@@ -25,9 +25,9 @@ const products: Product[] = [
   {
     id: "cookie-yeti",
     name: "Cookie Yeti",
-    description: "Automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection.",
+    description: "Automatically handles cookie consent pop-ups based on your privacy preferences. Launching first on Google Chrome, then expanding to other browsers.",
     category: "Extension",
-    status: "Live",
+    status: "Coming Soon",
     icon: Puzzle,
   },
 ];
@@ -94,12 +94,12 @@ export default function Products() {
                     {product.category}
                   </Badge>
                   
-                  {product.status === "Live" && (
+                  {(product.status === "Live" || product.id === "cookie-yeti") && (
                     <Link
                       to={product.id === "cookie-yeti" ? "/cookie-yeti" : `/product/${product.id}/legal`}
                       className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      {product.id === "cookie-yeti" ? "View Product" : "Legal Info"}
+                      {product.id === "cookie-yeti" ? "Learn More" : "Legal Info"}
                       <ExternalLink className="ml-1 h-3 w-3" />
                     </Link>
                   )}
