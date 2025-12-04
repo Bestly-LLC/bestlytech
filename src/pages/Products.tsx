@@ -23,14 +23,13 @@ interface Product {
 
 const products: Product[] = [
   {
-    id: "product-placeholder-1",
-    name: "Product Coming Soon",
-    description: "Our first product is currently in development. Check back soon for updates.",
-    category: "App",
-    status: "In Development",
-    icon: Smartphone,
+    id: "cookie-yeti",
+    name: "Cookie Yeti",
+    description: "Automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection.",
+    category: "Extension",
+    status: "Live",
+    icon: Puzzle,
   },
-  // Add more products here as they launch
 ];
 
 const categoryIcons: Record<ProductCategory, typeof Smartphone> = {
@@ -97,10 +96,10 @@ export default function Products() {
                   
                   {product.status === "Live" && (
                     <Link
-                      to={`/product/${product.id}/legal`}
+                      to={product.id === "cookie-yeti" ? "/cookie-yeti" : `/product/${product.id}/legal`}
                       className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      Legal Info
+                      {product.id === "cookie-yeti" ? "View Product" : "Legal Info"}
                       <ExternalLink className="ml-1 h-3 w-3" />
                     </Link>
                   )}
