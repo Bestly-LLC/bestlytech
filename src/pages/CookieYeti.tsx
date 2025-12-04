@@ -39,11 +39,11 @@ const CONFIG = {
     lifetime: "$2.99",
   },
   platforms: [
-    { name: "Chrome", available: true, icon: Chrome },
-    { name: "Safari", available: true, icon: Globe },
-    { name: "Firefox", available: true, icon: Globe },
-    { name: "Edge", available: true, icon: Globe },
-    { name: "Android", available: true, icon: Smartphone },
+    { name: "Chrome", available: true, comingSoon: true, icon: Chrome },
+    { name: "Safari", available: false, comingSoon: true, icon: Globe },
+    { name: "Firefox", available: false, comingSoon: true, icon: Globe },
+    { name: "Edge", available: false, comingSoon: true, icon: Globe },
+    { name: "Android", available: false, comingSoon: true, icon: Smartphone },
   ],
   features: [
     {
@@ -74,7 +74,7 @@ const CONFIG = {
     {
       icon: Globe,
       title: "Cross-Browser Support",
-      description: "Works on Chrome, Safari, Firefox, Edge, and Android.",
+      description: "Launching first on Chrome, with Safari, Firefox, Edge, and Android coming soon.",
     },
   ],
   faqs: [
@@ -92,7 +92,7 @@ const CONFIG = {
     },
     {
       question: "Does it work on mobile?",
-      answer: "Cookie Yeti is available on Android via Google Play. iOS support for Safari is coming soon.",
+      answer: "Cookie Yeti will be available on Android via Google Play after the initial Chrome launch. iOS support for Safari is planned for the future.",
     },
     {
       question: "Is the lifetime purchase really lifetime?",
@@ -149,16 +149,22 @@ export default function CookieYeti() {
               No tracking. No data collection. Just peaceful browsing.
             </p>
             
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" className="w-full sm:w-auto gap-2">
+            <div className="mt-8">
+              <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-sm px-4 py-1">
+                Coming Soon to Chrome
+              </Badge>
+            </div>
+            
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button size="lg" variant="outline" disabled className="w-full sm:w-auto gap-2">
                 <Chrome className="h-5 w-5" />
-                Get for Chrome
-              </Button>
-              <Button size="lg" variant="outline" className="w-full sm:w-auto gap-2">
-                <Smartphone className="h-5 w-5" />
-                Download on Google Play
+                Chrome Web Store – Coming Soon
               </Button>
             </div>
+            
+            <p className="mt-4 text-sm text-muted-foreground">
+              Other browsers (Safari, Firefox, Edge) and Android coming later
+            </p>
             
             <div className="mt-6">
               <Link 
@@ -417,28 +423,37 @@ export default function CookieYeti() {
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Available Everywhere You Browse
+              Platform Roadmap
             </h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Launching first on Chrome, then expanding to other browsers
+            </p>
           </div>
           
           <div className="flex flex-wrap items-center justify-center gap-4">
             {CONFIG.platforms.map((platform) => (
               <div
                 key={platform.name}
-                className="flex items-center gap-3 px-6 py-3 rounded-full bg-card border border-border"
+                className={`flex items-center gap-3 px-6 py-3 rounded-full border ${
+                  platform.available 
+                    ? "bg-primary/10 border-primary/30" 
+                    : "bg-card border-border"
+                }`}
               >
-                <platform.icon className="h-5 w-5 text-foreground" />
-                <span className="font-medium text-foreground">{platform.name}</span>
-                {platform.available && (
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                <platform.icon className={`h-5 w-5 ${platform.available ? "text-primary" : "text-muted-foreground"}`} />
+                <span className={`font-medium ${platform.available ? "text-foreground" : "text-muted-foreground"}`}>{platform.name}</span>
+                {platform.available ? (
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
+                    First
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-xs text-muted-foreground">
+                    Later
+                  </Badge>
                 )}
               </div>
             ))}
           </div>
-          
-          <p className="text-center text-sm text-muted-foreground mt-8">
-            iOS Safari support coming soon
-          </p>
         </div>
       </section>
 
@@ -511,19 +526,18 @@ export default function CookieYeti() {
               Ready for Distraction-Free Browsing?
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Join thousands of users who've reclaimed their browsing experience.
+              Cookie Yeti is coming soon. Be ready to reclaim your browsing experience.
             </p>
             
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" className="w-full sm:w-auto gap-2">
-                <Download className="h-5 w-5" />
-                Get Cookie Yeti Free
-              </Button>
-              <Button size="lg" variant="outline" className="w-full sm:w-auto gap-2">
-                <Smartphone className="h-5 w-5" />
-                View on Google Play
-              </Button>
+            <div className="mt-10">
+              <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-sm px-4 py-1">
+                Coming Soon to Chrome Web Store
+              </Badge>
             </div>
+            
+            <p className="mt-6 text-sm text-muted-foreground">
+              Other browsers and Android coming after Chrome launch
+            </p>
           </div>
         </div>
       </section>
