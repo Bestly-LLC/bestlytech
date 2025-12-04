@@ -1,1 +1,4 @@
 project_id = "keowunrxpxlbgebujbao"
+
+[functions.report-site]
+verify_jwt = false
