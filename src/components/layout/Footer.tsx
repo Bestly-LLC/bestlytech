@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import bestlyLogo from "@/assets/bestly-logo.png";
 
 const footerNavigation = {
   company: [
@@ -25,9 +26,12 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
-            <span className="text-lg font-semibold text-foreground">
-              Bestly LLC
-            </span>
+            <div className="flex items-center gap-2">
+              <img src={bestlyLogo} alt="Bestly LLC" className="h-8 w-auto" />
+              <span className="text-lg font-semibold text-foreground">
+                Bestly LLC
+              </span>
+            </div>
             <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
               A multi-vertical product studio building privacy-first digital and physical products.
             </p>
