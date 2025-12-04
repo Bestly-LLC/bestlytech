@@ -11,6 +11,7 @@ import TermsOfService from "./pages/TermsOfService";
 import DeveloperCompliance from "./pages/DeveloperCompliance";
 import Contact from "./pages/Contact";
 import ProductLegal from "./pages/ProductLegal";
+import CookieYetiPrivacy from "./pages/CookieYetiPrivacy";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/developer-compliance" element={<DeveloperCompliance />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/product/:productId/legal" element={<ProductLegal />} />
+          <Route path="/privacy" element={<CookieYetiPrivacy />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -8,6 +8,7 @@ const footerNavigation = {
   ],
   legal: [
     { name: "Privacy Policy", href: "/privacy-policy" },
+    { name: "Cookie Yeti Privacy", href: "/privacy" },
     { name: "Terms of Service", href: "/terms-of-service" },
     { name: "Developer Compliance", href: "/developer-compliance" },
   ],
