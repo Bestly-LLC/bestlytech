@@ -1,0 +1,247 @@
+import { useState } from "react";
+import { Layout } from "@/components/layout/Layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Mail, MapPin } from "lucide-react";
+
+export default function Contact() {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    category: "",
+    subject: "",
+    message: "",
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    // For now, just show a success message
+    // Backend email delivery will be implemented with Supabase Edge Function
+    try {
+      // Simulate form submission
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      
+      toast({
+        title: "Message sent",
+        description: "Thank you for contacting us. We'll respond within 2-3 business days.",
+      });
+      
+      setFormData({
+        name: "",
+        email: "",
+        category: "",
+        subject: "",
+        message: "",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "There was a problem sending your message. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
+  };
+
+  return (
+    <Layout>
+      <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-24">
+        {/* Page Header */}
+        <div className="mb-16 max-w-2xl">
+          <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+            Contact Us
+          </h1>
+          <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
+            Have a question, partnership inquiry, or need support? We're here to help. 
+            Fill out the form below and we'll get back to you within 2-3 business days.
+          </p>
+        </div>
+
+        <div className="grid gap-12 lg:grid-cols-3">
+          {/* Contact Form */}
+          <div className="lg:col-span-2">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name *</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Your name"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email *</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="you@example.com"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category *</Label>
+                  <Select
+                    value={formData.category}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, category: value }))
+                    }
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="app-support">App Support</SelectItem>
+                      <SelectItem value="platform-partners">Platform Partners</SelectItem>
+                      <SelectItem value="retail-distribution">Retail / Distribution</SelectItem>
+                      <SelectItem value="hardware-support">Hardware / Device Support</SelectItem>
+                      <SelectItem value="privacy">Privacy Inquiry</SelectItem>
+                      <SelectItem value="general">General Inquiry</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="subject">Subject *</Label>
+                  <Input
+                    id="subject"
+                    name="subject"
+                    type="text"
+                    required
+                    value={formData.subject}
+                    onChange={handleChange}
+                    placeholder="Brief description of your inquiry"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="message">Message *</Label>
+                <Textarea
+                  id="message"
+                  name="message"
+                  required
+                  value={formData.message}
+                  onChange={handleChange}
+                  placeholder="Please provide details about your inquiry..."
+                  className="min-h-[150px]"
+                />
+              </div>
+
+              <div>
+                <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+                  {isSubmitting ? "Sending..." : "Send Message"}
+                </Button>
+              </div>
+            </form>
+          </div>
+
+          {/* Contact Information Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-24 space-y-8">
+              {/* Company Info */}
+              <div className="rounded-xl border border-border bg-card p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                  Bestly LLC
+                </h3>
+                <div className="space-y-4 text-muted-foreground">
+                  <div className="flex gap-3">
+                    <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <span>Los Angeles, CA, United States</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Email Contacts */}
+              <div className="rounded-xl border border-border bg-card p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                  Email Contacts
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex gap-3">
+                    <Mail className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">General Support</p>
+                      <a
+                        href="mailto:support@bestly.tech"
+                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        support@bestly.tech
+                      </a>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <Mail className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Privacy Inquiries</p>
+                      <a
+                        href="mailto:privacy@bestly.tech"
+                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        privacy@bestly.tech
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Response Time */}
+              <div className="rounded-xl border border-border bg-secondary/30 p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  Response Time
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  We typically respond to inquiries within 2-3 business days. 
+                  For urgent privacy-related matters, please email{" "}
+                  <a
+                    href="mailto:privacy@bestly.tech"
+                    className="text-foreground underline underline-offset-4"
+                  >
+                    privacy@bestly.tech
+                  </a>{" "}
+                  directly.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+}
