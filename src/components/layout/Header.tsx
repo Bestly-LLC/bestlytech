@@ -8,7 +8,7 @@ const navigation = [
   { name: "Home", href: "/" },
   { name: "About", href: "/about" },
   { name: "Products", href: "/products" },
-  { name: "Compliance", href: "/developer-compliance" },
+  { name: "Cookie Yeti", href: "/cookie-yeti" },
   { name: "Contact", href: "/contact" },
 ];
 
