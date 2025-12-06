@@ -27,7 +27,7 @@ export function Header() {
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8">
         <div className="flex lg:flex-1">
           <Link to="/" className="-m-1.5 p-1.5 flex items-center gap-2">
-            <img src={bestlyLogo} alt="Bestly LLC" className="h-8 w-auto rotate-45" />
+            <img src={bestlyLogo} alt="Bestly LLC" className="h-8 w-auto rotate-[20deg]" />
             <span className="text-xl font-semibold tracking-tight text-foreground">Bestly
           </span>
           </Link>
@@ -58,7 +58,7 @@ export function Header() {
           <div className="fixed inset-y-0 right-0 z-50 w-full overflow-y-auto bg-background px-6 py-6 sm:max-w-sm sm:ring-1 sm:ring-border">
             <div className="flex items-center justify-between">
               <Link to="/" className="-m-1.5 p-1.5 flex items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
-                <img src={bestlyLogo} alt="Bestly LLC" className="h-8 w-auto rotate-45" />
+                <img src={bestlyLogo} alt="Bestly LLC" className="h-8 w-auto rotate-[20deg]" />
                 <span className="text-xl font-semibold tracking-tight text-foreground">
                   Bestly LLC
                 </span>
