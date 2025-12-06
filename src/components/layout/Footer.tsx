@@ -27,7 +27,7 @@ export function Footer() {
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2">
-              <img src={bestlyLogo} alt="Bestly LLC" className="h-8 w-auto" />
+              <img src={bestlyLogo} alt="Bestly LLC" className="h-8 w-auto rotate-45" />
               <span className="text-lg font-semibold text-foreground">
                 Bestly LLC
               </span>
