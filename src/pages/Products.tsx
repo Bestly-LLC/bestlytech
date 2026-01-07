@@ -28,7 +28,7 @@ const products: Product[] = [
     name: "Cookie Yeti",
     description: "A privacy-focused browser extension that automatically detects and dismisses cookie consent banners without compromising your privacy.",
     category: "Extension",
-    status: "Active",
+    status: "Coming Soon",
     icon: Puzzle,
   },
   {
