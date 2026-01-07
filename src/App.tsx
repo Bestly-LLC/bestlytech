@@ -7,12 +7,15 @@ import Index from "./pages/Index";
 import About from "./pages/About";
 import Products from "./pages/Products";
 import CookieYeti from "./pages/CookieYeti";
+import CookieYetiPrivacy from "./pages/CookieYetiPrivacy";
+import InventoryProof from "./pages/InventoryProof";
+import Hoku from "./pages/Hoku";
+import PressKit from "./pages/PressKit";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import DeveloperCompliance from "./pages/DeveloperCompliance";
 import Contact from "./pages/Contact";
 import ProductLegal from "./pages/ProductLegal";
-import CookieYetiPrivacy from "./pages/CookieYetiPrivacy";
 import ReportSite from "./pages/ReportSite";
 import NotFound from "./pages/NotFound";
 
@@ -29,12 +32,16 @@ const App = () => (
           <Route path="/about" element={<About />} />
           <Route path="/products" element={<Products />} />
           <Route path="/cookie-yeti" element={<CookieYeti />} />
+          <Route path="/cookie-yeti/privacy" element={<CookieYetiPrivacy />} />
+          <Route path="/inventory-proof" element={<InventoryProof />} />
+          <Route path="/hoku" element={<Hoku />} />
+          <Route path="/press" element={<PressKit />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/privacy" element={<CookieYetiPrivacy />} />
           <Route path="/terms-of-service" element={<TermsOfService />} />
           <Route path="/developer-compliance" element={<DeveloperCompliance />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/product/:productId/legal" element={<ProductLegal />} />
-          <Route path="/privacy" element={<CookieYetiPrivacy />} />
           <Route path="/report-site" element={<ReportSite />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
