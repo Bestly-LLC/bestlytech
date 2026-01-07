@@ -6,11 +6,12 @@ import {
   Puzzle, 
   Cpu, 
   Box,
-  ExternalLink
+  ExternalLink,
+  Droplets,
 } from "lucide-react";
 
 type ProductCategory = "App" | "Extension" | "AI Tool" | "Physical Product" | "Device" | "Platform";
-type ProductStatus = "Live" | "In Development" | "Coming Soon";
+type ProductStatus = "Live" | "Active" | "In Development" | "Coming Soon";
 
 interface Product {
   id: string;
@@ -25,10 +26,26 @@ const products: Product[] = [
   {
     id: "cookie-yeti",
     name: "Cookie Yeti",
-    description: "Automatically handles cookie consent pop-ups based on your privacy preferences. Launching first on Google Chrome, then expanding to other browsers.",
+    description: "A privacy-focused browser extension that automatically detects and dismisses cookie consent banners without compromising your privacy.",
     category: "Extension",
-    status: "Coming Soon",
+    status: "Active",
     icon: Puzzle,
+  },
+  {
+    id: "inventory-proof",
+    name: "InventoryProof",
+    description: "AI-powered home inventory documentation for insurance claims and estate planning. Create insurance-ready reports from video walkthroughs in minutes.",
+    category: "Platform",
+    status: "In Development",
+    icon: Smartphone,
+  },
+  {
+    id: "hoku",
+    name: "HOKU",
+    description: "Premium hypochlorous acid skincare. Pharmaceutical-grade HOCl facial mist using advanced electrolysis manufacturing and vacuum-sealed packaging.",
+    category: "Physical Product",
+    status: "In Development",
+    icon: Droplets,
   },
 ];
 
@@ -43,6 +60,7 @@ const categoryIcons: Record<ProductCategory, typeof Smartphone> = {
 
 const statusColors: Record<ProductStatus, string> = {
   "Live": "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  "Active": "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
   "In Development": "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
   "Coming Soon": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
 };
@@ -94,12 +112,17 @@ export default function Products() {
                     {product.category}
                   </Badge>
                   
-                  {(product.status === "Live" || product.id === "cookie-yeti") && (
+                  {(product.id === "cookie-yeti" || product.id === "inventory-proof" || product.id === "hoku") && (
                     <Link
-                      to={product.id === "cookie-yeti" ? "/cookie-yeti" : `/product/${product.id}/legal`}
+                      to={
+                        product.id === "cookie-yeti" ? "/cookie-yeti" :
+                        product.id === "inventory-proof" ? "/inventory-proof" :
+                        product.id === "hoku" ? "/hoku" :
+                        `/product/${product.id}/legal`
+                      }
                       className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      {product.id === "cookie-yeti" ? "Learn More" : "Legal Info"}
+                      Learn More
                       <ExternalLink className="ml-1 h-3 w-3" />
                     </Link>
                   )}

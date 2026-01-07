@@ -5,7 +5,7 @@ const footerNavigation = {
   company: [
     { name: "About", href: "/about" },
     { name: "Products", href: "/products" },
-    { name: "Cookie Yeti", href: "/cookie-yeti" },
+    { name: "Press Kit", href: "/press" },
     { name: "Contact", href: "/contact" },
   ],
   legal: [
