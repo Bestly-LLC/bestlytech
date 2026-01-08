@@ -1,9 +1,15 @@
 import { Layout } from "@/components/layout/Layout";
+import { SEOHead } from "@/components/SEOHead";
+import { AnimatedSection } from "@/components/AnimatedSection";
 import { Link } from "react-router-dom";
 
 export default function About() {
   return (
     <Layout>
+      <SEOHead
+        title="About Bestly LLC | Privacy-First Product Studio"
+        description="Bestly LLC is a founder-led product studio committed to building technology that respects users. Learn about our mission and values."
+      />
       <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8 lg:py-24">
         {/* Page Header */}
         <div className="mb-16">

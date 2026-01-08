@@ -1,5 +1,7 @@
-import { useEffect } from "react";
 import { Layout } from "@/components/layout/Layout";
+import { SEOHead } from "@/components/SEOHead";
+import { AnimatedSection } from "@/components/AnimatedSection";
+import { WaitlistForm } from "@/components/WaitlistForm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -18,17 +20,6 @@ import {
 import { Link } from "react-router-dom";
 
 const InventoryProof = () => {
-  useEffect(() => {
-    document.title = "InventoryProof - AI-Powered Home Inventory | Bestly LLC";
-    const metaDescription = document.querySelector('meta[name="description"]');
-    if (metaDescription) {
-      metaDescription.setAttribute(
-        "content",
-        "Create insurance-ready documentation of your belongings in minutes with AI-powered video analysis. Trusted by 12,000+ homeowners."
-      );
-    }
-  }, []);
-
   const features = [
     {
       icon: Brain,
@@ -91,49 +82,58 @@ const InventoryProof = () => {
 
   return (
     <Layout>
+      <SEOHead
+        title="InventoryProof - AI-Powered Home Inventory | Bestly LLC"
+        description="Create insurance-ready documentation of your belongings in minutes with AI-powered video analysis. Trusted by 12,000+ homeowners."
+      />
       <div className="bg-background">
         {/* Hero Section */}
-        <section className="relative overflow-hidden py-20 sm:py-32">
-          <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <div className="mx-auto max-w-2xl text-center">
-              <div className="mb-8 flex justify-center">
-                <div className="relative rounded-full px-4 py-1.5 text-sm leading-6 text-muted-foreground ring-1 ring-border">
-                  <span className="inline-flex items-center gap-2">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75"></span>
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
+        <AnimatedSection animation="fade-in-up">
+          <section className="relative overflow-hidden py-20 sm:py-32">
+            <div className="mx-auto max-w-7xl px-6 lg:px-8">
+              <div className="mx-auto max-w-2xl text-center">
+                <div className="mb-8 flex justify-center">
+                  <div className="relative rounded-full px-4 py-1.5 text-sm leading-6 text-muted-foreground ring-1 ring-border">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75"></span>
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
+                      </span>
+                      Coming Soon
                     </span>
-                    Coming Soon
-                  </span>
+                  </div>
                 </div>
-              </div>
-              <div className="mb-6 flex justify-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-                  <Smartphone className="h-8 w-8 text-primary" />
+                <div className="mb-6 flex justify-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+                    <Smartphone className="h-8 w-8 text-primary" />
+                  </div>
                 </div>
-              </div>
-              <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
-                InventoryProof
-              </h1>
-              <p className="mt-4 text-xl text-primary font-medium">
-                Your possessions, verified and protected.
-              </p>
-              <p className="mt-6 text-lg leading-8 text-muted-foreground">
-                A mobile-first platform that helps homeowners and renters create
-                insurance-ready documentation of their belongings in minutes—not
-                hours.
-              </p>
-              <div className="mt-10 flex items-center justify-center gap-x-6">
-                <Button size="lg" disabled>
-                  Get Notified at Launch
-                </Button>
-                <Button variant="outline" size="lg" asChild>
-                  <a href="#how-it-works">Learn More</a>
-                </Button>
+                <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
+                  InventoryProof
+                </h1>
+                <p className="mt-4 text-xl text-primary font-medium">
+                  Your possessions, verified and protected.
+                </p>
+                <p className="mt-6 text-lg leading-8 text-muted-foreground">
+                  A mobile-first platform that helps homeowners and renters create
+                  insurance-ready documentation of their belongings in minutes—not
+                  hours.
+                </p>
+                <WaitlistForm
+                  productId="inventory-proof"
+                  productName="InventoryProof"
+                  className="mt-10"
+                  buttonText="Get Notified at Launch"
+                />
+                <div className="mt-6">
+                  <Button variant="outline" size="lg" asChild>
+                    <a href="#how-it-works">Learn More</a>
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </AnimatedSection>
 
         {/* How It Works */}
         <section id="how-it-works" className="py-20 bg-muted/30">
@@ -258,27 +258,32 @@ const InventoryProof = () => {
         </section>
 
         {/* CTA */}
-        <section className="py-20 bg-muted/30">
-          <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <div className="mx-auto max-w-2xl text-center">
-              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Coming Soon
-              </h2>
-              <p className="mt-4 text-lg text-muted-foreground">
-                InventoryProof is currently in development. Be the first to know
-                when we launch.
-              </p>
-              <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Button size="lg" disabled>
-                  Get Notified at Launch
-                </Button>
-                <Button variant="outline" size="lg" asChild>
-                  <Link to="/products">View All Products</Link>
-                </Button>
+        <AnimatedSection animation="fade-in-up">
+          <section className="py-20 bg-muted/30">
+            <div className="mx-auto max-w-7xl px-6 lg:px-8">
+              <div className="mx-auto max-w-2xl text-center">
+                <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                  Coming Soon
+                </h2>
+                <p className="mt-4 text-lg text-muted-foreground">
+                  InventoryProof is currently in development. Be the first to know
+                  when we launch.
+                </p>
+                <WaitlistForm
+                  productId="inventory-proof"
+                  productName="InventoryProof"
+                  className="mt-8"
+                  buttonText="Get Notified at Launch"
+                />
+                <div className="mt-6">
+                  <Button variant="outline" size="lg" asChild>
+                    <Link to="/products">View All Products</Link>
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </AnimatedSection>
 
         {/* Legal Notice */}
         <section className="py-12 border-t border-border">

@@ -1,4 +1,6 @@
 import { Layout } from "@/components/layout/Layout";
+import { SEOHead } from "@/components/SEOHead";
+import { AnimatedSection } from "@/components/AnimatedSection";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -68,6 +70,10 @@ const statusColors: Record<ProductStatus, string> = {
 export default function Products() {
   return (
     <Layout>
+      <SEOHead
+        title="Products & Platforms | Bestly LLC"
+        description="Explore our portfolio of privacy-first products including Cookie Yeti, InventoryProof, and HOKU. Software, AI tools, and physical products built with ethical design."
+      />
       <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-24">
         {/* Page Header */}
         <div className="mb-16 max-w-3xl">
