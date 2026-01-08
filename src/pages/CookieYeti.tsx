@@ -1,6 +1,8 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
+import { SEOHead } from "@/components/SEOHead";
+
+import { WaitlistForm } from "@/components/WaitlistForm";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -111,18 +113,13 @@ const CONFIG = {
 };
 
 export default function CookieYeti() {
-  useEffect(() => {
-    document.title = "Cookie Yeti – Automatic Cookie Consent Handler | Bestly LLC";
-    
-    // Set meta description
-    const metaDescription = document.querySelector('meta[name="description"]');
-    if (metaDescription) {
-      metaDescription.setAttribute("content", "Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection. Available for Chrome, Safari, Firefox, Edge & Android.");
-    }
-  }, []);
-
   return (
     <Layout>
+      <SEOHead
+        title="Cookie Yeti – Automatic Cookie Consent Handler | Bestly LLC"
+        description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection. Available for Chrome, Safari, Firefox, Edge & Android."
+      />
+      
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-b from-secondary/50 to-background">
         <div className="mx-auto max-w-7xl px-6 py-20 lg:px-8 lg:py-32">
@@ -155,12 +152,12 @@ export default function CookieYeti() {
               </Badge>
             </div>
             
-            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" variant="outline" disabled className="w-full sm:w-auto gap-2">
-                <Chrome className="h-5 w-5" />
-                Chrome Web Store – Coming Soon
-              </Button>
-            </div>
+            <WaitlistForm 
+              productId="cookie-yeti" 
+              productName="Cookie Yeti" 
+              className="mt-8"
+              buttonText="Get Notified at Launch"
+            />
             
             <p className="mt-4 text-sm text-muted-foreground">
               Other browsers (Safari, Firefox, Edge) and Android coming later
