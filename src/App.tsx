@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import Index from "./pages/Index";
 import About from "./pages/About";
 import Products from "./pages/Products";
@@ -22,33 +24,35 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/cookie-yeti" element={<CookieYeti />} />
-          <Route path="/cookie-yeti/privacy" element={<CookieYetiPrivacy />} />
-          <Route path="/inventory-proof" element={<InventoryProof />} />
-          <Route path="/hoku" element={<Hoku />} />
-          <Route path="/press" element={<PressKit />} />
-          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-          <Route path="/privacy" element={<CookieYetiPrivacy />} />
-          <Route path="/terms-of-service" element={<TermsOfService />} />
-          <Route path="/developer-compliance" element={<DeveloperCompliance />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/product/:productId/legal" element={<ProductLegal />} />
-          <Route path="/report-site" element={<ReportSite />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <HelmetProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <ScrollToTop />
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/cookie-yeti" element={<CookieYeti />} />
+            <Route path="/cookie-yeti/privacy" element={<CookieYetiPrivacy />} />
+            <Route path="/inventory-proof" element={<InventoryProof />} />
+            <Route path="/hoku" element={<Hoku />} />
+            <Route path="/press" element={<PressKit />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/privacy" element={<CookieYetiPrivacy />} />
+            <Route path="/terms-of-service" element={<TermsOfService />} />
+            <Route path="/developer-compliance" element={<DeveloperCompliance />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/product/:productId/legal" element={<ProductLegal />} />
+            <Route path="/report-site" element={<ReportSite />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </HelmetProvider>
 );
 
 export default App;
