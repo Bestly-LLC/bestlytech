@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Layout } from "@/components/layout/Layout";
+import { SEOHead } from "@/components/SEOHead";
+import { AnimatedSection } from "@/components/AnimatedSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,11 +14,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, MapPin } from "lucide-react";
+import { Mail, MapPin, Loader2, CheckCircle2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Contact() {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -29,17 +33,19 @@ export default function Contact() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // For now, just show a success message
-    // Backend email delivery will be implemented with Supabase Edge Function
     try {
-      // Simulate form submission
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
+      const { error } = await supabase.functions.invoke("submit-contact", {
+        body: formData,
+      });
+
+      if (error) throw error;
+
+      setIsSuccess(true);
       toast({
         title: "Message sent",
         description: "Thank you for contacting us. We'll respond within 2-3 business days.",
       });
-      
+
       setFormData({
         name: "",
         email: "",
@@ -47,7 +53,8 @@ export default function Contact() {
         subject: "",
         message: "",
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Contact form error:", error);
       toast({
         title: "Error",
         description: "There was a problem sending your message. Please try again.",
@@ -69,114 +76,149 @@ export default function Contact() {
 
   return (
     <Layout>
+      <SEOHead
+        title="Contact Us"
+        description="Have a question, partnership inquiry, or need support? Contact Bestly LLC and we'll get back to you within 2-3 business days."
+        path="/contact"
+      />
+
       <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-24">
         {/* Page Header */}
-        <div className="mb-16 max-w-2xl">
+        <AnimatedSection className="mb-16 max-w-2xl">
           <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
             Contact Us
           </h1>
           <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
-            Have a question, partnership inquiry, or need support? We're here to help. 
+            Have a question, partnership inquiry, or need support? We're here to help.
             Fill out the form below and we'll get back to you within 2-3 business days.
           </p>
-        </div>
+        </AnimatedSection>
 
         <div className="grid gap-12 lg:grid-cols-3">
           {/* Contact Form */}
-          <div className="lg:col-span-2">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid gap-6 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name *</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="Your name"
-                  />
+          <AnimatedSection className="lg:col-span-2" delay={100}>
+            {isSuccess ? (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-8 text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                    <CheckCircle2 className="h-8 w-8 text-primary" />
+                  </div>
                 </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="you@example.com"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-6 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category *</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, category: value }))
-                    }
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="app-support">App Support</SelectItem>
-                      <SelectItem value="platform-partners">Platform Partners</SelectItem>
-                      <SelectItem value="retail-distribution">Retail / Distribution</SelectItem>
-                      <SelectItem value="hardware-support">Hardware / Device Support</SelectItem>
-                      <SelectItem value="privacy">Privacy Inquiry</SelectItem>
-                      <SelectItem value="general">General Inquiry</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="subject">Subject *</Label>
-                  <Input
-                    id="subject"
-                    name="subject"
-                    type="text"
-                    required
-                    value={formData.subject}
-                    onChange={handleChange}
-                    placeholder="Brief description of your inquiry"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="message">Message *</Label>
-                <Textarea
-                  id="message"
-                  name="message"
-                  required
-                  value={formData.message}
-                  onChange={handleChange}
-                  placeholder="Please provide details about your inquiry..."
-                  className="min-h-[150px]"
-                />
-              </div>
-
-              <div>
-                <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                  {isSubmitting ? "Sending..." : "Send Message"}
+                <h3 className="text-xl font-semibold text-foreground mb-2">Message Sent!</h3>
+                <p className="text-muted-foreground mb-6">
+                  Thank you for reaching out. We'll get back to you within 2-3 business days.
+                </p>
+                <Button variant="outline" onClick={() => setIsSuccess(false)}>
+                  Send Another Message
                 </Button>
               </div>
-            </form>
-          </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Name *</Label>
+                    <Input
+                      id="name"
+                      name="name"
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={handleChange}
+                      placeholder="Your name"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email *</Label>
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      required
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="you@example.com"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category *</Label>
+                    <Select
+                      value={formData.category}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, category: value }))
+                      }
+                      required
+                      disabled={isSubmitting}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="app-support">App Support</SelectItem>
+                        <SelectItem value="platform-partners">Platform Partners</SelectItem>
+                        <SelectItem value="retail-distribution">Retail / Distribution</SelectItem>
+                        <SelectItem value="hardware-support">Hardware / Device Support</SelectItem>
+                        <SelectItem value="privacy">Privacy Inquiry</SelectItem>
+                        <SelectItem value="general">General Inquiry</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="subject">Subject *</Label>
+                    <Input
+                      id="subject"
+                      name="subject"
+                      type="text"
+                      required
+                      value={formData.subject}
+                      onChange={handleChange}
+                      placeholder="Brief description of your inquiry"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="message">Message *</Label>
+                  <Textarea
+                    id="message"
+                    name="message"
+                    required
+                    value={formData.message}
+                    onChange={handleChange}
+                    placeholder="Please provide details about your inquiry..."
+                    className="min-h-[150px]"
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                <div>
+                  <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      "Send Message"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </AnimatedSection>
 
           {/* Contact Information Sidebar */}
-          <div className="lg:col-span-1">
+          <AnimatedSection className="lg:col-span-1" delay={200}>
             <div className="sticky top-24 space-y-8">
               {/* Company Info */}
-              <div className="rounded-xl border border-border bg-card p-6">
+              <div className="rounded-xl border border-border bg-card p-6 transition-shadow hover:shadow-md">
                 <h3 className="text-lg font-semibold text-foreground mb-4">
                   Bestly LLC
                 </h3>
@@ -189,7 +231,7 @@ export default function Contact() {
               </div>
 
               {/* Email Contacts */}
-              <div className="rounded-xl border border-border bg-card p-6">
+              <div className="rounded-xl border border-border bg-card p-6 transition-shadow hover:shadow-md">
                 <h3 className="text-lg font-semibold text-foreground mb-4">
                   Email Contacts
                 </h3>
@@ -227,7 +269,7 @@ export default function Contact() {
                   Response Time
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  We typically respond to inquiries within 2-3 business days. 
+                  We typically respond to inquiries within 2-3 business days.
                   For urgent privacy-related matters, please email{" "}
                   <a
                     href="mailto:privacy@bestly.tech"
@@ -239,7 +281,7 @@ export default function Contact() {
                 </p>
               </div>
             </div>
-          </div>
+          </AnimatedSection>
         </div>
       </div>
     </Layout>

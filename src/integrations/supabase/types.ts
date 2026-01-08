@@ -14,7 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      contact_submissions: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          email: string
+          id: string
+          message: string
+          name: string
+          status: string | null
+          subject: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          email: string
+          id?: string
+          message: string
+          name: string
+          status?: string | null
+          subject: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          message?: string
+          name?: string
+          status?: string | null
+          subject?: string
+        }
+        Relationships: []
+      }
+      waitlist_subscribers: {
+        Row: {
+          confirmed: boolean | null
+          created_at: string | null
+          email: string
+          id: string
+          products: string[] | null
+          source: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          confirmed?: boolean | null
+          created_at?: string | null
+          email: string
+          id?: string
+          products?: string[] | null
+          source?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          confirmed?: boolean | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          products?: string[] | null
+          source?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
