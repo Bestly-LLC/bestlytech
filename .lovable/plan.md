@@ -1,105 +1,68 @@
 
 
-## Hire Me Intake Form Implementation Plan
+## "About Jared & Services" Enhancement Plan
 
 ### Overview
-Create a dedicated "Hire Me" intake form page for potential clients who want to hire you. The form will collect detailed project information, store submissions in the database, and send email notifications from `support@bestly.tech` to `jaredbest@icloud.com`.
-
-### What We'll Build
-
-**1. New Database Table: `hire_requests`**
-- Stores all intake form submissions with comprehensive project details
-- Fields: name, email, company, project type, budget range, timeline, project description, how they found you
-
-**2. New Edge Function: `submit-hire-request`**
-- Validates form data with sanitization
-- Stores submission in database
-- Sends formatted email notification via SMTP to jaredbest@icloud.com
-- Includes rate limiting and honeypot spam protection
-
-**3. New Page: `/hire` (Hire.tsx)**
-- Professional intake form with the following fields:
-  - Name (required)
-  - Email (required)
-  - Company/Organization (optional)
-  - Project Type (dropdown: Web App, Mobile App, Browser Extension, AI/Automation, Consulting, Other)
-  - Budget Range (dropdown: Under $5K, $5K-$15K, $15K-$50K, $50K+, Not Sure)
-  - Timeline (dropdown: ASAP, 1-2 months, 3-6 months, Flexible)
-  - Project Description (textarea, required)
-  - How did you hear about me? (optional)
-- Success state with confirmation message
-- SEO optimized with proper meta tags
-
-**4. Navigation Update**
-- Add "Hire Me" link to header navigation
+Add formal, professional content about Jared and his services to the Bestly site. This includes creating a new dedicated Services page and enhancing the Hire page with an introductory section that establishes credibility and explains what Jared offers.
 
 ---
 
-### Technical Details
+### What We'll Build
 
-**Database Schema:**
-```sql
-CREATE TABLE hire_requests (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  company TEXT,
-  project_type TEXT NOT NULL,
-  budget_range TEXT,
-  timeline TEXT,
-  description TEXT NOT NULL,
-  referral_source TEXT,
-  status TEXT DEFAULT 'new',
-  created_at TIMESTAMPTZ DEFAULT now()
-);
+#### 1. New Services Page (`/services`)
+A dedicated page showcasing Jared's full service offerings with:
 
--- RLS Policies
-ALTER TABLE hire_requests ENABLE ROW LEVEL SECURITY;
+**Hero Section**
+- Personal introduction: "I'm Jared, and I help businesses build, grow, and scale."
+- Brief value proposition emphasizing partnership approach
 
--- Allow public inserts
-CREATE POLICY "Anyone can submit hire request"
-  ON hire_requests FOR INSERT
-  WITH CHECK (true);
+**Core Services Grid** (6 service cards):
+| Service | Description |
+|---------|-------------|
+| Web & App Development | Custom websites, web applications, and mobile apps built with modern technology stacks |
+| Business Consulting | Strategic guidance on operations, growth, and scaling your business |
+| AI & Automation | Implementing intelligent tools and automating workflows to increase efficiency |
+| Marketing & Branding | Digital marketing strategy, brand identity, and design services |
+| Productization | Transforming services or ideas into scalable products |
+| Compliance Engineering | Privacy-first architecture, legal compliance (GDPR, CCPA), and platform requirements |
 
--- Service role manages all
-CREATE POLICY "Service role can manage hire requests"
-  ON hire_requests FOR ALL
-  USING (auth.role() = 'service_role');
-```
+**Venture Studio Section**
+- Brief mention of the collaborative network and partnership approach
+- Explain revenue share and advisory models
 
-**Edge Function Features:**
-- Uses existing SMTP secrets (SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_PORT)
-- Sends FROM: support@bestly.tech (SMTP_USER)
-- Sends TO: jaredbest@icloud.com (hardcoded in function)
-- Professional email format with all project details
-- Rate limiting (5 submissions per hour per IP)
-- Honeypot field for bot protection
-- Input sanitization
+**Who I Work With Section**
+- Target audiences: Small businesses & startups, local service businesses, e-commerce, and tech companies
 
-**Email Format:**
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-NEW HIRE REQUEST
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+**CTA Section**
+- "Ready to Work Together?" with link to the Hire page
 
-From: [Name] <[Email]>
-Company: [Company or N/A]
+---
 
-PROJECT DETAILS
-───────────────
-Type: [Project Type]
-Budget: [Budget Range]
-Timeline: [Timeline]
+#### 2. Enhanced Hire Page Intro
+Add a section above the form with:
 
-Description:
-[Project Description]
+**Personal Introduction**
+- "I'm Jared" - brief, approachable intro
+- 5+ years of experience helping businesses
+- Emphasis on consulting/advisory and partnership models
 
-Referral Source: [How they heard about you]
+**What to Expect**
+- How the process works (consultation, proposal, partnership)
+- Typical engagement types: Advisory, Revenue share partnerships
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Submitted: [Timestamp]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+**Quick Services Summary**
+- Compact list of core offerings linking to the Services page
+
+---
+
+### Content Tone & Style
+
+**Voice**: Approachable and personal (first-person "I" language)
+**Aesthetic**: Clean, professional, matching the existing Apple-grade design
+**Credibility**: Subtle mention of network and experience without specific numbers
+
+Example copy:
+> "I work with businesses at every stage—from local shops looking to establish their online presence to tech startups ready to scale. My approach is collaborative: I partner with you to build something that works, not just deliver and disappear."
 
 ---
 
@@ -107,35 +70,72 @@ Submitted: [Timestamp]
 
 | File | Action |
 |------|--------|
-| `supabase/migrations/[timestamp].sql` | Create `hire_requests` table with RLS |
-| `supabase/functions/submit-hire-request/index.ts` | Edge function for form submission + email |
-| `supabase/config.toml` | Add new function config |
-| `src/pages/Hire.tsx` | New intake form page |
-| `src/App.tsx` | Add route for `/hire` |
-| `src/components/layout/Header.tsx` | Add "Hire Me" navigation link |
+| `src/pages/Services.tsx` | Create new Services page |
+| `src/pages/Hire.tsx` | Add intro section above form |
+| `src/App.tsx` | Add route for `/services` |
+| `src/components/layout/Header.tsx` | Add "Services" to navigation |
 
 ---
 
-### Form Fields Summary
+### Navigation Update
 
-| Field | Type | Required | Options |
-|-------|------|----------|---------|
-| Name | Text input | Yes | - |
-| Email | Email input | Yes | - |
-| Company | Text input | No | - |
-| Project Type | Select | Yes | Web App, Mobile App, Browser Extension, AI/Automation, Consulting, Other |
-| Budget Range | Select | No | Under $5K, $5K-$15K, $15K-$50K, $50K+, Not Sure |
-| Timeline | Select | No | ASAP, 1-2 months, 3-6 months, Flexible |
-| Project Description | Textarea | Yes | - |
-| Referral Source | Text input | No | - |
+Current: Home | About | Contact | Hire Me | Products
+
+Proposed: Home | About | **Services** | Contact | Hire Me | Products
 
 ---
 
-### User Experience Flow
-1. User navigates to `/hire` or clicks "Hire Me" in navigation
-2. User fills out intake form with project details
-3. On submit: loading state shown
-4. Backend validates, stores in database, sends email
-5. User sees success confirmation with "We'll be in touch within 2-3 business days"
-6. You receive formatted email at jaredbest@icloud.com
+### Technical Details
+
+**Services Page Structure:**
+```text
++----------------------------------+
+|            Hero Section          |
+|  "I'm Jared, and I help..."     |
++----------------------------------+
+|        Services Grid (6)         |
+|  [Dev] [Consulting] [AI/Auto]   |
+|  [Marketing] [Product] [Comply] |
++----------------------------------+
+|      Venture Studio Section      |
+|  Partnership & advisory model    |
++----------------------------------+
+|       Who I Work With            |
+|  Startups | Local | E-com | Tech |
++----------------------------------+
+|         CTA Section              |
+|    "Ready to Work Together?"     |
++----------------------------------+
+```
+
+**Hire Page Enhancement:**
+```text
++----------------------------------+
+|     NEW: Personal Intro          |
+|  "I'm Jared..." + experience    |
++----------------------------------+
+|     NEW: What to Expect          |
+|  Process + engagement types      |
++----------------------------------+
+|     Existing Intake Form         |
+|  (unchanged)                     |
++----------------------------------+
+```
+
+**Components Used:**
+- `AnimatedSection` for scroll animations
+- `SEOHead` for meta tags
+- Existing card/grid patterns from the site
+- Icons from `lucide-react`
+
+---
+
+### SEO Considerations
+
+**Services Page:**
+- Title: "Services | Jared Best - Business Development & Technology"
+- Description: "Web development, business consulting, AI automation, and venture studio services. I partner with startups and small businesses to build, grow, and scale."
+
+**Hire Page:**
+- Update meta to reflect the personal approach
 
