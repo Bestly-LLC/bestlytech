@@ -19,6 +19,7 @@ import DeveloperCompliance from "./pages/DeveloperCompliance";
 import Contact from "./pages/Contact";
 import ProductLegal from "./pages/ProductLegal";
 import ReportSite from "./pages/ReportSite";
+import Hire from "./pages/Hire";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/contact" element={<Contact />} />
             <Route path="/product/:productId/legal" element={<ProductLegal />} />
             <Route path="/report-site" element={<ReportSite />} />
+            <Route path="/hire" element={<Hire />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

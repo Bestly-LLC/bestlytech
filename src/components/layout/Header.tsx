@@ -10,6 +10,7 @@ const navigation = [
   { name: "Home", href: "/" },
   { name: "About", href: "/about" },
   { name: "Contact", href: "/contact" },
+  { name: "Hire Me", href: "/hire" },
 ];
 
 export function Header() {
@@ -19,6 +20,7 @@ export function Header() {
     location.pathname.startsWith("/cookie-yeti") ||
     location.pathname.startsWith("/inventory-proof") ||
     location.pathname.startsWith("/hoku");
+  const isHireActive = location.pathname === "/hire";
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
