@@ -2,3 +2,6 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.report-site]
 verify_jwt = false
+
+[functions.submit-hire-request]
+verify_jwt = false

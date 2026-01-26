@@ -47,6 +47,48 @@ export type Database = {
         }
         Relationships: []
       }
+      hire_requests: {
+        Row: {
+          budget_range: string | null
+          company: string | null
+          created_at: string | null
+          description: string
+          email: string
+          id: string
+          name: string
+          project_type: string
+          referral_source: string | null
+          status: string | null
+          timeline: string | null
+        }
+        Insert: {
+          budget_range?: string | null
+          company?: string | null
+          created_at?: string | null
+          description: string
+          email: string
+          id?: string
+          name: string
+          project_type: string
+          referral_source?: string | null
+          status?: string | null
+          timeline?: string | null
+        }
+        Update: {
+          budget_range?: string | null
+          company?: string | null
+          created_at?: string | null
+          description?: string
+          email?: string
+          id?: string
+          name?: string
+          project_type?: string
+          referral_source?: string | null
+          status?: string | null
+          timeline?: string | null
+        }
+        Relationships: []
+      }
       waitlist_subscribers: {
         Row: {
           confirmed: boolean | null
