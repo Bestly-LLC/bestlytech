@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, Loader2, Briefcase } from "lucide-react";
+import { CheckCircle2, Loader2, Briefcase, MessageSquare, Handshake, ArrowRight } from "lucide-react";
 
 const projectTypes = [
   { value: "web-app", label: "Web Application" },
@@ -125,23 +126,86 @@ export default function Hire() {
   return (
     <Layout>
       <SEOHead
-        title="Hire Me | Bestly"
-        description="Looking to bring your project to life? Submit your project details and let's discuss how we can work together on web apps, mobile apps, browser extensions, AI, and more."
+        title="Hire Jared Best | Business Development & Technology"
+        description="Partner with me on your next project. From web development to AI automation, I offer consulting, advisory, and revenue-share partnerships for startups and small businesses."
         path="/hire"
       />
 
-      <div className="py-16 md:py-24">
+      {/* Personal Introduction Section */}
+      <section className="py-16 md:py-20 border-b border-border">
+        <div className="mx-auto max-w-4xl px-6 lg:px-8">
+          <AnimatedSection animation="fade-in">
+            <div className="text-center">
+              <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+                Let's Build Something Together
+              </h1>
+              <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
+                I'm Jared—I've spent the past 5+ years helping businesses like yours navigate 
+                technology, strategy, and growth. I'm not just here to build something and disappear. 
+                My best work comes from true partnerships.
+              </p>
+            </div>
+          </AnimatedSection>
+
+          {/* What to Expect */}
+          <AnimatedSection animation="fade-in" delay={100}>
+            <div className="mt-12 grid gap-6 md:grid-cols-2">
+              <div className="rounded-xl border border-border bg-card p-6">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 mb-4">
+                  <MessageSquare className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2">How It Works</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Fill out the form below with your project details. I'll review everything 
+                  and reach out within 2-3 business days to schedule a conversation—no 
+                  commitment, just a chat to see if we're a good fit.
+                </p>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-6">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 mb-4">
+                  <Handshake className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2">How I Work</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  I typically engage through consulting/advisory relationships or revenue-share 
+                  partnerships. This means we're aligned on outcomes, and I'm invested in your 
+                  long-term success—not just the project deliverable.
+                </p>
+              </div>
+            </div>
+          </AnimatedSection>
+
+          {/* Quick Services Link */}
+          <AnimatedSection animation="fade-in" delay={150}>
+            <div className="mt-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                Want to know more about what I offer?{" "}
+                <Link 
+                  to="/services" 
+                  className="text-primary hover:underline inline-flex items-center gap-1"
+                >
+                  View my services
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </p>
+            </div>
+          </AnimatedSection>
+        </div>
+      </section>
+
+      {/* Form Section */}
+      <div className="py-16 md:py-20">
         <div className="mx-auto max-w-3xl px-6 lg:px-8">
           <AnimatedSection animation="fade-in">
-            <div className="text-center mb-12">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
-                <Briefcase className="h-8 w-8 text-primary" />
+            <div className="text-center mb-10">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-5">
+                <Briefcase className="h-7 w-7 text-primary" />
               </div>
-              <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Let's Work Together
-              </h1>
-              <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                Have a project in mind? Fill out the form below with your details and I'll get back to you within 2-3 business days.
+              <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                Tell Me About Your Project
+              </h2>
+              <p className="mt-3 text-muted-foreground">
+                The more detail you provide, the better I can understand how to help.
               </p>
             </div>
           </AnimatedSection>
