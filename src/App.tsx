@@ -20,6 +20,7 @@ import Contact from "./pages/Contact";
 import ProductLegal from "./pages/ProductLegal";
 import ReportSite from "./pages/ReportSite";
 import Hire from "./pages/Hire";
+import Services from "./pages/Services";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +50,7 @@ const App = () => (
             <Route path="/product/:productId/legal" element={<ProductLegal />} />
             <Route path="/report-site" element={<ReportSite />} />
             <Route path="/hire" element={<Hire />} />
+            <Route path="/services" element={<Services />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

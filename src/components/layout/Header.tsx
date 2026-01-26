@@ -9,6 +9,7 @@ import bestlyLogo from "@/assets/bestly-logo.png";
 const navigation = [
   { name: "Home", href: "/" },
   { name: "About", href: "/about" },
+  { name: "Services", href: "/services" },
   { name: "Contact", href: "/contact" },
   { name: "Hire Me", href: "/hire" },
 ];
@@ -138,6 +139,18 @@ export function Header() {
                     )}
                   >
                     Products
+                  </Link>
+                  <Link
+                    to="/services"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "-mx-3 block rounded-lg px-3 py-2 text-base font-medium transition-colors",
+                      location.pathname === "/services"
+                        ? "bg-accent text-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    )}
+                  >
+                    Services
                   </Link>
                   <div className="pl-4 space-y-1">
                     <Link
