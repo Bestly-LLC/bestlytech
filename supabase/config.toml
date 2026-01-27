@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.submit-hire-request]
 verify_jwt = false
+
+[functions.submit-contact]
+verify_jwt = false
+
+[functions.upsert-device-token]
+verify_jwt = false
