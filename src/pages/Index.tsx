@@ -99,7 +99,7 @@ export default function Index() {
             </div>
             
             {/* Main headline with gradient */}
-            <h1 className="text-5xl font-semibold tracking-tight text-foreground sm:text-6xl lg:text-7xl text-balance leading-[1.1]">
+            <h1 className="text-5xl font-semibold tracking-tight text-foreground sm:text-6xl lg:text-7xl whitespace-nowrap leading-[1.1]">
               Products That{" "}
               <GradientText className="font-semibold">
                 Respect People
