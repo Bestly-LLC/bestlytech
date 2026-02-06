@@ -89,8 +89,7 @@ export default function Contact() {
             Contact Us
           </h1>
           <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
-            Have a question, partnership inquiry, or need support? We're here to help.
-            Fill out the form below and we'll get back to you within 2-3 business days.
+            Drop us a line. We'll get back to you within 2-3 business days.
           </p>
         </AnimatedSection>
 

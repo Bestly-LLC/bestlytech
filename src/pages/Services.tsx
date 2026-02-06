@@ -23,37 +23,37 @@ const services = [
     icon: Code,
     title: "Web & App Development",
     description:
-      "Custom websites, web applications, and mobile apps built with modern technology stacks. From landing pages to full-featured platforms.",
+      "Custom websites, web apps, and mobile apps. From landing pages to full platforms.",
   },
   {
     icon: TrendingUp,
     title: "Business Consulting",
     description:
-      "Strategic guidance on operations, growth, and scaling your business. I help you identify opportunities and navigate challenges.",
+      "Strategic guidance on operations, growth, and scaling. Identify opportunities and navigate challenges.",
   },
   {
     icon: Bot,
     title: "AI & Automation",
     description:
-      "Implementing intelligent tools and automating workflows to increase efficiency. Save time and reduce manual work.",
+      "Intelligent tools and workflow automation to save time and cut manual work.",
   },
   {
     icon: Palette,
     title: "Marketing & Branding",
     description:
-      "Digital marketing strategy, brand identity, and design services. Build a brand that resonates with your audience.",
+      "Digital marketing strategy, brand identity, and design. Build a brand that resonates.",
   },
   {
     icon: Package,
     title: "Productization",
     description:
-      "Transforming services or ideas into scalable products. I help you package expertise into offerings that grow with you.",
+      "Turn services or ideas into scalable products. Package your expertise into offerings that grow.",
   },
   {
     icon: Shield,
     title: "Compliance Engineering",
     description:
-      "Privacy-first architecture, legal compliance (GDPR, CCPA), and platform requirements. Launch with confidence.",
+      "Privacy-first architecture, GDPR/CCPA compliance, and platform requirements. Launch with confidence.",
   },
 ];
 
@@ -97,9 +97,7 @@ export default function Services() {
               I'm Jared, and I help businesses build, grow, and scale.
             </h1>
             <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
-              I work with businesses at every stage—from local shops looking to establish their 
-              online presence to tech startups ready to scale. My approach is collaborative: 
-              I partner with you to build something that works, not just deliver and disappear.
+              From local shops to tech startups — I partner with you to build something that works, not just deliver and disappear.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
               <Button asChild size="lg">
@@ -121,11 +119,10 @@ export default function Services() {
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <AnimatedSection animation="fade-in" className="text-center mb-12">
             <h2 className="text-3xl font-bold tracking-tight text-foreground">
-              What I Can Help You With
+              How I Can Help
             </h2>
             <p className="mt-4 text-muted-foreground max-w-2xl mx-auto">
-              With over 5 years of professional experience, I bring a range of skills 
-              to help you tackle challenges and seize opportunities.
+              5+ years of experience across development, strategy, and growth.
             </p>
           </AnimatedSection>
 

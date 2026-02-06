@@ -31,7 +31,7 @@ const products: Product[] = [
   {
     id: "cookie-yeti",
     name: "Cookie Yeti",
-    description: "A privacy-focused browser extension that automatically detects and dismisses cookie consent banners without compromising your privacy.",
+    description: "Dismiss cookie banners instantly. Browse cleaner, faster, and more privately.",
     category: "Extension",
     status: "Coming Soon",
     icon: Puzzle,
@@ -39,7 +39,7 @@ const products: Product[] = [
   {
     id: "inventory-proof",
     name: "InventoryProof",
-    description: "AI-powered home inventory documentation for insurance claims and estate planning. Create insurance-ready reports from video walkthroughs in minutes.",
+    description: "Walk through your home. Get an insurance-ready inventory report in minutes, powered by AI.",
     category: "Platform",
     status: "In Development",
     icon: Smartphone,
@@ -47,7 +47,7 @@ const products: Product[] = [
   {
     id: "hoku",
     name: "HOKU",
-    description: "Premium hypochlorous acid skincare. Pharmaceutical-grade HOCl facial mist using advanced electrolysis manufacturing and vacuum-sealed packaging.",
+    description: "Pharmaceutical-grade skincare, simplified. A daily facial mist backed by science, not marketing.",
     category: "Physical Product",
     status: "In Development",
     icon: Droplets,
@@ -74,8 +74,8 @@ export default function Products() {
   return (
     <Layout>
       <SEOHead
-        title="Products & Platforms | Bestly LLC"
-        description="Explore our portfolio of privacy-first products including Cookie Yeti, InventoryProof, and HOKU. Software, AI tools, and physical products built with ethical design."
+        title="What We're Building | Bestly LLC"
+        description="Explore our portfolio of privacy-first products including Cookie Yeti, InventoryProof, and HOKU — software, AI tools, and physical products built with privacy at the core."
       />
       
       <div className="relative">
@@ -86,12 +86,10 @@ export default function Products() {
           {/* Page Header */}
           <AnimatedSection className="mb-20 max-w-3xl">
             <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              Products & <GradientText>Platforms</GradientText>
+              What We're <GradientText>Building</GradientText>
             </h1>
             <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
-              Our portfolio of privacy-first products spans software, AI tools, browser extensions, 
-              and physical products. Each product is built with our core commitment to user privacy 
-              and ethical design.
+              Every product starts with the same question: how do we make this great without compromising anyone's privacy?
             </p>
           </AnimatedSection>
 
@@ -150,9 +148,9 @@ export default function Products() {
                 <div className="w-14 h-14 rounded-xl bg-secondary/50 flex items-center justify-center mb-4">
                   <Box className="h-7 w-7 text-muted-foreground" />
                 </div>
-                <p className="text-foreground font-medium mb-2">More Products Coming</p>
+                <p className="text-foreground font-medium mb-2">More Coming Soon</p>
                 <p className="text-sm text-muted-foreground max-w-[200px]">
-                  We're actively developing new products across multiple categories.
+                  Something new is always in the works.
                 </p>
               </div>
             </AnimatedSection>
@@ -162,29 +160,29 @@ export default function Products() {
           <section className="mt-32 border-t border-border pt-16">
             <AnimatedSection>
               <h2 className="text-2xl font-semibold text-foreground mb-12">
-                Product Categories
+                Where We Play
               </h2>
             </AnimatedSection>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 {
                   category: "Mobile Apps",
-                  description: "iOS and Android applications with privacy-first architecture.",
+                  description: "iOS and Android apps that put you in control.",
                   icon: Smartphone,
                 },
                 {
                   category: "Browser Extensions",
-                  description: "Productivity and privacy tools for Chrome, Firefox, Safari, and Edge.",
+                  description: "Productivity and privacy tools for every major browser.",
                   icon: Puzzle,
                 },
                 {
                   category: "AI Tools",
-                  description: "Intelligent automation with transparent, ethical AI practices.",
+                  description: "Intelligent automation, built transparently.",
                   icon: Cpu,
                 },
                 {
                   category: "Physical Products",
-                  description: "Consumer products with optional privacy-respecting companion apps.",
+                  description: "Real goods with privacy-respecting companion apps.",
                   icon: Box,
                 },
               ].map((item, index) => (

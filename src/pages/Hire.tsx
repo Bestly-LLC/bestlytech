@@ -140,9 +140,7 @@ export default function Hire() {
                 Let's Build Something Together
               </h1>
               <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-                I'm Jared—I've spent the past 5+ years helping businesses like yours navigate 
-                technology, strategy, and growth. I'm not just here to build something and disappear. 
-                My best work comes from true partnerships.
+                I've spent 5+ years helping businesses navigate technology, strategy, and growth. My best work comes from true partnerships — not one-off deliverables.
               </p>
             </div>
           </AnimatedSection>
