@@ -53,7 +53,7 @@ export function Footer() {
               </span>
             </div>
             <p className="mt-4 text-sm text-muted-foreground leading-relaxed max-w-xs">
-              A multi-vertical product studio building privacy-first digital and physical products.
+              Products that respect people. Software, hardware, and everything in between.
             </p>
             <p className="mt-4 text-sm text-muted-foreground">
               Los Angeles, CA, United States

@@ -9,72 +9,72 @@ import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 
 const focusAreas = [
   {
-    name: "Software Platforms",
-    description: "Web and mobile applications built with user privacy at the core.",
+    name: "Apps & Platforms",
+    description: "Mobile and web products designed to work for you, not against you.",
     icon: Monitor,
   },
   {
-    name: "AI & Automation Tools",
-    description: "Intelligent systems designed with transparency and ethical principles.",
+    name: "AI & Automation",
+    description: "Smart tools that are transparent about how they think.",
     icon: Cpu,
   },
   {
     name: "Browser Extensions",
-    description: "Productivity tools that respect your browsing privacy.",
+    description: "Productivity without the surveillance.",
     icon: Puzzle,
   },
   {
-    name: "Consumer Technology",
-    description: "User-centric digital products for everyday life.",
+    name: "Consumer Tech",
+    description: "Everyday tools, built to last.",
     icon: Smartphone,
   },
   {
-    name: "Physical Products & Devices",
-    description: "Hardware-adjacent products with privacy-first companion apps.",
+    name: "Physical Products",
+    description: "Real things you can hold. No data strings attached.",
     icon: Box,
   },
   {
-    name: "Digital-to-Physical Systems",
-    description: "Seamless ecosystems connecting software with tangible products.",
+    name: "Connected Ecosystems",
+    description: "Software and hardware that work as one.",
     icon: Workflow,
   },
 ];
 
 const trustPrinciples = [
   {
-    name: "Privacy-First Architecture",
-    description: "Every product is designed with privacy as a foundational requirement.",
+    name: "Privacy by Design",
+    description: "Built in from day one. Not bolted on after.",
     icon: Shield,
   },
   {
-    name: "Minimal Data Collection",
-    description: "We only collect data that is essential for product functionality.",
+    name: "Less Data, More Trust",
+    description: "We collect only what's needed. Nothing more.",
     icon: Database,
   },
   {
-    name: "No Data Resale",
-    description: "Your personal information is never sold to third parties.",
+    name: "Zero Data Sales",
+    description: "Your information is never for sale. Period.",
     icon: Lock,
   },
   {
-    name: "Global Consumer Rights",
-    description: "We support GDPR, CCPA, and international data protection standards.",
+    name: "Global Standards",
+    description: "GDPR, CCPA, and beyond. Your rights, worldwide.",
     icon: Globe,
   },
 ];
 
 const metrics = [
-  { value: 3, label: "Products", suffix: "" },
-  { value: 100, label: "Privacy-First", suffix: "%" },
-  { value: 0, label: "Data Sold", suffix: "" },
+  { value: 3, label: "Products Shipped", suffix: "" },
+  { value: 100, label: "Privacy Score", suffix: "%" },
+  { value: 0, label: "User Data Sold", suffix: "" },
 ];
 
 export default function Index() {
   return (
     <Layout>
       <SEOHead
-        title="Bestly LLC – Privacy-First Digital & Physical Products"
-        description="Bestly LLC is a multi-vertical product studio developing consumer software, AI tools, hardware-adjacent devices, and physical products with a commitment to privacy and ethical design."
+        title="Bestly – Products That Respect People"
+        description="Bestly is a product studio building software, hardware, and AI tools with privacy at the core."
         path="/"
       />
 
@@ -95,22 +95,19 @@ export default function Index() {
             {/* Premium badge */}
             <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-border bg-background/60 backdrop-blur-sm px-4 py-2 text-sm font-medium text-muted-foreground">
               <Shield className="h-4 w-4 text-primary" />
-              Privacy-First Product Studio
+              A Bestly Studio
             </div>
             
             {/* Main headline with gradient */}
             <h1 className="text-5xl font-semibold tracking-tight text-foreground sm:text-6xl lg:text-7xl text-balance leading-[1.1]">
-              Building Thoughtful{" "}
+              Products That{" "}
               <GradientText className="font-semibold">
-                Digital & Physical
-              </GradientText>{" "}
-              Products
+                Respect People
+              </GradientText>
             </h1>
             
             <p className="mt-8 text-lg sm:text-xl leading-relaxed text-muted-foreground text-balance max-w-2xl mx-auto">
-              A multi-vertical product studio developing consumer software, AI tools,
-              hardware-adjacent devices, and physical products with a strict commitment to privacy,
-              transparency, and ethical design.
+              We design software, hardware, and everything in between — all built on the principle that your data is yours.
             </p>
             
             {/* CTAs */}
@@ -119,14 +116,14 @@ export default function Index() {
                 to="/products"
                 className="group inline-flex items-center justify-center rounded-xl gradient-bg px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                View Our Products
+                See What We're Building
                 <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Link>
               <Link
                 to="/about"
                 className="inline-flex items-center justify-center rounded-xl border border-border bg-background/80 backdrop-blur-sm px-8 py-4 text-base font-medium text-foreground shadow-sm transition-all hover:bg-accent hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                Learn More
+                Our Story
               </Link>
             </div>
             
@@ -172,10 +169,10 @@ export default function Index() {
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <AnimatedSection className="mx-auto max-w-2xl text-center mb-16">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Our Core Focus Areas
+              What We Build
             </h2>
             <p className="mt-6 text-lg text-muted-foreground">
-              We build across multiple verticals, united by our commitment to quality and user privacy.
+              From apps to physical goods — always privacy-first.
             </p>
           </AnimatedSection>
           
@@ -207,10 +204,10 @@ export default function Index() {
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <AnimatedSection className="mx-auto max-w-2xl text-center mb-16">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Trust & Compliance
+              Our Principles
             </h2>
             <p className="mt-6 text-lg text-muted-foreground">
-              Our commitment to protecting your data and respecting your rights.
+              Not policies. Promises.
             </p>
           </AnimatedSection>
           
@@ -244,10 +241,10 @@ export default function Index() {
         <div className="relative mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <AnimatedSection className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Questions or Inquiries?
+              Let's Talk
             </h2>
             <p className="mt-6 text-lg text-muted-foreground">
-              We're here to help with any questions about our products, partnerships, or compliance.
+              Whether it's a question, a partnership, or just curiosity — we're here.
             </p>
             <div className="mt-10">
               <Link
