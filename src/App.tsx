@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { ScrollProgress } from "@/components/ScrollProgress";
+import { PageTransition } from "@/components/PageTransition";
 import Index from "./pages/Index";
 import About from "./pages/About";
 import Products from "./pages/Products";
@@ -33,26 +35,29 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <ScrollToTop />
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/products" element={<Products />} />
-            <Route path="/cookie-yeti" element={<CookieYeti />} />
-            <Route path="/cookie-yeti/privacy" element={<CookieYetiPrivacy />} />
-            <Route path="/inventory-proof" element={<InventoryProof />} />
-            <Route path="/hoku" element={<Hoku />} />
-            <Route path="/press" element={<PressKit />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/privacy" element={<CookieYetiPrivacy />} />
-            <Route path="/terms-of-service" element={<TermsOfService />} />
-            <Route path="/developer-compliance" element={<DeveloperCompliance />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/product/:productId/legal" element={<ProductLegal />} />
-            <Route path="/report-site" element={<ReportSite />} />
-            <Route path="/hire" element={<Hire />} />
-            <Route path="/services" element={<Services />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <ScrollProgress />
+          <PageTransition>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/products" element={<Products />} />
+              <Route path="/cookie-yeti" element={<CookieYeti />} />
+              <Route path="/cookie-yeti/privacy" element={<CookieYetiPrivacy />} />
+              <Route path="/inventory-proof" element={<InventoryProof />} />
+              <Route path="/hoku" element={<Hoku />} />
+              <Route path="/press" element={<PressKit />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/privacy" element={<CookieYetiPrivacy />} />
+              <Route path="/terms-of-service" element={<TermsOfService />} />
+              <Route path="/developer-compliance" element={<DeveloperCompliance />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/product/:productId/legal" element={<ProductLegal />} />
+              <Route path="/report-site" element={<ReportSite />} />
+              <Route path="/hire" element={<Hire />} />
+              <Route path="/services" element={<Services />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </PageTransition>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

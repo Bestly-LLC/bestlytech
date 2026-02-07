@@ -109,9 +109,12 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-16 pt-8 border-t border-border">
-          <p className="text-sm text-muted-foreground text-center">
+        <div className="mt-16 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">
             © {new Date().getFullYear()} Bestly LLC. All rights reserved.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Built with conviction in Los Angeles.
           </p>
         </div>
       </div>

@@ -82,7 +82,9 @@ export default function Contact() {
         path="/contact"
       />
 
-      <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-24">
+      <div className="relative">
+        <div className="absolute inset-0 bg-mesh opacity-30" />
+        <div className="relative mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-24">
         {/* Page Header */}
         <AnimatedSection className="mb-16 max-w-2xl">
           <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
@@ -281,6 +283,7 @@ export default function Contact() {
               </div>
             </div>
           </AnimatedSection>
+        </div>
         </div>
       </div>
     </Layout>
