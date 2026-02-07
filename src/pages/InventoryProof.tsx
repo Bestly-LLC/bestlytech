@@ -16,6 +16,7 @@ import {
   Home,
   Briefcase,
   ScrollText,
+  ExternalLink,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -125,7 +126,13 @@ const InventoryProof = () => {
                   className="mt-10"
                   buttonText="Get Notified at Launch"
                 />
-                <div className="mt-6">
+                <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                  <Button variant="outline" size="lg" asChild>
+                    <a href="https://inventoryproof.com" target="_blank" rel="noopener noreferrer">
+                      Visit inventoryproof.com
+                      <ExternalLink className="ml-2 h-4 w-4" />
+                    </a>
+                  </Button>
                   <Button variant="outline" size="lg" asChild>
                     <a href="#how-it-works">Learn More</a>
                   </Button>

@@ -13,6 +13,7 @@ import {
   Package,
   Heart,
   CheckCircle,
+  ExternalLink,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -118,7 +119,13 @@ const Hoku = () => {
                   className="mt-10"
                   buttonText="Get Notified at Launch"
                 />
-                <div className="mt-6">
+                <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                  <Button variant="outline" size="lg" asChild>
+                    <a href="https://hoku-clean.com" target="_blank" rel="noopener noreferrer">
+                      Visit hoku-clean.com
+                      <ExternalLink className="ml-2 h-4 w-4" />
+                    </a>
+                  </Button>
                   <Button variant="outline" size="lg" asChild>
                     <a href="#about">Learn More</a>
                   </Button>
