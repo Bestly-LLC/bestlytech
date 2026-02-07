@@ -25,6 +25,7 @@ interface Product {
   category: ProductCategory;
   status: ProductStatus;
   icon: typeof Smartphone;
+  website?: string;
 }
 
 const products: Product[] = [
@@ -43,6 +44,7 @@ const products: Product[] = [
     category: "Platform",
     status: "In Development",
     icon: Smartphone,
+    website: "https://inventoryproof.com",
   },
   {
     id: "hoku",
@@ -51,6 +53,7 @@ const products: Product[] = [
     category: "Physical Product",
     status: "In Development",
     icon: Droplets,
+    website: "https://hoku-clean.com",
   },
 ];
 
@@ -122,20 +125,33 @@ export default function Products() {
                         {product.category}
                       </Badge>
                       
-                      {(product.id === "cookie-yeti" || product.id === "inventory-proof" || product.id === "hoku") && (
-                        <Link
-                          to={
-                            product.id === "cookie-yeti" ? "/cookie-yeti" :
-                            product.id === "inventory-proof" ? "/inventory-proof" :
-                            product.id === "hoku" ? "/hoku" :
-                            `/product/${product.id}/legal`
-                          }
-                          className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
-                        >
-                          Learn More
-                          <ArrowRight className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                        </Link>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {product.website && (
+                          <a
+                            href={product.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+                          >
+                            Website
+                            <ExternalLink className="ml-1 h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        {(product.id === "cookie-yeti" || product.id === "inventory-proof" || product.id === "hoku") && (
+                          <Link
+                            to={
+                              product.id === "cookie-yeti" ? "/cookie-yeti" :
+                              product.id === "inventory-proof" ? "/inventory-proof" :
+                              product.id === "hoku" ? "/hoku" :
+                              `/product/${product.id}/legal`
+                            }
+                            className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+                          >
+                            Details
+                            <ArrowRight className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   </GlowCard>
                 </AnimatedSection>
