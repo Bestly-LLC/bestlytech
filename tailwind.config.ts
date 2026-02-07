@@ -140,6 +140,10 @@ export default {
           "0%": { transform: "translateY(100%)", opacity: "0" },
           "100%": { transform: "translateY(0)", opacity: "1" },
         },
+        "page-enter": {
+          "0%": { opacity: "0", transform: "translateY(8px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -156,6 +160,7 @@ export default {
         "gradient-shift": "gradient-shift 8s ease infinite",
         "shimmer": "shimmer 2s linear infinite",
         "counter": "counter 0.5s ease-out forwards",
+        "page-enter": "page-enter 0.4s ease-out forwards",
       },
     },
   },

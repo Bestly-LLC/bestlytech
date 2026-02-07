@@ -132,15 +132,16 @@ export default function Hire() {
       />
 
       {/* Personal Introduction Section */}
-      <section className="py-16 md:py-20 border-b border-border">
-        <div className="mx-auto max-w-4xl px-6 lg:px-8">
+      <section className="relative overflow-hidden py-16 md:py-20 border-b border-border">
+        <div className="absolute inset-0 bg-mesh opacity-50" />
+        <div className="relative mx-auto max-w-4xl px-6 lg:px-8">
           <AnimatedSection animation="fade-in">
             <div className="text-center">
-              <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+              <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
                 Let's Build Something Together
               </h1>
-              <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-                I've spent 5+ years helping businesses navigate technology, strategy, and growth. My best work comes from true partnerships — not one-off deliverables.
+              <p className="mt-6 text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto">
+                5+ years helping businesses navigate technology, strategy, and growth. My best work comes from true partnerships.
               </p>
             </div>
           </AnimatedSection>
@@ -188,6 +189,32 @@ export default function Hire() {
               </p>
             </div>
           </AnimatedSection>
+        </div>
+      </section>
+
+      {/* What Happens Next */}
+      <section className="border-b border-border bg-secondary/20">
+        <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8">
+          <AnimatedSection animation="fade-in" className="text-center mb-10">
+            <h2 className="text-2xl font-semibold text-foreground">What Happens Next</h2>
+          </AnimatedSection>
+          <div className="grid gap-6 sm:grid-cols-3">
+            {[
+              { step: "1", title: "Review", desc: "I review your project details within 24 hours." },
+              { step: "2", title: "Quick Call", desc: "A 15-minute conversation to align on goals and fit." },
+              { step: "3", title: "Proposal", desc: "A clear plan with scope, timeline, and investment." },
+            ].map((s, i) => (
+              <AnimatedSection key={s.step} delay={i * 100}>
+                <div className="text-center p-6 rounded-2xl border border-border bg-card">
+                  <div className="inline-flex items-center justify-center w-10 h-10 rounded-full gradient-bg text-white text-sm font-semibold mb-4">
+                    {s.step}
+                  </div>
+                  <h3 className="font-semibold text-foreground mb-2">{s.title}</h3>
+                  <p className="text-sm text-muted-foreground">{s.desc}</p>
+                </div>
+              </AnimatedSection>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -416,6 +443,10 @@ export default function Hire() {
                     "Submit Request"
                   )}
                 </Button>
+
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Typically respond within 24 hours.
+                </p>
 
                 <p className="text-xs text-muted-foreground text-center">
                   By submitting this form, you agree to our{" "}

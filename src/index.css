@@ -207,4 +207,18 @@
   .gradient-border:hover::before {
     opacity: 1;
   }
+
+  /* Premium button hover */
+  .btn-lift {
+    @apply transition-all duration-200;
+  }
+  .btn-lift:hover {
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 0 4px 20px -4px hsl(var(--glow-color) / 0.3);
+  }
+
+  /* Focus glow on inputs */
+  .focus-glow:focus-within {
+    box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15), 0 0 20px -4px hsl(var(--glow-color) / 0.15);
+  }
 }

@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProductsDropdown } from "@/components/ProductsDropdown";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 import bestlyLogo from "@/assets/bestly-logo.png";
 
@@ -87,13 +88,14 @@ export function Header() {
           <ProductsDropdown isActive={isProductsActive} />
         </div>
 
-        <div className="hidden lg:flex lg:flex-1 lg:justify-end">
+        <div className="hidden lg:flex lg:flex-1 lg:justify-end lg:items-center lg:gap-2">
           <Link
             to="/privacy-policy"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-4 py-2 rounded-lg hover:bg-accent/50"
           >
             Legal
           </Link>
+          <ThemeToggle />
         </div>
       </nav>
 
