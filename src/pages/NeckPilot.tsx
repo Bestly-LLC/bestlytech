@@ -7,6 +7,7 @@ import { GradientText } from "@/components/ui/GradientText";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
+import neckpilotIcon from "@/assets/neckpilot-icon.png";
 import {
   Navigation,
   Headphones,
@@ -120,6 +121,11 @@ const NeckPilot = () => {
 
         <div className="relative mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-36">
           <AnimatedSection animation="fade-in-up" className="mx-auto max-w-3xl text-center">
+            <img
+              src={neckpilotIcon}
+              alt="NeckPilot app icon"
+              className="mx-auto mb-8 h-24 w-24 rounded-[22px] shadow-lg"
+            />
             <div
               className="mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium ring-1"
               style={{ color: nb.accent, borderColor: nb.ring, backgroundColor: nb.accentSoft }}
