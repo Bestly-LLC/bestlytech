@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ChevronDown, Puzzle, Smartphone, Droplets, Navigation } from "lucide-react";
+import { ChevronDown, Puzzle, Droplets } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,8 +7,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import inventoryproofIcon from "@/assets/inventoryproof-icon.png";
+import neckpilotIcon from "@/assets/neckpilot-icon.png";
+import type { LucideIcon } from "lucide-react";
 
-const products = [
+interface Product {
+  name: string;
+  description: string;
+  href: string;
+  icon?: LucideIcon;
+  image?: string;
+}
+
+const products: Product[] = [
   {
     name: "Cookie Yeti",
     description: "Privacy-focused cookie consent handler",
@@ -19,7 +30,7 @@ const products = [
     name: "InventoryProof",
     description: "AI-powered home inventory documentation",
     href: "/inventory-proof",
-    icon: Smartphone,
+    image: inventoryproofIcon,
   },
   {
     name: "HOKU",
@@ -31,7 +42,7 @@ const products = [
     name: "NeckPilot",
     description: "Posture awareness powered by AirPods",
     href: "/neckpilot",
-    icon: Navigation,
+    image: neckpilotIcon,
   },
 ];
 
@@ -60,9 +71,13 @@ export function ProductsDropdown({ className, isActive }: ProductsDropdownProps)
               to={product.href}
               className="flex items-start gap-3 p-3 cursor-pointer"
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary">
-                <product.icon className="h-4 w-4 text-foreground" />
-              </div>
+              {product.image ? (
+                <img src={product.image} alt={product.name} className="h-8 w-8 shrink-0 rounded-md" />
+              ) : product.icon ? (
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary">
+                  <product.icon className="h-4 w-4 text-foreground" />
+                </div>
+              ) : null}
               <div>
                 <p className="font-medium text-foreground">{product.name}</p>
                 <p className="text-xs text-muted-foreground">{product.description}</p>
