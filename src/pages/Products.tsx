@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Droplets,
   ArrowRight,
+  Navigation,
 } from "lucide-react";
 
 type ProductCategory = "App" | "Extension" | "AI Tool" | "Physical Product" | "Device" | "Platform";
@@ -54,6 +55,14 @@ const products: Product[] = [
     status: "In Development",
     icon: Droplets,
     website: "https://hoku-clean.com",
+  },
+  {
+    id: "neckpilot",
+    name: "NeckPilot",
+    description: "Posture awareness powered by AirPods. Real-time feedback and gentle alerts when you've been flying too long.",
+    category: "App",
+    status: "Coming Soon",
+    icon: Navigation,
   },
 ];
 
@@ -137,12 +146,13 @@ export default function Products() {
                             <ExternalLink className="ml-1 h-3.5 w-3.5" />
                           </a>
                         )}
-                        {(product.id === "cookie-yeti" || product.id === "inventory-proof" || product.id === "hoku") && (
+                        {(product.id === "cookie-yeti" || product.id === "inventory-proof" || product.id === "hoku" || product.id === "neckpilot") && (
                           <Link
                             to={
                               product.id === "cookie-yeti" ? "/cookie-yeti" :
                               product.id === "inventory-proof" ? "/inventory-proof" :
                               product.id === "hoku" ? "/hoku" :
+                              product.id === "neckpilot" ? "/neckpilot" :
                               `/product/${product.id}/legal`
                             }
                             className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"

@@ -14,6 +14,7 @@ import CookieYeti from "./pages/CookieYeti";
 import CookieYetiPrivacy from "./pages/CookieYetiPrivacy";
 import InventoryProof from "./pages/InventoryProof";
 import Hoku from "./pages/Hoku";
+import NeckPilot from "./pages/NeckPilot";
 import PressKit from "./pages/PressKit";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -45,6 +46,7 @@ const App = () => (
               <Route path="/cookie-yeti/privacy" element={<CookieYetiPrivacy />} />
               <Route path="/inventory-proof" element={<InventoryProof />} />
               <Route path="/hoku" element={<Hoku />} />
+              <Route path="/neckpilot" element={<NeckPilot />} />
               <Route path="/press" element={<PressKit />} />
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/privacy" element={<CookieYetiPrivacy />} />
