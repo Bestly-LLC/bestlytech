@@ -1,55 +1,23 @@
 
 
-## Add NeckPilot Product Page
+## Add Brand Icons to Products Dropdown
 
-Create a new "Coming Soon" product landing page for NeckPilot and register it across all product touchpoints in the site.
+Replace the generic Lucide icons with the actual app icons for InventoryProof and NeckPilot in the Products dropdown menu.
 
 ---
 
-### 1. New Page: `src/pages/NeckPilot.tsx`
+### Changes to `src/components/ProductsDropdown.tsx`
 
-A premium product page with a calm, Apple-adjacent aesthetic using soft blues and subtle aviation theming:
-
-- **Color palette**: Soft blues (`hsl(210 40% ...)`) and neutral tones -- distinct from HOKU's golden warmth and InventoryProof's deep blue tech feel
-- **Hero section**: "Coming Soon" badge, headline "Fly Aware. Adjust Early.", subtitle about posture awareness powered by AirPods, CTA "Join the Waitlist" using the existing `WaitlistForm` component
-- **How It Works**: 3-step horizontal flow (Connect AirPods, Start a Flight, Monitor + Adjust) with aviation-inspired step numbering
-- **Key Features grid**: 6 `GlowCard` items covering AirPods tracking, phone fallback, Live Activities, "Flying Too Long" alerts, session monitoring, and privacy-first design
-- **Who It's For**: Clean list/card section targeting desk workers, students, AirPods users, and anyone with screen-related neck fatigue
-- **Aviation-themed copy**: Use metaphors like "flight," "cruising altitude," "course correction" throughout
-- **Privacy callout**: Prominent section emphasizing no cameras, no recordings, no biometric storage
-- **CTA footer**: "Start your first flight." with waitlist form and link back to all products
-- **Legal notice**: Standard Bestly product disclaimer linking to Terms and Privacy
-
-### 2. Update `src/App.tsx`
-
-- Import `NeckPilot` page component
-- Add route: `<Route path="/neckpilot" element={<NeckPilot />} />`
-
-### 3. Update `src/pages/Products.tsx`
-
-Add NeckPilot to the `products` array:
-- `id: "neckpilot"`
-- `name: "NeckPilot"`
-- `description: "Posture awareness powered by AirPods. Real-time feedback and gentle alerts when you've been flying too long."`
-- `category: "App"`
-- `status: "Coming Soon"`
-- `icon: Smartphone` (or a relevant lucide icon like `Plane` / `Navigation`)
-
-Update the product card link logic to include `neckpilot` routing to `/neckpilot`.
-
-### 4. Update `src/components/ProductsDropdown.tsx`
-
-Add NeckPilot entry to the dropdown products array:
-- `name: "NeckPilot"`
-- `description: "Posture awareness powered by AirPods"`
-- `href: "/neckpilot"`
-- `icon: Navigation` (aviation-themed lucide icon)
+- Import the brand icon assets: `inventoryproof-icon.png` and `neckpilot-icon.png`
+- Update the `products` array to support both Lucide icons and image-based icons by adding an optional `image` field
+- For InventoryProof and NeckPilot, use their brand icons instead of the generic Lucide icons
+- Cookie Yeti and HOKU will continue using Lucide icons (no brand icons uploaded for them)
+- Update the rendering logic: if a product has an `image`, render an `<img>` tag; otherwise render the Lucide icon as before
+- The brand icons will be displayed at the same size as the current icon container (`h-8 w-8`) with `rounded-md` to match the existing style
 
 ### Technical Details
 
-**Icons used** (from lucide-react): `Navigation`, `Headphones`, `Activity`, `Bell`, `Timer`, `ShieldCheck`, `Smartphone`, `Monitor`, `Wifi`
+The product type will change to support an optional `image` string field alongside the existing `icon`. The render logic in the map will check for `image` first, falling back to the Lucide `icon` component.
 
-**No new dependencies needed** -- everything uses existing components (`Layout`, `SEOHead`, `AnimatedSection`, `GlowCard`, `GradientText`, `WaitlistForm`, `Button`, `Badge`).
-
-**No database changes required.**
+No other files need to change.
 
