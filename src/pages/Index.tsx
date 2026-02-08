@@ -92,11 +92,6 @@ export default function Index() {
         
         <div className="relative mx-auto max-w-7xl px-6 py-32 lg:px-8 lg:py-40">
           <AnimatedSection className="mx-auto max-w-4xl text-center">
-            {/* Premium badge */}
-            <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-border bg-background/60 backdrop-blur-sm px-4 py-2 text-sm font-medium text-muted-foreground">
-              <Shield className="h-4 w-4 text-primary" />
-              A Bestly Studio
-            </div>
             
             {/* Main headline with gradient */}
             <h1 className="text-5xl font-semibold tracking-tight text-foreground sm:text-6xl lg:text-7xl whitespace-nowrap leading-[1.1]">
