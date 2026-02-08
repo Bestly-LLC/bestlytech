@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ChevronDown, Puzzle, Smartphone, Droplets } from "lucide-react";
+import { ChevronDown, Puzzle, Smartphone, Droplets, Navigation } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,12 @@ const products = [
     description: "Premium hypochlorous acid skincare",
     href: "/hoku",
     icon: Droplets,
+  },
+  {
+    name: "NeckPilot",
+    description: "Posture awareness powered by AirPods",
+    href: "/neckpilot",
+    icon: Navigation,
   },
 ];
 
