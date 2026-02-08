@@ -18,9 +18,9 @@ import {
   ScrollText,
   ExternalLink,
   ArrowRight,
-  Scan,
   Clock,
 } from "lucide-react";
+import inventoryProofIcon from "@/assets/inventoryproof-icon.png";
 import { Link } from "react-router-dom";
 
 const InventoryProof = () => {
@@ -100,9 +100,7 @@ const InventoryProof = () => {
             </div>
 
             <div className="mb-6 flex justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.15)] to-[hsl(var(--gradient-end)/0.15)]">
-                <Scan className="h-8 w-8 text-primary" />
-              </div>
+              <img src={inventoryProofIcon} alt="InventoryProof" className="h-20 w-20 rounded-2xl" />
             </div>
 
             <h1 className="text-5xl font-semibold tracking-tight text-foreground sm:text-6xl lg:text-7xl">
