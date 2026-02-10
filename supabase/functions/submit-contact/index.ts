@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 interface ContactRequest {
@@ -14,6 +14,25 @@ interface ContactRequest {
   message: string;
 }
 
+const MAX_LENGTHS = { name: 100, email: 255, category: 50, subject: 200, message: 5000 };
+
+// Rate limiting
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 60 * 60 * 1000;
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+  if (!record || now > record.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_WINDOW_MS });
+    return false;
+  }
+  if (record.count >= RATE_LIMIT) return true;
+  record.count++;
+  return false;
+}
+
 serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -21,6 +40,15 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Rate limit check
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    if (isRateLimited(clientIp)) {
+      return new Response(
+        JSON.stringify({ error: "Too many submissions. Please try again later." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { name, email, category, subject, message }: ContactRequest = await req.json();
 
     // Validate required fields
@@ -45,15 +73,15 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Insert contact submission
+    // Insert contact submission with length limits
     const { error: insertError } = await supabase
       .from("contact_submissions")
       .insert({
-        name: name.trim(),
-        email: email.toLowerCase().trim(),
-        category: category || "general",
-        subject: subject.trim(),
-        message: message.trim(),
+        name: name.trim().slice(0, MAX_LENGTHS.name),
+        email: email.toLowerCase().trim().slice(0, MAX_LENGTHS.email),
+        category: (category || "general").slice(0, MAX_LENGTHS.category),
+        subject: subject.trim().slice(0, MAX_LENGTHS.subject),
+        message: message.trim().slice(0, MAX_LENGTHS.message),
       });
 
     if (insertError) {
@@ -66,7 +94,6 @@ serve(async (req: Request) => {
     const emailTo = Deno.env.get("EMAIL_TO");
     
     if (smtpHost && emailTo) {
-      // Email sending would go here - using existing SMTP secrets
       console.log("SMTP configured, would send notification to:", emailTo);
     }
 
@@ -77,7 +104,7 @@ serve(async (req: Request) => {
   } catch (error: any) {
     console.error("Contact form error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
