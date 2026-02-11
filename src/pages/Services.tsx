@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   Code, TrendingUp, Bot, Palette, Package, Shield,
   Rocket, Store, ShoppingCart, Cpu, ArrowRight, Handshake,
-  ClipboardCheck, PhoneCall, FileText, Zap,
+  ClipboardCheck, PhoneCall, FileText, Zap, Smartphone,
 } from "lucide-react";
 
 const services = [
@@ -40,6 +40,12 @@ const services = [
     icon: Shield,
     title: "Compliance Engineering",
     description: "Privacy-first architecture, GDPR/CCPA compliance. Launch with confidence.",
+  },
+  {
+    icon: Smartphone,
+    title: "Apple Business Modernization",
+    description: "Apple-native infrastructure — discovery, payments, identity, and automation for local businesses.",
+    link: "/apple-modernization",
   },
 ];
 
@@ -117,10 +123,34 @@ export default function Services() {
                   </div>
                   <h3 className="mt-5 text-lg font-semibold text-foreground">{service.title}</h3>
                   <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{service.description}</p>
+                  {service.link && (
+                    <Link to={service.link} className="mt-3 inline-flex items-center text-sm font-medium text-primary hover:underline">
+                      Learn more <ArrowRight className="ml-1 h-4 w-4" />
+                    </Link>
+                  )}
                 </GlowCard>
               </AnimatedSection>
             ))}
           </div>
+
+          {/* Featured Callout */}
+          <AnimatedSection animation="fade-in" delay={400} className="mt-12">
+            <Link to="/apple-modernization" className="block">
+              <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-[hsl(var(--gradient-start)/0.05)] to-[hsl(var(--gradient-end)/0.05)] p-8 transition-all hover:shadow-premium hover:-translate-y-1">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.15)] to-[hsl(var(--gradient-end)/0.15)]">
+                    <Smartphone className="h-7 w-7 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-1">Flagship Program</p>
+                    <h3 className="text-xl font-semibold text-foreground">Apple-Native Business Modernization</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">Discovery, payments, identity, automation — a complete Apple ecosystem stack for local businesses.</p>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-primary shrink-0" />
+                </div>
+              </div>
+            </Link>
+          </AnimatedSection>
         </div>
       </section>
 

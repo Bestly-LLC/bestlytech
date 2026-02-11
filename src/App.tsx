@@ -24,6 +24,7 @@ import ProductLegal from "./pages/ProductLegal";
 import ReportSite from "./pages/ReportSite";
 import Hire from "./pages/Hire";
 import Services from "./pages/Services";
+import AppleModernization from "./pages/AppleModernization";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -57,6 +58,7 @@ const App = () => (
               <Route path="/report-site" element={<ReportSite />} />
               <Route path="/hire" element={<Hire />} />
               <Route path="/services" element={<Services />} />
+              <Route path="/apple-modernization" element={<AppleModernization />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </PageTransition>
