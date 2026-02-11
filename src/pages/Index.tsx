@@ -2,7 +2,7 @@ import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Link } from "react-router-dom";
-import { Shield, Database, Lock, Globe, Monitor, Cpu, Puzzle, Smartphone, Box, Workflow, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Shield, Database, Lock, Globe, Monitor, Cpu, Puzzle, Smartphone, Box, Workflow, ArrowRight, CheckCircle2, MapPin } from "lucide-react";
 import { GradientText } from "@/components/ui/GradientText";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
@@ -80,57 +80,52 @@ export default function Index() {
 
       {/* Hero Section */}
       <section className="relative overflow-hidden min-h-[90vh] flex items-center">
-        {/* Gradient mesh background */}
         <div className="absolute inset-0 bg-mesh" />
-        
-        {/* Subtle grid overlay */}
         <div className="absolute inset-0 bg-grid opacity-50" />
-        
-        {/* Animated gradient orbs */}
         <div className="absolute top-1/4 -left-32 w-96 h-96 bg-gradient-to-r from-[hsl(var(--gradient-start)/0.2)] to-[hsl(var(--gradient-end)/0.1)] rounded-full blur-3xl animate-float-slow" />
         <div className="absolute bottom-1/4 -right-32 w-80 h-80 bg-gradient-to-l from-[hsl(var(--gradient-end)/0.15)] to-[hsl(var(--gradient-start)/0.1)] rounded-full blur-3xl animate-float-slow" style={{ animationDelay: '-3s' }} />
         
         <div className="relative mx-auto max-w-7xl px-6 py-32 lg:px-8 lg:py-40">
           <AnimatedSection className="mx-auto max-w-4xl text-center">
+            <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-6">
+              Product Studio · Los Angeles
+            </p>
             
-            {/* Main headline with gradient */}
             <h1 className="text-5xl font-semibold tracking-tight text-foreground sm:text-6xl lg:text-7xl whitespace-nowrap leading-[1.1]">
-              Products That{" "}
+              Build Different.{" "}
               <GradientText className="font-semibold">
-                Respect People
+                Build Better.
               </GradientText>
             </h1>
             
             <p className="mt-8 text-lg sm:text-xl leading-relaxed text-muted-foreground text-balance max-w-2xl mx-auto">
-              We design software, hardware, and everything in between — all built on the principle that your data is yours.
+              We design software, hardware, and services that put people first — from privacy-respecting apps to Apple-native business infrastructure.
             </p>
             
-            {/* CTAs */}
             <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
-                to="/products"
+                to="/services"
                 className="group inline-flex items-center justify-center rounded-xl gradient-bg px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                See What We're Building
+                Explore Services
                 <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Link>
               <Link
-                to="/about"
+                to="/products"
                 className="inline-flex items-center justify-center rounded-xl border border-border bg-background/80 backdrop-blur-sm px-8 py-4 text-base font-medium text-foreground shadow-sm transition-all hover:bg-accent hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                Our Story
+                Our Products
               </Link>
             </div>
             
-            {/* Trust badges */}
             <div className="mt-16 flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>GDPR Compliant</span>
+                <span>Privacy First</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>CCPA Ready</span>
+                <span>Apple Ecosystem</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
@@ -188,6 +183,43 @@ export default function Index() {
               </AnimatedSection>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Apple Modernization Callout */}
+      <section className="relative border-t border-border bg-secondary/20">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+        <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
+          <AnimatedSection animation="fade-in">
+            <Link to="/apple-modernization" className="block group">
+              <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-[hsl(var(--gradient-start)/0.04)] to-[hsl(var(--gradient-end)/0.08)] p-8 sm:p-12 transition-all hover:shadow-premium hover:-translate-y-1">
+                <div className="absolute top-6 right-6 sm:top-8 sm:right-8">
+                  <ArrowRight className="h-6 w-6 text-primary transition-transform group-hover:translate-x-1" />
+                </div>
+                <div className="flex flex-col sm:flex-row items-start gap-6 sm:gap-8">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.15)] to-[hsl(var(--gradient-end)/0.15)]">
+                    <MapPin className="h-8 w-8 text-primary" />
+                  </div>
+                  <div className="max-w-2xl">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-2">Flagship Program</p>
+                    <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+                      Apple-Native Business Modernization
+                    </h3>
+                    <p className="mt-3 text-muted-foreground leading-relaxed">
+                      A turnkey infrastructure stack for local businesses — discovery, payments, identity verification, and automation, all built on Apple's ecosystem.
+                    </p>
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      {["Apple Maps", "Tap to Pay", "App Clips", "Digital ID", "Wallet Passes"].map((tag) => (
+                        <span key={tag} className="text-xs font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          </AnimatedSection>
         </div>
       </section>
 
