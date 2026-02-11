@@ -23,6 +23,7 @@ export function Header() {
     location.pathname.startsWith("/cookie-yeti") ||
     location.pathname.startsWith("/inventory-proof") ||
     location.pathname.startsWith("/hoku");
+  const isServicesActive = location.pathname === "/services" || location.pathname.startsWith("/apple-modernization");
 
   useEffect(() => {
     const handleScroll = () => {
@@ -74,13 +75,13 @@ export function Header() {
               to={item.href}
               className={cn(
                 "relative px-4 py-2 text-sm font-medium transition-colors rounded-lg",
-                location.pathname === item.href
-                  ? "text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+              (item.href === "/services" ? isServicesActive : location.pathname === item.href)
+                   ? "text-foreground"
+                   : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
               )}
             >
               {item.name}
-              {location.pathname === item.href && (
+              {(item.href === "/services" ? isServicesActive : location.pathname === item.href) && (
                 <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
               )}
             </Link>
@@ -167,7 +168,7 @@ export function Header() {
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
                       "block rounded-xl px-4 py-3 text-base font-medium transition-all",
-                      location.pathname === "/services"
+                      isServicesActive
                         ? "bg-accent text-foreground"
                         : "text-muted-foreground hover:bg-accent hover:text-foreground"
                     )}
