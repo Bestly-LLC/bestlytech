@@ -86,7 +86,7 @@ const CookieYetiSupport = () => {
                 </p>
                 <Button asChild size="lg">
                   <a
-                    href="mailto:help.support@bestly.tech?subject=Cookie%20Yeti%20Support"
+                    href="mailto:support@bestly.tech?subject=Cookie%20Yeti%20Support"
                   >
                     Contact Support
                   </a>
