@@ -148,7 +148,7 @@ export default function CookieYeti() {
             
             <div className="mt-8">
               <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-sm px-4 py-1">
-                Coming Soon to Chrome
+                Available Now
               </Badge>
             </div>
             
@@ -156,11 +156,11 @@ export default function CookieYeti() {
               productId="cookie-yeti" 
               productName="Cookie Yeti" 
               className="mt-8"
-              buttonText="Get Notified at Launch"
+              buttonText="Get Early Access"
             />
             
             <p className="mt-4 text-sm text-muted-foreground">
-              Other browsers (Safari, Firefox, Edge) and Android coming later
+              Available on Chrome, Safari (iOS + macOS), and Android
             </p>
             
             <div className="mt-6">
