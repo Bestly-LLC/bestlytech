@@ -36,6 +36,11 @@ const faqs = [
     answer:
       "None. Cookie Yeti processes everything on your device. No browsing history, no personal data, no tracking. Your preferences never leave your device.",
   },
+  {
+    question: "How do I report a banner Cookie Yeti missed?",
+    answer:
+      "Open the Cookie Yeti extension popup and tap Report a missed banner. This helps us improve detection for future updates.",
+  },
 ];
 
 const CookieYetiSupport = () => {
