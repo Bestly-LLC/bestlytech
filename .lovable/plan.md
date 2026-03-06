@@ -1,60 +1,57 @@
 
 
-# Mobile Responsiveness Audit & Fixes
+## Integrate Apple-Native Business Modernization Program
 
-## Issues Found
-
-After reviewing all pages, the codebase is **already largely mobile-friendly** thanks to consistent use of Tailwind responsive utilities (`sm:`, `md:`, `lg:` breakpoints), flexbox/grid layouts, and a working mobile hamburger menu. However, there are specific issues to fix:
-
-### 1. Homepage Hero: `whitespace-nowrap` causes horizontal overflow on small screens
-- **File**: `src/pages/Index.tsx`, line 94
-- The `whitespace-nowrap` class on the h1 forces "Build Different. Build Better." onto one line, overflowing on phones (<375px).
-- **Fix**: Remove `whitespace-nowrap` so the text wraps naturally on small screens.
-
-### 2. Homepage Metrics Grid: 3-column grid cramped on small phones
-- **File**: `src/pages/Index.tsx`, line 142
-- `grid-cols-3` with no small-screen fallback makes metrics text tiny on narrow screens.
-- **Fix**: Keep `grid-cols-3` but it's borderline acceptable. No change strictly needed since values are short numbers.
-
-### 3. Hire Page: 3-column select grid doesn't stack on mobile
-- **File**: `src/pages/Hire.tsx`, line 336
-- `md:grid-cols-3` is fine — it already stacks on mobile. No issue.
-
-### 4. Cookie Yeti Privacy trust grid: `grid-cols-2 md:grid-cols-3` on very small screens
-- **File**: `src/pages/CookieYeti.tsx`, line 280
-- The 2-col grid on smallest screens may clip the "No selling or sharing" text. Minor but acceptable.
-
-### 5. HOKU Hero: Fixed-height image could cause layout issues
-- The hero grid handles this well with `lg:grid-cols-2`. No issue.
-
-### 6. NeckPilot icon image may need `max-w` constraint on mobile
-- Would need to verify but pattern matches other product pages.
-
-### 7. Apple Modernization page uses responsive patterns correctly.
+Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
 
 ---
 
-## Summary of Actual Fixes Needed
+### 1. New Page: `src/pages/AppleModernization.tsx`
 
-Only **one clear bug** and a couple of minor improvements:
+A comprehensive, premium-feeling service page with the following sections:
 
-| Page | Issue | Fix |
-|------|-------|-----|
-| **Index.tsx** (Hero) | `whitespace-nowrap` causes horizontal scroll on mobile | Remove `whitespace-nowrap` |
-| **Index.tsx** (Hero) | Large text sizes (`text-5xl`) could be slightly smaller on mobile | Add `text-4xl` base with `sm:text-5xl` |
-| **Footer** | 2-col grid on smallest screens puts company info + nav links side by side tightly | Already `col-span-2` on small, acceptable |
+- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
+- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
+- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
+  - Apple Discovery Infrastructure
+  - App Clips (Instant Customer Experience)
+  - Payments Modernization (Tap to Pay)
+  - Digital ID Verification
+  - Brand Trust and Identity
+  - Customer Experience Automation
+  - Commerce and Ordering
+  - Operational Analytics
+  - Apple-Ready Certification (marked as optional)
+- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
+- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
+- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
 
-## Implementation
+### 2. Route Registration: `src/App.tsx`
 
-The fix is minimal — a single line change in `src/pages/Index.tsx`:
-- Line 94: Change `text-5xl ... sm:text-6xl lg:text-7xl whitespace-nowrap` to `text-4xl ... sm:text-5xl lg:text-7xl` (drop `whitespace-nowrap`, adjust base size)
+- Import the new `AppleModernization` page component.
+- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
 
-All other pages follow correct responsive patterns. No systemic issues found.
+### 3. Services Page Update: `src/pages/Services.tsx`
 
-## Going Forward
+- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
+- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
 
-The codebase already follows strong mobile-first conventions. To maintain this:
-- Continue using Tailwind's mobile-first approach (base styles = mobile, `sm:`/`md:`/`lg:` for larger)
-- Avoid `whitespace-nowrap` on headings
-- Test any new `grid-cols-*` layouts have a single-column fallback at base
+### 4. Header Navigation: `src/components/layout/Header.tsx`
+
+- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
+
+---
+
+### Technical Details
+
+**New file:**
+- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
+
+**Modified files:**
+- `src/App.tsx` -- add import and route
+- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
+
+**No database or backend changes required.** This is purely a frontend content page.
+
+The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
 

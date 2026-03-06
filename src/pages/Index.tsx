@@ -91,7 +91,7 @@ export default function Index() {
               Product Studio · Los Angeles
             </p>
             
-            <h1 className="text-5xl font-semibold tracking-tight text-foreground sm:text-6xl lg:text-7xl whitespace-nowrap leading-[1.1]">
+            <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-7xl leading-[1.1]">
               Build Different.{" "}
               <GradientText className="font-semibold">
                 Build Better.
