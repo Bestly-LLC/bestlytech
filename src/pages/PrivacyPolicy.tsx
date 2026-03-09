@@ -275,7 +275,48 @@ export default function PrivacyPolicy() {
           </section>
 
           <section className="mb-12">
-            <h2 className="text-2xl font-semibold text-foreground mb-4">15. Changes to This Policy</h2>
+            <h2 className="text-2xl font-semibold text-foreground mb-4">15. Cookie Yeti Extension – Community Pattern Sharing</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              The Cookie Yeti browser extension includes an optional community pattern sharing feature. 
+              When enabled, the extension shares anonymized cookie banner detection patterns with our 
+              community database to improve cookie consent detection for all users.
+            </p>
+            <h3 className="text-xl font-medium text-foreground mb-3 mt-6">Data Shared</h3>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              The only data shared through this feature includes:
+            </p>
+            <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
+              <li><strong className="text-foreground">Website domain names</strong> (e.g., "example.com")</li>
+              <li><strong className="text-foreground">CSS selectors</strong> used to identify cookie consent banners</li>
+              <li><strong className="text-foreground">Action types</strong> (accept, reject, necessary, save, or close)</li>
+              <li><strong className="text-foreground">CMP fingerprints</strong> (consent management platform identifiers)</li>
+            </ul>
+            <h3 className="text-xl font-medium text-foreground mb-3 mt-6">Data NOT Collected</h3>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              This feature does <strong className="text-foreground">not</strong> collect any of the following:
+            </p>
+            <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
+              <li>Personal information of any kind</li>
+              <li>Browsing history or page content</li>
+              <li>IP addresses or geolocation data</li>
+              <li>Cookies or cookie values from websites</li>
+              <li>User identifiers, accounts, or device fingerprints</li>
+            </ul>
+            <h3 className="text-xl font-medium text-foreground mb-3 mt-6">Opt-In & Control</h3>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              Community pattern sharing is entirely <strong className="text-foreground">opt-in</strong> and 
+              can be disabled at any time in the Cookie Yeti extension settings. Shared pattern data is 
+              stored securely and used solely to improve cookie banner detection accuracy for all Cookie 
+              Yeti users.
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              For Cookie Yeti's complete privacy policy, see the{" "}
+              <Link to="/cookie-yeti/privacy" className="text-foreground underline">Cookie Yeti Privacy Policy</Link>.
+            </p>
+          </section>
+
+          <section className="mb-12">
+            <h2 className="text-2xl font-semibold text-foreground mb-4">16. Changes to This Policy</h2>
             <p className="text-muted-foreground leading-relaxed">
               We may update this Privacy Policy from time to time. We will notify you of any material 
               changes by posting the new Privacy Policy on this page and updating the "Last Updated" 
@@ -285,7 +326,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section className="mb-12">
-            <h2 className="text-2xl font-semibold text-foreground mb-4">16. Contact Us</h2>
+            <h2 className="text-2xl font-semibold text-foreground mb-4">17. Contact Us</h2>
             <p className="text-muted-foreground leading-relaxed mb-4">
               If you have any questions about this Privacy Policy or our data practices, please 
               contact us:
