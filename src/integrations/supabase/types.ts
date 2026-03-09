@@ -47,6 +47,51 @@ export type Database = {
         }
         Relationships: []
       }
+      cookie_patterns: {
+        Row: {
+          action_type: string
+          cmp_fingerprint: string
+          confidence: number
+          created_at: string
+          domain: string
+          id: string
+          last_seen: string | null
+          report_count: number
+          selector: string
+          source: string
+          success_count: number
+          updated_at: string
+        }
+        Insert: {
+          action_type: string
+          cmp_fingerprint?: string
+          confidence?: number
+          created_at?: string
+          domain: string
+          id?: string
+          last_seen?: string | null
+          report_count?: number
+          selector: string
+          source?: string
+          success_count?: number
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string
+          cmp_fingerprint?: string
+          confidence?: number
+          created_at?: string
+          domain?: string
+          id?: string
+          last_seen?: string | null
+          report_count?: number
+          selector?: string
+          source?: string
+          success_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       device_tokens: {
         Row: {
           created_at: string
@@ -151,7 +196,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      record_pattern_success: {
+        Args: { _action_type: string; _domain: string; _selector: string }
+        Returns: undefined
+      }
+      upsert_pattern: {
+        Args: {
+          _action_type: string
+          _cmp_fingerprint?: string
+          _domain: string
+          _selector: string
+          _source?: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
