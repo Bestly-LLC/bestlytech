@@ -114,12 +114,14 @@ const InventoryProof = () => {
               insurance-ready documentation of their belongings in minutes — not hours.
             </p>
 
-            <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-              <WaitlistForm
-                productId="inventory-proof"
-                productName="InventoryProof"
-                buttonText="Get Notified at Launch"
-              />
+            <div className="mt-10 flex justify-center">
+              <a href="https://apps.apple.com/us/app/inventoryproof/id6758317473" target="_blank" rel="noopener noreferrer">
+                <img
+                  src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+                  alt="Download on the App Store"
+                  style={{ width: 180 }}
+                />
+              </a>
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
