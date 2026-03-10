@@ -18,7 +18,7 @@ import {
   ScrollText,
   ExternalLink,
   ArrowRight,
-  Clock,
+  
 } from "lucide-react";
 import inventoryProofIcon from "@/assets/inventoryproof-icon.png";
 import { Link } from "react-router-dom";
