@@ -1,7 +1,7 @@
 import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
-import { WaitlistForm } from "@/components/WaitlistForm";
+
 import { GlowCard } from "@/components/ui/GlowCard";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +18,7 @@ import {
   ScrollText,
   ExternalLink,
   ArrowRight,
-  Clock,
+  
 } from "lucide-react";
 import inventoryProofIcon from "@/assets/inventoryproof-icon.png";
 import { Link } from "react-router-dom";
@@ -91,12 +91,12 @@ const InventoryProof = () => {
 
         <div className="relative mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-36">
           <AnimatedSection animation="fade-in-up" className="mx-auto max-w-3xl text-center">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-background/60 backdrop-blur-sm px-4 py-2 text-sm font-medium text-muted-foreground">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-background/60 backdrop-blur-sm px-4 py-2 text-sm font-medium text-primary">
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
               </span>
-              In Development
+              Available on the App Store
             </div>
 
             <div className="mb-6 flex justify-center">
@@ -114,12 +114,14 @@ const InventoryProof = () => {
               insurance-ready documentation of their belongings in minutes — not hours.
             </p>
 
-            <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-              <WaitlistForm
-                productId="inventory-proof"
-                productName="InventoryProof"
-                buttonText="Get Notified at Launch"
-              />
+            <div className="mt-10 flex justify-center">
+              <a href="https://apps.apple.com/us/app/inventoryproof/id6758317473" target="_blank" rel="noopener noreferrer">
+                <img
+                  src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+                  alt="Download on the App Store"
+                  style={{ width: 180 }}
+                />
+              </a>
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
@@ -247,17 +249,20 @@ const InventoryProof = () => {
           <div className="absolute inset-0 bg-mesh opacity-30" />
           <AnimatedSection className="relative mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Coming Soon
+              Available Now
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              InventoryProof is currently in development. Be the first to know when we launch.
+              InventoryProof is live on the App Store. Download it today and protect what matters.
             </p>
-            <WaitlistForm
-              productId="inventory-proof"
-              productName="InventoryProof"
-              className="mt-8"
-              buttonText="Get Notified at Launch"
-            />
+            <div className="mt-8 flex justify-center">
+              <a href="https://apps.apple.com/us/app/inventoryproof/id6758317473" target="_blank" rel="noopener noreferrer">
+                <img
+                  src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+                  alt="Download on the App Store"
+                  style={{ width: 180 }}
+                />
+              </a>
+            </div>
             <div className="mt-6">
               <Button variant="outline" size="lg" asChild>
                 <Link to="/products">View All Products</Link>
