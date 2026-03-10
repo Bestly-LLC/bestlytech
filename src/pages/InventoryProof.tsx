@@ -249,17 +249,20 @@ const InventoryProof = () => {
           <div className="absolute inset-0 bg-mesh opacity-30" />
           <AnimatedSection className="relative mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Coming Soon
+              Available Now
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              InventoryProof is currently in development. Be the first to know when we launch.
+              InventoryProof is live on the App Store. Download it today and protect what matters.
             </p>
-            <WaitlistForm
-              productId="inventory-proof"
-              productName="InventoryProof"
-              className="mt-8"
-              buttonText="Get Notified at Launch"
-            />
+            <div className="mt-8 flex justify-center">
+              <a href="https://apps.apple.com/us/app/inventoryproof/id6758317473" target="_blank" rel="noopener noreferrer">
+                <img
+                  src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+                  alt="Download on the App Store"
+                  style={{ width: 180 }}
+                />
+              </a>
+            </div>
             <div className="mt-6">
               <Button variant="outline" size="lg" asChild>
                 <Link to="/products">View All Products</Link>
