@@ -228,7 +228,7 @@ export default function Services() {
             </h2>
           </AnimatedSection>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-4xl mx-auto">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-5xl mx-auto">
             {audiences.map((audience, index) => (
               <AnimatedSection key={audience.title} animation="fade-in" delay={index * 60}>
                 <div className="text-center p-6 rounded-2xl border border-border bg-card transition-all hover:shadow-premium hover:-translate-y-1">
