@@ -1,6 +1,7 @@
 import { Layout } from '@/components/layout/Layout';
 import { SEOHead } from '@/components/SEOHead';
 import { IntakeFormProvider, useIntakeForm } from '@/contexts/IntakeFormContext';
+import { GuidanceProvider } from '@/contexts/GuidanceContext';
 import { StepProgress } from '@/components/amazon-setup/StepProgress';
 import { Step0Readiness } from '@/components/amazon-setup/steps/Step0Readiness';
 import { Step1Business } from '@/components/amazon-setup/steps/Step1Business';
