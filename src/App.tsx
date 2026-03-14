@@ -29,6 +29,7 @@ import AmazonSetup from "./pages/AmazonSetup";
 import CookieYetiSupport from "./pages/CookieYetiSupport";
 import NotFound from "./pages/NotFound";
 import { AdminRoute } from "@/components/admin/AdminRoute";
+import { AdminLayout } from "@/components/admin/AdminLayout";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminSubmissions from "./pages/admin/AdminSubmissions";
