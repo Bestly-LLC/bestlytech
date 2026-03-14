@@ -230,8 +230,8 @@ export default function Services() {
 
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-5xl mx-auto">
             {audiences.map((audience, index) => (
-              <AnimatedSection key={audience.title} animation="fade-in" delay={index * 60}>
-                <div className="text-center p-6 rounded-2xl border border-border bg-card transition-all hover:shadow-premium hover:-translate-y-1">
+              <AnimatedSection key={audience.title} animation="fade-in" delay={index * 60} className="h-full">
+                <div className="flex flex-col items-center text-center p-6 rounded-2xl border border-border bg-card transition-all hover:shadow-premium hover:-translate-y-1 h-full">
                   <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.1)] to-[hsl(var(--gradient-end)/0.1)] mb-4">
                     <audience.icon className="h-6 w-6 text-primary" />
                   </div>
