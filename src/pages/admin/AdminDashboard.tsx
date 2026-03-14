@@ -48,7 +48,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <AdminLayout>
+    <div className="space-y-8 max-w-6xl">
       <div className="space-y-8 max-w-6xl">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Amazon Dashboard</h1>
