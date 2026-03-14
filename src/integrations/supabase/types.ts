@@ -185,6 +185,331 @@ export type Database = {
         }
         Relationships: []
       }
+      intake_documents: {
+        Row: {
+          document_type: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          intake_id: string
+          mime_type: string | null
+          uploaded_at: string | null
+        }
+        Insert: {
+          document_type: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          intake_id: string
+          mime_type?: string | null
+          uploaded_at?: string | null
+        }
+        Update: {
+          document_type?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          intake_id?: string
+          mime_type?: string | null
+          uploaded_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_documents_intake_id_fkey"
+            columns: ["intake_id"]
+            isOneToOne: false
+            referencedRelation: "seller_intakes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intake_validations: {
+        Row: {
+          created_at: string | null
+          field_name: string
+          id: string
+          intake_id: string
+          message: string
+          resolved: boolean | null
+          resolved_notes: string | null
+          severity: string
+        }
+        Insert: {
+          created_at?: string | null
+          field_name: string
+          id?: string
+          intake_id: string
+          message: string
+          resolved?: boolean | null
+          resolved_notes?: string | null
+          severity: string
+        }
+        Update: {
+          created_at?: string | null
+          field_name?: string
+          id?: string
+          intake_id?: string
+          message?: string
+          resolved?: boolean | null
+          resolved_notes?: string | null
+          severity?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_validations_intake_id_fkey"
+            columns: ["intake_id"]
+            isOneToOne: false
+            referencedRelation: "seller_intakes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      seller_intakes: {
+        Row: {
+          account_holder_name: string | null
+          account_number_last4: string | null
+          account_type: string | null
+          addresses_differ: boolean | null
+          admin_notes: string | null
+          amazon_email: string | null
+          amazon_phone: string | null
+          amazon_store_name: string | null
+          bank_name: string | null
+          birth_country: string | null
+          brand_name: string | null
+          business_legal_name: string | null
+          business_type: string | null
+          citizenship_country: string | null
+          client_email: string | null
+          client_name: string | null
+          client_phone: string | null
+          client_timezone: string | null
+          completed_steps: number[] | null
+          contact_first_name: string | null
+          contact_last_name: string | null
+          contact_middle_name: string | null
+          created_at: string | null
+          credit_card_expiry: string | null
+          credit_card_last4: string | null
+          date_of_birth: string | null
+          ein: string | null
+          fulfillment_method: string | null
+          has_diversity_certs: boolean | null
+          has_trademark: boolean | null
+          has_upcs: boolean | null
+          id: string
+          id_country_of_issue: string | null
+          id_expiry_date: string | null
+          id_number: string | null
+          id_type: string | null
+          number_of_products: string | null
+          operating_address: string | null
+          operating_city: string | null
+          operating_state: string | null
+          operating_zip: string | null
+          owns_brand: boolean | null
+          phone_number: string | null
+          platform: string
+          preferred_contact_method: string | null
+          product_category: string | null
+          product_description: string | null
+          registered_agent_address: string | null
+          registered_agent_city: string | null
+          registered_agent_service: string | null
+          registered_agent_state: string | null
+          registered_agent_zip: string | null
+          rep_name: string | null
+          rep_relationship: string | null
+          residential_address: string | null
+          residential_city: string | null
+          residential_state: string | null
+          residential_zip: string | null
+          routing_number_last4: string | null
+          seller_plan: string | null
+          setup_by_representative: boolean | null
+          ssn_itin: string | null
+          state_of_registration: string | null
+          status: string
+          tax_residency: string | null
+          trademark_number: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_holder_name?: string | null
+          account_number_last4?: string | null
+          account_type?: string | null
+          addresses_differ?: boolean | null
+          admin_notes?: string | null
+          amazon_email?: string | null
+          amazon_phone?: string | null
+          amazon_store_name?: string | null
+          bank_name?: string | null
+          birth_country?: string | null
+          brand_name?: string | null
+          business_legal_name?: string | null
+          business_type?: string | null
+          citizenship_country?: string | null
+          client_email?: string | null
+          client_name?: string | null
+          client_phone?: string | null
+          client_timezone?: string | null
+          completed_steps?: number[] | null
+          contact_first_name?: string | null
+          contact_last_name?: string | null
+          contact_middle_name?: string | null
+          created_at?: string | null
+          credit_card_expiry?: string | null
+          credit_card_last4?: string | null
+          date_of_birth?: string | null
+          ein?: string | null
+          fulfillment_method?: string | null
+          has_diversity_certs?: boolean | null
+          has_trademark?: boolean | null
+          has_upcs?: boolean | null
+          id?: string
+          id_country_of_issue?: string | null
+          id_expiry_date?: string | null
+          id_number?: string | null
+          id_type?: string | null
+          number_of_products?: string | null
+          operating_address?: string | null
+          operating_city?: string | null
+          operating_state?: string | null
+          operating_zip?: string | null
+          owns_brand?: boolean | null
+          phone_number?: string | null
+          platform?: string
+          preferred_contact_method?: string | null
+          product_category?: string | null
+          product_description?: string | null
+          registered_agent_address?: string | null
+          registered_agent_city?: string | null
+          registered_agent_service?: string | null
+          registered_agent_state?: string | null
+          registered_agent_zip?: string | null
+          rep_name?: string | null
+          rep_relationship?: string | null
+          residential_address?: string | null
+          residential_city?: string | null
+          residential_state?: string | null
+          residential_zip?: string | null
+          routing_number_last4?: string | null
+          seller_plan?: string | null
+          setup_by_representative?: boolean | null
+          ssn_itin?: string | null
+          state_of_registration?: string | null
+          status?: string
+          tax_residency?: string | null
+          trademark_number?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_holder_name?: string | null
+          account_number_last4?: string | null
+          account_type?: string | null
+          addresses_differ?: boolean | null
+          admin_notes?: string | null
+          amazon_email?: string | null
+          amazon_phone?: string | null
+          amazon_store_name?: string | null
+          bank_name?: string | null
+          birth_country?: string | null
+          brand_name?: string | null
+          business_legal_name?: string | null
+          business_type?: string | null
+          citizenship_country?: string | null
+          client_email?: string | null
+          client_name?: string | null
+          client_phone?: string | null
+          client_timezone?: string | null
+          completed_steps?: number[] | null
+          contact_first_name?: string | null
+          contact_last_name?: string | null
+          contact_middle_name?: string | null
+          created_at?: string | null
+          credit_card_expiry?: string | null
+          credit_card_last4?: string | null
+          date_of_birth?: string | null
+          ein?: string | null
+          fulfillment_method?: string | null
+          has_diversity_certs?: boolean | null
+          has_trademark?: boolean | null
+          has_upcs?: boolean | null
+          id?: string
+          id_country_of_issue?: string | null
+          id_expiry_date?: string | null
+          id_number?: string | null
+          id_type?: string | null
+          number_of_products?: string | null
+          operating_address?: string | null
+          operating_city?: string | null
+          operating_state?: string | null
+          operating_zip?: string | null
+          owns_brand?: boolean | null
+          phone_number?: string | null
+          platform?: string
+          preferred_contact_method?: string | null
+          product_category?: string | null
+          product_description?: string | null
+          registered_agent_address?: string | null
+          registered_agent_city?: string | null
+          registered_agent_service?: string | null
+          registered_agent_state?: string | null
+          registered_agent_zip?: string | null
+          rep_name?: string | null
+          rep_relationship?: string | null
+          residential_address?: string | null
+          residential_city?: string | null
+          residential_state?: string | null
+          residential_zip?: string | null
+          routing_number_last4?: string | null
+          seller_plan?: string | null
+          setup_by_representative?: boolean | null
+          ssn_itin?: string | null
+          state_of_registration?: string | null
+          status?: string
+          tax_residency?: string | null
+          trademark_number?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      setup_guidance: {
+        Row: {
+          answer_recommendation: string | null
+          display_order: number
+          field_name: string
+          guidance_text: string
+          id: string
+          platform: string
+          reason: string | null
+          section: string
+        }
+        Insert: {
+          answer_recommendation?: string | null
+          display_order?: number
+          field_name: string
+          guidance_text: string
+          id?: string
+          platform: string
+          reason?: string | null
+          section: string
+        }
+        Update: {
+          answer_recommendation?: string | null
+          display_order?: number
+          field_name?: string
+          guidance_text?: string
+          id?: string
+          platform?: string
+          reason?: string | null
+          section?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           created_at: string | null
