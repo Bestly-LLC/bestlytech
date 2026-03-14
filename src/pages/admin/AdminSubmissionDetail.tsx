@@ -116,9 +116,7 @@ export default function AdminSubmissionDetail() {
 
   if (!intake) {
     return (
-      <AdminLayout>
-        <div className="text-center py-20 text-muted-foreground">Submission not found.</div>
-      </AdminLayout>
+      <div className="text-center py-20 text-muted-foreground">Submission not found.</div>
     );
   }
 
