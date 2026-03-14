@@ -1,4 +1,4 @@
-import Layout from '@/components/layout/Layout';
+import { Layout } from '@/components/layout/Layout';
 import { SEOHead } from '@/components/SEOHead';
 import { IntakeFormProvider, useIntakeForm } from '@/contexts/IntakeFormContext';
 import { StepProgress } from '@/components/amazon-setup/StepProgress';
