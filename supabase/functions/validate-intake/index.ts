@@ -1,0 +1,192 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { intake_id } = await req.json();
+    if (!intake_id) {
+      return new Response(JSON.stringify({ error: "intake_id required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // Load intake
+    const { data: intake, error: intakeError } = await supabase
+      .from("seller_intakes")
+      .select("*")
+      .eq("id", intake_id)
+      .single();
+
+    if (intakeError || !intake) {
+      return new Response(JSON.stringify({ error: "Intake not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Load documents
+    const { data: docs } = await supabase
+      .from("intake_documents")
+      .select("*")
+      .eq("intake_id", intake_id);
+
+    const documents = docs || [];
+    const docTypes = new Set(documents.map((d: any) => d.document_type));
+
+    const issues: { severity: string; field_name: string; message: string }[] = [];
+
+    // --- Validation checks ---
+
+    // 1. EIN format (XX-XXXXXXX)
+    if (intake.ein) {
+      const einClean = intake.ein.replace(/\D/g, "");
+      if (einClean.length !== 9) {
+        issues.push({ severity: "error", field_name: "ein", message: "EIN must be exactly 9 digits" });
+      }
+    } else {
+      issues.push({ severity: "error", field_name: "ein", message: "EIN is required" });
+    }
+
+    // 2. SSN/ITIN format
+    if (intake.ssn_itin) {
+      const ssnClean = intake.ssn_itin.replace(/\D/g, "");
+      if (ssnClean.length !== 4 && ssnClean.length !== 9) {
+        issues.push({ severity: "warning", field_name: "ssn_itin", message: "SSN/ITIN should be 4 or 9 digits" });
+      }
+    } else if (intake.citizenship_country === "United States" || intake.tax_residency === "United States") {
+      issues.push({ severity: "error", field_name: "ssn_itin", message: "SSN/ITIN required for US residents" });
+    }
+
+    // 3. DOB — must be 18+
+    if (intake.date_of_birth) {
+      const dob = new Date(intake.date_of_birth);
+      const age = (Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      if (age < 18) {
+        issues.push({ severity: "error", field_name: "date_of_birth", message: "Owner must be at least 18 years old" });
+      }
+    } else {
+      issues.push({ severity: "error", field_name: "date_of_birth", message: "Date of birth is required" });
+    }
+
+    // 4. ID expiry — must be in the future
+    if (intake.id_expiry_date) {
+      const expiry = new Date(intake.id_expiry_date);
+      if (expiry < new Date()) {
+        issues.push({ severity: "error", field_name: "id_expiry_date", message: "ID has expired" });
+      } else {
+        const sixMonths = new Date();
+        sixMonths.setMonth(sixMonths.getMonth() + 6);
+        if (expiry < sixMonths) {
+          issues.push({ severity: "warning", field_name: "id_expiry_date", message: "ID expires within 6 months — Amazon may reject" });
+        }
+      }
+    }
+
+    // 5. Phone format
+    if (intake.phone_number) {
+      const phoneClean = intake.phone_number.replace(/\D/g, "");
+      if (phoneClean.length < 10) {
+        issues.push({ severity: "warning", field_name: "phone_number", message: "Phone number seems too short" });
+      }
+    }
+
+    // 6. Email format
+    if (intake.amazon_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(intake.amazon_email)) {
+      issues.push({ severity: "error", field_name: "amazon_email", message: "Invalid Amazon email format" });
+    }
+
+    // 7. ZIP codes
+    for (const field of ["residential_zip", "registered_agent_zip", "operating_zip"] as const) {
+      if (intake[field] && !/^\d{5}(-\d{4})?$/.test(intake[field])) {
+        issues.push({ severity: "warning", field_name: field, message: `Invalid ZIP code format for ${field}` });
+      }
+    }
+
+    // 8. Routing number last 4
+    if (intake.routing_number_last4 && intake.routing_number_last4.length !== 4) {
+      issues.push({ severity: "warning", field_name: "routing_number_last4", message: "Routing number last 4 should be exactly 4 digits" });
+    }
+
+    // 9. Account number last 4
+    if (intake.account_number_last4 && intake.account_number_last4.length !== 4) {
+      issues.push({ severity: "warning", field_name: "account_number_last4", message: "Account number last 4 should be exactly 4 digits" });
+    }
+
+    // 10. Required documents
+    if (!docTypes.has("BusinessRegistration")) {
+      issues.push({ severity: "warning", field_name: "documents", message: "Missing Business Registration document" });
+    }
+    if (!docTypes.has("IDFront")) {
+      issues.push({ severity: "error", field_name: "documents", message: "Missing ID Front document" });
+    }
+    if (intake.id_type === "Drivers License" && !docTypes.has("IDBack")) {
+      issues.push({ severity: "warning", field_name: "documents", message: "Driver's License back is recommended" });
+    }
+
+    // 11. Business name required
+    if (!intake.business_legal_name) {
+      issues.push({ severity: "error", field_name: "business_legal_name", message: "Business legal name is required" });
+    }
+
+    // 12. Contact name required
+    if (!intake.contact_first_name || !intake.contact_last_name) {
+      issues.push({ severity: "error", field_name: "contact_name", message: "Contact first and last name required" });
+    }
+
+    // 13. Agent state vs registration state
+    if (intake.registered_agent_state && intake.state_of_registration &&
+        intake.registered_agent_state !== intake.state_of_registration) {
+      issues.push({ severity: "warning", field_name: "registered_agent_state", message: "Registered agent state differs from state of registration" });
+    }
+
+    // 14. Store name check
+    if (!intake.amazon_store_name) {
+      issues.push({ severity: "warning", field_name: "amazon_store_name", message: "Amazon store name not provided" });
+    }
+
+    // 15. Bank info completeness
+    if (!intake.bank_name || !intake.account_holder_name || !intake.account_number_last4 || !intake.routing_number_last4) {
+      issues.push({ severity: "warning", field_name: "bank_info", message: "Bank information appears incomplete" });
+    }
+
+    // Clear old validations and insert new ones
+    await supabase.from("intake_validations").delete().eq("intake_id", intake_id);
+
+    if (issues.length > 0) {
+      await supabase.from("intake_validations").insert(
+        issues.map((i) => ({ ...i, intake_id }))
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        errors: issues.filter((i) => i.severity === "error").length,
+        warnings: issues.filter((i) => i.severity === "warning").length,
+        total: issues.length,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "Internal error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

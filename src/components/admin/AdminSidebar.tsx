@@ -64,7 +64,7 @@ export function AdminSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup defaultOpen>
+        <SidebarGroup>
           <SidebarGroupLabel>❄️ Cookie Yeti</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
