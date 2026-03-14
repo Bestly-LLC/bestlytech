@@ -122,7 +122,6 @@ export default function AdminSubmissionDetail() {
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <div className="space-y-4 max-w-4xl">
         <div className="flex items-center gap-3">
           <Link to="/admin/submissions">
             <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" /> Back</Button>

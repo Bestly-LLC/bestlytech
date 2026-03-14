@@ -49,7 +49,6 @@ export default function AdminSubmissions() {
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <div className="space-y-6 max-w-6xl">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Submissions</h1>
           <p className="text-sm text-muted-foreground mt-1">All marketplace seller intake submissions.</p>

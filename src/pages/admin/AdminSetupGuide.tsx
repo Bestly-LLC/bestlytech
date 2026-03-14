@@ -80,7 +80,6 @@ export default function AdminSetupGuide() {
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <div className="space-y-4 max-w-4xl">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-foreground">Setup Guide</h1>
           <Button onClick={addEntry} size="sm">

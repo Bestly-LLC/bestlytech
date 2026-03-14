@@ -36,7 +36,6 @@ export default function CYSubscribers() {
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <div className="space-y-6 max-w-6xl">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Subscribers</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage Cookie Yeti paid subscriptions.</p>
