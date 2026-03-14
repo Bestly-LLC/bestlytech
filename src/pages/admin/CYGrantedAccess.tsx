@@ -184,7 +184,6 @@ export default function CYGrantedAccess() {
             </Table>
           </CardContent>
         </Card>
-      </div>
-    </AdminLayout>
+    </div>
   );
 }

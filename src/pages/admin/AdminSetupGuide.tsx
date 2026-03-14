@@ -155,7 +155,6 @@ export default function AdminSetupGuide() {
             )}
           </TabsContent>
         </Tabs>
-      </div>
-    </AdminLayout>
+    </div>
   );
 }

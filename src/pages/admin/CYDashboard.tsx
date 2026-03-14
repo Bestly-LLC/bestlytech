@@ -182,7 +182,6 @@ export default function CYDashboard() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </AdminLayout>
+    </div>
   );
 }

@@ -138,7 +138,6 @@ export default function CYSubscribers() {
             )}
           </SheetContent>
         </Sheet>
-      </div>
-    </AdminLayout>
+    </div>
   );
 }

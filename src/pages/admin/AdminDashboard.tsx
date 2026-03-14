@@ -123,7 +123,6 @@ export default function AdminDashboard() {
             </Table>
           </CardContent>
         </Card>
-      </div>
-    </AdminLayout>
+    </div>
   );
 }

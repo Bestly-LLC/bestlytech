@@ -136,7 +136,6 @@ export default function AdminSubmissions() {
             </Button>
           </div>
         )}
-      </div>
-    </AdminLayout>
+    </div>
   );
 }

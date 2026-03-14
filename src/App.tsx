@@ -75,13 +75,15 @@ const App = () => (
               <Route path="/support" element={<CookieYetiSupport />} />
               {/* Admin Routes */}
               <Route path="/admin/login" element={<AdminLogin />} />
-              <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-              <Route path="/admin/submissions" element={<AdminRoute><AdminSubmissions /></AdminRoute>} />
-              <Route path="/admin/submissions/:id" element={<AdminRoute><AdminSubmissionDetail /></AdminRoute>} />
-              <Route path="/admin/guide" element={<AdminRoute><AdminSetupGuide /></AdminRoute>} />
-              <Route path="/admin/cookie-yeti" element={<AdminRoute><CYDashboard /></AdminRoute>} />
-              <Route path="/admin/cookie-yeti/subscribers" element={<AdminRoute><CYSubscribers /></AdminRoute>} />
-              <Route path="/admin/cookie-yeti/granted" element={<AdminRoute><CYGrantedAccess /></AdminRoute>} />
+              <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="submissions" element={<AdminSubmissions />} />
+                <Route path="submissions/:id" element={<AdminSubmissionDetail />} />
+                <Route path="guide" element={<AdminSetupGuide />} />
+                <Route path="cookie-yeti" element={<CYDashboard />} />
+                <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
+                <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />
+              </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
           </PageTransition>

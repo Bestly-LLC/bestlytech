@@ -313,7 +313,6 @@ export default function AdminSubmissionDetail() {
           />
           <Button onClick={saveStatus} size="sm" className="mt-2">Save Notes</Button>
         </Section>
-      </div>
-    </AdminLayout>
+    </div>
   );
 }
