@@ -72,7 +72,7 @@ export default function CYGrantedAccess() {
     : data;
 
   return (
-    <AdminLayout>
+    <div className="space-y-6 max-w-5xl">
       <div className="space-y-6 max-w-5xl">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Granted Access</h1>
