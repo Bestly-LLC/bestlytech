@@ -11,6 +11,7 @@ import { useIntakeForm } from '@/contexts/IntakeFormContext';
 import { useGuidance } from '@/contexts/GuidanceContext';
 import { US_STATES, COUNTRIES } from '../constants';
 import { GuidedLabel } from '../GuidedLabel';
+import { IntakeField } from '../IntakeField';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step2Owner = () => {
@@ -50,18 +51,10 @@ export const Step2Owner = () => {
 
   const missingSSN = formData.tax_residency === 'US Resident' && !formData.ssn_itin;
 
-  const Field = ({ name, label, required = true, ...props }: any) => (
+  const CountrySelect = ({ name, label }: { name: string; label: string }) => (
     <div>
-      <GuidedLabel label={label} fieldName={name} required={required} getGuidance={getGuidance} />
-      <Input value={(formData as any)[name] || ''} onChange={(e: any) => updateField(name, e.target.value)} className="mt-1" {...props} />
-      {errors[name] && <p className="text-xs text-destructive mt-1">{errors[name]}</p>}
-    </div>
-  );
-
-  const CountrySelect = ({ name, label }: { name: keyof typeof formData; label: string }) => (
-    <div>
-      <GuidedLabel label={label} fieldName={name as string} required getGuidance={getGuidance} />
-      <Select value={formData[name] as string} onValueChange={v => updateField(name, v)}>
+      <GuidedLabel label={label} fieldName={name} required getGuidance={getGuidance} />
+      <Select value={(formData as any)[name] as string} onValueChange={v => updateField(name as any, v)}>
         <SelectTrigger className="mt-1"><SelectValue placeholder="Select country" /></SelectTrigger>
         <SelectContent>
           {COUNTRIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
@@ -79,9 +72,9 @@ export const Step2Owner = () => {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-3 gap-3">
-          <Field name="contact_first_name" label="First Name" />
-          <Field name="contact_middle_name" label="Middle Name" required={false} placeholder="If on your ID" />
-          <Field name="contact_last_name" label="Last Name" />
+          <IntakeField name="contact_first_name" label="First Name" value={formData.contact_first_name} onChange={updateField} error={errors.contact_first_name} getGuidance={getGuidance} />
+          <IntakeField name="contact_middle_name" label="Middle Name" required={false} placeholder="If on your ID" value={formData.contact_middle_name} onChange={updateField} error={errors.contact_middle_name} getGuidance={getGuidance} />
+          <IntakeField name="contact_last_name" label="Last Name" value={formData.contact_last_name} onChange={updateField} error={errors.contact_last_name} getGuidance={getGuidance} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -89,7 +82,7 @@ export const Step2Owner = () => {
           <CountrySelect name="birth_country" label="Country of Birth" />
         </div>
 
-        <Field name="date_of_birth" label="Date of Birth" type="date" />
+        <IntakeField name="date_of_birth" label="Date of Birth" type="date" value={formData.date_of_birth} onChange={updateField} error={errors.date_of_birth} getGuidance={getGuidance} />
 
         <div className="space-y-3 pt-4 border-t border-border">
           <h3 className="font-medium text-sm">Tax Information</h3>
@@ -138,8 +131,8 @@ export const Step2Owner = () => {
             {errors.id_type && <p className="text-xs text-destructive mt-1">{errors.id_type}</p>}
           </div>
 
-          <Field name="id_number" label="ID Number" />
-          <Field name="id_expiry_date" label="Date of Expiry" type="date" />
+          <IntakeField name="id_number" label="ID Number" value={formData.id_number} onChange={updateField} error={errors.id_number} getGuidance={getGuidance} />
+          <IntakeField name="id_expiry_date" label="Date of Expiry" type="date" value={formData.id_expiry_date} onChange={updateField} error={errors.id_expiry_date} getGuidance={getGuidance} />
           <CountrySelect name="id_country_of_issue" label="Country of Issue" />
 
           {idExpiresSoon && (
@@ -159,9 +152,9 @@ export const Step2Owner = () => {
 
         <div className="space-y-3 pt-4 border-t border-border">
           <h3 className="font-medium text-sm">Residential Address</h3>
-          <Field name="residential_address" label="Street Address" />
+          <IntakeField name="residential_address" label="Street Address" value={formData.residential_address} onChange={updateField} error={errors.residential_address} getGuidance={getGuidance} />
           <div className="grid grid-cols-2 gap-3">
-            <Field name="residential_city" label="City" />
+            <IntakeField name="residential_city" label="City" value={formData.residential_city} onChange={updateField} error={errors.residential_city} getGuidance={getGuidance} />
             <div>
               <GuidedLabel label="State" fieldName="residential_state" required getGuidance={getGuidance} />
               <Select value={formData.residential_state} onValueChange={v => updateField('residential_state', v)}>
@@ -173,8 +166,8 @@ export const Step2Owner = () => {
               {errors.residential_state && <p className="text-xs text-destructive mt-1">{errors.residential_state}</p>}
             </div>
           </div>
-          <Field name="residential_zip" label="ZIP Code" placeholder="XXXXX" />
-          <Field name="phone_number" label="Phone Number" type="tel" placeholder="(XXX) XXX-XXXX" />
+          <IntakeField name="residential_zip" label="ZIP Code" placeholder="XXXXX" value={formData.residential_zip} onChange={updateField} error={errors.residential_zip} getGuidance={getGuidance} />
+          <IntakeField name="phone_number" label="Phone Number" type="tel" placeholder="(XXX) XXX-XXXX" value={formData.phone_number} onChange={updateField} error={errors.phone_number} getGuidance={getGuidance} />
 
           <DocumentUpload documentType="PersonalAddressProof" label="Proof of Personal Address"
             description="Bank statement or utility bill showing the owner's name and residential address, dated within 180 days" required />

@@ -10,6 +10,7 @@ import { useIntakeForm } from '@/contexts/IntakeFormContext';
 import { useGuidance } from '@/contexts/GuidanceContext';
 import { US_STATES, BUSINESS_TYPES, REGISTERED_AGENT_SERVICES } from '../constants';
 import { GuidedLabel } from '../GuidedLabel';
+import { IntakeField } from '../IntakeField';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step1Business = () => {
@@ -47,19 +48,6 @@ export const Step1Business = () => {
     formData.state_of_registration &&
     formData.registered_agent_state !== formData.state_of_registration;
 
-  const Field = ({ name, label, required = true, ...props }: any) => (
-    <div>
-      <GuidedLabel label={label} fieldName={name} required={required} getGuidance={getGuidance} />
-      <Input
-        value={(formData as any)[name] || ''}
-        onChange={(e: any) => updateField(name, e.target.value)}
-        className="mt-1"
-        {...props}
-      />
-      {errors[name] && <p className="text-xs text-destructive mt-1">{errors[name]}</p>}
-    </div>
-  );
-
   return (
     <Card>
       <CardHeader>
@@ -67,7 +55,7 @@ export const Step1Business = () => {
         <CardDescription>Enter your business details exactly as they appear on your state registration documents.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Field name="business_legal_name" label="Business Legal Name" />
+        <IntakeField name="business_legal_name" label="Business Legal Name" value={formData.business_legal_name} onChange={updateField} error={errors.business_legal_name} getGuidance={getGuidance} />
 
         <div>
           <GuidedLabel label="Business Type" fieldName="business_type" required getGuidance={getGuidance} />
@@ -91,7 +79,7 @@ export const Step1Business = () => {
           {errors.state_of_registration && <p className="text-xs text-destructive mt-1">{errors.state_of_registration}</p>}
         </div>
 
-        <Field name="ein" label="EIN" placeholder="XX-XXXXXXX" />
+        <IntakeField name="ein" label="EIN" placeholder="XX-XXXXXXX" value={formData.ein} onChange={updateField} error={errors.ein} getGuidance={getGuidance} />
 
         <div>
           <GuidedLabel label="Registered Agent Service" fieldName="registered_agent_service" required getGuidance={getGuidance} />
@@ -113,9 +101,9 @@ export const Step1Business = () => {
 
         <div className="space-y-3 pt-4 border-t border-border">
           <h3 className="font-medium text-sm">Registered Agent Address (from your state filing)</h3>
-          <Field name="registered_agent_address" label="Street Address" />
+          <IntakeField name="registered_agent_address" label="Street Address" value={formData.registered_agent_address} onChange={updateField} error={errors.registered_agent_address} getGuidance={getGuidance} />
           <div className="grid grid-cols-2 gap-3">
-            <Field name="registered_agent_city" label="City" />
+            <IntakeField name="registered_agent_city" label="City" value={formData.registered_agent_city} onChange={updateField} error={errors.registered_agent_city} getGuidance={getGuidance} />
             <div>
               <GuidedLabel label="State" fieldName="registered_agent_state" required getGuidance={getGuidance} />
               <Select value={formData.registered_agent_state} onValueChange={v => updateField('registered_agent_state', v)}>
@@ -127,7 +115,7 @@ export const Step1Business = () => {
               {errors.registered_agent_state && <p className="text-xs text-destructive mt-1">{errors.registered_agent_state}</p>}
             </div>
           </div>
-          <Field name="registered_agent_zip" label="ZIP Code" placeholder="XXXXX" />
+          <IntakeField name="registered_agent_zip" label="ZIP Code" placeholder="XXXXX" value={formData.registered_agent_zip} onChange={updateField} error={errors.registered_agent_zip} getGuidance={getGuidance} />
         </div>
 
         <Alert variant="destructive" className="bg-destructive/5 border-destructive/20">
@@ -154,9 +142,9 @@ export const Step1Business = () => {
         {formData.addresses_differ && (
           <div className="space-y-3 pl-4 border-l-2 border-border">
             <h3 className="font-medium text-sm">Operating Address</h3>
-            <Field name="operating_address" label="Street Address" />
+            <IntakeField name="operating_address" label="Street Address" value={formData.operating_address} onChange={updateField} error={errors.operating_address} getGuidance={getGuidance} />
             <div className="grid grid-cols-2 gap-3">
-              <Field name="operating_city" label="City" />
+              <IntakeField name="operating_city" label="City" value={formData.operating_city} onChange={updateField} error={errors.operating_city} getGuidance={getGuidance} />
               <div>
                 <GuidedLabel label="State" fieldName="operating_state" required getGuidance={getGuidance} />
                 <Select value={formData.operating_state} onValueChange={v => updateField('operating_state', v)}>
@@ -167,7 +155,7 @@ export const Step1Business = () => {
                 </Select>
               </div>
             </div>
-            <Field name="operating_zip" label="ZIP Code" placeholder="XXXXX" />
+            <IntakeField name="operating_zip" label="ZIP Code" placeholder="XXXXX" value={formData.operating_zip} onChange={updateField} error={errors.operating_zip} getGuidance={getGuidance} />
           </div>
         )}
 
