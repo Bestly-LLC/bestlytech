@@ -5,6 +5,7 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, Shield } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { ChangePasswordDialog } from "./ChangePasswordDialog";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -29,6 +30,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs text-muted-foreground hidden sm:inline">{user?.email}</span>
+              <ChangePasswordDialog />
               <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground hover:text-foreground">
                 <LogOut className="h-4 w-4 mr-1" />
                 <span className="hidden sm:inline">Logout</span>
