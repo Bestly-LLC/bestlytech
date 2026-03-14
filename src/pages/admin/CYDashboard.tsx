@@ -65,7 +65,7 @@ export default function CYDashboard() {
   ];
 
   return (
-    <AdminLayout>
+    <div className="space-y-8 max-w-6xl">
       <div className="space-y-8 max-w-6xl">
         <div className="flex items-center justify-between">
           <div>
