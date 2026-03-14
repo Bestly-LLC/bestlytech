@@ -61,6 +61,7 @@ const App = () => (
               <Route path="/hire" element={<Hire />} />
               <Route path="/services" element={<Services />} />
               <Route path="/apple-modernization" element={<AppleModernization />} />
+              <Route path="/amazon-setup" element={<AmazonSetup />} />
               <Route path="/support" element={<CookieYetiSupport />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
