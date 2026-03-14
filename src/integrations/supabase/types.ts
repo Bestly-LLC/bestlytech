@@ -92,6 +92,36 @@ export type Database = {
         }
         Relationships: []
       }
+      device_registrations: {
+        Row: {
+          device_id: string
+          email: string
+          first_seen: string | null
+          id: string
+          last_seen: string | null
+          platform: string
+          user_agent: string | null
+        }
+        Insert: {
+          device_id: string
+          email: string
+          first_seen?: string | null
+          id?: string
+          last_seen?: string | null
+          platform?: string
+          user_agent?: string | null
+        }
+        Update: {
+          device_id?: string
+          email?: string
+          first_seen?: string | null
+          id?: string
+          last_seen?: string | null
+          platform?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       device_tokens: {
         Row: {
           created_at: string
