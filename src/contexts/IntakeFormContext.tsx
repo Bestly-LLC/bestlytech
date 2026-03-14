@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export interface IntakeFormData {
   platform: string;
+  selected_platforms: string[];
   client_name: string;
   client_email: string;
   client_phone: string;
@@ -65,10 +66,27 @@ export interface IntakeFormData {
   amazon_email: string;
   amazon_phone: string;
   seller_plan: string;
+  // Shopify-specific
+  shopify_store_name: string;
+  shopify_email: string;
+  shopify_plan: string;
+  shopify_domain: string;
+  shipping_method: string;
+  has_existing_shopify: boolean;
+  existing_shopify_url: string;
+  // TikTok-specific
+  tiktok_shop_name: string;
+  tiktok_email: string;
+  tiktok_phone: string;
+  tiktok_category: string;
+  tiktok_fulfillment: string;
+  has_tiktok_creator: boolean;
+  tiktok_handle: string;
 }
 
 const defaultFormData: IntakeFormData = {
   platform: 'Amazon',
+  selected_platforms: [],
   client_name: '', client_email: '', client_phone: '',
   preferred_contact_method: 'Email', client_timezone: '',
   business_legal_name: '', business_type: '', state_of_registration: '',
@@ -94,6 +112,12 @@ const defaultFormData: IntakeFormData = {
   product_description: '',
   setup_by_representative: false, rep_name: '', rep_relationship: '',
   amazon_email: '', amazon_phone: '', seller_plan: 'Professional',
+  // Shopify
+  shopify_store_name: '', shopify_email: '', shopify_plan: 'Basic',
+  shopify_domain: '', shipping_method: '', has_existing_shopify: false, existing_shopify_url: '',
+  // TikTok
+  tiktok_shop_name: '', tiktok_email: '', tiktok_phone: '',
+  tiktok_category: '', tiktok_fulfillment: '', has_tiktok_creator: false, tiktok_handle: '',
 };
 
 interface IntakeFormContextType {
@@ -113,6 +137,8 @@ interface IntakeFormContextType {
   setStatus: (s: string) => void;
   uploadedDocs: UploadedDoc[];
   refreshDocs: () => Promise<void>;
+  isPlatformSelected: (platform: string) => boolean;
+  togglePlatform: (platform: string) => void;
 }
 
 export interface UploadedDoc {
@@ -146,6 +172,21 @@ export const IntakeFormProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const lastSavedRef = useRef<string>('');
 
   const formId = searchParams.get('id') || '';
+
+  const isPlatformSelected = useCallback((platform: string) => {
+    return formData.selected_platforms.includes(platform);
+  }, [formData.selected_platforms]);
+
+  const togglePlatform = useCallback((platform: string) => {
+    setFormData(prev => {
+      const platforms = prev.selected_platforms.includes(platform)
+        ? prev.selected_platforms.filter(p => p !== platform)
+        : [...prev.selected_platforms, platform];
+      // Set backward-compat platform field
+      const mainPlatform = platforms.length === 1 ? platforms[0] : platforms.length > 1 ? 'Multi' : 'Amazon';
+      return { ...prev, selected_platforms: platforms, platform: mainPlatform };
+    });
+  }, []);
 
   // Initialize form ID
   useEffect(() => {
@@ -209,8 +250,6 @@ export const IntakeFormProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setSaving(true);
     try {
       const payload: any = { id, ...formData, completed_steps: completedSteps, status };
-      // Remove fields that aren't DB columns
-      delete payload.platform; // platform is already a column
       await (supabase as any).from('seller_intakes').upsert(payload, { onConflict: 'id' });
       lastSavedRef.current = dataStr;
       toast({ title: '✓ Draft saved', duration: 2000 });
@@ -242,7 +281,7 @@ export const IntakeFormProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     <IntakeFormContext.Provider value={{
       formData, updateField, updateFields, currentStep, setCurrentStep,
       goNext, goBack, formId, saving, saveNow, completedSteps, markStepComplete,
-      status, setStatus, uploadedDocs, refreshDocs,
+      status, setStatus, uploadedDocs, refreshDocs, isPlatformSelected, togglePlatform,
     }}>
       {children}
     </IntakeFormContext.Provider>

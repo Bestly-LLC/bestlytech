@@ -296,8 +296,11 @@ export type Database = {
           credit_card_last4: string | null
           date_of_birth: string | null
           ein: string | null
+          existing_shopify_url: string | null
           fulfillment_method: string | null
           has_diversity_certs: boolean | null
+          has_existing_shopify: boolean | null
+          has_tiktok_creator: boolean | null
           has_trademark: boolean | null
           has_upcs: boolean | null
           id: string
@@ -328,12 +331,24 @@ export type Database = {
           residential_state: string | null
           residential_zip: string | null
           routing_number_last4: string | null
+          selected_platforms: string[] | null
           seller_plan: string | null
           setup_by_representative: boolean | null
+          shipping_method: string | null
+          shopify_domain: string | null
+          shopify_email: string | null
+          shopify_plan: string | null
+          shopify_store_name: string | null
           ssn_itin: string | null
           state_of_registration: string | null
           status: string
           tax_residency: string | null
+          tiktok_category: string | null
+          tiktok_email: string | null
+          tiktok_fulfillment: string | null
+          tiktok_handle: string | null
+          tiktok_phone: string | null
+          tiktok_shop_name: string | null
           trademark_number: string | null
           updated_at: string | null
         }
@@ -365,8 +380,11 @@ export type Database = {
           credit_card_last4?: string | null
           date_of_birth?: string | null
           ein?: string | null
+          existing_shopify_url?: string | null
           fulfillment_method?: string | null
           has_diversity_certs?: boolean | null
+          has_existing_shopify?: boolean | null
+          has_tiktok_creator?: boolean | null
           has_trademark?: boolean | null
           has_upcs?: boolean | null
           id?: string
@@ -397,12 +415,24 @@ export type Database = {
           residential_state?: string | null
           residential_zip?: string | null
           routing_number_last4?: string | null
+          selected_platforms?: string[] | null
           seller_plan?: string | null
           setup_by_representative?: boolean | null
+          shipping_method?: string | null
+          shopify_domain?: string | null
+          shopify_email?: string | null
+          shopify_plan?: string | null
+          shopify_store_name?: string | null
           ssn_itin?: string | null
           state_of_registration?: string | null
           status?: string
           tax_residency?: string | null
+          tiktok_category?: string | null
+          tiktok_email?: string | null
+          tiktok_fulfillment?: string | null
+          tiktok_handle?: string | null
+          tiktok_phone?: string | null
+          tiktok_shop_name?: string | null
           trademark_number?: string | null
           updated_at?: string | null
         }
@@ -434,8 +464,11 @@ export type Database = {
           credit_card_last4?: string | null
           date_of_birth?: string | null
           ein?: string | null
+          existing_shopify_url?: string | null
           fulfillment_method?: string | null
           has_diversity_certs?: boolean | null
+          has_existing_shopify?: boolean | null
+          has_tiktok_creator?: boolean | null
           has_trademark?: boolean | null
           has_upcs?: boolean | null
           id?: string
@@ -466,12 +499,24 @@ export type Database = {
           residential_state?: string | null
           residential_zip?: string | null
           routing_number_last4?: string | null
+          selected_platforms?: string[] | null
           seller_plan?: string | null
           setup_by_representative?: boolean | null
+          shipping_method?: string | null
+          shopify_domain?: string | null
+          shopify_email?: string | null
+          shopify_plan?: string | null
+          shopify_store_name?: string | null
           ssn_itin?: string | null
           state_of_registration?: string | null
           status?: string
           tax_residency?: string | null
+          tiktok_category?: string | null
+          tiktok_email?: string | null
+          tiktok_fulfillment?: string | null
+          tiktok_handle?: string | null
+          tiktok_phone?: string | null
+          tiktok_shop_name?: string | null
           trademark_number?: string | null
           updated_at?: string | null
         }
