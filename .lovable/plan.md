@@ -1,130 +1,57 @@
 
 
-# Phase 3 + 4: Admin Dashboard, Validation, and Cookie Yeti Admin
+## Integrate Apple-Native Business Modernization Program
 
-This is a large implementation covering the admin dashboard, validation edge function, enhanced client-side validation, and Cookie Yeti subscriber management.
-
----
-
-## Database Changes (1 migration)
-
-1. **RLS policies for admin access** on `granted_access` and `subscriptions`:
-   - Add policy allowing `jaredbest@icloud.com` (via `auth.jwt() ->> 'email'`) full access to `granted_access` (insert/update/delete)
-   - Add similar admin read policy on `subscriptions`
-   - Add admin ALL policy on `seller_intakes`, `intake_documents`, `intake_validations`, `setup_guidance` for the admin email
-
-2. **Enable Supabase Auth** (already available via Lovable Cloud) — no table changes needed since we are not storing profiles (admin is checked by email match only).
+Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
 
 ---
 
-## Phase 3: Admin Dashboard
+### 1. New Page: `src/pages/AppleModernization.tsx`
 
-### Authentication
-- **Login page** at `/admin/login` using Supabase Auth email/password
-- After login, check if `user.email === 'jaredbest@icloud.com'` — if not, show "Access Denied"
-- Auth context/hook: `useAdminAuth` — wraps `onAuthStateChange`, provides `user`, `loading`, `isAdmin`, `signOut`
-- Protected route wrapper component `AdminRoute` that redirects to `/admin/login` if not authenticated/admin
+A comprehensive, premium-feeling service page with the following sections:
 
-### Layout
-- `AdminLayout` component with:
-  - Top nav: "Bestly Admin" left, user email + Logout right
-  - Left sidebar (shadcn Sidebar, collapsible on mobile) with sections:
-    - **Amazon**: Dashboard, Submissions, Setup Guide
-    - **Cookie Yeti** (❄️ icon): CY Dashboard, Subscribers, Granted Access
-  - Main content area
+- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
+- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
+- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
+  - Apple Discovery Infrastructure
+  - App Clips (Instant Customer Experience)
+  - Payments Modernization (Tap to Pay)
+  - Digital ID Verification
+  - Brand Trust and Identity
+  - Customer Experience Automation
+  - Commerce and Ordering
+  - Operational Analytics
+  - Apple-Ready Certification (marked as optional)
+- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
+- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
+- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
 
-### Pages (all under `/admin/*`)
+### 2. Route Registration: `src/App.tsx`
 
-**Amazon Dashboard** (`/admin`):
-- 4 stat cards: Total Submissions, New This Week, Needs Review, Approved
-- Recent Submissions table (last 5)
+- Import the new `AppleModernization` page component.
+- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
 
-**Submissions List** (`/admin/submissions`):
-- Data table with columns: Business Name (link), Contact Name, Client Contact, Platform badge, Status badge, Submitted Date, Last Updated
-- Filters: status dropdown, platform dropdown, search input
-- Sort by column headers, pagination (20/page)
+### 3. Services Page Update: `src/pages/Services.tsx`
 
-**Submission Detail** (`/admin/submissions/:id`):
-- Header: business name, status badge, status change dropdown + save
-- 10 expandable card sections: Client Contact, Business Info, Owner Info, Bank & Payment, Brand & Product, Authorization, Documents (with download/preview), Validation Warnings (with resolve), Setup Operator Guide (from `setup_guidance`), Admin Notes
-- Document preview modal for images/PDFs
-- Copy email/phone buttons
+- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
+- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
 
-**Setup Guide** (`/admin/guide`):
-- Platform tabs (Amazon, Shopify, TikTok)
-- Grouped by section, each item shows field/guidance/recommendation/reason
-- Inline editing + "Add New Entry" button
+### 4. Header Navigation: `src/components/layout/Header.tsx`
 
-### Cookie Yeti Admin Pages
-
-**CY Dashboard** (`/admin/cookie-yeti`):
-- 5 stat cards: Total Premium, Paid Subscribers, Granted Access, Monthly Plans, Yearly Plans
-- Two side-by-side sections: Recent Subscribers, Recently Granted
-- Floating "Grant Access" FAB that opens a dialog
-
-**Subscribers** (`/admin/cookie-yeti/subscribers`):
-- Table: Email, Plan badge, Status badge, Stripe Customer ID (truncated + copy), Period End, Created
-- Filters: status, plan, search by email
-- Click row → Sheet panel with full details
-
-**Granted Access** (`/admin/cookie-yeti/granted`):
-- "Grant Premium Access" card at top: email input, reason, granted_by (auto-filled), Grant button
-- Table below: Email, Reason, Granted By, Date, Revoke button (with confirmation)
-- Search, sort, pagination, bulk revoke with checkboxes
+- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
 
 ---
 
-## Phase 4: Validation
+### Technical Details
 
-### Client-Side Validations (inline on form steps)
-Add field-level validation (red error on blur) and cross-field warnings (yellow alerts) to existing step components:
-- EIN format, DOB 18+, ID expiry future, phone US format, email format, routing 9 digits, ZIP 5 digits, card last4 4 digits, SSN format
-- Cross-field: address mismatch warning, agent state vs registration state, bank name match, ID expiry <6mo, missing SSN for US resident, missing docs, DL back, store name check
+**New file:**
+- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
 
-### Server-Side Validation (Edge Function)
-- Create `supabase/functions/validate-intake/index.ts`
-- Accepts `intake_id`, reads submission + documents, runs 15 checks, deletes old validations, inserts new ones into `intake_validations`
-- Called on form submit (after status → Submitted) and from admin "Run Validation" button
+**Modified files:**
+- `src/App.tsx` -- add import and route
+- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
 
-### Form Submission Flow Update
-- On Step 7 Submit: run client-side validation first → block if critical errors → allow with acknowledgment for warnings → on success call `validate-intake` edge function → update status
+**No database or backend changes required.** This is purely a frontend content page.
 
----
-
-## Routes to Add (in App.tsx)
-
-```
-/admin/login
-/admin           (dashboard)
-/admin/submissions
-/admin/submissions/:id
-/admin/guide
-/admin/cookie-yeti
-/admin/cookie-yeti/subscribers
-/admin/cookie-yeti/granted
-```
-
-## New Files (~20+)
-
-- `src/hooks/useAdminAuth.ts`
-- `src/components/admin/AdminRoute.tsx`
-- `src/components/admin/AdminLayout.tsx`
-- `src/components/admin/AdminSidebar.tsx`
-- `src/pages/admin/AdminLogin.tsx`
-- `src/pages/admin/AdminDashboard.tsx`
-- `src/pages/admin/AdminSubmissions.tsx`
-- `src/pages/admin/AdminSubmissionDetail.tsx`
-- `src/pages/admin/AdminSetupGuide.tsx`
-- `src/pages/admin/CYDashboard.tsx`
-- `src/pages/admin/CYSubscribers.tsx`
-- `src/pages/admin/CYGrantedAccess.tsx`
-- `supabase/functions/validate-intake/index.ts`
-
-## Summary
-- 1 SQL migration (admin RLS policies)
-- 1 new edge function (`validate-intake`)
-- ~15 new React components/pages
-- Updates to existing step components for inline validation
-- Route additions to App.tsx
-- Config update for `validate-intake` in `supabase/config.toml`
+The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
 
