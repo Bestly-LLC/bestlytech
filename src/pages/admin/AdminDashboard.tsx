@@ -49,7 +49,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8 max-w-6xl">
-      <div className="space-y-8 max-w-6xl">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Amazon Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">Overview of marketplace seller intake submissions.</p>
