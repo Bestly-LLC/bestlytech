@@ -30,8 +30,8 @@ const FormContent = () => {
   return (
     <div className="max-w-[700px] mx-auto px-4 py-8">
       <div className="text-center mb-6">
-        <h1 className="text-2xl font-bold mb-1">Amazon Seller Account Setup</h1>
-        <p className="text-sm text-muted-foreground">Complete this form to get your Amazon Seller Central account set up professionally.</p>
+        <h1 className="text-2xl font-bold mb-1">Marketplace Account Setup</h1>
+        <p className="text-sm text-muted-foreground">Complete this form to get your seller accounts set up professionally.</p>
         {saving && (
           <div className="flex items-center justify-center gap-1 mt-2 text-xs text-muted-foreground">
             <Save className="w-3 h-3 animate-pulse" /> Saving...
@@ -53,8 +53,8 @@ const AmazonSetup = () => {
   return (
     <Layout>
       <SEOHead
-        title="Amazon Seller Account Setup | Bestly"
-        description="Professional Amazon Seller Central account setup. Complete our intake form to get started."
+        title="Marketplace Account Setup | Bestly"
+        description="Professional Amazon, Shopify & TikTok Shop account setup. Complete our intake form to get started."
       />
       <IntakeFormProvider>
         <FormContent />

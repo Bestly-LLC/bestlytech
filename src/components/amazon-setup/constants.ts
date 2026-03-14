@@ -89,3 +89,62 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   W9: 'W-9 Form',
   Other: 'Other Document',
 };
+
+// ── Multi-platform constants ──
+
+export const PLATFORM_OPTIONS = [
+  { value: 'Amazon', label: 'Amazon', description: 'Sell on Amazon Seller Central' },
+  { value: 'Shopify', label: 'Shopify', description: 'Launch your own Shopify store' },
+  { value: 'TikTok', label: 'TikTok Shop', description: 'Sell directly on TikTok' },
+];
+
+export const SHOPIFY_PLANS = [
+  { value: 'Basic', label: 'Basic', description: 'For solo entrepreneurs — $39/month' },
+  { value: 'Shopify', label: 'Shopify', description: 'For small teams — $105/month' },
+  { value: 'Advanced', label: 'Advanced', description: 'For scaling businesses — $399/month' },
+];
+
+export const SHIPPING_METHODS = [
+  { value: 'Self', label: 'I\'ll ship orders myself' },
+  { value: '3PL', label: 'Third-party logistics (3PL)' },
+  { value: 'Dropship', label: 'Dropshipping' },
+];
+
+export const TIKTOK_CATEGORIES = [
+  'Beauty & Personal Care', 'Fashion & Accessories', 'Food & Beverages',
+  'Health & Wellness', 'Home & Living', 'Electronics & Gadgets',
+  'Sports & Outdoor', 'Baby & Kids', 'Pet Supplies', 'Other',
+];
+
+export const TIKTOK_FULFILLMENT = [
+  { value: 'Self', label: 'Ship orders myself' },
+  { value: 'TikTok', label: 'Fulfilled by TikTok' },
+  { value: 'Both', label: 'Both / Not sure yet' },
+];
+
+// Platform-specific readiness checklist items
+export const READINESS_ITEMS: Record<string, { text: string; key: string }[]> = {
+  Amazon: [
+    { key: 'state_reg', text: 'Your state business registration document (Certificate of Formation, Articles of Organization, or equivalent)' },
+    { key: 'ein', text: 'Your EIN (Employer Identification Number) from the IRS' },
+    { key: 'gov_id', text: "The business owner's government-issued photo ID (passport or driver's license — not expired)" },
+    { key: 'bank_statement', text: 'A recent bank statement (within 180 days) showing the business name and address — must be a full statement with transactions, NOT just a bank letter' },
+    { key: 'address_proof', text: "A recent utility bill OR bank statement showing the owner's personal residential address (within 180 days)" },
+    { key: 'bank_details', text: 'Bank account details (account number, routing number) for receiving Amazon payments' },
+    { key: 'credit_card', text: "A credit or debit card for Amazon's monthly seller subscription fee ($39.99/month)" },
+  ],
+  Shopify: [
+    { key: 'state_reg', text: 'Your business registration document' },
+    { key: 'gov_id', text: "The business owner's government-issued photo ID" },
+    { key: 'payment_method', text: 'A credit or debit card for Shopify subscription billing' },
+    { key: 'product_photos', text: 'Product photos and descriptions ready for listing' },
+    { key: 'bank_details', text: 'Bank account for receiving Shopify Payments payouts' },
+  ],
+  TikTok: [
+    { key: 'gov_id', text: "The business owner's government-issued photo ID" },
+    { key: 'business_license', text: 'Business license or registration document' },
+    { key: 'bank_details', text: 'Bank account for receiving TikTok Shop payouts' },
+    { key: 'product_photos', text: 'Product photos/samples and content for listings' },
+    { key: 'ein', text: 'Your EIN or tax identification number' },
+  ],
+};
