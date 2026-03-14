@@ -48,7 +48,7 @@ export default function AdminSubmissions() {
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
-    <AdminLayout>
+    <div className="space-y-6 max-w-6xl">
       <div className="space-y-6 max-w-6xl">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Submissions</h1>
