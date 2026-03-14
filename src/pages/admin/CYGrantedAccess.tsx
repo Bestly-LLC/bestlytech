@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { AdminLayout } from "@/components/admin/AdminLayout";
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,8 +72,7 @@ export default function CYGrantedAccess() {
     : data;
 
   return (
-    <AdminLayout>
-      <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 max-w-5xl">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Granted Access</h1>
           <p className="text-sm text-muted-foreground mt-1">Manually grant or revoke Cookie Yeti premium access.</p>
@@ -184,7 +183,6 @@ export default function CYGrantedAccess() {
             </Table>
           </CardContent>
         </Card>
-      </div>
-    </AdminLayout>
+    </div>
   );
 }

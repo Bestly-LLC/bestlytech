@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "./AdminSidebar";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
@@ -7,11 +7,7 @@ import { LogOut, Shield } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
 
-interface AdminLayoutProps {
-  children: ReactNode;
-}
-
-export function AdminLayout({ children }: AdminLayoutProps) {
+export function AdminLayout() {
   const { user, signOut } = useAdminAuth();
 
   return (
@@ -38,7 +34,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </div>
           </header>
           <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
-            {children}
+            <Outlet />
           </main>
         </div>
       </div>

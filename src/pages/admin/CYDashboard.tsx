@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { AdminLayout } from "@/components/admin/AdminLayout";
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,8 +65,7 @@ export default function CYDashboard() {
   ];
 
   return (
-    <AdminLayout>
-      <div className="space-y-8 max-w-6xl">
+    <div className="space-y-8 max-w-6xl">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground tracking-tight">Cookie Yeti Dashboard</h1>
@@ -182,7 +181,6 @@ export default function CYDashboard() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </AdminLayout>
+    </div>
   );
 }

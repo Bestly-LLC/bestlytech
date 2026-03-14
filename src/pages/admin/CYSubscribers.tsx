@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { AdminLayout } from "@/components/admin/AdminLayout";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -35,8 +35,7 @@ export default function CYSubscribers() {
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
-    <AdminLayout>
-      <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 max-w-6xl">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Subscribers</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage Cookie Yeti paid subscriptions.</p>
@@ -138,7 +137,6 @@ export default function CYSubscribers() {
             )}
           </SheetContent>
         </Sheet>
-      </div>
-    </AdminLayout>
+    </div>
   );
 }

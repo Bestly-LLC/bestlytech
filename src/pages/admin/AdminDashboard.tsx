@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { AdminLayout } from "@/components/admin/AdminLayout";
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -48,8 +48,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <AdminLayout>
-      <div className="space-y-8 max-w-6xl">
+    <div className="space-y-8 max-w-6xl">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Amazon Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">Overview of marketplace seller intake submissions.</p>
@@ -123,7 +122,6 @@ export default function AdminDashboard() {
             </Table>
           </CardContent>
         </Card>
-      </div>
-    </AdminLayout>
+    </div>
   );
 }

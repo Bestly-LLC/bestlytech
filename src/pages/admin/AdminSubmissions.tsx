@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { AdminLayout } from "@/components/admin/AdminLayout";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -48,8 +48,7 @@ export default function AdminSubmissions() {
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
-    <AdminLayout>
-      <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 max-w-6xl">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Submissions</h1>
           <p className="text-sm text-muted-foreground mt-1">All marketplace seller intake submissions.</p>
@@ -136,7 +135,6 @@ export default function AdminSubmissions() {
             </Button>
           </div>
         )}
-      </div>
-    </AdminLayout>
+    </div>
   );
 }

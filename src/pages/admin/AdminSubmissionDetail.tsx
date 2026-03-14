@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { AdminLayout } from "@/components/admin/AdminLayout";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -108,25 +108,20 @@ export default function AdminSubmissionDetail() {
 
   if (loading) {
     return (
-      <AdminLayout>
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-        </div>
-      </AdminLayout>
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
     );
   }
 
   if (!intake) {
     return (
-      <AdminLayout>
-        <div className="text-center py-20 text-muted-foreground">Submission not found.</div>
-      </AdminLayout>
+      <div className="text-center py-20 text-muted-foreground">Submission not found.</div>
     );
   }
 
   return (
-    <AdminLayout>
-      <div className="space-y-4 max-w-4xl">
+    <div className="space-y-4 max-w-4xl">
         <div className="flex items-center gap-3">
           <Link to="/admin/submissions">
             <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" /> Back</Button>
@@ -317,7 +312,6 @@ export default function AdminSubmissionDetail() {
           />
           <Button onClick={saveStatus} size="sm" className="mt-2">Save Notes</Button>
         </Section>
-      </div>
-    </AdminLayout>
+    </div>
   );
 }
