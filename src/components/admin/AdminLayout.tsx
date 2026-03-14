@@ -5,6 +5,7 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, Shield } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { ChangePasswordDialog } from "./ChangePasswordDialog";
 
 interface AdminLayoutProps {
   children: ReactNode;
