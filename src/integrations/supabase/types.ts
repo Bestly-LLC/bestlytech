@@ -119,6 +119,30 @@ export type Database = {
         }
         Relationships: []
       }
+      granted_access: {
+        Row: {
+          created_at: string | null
+          email: string
+          granted_by: string | null
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          granted_by?: string | null
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          granted_by?: string | null
+          id?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
       hire_requests: {
         Row: {
           budget_range: string | null
