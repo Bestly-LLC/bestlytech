@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminLayout } from "@/components/admin/AdminLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 const STATUSES = ["All", "Draft", "Submitted", "In Review", "Issues Flagged", "Approved"];
 const PAGE_SIZE = 20;
@@ -49,16 +49,22 @@ export default function AdminSubmissions() {
 
   return (
     <AdminLayout>
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold text-foreground">Submissions</h1>
+      <div className="space-y-6 max-w-6xl">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Submissions</h1>
+          <p className="text-sm text-muted-foreground mt-1">All marketplace seller intake submissions.</p>
+        </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
-          <Input
-            placeholder="Search by name or email..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            className="max-w-xs"
-          />
+          <div className="relative max-w-xs flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or email..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+              className="pl-9"
+            />
+          </div>
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
             <SelectTrigger className="w-[160px]">
               <SelectValue />
@@ -71,32 +77,32 @@ export default function AdminSubmissions() {
           </Select>
         </div>
 
-        <Card>
+        <Card className="border-border/50">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Business Name</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Platform</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Submitted</TableHead>
-                  <TableHead>Updated</TableHead>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs">Business Name</TableHead>
+                  <TableHead className="text-xs">Contact</TableHead>
+                  <TableHead className="text-xs">Email</TableHead>
+                  <TableHead className="text-xs">Platform</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Submitted</TableHead>
+                  <TableHead className="text-xs">Updated</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paged.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell>
-                      <Link to={`/admin/submissions/${r.id}`} className="text-primary hover:underline font-medium">
+                      <Link to={`/admin/submissions/${r.id}`} className="text-primary hover:underline font-medium text-sm">
                         {r.business_legal_name || "Unnamed"}
                       </Link>
                     </TableCell>
-                    <TableCell>{r.client_name || "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.client_email || "—"}</TableCell>
-                    <TableCell><Badge variant="outline">{r.platform}</Badge></TableCell>
-                    <TableCell><Badge>{r.status}</Badge></TableCell>
+                    <TableCell className="text-sm">{r.client_name || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{r.client_email || "—"}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{r.platform}</Badge></TableCell>
+                    <TableCell><Badge className="text-xs">{r.status}</Badge></TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
                     </TableCell>
@@ -107,7 +113,7 @@ export default function AdminSubmissions() {
                 ))}
                 {paged.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-12 text-sm">
                       No submissions found
                     </TableCell>
                   </TableRow>
@@ -118,11 +124,11 @@ export default function AdminSubmissions() {
         </Card>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-3">
             <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-xs text-muted-foreground tabular-nums">
               Page {page + 1} of {totalPages}
             </span>
             <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
