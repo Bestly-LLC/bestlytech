@@ -46,7 +46,7 @@ export function AdminSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
-        <SidebarGroup defaultOpen>
+        <SidebarGroup>
           <SidebarGroupLabel>Amazon</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
