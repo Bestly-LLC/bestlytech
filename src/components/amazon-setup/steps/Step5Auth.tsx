@@ -7,10 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle2, Info } from 'lucide-react';
 import { useIntakeForm } from '@/contexts/IntakeFormContext';
+import { useGuidance } from '@/contexts/GuidanceContext';
+import { GuidedLabel } from '../GuidedLabel';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step5Auth = () => {
   const { formData, updateField, goNext, goBack } = useIntakeForm();
+  const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const ownerSetup = !formData.setup_by_representative;
 
@@ -28,11 +31,13 @@ export const Step5Auth = () => {
     <Card>
       <CardHeader>
         <CardTitle>Account Setup Authorization</CardTitle>
-        <CardDescription>Tell us who will be setting up and managing this Amazon account.</CardDescription>
+        <CardDescription>Tell us who will be setting up and managing these marketplace accounts.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">Is the business owner setting up this account themselves?</p>
+          <div className="inline-flex items-center gap-1">
+            <GuidedLabel label="Is the business owner setting up this account themselves?" fieldName="setup_by_representative" getGuidance={getGuidance} />
+          </div>
           <Switch checked={!formData.setup_by_representative}
             onCheckedChange={v => updateField('setup_by_representative', !v)} />
         </div>
@@ -46,7 +51,7 @@ export const Step5Auth = () => {
           <div className="space-y-4 pl-4 border-l-2 border-border">
             <h3 className="font-medium text-sm">Authorized Representative</h3>
             <div>
-              <label className="text-sm font-medium">Representative Full Name <span className="text-destructive">*</span></label>
+              <GuidedLabel label="Representative Full Name" fieldName="rep_name" required getGuidance={getGuidance} />
               <Input value={formData.rep_name} onChange={e => updateField('rep_name', e.target.value)} className="mt-1" />
               {errors.rep_name && <p className="text-xs text-destructive mt-1">{errors.rep_name}</p>}
             </div>

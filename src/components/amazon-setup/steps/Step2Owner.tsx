@@ -8,11 +8,14 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Info, AlertTriangle } from 'lucide-react';
 import { useIntakeForm } from '@/contexts/IntakeFormContext';
+import { useGuidance } from '@/contexts/GuidanceContext';
 import { US_STATES, COUNTRIES } from '../constants';
+import { GuidedLabel } from '../GuidedLabel';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step2Owner = () => {
   const { formData, updateField, goNext, goBack } = useIntakeForm();
+  const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = () => {
@@ -49,7 +52,7 @@ export const Step2Owner = () => {
 
   const Field = ({ name, label, required = true, ...props }: any) => (
     <div>
-      <label className="text-sm font-medium">{label} {required && <span className="text-destructive">*</span>}</label>
+      <GuidedLabel label={label} fieldName={name} required={required} getGuidance={getGuidance} />
       <Input value={(formData as any)[name] || ''} onChange={(e: any) => updateField(name, e.target.value)} className="mt-1" {...props} />
       {errors[name] && <p className="text-xs text-destructive mt-1">{errors[name]}</p>}
     </div>
@@ -57,7 +60,7 @@ export const Step2Owner = () => {
 
   const CountrySelect = ({ name, label }: { name: keyof typeof formData; label: string }) => (
     <div>
-      <label className="text-sm font-medium">{label} <span className="text-destructive">*</span></label>
+      <GuidedLabel label={label} fieldName={name as string} required getGuidance={getGuidance} />
       <Select value={formData[name] as string} onValueChange={v => updateField(name, v)}>
         <SelectTrigger className="mt-1"><SelectValue placeholder="Select country" /></SelectTrigger>
         <SelectContent>
@@ -91,7 +94,7 @@ export const Step2Owner = () => {
         <div className="space-y-3 pt-4 border-t border-border">
           <h3 className="font-medium text-sm">Tax Information</h3>
           <div>
-            <label className="text-sm font-medium">Tax Residency <span className="text-destructive">*</span></label>
+            <GuidedLabel label="Tax Residency" fieldName="tax_residency" required getGuidance={getGuidance} />
             <RadioGroup value={formData.tax_residency} onValueChange={v => updateField('tax_residency', v)} className="flex gap-4 mt-2">
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="US Resident" id="us-res" />
@@ -105,7 +108,7 @@ export const Step2Owner = () => {
           </div>
 
           <div>
-            <label className="text-sm font-medium">SSN or ITIN</label>
+            <GuidedLabel label="SSN or ITIN" fieldName="ssn_itin" getGuidance={getGuidance} />
             <p className="text-xs text-muted-foreground">Required for tax forms (W-9). If you don't have it now, we can collect it later. Only the last 4 digits are stored.</p>
             <Input type="password" value={formData.ssn_itin} onChange={e => updateField('ssn_itin', e.target.value)}
               placeholder="XXX-XX-XXXX" className="mt-1" />
@@ -124,7 +127,7 @@ export const Step2Owner = () => {
         <div className="space-y-3 pt-4 border-t border-border">
           <h3 className="font-medium text-sm">Government-Issued ID</h3>
           <div>
-            <label className="text-sm font-medium">ID Type <span className="text-destructive">*</span></label>
+            <GuidedLabel label="ID Type" fieldName="id_type" required getGuidance={getGuidance} />
             <Select value={formData.id_type} onValueChange={v => updateField('id_type', v)}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Select ID type" /></SelectTrigger>
               <SelectContent>
@@ -160,7 +163,7 @@ export const Step2Owner = () => {
           <div className="grid grid-cols-2 gap-3">
             <Field name="residential_city" label="City" />
             <div>
-              <label className="text-sm font-medium">State <span className="text-destructive">*</span></label>
+              <GuidedLabel label="State" fieldName="residential_state" required getGuidance={getGuidance} />
               <Select value={formData.residential_state} onValueChange={v => updateField('residential_state', v)}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="State" /></SelectTrigger>
                 <SelectContent>

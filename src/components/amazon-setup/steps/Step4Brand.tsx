@@ -11,26 +11,26 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Info, ShoppingCart, Store, Video } from 'lucide-react';
 import { useIntakeForm } from '@/contexts/IntakeFormContext';
+import { useGuidance } from '@/contexts/GuidanceContext';
 import { PRODUCT_CATEGORIES, SHOPIFY_PLANS, SHIPPING_METHODS, TIKTOK_CATEGORIES, TIKTOK_FULFILLMENT } from '../constants';
+import { GuidedLabel } from '../GuidedLabel';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step4Brand = () => {
   const { formData, updateField, goNext, goBack, isPlatformSelected } = useIntakeForm();
+  const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = () => {
     const e: Record<string, string> = {};
-    // Amazon validations
     if (isPlatformSelected('Amazon')) {
       if (!formData.product_category) e.product_category = 'Required';
       if (!formData.number_of_products) e.number_of_products = 'Required';
       if (!formData.fulfillment_method) e.fulfillment_method = 'Required';
     }
-    // Shopify validations
     if (isPlatformSelected('Shopify')) {
       if (!formData.shopify_store_name.trim()) e.shopify_store_name = 'Required';
     }
-    // TikTok validations
     if (isPlatformSelected('TikTok')) {
       if (!formData.tiktok_shop_name.trim()) e.tiktok_shop_name = 'Required';
       if (!formData.tiktok_category) e.tiktok_category = 'Required';
@@ -50,16 +50,14 @@ export const Step4Brand = () => {
         {/* Shared Brand Section */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Do you own a brand for your products?</p>
-            </div>
+            <p className="text-sm font-medium">Do you own a brand for your products?</p>
             <Switch checked={formData.owns_brand} onCheckedChange={v => updateField('owns_brand', v)} />
           </div>
 
           {formData.owns_brand && (
             <div className="space-y-3 pl-4 border-l-2 border-border">
               <div>
-                <label className="text-sm font-medium">Brand Name <span className="text-destructive">*</span></label>
+                <GuidedLabel label="Brand Name" fieldName="brand_name" required getGuidance={getGuidance} />
                 <Input value={formData.brand_name} onChange={e => updateField('brand_name', e.target.value)} className="mt-1" />
                 {errors.brand_name && <p className="text-xs text-destructive mt-1">{errors.brand_name}</p>}
               </div>
@@ -94,7 +92,7 @@ export const Step4Brand = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Amazon Store/Brand Display Name</label>
+              <GuidedLabel label="Amazon Store/Brand Display Name" fieldName="amazon_store_name" getGuidance={getGuidance} />
               <p className="text-xs text-muted-foreground">Name customers will see on Amazon. Leave blank to use your business name.</p>
               <Input value={formData.amazon_store_name} onChange={e => updateField('amazon_store_name', e.target.value)} className="mt-1" />
               {!formData.amazon_store_name && (
@@ -106,7 +104,9 @@ export const Step4Brand = () => {
             </div>
 
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Do you have UPCs for all your products?</p>
+              <div className="inline-flex items-center gap-1">
+                <GuidedLabel label="Do you have UPCs for all your products?" fieldName="has_upcs" getGuidance={getGuidance} />
+              </div>
               <Switch checked={formData.has_upcs} onCheckedChange={v => updateField('has_upcs', v)} />
             </div>
             {!formData.has_upcs && (
@@ -125,7 +125,7 @@ export const Step4Brand = () => {
             )}
 
             <div>
-              <label className="text-sm font-medium">Product Category <span className="text-destructive">*</span></label>
+              <GuidedLabel label="Product Category" fieldName="product_category" required getGuidance={getGuidance} />
               <Select value={formData.product_category} onValueChange={v => updateField('product_category', v)}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select category" /></SelectTrigger>
                 <SelectContent>
@@ -150,7 +150,7 @@ export const Step4Brand = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Fulfillment Method <span className="text-destructive">*</span></label>
+              <GuidedLabel label="Fulfillment Method" fieldName="fulfillment_method" required getGuidance={getGuidance} />
               <RadioGroup value={formData.fulfillment_method} onValueChange={v => updateField('fulfillment_method', v)} className="mt-2 space-y-2">
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="FBM" id="fbm" />
@@ -186,14 +186,16 @@ export const Step4Brand = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Shopify Store Name <span className="text-destructive">*</span></label>
+              <GuidedLabel label="Shopify Store Name" fieldName="shopify_store_name" required getGuidance={getGuidance} />
               <p className="text-xs text-muted-foreground">The name that will appear on your Shopify store.</p>
               <Input value={formData.shopify_store_name} onChange={e => updateField('shopify_store_name', e.target.value)} className="mt-1" />
               {errors.shopify_store_name && <p className="text-xs text-destructive mt-1">{errors.shopify_store_name}</p>}
             </div>
 
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Do you already have a Shopify store?</p>
+              <div className="inline-flex items-center gap-1">
+                <GuidedLabel label="Do you already have a Shopify store?" fieldName="has_existing_shopify" getGuidance={getGuidance} />
+              </div>
               <Switch checked={formData.has_existing_shopify} onCheckedChange={v => updateField('has_existing_shopify', v)} />
             </div>
             {formData.has_existing_shopify && (
@@ -205,7 +207,7 @@ export const Step4Brand = () => {
             )}
 
             <div>
-              <label className="text-sm font-medium">Shopify Plan Preference</label>
+              <GuidedLabel label="Shopify Plan Preference" fieldName="shopify_plan" getGuidance={getGuidance} />
               <RadioGroup value={formData.shopify_plan} onValueChange={v => updateField('shopify_plan', v)} className="mt-2 space-y-2">
                 {SHOPIFY_PLANS.map(plan => (
                   <div key={plan.value} className="flex items-start gap-3 p-3 rounded-lg border border-border">
@@ -220,14 +222,14 @@ export const Step4Brand = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Custom Domain</label>
+              <GuidedLabel label="Custom Domain" fieldName="shopify_domain" getGuidance={getGuidance} />
               <p className="text-xs text-muted-foreground">Already have a domain? Enter it here. Otherwise we'll help you set one up.</p>
               <Input value={formData.shopify_domain} onChange={e => updateField('shopify_domain', e.target.value)}
                 placeholder="yourbrand.com" className="mt-1" />
             </div>
 
             <div>
-              <label className="text-sm font-medium">Shipping Method</label>
+              <GuidedLabel label="Shipping Method" fieldName="shipping_method" getGuidance={getGuidance} />
               <RadioGroup value={formData.shipping_method} onValueChange={v => updateField('shipping_method', v)} className="mt-2 space-y-2">
                 {SHIPPING_METHODS.map(m => (
                   <div key={m.value} className="flex items-center gap-2">
@@ -250,25 +252,27 @@ export const Step4Brand = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">TikTok Shop Name <span className="text-destructive">*</span></label>
+              <GuidedLabel label="TikTok Shop Name" fieldName="tiktok_shop_name" required getGuidance={getGuidance} />
               <Input value={formData.tiktok_shop_name} onChange={e => updateField('tiktok_shop_name', e.target.value)} className="mt-1" />
               {errors.tiktok_shop_name && <p className="text-xs text-destructive mt-1">{errors.tiktok_shop_name}</p>}
             </div>
 
             <div>
-              <label className="text-sm font-medium">TikTok Handle</label>
+              <GuidedLabel label="TikTok Handle" fieldName="tiktok_handle" getGuidance={getGuidance} />
               <p className="text-xs text-muted-foreground">Your @username on TikTok (if you have one).</p>
               <Input value={formData.tiktok_handle} onChange={e => updateField('tiktok_handle', e.target.value)}
                 placeholder="@yourbrand" className="mt-1" />
             </div>
 
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Do you have a TikTok Creator account?</p>
+              <div className="inline-flex items-center gap-1">
+                <GuidedLabel label="Do you have a TikTok Creator account?" fieldName="has_tiktok_creator" getGuidance={getGuidance} />
+              </div>
               <Switch checked={formData.has_tiktok_creator} onCheckedChange={v => updateField('has_tiktok_creator', v)} />
             </div>
 
             <div>
-              <label className="text-sm font-medium">Product Category <span className="text-destructive">*</span></label>
+              <GuidedLabel label="Product Category" fieldName="tiktok_category" required getGuidance={getGuidance} />
               <Select value={formData.tiktok_category} onValueChange={v => updateField('tiktok_category', v)}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select category" /></SelectTrigger>
                 <SelectContent>
@@ -279,7 +283,7 @@ export const Step4Brand = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Fulfillment Method</label>
+              <GuidedLabel label="Fulfillment Method" fieldName="tiktok_fulfillment" getGuidance={getGuidance} />
               <RadioGroup value={formData.tiktok_fulfillment} onValueChange={v => updateField('tiktok_fulfillment', v)} className="mt-2 space-y-2">
                 {TIKTOK_FULFILLMENT.map(m => (
                   <div key={m.value} className="flex items-center gap-2">

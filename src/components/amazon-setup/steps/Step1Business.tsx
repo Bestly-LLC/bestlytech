@@ -7,11 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle, Info } from 'lucide-react';
 import { useIntakeForm } from '@/contexts/IntakeFormContext';
+import { useGuidance } from '@/contexts/GuidanceContext';
 import { US_STATES, BUSINESS_TYPES, REGISTERED_AGENT_SERVICES } from '../constants';
+import { GuidedLabel } from '../GuidedLabel';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step1Business = () => {
   const { formData, updateField, goNext, goBack } = useIntakeForm();
+  const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [otherAgent, setOtherAgent] = useState('');
 
@@ -46,7 +49,7 @@ export const Step1Business = () => {
 
   const Field = ({ name, label, required = true, ...props }: any) => (
     <div>
-      <label className="text-sm font-medium">{label} {required && <span className="text-destructive">*</span>}</label>
+      <GuidedLabel label={label} fieldName={name} required={required} getGuidance={getGuidance} />
       <Input
         value={(formData as any)[name] || ''}
         onChange={(e: any) => updateField(name, e.target.value)}
@@ -67,7 +70,7 @@ export const Step1Business = () => {
         <Field name="business_legal_name" label="Business Legal Name" />
 
         <div>
-          <label className="text-sm font-medium">Business Type <span className="text-destructive">*</span></label>
+          <GuidedLabel label="Business Type" fieldName="business_type" required getGuidance={getGuidance} />
           <Select value={formData.business_type} onValueChange={v => updateField('business_type', v)}>
             <SelectTrigger className="mt-1"><SelectValue placeholder="Select type" /></SelectTrigger>
             <SelectContent>
@@ -78,7 +81,7 @@ export const Step1Business = () => {
         </div>
 
         <div>
-          <label className="text-sm font-medium">State of Registration <span className="text-destructive">*</span></label>
+          <GuidedLabel label="State of Registration" fieldName="state_of_registration" required getGuidance={getGuidance} />
           <Select value={formData.state_of_registration} onValueChange={v => updateField('state_of_registration', v)}>
             <SelectTrigger className="mt-1"><SelectValue placeholder="Select state" /></SelectTrigger>
             <SelectContent>
@@ -91,7 +94,7 @@ export const Step1Business = () => {
         <Field name="ein" label="EIN" placeholder="XX-XXXXXXX" />
 
         <div>
-          <label className="text-sm font-medium">Registered Agent Service <span className="text-destructive">*</span></label>
+          <GuidedLabel label="Registered Agent Service" fieldName="registered_agent_service" required getGuidance={getGuidance} />
           <Select value={formData.registered_agent_service} onValueChange={v => {
             updateField('registered_agent_service', v === 'Other' ? otherAgent : v);
             if (v !== 'Other') setOtherAgent('');
@@ -114,7 +117,7 @@ export const Step1Business = () => {
           <div className="grid grid-cols-2 gap-3">
             <Field name="registered_agent_city" label="City" />
             <div>
-              <label className="text-sm font-medium">State <span className="text-destructive">*</span></label>
+              <GuidedLabel label="State" fieldName="registered_agent_state" required getGuidance={getGuidance} />
               <Select value={formData.registered_agent_state} onValueChange={v => updateField('registered_agent_state', v)}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="State" /></SelectTrigger>
                 <SelectContent>
@@ -155,7 +158,7 @@ export const Step1Business = () => {
             <div className="grid grid-cols-2 gap-3">
               <Field name="operating_city" label="City" />
               <div>
-                <label className="text-sm font-medium">State <span className="text-destructive">*</span></label>
+                <GuidedLabel label="State" fieldName="operating_state" required getGuidance={getGuidance} />
                 <Select value={formData.operating_state} onValueChange={v => updateField('operating_state', v)}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="State" /></SelectTrigger>
                   <SelectContent>
