@@ -8,6 +8,7 @@ import { Shield, AlertTriangle } from 'lucide-react';
 import { useIntakeForm } from '@/contexts/IntakeFormContext';
 import { useGuidance } from '@/contexts/GuidanceContext';
 import { GuidedLabel } from '../GuidedLabel';
+import { IntakeField } from '../IntakeField';
 
 export const Step3Bank = () => {
   const { formData, updateField, goNext, goBack } = useIntakeForm();
@@ -84,11 +85,7 @@ export const Step3Bank = () => {
           </AlertDescription>
         </Alert>
 
-        <div>
-          <GuidedLabel label="Bank Name" fieldName="bank_name" required getGuidance={getGuidance} />
-          <Input value={formData.bank_name} onChange={e => updateField('bank_name', e.target.value)} className="mt-1" />
-          {errors.bank_name && <p className="text-xs text-destructive mt-1">{errors.bank_name}</p>}
-        </div>
+        <IntakeField name="bank_name" label="Bank Name" value={formData.bank_name} onChange={updateField} error={errors.bank_name} getGuidance={getGuidance} />
 
         <div>
           <GuidedLabel label="Account Holder Name" fieldName="account_holder_name" required getGuidance={getGuidance} />
@@ -109,7 +106,6 @@ export const Step3Bank = () => {
         <div>
           <label className="text-sm font-medium">Account Number <span className="text-destructive">*</span></label>
           <Input
-            type={accountFocused ? 'text' : 'text'}
             value={accountFocused ? fullAccount : accountDisplay}
             onChange={e => setFullAccount(e.target.value.replace(/\D/g, ''))}
             onFocus={() => setAccountFocused(true)}

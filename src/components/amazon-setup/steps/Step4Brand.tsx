@@ -14,6 +14,7 @@ import { useIntakeForm } from '@/contexts/IntakeFormContext';
 import { useGuidance } from '@/contexts/GuidanceContext';
 import { PRODUCT_CATEGORIES, SHOPIFY_PLANS, SHIPPING_METHODS, TIKTOK_CATEGORIES, TIKTOK_FULFILLMENT } from '../constants';
 import { GuidedLabel } from '../GuidedLabel';
+import { IntakeField } from '../IntakeField';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step4Brand = () => {
@@ -56,11 +57,7 @@ export const Step4Brand = () => {
 
           {formData.owns_brand && (
             <div className="space-y-3 pl-4 border-l-2 border-border">
-              <div>
-                <GuidedLabel label="Brand Name" fieldName="brand_name" required getGuidance={getGuidance} />
-                <Input value={formData.brand_name} onChange={e => updateField('brand_name', e.target.value)} className="mt-1" />
-                {errors.brand_name && <p className="text-xs text-destructive mt-1">{errors.brand_name}</p>}
-              </div>
+              <IntakeField name="brand_name" label="Brand Name" value={formData.brand_name} onChange={updateField} error={errors.brand_name} getGuidance={getGuidance} />
 
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">Active registered trademark?</p>
@@ -185,12 +182,7 @@ export const Step4Brand = () => {
               <Badge variant="secondary" className="text-xs">Shopify</Badge>
             </div>
 
-            <div>
-              <GuidedLabel label="Shopify Store Name" fieldName="shopify_store_name" required getGuidance={getGuidance} />
-              <p className="text-xs text-muted-foreground">The name that will appear on your Shopify store.</p>
-              <Input value={formData.shopify_store_name} onChange={e => updateField('shopify_store_name', e.target.value)} className="mt-1" />
-              {errors.shopify_store_name && <p className="text-xs text-destructive mt-1">{errors.shopify_store_name}</p>}
-            </div>
+            <IntakeField name="shopify_store_name" label="Shopify Store Name" value={formData.shopify_store_name} onChange={updateField} error={errors.shopify_store_name} getGuidance={getGuidance} />
 
             <div className="flex items-center justify-between">
               <div className="inline-flex items-center gap-1">
@@ -251,11 +243,7 @@ export const Step4Brand = () => {
               <Badge variant="secondary" className="text-xs">TikTok</Badge>
             </div>
 
-            <div>
-              <GuidedLabel label="TikTok Shop Name" fieldName="tiktok_shop_name" required getGuidance={getGuidance} />
-              <Input value={formData.tiktok_shop_name} onChange={e => updateField('tiktok_shop_name', e.target.value)} className="mt-1" />
-              {errors.tiktok_shop_name && <p className="text-xs text-destructive mt-1">{errors.tiktok_shop_name}</p>}
-            </div>
+            <IntakeField name="tiktok_shop_name" label="TikTok Shop Name" value={formData.tiktok_shop_name} onChange={updateField} error={errors.tiktok_shop_name} getGuidance={getGuidance} />
 
             <div>
               <GuidedLabel label="TikTok Handle" fieldName="tiktok_handle" getGuidance={getGuidance} />

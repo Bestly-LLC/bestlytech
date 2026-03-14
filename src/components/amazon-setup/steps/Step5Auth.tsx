@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -9,6 +8,7 @@ import { CheckCircle2, Info } from 'lucide-react';
 import { useIntakeForm } from '@/contexts/IntakeFormContext';
 import { useGuidance } from '@/contexts/GuidanceContext';
 import { GuidedLabel } from '../GuidedLabel';
+import { IntakeField } from '../IntakeField';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step5Auth = () => {
@@ -50,11 +50,7 @@ export const Step5Auth = () => {
         ) : (
           <div className="space-y-4 pl-4 border-l-2 border-border">
             <h3 className="font-medium text-sm">Authorized Representative</h3>
-            <div>
-              <GuidedLabel label="Representative Full Name" fieldName="rep_name" required getGuidance={getGuidance} />
-              <Input value={formData.rep_name} onChange={e => updateField('rep_name', e.target.value)} className="mt-1" />
-              {errors.rep_name && <p className="text-xs text-destructive mt-1">{errors.rep_name}</p>}
-            </div>
+            <IntakeField name="rep_name" label="Representative Full Name" value={formData.rep_name} onChange={updateField} error={errors.rep_name} getGuidance={getGuidance} />
             <div>
               <label className="text-sm font-medium">Relationship to Business <span className="text-destructive">*</span></label>
               <Select value={formData.rep_relationship} onValueChange={v => updateField('rep_relationship', v)}>
