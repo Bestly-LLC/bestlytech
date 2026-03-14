@@ -57,7 +57,9 @@ const AmazonSetup = () => {
         description="Professional Amazon, Shopify & TikTok Shop account setup. Complete our intake form to get started."
       />
       <IntakeFormProvider>
-        <FormContent />
+        <GuidanceProvider>
+          <FormContent />
+        </GuidanceProvider>
       </IntakeFormProvider>
     </Layout>
   );
