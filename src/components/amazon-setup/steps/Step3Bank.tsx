@@ -6,9 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Shield, AlertTriangle } from 'lucide-react';
 import { useIntakeForm } from '@/contexts/IntakeFormContext';
+import { useGuidance } from '@/contexts/GuidanceContext';
+import { GuidedLabel } from '../GuidedLabel';
 
 export const Step3Bank = () => {
   const { formData, updateField, goNext, goBack } = useIntakeForm();
+  const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [fullAccount, setFullAccount] = useState('');
   const [fullRouting, setFullRouting] = useState('');
@@ -48,14 +51,12 @@ export const Step3Bank = () => {
   const routingDisplay = routingFocused ? fullRouting :
     formData.routing_number_last4 ? `••••${formData.routing_number_last4}` : '';
 
-  // Name match warning
   const holderName = formData.account_holder_name.toLowerCase().trim();
   const ownerName = `${formData.contact_first_name} ${formData.contact_last_name}`.toLowerCase().trim();
   const bizName = formData.business_legal_name.toLowerCase().trim();
   const nameMatch = !holderName || holderName === ownerName || holderName === bizName ||
     bizName.includes(holderName) || holderName.includes(bizName);
 
-  // Generate expiry options
   const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 11 }, (_, i) => String(currentYear + i));
@@ -73,7 +74,7 @@ export const Step3Bank = () => {
     <Card>
       <CardHeader>
         <CardTitle>Bank Account & Payment Details</CardTitle>
-        <CardDescription>This information is used to set up your Amazon seller payment deposit and subscription.</CardDescription>
+        <CardDescription>This information is used to set up your seller payment deposit and subscription.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Alert className="bg-primary/5 border-primary/20">
@@ -84,13 +85,13 @@ export const Step3Bank = () => {
         </Alert>
 
         <div>
-          <label className="text-sm font-medium">Bank Name <span className="text-destructive">*</span></label>
+          <GuidedLabel label="Bank Name" fieldName="bank_name" required getGuidance={getGuidance} />
           <Input value={formData.bank_name} onChange={e => updateField('bank_name', e.target.value)} className="mt-1" />
           {errors.bank_name && <p className="text-xs text-destructive mt-1">{errors.bank_name}</p>}
         </div>
 
         <div>
-          <label className="text-sm font-medium">Account Holder Name <span className="text-destructive">*</span></label>
+          <GuidedLabel label="Account Holder Name" fieldName="account_holder_name" required getGuidance={getGuidance} />
           <p className="text-xs text-muted-foreground">Must match the name on the bank account</p>
           <Input value={formData.account_holder_name} onChange={e => updateField('account_holder_name', e.target.value)} className="mt-1" />
           {errors.account_holder_name && <p className="text-xs text-destructive mt-1">{errors.account_holder_name}</p>}
@@ -144,10 +145,10 @@ export const Step3Bank = () => {
 
         <div className="space-y-3 pt-4 border-t border-border">
           <h3 className="font-medium text-sm">Payment Card for Seller Fees</h3>
-          <p className="text-xs text-muted-foreground">Amazon charges $39.99/month for the Professional seller plan. We only store the last 4 digits for reference.</p>
+          <p className="text-xs text-muted-foreground">Marketplace platforms charge monthly subscription fees. We only store the last 4 digits for reference.</p>
 
           <div>
-            <label className="text-sm font-medium">Card Last 4 Digits <span className="text-destructive">*</span></label>
+            <GuidedLabel label="Card Last 4 Digits" fieldName="credit_card_last4" required getGuidance={getGuidance} />
             <Input value={formData.credit_card_last4}
               onChange={e => updateField('credit_card_last4', e.target.value.replace(/\D/g, '').slice(0, 4))}
               placeholder="XXXX" maxLength={4} className="mt-1 font-mono w-32" />
@@ -175,7 +176,7 @@ export const Step3Bank = () => {
             </div>
           </div>
           {errors.credit_card_expiry && <p className="text-xs text-destructive mt-1">{errors.credit_card_expiry}</p>}
-          <p className="text-xs text-muted-foreground">You'll enter the full card number during Amazon setup.</p>
+          <p className="text-xs text-muted-foreground">You'll enter the full card number during platform setup.</p>
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">

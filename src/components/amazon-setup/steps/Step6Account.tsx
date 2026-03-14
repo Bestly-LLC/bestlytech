@@ -7,10 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ShoppingCart, Store, Video } from 'lucide-react';
 import { useIntakeForm } from '@/contexts/IntakeFormContext';
+import { useGuidance } from '@/contexts/GuidanceContext';
+import { GuidedLabel } from '../GuidedLabel';
 import { SHOPIFY_PLANS } from '../constants';
 
 export const Step6Account = () => {
   const { formData, updateField, goNext, goBack, isPlatformSelected } = useIntakeForm();
+  const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = () => {
@@ -50,7 +53,7 @@ export const Step6Account = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Amazon Account Email <span className="text-destructive">*</span></label>
+              <GuidedLabel label="Amazon Account Email" fieldName="amazon_email" required getGuidance={getGuidance} />
               <p className="text-xs text-muted-foreground">This email will be the login for the Amazon Seller account. Use a dedicated business email if possible.</p>
               <Input type="email" value={formData.amazon_email} onChange={e => updateField('amazon_email', e.target.value)} className="mt-1" />
               {errors.amazon_email && <p className="text-xs text-destructive mt-1">{errors.amazon_email}</p>}
@@ -64,7 +67,7 @@ export const Step6Account = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Seller Plan</label>
+              <GuidedLabel label="Seller Plan" fieldName="seller_plan" getGuidance={getGuidance} />
               <RadioGroup value={formData.seller_plan} onValueChange={v => updateField('seller_plan', v)} className="mt-2 space-y-3">
                 <div className="flex items-start gap-3 p-3 rounded-lg border border-border bg-primary/5">
                   <RadioGroupItem value="Professional" id="pro" className="mt-0.5" />
@@ -95,14 +98,14 @@ export const Step6Account = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Shopify Account Email <span className="text-destructive">*</span></label>
+              <GuidedLabel label="Shopify Account Email" fieldName="shopify_email" required getGuidance={getGuidance} />
               <p className="text-xs text-muted-foreground">The email used to log in to Shopify admin.</p>
               <Input type="email" value={formData.shopify_email} onChange={e => updateField('shopify_email', e.target.value)} className="mt-1" />
               {errors.shopify_email && <p className="text-xs text-destructive mt-1">{errors.shopify_email}</p>}
             </div>
 
             <div>
-              <label className="text-sm font-medium">Shopify Plan</label>
+              <GuidedLabel label="Shopify Plan" fieldName="shopify_plan" getGuidance={getGuidance} />
               <RadioGroup value={formData.shopify_plan} onValueChange={v => updateField('shopify_plan', v)} className="mt-2 space-y-2">
                 {SHOPIFY_PLANS.map(plan => (
                   <div key={plan.value} className="flex items-start gap-3 p-3 rounded-lg border border-border">
@@ -128,7 +131,7 @@ export const Step6Account = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">TikTok Shop Email <span className="text-destructive">*</span></label>
+              <GuidedLabel label="TikTok Shop Email" fieldName="tiktok_email" required getGuidance={getGuidance} />
               <p className="text-xs text-muted-foreground">Email for your TikTok Shop Seller Center account.</p>
               <Input type="email" value={formData.tiktok_email} onChange={e => updateField('tiktok_email', e.target.value)} className="mt-1" />
               {errors.tiktok_email && <p className="text-xs text-destructive mt-1">{errors.tiktok_email}</p>}
@@ -142,7 +145,7 @@ export const Step6Account = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">TikTok Handle</label>
+              <GuidedLabel label="TikTok Handle" fieldName="tiktok_handle" getGuidance={getGuidance} />
               <p className="text-xs text-muted-foreground">Your @username — helps link your creator and shop accounts.</p>
               <Input value={formData.tiktok_handle} onChange={e => updateField('tiktok_handle', e.target.value)}
                 placeholder="@yourbrand" className="mt-1" />
