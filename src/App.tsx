@@ -28,6 +28,15 @@ import AppleModernization from "./pages/AppleModernization";
 import AmazonSetup from "./pages/AmazonSetup";
 import CookieYetiSupport from "./pages/CookieYetiSupport";
 import NotFound from "./pages/NotFound";
+import { AdminRoute } from "@/components/admin/AdminRoute";
+import AdminLogin from "./pages/admin/AdminLogin";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminSubmissions from "./pages/admin/AdminSubmissions";
+import AdminSubmissionDetail from "./pages/admin/AdminSubmissionDetail";
+import AdminSetupGuide from "./pages/admin/AdminSetupGuide";
+import CYDashboard from "./pages/admin/CYDashboard";
+import CYSubscribers from "./pages/admin/CYSubscribers";
+import CYGrantedAccess from "./pages/admin/CYGrantedAccess";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +72,15 @@ const App = () => (
               <Route path="/apple-modernization" element={<AppleModernization />} />
               <Route path="/amazon-setup" element={<AmazonSetup />} />
               <Route path="/support" element={<CookieYetiSupport />} />
+              {/* Admin Routes */}
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+              <Route path="/admin/submissions" element={<AdminRoute><AdminSubmissions /></AdminRoute>} />
+              <Route path="/admin/submissions/:id" element={<AdminRoute><AdminSubmissionDetail /></AdminRoute>} />
+              <Route path="/admin/guide" element={<AdminRoute><AdminSetupGuide /></AdminRoute>} />
+              <Route path="/admin/cookie-yeti" element={<AdminRoute><CYDashboard /></AdminRoute>} />
+              <Route path="/admin/cookie-yeti/subscribers" element={<AdminRoute><CYSubscribers /></AdminRoute>} />
+              <Route path="/admin/cookie-yeti/granted" element={<AdminRoute><CYGrantedAccess /></AdminRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </PageTransition>
