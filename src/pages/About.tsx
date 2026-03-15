@@ -63,20 +63,18 @@ export default function About() {
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <div className="grid gap-16 lg:grid-cols-2 lg:items-center">
             <AnimatedSection>
-              <div className="flex flex-col sm:flex-row items-start gap-6 mb-6">
+              <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
                 <img
                   src={jaredHeadshot}
                   alt="Jared Best, founder of Bestly LLC"
-                  className="w-64 h-64 sm:w-80 sm:h-80 rounded-3xl object-cover shadow-2xl border-2 border-border shrink-0"
+                  className="w-64 h-64 sm:w-80 sm:h-80 rounded-3xl object-cover shadow-2xl border-2 border-border mb-8"
                 />
-                <div>
-                  <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                    Why We Exist
-                  </h2>
-                  <p className="mt-4 text-lg text-muted-foreground leading-relaxed">
-                    Technology should make life better without making privacy worse. That's not a tagline — it's how we decide what to build and what to skip.
-                  </p>
-                </div>
+                <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                  Why We Exist
+                </h2>
+                <p className="mt-4 text-lg text-muted-foreground leading-relaxed">
+                  Technology should make life better without making privacy worse. That's not a tagline — it's how we decide what to build and what to skip.
+                </p>
               </div>
             </AnimatedSection>
             <AnimatedSection delay={100}>
