@@ -39,7 +39,8 @@ const CONFIG = {
   version: "1.0.0",
   pricing: {
     free: "Free",
-    lifetime: "$2.99",
+    monthly: "$0.99",
+    yearly: "$7.99",
   },
   platforms: [
     { name: "Chrome", available: true, comingSoon: true, icon: Chrome },
