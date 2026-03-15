@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      activation_codes: {
+        Row: {
+          activated_at: string | null
+          active: boolean | null
+          code: string
+          created_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          ip_address: string | null
+          last_verified: string | null
+          platform: string | null
+        }
+        Insert: {
+          activated_at?: string | null
+          active?: boolean | null
+          code: string
+          created_at?: string | null
+          email: string
+          expires_at: string
+          id?: string
+          ip_address?: string | null
+          last_verified?: string | null
+          platform?: string | null
+        }
+        Update: {
+          activated_at?: string | null
+          active?: boolean | null
+          code?: string
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          ip_address?: string | null
+          last_verified?: string | null
+          platform?: string | null
+        }
+        Relationships: []
+      }
       contact_submissions: {
         Row: {
           category: string | null

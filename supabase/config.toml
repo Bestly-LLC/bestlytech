@@ -24,5 +24,11 @@ verify_jwt = false
 [functions.notify-sms]
 verify_jwt = false
 
+[functions.send-activation-code]
+verify_jwt = false
+
+[functions.validate-activation-code]
+verify_jwt = false
+
 [functions.run-pattern-maintenance]
 verify_jwt = false
