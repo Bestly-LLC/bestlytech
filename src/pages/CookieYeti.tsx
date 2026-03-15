@@ -460,10 +460,10 @@ export default function CookieYeti() {
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Platform Roadmap
+              Available Now
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Launching first on Chrome, then expanding to other browsers
+              Get Cookie Yeti on your favorite browser
             </p>
           </div>
           
@@ -471,25 +471,30 @@ export default function CookieYeti() {
             {CONFIG.platforms.map((platform) => (
               <div
                 key={platform.name}
-                className={`flex items-center gap-3 px-6 py-3 rounded-full border ${
-                  platform.available 
-                    ? "bg-primary/10 border-primary/30" 
-                    : "bg-card border-border"
-                }`}
+                className="flex items-center gap-3 px-6 py-3 rounded-full border bg-primary/10 border-primary/30"
               >
-                <platform.icon className={`h-5 w-5 ${platform.available ? "text-primary" : "text-muted-foreground"}`} />
-                <span className={`font-medium ${platform.available ? "text-foreground" : "text-muted-foreground"}`}>{platform.name}</span>
-                {platform.available ? (
-                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
-                    First
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-xs text-muted-foreground">
-                    Later
-                  </Badge>
-                )}
+                <platform.icon className="h-5 w-5 text-primary" />
+                <span className="font-medium text-foreground">{platform.name}</span>
+                <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs">
+                  Live
+                </Badge>
               </div>
             ))}
+          </div>
+          
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Button asChild>
+              <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
+                <Chrome className="h-5 w-5 mr-2" />
+                Chrome Web Store
+              </a>
+            </Button>
+            <Button variant="outline" asChild>
+              <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
+                <Globe className="h-5 w-5 mr-2" />
+                App Store
+              </a>
+            </Button>
           </div>
         </div>
       </section>
