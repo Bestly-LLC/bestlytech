@@ -297,6 +297,72 @@ export type Database = {
           },
         ]
       }
+      missed_banner_reports: {
+        Row: {
+          created_at: string
+          domain: string
+          has_working_pattern: boolean
+          id: number
+          last_reported: string
+          report_count: number
+          resolved: boolean
+          resolved_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          has_working_pattern?: boolean
+          id?: never
+          last_reported?: string
+          report_count?: number
+          resolved?: boolean
+          resolved_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          has_working_pattern?: boolean
+          id?: never
+          last_reported?: string
+          report_count?: number
+          resolved?: boolean
+          resolved_at?: string | null
+        }
+        Relationships: []
+      }
+      pattern_fix_log: {
+        Row: {
+          action_taken: string
+          created_at: string
+          domain: string
+          error_message: string | null
+          id: number
+          issue_type: string
+          selector: string
+          success: boolean
+        }
+        Insert: {
+          action_taken: string
+          created_at?: string
+          domain: string
+          error_message?: string | null
+          id?: never
+          issue_type: string
+          selector: string
+          success?: boolean
+        }
+        Update: {
+          action_taken?: string
+          created_at?: string
+          domain?: string
+          error_message?: string | null
+          id?: never
+          issue_type?: string
+          selector?: string
+          success?: boolean
+        }
+        Relationships: []
+      }
       seller_intakes: {
         Row: {
           account_holder_name: string | null
@@ -656,6 +722,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auto_fix_pattern_issues: { Args: never; Returns: Json }
       get_action_type_stats: { Args: never; Returns: Json }
       get_cmp_distribution: { Args: never; Returns: Json }
       get_community_overview: { Args: never; Returns: Json }
@@ -665,6 +732,8 @@ export type Database = {
       get_recently_learned: { Args: { p_limit?: number }; Returns: Json }
       get_source_breakdown: { Args: never; Returns: Json }
       get_top_domains: { Args: { p_limit?: number }; Returns: Json }
+      get_unresolved_reports: { Args: { p_limit?: number }; Returns: Json }
+      process_user_reports: { Args: never; Returns: Json }
       record_pattern_success: {
         Args: { _action_type: string; _domain: string; _selector: string }
         Returns: undefined
