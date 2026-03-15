@@ -1,57 +1,43 @@
 
 
-## Integrate Apple-Native Business Modernization Program
+# Bestly-Branded Alert Email Redesign
 
-Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
+## What changes
 
----
+Redesign the `alertEmail()` function and `baseLayout()` in `supabase/functions/_shared/email-template.ts` to be fully Bestly-branded with the logo, matching the site's navy/indigo identity with a bold, polished design.
 
-### 1. New Page: `src/pages/AppleModernization.tsx`
+## Design
 
-A comprehensive, premium-feeling service page with the following sections:
+Since email clients can't render local assets, the logo will be referenced from the published site's built assets. We'll use the published URL to source the logo image.
 
-- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
-- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
-- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
-  - Apple Discovery Infrastructure
-  - App Clips (Instant Customer Experience)
-  - Payments Modernization (Tap to Pay)
-  - Digital ID Verification
-  - Brand Trust and Identity
-  - Customer Experience Automation
-  - Commerce and Ordering
-  - Operational Analytics
-  - Apple-Ready Certification (marked as optional)
-- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
-- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
-- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
+**Header**: Deep navy banner (`#1e3a5f`) with the Bestly logo (rotated 20° to match the site) + "Bestly" wordmark in white — mirroring the site header exactly.
 
-### 2. Route Registration: `src/App.tsx`
+**Body card**: White card with generous padding, a gradient accent line at top (matching the footer's gradient accent), and the severity badge redesigned with bolder styling.
 
-- Import the new `AppleModernization` page component.
-- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
+**Stats section**: Navy-backed metric cards instead of the current gray background — each stat in a rounded pill with white text on navy.
 
-### 3. Services Page Update: `src/pages/Services.tsx`
+**Items table**: Alternating row shading with the brand's indigo-blue accent for row borders instead of plain gray.
 
-- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
-- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
+**Footer**: Trust badges row ("GDPR Compliant · CCPA Ready · Zero Data Resale") + "Bestly Technologies · Los Angeles, CA" — matching the site footer.
 
-### 4. Header Navigation: `src/components/layout/Header.tsx`
+**Color palette** (from the site):
+- Primary navy: `#1e3a5f`
+- Accent indigo: `#4f7cac`
+- Gradient accent: navy → indigo → transparent
+- Background: `#f8f9fa`
 
-- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
+## Technical details
 
----
+- Edit `baseLayout()` to include the logo image from the published site URL, the 20° rotation, gradient accent line, and trust badges footer
+- Edit `alertEmail()` to use bolder severity styling with navy stat cards
+- `brandedEmail()` automatically inherits the new `baseLayout()`
+- `activationCodeEmail()` is untouched (it has its own Cookie Yeti layout)
+- Redeploy `run-pattern-maintenance` and `send-activation-code` edge functions
 
-### Technical Details
+## Files
 
-**New file:**
-- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
-
-**Modified files:**
-- `src/App.tsx` -- add import and route
-- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
-
-**No database or backend changes required.** This is purely a frontend content page.
-
-The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
+| File | Action |
+|------|--------|
+| `supabase/functions/_shared/email-template.ts` | Edit `baseLayout()` + `alertEmail()` — full Bestly brand overhaul |
+| Edge functions | Redeploy `run-pattern-maintenance` |
 
