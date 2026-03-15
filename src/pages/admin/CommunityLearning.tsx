@@ -108,6 +108,44 @@ export default function CommunityLearning() {
     }
   }, []);
 
+  const handleRunFixer = useCallback(async () => {
+    setRunningFixer(true);
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-pattern-maintenance`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      toast.success(`Maintenance complete — Fixed: ${data.fix?.fixed ?? 0}, Failed: ${data.fix?.failed ?? 0}`);
+      fetchAll();
+    } catch (e: any) {
+      toast.error(`Maintenance failed: ${e.message}`);
+    } finally {
+      setRunningFixer(false);
+    }
+  }, [fetchAll]);
+
+  const handleProcessReports = useCallback(async () => {
+    setProcessingReports(true);
+    try {
+      const { data, error } = await supabase.rpc("process_user_reports" as any);
+      if (error) throw error;
+      const d = data as any;
+      toast.success(`Reports processed — Resolved: ${d.newly_resolved ?? 0}, Unresolved: ${d.total_unresolved ?? 0}`);
+      fetchAll();
+    } catch (e: any) {
+      toast.error(`Processing failed: ${e.message}`);
+    } finally {
+      setProcessingReports(false);
+    }
+  }, [fetchAll]);
+
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   if (loading) {
