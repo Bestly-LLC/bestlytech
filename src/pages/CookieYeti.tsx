@@ -37,8 +37,9 @@ const CONFIG = {
   version: "1.0.0",
   pricing: {
     free: "Free",
-    monthly: "$0.99",
-    yearly: "$7.99",
+    monthly: "$4.99",
+    yearly: "$39.99",
+    lifetime: "$149.99",
   },
   platforms: [
     { name: "Chrome", available: true, icon: Chrome },
@@ -55,14 +56,14 @@ const CONFIG = {
       description: "Automatically identifies cookie consent pop-ups across thousands of websites.",
     },
     {
+      icon: Shield,
+      title: "Tracking Cookie Cleaning",
+      description: "Cleans tracking cookies after dismissing banners. Pro = unlimited, Free = 50 sites/day.",
+    },
+    {
       icon: EyeOff,
       title: "Background Operation",
       description: "Runs silently without interrupting your browsing experience.",
-    },
-    {
-      icon: Shield,
-      title: "Local-Only Storage",
-      description: "All your preferences stay on your device. Nothing leaves your browser.",
     },
     {
       icon: BarChart3,
@@ -99,7 +100,7 @@ const CONFIG = {
     },
     {
       question: "How much does Cookie Yeti cost?",
-      answer: "Cookie Yeti offers a free tier with limited daily handling, a monthly plan at $0.99/mo, and a yearly plan at $7.99/yr (save 33%). Prices may vary by platform and region.",
+      answer: "Cookie Yeti offers a free tier (5 banner handles/day), Monthly at $4.99/mo, Yearly at $39.99/yr (save 33%), and Lifetime at $149.99 one-time. Prices may vary by platform and region.",
     },
     {
       question: "What cookie preferences can I set?",
@@ -143,8 +144,8 @@ export default function CookieYeti() {
               Distraction-Free Browsing, Automatically
             </p>
             <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              Automatically handles cookie consent pop-ups and removes tracking cookies from sites you visit. 
-              50 sites per day free, unlimited with Pro. No data collection. Just peaceful browsing.
+              Automatically handles cookie consent pop-ups and cleans tracking cookies from sites you visit. 
+              5 banner handles per day free, unlimited with Pro. No data collection. Just peaceful browsing.
             </p>
             
             <div className="mt-8">
@@ -331,12 +332,12 @@ export default function CookieYeti() {
                 <div className="mt-4">
                   <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.free}</span>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">Try before you upgrade</p>
+                <p className="mt-2 text-sm text-muted-foreground">5 banner handles per day</p>
               </div>
               
               <ul className="mt-8 space-y-4">
                 {[
-                  { icon: Clock, text: "Limited daily site handling" },
+                  { icon: Clock, text: "5 banner handles per day" },
                   { icon: Settings, text: "Basic preferences" },
                   { icon: Globe, text: "Works on popular sites" },
                 ].map((item) => (
@@ -366,8 +367,8 @@ export default function CookieYeti() {
               <ul className="mt-8 space-y-4">
                 {[
                   { icon: Infinity, text: "Unlimited sites" },
+                  { icon: Shield, text: "Tracking cookie cleaning" },
                   { icon: Settings, text: "Saved preferences" },
-                  { icon: Clock, text: "No daily limits" },
                   { icon: CheckCircle2, text: "Cancel anytime" },
                 ].map((item) => (
                   <li key={item.text} className="flex items-center gap-3">
@@ -399,8 +400,8 @@ export default function CookieYeti() {
               <ul className="mt-8 space-y-4">
                 {[
                   { icon: Infinity, text: "Unlimited sites" },
+                  { icon: Shield, text: "Tracking cookie cleaning" },
                   { icon: Settings, text: "Saved preferences" },
-                  { icon: Clock, text: "No daily limits" },
                   { icon: Headphones, text: "Priority support" },
                 ].map((item) => (
                   <li key={item.text} className="flex items-center gap-3">
@@ -412,6 +413,35 @@ export default function CookieYeti() {
               
               <Button className="w-full mt-8">
                 Subscribe Yearly
+              </Button>
+            </div>
+            
+            {/* Lifetime Tier */}
+            <div className="rounded-xl border border-border bg-card p-8 md:col-span-3 max-w-md mx-auto w-full">
+              <div className="text-center">
+                <h3 className="text-xl font-semibold text-foreground">Lifetime</h3>
+                <div className="mt-4">
+                  <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.lifetime}</span>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">One-time payment, forever access</p>
+              </div>
+              
+              <ul className="mt-8 space-y-4">
+                {[
+                  { icon: Infinity, text: "Unlimited everything, forever" },
+                  { icon: Shield, text: "Tracking cookie cleaning" },
+                  { icon: Headphones, text: "Priority support" },
+                  { icon: CheckCircle2, text: "All future updates included" },
+                ].map((item) => (
+                  <li key={item.text} className="flex items-center gap-3">
+                    <item.icon className="h-5 w-5 text-primary shrink-0" />
+                    <span className="text-sm text-foreground">{item.text}</span>
+                  </li>
+                ))}
+              </ul>
+              
+              <Button variant="outline" className="w-full mt-8">
+                Buy Lifetime
               </Button>
             </div>
           </div>
