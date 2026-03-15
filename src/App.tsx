@@ -25,7 +25,7 @@ import ReportSite from "./pages/ReportSite";
 import Hire from "./pages/Hire";
 import Services from "./pages/Services";
 import AppleModernization from "./pages/AppleModernization";
-import AmazonSetup from "./pages/AmazonSetup";
+import MarketplaceSetup from "./pages/MarketplaceSetup";
 import CookieYetiSupport from "./pages/CookieYetiSupport";
 import NotFound from "./pages/NotFound";
 import { AdminRoute } from "@/components/admin/AdminRoute";
@@ -71,7 +71,8 @@ const App = () => (
               <Route path="/hire" element={<Hire />} />
               <Route path="/services" element={<Services />} />
               <Route path="/apple-modernization" element={<AppleModernization />} />
-              <Route path="/amazon-setup" element={<AmazonSetup />} />
+              <Route path="/marketplace-setup" element={<MarketplaceSetup />} />
+              <Route path="/amazon-setup" element={<MarketplaceSetup />} /> {/* Legacy redirect */}
               <Route path="/support" element={<CookieYetiSupport />} />
               {/* Admin Routes */}
               <Route path="/admin/login" element={<AdminLogin />} />

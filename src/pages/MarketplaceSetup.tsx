@@ -50,12 +50,13 @@ const FormContent = () => {
   );
 };
 
-const AmazonSetup = () => {
+const MarketplaceSetup = () => {
   return (
     <Layout>
       <SEOHead
         title="Marketplace Account Setup | Bestly"
         description="Professional Amazon, Shopify & TikTok Shop account setup. Complete our intake form to get started."
+        path="/marketplace-setup"
       />
       <IntakeFormProvider>
         <GuidanceProvider>
@@ -66,4 +67,4 @@ const AmazonSetup = () => {
   );
 };
 
-export default AmazonSetup;
+export default MarketplaceSetup;

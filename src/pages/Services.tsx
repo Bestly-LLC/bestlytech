@@ -51,7 +51,7 @@ const services = [
     icon: ShoppingCart,
     title: "Marketplace Onboarding",
     description: "Full-service setup for Amazon, Shopify, and TikTok Shop — from registration to launch-ready.",
-    link: "/amazon-setup",
+    link: "/marketplace-setup",
   },
 ];
 
@@ -159,7 +159,7 @@ export default function Services() {
           </AnimatedSection>
 
           <AnimatedSection animation="fade-in" delay={500} className="mt-4">
-            <Link to="/amazon-setup" className="block">
+            <Link to="/marketplace-setup" className="block">
               <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-[hsl(var(--gradient-start)/0.05)] to-[hsl(var(--gradient-end)/0.05)] p-8 transition-all hover:shadow-premium hover:-translate-y-1">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.15)] to-[hsl(var(--gradient-end)/0.15)]">
