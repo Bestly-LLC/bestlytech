@@ -25,6 +25,9 @@ export function AdminLayout() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-foreground">
+                <Link to="/"><Home className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Home</span></Link>
+              </Button>
               <span className="text-xs text-muted-foreground hidden sm:inline">{user?.email}</span>
               <ChangePasswordDialog />
               <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground hover:text-foreground">
