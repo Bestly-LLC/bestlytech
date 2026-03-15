@@ -1,34 +1,57 @@
 
 
-# Cookie Yeti Branded Activation Code Email
+## Integrate Apple-Native Business Modernization Program
 
-## What changes
+Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
 
-Redesign the `activationCodeEmail()` function in `supabase/functions/_shared/email-template.ts` to be fully Cookie Yeti themed instead of using the generic Bestly layout.
+---
 
-## Design
+### 1. New Page: `src/pages/AppleModernization.tsx`
 
-The activation code email will get its own dedicated layout with:
+A comprehensive, premium-feeling service page with the following sections:
 
-- **Dark header band** with a large snowflake emoji (❄️) and "Cookie Yeti" wordmark in white — matching the product's icy/privacy-first identity
-- **Icy blue gradient background** (`#e8f4f8` to `#f0f7fa`) instead of generic gray
-- **Code display**: Large digits on a frosted glass card with an icy blue border and subtle snowflake accents
-- **Color palette**: Arctic blues (`#1a365d` deep navy, `#3b82f6` bright blue, `#bfdbfe` light ice, `#0ea5e9` accent cyan) — pulling from the product's identity
-- **Tagline**: "Distraction-Free Browsing, Automatically" below the logo
-- **Privacy badge**: Shield icon reference + "100% Privacy-First" in the footer
-- **Footer**: "Cookie Yeti by Bestly Technologies · Los Angeles, CA"
+- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
+- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
+- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
+  - Apple Discovery Infrastructure
+  - App Clips (Instant Customer Experience)
+  - Payments Modernization (Tap to Pay)
+  - Digital ID Verification
+  - Brand Trust and Identity
+  - Customer Experience Automation
+  - Commerce and Ordering
+  - Operational Analytics
+  - Apple-Ready Certification (marked as optional)
+- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
+- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
+- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
 
-## Technical details
+### 2. Route Registration: `src/App.tsx`
 
-- Only the `activationCodeEmail` function changes — `alertEmail` and `brandedEmail` stay as-is (those are admin/Bestly emails)
-- The function will use its own inline layout rather than calling `baseLayout()`, so it's fully self-contained with the Cookie Yeti theme
-- No other files change — just the one shared template file
-- After editing, the `send-activation-code` edge function needs redeployment
+- Import the new `AppleModernization` page component.
+- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
 
-## Files
+### 3. Services Page Update: `src/pages/Services.tsx`
 
-| File | Action |
-|------|--------|
-| `supabase/functions/_shared/email-template.ts` | Edit `activationCodeEmail()` — full Cookie Yeti themed layout |
-| `supabase/functions/send-activation-code/index.ts` | Redeploy (no code change) |
+- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
+- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
+
+### 4. Header Navigation: `src/components/layout/Header.tsx`
+
+- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
+
+---
+
+### Technical Details
+
+**New file:**
+- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
+
+**Modified files:**
+- `src/App.tsx` -- add import and route
+- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
+
+**No database or backend changes required.** This is purely a frontend content page.
+
+The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
 
