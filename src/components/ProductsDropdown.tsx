@@ -25,7 +25,7 @@ const products: Product[] = [
     name: "Cookie Yeti",
     description: "Privacy-focused cookie consent handler",
     href: "/cookie-yeti",
-    icon: Puzzle,
+    image: cookieYetiIcon,
   },
   {
     name: "InventoryProof",
