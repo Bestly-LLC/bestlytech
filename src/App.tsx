@@ -38,6 +38,7 @@ import AdminSetupGuide from "./pages/admin/AdminSetupGuide";
 import CYDashboard from "./pages/admin/CYDashboard";
 import CYSubscribers from "./pages/admin/CYSubscribers";
 import CYGrantedAccess from "./pages/admin/CYGrantedAccess";
+import CommunityLearning from "./pages/admin/CommunityLearning";
 
 const queryClient = new QueryClient();
 
