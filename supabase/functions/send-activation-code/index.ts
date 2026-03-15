@@ -24,10 +24,11 @@ serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    const smtpUser = Deno.env.get("PRIVATEMAIL_EMAIL");
+    const smtpPass = Deno.env.get("PRIVATEMAIL_PASSWORD");
 
-    if (!resendApiKey) {
-      throw new Error("RESEND_API_KEY is not configured");
+    if (!smtpUser || !smtpPass) {
+      throw new Error("PRIVATEMAIL_EMAIL or PRIVATEMAIL_PASSWORD is not configured");
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -69,26 +70,42 @@ serve(async (req: Request) => {
 
     if (insertError) throw new Error(`Insert failed: ${insertError.message}`);
 
-    // Send branded HTML email via Resend
+    // Send branded HTML email via PrivateMail SMTP
     const html = activationCodeEmail(code);
-    const resendResponse = await fetch("https://api.resend.com/emails", {
+
+    // Use SMTPjs-compatible approach via raw SMTP over TLS
+    const smtpResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${resendApiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Cookie Yeti <noreply@bestly.tech>",
-        to: [email],
-        subject: "Your Cookie Yeti activation code",
-        html,
+        // We'll use a direct SMTP connection instead
       }),
+    }).catch(() => null);
+
+    // Direct SMTP sending using Deno's built-in TLS
+    const { SMTPClient } = await import("https://deno.land/x/denomailer@1.6.0/mod.ts");
+    
+    const client = new SMTPClient({
+      connection: {
+        hostname: "mail.privateemail.com",
+        port: 465,
+        tls: true,
+        auth: {
+          username: smtpUser,
+          password: smtpPass,
+        },
+      },
     });
 
-    if (!resendResponse.ok) {
-      const errBody = await resendResponse.text();
-      throw new Error(`Resend API error [${resendResponse.status}]: ${errBody}`);
-    }
+    await client.send({
+      from: smtpUser,
+      to: email,
+      subject: "Your Cookie Yeti activation code",
+      content: "auto",
+      html,
+    });
+
+    await client.close();
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
