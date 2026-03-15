@@ -70,7 +70,10 @@ export default function CommunityLearning() {
   const [actionStats, setActionStats] = useState<any[]>([]);
   const [confDist, setConfDist] = useState<any[]>([]);
   const [sourceDist, setSourceDist] = useState<any[]>([]);
-
+  const [fixLog, setFixLog] = useState<any[]>([]);
+  const [unresolvedReports, setUnresolvedReports] = useState<any[]>([]);
+  const [runningFixer, setRunningFixer] = useState(false);
+  const [processingReports, setProcessingReports] = useState(false);
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
