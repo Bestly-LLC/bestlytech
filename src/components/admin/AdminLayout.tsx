@@ -48,6 +48,14 @@ export function AdminLayout() {
               <div className="flex items-center gap-2">
                 <Tooltip>
                   <TooltipTrigger asChild>
+                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground h-8 gap-1.5 text-xs hidden sm:flex">
+                      <Command className="h-3 w-3" />K
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Command palette (⌘K)</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" asChild className="text-muted-foreground hover:text-foreground h-8 w-8">
                       <Link to="/"><Home className="h-4 w-4" /></Link>
                     </Button>
@@ -61,6 +69,7 @@ export function AdminLayout() {
                   </span>
                   <span className="text-xs text-muted-foreground">{user?.email}</span>
                 </div>
+                <ThemeToggle />
                 <ChangePasswordDialog />
                 <Tooltip>
                   <TooltipTrigger asChild>
