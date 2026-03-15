@@ -96,7 +96,11 @@ export default function CYGrantedAccess() {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <PageHeader title="Granted Access" description="Manually grant or revoke Cookie Yeti premium access." />
+      <PageHeader
+        title="Granted Access"
+        description="Manually grant or revoke Cookie Yeti premium access."
+        actions={<ExportButton data={filtered} filename="granted-access" columns={EXPORT_COLUMNS} />}
+      />
 
       <Card className="border-border/50">
         <CardHeader className="pb-3">

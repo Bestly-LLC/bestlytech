@@ -63,7 +63,11 @@ export default function CYSubscribers() {
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <PageHeader title="Subscribers" description="Manage Cookie Yeti paid subscriptions." />
+      <PageHeader
+        title="Subscribers"
+        description="Manage Cookie Yeti paid subscriptions."
+        actions={<ExportButton data={filtered} filename="subscribers" columns={EXPORT_COLUMNS} />}
+      />
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative max-w-xs flex-1">
