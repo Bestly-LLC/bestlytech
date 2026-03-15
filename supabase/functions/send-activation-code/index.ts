@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { activationCodeEmail } from "../_shared/email-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +16,6 @@ serve(async (req: Request) => {
   try {
     const { email, platform } = await req.json();
 
-    // Validate email
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return new Response(JSON.stringify({ success: false, error: "invalid_email" }), {
         status: 400,
@@ -45,7 +45,7 @@ serve(async (req: Request) => {
       });
     }
 
-    // Cleanup expired/pending codes for this email
+    // Cleanup expired/pending codes
     await supabase
       .from("activation_codes")
       .delete()
@@ -67,7 +67,8 @@ serve(async (req: Request) => {
 
     if (insertError) throw new Error(`Insert failed: ${insertError.message}`);
 
-    // Send email via SMTP
+    // Send branded HTML email
+    const html = activationCodeEmail(code);
     const client = new SMTPClient({
       connection: {
         hostname: "mail.privateemail.com",
@@ -82,7 +83,7 @@ serve(async (req: Request) => {
         from: smtpEmail,
         to: email,
         subject: "Your Cookie Yeti activation code",
-        content: `Your Cookie Yeti activation code is: ${code}. This code expires in 15 minutes.`,
+        html,
       });
     } finally {
       await client.close();
