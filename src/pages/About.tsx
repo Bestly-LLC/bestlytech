@@ -8,10 +8,11 @@ import {
   Eye, ShieldCheck, Ban, BrainCircuit, Lock,
   Smartphone, Puzzle, Cpu, Box, Droplets, HardDrive,
   ArrowRight, Fingerprint, Server, UserX, Trash2,
+  MapPin, Heart,
 } from "lucide-react";
 
 const verticals = [
-  { icon: Smartphone, label: "Mobile Apps", desc: "iOS and Android" },
+  { icon: Smartphone, label: "Mobile Apps", desc: "iOS & Android" },
   { icon: Puzzle, label: "Browser Extensions", desc: "Productivity & privacy" },
   { icon: Cpu, label: "AI Tools", desc: "Built with transparency" },
   { icon: Box, label: "Consumer Tech", desc: "Everyday products" },
@@ -19,69 +20,85 @@ const verticals = [
   { icon: Droplets, label: "Wellness", desc: "Cosmetic-safe, non-medical" },
 ];
 
-const principles = [
+const operatingPrinciples = [
   { icon: Eye, title: "Transparency", desc: "We tell you what we collect, why, and how it's used." },
-  { icon: ShieldCheck, title: "User Control", desc: "Access, modify, or delete your data anytime." },
-  { icon: Ban, title: "No Dark Patterns", desc: "Honest interfaces. No tricks." },
-  { icon: BrainCircuit, title: "AI Disclosure", desc: "When we use AI, we explain how." },
+  { icon: Fingerprint, title: "Data Minimization", desc: "We only collect what's strictly necessary. Nothing more." },
+  { icon: ShieldCheck, title: "User Control", desc: "Access, modify, or delete your data — anytime, no hoops." },
+  { icon: Ban, title: "No Dark Patterns", desc: "Honest interfaces, honest business. No tricks, no data sales." },
+  { icon: Server, title: "On-Device First", desc: "Your data stays on your device whenever possible." },
+  { icon: BrainCircuit, title: "AI Disclosure", desc: "When we use AI, we explain how — clearly and upfront." },
   { icon: Lock, title: "Security", desc: "Industry-standard protections, regularly audited." },
-];
-
-const privacyCommitments = [
-  { icon: Fingerprint, title: "Data Minimization", desc: "Only what's strictly necessary." },
-  { icon: Server, title: "On-Device Processing", desc: "Your data stays on your device whenever possible." },
-  { icon: Ban, title: "No Data Sales", desc: "Never. Period." },
-  { icon: UserX, title: "No Cross-App Tracking", desc: "We don't follow you around." },
-  { icon: Trash2, title: "Right to Deletion", desc: "Your data, your call." },
+  { icon: UserX, title: "No Cross-App Tracking", desc: "We don't follow you around the internet. Period." },
+  { icon: Trash2, title: "Right to Deletion", desc: "Your data, your call. One request and it's gone." },
 ];
 
 export default function About() {
   return (
     <Layout>
       <SEOHead
-        title="Our Story | Bestly LLC"
-        description="We build things people actually want — without the trade-offs they shouldn't have to make."
+        title="About Jared Best | Founder of Bestly LLC"
+        description="Founder-led technology studio based in Los Angeles. We build privacy-first software, consumer products, and business tools — without the trade-offs."
+        path="/about"
       />
 
-      {/* Hero */}
+      {/* Hero — Founder Introduction */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-mesh opacity-50" />
-        <div className="relative mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <AnimatedSection className="max-w-3xl">
-            <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              Our Story
-            </h1>
-            <p className="mt-6 text-xl text-muted-foreground leading-relaxed max-w-2xl">
-              We build things people actually want — without the trade-offs they shouldn't have to make.
-            </p>
-          </AnimatedSection>
+        <div className="relative mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-36">
+          <div className="grid gap-12 lg:grid-cols-[auto_1fr] lg:items-center lg:gap-20">
+            <AnimatedSection animation="fade-in">
+              <div className="flex justify-center lg:justify-start">
+                <div className="relative">
+                  <div className="absolute -inset-1 rounded-3xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.3)] to-[hsl(var(--gradient-end)/0.3)] blur-xl" />
+                  <img
+                    src={jaredHeadshot}
+                    alt="Jared Best, founder of Bestly LLC"
+                    className="relative w-72 h-72 sm:w-80 sm:h-80 rounded-3xl object-cover shadow-2xl border-2 border-border"
+                  />
+                </div>
+              </div>
+            </AnimatedSection>
+            <AnimatedSection animation="fade-in" delay={100}>
+              <div className="text-center lg:text-left">
+                <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-4">
+                  Founder & Builder
+                </p>
+                <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+                  Hey, I'm Jared.
+                </h1>
+                <p className="mt-6 text-xl text-muted-foreground leading-relaxed max-w-2xl">
+                  I run Bestly — a technology studio based in Los Angeles. We build software, consumer products, and business tools that respect the people who use them.
+                </p>
+                <div className="mt-4 inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  Los Angeles, California
+                </div>
+              </div>
+            </AnimatedSection>
+          </div>
         </div>
       </section>
 
-      {/* Why We Exist */}
+      {/* The Story */}
       <section className="border-t border-border">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <div className="grid gap-16 lg:grid-cols-2 lg:items-center">
+          <div className="grid gap-16 lg:grid-cols-2 lg:items-start">
             <AnimatedSection>
-              <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
-                <img
-                  src={jaredHeadshot}
-                  alt="Jared Best, founder of Bestly LLC"
-                  className="w-64 h-64 sm:w-80 sm:h-80 rounded-3xl object-cover shadow-2xl border-2 border-border mb-8"
-                />
-                <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                  Why We Exist
-                </h2>
-                <p className="mt-4 text-lg text-muted-foreground leading-relaxed">
-                  Technology should make life better without making privacy worse. That's not a tagline — it's how we decide what to build and what to skip.
-                </p>
-              </div>
+              <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                Why I Started This
+              </h2>
+              <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
+                I got tired of building things that worked <em>against</em> the people using them — products designed to extract data, exploit attention, and maximize engagement at all costs.
+              </p>
+              <p className="mt-4 text-lg text-muted-foreground leading-relaxed">
+                So I started building the opposite. Technology that makes life better without making privacy worse. That's not a tagline — it's how I decide what to build and what to skip.
+              </p>
             </AnimatedSection>
             <AnimatedSection delay={100}>
               <GlowCard className="p-8">
                 <h3 className="text-xl font-semibold text-foreground mb-4">Lean by Design</h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  We're founder-led and intentionally lean. No outside investors pushing us to monetize your data. No board meetings debating whether to sell your information.
+                  Bestly is founder-led and intentionally lean. No outside investors pushing us to monetize your data. No board meetings debating whether to sell your information.
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
                   This structure lets us move fast and stay principled — from software to physical products, the same standards apply to everything we ship.
@@ -92,12 +109,12 @@ export default function About() {
         </div>
       </section>
 
-      {/* What We Touch */}
+      {/* What We Build */}
       <section className="border-t border-border bg-secondary/20">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <AnimatedSection className="text-center mb-16">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              What We Touch
+              What We Build
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
               Different industries, same conviction.
@@ -119,54 +136,27 @@ export default function About() {
         </div>
       </section>
 
-      {/* How We Build */}
+      {/* How We Operate — Consolidated principles + privacy */}
       <section className="border-t border-border">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <AnimatedSection className="text-center mb-16">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              How We Build
+              How We Operate
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Ethical technology isn't a talking point — it's the filter for every decision.
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+              Privacy isn't a feature we bolt on — it's the foundation everything else is built on.
             </p>
           </AnimatedSection>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
-            {principles.map((p, i) => (
-              <AnimatedSection key={p.title} delay={i * 80}>
-                <GlowCard className="h-full">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.1)] to-[hsl(var(--gradient-end)/0.1)]">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
+            {operatingPrinciples.map((p, i) => (
+              <AnimatedSection key={p.title} delay={i * 60}>
+                <div className="flex gap-4 p-5 rounded-2xl border border-border bg-card transition-all hover:shadow-lg hover:border-border/60 h-full">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.1)] to-[hsl(var(--gradient-end)/0.1)]">
                     <p.icon className="h-5 w-5 text-primary" />
                   </div>
-                  <h3 className="mt-4 text-base font-semibold text-foreground">{p.title}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{p.desc}</p>
-                </GlowCard>
-              </AnimatedSection>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Privacy as a Feature */}
-      <section className="border-t border-border bg-secondary/20">
-        <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <AnimatedSection className="text-center mb-16">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Privacy as a Feature
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Our approach goes beyond checking boxes.
-            </p>
-          </AnimatedSection>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
-            {privacyCommitments.map((c, i) => (
-              <AnimatedSection key={c.title} delay={i * 80}>
-                <div className="flex gap-4 p-5 rounded-2xl border border-border bg-card transition-all hover:shadow-lg hover:border-border/60">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.1)] to-[hsl(var(--gradient-end)/0.1)]">
-                    <c.icon className="h-5 w-5 text-primary" />
-                  </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">{c.title}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">{c.desc}</p>
+                    <h3 className="text-sm font-semibold text-foreground">{p.title}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground leading-relaxed">{p.desc}</p>
                   </div>
                 </div>
               </AnimatedSection>
@@ -175,8 +165,8 @@ export default function About() {
         </div>
       </section>
 
-      {/* Platform Agnostic + Wellness */}
-      <section className="border-t border-border">
+      {/* Platform + Wellness */}
+      <section className="border-t border-border bg-secondary/20">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <div className="grid gap-8 lg:grid-cols-2">
             <AnimatedSection>
@@ -203,28 +193,32 @@ export default function About() {
       </section>
 
       {/* CTA */}
-      <section className="border-t border-border bg-secondary/20">
+      <section className="border-t border-border">
         <div className="relative mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <AnimatedSection className="text-center">
+          <div className="absolute inset-0 bg-mesh opacity-30" />
+          <AnimatedSection className="relative text-center">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.1)] to-[hsl(var(--gradient-end)/0.1)] mb-6">
+              <Heart className="h-7 w-7 text-primary" />
+            </div>
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Curious?
+              Let's Build Something Together
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              See what we're building or say hello.
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+              Whether you need a product built, a business scaled, or a partnership that goes deeper — I'd love to hear from you.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
               <Link
-                to="/products"
+                to="/hire"
                 className="group inline-flex items-center justify-center rounded-xl gradient-bg px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/20 btn-lift"
               >
-                View Products
+                Work With Me
                 <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Link>
               <Link
-                to="/contact"
+                to="/products"
                 className="inline-flex items-center justify-center rounded-xl border border-border bg-background/80 backdrop-blur-sm px-8 py-4 text-base font-medium text-foreground shadow-sm transition-all hover:bg-accent hover:border-border/80"
               >
-                Contact Us
+                View Products
               </Link>
             </div>
           </AnimatedSection>
