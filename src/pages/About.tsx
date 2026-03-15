@@ -67,7 +67,7 @@ export default function About() {
                 <img
                   src={jaredHeadshot}
                   alt="Jared Best, founder of Bestly LLC"
-                  className="w-48 h-48 rounded-3xl object-cover shadow-2xl border-2 border-border shrink-0"
+                  className="w-64 h-64 sm:w-80 sm:h-80 rounded-3xl object-cover shadow-2xl border-2 border-border shrink-0"
                 />
                 <div>
                   <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
