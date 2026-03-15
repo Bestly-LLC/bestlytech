@@ -34,7 +34,7 @@ import {
 // Update these values to change content easily
 // ============================================
 const CONFIG = {
-  version: "1.0.0",
+  version: "1.0.1",
   pricing: {
     free: "Free",
     monthly: "$4.99",
