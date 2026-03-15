@@ -31,6 +31,7 @@ const cookieYetiItems = [
   { title: "CY Dashboard", url: "/admin/cookie-yeti", icon: Snowflake },
   { title: "Subscribers", url: "/admin/cookie-yeti/subscribers", icon: Users },
   { title: "Granted Access", url: "/admin/cookie-yeti/granted", icon: ShieldCheck },
+  { title: "Community Learning", url: "/admin/cookie-yeti/community", icon: Brain },
 ];
 
 export function AdminSidebar() {

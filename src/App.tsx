@@ -85,6 +85,7 @@ const App = () => (
                 <Route path="cookie-yeti" element={<CYDashboard />} />
                 <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
                 <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />
+                <Route path="cookie-yeti/community" element={<CommunityLearning />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
