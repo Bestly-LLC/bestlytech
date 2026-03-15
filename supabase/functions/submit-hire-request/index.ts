@@ -224,6 +224,35 @@ Request ID: ${insertedData.id}
       // Don't fail the request since database save was successful
     }
 
+    // Send SMS notification via Twilio
+    try {
+      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+      const TWILIO_API_KEY = Deno.env.get("TWILIO_API_KEY");
+      if (LOVABLE_API_KEY && TWILIO_API_KEY) {
+        const smsBody = `New hire request from ${sanitizedData.name} — ${sanitizedData.project_type}, Budget: ${sanitizedData.budget_range || "N/A"}`;
+        const smsRes = await fetch("https://connector-gateway.lovable.dev/twilio/Messages.json", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "X-Connection-Api-Key": TWILIO_API_KEY,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            To: "+18165007236",
+            From: "+12139279363",
+            Body: smsBody,
+          }),
+        });
+        if (smsRes.ok) {
+          console.log("SMS notification sent");
+        } else {
+          console.error("SMS failed:", await smsRes.text());
+        }
+      }
+    } catch (smsError) {
+      console.error("SMS sending failed:", smsError);
+    }
+
     return new Response(
       JSON.stringify({ success: true, message: "Your request has been submitted successfully. We'll be in touch within 2-3 business days." }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
