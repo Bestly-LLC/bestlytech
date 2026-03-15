@@ -11,8 +11,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import {
-  Snowflake,
   Download,
   Settings,
   Globe,
