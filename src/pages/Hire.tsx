@@ -17,6 +17,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle2, Loader2, Briefcase, MessageSquare, Handshake, ArrowRight } from "lucide-react";
+import jaredHeadshot from "@/assets/jared-headshot.png";
 
 const projectTypes = [
   { value: "web-app", label: "Web Application" },

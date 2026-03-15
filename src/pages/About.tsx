@@ -3,6 +3,7 @@ import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { Link } from "react-router-dom";
+import jaredHeadshot from "@/assets/jared-headshot.png";
 import {
   Eye, ShieldCheck, Ban, BrainCircuit, Lock,
   Smartphone, Puzzle, Cpu, Box, Droplets, HardDrive,
