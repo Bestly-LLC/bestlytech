@@ -332,7 +332,7 @@ export default function CookieYeti() {
                 <div className="mt-4">
                   <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.free}</span>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">Try before you upgrade</p>
+                <p className="mt-2 text-sm text-muted-foreground">5 banner handles per day</p>
               </div>
               
               <ul className="mt-8 space-y-4">
