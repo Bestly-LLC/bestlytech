@@ -27,7 +27,6 @@ import {
   Headphones,
   Mail,
   AlertTriangle,
-  Smartphone,
 } from "lucide-react";
 
 // ============================================
