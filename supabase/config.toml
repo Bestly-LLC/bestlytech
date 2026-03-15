@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.validate-intake]
 verify_jwt = false
+
+[functions.notify-sms]
+verify_jwt = false
