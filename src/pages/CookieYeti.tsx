@@ -100,7 +100,7 @@ const CONFIG = {
     },
     {
       question: "How much does Cookie Yeti cost?",
-      answer: "Cookie Yeti offers a free tier with limited daily handling, a monthly plan at $0.99/mo, and a yearly plan at $7.99/yr (save 33%). Prices may vary by platform and region.",
+      answer: "Cookie Yeti offers a free tier (5 banner handles/day), Monthly at $4.99/mo, Yearly at $39.99/yr (save 33%), and Lifetime at $149.99 one-time. Prices may vary by platform and region.",
     },
     {
       question: "What cookie preferences can I set?",
