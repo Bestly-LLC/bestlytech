@@ -77,7 +77,7 @@ export default function CommunityLearning() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [r1, r2, r3, r4, r5, r6, r7, r8, r9] = await Promise.all([
+      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11] = await Promise.all([
         supabase.rpc("get_community_overview" as any),
         supabase.rpc("get_daily_pattern_activity" as any, { p_days: 30 }),
         supabase.rpc("get_top_domains" as any, { p_limit: 25 }),
@@ -87,6 +87,8 @@ export default function CommunityLearning() {
         supabase.rpc("get_action_type_stats" as any),
         supabase.rpc("get_confidence_distribution" as any),
         supabase.rpc("get_source_breakdown" as any),
+        supabase.from("pattern_fix_log").select("*").order("created_at", { ascending: false }).limit(25),
+        supabase.rpc("get_unresolved_reports" as any, { p_limit: 50 }),
       ]);
       setOverview(r1.data as any);
       setActivity(r2.data as any ?? []);
@@ -97,6 +99,8 @@ export default function CommunityLearning() {
       setActionStats(r7.data as any ?? []);
       setConfDist(r8.data as any ?? []);
       setSourceDist(r9.data as any ?? []);
+      setFixLog(r10.data as any ?? []);
+      setUnresolvedReports(r11.data as any ?? []);
     } catch (e) {
       console.error("Failed to fetch community data", e);
     } finally {
