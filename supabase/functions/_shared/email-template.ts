@@ -20,6 +20,9 @@ const BRAND_COLORS = {
   codeBg: "#f1f5f9",
 };
 
+// Published logo — Vite-hashed asset served from the live site
+const LOGO_URL = "https://bestlytech.lovable.app/assets/bestly-logo.png";
+
 function baseLayout(content: string, footerNote?: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -32,30 +35,53 @@ function baseLayout(content: string, footerNote?: string): string {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${BRAND_COLORS.bg};padding:32px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
-          <!-- Logo -->
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+          <!-- Header Band -->
           <tr>
-            <td align="center" style="padding-bottom:24px;">
-              <span style="font-size:22px;font-weight:700;color:${BRAND_COLORS.primary};letter-spacing:-0.5px;">Bestly</span>
+            <td style="background:${BRAND_COLORS.primary};border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:14px;">
+                    <img src="${LOGO_URL}" alt="Bestly" width="44" height="44" style="display:block;width:44px;height:44px;border-radius:10px;transform:rotate(20deg);-webkit-transform:rotate(20deg);-ms-transform:rotate(20deg);" />
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Bestly</span>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:8px 0 0;font-size:12px;color:rgba(255,255,255,0.6);letter-spacing:0.5px;font-weight:500;">System Monitoring</p>
             </td>
           </tr>
+
+          <!-- Gradient Accent Line -->
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg, ${BRAND_COLORS.primary}, ${BRAND_COLORS.accent}, transparent);font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
           <!-- Card -->
           <tr>
-            <td style="background-color:${BRAND_COLORS.cardBg};border-radius:12px;border:1px solid ${BRAND_COLORS.border};box-shadow:0 1px 3px rgba(0,0,0,0.06);padding:36px 32px;">
+            <td style="background-color:${BRAND_COLORS.cardBg};padding:36px 32px;border-left:1px solid ${BRAND_COLORS.border};border-right:1px solid ${BRAND_COLORS.border};">
               ${content}
             </td>
           </tr>
+
           <!-- Footer -->
           <tr>
-            <td align="center" style="padding-top:24px;">
-              <p style="margin:0;font-size:12px;color:${BRAND_COLORS.textMuted};line-height:1.5;">
-                ${footerNote || ""}
-              </p>
-              <p style="margin:8px 0 0;font-size:11px;color:${BRAND_COLORS.textMuted};">
+            <td style="background:${BRAND_COLORS.primary};border-radius:0 0 16px 16px;padding:24px 32px;text-align:center;">
+              ${footerNote ? `<p style="margin:0 0 14px;font-size:12px;color:rgba(255,255,255,0.7);line-height:1.5;">${footerNote}</p>` : ""}
+              <!-- Trust Badges -->
+              <div style="margin-bottom:14px;">
+                <span style="display:inline-block;background:rgba(79,124,172,0.2);border:1px solid rgba(79,124,172,0.35);border-radius:20px;padding:5px 14px;margin:3px 4px;font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);letter-spacing:0.3px;">🛡️ GDPR Compliant</span>
+                <span style="display:inline-block;background:rgba(79,124,172,0.2);border:1px solid rgba(79,124,172,0.35);border-radius:20px;padding:5px 14px;margin:3px 4px;font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);letter-spacing:0.3px;">🔒 CCPA Ready</span>
+                <span style="display:inline-block;background:rgba(79,124,172,0.2);border:1px solid rgba(79,124,172,0.35);border-radius:20px;padding:5px 14px;margin:3px 4px;font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);letter-spacing:0.3px;">✅ Zero Data Resale</span>
+              </div>
+              <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.5);line-height:1.5;">
                 © ${new Date().getFullYear()} Bestly Technologies · Los Angeles, CA
               </p>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
@@ -178,14 +204,16 @@ export function alertEmail(opts: {
     const cells = opts.stats
       .map(
         (st) => `
-      <td style="text-align:center;padding:12px 8px;width:${Math.floor(100 / opts.stats!.length)}%;">
-        <div style="font-size:24px;font-weight:700;color:${BRAND_COLORS.text};font-variant-numeric:tabular-nums;">${st.value}</div>
-        <div style="font-size:11px;color:${BRAND_COLORS.textMuted};text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">${st.label}</div>
+      <td style="text-align:center;padding:16px 10px;width:${Math.floor(100 / opts.stats!.length)}%;">
+        <div style="background:${BRAND_COLORS.primary};border-radius:12px;padding:16px 12px;">
+          <div style="font-size:28px;font-weight:800;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;">${st.value}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:0.8px;margin-top:6px;font-weight:600;">${st.label}</div>
+        </div>
       </td>`
       )
       .join("");
     statsHtml = `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND_COLORS.bg};border-radius:8px;margin:16px 0 20px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 24px;">
       <tr>${cells}</tr>
     </table>`;
   }
@@ -194,30 +222,35 @@ export function alertEmail(opts: {
   if (opts.items && opts.items.length > 0) {
     const rows = opts.items
       .map(
-        (item) => `
+        (item, i) => `
       <tr>
-        <td style="padding:10px 12px;border-bottom:1px solid ${BRAND_COLORS.border};font-size:13px;">
-          <strong style="color:${BRAND_COLORS.text};">${item.label}</strong><br/>
-          <span style="color:${BRAND_COLORS.textMuted};font-size:12px;">${item.detail}</span>
+        <td style="padding:12px 16px;border-bottom:2px solid ${BRAND_COLORS.accent}22;background:${i % 2 === 0 ? '#ffffff' : BRAND_COLORS.bg};font-size:13px;">
+          <strong style="color:${BRAND_COLORS.primary};font-size:13px;">${item.label}</strong><br/>
+          <span style="color:${BRAND_COLORS.textMuted};font-size:12px;line-height:1.5;">${item.detail}</span>
         </td>
       </tr>`
       )
       .join("");
     itemsHtml = `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${BRAND_COLORS.border};border-radius:8px;overflow:hidden;margin:16px 0 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:2px solid ${BRAND_COLORS.accent}33;border-radius:12px;overflow:hidden;margin:20px 0 0;">
+      <tr>
+        <td style="background:${BRAND_COLORS.primary};padding:10px 16px;">
+          <span style="font-size:11px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.8px;">Details</span>
+        </td>
+      </tr>
       ${rows}
     </table>`;
   }
 
   const content = `
     <!-- Severity badge -->
-    <div style="background:${s.bg};border-left:4px solid ${s.color};border-radius:6px;padding:12px 16px;margin-bottom:20px;">
-      <span style="font-size:14px;font-weight:600;color:${s.color};">${s.icon} ${opts.title}</span>
+    <div style="background:${s.bg};border-left:5px solid ${s.color};border-radius:8px;padding:14px 18px;margin-bottom:24px;">
+      <span style="font-size:15px;font-weight:700;color:${s.color};">${s.icon} ${opts.title}</span>
     </div>
-    <p style="margin:0 0 4px;font-size:14px;color:${BRAND_COLORS.text};line-height:1.6;">${opts.summary}</p>
+    <p style="margin:0 0 4px;font-size:14px;color:${BRAND_COLORS.text};line-height:1.7;">${opts.summary}</p>
     ${statsHtml}
     ${itemsHtml}
-    ${opts.timestamp ? `<p style="margin:20px 0 0;font-size:11px;color:${BRAND_COLORS.textMuted};text-align:right;">Timestamp: ${opts.timestamp}</p>` : ""}`;
+    ${opts.timestamp ? `<p style="margin:24px 0 0;font-size:11px;color:${BRAND_COLORS.textMuted};text-align:right;border-top:1px solid ${BRAND_COLORS.border};padding-top:12px;">🕐 ${opts.timestamp}</p>` : ""}`;
 
   return baseLayout(content, "Automated alert from Cookie Yeti system monitoring.");
 }
