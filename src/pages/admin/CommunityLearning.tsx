@@ -234,12 +234,14 @@ export default function CommunityLearning() {
 
       {/* Tabs */}
       <Tabs defaultValue="activity" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="activity">Activity</TabsTrigger>
           <TabsTrigger value="domains">Domains</TabsTrigger>
           <TabsTrigger value="recent">Recent</TabsTrigger>
           <TabsTrigger value="issues">Issues</TabsTrigger>
           <TabsTrigger value="breakdown">Breakdown</TabsTrigger>
+          <TabsTrigger value="ai-fixer" className="gap-1"><Wrench className="h-3.5 w-3.5" />AI Fixer</TabsTrigger>
+          <TabsTrigger value="user-reports" className="gap-1"><Flag className="h-3.5 w-3.5" />User Reports</TabsTrigger>
         </TabsList>
 
         {/* Activity Tab */}
