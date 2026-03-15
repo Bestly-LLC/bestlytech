@@ -367,8 +367,8 @@ export default function CookieYeti() {
               <ul className="mt-8 space-y-4">
                 {[
                   { icon: Infinity, text: "Unlimited sites" },
+                  { icon: Shield, text: "Tracking cookie cleaning" },
                   { icon: Settings, text: "Saved preferences" },
-                  { icon: Clock, text: "No daily limits" },
                   { icon: CheckCircle2, text: "Cancel anytime" },
                 ].map((item) => (
                   <li key={item.text} className="flex items-center gap-3">
