@@ -1,0 +1,56 @@
+import { LucideIcon } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+
+interface StatCardProps {
+  label: string;
+  value: number | string;
+  icon: LucideIcon;
+  accentColor?: string; // tailwind border-color class e.g. "border-primary"
+  iconBg?: string;      // tailwind bg class e.g. "bg-primary/10"
+  iconColor?: string;   // tailwind text class e.g. "text-primary"
+  subtitle?: string;
+  centered?: boolean;
+}
+
+export function StatCard({
+  label,
+  value,
+  icon: Icon,
+  accentColor = "border-primary/40",
+  iconBg = "bg-primary/10",
+  iconColor = "text-primary",
+  subtitle,
+  centered = false,
+}: StatCardProps) {
+  if (centered) {
+    return (
+      <Card className={`border-t-2 ${accentColor} hover:-translate-y-0.5 transition-transform duration-200`}>
+        <CardContent className="pt-5 pb-4 text-center">
+          <div className={`h-9 w-9 rounded-xl ${iconBg} flex items-center justify-center mx-auto mb-2`}>
+            <Icon className={`h-[18px] w-[18px] ${iconColor}`} />
+          </div>
+          <p className="text-2xl font-bold text-foreground tabular-nums">{value}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">{label}</p>
+          {subtitle && <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className={`border-t-2 ${accentColor} hover:-translate-y-0.5 transition-transform duration-200`}>
+      <CardContent className="pt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
+            <p className="text-3xl font-bold text-foreground mt-1 tabular-nums">{value}</p>
+            {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+          </div>
+          <div className={`h-10 w-10 rounded-xl ${iconBg} flex items-center justify-center`}>
+            <Icon className={`h-5 w-5 ${iconColor}`} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

@@ -12,6 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Crown, Users, ShieldCheck, Calendar, Plus, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import { PageHeader } from "@/components/admin/PageHeader";
+import { StatCard } from "@/components/admin/StatCard";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function CYDashboard() {
   const [subs, setSubs] = useState<any[]>([]);
@@ -19,6 +23,7 @@ export default function CYDashboard() {
   const [grantEmail, setGrantEmail] = useState("");
   const [grantReason, setGrantReason] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -32,6 +37,7 @@ export default function CYDashboard() {
     ]);
     setSubs(s || []);
     setGrants(g || []);
+    setLoading(false);
   };
 
   const handleGrant = async () => {
@@ -57,20 +63,34 @@ export default function CYDashboard() {
   const yearly = activeSubs.filter((s) => s.plan === "yearly").length;
 
   const stats = [
-    { label: "Total Premium", value: activeSubs.length + grants.length, icon: Crown, color: "text-yellow-500", bg: "bg-yellow-500/10" },
-    { label: "Paid Subscribers", value: activeSubs.length, icon: Users, color: "text-primary", bg: "bg-primary/10" },
-    { label: "Granted Access", value: grants.length, icon: ShieldCheck, color: "text-green-500", bg: "bg-green-500/10" },
-    { label: "Monthly", value: monthly, icon: Calendar, color: "text-blue-500", bg: "bg-blue-500/10" },
-    { label: "Yearly", value: yearly, icon: Calendar, color: "text-purple-500", bg: "bg-purple-500/10" },
+    { label: "Total Premium", value: activeSubs.length + grants.length, icon: Crown, iconColor: "text-yellow-500", iconBg: "bg-yellow-500/10", accentColor: "border-yellow-500/40" },
+    { label: "Paid Subscribers", value: activeSubs.length, icon: Users, iconColor: "text-primary", iconBg: "bg-primary/10", accentColor: "border-primary/40" },
+    { label: "Granted Access", value: grants.length, icon: ShieldCheck, iconColor: "text-green-500", iconBg: "bg-green-500/10", accentColor: "border-green-500/40" },
+    { label: "Monthly", value: monthly, icon: Calendar, iconColor: "text-blue-500", iconBg: "bg-blue-500/10", accentColor: "border-blue-500/40" },
+    { label: "Yearly", value: yearly, icon: Calendar, iconColor: "text-purple-500", iconBg: "bg-purple-500/10", accentColor: "border-purple-500/40" },
   ];
+
+  if (loading) {
+    return (
+      <div className="space-y-8 max-w-6xl">
+        <div><Skeleton className="h-7 w-56" /><Skeleton className="h-4 w-72 mt-2" /></div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        </div>
+        <div className="grid md:grid-cols-2 gap-6">
+          <Skeleton className="h-64 rounded-xl" />
+          <Skeleton className="h-64 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 max-w-6xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">Cookie Yeti Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-1">Manage premium subscribers and access grants.</p>
-          </div>
+      <PageHeader
+        title="Cookie Yeti Dashboard"
+        description="Manage premium subscribers and access grants."
+        actions={
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Grant Access</Button>
@@ -92,95 +112,88 @@ export default function CYDashboard() {
               </div>
             </DialogContent>
           </Dialog>
-        </div>
+        }
+      />
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {stats.map((s) => (
-            <Card key={s.label} className="border-border/50">
-              <CardContent className="pt-5 pb-4 text-center">
-                <div className={`h-9 w-9 rounded-xl ${s.bg} flex items-center justify-center mx-auto mb-2`}>
-                  <s.icon className={`h-4 w-4 ${s.color}`} />
-                </div>
-                <p className="text-2xl font-bold text-foreground">{s.value}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        {stats.map((s) => (
+          <StatCard key={s.label} {...s} centered />
+        ))}
+      </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <div>
-                <CardTitle className="text-sm font-semibold">Recent Subscribers</CardTitle>
-                <CardDescription className="text-xs">Latest paid subscriptions.</CardDescription>
-              </div>
-              <Link to="/admin/cookie-yeti/subscribers">
-                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7">
-                  View all <ArrowRight className="h-3 w-3 ml-1" />
-                </Button>
-              </Link>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs">Email</TableHead>
-                    <TableHead className="text-xs">Plan</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card className="border-border/50">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-sm font-semibold">Recent Subscribers</CardTitle>
+              <CardDescription className="text-xs">Latest paid subscriptions.</CardDescription>
+            </div>
+            <Link to="/admin/cookie-yeti/subscribers">
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7">
+                View all <ArrowRight className="h-3 w-3 ml-1" />
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs">Email</TableHead>
+                  <TableHead className="text-xs">Plan</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {subs.slice(0, 5).map((s) => (
+                  <TableRow key={s.id} className="even:bg-muted/30">
+                    <TableCell className="text-sm">{s.email}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{s.plan}</Badge></TableCell>
+                    <TableCell><Badge variant={s.status === "active" ? "default" : "secondary"} className="text-xs">{s.status}</Badge></TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {subs.slice(0, 5).map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="text-sm">{s.email}</TableCell>
-                      <TableCell><Badge variant="outline" className="text-xs">{s.plan}</Badge></TableCell>
-                      <TableCell><Badge variant={s.status === "active" ? "default" : "secondary"} className="text-xs">{s.status}</Badge></TableCell>
-                    </TableRow>
-                  ))}
-                  {subs.length === 0 && (
-                    <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8 text-sm">No subscribers</TableCell></TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                ))}
+                {subs.length === 0 && (
+                  <TableRow><TableCell colSpan={3} className="p-0"><EmptyState icon={Users} title="No subscribers" /></TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
-          <Card className="border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <div>
-                <CardTitle className="text-sm font-semibold">Recently Granted</CardTitle>
-                <CardDescription className="text-xs">Manual premium access grants.</CardDescription>
-              </div>
-              <Link to="/admin/cookie-yeti/granted">
-                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7">
-                  View all <ArrowRight className="h-3 w-3 ml-1" />
-                </Button>
-              </Link>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs">Email</TableHead>
-                    <TableHead className="text-xs">Reason</TableHead>
+        <Card className="border-border/50">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-sm font-semibold">Recently Granted</CardTitle>
+              <CardDescription className="text-xs">Manual premium access grants.</CardDescription>
+            </div>
+            <Link to="/admin/cookie-yeti/granted">
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7">
+                View all <ArrowRight className="h-3 w-3 ml-1" />
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs">Email</TableHead>
+                  <TableHead className="text-xs">Reason</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {grants.slice(0, 5).map((g) => (
+                  <TableRow key={g.id} className="even:bg-muted/30">
+                    <TableCell className="text-sm">{g.email}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{g.reason || "—"}</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {grants.slice(0, 5).map((g) => (
-                    <TableRow key={g.id}>
-                      <TableCell className="text-sm">{g.email}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{g.reason || "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                  {grants.length === 0 && (
-                    <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-8 text-sm">No granted access</TableCell></TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
+                ))}
+                {grants.length === 0 && (
+                  <TableRow><TableCell colSpan={2} className="p-0"><EmptyState icon={ShieldCheck} title="No granted access" /></TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

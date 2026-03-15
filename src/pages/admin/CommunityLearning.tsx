@@ -6,11 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2 } from "lucide-react";
+import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers } from "lucide-react";
 import { toast } from "sonner";
+import { PageHeader } from "@/components/admin/PageHeader";
+import { StatCard } from "@/components/admin/StatCard";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell, Legend,
+  BarChart, Bar, PieChart, Pie, Cell, Legend, Area, AreaChart,
 } from "recharts";
 
 interface Overview {
@@ -74,6 +78,7 @@ export default function CommunityLearning() {
   const [unresolvedReports, setUnresolvedReports] = useState<any[]>([]);
   const [runningFixer, setRunningFixer] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -150,9 +155,15 @@ export default function CommunityLearning() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-        <Brain className="h-12 w-12 text-primary animate-pulse" />
-        <p className="text-muted-foreground text-sm">Loading community intelligence…</p>
+      <div className="space-y-6">
+        <div><Skeleton className="h-7 w-56" /><Skeleton className="h-4 w-80 mt-2" /></div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          {[1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
+        </div>
+        <Skeleton className="h-96 rounded-xl" />
       </div>
     );
   }
@@ -162,70 +173,55 @@ export default function CommunityLearning() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Community Learning</h1>
-          <p className="text-muted-foreground text-sm">Cookie pattern intelligence from the Cookie Yeti network</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
-          <RefreshCw className="h-4 w-4" /> Refresh
-        </Button>
-      </div>
+      <PageHeader
+        title="Community Learning"
+        description="Cookie pattern intelligence from the Cookie Yeti network"
+        actions={
+          <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </Button>
+        }
+      />
 
       {/* Overview Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2"><CardDescription>Total Patterns</CardDescription>
-            <CardTitle className="text-3xl">{o.total_patterns}</CardTitle>
-          </CardHeader>
-          <CardContent><p className="text-xs text-muted-foreground">{o.patterns_last_7d} active last 7 days</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardDescription>Domains Covered</CardDescription>
-            <CardTitle className="text-3xl">{o.total_domains}</CardTitle>
-          </CardHeader>
-          <CardContent><p className="text-xs text-muted-foreground">{o.new_domains_last_7d} new this week</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardDescription>Success Rate</CardDescription>
-            <CardTitle className="text-3xl">{o.overall_success_rate}%</CardTitle>
-          </CardHeader>
-          <CardContent><p className="text-xs text-muted-foreground">{Number(o.total_successes).toLocaleString()} / {Number(o.total_reports).toLocaleString()} interactions</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardDescription>Avg Confidence</CardDescription>
-            <CardTitle className="text-3xl">{o.avg_confidence ?? "—"}</CardTitle>
-          </CardHeader>
-          <CardContent><p className="text-xs text-muted-foreground">{o.high_confidence} high / {o.low_confidence} low</p></CardContent>
-        </Card>
+        <StatCard label="Total Patterns" value={o.total_patterns} icon={Layers} iconColor="text-primary" iconBg="bg-primary/10" accentColor="border-primary/40" subtitle={`${o.patterns_last_7d} active last 7 days`} />
+        <StatCard label="Domains Covered" value={o.total_domains} icon={Globe} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="border-green-500/40" subtitle={`${o.new_domains_last_7d} new this week`} />
+        <StatCard label="Success Rate" value={`${o.overall_success_rate}%`} icon={Target} iconColor="text-blue-500" iconBg="bg-blue-500/10" accentColor="border-blue-500/40" subtitle={`${Number(o.total_successes).toLocaleString()} / ${Number(o.total_reports).toLocaleString()}`} />
+        <StatCard label="Avg Confidence" value={o.avg_confidence ?? "—"} icon={TrendingUp} iconColor="text-purple-500" iconBg="bg-purple-500/10" accentColor="border-purple-500/40" subtitle={`${o.high_confidence} high / ${o.low_confidence} low`} />
       </div>
 
       {/* Health Indicators */}
       <div className="grid grid-cols-3 gap-4">
-        <Card className="border-green-500/30">
+        <Card className="border-t-2 border-green-500/40">
           <CardContent className="flex items-center gap-3 py-4">
-            <Clock className="h-5 w-5 text-green-500" />
+            <div className="relative">
+              <Clock className="h-5 w-5 text-green-500" />
+              <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+              </span>
+            </div>
             <div>
-              <p className="text-sm font-medium">{o.patterns_last_24h}</p>
+              <p className="text-sm font-semibold tabular-nums">{o.patterns_last_24h}</p>
               <p className="text-xs text-muted-foreground">Active last 24h</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-amber-500/30">
+        <Card className="border-t-2 border-amber-500/40">
           <CardContent className="flex items-center gap-3 py-4">
             <AlertTriangle className="h-5 w-5 text-amber-500" />
             <div>
-              <p className="text-sm font-medium">{o.stale_patterns}</p>
+              <p className="text-sm font-semibold tabular-nums">{o.stale_patterns}</p>
               <p className="text-xs text-muted-foreground">Stale 30d+</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-red-500/30">
+        <Card className="border-t-2 border-red-500/40">
           <CardContent className="flex items-center gap-3 py-4">
             <CircleAlert className="h-5 w-5 text-red-500" />
             <div>
-              <p className="text-sm font-medium">{issueCount}</p>
+              <p className="text-sm font-semibold tabular-nums">{issueCount}</p>
               <p className="text-xs text-muted-foreground">Issues detected</p>
             </div>
           </CardContent>
@@ -234,14 +230,14 @@ export default function CommunityLearning() {
 
       {/* Tabs */}
       <Tabs defaultValue="activity" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-7">
-          <TabsTrigger value="activity">Activity</TabsTrigger>
-          <TabsTrigger value="domains">Domains</TabsTrigger>
-          <TabsTrigger value="recent">Recent</TabsTrigger>
-          <TabsTrigger value="issues">Issues</TabsTrigger>
-          <TabsTrigger value="breakdown">Breakdown</TabsTrigger>
-          <TabsTrigger value="ai-fixer" className="gap-1"><Wrench className="h-3.5 w-3.5" />AI Fixer</TabsTrigger>
-          <TabsTrigger value="user-reports" className="gap-1"><Flag className="h-3.5 w-3.5" />User Reports</TabsTrigger>
+        <TabsList className="inline-flex h-10 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground">
+          <TabsTrigger value="activity" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><TrendingUp className="h-3.5 w-3.5" />Activity</TabsTrigger>
+          <TabsTrigger value="domains" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Globe className="h-3.5 w-3.5" />Domains</TabsTrigger>
+          <TabsTrigger value="recent" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Brain className="h-3.5 w-3.5" />Recent</TabsTrigger>
+          <TabsTrigger value="issues" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><AlertTriangle className="h-3.5 w-3.5" />Issues</TabsTrigger>
+          <TabsTrigger value="breakdown" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><BarChart3 className="h-3.5 w-3.5" />Breakdown</TabsTrigger>
+          <TabsTrigger value="ai-fixer" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Wrench className="h-3.5 w-3.5" />AI Fixer</TabsTrigger>
+          <TabsTrigger value="user-reports" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Flag className="h-3.5 w-3.5" />Reports</TabsTrigger>
         </TabsList>
 
         {/* Activity Tab */}
@@ -251,16 +247,26 @@ export default function CommunityLearning() {
             <CardContent>
               <div className="h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={activity}>
+                  <AreaChart data={activity}>
+                    <defs>
+                      <linearGradient id="gradNew" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(270,60%,55%)" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="hsl(270,60%,55%)" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="gradDomains" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(142,76%,36%)" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="hsl(142,76%,36%)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                    <Line type="monotone" dataKey="new_patterns" stroke="hsl(270,60%,55%)" strokeWidth={2} name="New Patterns" dot={false} />
-                    <Line type="monotone" dataKey="new_domains" stroke="hsl(142,76%,36%)" strokeWidth={2} name="New Domains" dot={false} />
+                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                    <Area type="monotone" dataKey="new_patterns" stroke="hsl(270,60%,55%)" strokeWidth={2} fill="url(#gradNew)" name="New Patterns" />
+                    <Area type="monotone" dataKey="new_domains" stroke="hsl(142,76%,36%)" strokeWidth={2} fill="url(#gradDomains)" name="New Domains" />
                     <Line type="monotone" dataKey="active_patterns" stroke="hsl(45,93%,47%)" strokeWidth={2} strokeDasharray="5 5" name="Active Patterns" dot={false} />
                     <Legend />
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
@@ -285,15 +291,15 @@ export default function CommunityLearning() {
                 </TableHeader>
                 <TableBody>
                   {domains.map((d: any, i: number) => (
-                    <TableRow key={i}>
+                    <TableRow key={i} className="even:bg-muted/30">
                       <TableCell className="font-medium flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-muted-foreground" />{d.domain}</TableCell>
-                      <TableCell className="text-right">{d.pattern_count}</TableCell>
-                      <TableCell className="text-right">{Number(d.total_reports).toLocaleString()}</TableCell>
-                      <TableCell className={`text-right font-medium ${rateColor(d.success_rate)}`}>{d.success_rate}%</TableCell>
+                      <TableCell className="text-right tabular-nums">{d.pattern_count}</TableCell>
+                      <TableCell className="text-right tabular-nums">{Number(d.total_reports).toLocaleString()}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${rateColor(d.success_rate)}`}>{d.success_rate}%</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Progress value={d.avg_confidence * 100} className="h-2 w-16" />
-                          <span className="text-xs text-muted-foreground">{d.avg_confidence}</span>
+                          <span className="text-xs text-muted-foreground tabular-nums">{d.avg_confidence}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">{d.last_active ? timeAgo(d.last_active) : "—"}</TableCell>
@@ -326,15 +332,15 @@ export default function CommunityLearning() {
                   </TableHeader>
                   <TableBody>
                     {recent.map((r: any, i: number) => (
-                      <TableRow key={i}>
+                      <TableRow key={i} className="even:bg-muted/30">
                         <TableCell className="font-medium">{r.domain}</TableCell>
                         <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.selector}</code></TableCell>
                         <TableCell>
                           <Badge variant="outline" className={ACTION_BADGE_VARIANT[r.action_type] ?? ""}>{r.action_type}</Badge>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.cmp_fingerprint}</TableCell>
-                        <TableCell className="text-right">{r.confidence}</TableCell>
-                        <TableCell className="text-right">{r.report_count}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.confidence}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.report_count}</TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-[10px]">{r.source}</Badge>
                         </TableCell>
@@ -354,10 +360,7 @@ export default function CommunityLearning() {
             <CardHeader><CardTitle className="text-lg">Pattern Issues</CardTitle></CardHeader>
             <CardContent>
               {issues.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <CheckCircle2 className="h-10 w-10 text-green-500" />
-                  <p className="text-muted-foreground font-medium">No issues detected!</p>
-                </div>
+                <EmptyState icon={CheckCircle2} title="No issues detected!" description="All patterns are healthy." />
               ) : (
                 <Table>
                   <TableHeader>
@@ -376,14 +379,14 @@ export default function CommunityLearning() {
                     {issues.map((p: any, i: number) => {
                       const issue = ISSUE_BADGE[p.issue_type] ?? ISSUE_BADGE.other;
                       return (
-                        <TableRow key={i}>
+                        <TableRow key={i} className="even:bg-muted/30">
                           <TableCell><Badge variant="outline" className={issue.className}>{issue.label}</Badge></TableCell>
                           <TableCell className="font-medium">{p.domain}</TableCell>
                           <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[180px] truncate inline-block">{p.selector}</code></TableCell>
                           <TableCell><Badge variant="outline" className={ACTION_BADGE_VARIANT[p.action_type] ?? ""}>{p.action_type}</Badge></TableCell>
-                          <TableCell className="text-right">{p.confidence}</TableCell>
-                          <TableCell className="text-right">{p.report_count}</TableCell>
-                          <TableCell className={`text-right font-medium ${rateColor(p.success_rate ?? 0)}`}>{p.success_rate ?? 0}%</TableCell>
+                          <TableCell className="text-right tabular-nums">{p.confidence}</TableCell>
+                          <TableCell className="text-right tabular-nums">{p.report_count}</TableCell>
+                          <TableCell className={`text-right font-medium tabular-nums ${rateColor(p.success_rate ?? 0)}`}>{p.success_rate ?? 0}%</TableCell>
                           <TableCell className="text-right text-xs text-muted-foreground">{p.last_seen ? timeAgo(p.last_seen) : "—"}</TableCell>
                         </TableRow>
                       );
@@ -398,7 +401,6 @@ export default function CommunityLearning() {
         {/* Breakdown Tab */}
         <TabsContent value="breakdown">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Confidence Histogram */}
             <Card>
               <CardHeader><CardTitle className="text-lg">Confidence Distribution</CardTitle></CardHeader>
               <CardContent>
@@ -408,7 +410,7 @@ export default function CommunityLearning() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
+                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                       <Bar dataKey="count" name="Patterns" radius={[4, 4, 0, 0]}>
                         {confDist.map((_: any, i: number) => (
                           <Cell key={i} fill={CONFIDENCE_COLORS[i] ?? "hsl(var(--primary))"} />
@@ -420,7 +422,6 @@ export default function CommunityLearning() {
               </CardContent>
             </Card>
 
-            {/* Action Type Donut */}
             <Card>
               <CardHeader><CardTitle className="text-lg">Action Types</CardTitle></CardHeader>
               <CardContent>
@@ -432,7 +433,7 @@ export default function CommunityLearning() {
                           <Cell key={i} fill={ACTION_COLORS[a.action_type] ?? "hsl(var(--muted))"} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
+                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
@@ -440,7 +441,6 @@ export default function CommunityLearning() {
               </CardContent>
             </Card>
 
-            {/* CMP Fingerprints Table */}
             <Card>
               <CardHeader><CardTitle className="text-lg">CMP Fingerprints</CardTitle></CardHeader>
               <CardContent>
@@ -456,12 +456,12 @@ export default function CommunityLearning() {
                   </TableHeader>
                   <TableBody>
                     {cmpDist.map((c: any, i: number) => (
-                      <TableRow key={i}>
+                      <TableRow key={i} className="even:bg-muted/30">
                         <TableCell className="font-medium">{c.cmp_fingerprint}</TableCell>
-                        <TableCell className="text-right">{c.pattern_count}</TableCell>
-                        <TableCell className="text-right">{c.domain_count}</TableCell>
-                        <TableCell className="text-right">{c.avg_confidence}</TableCell>
-                        <TableCell className={`text-right font-medium ${rateColor(c.success_rate)}`}>{c.success_rate}%</TableCell>
+                        <TableCell className="text-right tabular-nums">{c.pattern_count}</TableCell>
+                        <TableCell className="text-right tabular-nums">{c.domain_count}</TableCell>
+                        <TableCell className="text-right tabular-nums">{c.avg_confidence}</TableCell>
+                        <TableCell className={`text-right font-medium tabular-nums ${rateColor(c.success_rate)}`}>{c.success_rate}%</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -469,7 +469,6 @@ export default function CommunityLearning() {
               </CardContent>
             </Card>
 
-            {/* Source Breakdown Bar */}
             <Card>
               <CardHeader><CardTitle className="text-lg">Source Breakdown</CardTitle></CardHeader>
               <CardContent>
@@ -479,7 +478,7 @@ export default function CommunityLearning() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis type="number" tick={{ fontSize: 11 }} />
                       <YAxis type="category" dataKey="source" tick={{ fontSize: 11 }} width={80} />
-                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
+                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                       <Bar dataKey="count" name="Patterns" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -504,26 +503,22 @@ export default function CommunityLearning() {
             </CardHeader>
             <CardContent>
               {fixLog.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <CheckCircle2 className="h-10 w-10 text-green-500" />
-                  <p className="text-muted-foreground font-medium">No fix actions recorded yet</p>
-                </div>
+                <EmptyState icon={Wrench} title="No fix actions recorded yet" description="Run the AI Fixer to automatically maintain pattern quality." />
               ) : (
                 <>
-                  {/* Summary from latest batch */}
                   {(() => {
                     const latestBatch = fixLog.filter((f: any) => {
                       const t = new Date(f.created_at).getTime();
                       const newest = new Date(fixLog[0].created_at).getTime();
-                      return newest - t < 5000; // within 5s = same batch
+                      return newest - t < 5000;
                     });
                     const successes = latestBatch.filter((f: any) => f.success).length;
                     const failures = latestBatch.filter((f: any) => !f.success).length;
                     return (
                       <div className="grid grid-cols-3 gap-4 mb-6">
-                        <Card><CardContent className="py-3 text-center"><p className="text-2xl font-bold">{latestBatch.length}</p><p className="text-xs text-muted-foreground">Processed</p></CardContent></Card>
-                        <Card className="border-green-500/30"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-green-500">{successes}</p><p className="text-xs text-muted-foreground">Fixed</p></CardContent></Card>
-                        <Card className="border-red-500/30"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-red-500">{failures}</p><p className="text-xs text-muted-foreground">Failed</p></CardContent></Card>
+                        <Card className="border-t-2 border-primary/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold tabular-nums">{latestBatch.length}</p><p className="text-xs text-muted-foreground">Processed</p></CardContent></Card>
+                        <Card className="border-t-2 border-green-500/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-green-500 tabular-nums">{successes}</p><p className="text-xs text-muted-foreground">Fixed</p></CardContent></Card>
+                        <Card className="border-t-2 border-red-500/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-red-500 tabular-nums">{failures}</p><p className="text-xs text-muted-foreground">Failed</p></CardContent></Card>
                       </div>
                     );
                   })()}
@@ -540,7 +535,7 @@ export default function CommunityLearning() {
                     </TableHeader>
                     <TableBody>
                       {fixLog.map((f: any, i: number) => (
-                        <TableRow key={i} className={f.success ? "" : "bg-red-500/5"}>
+                        <TableRow key={i} className={f.success ? "even:bg-muted/30" : "bg-red-500/5"}>
                           <TableCell className="text-xs text-muted-foreground">{timeAgo(f.created_at)}</TableCell>
                           <TableCell className="font-medium">{f.domain}</TableCell>
                           <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[180px] truncate inline-block">{f.selector}</code></TableCell>
@@ -582,15 +577,12 @@ export default function CommunityLearning() {
             </CardHeader>
             <CardContent>
               {unresolvedReports.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <CheckCircle2 className="h-10 w-10 text-green-500" />
-                  <p className="text-muted-foreground font-medium">No unresolved reports!</p>
-                </div>
+                <EmptyState icon={CheckCircle2} title="No unresolved reports!" description="All user-reported domains have been handled." />
               ) : (
                 <>
                   <div className="grid grid-cols-2 gap-4 mb-6">
-                    <Card><CardContent className="py-3 text-center"><p className="text-2xl font-bold">{unresolvedReports.length}</p><p className="text-xs text-muted-foreground">Unresolved</p></CardContent></Card>
-                    <Card className="border-amber-500/30"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-amber-500">{unresolvedReports.filter((r: any) => r.report_count >= 3).length}</p><p className="text-xs text-muted-foreground">Priority (3+ reports)</p></CardContent></Card>
+                    <Card className="border-t-2 border-primary/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold tabular-nums">{unresolvedReports.length}</p><p className="text-xs text-muted-foreground">Unresolved</p></CardContent></Card>
+                    <Card className="border-t-2 border-amber-500/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-amber-500 tabular-nums">{unresolvedReports.filter((r: any) => r.report_count >= 3).length}</p><p className="text-xs text-muted-foreground">Priority (3+ reports)</p></CardContent></Card>
                   </div>
                   <Table>
                     <TableHeader>
@@ -604,7 +596,7 @@ export default function CommunityLearning() {
                     </TableHeader>
                     <TableBody>
                       {unresolvedReports.map((r: any, i: number) => (
-                        <TableRow key={i}>
+                        <TableRow key={i} className="even:bg-muted/30">
                           <TableCell className="font-medium flex items-center gap-2">
                             <Globe className="h-3.5 w-3.5 text-muted-foreground" />
                             {r.domain}
@@ -612,7 +604,7 @@ export default function CommunityLearning() {
                               <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[10px]">Priority</Badge>
                             )}
                           </TableCell>
-                          <TableCell className="text-right font-medium">{r.report_count}</TableCell>
+                          <TableCell className="text-right font-medium tabular-nums">{r.report_count}</TableCell>
                           <TableCell>
                             {r.has_working_pattern ? (
                               <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">Yes</Badge>
