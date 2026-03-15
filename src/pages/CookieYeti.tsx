@@ -143,8 +143,8 @@ export default function CookieYeti() {
               Distraction-Free Browsing, Automatically
             </p>
             <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              Automatically handles cookie consent pop-ups based on your privacy preferences. 
-              No tracking. No data collection. Just peaceful browsing.
+              Automatically handles cookie consent pop-ups and removes tracking cookies from sites you visit. 
+              50 sites per day free, unlimited with Pro. No data collection. Just peaceful browsing.
             </p>
             
             <div className="mt-8">
