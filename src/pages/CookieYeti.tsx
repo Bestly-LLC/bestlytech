@@ -96,11 +96,11 @@ const CONFIG = {
     },
     {
       question: "Does it work on mobile?",
-      answer: "Cookie Yeti will be available on Android via Google Play after the initial Chrome launch. iOS support for Safari is planned for the future.",
+      answer: "Yes! Cookie Yeti is available on Safari for iPhone and iPad. Download it from the App Store and enable it in Settings → Safari → Extensions.",
     },
     {
-      question: "Is the lifetime purchase really lifetime?",
-      answer: "Yes. The $2.99 one-time purchase unlocks all features forever. No subscriptions, no recurring charges, no ads. Your purchase supports ongoing development.",
+      question: "How much does Cookie Yeti cost?",
+      answer: "Cookie Yeti offers a free tier with limited daily handling, a monthly plan at $0.99/mo, and a yearly plan at $7.99/yr (save 33%). Prices may vary by platform and region.",
     },
     {
       question: "What cookie preferences can I set?",
