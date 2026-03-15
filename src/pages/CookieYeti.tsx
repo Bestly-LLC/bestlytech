@@ -42,12 +42,13 @@ const CONFIG = {
     yearly: "$7.99",
   },
   platforms: [
-    { name: "Chrome", available: true, comingSoon: true, icon: Chrome },
-    { name: "Safari", available: false, comingSoon: true, icon: Globe },
-    { name: "Firefox", available: false, comingSoon: true, icon: Globe },
-    { name: "Edge", available: false, comingSoon: true, icon: Globe },
-    { name: "Android", available: false, comingSoon: true, icon: Smartphone },
+    { name: "Chrome", available: true, icon: Chrome },
+    { name: "Safari (iOS + macOS)", available: true, icon: Globe },
   ],
+  links: {
+    chrome: "https://chromewebstore.google.com/detail/cookie-yeti/kfdgjhogdcoifmflbhcoijfibmfhknkh",
+    safari: "https://apps.apple.com/us/app/cookie-yeti/id6743440341",
+  },
   features: [
     {
       icon: Eye,
