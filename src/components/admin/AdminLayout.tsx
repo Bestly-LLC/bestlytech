@@ -3,10 +3,12 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "./AdminSidebar";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Button } from "@/components/ui/button";
-import { LogOut, Shield, Home } from "lucide-react";
+import { LogOut, Shield, Home, Command } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { CommandPalette } from "./CommandPalette";
 
 const BREADCRUMB_MAP: Record<string, string> = {
   "/admin": "Dashboard",
