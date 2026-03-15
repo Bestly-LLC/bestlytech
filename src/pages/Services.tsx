@@ -47,6 +47,12 @@ const services = [
     description: "Apple-native infrastructure — discovery, payments, identity, and automation for local businesses.",
     link: "/apple-modernization",
   },
+  {
+    icon: ShoppingCart,
+    title: "Marketplace Onboarding",
+    description: "Full-service setup for Amazon, Shopify, and TikTok Shop — from registration to launch-ready.",
+    link: "/amazon-setup",
+  },
 ];
 
 const processSteps = [
