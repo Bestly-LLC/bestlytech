@@ -1,57 +1,43 @@
 
 
-## Integrate Apple-Native Business Modernization Program
+## Activation Code System Plan
 
-Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
+Three deliverables, no UI changes.
 
----
+### 1. Database Migration — `activation_codes` table
 
-### 1. New Page: `src/pages/AppleModernization.tsx`
+Run the provided SQL as a migration: creates the table with UUID primary key, unique index on (email, code), partial index on active emails, RLS with public SELECT and service_role-only write policies.
 
-A comprehensive, premium-feeling service page with the following sections:
+### 2. Edge Function: `send-activation-code`
 
-- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
-- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
-- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
-  - Apple Discovery Infrastructure
-  - App Clips (Instant Customer Experience)
-  - Payments Modernization (Tap to Pay)
-  - Digital ID Verification
-  - Brand Trust and Identity
-  - Customer Experience Automation
-  - Commerce and Ordering
-  - Operational Analytics
-  - Apple-Ready Certification (marked as optional)
-- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
-- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
-- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
+Create `supabase/functions/send-activation-code/index.ts`:
+- CORS headers + OPTIONS handler (matching existing pattern from `run-pattern-maintenance`)
+- Validate email with regex
+- Rate limit: count rows for this email where `created_at > now() - 1 hour`; reject if >= 5
+- Delete inactive pending codes for this email (`active = false`)
+- Generate 6-digit code (`Math.floor(100000 + Math.random() * 900000)`)
+- Insert row with `expires_at = now() + 15 min`
+- Send code via denomailer (same SMTP pattern as `run-pattern-maintenance`)
+- Recipient is the user's email, sender is `PRIVATEMAIL_EMAIL`
+- Register in `config.toml` with `verify_jwt = false`
 
-### 2. Route Registration: `src/App.tsx`
+### 3. Edge Function: `validate-activation-code`
 
-- Import the new `AppleModernization` page component.
-- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
+Create `supabase/functions/validate-activation-code/index.ts`:
+- CORS headers + OPTIONS handler
+- Query `activation_codes` where email + code match, `active = false`, `expires_at > now()`
+- If found: update `active = true`, `activated_at = now()`, `platform`, `ip_address` (from request headers), `expires_at = '2099-12-31'`
+- Return success/failure JSON
+- Register in `config.toml` with `verify_jwt = false`
 
-### 3. Services Page Update: `src/pages/Services.tsx`
+### Files
 
-- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
-- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
+| File | Action |
+|------|--------|
+| `supabase/migrations/..._activation_codes.sql` | Create — table + indexes + RLS |
+| `supabase/functions/send-activation-code/index.ts` | Create |
+| `supabase/functions/validate-activation-code/index.ts` | Create |
+| `supabase/config.toml` | Edit — add both functions with `verify_jwt = false` |
 
-### 4. Header Navigation: `src/components/layout/Header.tsx`
-
-- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
-
----
-
-### Technical Details
-
-**New file:**
-- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
-
-**Modified files:**
-- `src/App.tsx` -- add import and route
-- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
-
-**No database or backend changes required.** This is purely a frontend content page.
-
-The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
+No new secrets needed — `PRIVATEMAIL_EMAIL` and `PRIVATEMAIL_PASSWORD` already exist.
 
