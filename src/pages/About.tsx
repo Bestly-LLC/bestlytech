@@ -3,6 +3,7 @@ import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { Link } from "react-router-dom";
+import jaredHeadshot from "@/assets/jared-headshot.png";
 import {
   Eye, ShieldCheck, Ban, BrainCircuit, Lock,
   Smartphone, Puzzle, Cpu, Box, Droplets, HardDrive,
@@ -62,12 +63,21 @@ export default function About() {
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <div className="grid gap-16 lg:grid-cols-2 lg:items-center">
             <AnimatedSection>
-              <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                Why We Exist
-              </h2>
-              <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
-                Technology should make life better without making privacy worse. That's not a tagline — it's how we decide what to build and what to skip.
-              </p>
+              <div className="flex flex-col sm:flex-row items-start gap-6 mb-6">
+                <img
+                  src={jaredHeadshot}
+                  alt="Jared Best, founder of Bestly LLC"
+                  className="w-24 h-24 rounded-2xl object-cover shadow-lg border border-border shrink-0"
+                />
+                <div>
+                  <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                    Why We Exist
+                  </h2>
+                  <p className="mt-4 text-lg text-muted-foreground leading-relaxed">
+                    Technology should make life better without making privacy worse. That's not a tagline — it's how we decide what to build and what to skip.
+                  </p>
+                </div>
+              </div>
             </AnimatedSection>
             <AnimatedSection delay={100}>
               <GlowCard className="p-8">

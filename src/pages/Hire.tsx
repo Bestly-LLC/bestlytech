@@ -17,6 +17,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle2, Loader2, Briefcase, MessageSquare, Handshake, ArrowRight } from "lucide-react";
+import jaredHeadshot from "@/assets/jared-headshot.png";
 
 const projectTypes = [
   { value: "web-app", label: "Web Application" },
@@ -136,7 +137,12 @@ export default function Hire() {
         <div className="absolute inset-0 bg-mesh opacity-50" />
         <div className="relative mx-auto max-w-4xl px-6 lg:px-8">
           <AnimatedSection animation="fade-in">
-            <div className="text-center">
+             <div className="flex flex-col items-center">
+              <img
+                src={jaredHeadshot}
+                alt="Jared Best"
+                className="w-28 h-28 rounded-2xl object-cover shadow-lg border border-border mb-6"
+              />
               <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
                 Let's Build Something Together
               </h1>
