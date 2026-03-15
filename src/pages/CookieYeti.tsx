@@ -312,7 +312,7 @@ export default function CookieYeti() {
               Simple, Fair Pricing
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              No subscriptions. No ads. Just one simple price.
+              Choose the plan that works for you
             </p>
           </div>
           
