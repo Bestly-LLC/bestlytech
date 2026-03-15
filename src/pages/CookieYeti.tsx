@@ -154,15 +154,23 @@ export default function CookieYeti() {
               </Badge>
             </div>
             
-            <WaitlistForm 
-              productId="cookie-yeti" 
-              productName="Cookie Yeti" 
-              className="mt-8"
-              buttonText="Get Early Access"
-            />
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button size="lg" asChild>
+                <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
+                  <Chrome className="h-5 w-5 mr-2" />
+                  Download for Chrome
+                </a>
+              </Button>
+              <Button size="lg" variant="outline" asChild>
+                <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
+                  <Globe className="h-5 w-5 mr-2" />
+                  Download for Safari
+                </a>
+              </Button>
+            </div>
             
             <p className="mt-4 text-sm text-muted-foreground">
-              Available on Chrome, Safari (iOS + macOS), and Android
+              Available on Chrome and Safari (iOS + macOS)
             </p>
             
             <div className="mt-6">
