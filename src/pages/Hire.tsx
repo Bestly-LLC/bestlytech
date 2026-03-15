@@ -141,7 +141,7 @@ export default function Hire() {
               <img
                 src={jaredHeadshot}
                 alt="Jared Best"
-                className="w-56 h-56 sm:w-64 sm:h-64 rounded-3xl object-cover shadow-2xl border-2 border-border mb-8"
+                className="w-64 h-64 sm:w-80 sm:h-80 rounded-3xl object-cover shadow-2xl border-2 border-border mb-8"
               />
               <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
                 Let's Build Something Together
