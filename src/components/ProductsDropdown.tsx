@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ChevronDown, Puzzle, Droplets } from "lucide-react";
+import { ChevronDown, Droplets } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
