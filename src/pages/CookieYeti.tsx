@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 
-import { WaitlistForm } from "@/components/WaitlistForm";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -28,7 +27,6 @@ import {
   Headphones,
   Mail,
   AlertTriangle,
-  Smartphone,
 } from "lucide-react";
 
 // ============================================
@@ -43,12 +41,13 @@ const CONFIG = {
     yearly: "$7.99",
   },
   platforms: [
-    { name: "Chrome", available: true, comingSoon: true, icon: Chrome },
-    { name: "Safari", available: false, comingSoon: true, icon: Globe },
-    { name: "Firefox", available: false, comingSoon: true, icon: Globe },
-    { name: "Edge", available: false, comingSoon: true, icon: Globe },
-    { name: "Android", available: false, comingSoon: true, icon: Smartphone },
+    { name: "Chrome", available: true, icon: Chrome },
+    { name: "Safari (iOS + macOS)", available: true, icon: Globe },
   ],
+  links: {
+    chrome: "https://chromewebstore.google.com/detail/cookie-yeti/kfdgjhogdcoifmflbhcoijfibmfhknkh",
+    safari: "https://apps.apple.com/us/app/cookie-yeti/id6743440341",
+  },
   features: [
     {
       icon: Eye,
@@ -77,8 +76,8 @@ const CONFIG = {
     },
     {
       icon: Globe,
-      title: "Cross-Browser Support",
-      description: "Launching first on Chrome, with Safari, Firefox, Edge, and Android coming soon.",
+      title: "Cross-Platform Support",
+      description: "Available on Chrome and Safari for iOS and macOS. Browse privately on any device.",
     },
   ],
   faqs: [
@@ -96,11 +95,11 @@ const CONFIG = {
     },
     {
       question: "Does it work on mobile?",
-      answer: "Cookie Yeti will be available on Android via Google Play after the initial Chrome launch. iOS support for Safari is planned for the future.",
+      answer: "Yes! Cookie Yeti is available on Safari for iPhone and iPad. Download it from the App Store and enable it in Settings → Safari → Extensions.",
     },
     {
-      question: "Is the lifetime purchase really lifetime?",
-      answer: "Yes. The $2.99 one-time purchase unlocks all features forever. No subscriptions, no recurring charges, no ads. Your purchase supports ongoing development.",
+      question: "How much does Cookie Yeti cost?",
+      answer: "Cookie Yeti offers a free tier with limited daily handling, a monthly plan at $0.99/mo, and a yearly plan at $7.99/yr (save 33%). Prices may vary by platform and region.",
     },
     {
       question: "What cookie preferences can I set?",
@@ -119,7 +118,7 @@ export default function CookieYeti() {
     <Layout>
       <SEOHead
         title="Cookie Yeti – Automatic Cookie Consent Handler | Bestly LLC"
-        description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection. Available for Chrome, Safari, Firefox, Edge & Android."
+        description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection. Available now for Chrome and Safari."
       />
       
       {/* Hero Section */}
@@ -154,15 +153,23 @@ export default function CookieYeti() {
               </Badge>
             </div>
             
-            <WaitlistForm 
-              productId="cookie-yeti" 
-              productName="Cookie Yeti" 
-              className="mt-8"
-              buttonText="Get Early Access"
-            />
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button size="lg" asChild>
+                <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
+                  <Chrome className="h-5 w-5 mr-2" />
+                  Download for Chrome
+                </a>
+              </Button>
+              <Button size="lg" variant="outline" asChild>
+                <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
+                  <Globe className="h-5 w-5 mr-2" />
+                  Download for Safari
+                </a>
+              </Button>
+            </div>
             
             <p className="mt-4 text-sm text-muted-foreground">
-              Available on Chrome, Safari (iOS + macOS), and Android
+              Available on Chrome and Safari (iOS + macOS)
             </p>
             
             <div className="mt-6">
@@ -285,7 +292,7 @@ export default function CookieYeti() {
                 "No tracking",
                 "No selling or sharing",
                 "No ads",
-                "No subscriptions",
+                "Free tier available",
                 "All settings stored locally",
               ].map((item) => (
                 <div key={item} className="flex items-center gap-2 text-sm">
@@ -452,10 +459,10 @@ export default function CookieYeti() {
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Platform Roadmap
+              Available Now
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Launching first on Chrome, then expanding to other browsers
+              Get Cookie Yeti on your favorite browser
             </p>
           </div>
           
@@ -463,25 +470,30 @@ export default function CookieYeti() {
             {CONFIG.platforms.map((platform) => (
               <div
                 key={platform.name}
-                className={`flex items-center gap-3 px-6 py-3 rounded-full border ${
-                  platform.available 
-                    ? "bg-primary/10 border-primary/30" 
-                    : "bg-card border-border"
-                }`}
+                className="flex items-center gap-3 px-6 py-3 rounded-full border bg-primary/10 border-primary/30"
               >
-                <platform.icon className={`h-5 w-5 ${platform.available ? "text-primary" : "text-muted-foreground"}`} />
-                <span className={`font-medium ${platform.available ? "text-foreground" : "text-muted-foreground"}`}>{platform.name}</span>
-                {platform.available ? (
-                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
-                    First
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-xs text-muted-foreground">
-                    Later
-                  </Badge>
-                )}
+                <platform.icon className="h-5 w-5 text-primary" />
+                <span className="font-medium text-foreground">{platform.name}</span>
+                <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs">
+                  Live
+                </Badge>
               </div>
             ))}
+          </div>
+          
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Button asChild>
+              <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
+                <Chrome className="h-5 w-5 mr-2" />
+                Chrome Web Store
+              </a>
+            </Button>
+            <Button variant="outline" asChild>
+              <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
+                <Globe className="h-5 w-5 mr-2" />
+                App Store
+              </a>
+            </Button>
           </div>
         </div>
       </section>
@@ -555,18 +567,23 @@ export default function CookieYeti() {
               Ready for Distraction-Free Browsing?
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Cookie Yeti is coming soon. Be ready to reclaim your browsing experience.
+              Download Cookie Yeti now and reclaim your browsing experience.
             </p>
             
-            <div className="mt-10">
-              <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-sm px-4 py-1">
-                Coming Soon to Chrome Web Store
-              </Badge>
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button size="lg" asChild>
+                <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
+                  <Chrome className="h-5 w-5 mr-2" />
+                  Download for Chrome
+                </a>
+              </Button>
+              <Button size="lg" variant="outline" asChild>
+                <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
+                  <Globe className="h-5 w-5 mr-2" />
+                  Download for Safari
+                </a>
+              </Button>
             </div>
-            
-            <p className="mt-6 text-sm text-muted-foreground">
-              Other browsers and Android coming after Chrome launch
-            </p>
           </div>
         </div>
       </section>
