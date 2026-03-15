@@ -568,18 +568,23 @@ export default function CookieYeti() {
               Ready for Distraction-Free Browsing?
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Cookie Yeti is coming soon. Be ready to reclaim your browsing experience.
+              Download Cookie Yeti now and reclaim your browsing experience.
             </p>
             
-            <div className="mt-10">
-              <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-sm px-4 py-1">
-                Coming Soon to Chrome Web Store
-              </Badge>
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button size="lg" asChild>
+                <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
+                  <Chrome className="h-5 w-5 mr-2" />
+                  Download for Chrome
+                </a>
+              </Button>
+              <Button size="lg" variant="outline" asChild>
+                <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
+                  <Globe className="h-5 w-5 mr-2" />
+                  Download for Safari
+                </a>
+              </Button>
             </div>
-            
-            <p className="mt-6 text-sm text-muted-foreground">
-              Other browsers and Android coming after Chrome launch
-            </p>
           </div>
         </div>
       </section>
