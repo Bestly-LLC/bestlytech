@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.notify-sms]
 verify_jwt = false
+
+[functions.run-pattern-maintenance]
+verify_jwt = false
