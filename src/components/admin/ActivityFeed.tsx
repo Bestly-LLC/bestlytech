@@ -33,11 +33,11 @@ export function ActivityFeed() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase
-      .from("admin_activity_log")
+    (supabase
+      .from("admin_activity_log" as any)
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(20)
+      .limit(20) as any)
       .then(({ data }) => {
         setEvents(data || []);
         setLoading(false);
