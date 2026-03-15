@@ -337,7 +337,7 @@ export default function CookieYeti() {
               
               <ul className="mt-8 space-y-4">
                 {[
-                  { icon: Clock, text: "Limited daily site handling" },
+                  { icon: Clock, text: "5 banner handles per day" },
                   { icon: Settings, text: "Basic preferences" },
                   { icon: Globe, text: "Works on popular sites" },
                 ].map((item) => (
