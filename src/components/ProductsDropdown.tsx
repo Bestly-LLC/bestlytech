@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ChevronDown, Puzzle, Droplets } from "lucide-react";
+import { ChevronDown, Droplets } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import inventoryproofIcon from "@/assets/inventoryproof-icon.png";
 import neckpilotIcon from "@/assets/neckpilot-icon.png";
+import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import type { LucideIcon } from "lucide-react";
 
 interface Product {
@@ -24,7 +25,7 @@ const products: Product[] = [
     name: "Cookie Yeti",
     description: "Privacy-focused cookie consent handler",
     href: "/cookie-yeti",
-    icon: Puzzle,
+    image: cookieYetiIcon,
   },
   {
     name: "InventoryProof",

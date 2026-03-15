@@ -11,8 +11,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import {
-  Snowflake,
   Download,
   Settings,
   Globe,
@@ -126,8 +126,8 @@ export default function CookieYeti() {
           <div className="text-center max-w-3xl mx-auto">
             <div className="flex justify-center mb-8">
               <div className="relative">
-                <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20">
-                  <Snowflake className="h-12 w-12 text-primary" />
+                <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 overflow-hidden">
+                  <img src={cookieYetiIcon} alt="Cookie Yeti" className="h-16 w-16 object-contain" />
                 </div>
                 <Badge className="absolute -top-2 -right-2 bg-primary text-primary-foreground">
                   v{CONFIG.version}

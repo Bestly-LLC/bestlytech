@@ -126,7 +126,7 @@ export function activationCodeEmail(code: string): string {
           <!-- Header Band -->
           <tr>
             <td style="background:${CY.headerBg};border-radius:16px 16px 0 0;padding:32px 32px 24px;text-align:center;">
-              <div style="font-size:48px;line-height:1;margin-bottom:12px;">❄️</div>
+              <img src="https://bestlytech.lovable.app/images/cookieyeti-icon.png" alt="Cookie Yeti" width="64" height="64" style="display:block;margin:0 auto 12px;border-radius:14px;" />
               <h1 style="margin:0;font-size:28px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Cookie Yeti</h1>
               <p style="margin:6px 0 0;font-size:13px;color:${CY.ice};letter-spacing:0.5px;font-weight:500;">Distraction-Free Browsing, Automatically</p>
             </td>
