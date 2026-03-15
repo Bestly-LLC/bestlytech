@@ -56,6 +56,7 @@ const MarketplaceSetup = () => {
       <SEOHead
         title="Marketplace Account Setup | Bestly"
         description="Professional Amazon, Shopify & TikTok Shop account setup. Complete our intake form to get started."
+        path="/marketplace-setup"
       />
       <IntakeFormProvider>
         <GuidanceProvider>
