@@ -14,6 +14,14 @@ import { Trash2, Search, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ExportButton } from "@/components/admin/ExportButton";
+
+const EXPORT_COLUMNS = [
+  { key: "email", label: "Email" },
+  { key: "reason", label: "Reason" },
+  { key: "granted_by", label: "Granted By" },
+  { key: "created_at", label: "Date" },
+];
 
 export default function CYGrantedAccess() {
   const [data, setData] = useState<any[]>([]);
