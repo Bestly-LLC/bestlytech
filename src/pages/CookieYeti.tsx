@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   Clock,
   Infinity,
+  Headphones,
   Mail,
   AlertTriangle,
   Smartphone,
