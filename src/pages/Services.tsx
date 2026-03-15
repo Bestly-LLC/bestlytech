@@ -51,7 +51,7 @@ const services = [
     icon: ShoppingCart,
     title: "Marketplace Onboarding",
     description: "Full-service setup for Amazon, Shopify, and TikTok Shop — from registration to launch-ready.",
-    link: "/amazon-setup",
+    link: "/marketplace-setup",
   },
 ];
 
