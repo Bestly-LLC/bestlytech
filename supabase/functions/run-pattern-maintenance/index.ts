@@ -1,33 +1,36 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function sendEmail(resendApiKey: string, subject: string, body: string) {
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json",
+async function sendEmail(smtpEmail: string, smtpPassword: string, subject: string, body: string) {
+  const client = new SMTPClient({
+    connection: {
+      hostname: "mail.privateemail.com",
+      port: 465,
+      tls: true,
+      auth: {
+        username: smtpEmail,
+        password: smtpPassword,
+      },
     },
-    body: JSON.stringify({
-      from: "Cookie Yeti Alerts <alerts@bestly.tech>",
-      to: ["jaredbest@icloud.com"],
-      subject,
-      text: body,
-    }),
   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    console.error(`Resend API error [${res.status}]: ${err}`);
-    throw new Error(`Failed to send email: ${res.status}`);
+  try {
+    await client.send({
+      from: smtpEmail,
+      to: "jaredbest@icloud.com",
+      subject,
+      content: body,
+    });
+    console.log(`Email sent: "${subject}"`);
+  } finally {
+    await client.close();
   }
-
-  console.log(`Email sent: "${subject}"`);
 }
 
 serve(async (req: Request) => {
@@ -38,10 +41,11 @@ serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    const smtpEmail = Deno.env.get("PRIVATEMAIL_EMAIL");
+    const smtpPassword = Deno.env.get("PRIVATEMAIL_PASSWORD");
 
-    if (!resendApiKey) {
-      throw new Error("RESEND_API_KEY is not configured");
+    if (!smtpEmail || !smtpPassword) {
+      throw new Error("PRIVATEMAIL_EMAIL or PRIVATEMAIL_PASSWORD is not configured");
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -68,7 +72,8 @@ serve(async (req: Request) => {
         .join("\n");
 
       await sendEmail(
-        resendApiKey,
+        smtpEmail,
+        smtpPassword,
         "Cookie Yeti: Pattern Fix Failures",
         `Pattern auto-fixer encountered ${fixData.failed} failure(s).\n\nProcessed: ${fixData.processed}\nFixed: ${fixData.fixed}\nFailed: ${fixData.failed}\n\nFailed items:\n${failedDetails || "(no details available)"}\n\nTimestamp: ${new Date().toISOString()}`
       );
@@ -82,7 +87,8 @@ serve(async (req: Request) => {
         .join("\n");
 
       await sendEmail(
-        resendApiKey,
+        smtpEmail,
+        smtpPassword,
         "Cookie Yeti: Unresolved Missed Banner Reports",
         `There are ${priorityDomains.length} domain(s) with 3+ unresolved missed banner reports.\n\nTotal unresolved: ${reportData.total_unresolved}\nNewly resolved this run: ${reportData.newly_resolved}\n\nPriority domains:\n${domainList}\n\nTimestamp: ${new Date().toISOString()}`
       );
