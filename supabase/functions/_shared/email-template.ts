@@ -20,6 +20,9 @@ const BRAND_COLORS = {
   codeBg: "#f1f5f9",
 };
 
+// Published logo — Vite-hashed asset served from the live site
+const LOGO_URL = "https://bestlytech.lovable.app/assets/bestly-logo.png";
+
 function baseLayout(content: string, footerNote?: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -32,30 +35,53 @@ function baseLayout(content: string, footerNote?: string): string {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${BRAND_COLORS.bg};padding:32px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
-          <!-- Logo -->
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+          <!-- Header Band -->
           <tr>
-            <td align="center" style="padding-bottom:24px;">
-              <span style="font-size:22px;font-weight:700;color:${BRAND_COLORS.primary};letter-spacing:-0.5px;">Bestly</span>
+            <td style="background:${BRAND_COLORS.primary};border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:14px;">
+                    <img src="${LOGO_URL}" alt="Bestly" width="44" height="44" style="display:block;width:44px;height:44px;border-radius:10px;transform:rotate(20deg);-webkit-transform:rotate(20deg);-ms-transform:rotate(20deg);" />
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Bestly</span>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:8px 0 0;font-size:12px;color:rgba(255,255,255,0.6);letter-spacing:0.5px;font-weight:500;">System Monitoring</p>
             </td>
           </tr>
+
+          <!-- Gradient Accent Line -->
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg, ${BRAND_COLORS.primary}, ${BRAND_COLORS.accent}, transparent);font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
           <!-- Card -->
           <tr>
-            <td style="background-color:${BRAND_COLORS.cardBg};border-radius:12px;border:1px solid ${BRAND_COLORS.border};box-shadow:0 1px 3px rgba(0,0,0,0.06);padding:36px 32px;">
+            <td style="background-color:${BRAND_COLORS.cardBg};padding:36px 32px;border-left:1px solid ${BRAND_COLORS.border};border-right:1px solid ${BRAND_COLORS.border};">
               ${content}
             </td>
           </tr>
+
           <!-- Footer -->
           <tr>
-            <td align="center" style="padding-top:24px;">
-              <p style="margin:0;font-size:12px;color:${BRAND_COLORS.textMuted};line-height:1.5;">
-                ${footerNote || ""}
-              </p>
-              <p style="margin:8px 0 0;font-size:11px;color:${BRAND_COLORS.textMuted};">
+            <td style="background:${BRAND_COLORS.primary};border-radius:0 0 16px 16px;padding:24px 32px;text-align:center;">
+              ${footerNote ? `<p style="margin:0 0 14px;font-size:12px;color:rgba(255,255,255,0.7);line-height:1.5;">${footerNote}</p>` : ""}
+              <!-- Trust Badges -->
+              <div style="margin-bottom:14px;">
+                <span style="display:inline-block;background:rgba(79,124,172,0.2);border:1px solid rgba(79,124,172,0.35);border-radius:20px;padding:5px 14px;margin:3px 4px;font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);letter-spacing:0.3px;">🛡️ GDPR Compliant</span>
+                <span style="display:inline-block;background:rgba(79,124,172,0.2);border:1px solid rgba(79,124,172,0.35);border-radius:20px;padding:5px 14px;margin:3px 4px;font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);letter-spacing:0.3px;">🔒 CCPA Ready</span>
+                <span style="display:inline-block;background:rgba(79,124,172,0.2);border:1px solid rgba(79,124,172,0.35);border-radius:20px;padding:5px 14px;margin:3px 4px;font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);letter-spacing:0.3px;">✅ Zero Data Resale</span>
+              </div>
+              <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.5);line-height:1.5;">
                 © ${new Date().getFullYear()} Bestly Technologies · Los Angeles, CA
               </p>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
