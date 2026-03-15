@@ -656,6 +656,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_action_type_stats: { Args: never; Returns: Json }
+      get_cmp_distribution: { Args: never; Returns: Json }
+      get_community_overview: { Args: never; Returns: Json }
+      get_confidence_distribution: { Args: never; Returns: Json }
+      get_daily_pattern_activity: { Args: { p_days?: number }; Returns: Json }
+      get_pattern_issues: { Args: { p_limit?: number }; Returns: Json }
+      get_recently_learned: { Args: { p_limit?: number }; Returns: Json }
+      get_source_breakdown: { Args: never; Returns: Json }
+      get_top_domains: { Args: { p_limit?: number }; Returns: Json }
       record_pattern_success: {
         Args: { _action_type: string; _domain: string; _selector: string }
         Returns: undefined

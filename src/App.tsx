@@ -38,6 +38,7 @@ import AdminSetupGuide from "./pages/admin/AdminSetupGuide";
 import CYDashboard from "./pages/admin/CYDashboard";
 import CYSubscribers from "./pages/admin/CYSubscribers";
 import CYGrantedAccess from "./pages/admin/CYGrantedAccess";
+import CommunityLearning from "./pages/admin/CommunityLearning";
 
 const queryClient = new QueryClient();
 
@@ -84,6 +85,7 @@ const App = () => (
                 <Route path="cookie-yeti" element={<CYDashboard />} />
                 <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
                 <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />
+                <Route path="cookie-yeti/community" element={<CommunityLearning />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
