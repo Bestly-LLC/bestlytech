@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import inventoryproofIcon from "@/assets/inventoryproof-icon.png";
 import neckpilotIcon from "@/assets/neckpilot-icon.png";
+import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import type { LucideIcon } from "lucide-react";
 
 interface Product {
