@@ -174,6 +174,7 @@ export default function Services() {
                 </div>
               </div>
             </Link>
+          </AnimatedSection>
         </div>
       </section>
 
