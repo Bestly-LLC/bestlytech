@@ -66,4 +66,4 @@ const MarketplaceSetup = () => {
   );
 };
 
-export default AmazonSetup;
+export default MarketplaceSetup;
