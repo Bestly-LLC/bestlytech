@@ -3,10 +3,12 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "./AdminSidebar";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Button } from "@/components/ui/button";
-import { LogOut, Shield, Home } from "lucide-react";
+import { LogOut, Shield, Home, Command } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { CommandPalette } from "./CommandPalette";
 
 const BREADCRUMB_MAP: Record<string, string> = {
   "/admin": "Dashboard",
@@ -46,6 +48,14 @@ export function AdminLayout() {
               <div className="flex items-center gap-2">
                 <Tooltip>
                   <TooltipTrigger asChild>
+                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground h-8 gap-1.5 text-xs hidden sm:flex">
+                      <Command className="h-3 w-3" />K
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Command palette (⌘K)</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" asChild className="text-muted-foreground hover:text-foreground h-8 w-8">
                       <Link to="/"><Home className="h-4 w-4" /></Link>
                     </Button>
@@ -59,6 +69,7 @@ export function AdminLayout() {
                   </span>
                   <span className="text-xs text-muted-foreground">{user?.email}</span>
                 </div>
+                <ThemeToggle />
                 <ChangePasswordDialog />
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -73,6 +84,7 @@ export function AdminLayout() {
             <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
               <Outlet />
             </main>
+            <CommandPalette />
           </div>
         </div>
       </SidebarProvider>

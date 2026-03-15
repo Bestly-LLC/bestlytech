@@ -7,14 +7,27 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChevronLeft, ChevronRight, Search, FileText } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ExportButton } from "@/components/admin/ExportButton";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUSES = ["All", "Draft", "Submitted", "In Review", "Issues Flagged", "Approved"];
 const PAGE_SIZE = 20;
+
+const EXPORT_COLUMNS = [
+  { key: "business_legal_name", label: "Business Name" },
+  { key: "client_name", label: "Contact" },
+  { key: "client_email", label: "Email" },
+  { key: "platform", label: "Platform" },
+  { key: "status", label: "Status" },
+  { key: "created_at", label: "Submitted" },
+  { key: "updated_at", label: "Updated" },
+];
 
 export default function AdminSubmissions() {
   const [data, setData] = useState<any[]>([]);
@@ -22,6 +35,8 @@ export default function AdminSubmissions() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const { toast } = useToast();
 
   useEffect(() => {
     loadData();
@@ -52,6 +67,27 @@ export default function AdminSubmissions() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
+  const toggleSelect = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+
+  const bulkUpdateStatus = async (newStatus: string) => {
+    const ids = Array.from(selected);
+    const { error } = await supabase
+      .from("seller_intakes")
+      .update({ status: newStatus })
+      .in("id", ids);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: `Updated ${ids.length} submissions to "${newStatus}"` });
+      setSelected(new Set());
+      loadData();
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6 max-w-6xl">
@@ -64,7 +100,11 @@ export default function AdminSubmissions() {
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <PageHeader title="Submissions" description="All marketplace seller intake submissions." />
+      <PageHeader
+        title="Submissions"
+        description="All marketplace seller intake submissions."
+        actions={<ExportButton data={filtered} filename="submissions" columns={EXPORT_COLUMNS} />}
+      />
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative max-w-xs flex-1">
@@ -88,11 +128,34 @@ export default function AdminSubmissions() {
         </Select>
       </div>
 
+      {selected.size > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-4 py-2">
+          <span className="text-sm font-medium">{selected.size} selected</span>
+          <span className="text-muted-foreground">·</span>
+          {["Submitted", "In Review", "Issues Flagged", "Approved"].map((status) => (
+            <Button key={status} variant="outline" size="sm" className="text-xs h-7" onClick={() => bulkUpdateStatus(status)}>
+              Mark {status}
+            </Button>
+          ))}
+          <Button variant="ghost" size="sm" className="text-xs h-7 ml-auto" onClick={() => setSelected(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
       <Card className="border-border/50">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={selected.size === paged.length && paged.length > 0}
+                    onCheckedChange={(checked) => {
+                      setSelected(checked ? new Set(paged.map((r) => r.id)) : new Set());
+                    }}
+                  />
+                </TableHead>
                 <TableHead className="text-xs">Business Name</TableHead>
                 <TableHead className="text-xs">Contact</TableHead>
                 <TableHead className="text-xs">Email</TableHead>
@@ -105,6 +168,9 @@ export default function AdminSubmissions() {
             <TableBody>
               {paged.map((r) => (
                 <TableRow key={r.id} className="even:bg-muted/30">
+                  <TableCell>
+                    <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} />
+                  </TableCell>
                   <TableCell>
                     <Link to={`/admin/submissions/${r.id}`} className="text-primary hover:underline font-medium text-sm">
                       {r.business_legal_name || "Unnamed"}
@@ -124,7 +190,7 @@ export default function AdminSubmissions() {
               ))}
               {paged.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="p-0">
+                  <TableCell colSpan={8} className="p-0">
                     <EmptyState icon={FileText} title="No submissions found" description="Try adjusting your search or filter criteria." />
                   </TableCell>
                 </TableRow>

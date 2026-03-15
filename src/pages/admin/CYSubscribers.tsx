@@ -12,6 +12,16 @@ import { Copy, ChevronLeft, ChevronRight, Search, Users } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ExportButton } from "@/components/admin/ExportButton";
+
+const EXPORT_COLUMNS = [
+  { key: "email", label: "Email" },
+  { key: "plan", label: "Plan" },
+  { key: "status", label: "Status" },
+  { key: "stripe_customer_id", label: "Stripe Customer ID" },
+  { key: "current_period_end", label: "Period End" },
+  { key: "created_at", label: "Created" },
+];
 
 const PAGE_SIZE = 20;
 
@@ -53,7 +63,11 @@ export default function CYSubscribers() {
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <PageHeader title="Subscribers" description="Manage Cookie Yeti paid subscriptions." />
+      <PageHeader
+        title="Subscribers"
+        description="Manage Cookie Yeti paid subscriptions."
+        actions={<ExportButton data={filtered} filename="subscribers" columns={EXPORT_COLUMNS} />}
+      />
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative max-w-xs flex-1">

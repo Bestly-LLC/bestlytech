@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -16,6 +16,8 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DateRangeFilter, filterByDateRange, type DateRange } from "@/components/admin/DateRangeFilter";
+import { useAdminRealtime } from "@/hooks/useAdminRealtime";
 
 export default function CYDashboard() {
   const [subs, setSubs] = useState<any[]>([]);
@@ -24,7 +26,16 @@ export default function CYDashboard() {
   const [grantReason, setGrantReason] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
   const { toast } = useToast();
+
+  useAdminRealtime({
+    tables: ["subscriptions", "granted_access"],
+    onNewRecord: (table, record) => {
+      if (table === "subscriptions") setSubs((p) => [record, ...p]);
+      if (table === "granted_access") setGrants((p) => [record, ...p]);
+    },
+  });
 
   useEffect(() => {
     loadData();
@@ -58,14 +69,17 @@ export default function CYDashboard() {
     }
   };
 
-  const activeSubs = subs.filter((s) => s.status === "active");
+  const filteredSubs = useMemo(() => filterByDateRange(subs, dateRange), [subs, dateRange]);
+  const filteredGrants = useMemo(() => filterByDateRange(grants, dateRange), [grants, dateRange]);
+
+  const activeSubs = filteredSubs.filter((s) => s.status === "active");
   const monthly = activeSubs.filter((s) => s.plan === "monthly").length;
   const yearly = activeSubs.filter((s) => s.plan === "yearly").length;
 
   const stats = [
-    { label: "Total Premium", value: activeSubs.length + grants.length, icon: Crown, iconColor: "text-yellow-500", iconBg: "bg-yellow-500/10", accentColor: "border-yellow-500/40" },
+    { label: "Total Premium", value: activeSubs.length + filteredGrants.length, icon: Crown, iconColor: "text-yellow-500", iconBg: "bg-yellow-500/10", accentColor: "border-yellow-500/40" },
     { label: "Paid Subscribers", value: activeSubs.length, icon: Users, iconColor: "text-primary", iconBg: "bg-primary/10", accentColor: "border-primary/40" },
-    { label: "Granted Access", value: grants.length, icon: ShieldCheck, iconColor: "text-green-500", iconBg: "bg-green-500/10", accentColor: "border-green-500/40" },
+    { label: "Granted Access", value: filteredGrants.length, icon: ShieldCheck, iconColor: "text-green-500", iconBg: "bg-green-500/10", accentColor: "border-green-500/40" },
     { label: "Monthly", value: monthly, icon: Calendar, iconColor: "text-blue-500", iconBg: "bg-blue-500/10", accentColor: "border-blue-500/40" },
     { label: "Yearly", value: yearly, icon: Calendar, iconColor: "text-purple-500", iconBg: "bg-purple-500/10", accentColor: "border-purple-500/40" },
   ];
@@ -87,33 +101,36 @@ export default function CYDashboard() {
 
   return (
     <div className="space-y-8 max-w-6xl">
-      <PageHeader
-        title="Cookie Yeti Dashboard"
-        description="Manage premium subscribers and access grants."
-        actions={
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Grant Access</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Grant Premium Access</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Email</Label>
-                  <Input value={grantEmail} onChange={(e) => setGrantEmail(e.target.value)} placeholder="user@example.com" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <PageHeader
+          title="Cookie Yeti Dashboard"
+          description="Manage premium subscribers and access grants."
+          actions={
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Grant Access</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Grant Premium Access</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Email</Label>
+                    <Input value={grantEmail} onChange={(e) => setGrantEmail(e.target.value)} placeholder="user@example.com" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Reason</Label>
+                    <Textarea value={grantReason} onChange={(e) => setGrantReason(e.target.value)} placeholder="Why grant access?" rows={2} />
+                  </div>
+                  <Button onClick={handleGrant} className="w-full">Grant Access</Button>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Reason</Label>
-                  <Textarea value={grantReason} onChange={(e) => setGrantReason(e.target.value)} placeholder="Why grant access?" rows={2} />
-                </div>
-                <Button onClick={handleGrant} className="w-full">Grant Access</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        }
-      />
+              </DialogContent>
+            </Dialog>
+          }
+        />
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {stats.map((s) => (
@@ -144,14 +161,14 @@ export default function CYDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {subs.slice(0, 5).map((s) => (
+                {filteredSubs.slice(0, 5).map((s) => (
                   <TableRow key={s.id} className="even:bg-muted/30">
                     <TableCell className="text-sm">{s.email}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{s.plan}</Badge></TableCell>
                     <TableCell><Badge variant={s.status === "active" ? "default" : "secondary"} className="text-xs">{s.status}</Badge></TableCell>
                   </TableRow>
                 ))}
-                {subs.length === 0 && (
+                {filteredSubs.length === 0 && (
                   <TableRow><TableCell colSpan={3} className="p-0"><EmptyState icon={Users} title="No subscribers" /></TableCell></TableRow>
                 )}
               </TableBody>
@@ -180,13 +197,13 @@ export default function CYDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {grants.slice(0, 5).map((g) => (
+                {filteredGrants.slice(0, 5).map((g) => (
                   <TableRow key={g.id} className="even:bg-muted/30">
                     <TableCell className="text-sm">{g.email}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{g.reason || "—"}</TableCell>
                   </TableRow>
                 ))}
-                {grants.length === 0 && (
+                {filteredGrants.length === 0 && (
                   <TableRow><TableCell colSpan={2} className="p-0"><EmptyState icon={ShieldCheck} title="No granted access" /></TableCell></TableRow>
                 )}
               </TableBody>

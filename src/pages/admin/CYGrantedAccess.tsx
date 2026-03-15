@@ -14,6 +14,14 @@ import { Trash2, Search, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ExportButton } from "@/components/admin/ExportButton";
+
+const EXPORT_COLUMNS = [
+  { key: "email", label: "Email" },
+  { key: "reason", label: "Reason" },
+  { key: "granted_by", label: "Granted By" },
+  { key: "created_at", label: "Date" },
+];
 
 export default function CYGrantedAccess() {
   const [data, setData] = useState<any[]>([]);
@@ -88,7 +96,11 @@ export default function CYGrantedAccess() {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <PageHeader title="Granted Access" description="Manually grant or revoke Cookie Yeti premium access." />
+      <PageHeader
+        title="Granted Access"
+        description="Manually grant or revoke Cookie Yeti premium access."
+        actions={<ExportButton data={filtered} filename="granted-access" columns={EXPORT_COLUMNS} />}
+      />
 
       <Card className="border-border/50">
         <CardHeader className="pb-3">
