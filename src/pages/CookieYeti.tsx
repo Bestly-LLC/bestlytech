@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   Clock,
   Infinity,
+  Headphones,
   Mail,
   AlertTriangle,
   Smartphone,
@@ -38,7 +39,8 @@ const CONFIG = {
   version: "1.0.0",
   pricing: {
     free: "Free",
-    lifetime: "$2.99",
+    monthly: "$0.99",
+    yearly: "$7.99",
   },
   platforms: [
     { name: "Chrome", available: true, comingSoon: true, icon: Chrome },
@@ -310,11 +312,11 @@ export default function CookieYeti() {
               Simple, Fair Pricing
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              No subscriptions. No ads. Just one simple price.
+              Choose the plan that works for you
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {/* Free Tier */}
             <div className="rounded-xl border border-border bg-card p-8">
               <div className="text-center">
@@ -322,7 +324,7 @@ export default function CookieYeti() {
                 <div className="mt-4">
                   <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.free}</span>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">Try before you unlock</p>
+                <p className="mt-2 text-sm text-muted-foreground">Try before you upgrade</p>
               </div>
               
               <ul className="mt-8 space-y-4">
@@ -343,18 +345,15 @@ export default function CookieYeti() {
               </Button>
             </div>
             
-            {/* Lifetime Tier */}
-            <div className="rounded-xl border-2 border-primary bg-card p-8 relative">
-              <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
-                Best Value
-              </Badge>
+            {/* Monthly Tier */}
+            <div className="rounded-xl border border-border bg-card p-8">
               <div className="text-center">
-                <h3 className="text-xl font-semibold text-foreground">Lifetime</h3>
+                <h3 className="text-xl font-semibold text-foreground">Monthly</h3>
                 <div className="mt-4">
-                  <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.lifetime}</span>
-                  <span className="text-muted-foreground ml-2">one-time</span>
+                  <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.monthly}</span>
+                  <span className="text-muted-foreground ml-1">/mo</span>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">Pay once, use forever</p>
+                <p className="mt-2 text-sm text-muted-foreground">Billed monthly</p>
               </div>
               
               <ul className="mt-8 space-y-4">
@@ -362,7 +361,40 @@ export default function CookieYeti() {
                   { icon: Infinity, text: "Unlimited sites" },
                   { icon: Settings, text: "Saved preferences" },
                   { icon: Clock, text: "No daily limits" },
-                  { icon: CheckCircle2, text: "One-time purchase" },
+                  { icon: CheckCircle2, text: "Cancel anytime" },
+                ].map((item) => (
+                  <li key={item.text} className="flex items-center gap-3">
+                    <item.icon className="h-5 w-5 text-primary shrink-0" />
+                    <span className="text-sm text-foreground">{item.text}</span>
+                  </li>
+                ))}
+              </ul>
+              
+              <Button variant="outline" className="w-full mt-8">
+                Subscribe Monthly
+              </Button>
+            </div>
+            
+            {/* Yearly Tier */}
+            <div className="rounded-xl border-2 border-primary bg-card p-8 relative">
+              <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
+                Recommended
+              </Badge>
+              <div className="text-center">
+                <h3 className="text-xl font-semibold text-foreground">Yearly</h3>
+                <div className="mt-4">
+                  <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.yearly}</span>
+                  <span className="text-muted-foreground ml-1">/yr</span>
+                </div>
+                <p className="mt-2 text-sm font-medium text-primary">Save 33%</p>
+              </div>
+              
+              <ul className="mt-8 space-y-4">
+                {[
+                  { icon: Infinity, text: "Unlimited sites" },
+                  { icon: Settings, text: "Saved preferences" },
+                  { icon: Clock, text: "No daily limits" },
+                  { icon: Headphones, text: "Priority support" },
                 ].map((item) => (
                   <li key={item.text} className="flex items-center gap-3">
                     <item.icon className="h-5 w-5 text-primary shrink-0" />
@@ -372,13 +404,13 @@ export default function CookieYeti() {
               </ul>
               
               <Button className="w-full mt-8">
-                Unlock Forever
+                Subscribe Yearly
               </Button>
             </div>
           </div>
           
           <p className="text-center text-sm text-muted-foreground mt-8">
-            * Prices may vary by platform and region. No subscriptions, no ads, no hidden fees.
+            * Prices may vary by platform and region.
           </p>
         </div>
       </section>

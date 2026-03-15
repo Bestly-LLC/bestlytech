@@ -1,42 +1,57 @@
 
 
-# Redesign Cookie Yeti Pricing: 3-Tier Layout
+## Integrate Apple-Native Business Modernization Program
 
-## What changes
+Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
 
-Replace the current 2-card (Free + Lifetime) pricing layout with 3 cards: **Free**, **Monthly ($0.99/mo)**, and **Yearly ($7.99/yr, highlighted)**.
+---
 
-### CONFIG update (lines 39-42)
-- Change `pricing` to: `free: "Free"`, `monthly: "$0.99"`, `yearly: "$7.99"`
-- Remove `lifetime`
+### 1. New Page: `src/pages/AppleModernization.tsx`
 
-### Subtitle (line 313)
-- Change to: `"Choose the plan that works for you"`
+A comprehensive, premium-feeling service page with the following sections:
 
-### Grid layout (line 317)
-- Change from `grid-cols-1 md:grid-cols-2` to `grid-cols-1 md:grid-cols-3`
-- Change `max-w-4xl` to `max-w-5xl`
+- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
+- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
+- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
+  - Apple Discovery Infrastructure
+  - App Clips (Instant Customer Experience)
+  - Payments Modernization (Tap to Pay)
+  - Digital ID Verification
+  - Brand Trust and Identity
+  - Customer Experience Automation
+  - Commerce and Ordering
+  - Operational Analytics
+  - Apple-Ready Certification (marked as optional)
+- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
+- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
+- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
 
-### Three cards
+### 2. Route Registration: `src/App.tsx`
 
-1. **Free** — plain card (no highlight)
-   - Subtitle: "Try before you upgrade"
-   - Features: Limited daily site handling, Basic preferences, Works on popular sites
-   - Button: outline "Get Started Free"
+- Import the new `AppleModernization` page component.
+- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
 
-2. **Monthly $0.99/mo** — plain card
-   - Subtitle: "Billed monthly"
-   - Features: Unlimited sites, Saved preferences, No daily limits, Cancel anytime
-   - Button: outline "Subscribe Monthly"
+### 3. Services Page Update: `src/pages/Services.tsx`
 
-3. **Yearly $7.99/yr** — highlighted card (border-2 border-primary, "Recommended" badge, "Save 33%" badge)
-   - Subtitle: "Save 33%"
-   - Features: Unlimited sites, Saved preferences, No daily limits, Priority support
-   - Button: primary "Subscribe Yearly"
+- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
+- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
 
-### Disclaimer (line 381)
-- Change to: `"* Prices may vary by platform and region."`
+### 4. Header Navigation: `src/components/layout/Header.tsx`
 
-### Imports
-- May need `Infinity` icon import (already used), plus `Headphones` or `Star` for "Priority support"
+- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
+
+---
+
+### Technical Details
+
+**New file:**
+- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
+
+**Modified files:**
+- `src/App.tsx` -- add import and route
+- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
+
+**No database or backend changes required.** This is purely a frontend content page.
+
+The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
 
