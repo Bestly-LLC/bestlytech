@@ -293,7 +293,7 @@ export default function CookieYeti() {
                 "No tracking",
                 "No selling or sharing",
                 "No ads",
-                "No subscriptions",
+                "Free tier available",
                 "All settings stored locally",
               ].map((item) => (
                 <div key={item} className="flex items-center gap-2 text-sm">
