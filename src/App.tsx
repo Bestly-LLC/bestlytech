@@ -72,7 +72,7 @@ const App = () => (
               <Route path="/services" element={<Services />} />
               <Route path="/apple-modernization" element={<AppleModernization />} />
               <Route path="/marketplace-setup" element={<MarketplaceSetup />} />
-              <Route path="/amazon-setup" element={<MarketplaceSetup />} /> {/* Legacy redirect */}
+              
               <Route path="/support" element={<CookieYetiSupport />} />
               {/* Admin Routes */}
               <Route path="/admin/login" element={<AdminLogin />} />
