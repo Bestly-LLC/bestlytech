@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { activationCodeEmail } from "../_shared/email-template.ts";
 
 const corsHeaders = {
@@ -25,8 +24,11 @@ serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const smtpEmail = Deno.env.get("PRIVATEMAIL_EMAIL")!;
-    const smtpPassword = Deno.env.get("PRIVATEMAIL_PASSWORD")!;
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+
+    if (!resendApiKey) {
+      throw new Error("RESEND_API_KEY is not configured");
+    }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -67,26 +69,25 @@ serve(async (req: Request) => {
 
     if (insertError) throw new Error(`Insert failed: ${insertError.message}`);
 
-    // Send branded HTML email
+    // Send branded HTML email via Resend
     const html = activationCodeEmail(code);
-    const client = new SMTPClient({
-      connection: {
-        hostname: "mail.privateemail.com",
-        port: 465,
-        tls: true,
-        auth: { username: smtpEmail, password: smtpPassword },
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
       },
-    });
-
-    try {
-      await client.send({
-        from: smtpEmail,
-        to: email,
+      body: JSON.stringify({
+        from: "Cookie Yeti <noreply@bestly.tech>",
+        to: [email],
         subject: "Your Cookie Yeti activation code",
         html,
-      });
-    } finally {
-      await client.close();
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const errBody = await resendResponse.text();
+      throw new Error(`Resend API error [${resendResponse.status}]: ${errBody}`);
     }
 
     return new Response(JSON.stringify({ success: true }), {
