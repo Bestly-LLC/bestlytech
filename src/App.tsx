@@ -25,7 +25,7 @@ import ReportSite from "./pages/ReportSite";
 import Hire from "./pages/Hire";
 import Services from "./pages/Services";
 import AppleModernization from "./pages/AppleModernization";
-import AmazonSetup from "./pages/AmazonSetup";
+import MarketplaceSetup from "./pages/MarketplaceSetup";
 import CookieYetiSupport from "./pages/CookieYetiSupport";
 import NotFound from "./pages/NotFound";
 import { AdminRoute } from "@/components/admin/AdminRoute";
