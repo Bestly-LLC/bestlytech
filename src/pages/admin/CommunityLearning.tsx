@@ -488,6 +488,149 @@ export default function CommunityLearning() {
             </Card>
           </div>
         </TabsContent>
+
+        {/* AI Fixer Tab */}
+        <TabsContent value="ai-fixer">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">AI Auto-Fixer</CardTitle>
+                <CardDescription>Automated pattern maintenance — deletes stale/broken patterns, downranks low-quality ones</CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleRunFixer} disabled={runningFixer} className="gap-2">
+                {runningFixer ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                Run Now
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {fixLog.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <CheckCircle2 className="h-10 w-10 text-green-500" />
+                  <p className="text-muted-foreground font-medium">No fix actions recorded yet</p>
+                </div>
+              ) : (
+                <>
+                  {/* Summary from latest batch */}
+                  {(() => {
+                    const latestBatch = fixLog.filter((f: any) => {
+                      const t = new Date(f.created_at).getTime();
+                      const newest = new Date(fixLog[0].created_at).getTime();
+                      return newest - t < 5000; // within 5s = same batch
+                    });
+                    const successes = latestBatch.filter((f: any) => f.success).length;
+                    const failures = latestBatch.filter((f: any) => !f.success).length;
+                    return (
+                      <div className="grid grid-cols-3 gap-4 mb-6">
+                        <Card><CardContent className="py-3 text-center"><p className="text-2xl font-bold">{latestBatch.length}</p><p className="text-xs text-muted-foreground">Processed</p></CardContent></Card>
+                        <Card className="border-green-500/30"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-green-500">{successes}</p><p className="text-xs text-muted-foreground">Fixed</p></CardContent></Card>
+                        <Card className="border-red-500/30"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-red-500">{failures}</p><p className="text-xs text-muted-foreground">Failed</p></CardContent></Card>
+                      </div>
+                    );
+                  })()}
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Domain</TableHead>
+                        <TableHead>Selector</TableHead>
+                        <TableHead>Issue</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead className="text-right">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {fixLog.map((f: any, i: number) => (
+                        <TableRow key={i} className={f.success ? "" : "bg-red-500/5"}>
+                          <TableCell className="text-xs text-muted-foreground">{timeAgo(f.created_at)}</TableCell>
+                          <TableCell className="font-medium">{f.domain}</TableCell>
+                          <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[180px] truncate inline-block">{f.selector}</code></TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={ISSUE_BADGE[f.issue_type]?.className ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
+                              {ISSUE_BADGE[f.issue_type]?.label ?? f.issue_type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs">{f.action_taken}</TableCell>
+                          <TableCell className="text-right">
+                            {f.success ? (
+                              <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">Success</Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30">Failed</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* User Reports Tab */}
+        <TabsContent value="user-reports">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Missed Banner Reports</CardTitle>
+                <CardDescription>Domains reported by users where cookie banners weren't handled</CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleProcessReports} disabled={processingReports} className="gap-2">
+                {processingReports ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Process Reports
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {unresolvedReports.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <CheckCircle2 className="h-10 w-10 text-green-500" />
+                  <p className="text-muted-foreground font-medium">No unresolved reports!</p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <Card><CardContent className="py-3 text-center"><p className="text-2xl font-bold">{unresolvedReports.length}</p><p className="text-xs text-muted-foreground">Unresolved</p></CardContent></Card>
+                    <Card className="border-amber-500/30"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-amber-500">{unresolvedReports.filter((r: any) => r.report_count >= 3).length}</p><p className="text-xs text-muted-foreground">Priority (3+ reports)</p></CardContent></Card>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Domain</TableHead>
+                        <TableHead className="text-right">Reports</TableHead>
+                        <TableHead>Working Pattern?</TableHead>
+                        <TableHead className="text-right">Last Reported</TableHead>
+                        <TableHead className="text-right">First Seen</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {unresolvedReports.map((r: any, i: number) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium flex items-center gap-2">
+                            <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                            {r.domain}
+                            {r.report_count >= 3 && (
+                              <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[10px]">Priority</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">{r.report_count}</TableCell>
+                          <TableCell>
+                            {r.has_working_pattern ? (
+                              <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">Yes</Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30">No</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">{r.last_reported ? timeAgo(r.last_reported) : "—"}</TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
