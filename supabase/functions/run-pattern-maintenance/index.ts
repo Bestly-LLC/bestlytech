@@ -1,31 +1,29 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { alertEmail } from "../_shared/email-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function sendEmail(smtpEmail: string, smtpPassword: string, subject: string, body: string) {
+async function sendEmail(smtpEmail: string, smtpPassword: string, to: string, subject: string, html: string) {
   const client = new SMTPClient({
     connection: {
       hostname: "mail.privateemail.com",
       port: 465,
       tls: true,
-      auth: {
-        username: smtpEmail,
-        password: smtpPassword,
-      },
+      auth: { username: smtpEmail, password: smtpPassword },
     },
   });
 
   try {
     await client.send({
       from: smtpEmail,
-      to: "jaredbest@icloud.com",
+      to,
       subject,
-      content: body,
+      html,
     });
     console.log(`Email sent: "${subject}"`);
   } finally {
@@ -50,7 +48,6 @@ serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Run both RPCs in parallel
     const [fixResult, reportResult] = await Promise.all([
       supabase.rpc("auto_fix_pattern_issues"),
       supabase.rpc("process_user_reports"),
@@ -64,34 +61,55 @@ serve(async (req: Request) => {
 
     console.log(`Maintenance complete — Fixed: ${fixData.fixed}, Failed: ${fixData.failed}, Unresolved reports: ${reportData.total_unresolved}`);
 
+    const timestamp = new Date().toISOString();
+
     // Send alert if auto-fix had failures
     if (fixData.failed > 0) {
-      const failedDetails = (fixData.details || [])
+      const failedItems = (fixData.details || [])
         .filter((d: any) => !d.success)
-        .map((d: any) => `  • ${d.domain} — ${d.selector} (${d.issue}): ${d.error}`)
-        .join("\n");
+        .map((d: any) => ({
+          label: d.domain,
+          detail: `${d.selector} · ${d.issue} — ${d.error || "unknown error"}`,
+        }));
 
-      await sendEmail(
-        smtpEmail,
-        smtpPassword,
-        "Cookie Yeti: Pattern Fix Failures",
-        `Pattern auto-fixer encountered ${fixData.failed} failure(s).\n\nProcessed: ${fixData.processed}\nFixed: ${fixData.fixed}\nFailed: ${fixData.failed}\n\nFailed items:\n${failedDetails || "(no details available)"}\n\nTimestamp: ${new Date().toISOString()}`
-      );
+      const html = alertEmail({
+        title: "Pattern Fix Failures",
+        severity: "danger",
+        summary: `The automated pattern fixer encountered <strong>${fixData.failed} failure(s)</strong> during this maintenance run.`,
+        stats: [
+          { label: "Processed", value: fixData.processed },
+          { label: "Fixed", value: fixData.fixed },
+          { label: "Failed", value: fixData.failed },
+        ],
+        items: failedItems.length > 0 ? failedItems : undefined,
+        timestamp,
+      });
+
+      await sendEmail(smtpEmail, smtpPassword, "jaredbest@icloud.com", "Cookie Yeti: Pattern Fix Failures", html);
     }
 
     // Send alert if there are priority domains (3+ unresolved reports)
     const priorityDomains = reportData.priority_domains || [];
     if (Array.isArray(priorityDomains) && priorityDomains.length > 0) {
-      const domainList = priorityDomains
-        .map((d: any) => `  • ${d.domain} — ${d.report_count} reports (last: ${d.last_reported})`)
-        .join("\n");
+      const domainItems = priorityDomains.map((d: any) => ({
+        label: d.domain,
+        detail: `${d.report_count} reports · last reported ${new Date(d.last_reported).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`,
+      }));
 
-      await sendEmail(
-        smtpEmail,
-        smtpPassword,
-        "Cookie Yeti: Unresolved Missed Banner Reports",
-        `There are ${priorityDomains.length} domain(s) with 3+ unresolved missed banner reports.\n\nTotal unresolved: ${reportData.total_unresolved}\nNewly resolved this run: ${reportData.newly_resolved}\n\nPriority domains:\n${domainList}\n\nTimestamp: ${new Date().toISOString()}`
-      );
+      const html = alertEmail({
+        title: "Unresolved Missed Banner Reports",
+        severity: "warning",
+        summary: `There are <strong>${priorityDomains.length} domain(s)</strong> with 3 or more unresolved missed banner reports requiring attention.`,
+        stats: [
+          { label: "Unresolved", value: reportData.total_unresolved },
+          { label: "Resolved This Run", value: reportData.newly_resolved },
+          { label: "Priority Domains", value: priorityDomains.length },
+        ],
+        items: domainItems,
+        timestamp,
+      });
+
+      await sendEmail(smtpEmail, smtpPassword, "jaredbest@icloud.com", "Cookie Yeti: Unresolved Missed Banner Reports", html);
     }
 
     return new Response(
