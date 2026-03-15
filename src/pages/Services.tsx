@@ -47,6 +47,12 @@ const services = [
     description: "Apple-native infrastructure — discovery, payments, identity, and automation for local businesses.",
     link: "/apple-modernization",
   },
+  {
+    icon: ShoppingCart,
+    title: "Marketplace Onboarding",
+    description: "Full-service setup for Amazon, Shopify, and TikTok Shop — from registration to launch-ready.",
+    link: "/amazon-setup",
+  },
 ];
 
 const processSteps = [
@@ -145,6 +151,24 @@ export default function Services() {
                     <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-1">Flagship Program</p>
                     <h3 className="text-xl font-semibold text-foreground">Apple-Native Business Modernization</h3>
                     <p className="mt-1 text-sm text-muted-foreground">Discovery, payments, identity, automation — a complete Apple ecosystem stack for local businesses.</p>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-primary shrink-0" />
+                </div>
+              </div>
+            </Link>
+          </AnimatedSection>
+
+          <AnimatedSection animation="fade-in" delay={500} className="mt-4">
+            <Link to="/amazon-setup" className="block">
+              <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-[hsl(var(--gradient-start)/0.05)] to-[hsl(var(--gradient-end)/0.05)] p-8 transition-all hover:shadow-premium hover:-translate-y-1">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.15)] to-[hsl(var(--gradient-end)/0.15)]">
+                    <ShoppingCart className="h-7 w-7 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-1">Done-For-You Setup</p>
+                    <h3 className="text-xl font-semibold text-foreground">Marketplace Onboarding</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">Amazon Seller Central, Shopify, and TikTok Shop — we handle registration, branding, and compliance so you can start selling.</p>
                   </div>
                   <ArrowRight className="h-5 w-5 text-primary shrink-0" />
                 </div>
