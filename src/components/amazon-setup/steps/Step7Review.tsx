@@ -36,6 +36,14 @@ export const Step7Review = () => {
       setStatus('Submitted');
       setSubmitted(true);
       setShowConfirm(false);
+
+      // Send SMS notification (fire-and-forget)
+      try {
+        const smsMessage = `New intake submitted by ${formData.client_name || formData.contact_first_name + ' ' + formData.contact_last_name} — ${platformNames} — ID: ${formId?.slice(0, 8)}`;
+        await supabase.functions.invoke('notify-sms', { body: { message: smsMessage } });
+      } catch (smsErr) {
+        console.error('SMS notification failed:', smsErr);
+      }
     } catch (e) {
       toast({ title: 'Submission failed', description: 'Please try again', variant: 'destructive' });
     } finally {
