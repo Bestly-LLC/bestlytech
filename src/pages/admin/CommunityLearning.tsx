@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers } from "lucide-react";
+import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
@@ -502,6 +502,35 @@ export default function CommunityLearning() {
               </Button>
             </CardHeader>
             <CardContent>
+              {/* Schedule & Last Run Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                <Card className="border border-border/60">
+                  <CardContent className="flex items-center gap-3 py-4">
+                    <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <CalendarClock className="h-[18px] w-[18px] text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">Every 6 hours</p>
+                      <p className="text-xs text-muted-foreground">Auto-trigger schedule (pg_cron)</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border border-border/60">
+                  <CardContent className="flex items-center gap-3 py-4">
+                    <div className="h-9 w-9 rounded-xl bg-green-500/10 flex items-center justify-center">
+                      <Timer className="h-[18px] w-[18px] text-green-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {fixLog.length > 0 ? new Date(fixLog[0].created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Never"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Last maintenance run{fixLog.length > 0 ? ` (${timeAgo(fixLog[0].created_at)})` : ""}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
               {fixLog.length === 0 ? (
                 <EmptyState icon={Wrench} title="No fix actions recorded yet" description="Run the AI Fixer to automatically maintain pattern quality." />
               ) : (
