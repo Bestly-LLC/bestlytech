@@ -50,7 +50,7 @@ const FormContent = () => {
   );
 };
 
-const AmazonSetup = () => {
+const MarketplaceSetup = () => {
   return (
     <Layout>
       <SEOHead
