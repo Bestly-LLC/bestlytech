@@ -77,8 +77,8 @@ const CONFIG = {
     },
     {
       icon: Globe,
-      title: "Cross-Browser Support",
-      description: "Launching first on Chrome, with Safari, Firefox, Edge, and Android coming soon.",
+      title: "Cross-Platform Support",
+      description: "Available on Chrome and Safari for iOS and macOS. Browse privately on any device.",
     },
   ],
   faqs: [
