@@ -56,14 +56,14 @@ const CONFIG = {
       description: "Automatically identifies cookie consent pop-ups across thousands of websites.",
     },
     {
+      icon: Shield,
+      title: "Tracking Cookie Cleaning",
+      description: "Cleans tracking cookies after dismissing banners. Pro = unlimited, Free = 50 sites/day.",
+    },
+    {
       icon: EyeOff,
       title: "Background Operation",
       description: "Runs silently without interrupting your browsing experience.",
-    },
-    {
-      icon: Shield,
-      title: "Local-Only Storage",
-      description: "All your preferences stay on your device. Nothing leaves your browser.",
     },
     {
       icon: BarChart3,
