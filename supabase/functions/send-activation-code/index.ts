@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { activationCodeEmail } from "../_shared/email-template.ts";
 
 const corsHeaders = {
@@ -70,21 +71,9 @@ serve(async (req: Request) => {
 
     if (insertError) throw new Error(`Insert failed: ${insertError.message}`);
 
-    // Send branded HTML email via PrivateMail SMTP
+    // Send branded HTML email via PrivateMail SMTP (port 465, TLS)
     const html = activationCodeEmail(code);
 
-    // Use SMTPjs-compatible approach via raw SMTP over TLS
-    const smtpResponse = await fetch("https://api.smtp2go.com/v3/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        // We'll use a direct SMTP connection instead
-      }),
-    }).catch(() => null);
-
-    // Direct SMTP sending using Deno's built-in TLS
-    const { SMTPClient } = await import("https://deno.land/x/denomailer@1.6.0/mod.ts");
-    
     const client = new SMTPClient({
       connection: {
         hostname: "mail.privateemail.com",
