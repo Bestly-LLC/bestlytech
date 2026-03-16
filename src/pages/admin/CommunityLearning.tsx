@@ -398,12 +398,17 @@ export default function CommunityLearning() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recent.map((r: any, i: number) => (
-                      <TableRow key={i} className="even:bg-muted/30">
+                    {recent.map((r: any, i: number) => {
+                      const isFixed = fixedPatterns.has(`${r.domain}::${r.selector}`);
+                      return (
+                      <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
                         <TableCell className="font-medium">{r.domain}</TableCell>
                         <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.selector}</code></TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={ACTION_BADGE_VARIANT[r.action_type] ?? ""}>{r.action_type}</Badge>
+                          <span className="inline-flex items-center gap-1">
+                            <Badge variant="outline" className={ACTION_BADGE_VARIANT[r.action_type] ?? ""}>{r.action_type}</Badge>
+                            <AiFixerIndicator domain={r.domain} selector={r.selector} />
+                          </span>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.cmp_fingerprint}</TableCell>
                         <TableCell className="text-right tabular-nums">{r.confidence}</TableCell>
@@ -413,7 +418,8 @@ export default function CommunityLearning() {
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
