@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,14 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock } from "lucide-react";
+import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip as RechartsTooltip } from "recharts";
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend, Area, AreaChart,
 } from "recharts";
 
@@ -65,6 +67,7 @@ function rateColor(rate: number) {
 
 export default function CommunityLearning() {
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("activity");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [activity, setActivity] = useState<any[]>([]);
   const [domains, setDomains] = useState<any[]>([]);
@@ -80,7 +83,7 @@ export default function CommunityLearning() {
   const [processingReports, setProcessingReports] = useState(false);
 
   const fetchAll = useCallback(async () => {
-    setLoading(true);
+    if (!overview) setLoading(true);
     try {
       const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11] = await Promise.all([
         supabase.rpc("get_community_overview" as any),
@@ -153,6 +156,18 @@ export default function CommunityLearning() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Build lookup sets for AI fixer cross-referencing (must be before early return)
+  const fixedPatterns = useMemo(() => new Set(fixLog.map((f: any) => `${f.domain}::${f.selector}`)), [fixLog]);
+  const fixedDomains = useMemo(() => new Set(fixLog.map((f: any) => f.domain)), [fixLog]);
+  const fixActionMap = useMemo(() => {
+    const map = new Map<string, { action: string; success: boolean }>();
+    for (const f of fixLog) {
+      const key = `${f.domain}::${f.selector}`;
+      if (!map.has(key)) map.set(key, { action: f.action_taken, success: f.success });
+    }
+    return map;
+  }, [fixLog]);
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -170,6 +185,55 @@ export default function CommunityLearning() {
 
   const o = overview!;
   const issueCount = issues.length;
+
+  const FIX_ACTION_BADGE: Record<string, string> = {
+    deleted_stale: "bg-red-500/15 text-red-500 border-red-500/30",
+    deleted_broken: "bg-red-500/15 text-red-500 border-red-500/30",
+    confidence_zeroed: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+    confidence_halved: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+    skipped: "bg-muted text-muted-foreground border-muted-foreground/30",
+  };
+
+  const AiFixerIndicator = ({ domain, selector }: { domain: string; selector: string }) => {
+    const key = `${domain}::${selector}`;
+    const fix = fixActionMap.get(key);
+    if (!fix) return null;
+    return (
+      <TooltipProvider delayDuration={200}>
+        <UITooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-1 ml-1.5">
+              <Bot className="h-3.5 w-3.5 text-purple-500" />
+              <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${FIX_ACTION_BADGE[fix.action] ?? "bg-purple-500/15 text-purple-500 border-purple-500/30"}`}>
+                {fix.action.replace(/_/g, " ")}
+              </Badge>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">AI Fixer: <span className="font-semibold">{fix.action.replace(/_/g, " ")}</span> — {fix.success ? "Success" : "Failed"}</p>
+          </TooltipContent>
+        </UITooltip>
+      </TooltipProvider>
+    );
+  };
+
+  const DomainAiBadge = ({ domain }: { domain: string }) => {
+    if (!fixedDomains.has(domain)) return null;
+    return (
+      <TooltipProvider delayDuration={200}>
+        <UITooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex ml-1.5">
+              <Bot className="h-3.5 w-3.5 text-purple-500" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">AI Fixer has actioned patterns on this domain</p>
+          </TooltipContent>
+        </UITooltip>
+      </TooltipProvider>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -229,7 +293,7 @@ export default function CommunityLearning() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="activity" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="inline-flex h-10 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground">
           <TabsTrigger value="activity" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><TrendingUp className="h-3.5 w-3.5" />Activity</TabsTrigger>
           <TabsTrigger value="domains" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Globe className="h-3.5 w-3.5" />Domains</TabsTrigger>
@@ -261,7 +325,7 @@ export default function CommunityLearning() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                    <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                     <Area type="monotone" dataKey="new_patterns" stroke="hsl(270,60%,55%)" strokeWidth={2} fill="url(#gradNew)" name="New Patterns" />
                     <Area type="monotone" dataKey="new_domains" stroke="hsl(142,76%,36%)" strokeWidth={2} fill="url(#gradDomains)" name="New Domains" />
                     <Line type="monotone" dataKey="active_patterns" stroke="hsl(45,93%,47%)" strokeWidth={2} strokeDasharray="5 5" name="Active Patterns" dot={false} />
@@ -290,9 +354,11 @@ export default function CommunityLearning() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {domains.map((d: any, i: number) => (
-                    <TableRow key={i} className="even:bg-muted/30">
-                      <TableCell className="font-medium flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-muted-foreground" />{d.domain}</TableCell>
+                  {domains.map((d: any, i: number) => {
+                    const isFixed = fixedDomains.has(d.domain);
+                    return (
+                    <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
+                      <TableCell className="font-medium flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-muted-foreground" />{d.domain}<DomainAiBadge domain={d.domain} /></TableCell>
                       <TableCell className="text-right tabular-nums">{d.pattern_count}</TableCell>
                       <TableCell className="text-right tabular-nums">{Number(d.total_reports).toLocaleString()}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${rateColor(d.success_rate)}`}>{d.success_rate}%</TableCell>
@@ -304,7 +370,8 @@ export default function CommunityLearning() {
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">{d.last_active ? timeAgo(d.last_active) : "—"}</TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
@@ -331,12 +398,17 @@ export default function CommunityLearning() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recent.map((r: any, i: number) => (
-                      <TableRow key={i} className="even:bg-muted/30">
+                    {recent.map((r: any, i: number) => {
+                      const isFixed = fixedPatterns.has(`${r.domain}::${r.selector}`);
+                      return (
+                      <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
                         <TableCell className="font-medium">{r.domain}</TableCell>
                         <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.selector}</code></TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={ACTION_BADGE_VARIANT[r.action_type] ?? ""}>{r.action_type}</Badge>
+                          <span className="inline-flex items-center gap-1">
+                            <Badge variant="outline" className={ACTION_BADGE_VARIANT[r.action_type] ?? ""}>{r.action_type}</Badge>
+                            <AiFixerIndicator domain={r.domain} selector={r.selector} />
+                          </span>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.cmp_fingerprint}</TableCell>
                         <TableCell className="text-right tabular-nums">{r.confidence}</TableCell>
@@ -346,7 +418,8 @@ export default function CommunityLearning() {
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -378,9 +451,15 @@ export default function CommunityLearning() {
                   <TableBody>
                     {issues.map((p: any, i: number) => {
                       const issue = ISSUE_BADGE[p.issue_type] ?? ISSUE_BADGE.other;
+                      const isFixed = fixedPatterns.has(`${p.domain}::${p.selector}`);
                       return (
-                        <TableRow key={i} className="even:bg-muted/30">
-                          <TableCell><Badge variant="outline" className={issue.className}>{issue.label}</Badge></TableCell>
+                        <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
+                          <TableCell>
+                            <span className="inline-flex items-center gap-1">
+                              <Badge variant="outline" className={issue.className}>{issue.label}</Badge>
+                              <AiFixerIndicator domain={p.domain} selector={p.selector} />
+                            </span>
+                          </TableCell>
                           <TableCell className="font-medium">{p.domain}</TableCell>
                           <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[180px] truncate inline-block">{p.selector}</code></TableCell>
                           <TableCell><Badge variant="outline" className={ACTION_BADGE_VARIANT[p.action_type] ?? ""}>{p.action_type}</Badge></TableCell>
@@ -410,7 +489,7 @@ export default function CommunityLearning() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                       <Bar dataKey="count" name="Patterns" radius={[4, 4, 0, 0]}>
                         {confDist.map((_: any, i: number) => (
                           <Cell key={i} fill={CONFIDENCE_COLORS[i] ?? "hsl(var(--primary))"} />
@@ -433,7 +512,7 @@ export default function CommunityLearning() {
                           <Cell key={i} fill={ACTION_COLORS[a.action_type] ?? "hsl(var(--muted))"} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
@@ -478,7 +557,7 @@ export default function CommunityLearning() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis type="number" tick={{ fontSize: 11 }} />
                       <YAxis type="category" dataKey="source" tick={{ fontSize: 11 }} width={80} />
-                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                       <Bar dataKey="count" name="Patterns" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -573,7 +652,11 @@ export default function CommunityLearning() {
                               {ISSUE_BADGE[f.issue_type]?.label ?? f.issue_type}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-xs">{f.action_taken}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={FIX_ACTION_BADGE[f.action_taken] ?? "bg-purple-500/15 text-purple-500 border-purple-500/30"}>
+                              {f.action_taken.replace(/_/g, " ")}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="text-right">
                             {f.success ? (
                               <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">Success</Badge>
