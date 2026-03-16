@@ -39,6 +39,9 @@ import CYDashboard from "./pages/admin/CYDashboard";
 import CYSubscribers from "./pages/admin/CYSubscribers";
 import CYGrantedAccess from "./pages/admin/CYGrantedAccess";
 import CommunityLearning from "./pages/admin/CommunityLearning";
+import AdminContacts from "./pages/admin/AdminContacts";
+import AdminHireRequests from "./pages/admin/AdminHireRequests";
+import AdminWaitlist from "./pages/admin/AdminWaitlist";
 
 const queryClient = new QueryClient();
 
