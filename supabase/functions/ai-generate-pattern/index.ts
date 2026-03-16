@@ -46,10 +46,7 @@ Deno.serve(async (req) => {
     );
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+  const supabase = svcClient;
 
   const results: any[] = [];
   let processed = 0, generated = 0, skipped = 0, failed = 0;
