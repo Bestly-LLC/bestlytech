@@ -174,6 +174,67 @@ export default function CommunityLearning() {
   const o = overview!;
   const issueCount = issues.length;
 
+  // Build lookup sets for AI fixer cross-referencing
+  const fixedPatterns = useMemo(() => new Set(fixLog.map((f: any) => `${f.domain}::${f.selector}`)), [fixLog]);
+  const fixedDomains = useMemo(() => new Set(fixLog.map((f: any) => f.domain)), [fixLog]);
+  const fixActionMap = useMemo(() => {
+    const map = new Map<string, { action: string; success: boolean }>();
+    for (const f of fixLog) {
+      const key = `${f.domain}::${f.selector}`;
+      if (!map.has(key)) map.set(key, { action: f.action_taken, success: f.success });
+    }
+    return map;
+  }, [fixLog]);
+
+  const FIX_ACTION_BADGE: Record<string, string> = {
+    deleted_stale: "bg-red-500/15 text-red-500 border-red-500/30",
+    deleted_broken: "bg-red-500/15 text-red-500 border-red-500/30",
+    confidence_zeroed: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+    confidence_halved: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+    skipped: "bg-muted text-muted-foreground border-muted-foreground/30",
+  };
+
+  const AiFixerIndicator = ({ domain, selector }: { domain: string; selector: string }) => {
+    const key = `${domain}::${selector}`;
+    const fix = fixActionMap.get(key);
+    if (!fix) return null;
+    return (
+      <TooltipProvider delayDuration={200}>
+        <UITooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-1 ml-1.5">
+              <Bot className="h-3.5 w-3.5 text-purple-500" />
+              <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${FIX_ACTION_BADGE[fix.action] ?? "bg-purple-500/15 text-purple-500 border-purple-500/30"}`}>
+                {fix.action.replace(/_/g, " ")}
+              </Badge>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">AI Fixer: <span className="font-semibold">{fix.action.replace(/_/g, " ")}</span> — {fix.success ? "Success" : "Failed"}</p>
+          </TooltipContent>
+        </UITooltip>
+      </TooltipProvider>
+    );
+  };
+
+  const DomainAiBadge = ({ domain }: { domain: string }) => {
+    if (!fixedDomains.has(domain)) return null;
+    return (
+      <TooltipProvider delayDuration={200}>
+        <UITooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex ml-1.5">
+              <Bot className="h-3.5 w-3.5 text-purple-500" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">AI Fixer has actioned patterns on this domain</p>
+          </TooltipContent>
+        </UITooltip>
+      </TooltipProvider>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
