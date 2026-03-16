@@ -67,6 +67,7 @@ function rateColor(rate: number) {
 
 export default function CommunityLearning() {
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("activity");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [activity, setActivity] = useState<any[]>([]);
   const [domains, setDomains] = useState<any[]>([]);
