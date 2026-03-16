@@ -1,57 +1,45 @@
 
 
-## Integrate Apple-Native Business Modernization Program
+# Admin Dashboard Audit — Issues Found
 
-Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
-
----
-
-### 1. New Page: `src/pages/AppleModernization.tsx`
-
-A comprehensive, premium-feeling service page with the following sections:
-
-- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
-- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
-- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
-  - Apple Discovery Infrastructure
-  - App Clips (Instant Customer Experience)
-  - Payments Modernization (Tap to Pay)
-  - Digital ID Verification
-  - Brand Trust and Identity
-  - Customer Experience Automation
-  - Commerce and Ordering
-  - Operational Analytics
-  - Apple-Ready Certification (marked as optional)
-- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
-- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
-- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
-
-### 2. Route Registration: `src/App.tsx`
-
-- Import the new `AppleModernization` page component.
-- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
-
-### 3. Services Page Update: `src/pages/Services.tsx`
-
-- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
-- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
-
-### 4. Header Navigation: `src/components/layout/Header.tsx`
-
-- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
+After reviewing all admin files, here are the issues I identified:
 
 ---
 
-### Technical Details
+## 1. Security: Admin check uses hardcoded email (Medium Risk)
 
-**New file:**
-- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
+`useAdminAuth.ts` checks `user?.email === "jaredbest@icloud.com"` on the client side. While RLS policies also enforce this server-side (which is good), the client-side check is brittle. This is acceptable for a single-admin setup but worth noting — no code change needed unless you want a `user_roles` table.
 
-**Modified files:**
-- `src/App.tsx` -- add import and route
-- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
+## 2. `fetchAll` dependency array is empty (Bug)
 
-**No database or backend changes required.** This is purely a frontend content page.
+In `CommunityLearning.tsx` line 117, `useCallback` for `fetchAll` has `[]` as deps, but line 86 checks `if (!overview) setLoading(true)` — `overview` is stale inside the callback since it's closed over the initial `null`. After the first load, subsequent calls to `fetchAll` (e.g. after running the fixer) will never show loading, which is the *desired* behavior now, but the logic is accidentally correct. The `overview` ref will always be the initial `null` on the first render when `fetchAll` is created, so the guard works on first call but breaks if `fetchAll` is ever recreated. **Should use a ref instead of state for the "has loaded once" check.**
 
-The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
+## 3. Bulk revoke in `CYGrantedAccess.tsx` does sequential deletes (Perf)
+
+Lines 68-74: The `bulkRevoke` function loops through selected IDs and does individual `delete().eq("id", id)` calls. Should use a single `.in("id", [...ids])` call like `AdminSubmissions` does for bulk updates.
+
+## 4. `useAdminRealtime` has stale dependency
+
+Line 41 in `useAdminRealtime.ts`: `tables.join(",")` in the deps array — this creates a new string each render if the `tables` array reference changes. The hook callers in `AdminDashboard` and `CYDashboard` create new array literals on every render (e.g. `tables: ["seller_intakes"]`), so the channel gets torn down and recreated every render. **Should memoize the tables array at call sites or stabilize inside the hook.**
+
+## 5. No error handling on several Supabase queries
+
+Multiple pages silently swallow errors — `CYSubscribers`, `CYGrantedAccess`, `AdminDashboard`, `AdminSubmissions` all call `.select()` but never check for `error`. If a query fails, data silently becomes empty.
+
+## 6. Missing `waitlist_subscribers` RLS for admin read
+
+The `waitlist_subscribers` table has no admin read policy — only `service_role` can read. If you ever want to display waitlist data in admin, you'd need to add an admin RLS policy.
+
+---
+
+## Proposed Fixes
+
+| # | Fix | File |
+|---|-----|------|
+| 2 | Replace `overview` state check with a `hasLoadedRef` to correctly track first load | `CommunityLearning.tsx` |
+| 3 | Replace sequential delete loop with single `.delete().in("id", [...ids])` | `CYGrantedAccess.tsx` |
+| 4 | Stabilize `tables` array inside `useAdminRealtime` using `useRef` + comparison | `useAdminRealtime.ts` |
+| 5 | Add basic error toasts on failed queries in `AdminDashboard`, `AdminSubmissions`, `CYSubscribers`, `CYGrantedAccess` | Multiple files |
+
+These are all small, targeted fixes — no UI changes, no database migrations.
 
