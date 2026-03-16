@@ -35,7 +35,8 @@ export default function CYSubscribers() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.from("subscriptions").select("*").order("created_at", { ascending: false }).then(({ data }) => {
+    supabase.from("subscriptions").select("*").order("created_at", { ascending: false }).then(({ data, error }) => {
+      if (error) console.error("Failed to load subscribers", error);
       setData(data || []);
       setLoading(false);
     });

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ const statusColor: Record<string, string> = {
 };
 
 export default function AdminDashboard() {
+  const { toast } = useToast();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
@@ -38,7 +40,8 @@ export default function AdminDashboard() {
   }, []);
 
   const loadData = async () => {
-    const { data: all } = await supabase.from("seller_intakes").select("*").order("created_at", { ascending: false });
+    const { data: all, error } = await supabase.from("seller_intakes").select("*").order("created_at", { ascending: false });
+    if (error) toast({ title: "Failed to load submissions", description: error.message, variant: "destructive" });
     setData(all || []);
     setLoading(false);
   };

@@ -18,10 +18,14 @@ const LABELS: Record<TableName, string> = {
 export function useAdminRealtime({ tables, onNewRecord }: RealtimeConfig) {
   const { toast } = useToast();
   const mountedRef = useRef(true);
+  const tablesKeyRef = useRef(tables.join(","));
 
   useEffect(() => {
     mountedRef.current = true;
-    const channel = supabase.channel("admin-realtime");
+    const key = tables.join(",");
+    tablesKeyRef.current = key;
+
+    const channel = supabase.channel(`admin-realtime-${key}`);
 
     tables.forEach((table) => {
       channel.on(
@@ -44,6 +48,7 @@ export function useAdminRealtime({ tables, onNewRecord }: RealtimeConfig) {
       mountedRef.current = false;
       supabase.removeChannel(channel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tables.join(",")]);
 }
 
