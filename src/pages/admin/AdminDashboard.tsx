@@ -38,7 +38,8 @@ export default function AdminDashboard() {
   }, []);
 
   const loadData = async () => {
-    const { data: all } = await supabase.from("seller_intakes").select("*").order("created_at", { ascending: false });
+    const { data: all, error } = await supabase.from("seller_intakes").select("*").order("created_at", { ascending: false });
+    if (error) toast({ title: "Failed to load submissions", description: error.message, variant: "destructive" });
     setData(all || []);
     setLoading(false);
   };
