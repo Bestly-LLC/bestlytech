@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown } from "lucide-react";
+import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
@@ -50,6 +50,12 @@ const ISSUE_BADGE: Record<string, { label: string; className: string }> = {
 
 const CONFIDENCE_COLORS = ["hsl(0,84%,60%)", "hsl(25,95%,53%)", "hsl(45,93%,47%)", "hsl(142,60%,50%)", "hsl(250,60%,55%)"];
 
+const AI_STATUS_BADGE: Record<string, string> = {
+  success: "bg-green-600/15 text-green-600 border-green-600/30",
+  error: "bg-red-500/15 text-red-500 border-red-500/30",
+  skipped_no_html: "bg-muted text-muted-foreground border-muted-foreground/30",
+};
+
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -80,15 +86,19 @@ export default function CommunityLearning() {
   const [sourceDist, setSourceDist] = useState<any[]>([]);
   const [fixLog, setFixLog] = useState<any[]>([]);
   const [unresolvedReports, setUnresolvedReports] = useState<any[]>([]);
-  const [runningFixer, setRunningFixer] = useState(false);
+  const [runningGenerator, setRunningGenerator] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
-  const [fixResultsOpen, setFixResultsOpen] = useState(false);
+  const [genResultsOpen, setGenResultsOpen] = useState(false);
+  const [genResults, setGenResults] = useState<any | null>(null);
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [aiGenLog, setAiGenLog] = useState<any[]>([]);
+  const [aiGeneratedCount, setAiGeneratedCount] = useState(0);
   const hasLoadedRef = useRef(false);
 
   const fetchAll = useCallback(async () => {
     if (!hasLoadedRef.current) setLoading(true);
     try {
-      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11] = await Promise.all([
+      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14] = await Promise.all([
         supabase.rpc("get_community_overview" as any),
         supabase.rpc("get_daily_pattern_activity" as any, { p_days: 30 }),
         supabase.rpc("get_top_domains" as any, { p_limit: 25 }),
@@ -100,6 +110,12 @@ export default function CommunityLearning() {
         supabase.rpc("get_source_breakdown" as any),
         supabase.from("pattern_fix_log").select("*").order("created_at", { ascending: false }).limit(25),
         supabase.rpc("get_unresolved_reports" as any, { p_limit: 50 }),
+        // New: candidates for AI generation
+        supabase.from("missed_banner_reports").select("*").eq("resolved", false).order("report_count", { ascending: false }).limit(50),
+        // New: AI generation log
+        supabase.from("ai_generation_log").select("*").order("created_at", { ascending: false }).limit(50),
+        // New: AI generated count
+        supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("source", "ai_generated"),
       ]);
       setOverview(r1.data as any);
       setActivity(r2.data as any ?? []);
@@ -112,6 +128,9 @@ export default function CommunityLearning() {
       setSourceDist(r9.data as any ?? []);
       setFixLog(r10.data as any ?? []);
       setUnresolvedReports(r11.data as any ?? []);
+      setCandidates(r12.data as any ?? []);
+      setAiGenLog(r13.data as any ?? []);
+      setAiGeneratedCount(r14.count ?? 0);
     } catch (e) {
       console.error("Failed to fetch community data", e);
     } finally {
@@ -120,10 +139,10 @@ export default function CommunityLearning() {
     }
   }, []);
 
-  const handleRunFixer = useCallback(async () => {
-    setRunningFixer(true);
+  const handleRunGenerator = useCallback(async () => {
+    setRunningGenerator(true);
     try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-pattern-maintenance`;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-generate-pattern`;
       const res = await fetch(url, {
         method: "POST",
         headers: {
@@ -134,13 +153,14 @@ export default function CommunityLearning() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
-      toast.success(`Maintenance complete — Fixed: ${data.fix?.fixed ?? 0}, Failed: ${data.fix?.failed ?? 0}`);
+      toast.success(`AI Generator complete — Generated: ${data.generated ?? 0}, Skipped: ${data.skipped ?? 0}, Failed: ${data.failed ?? 0}`);
+      setGenResults(data);
+      setGenResultsOpen(true);
       await fetchAll();
-      setFixResultsOpen(true);
     } catch (e: any) {
-      toast.error(`Maintenance failed: ${e.message}`);
+      toast.error(`AI Generator failed: ${e.message}`);
     } finally {
-      setRunningFixer(false);
+      setRunningGenerator(false);
     }
   }, [fetchAll]);
 
@@ -161,7 +181,7 @@ export default function CommunityLearning() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Build lookup sets for AI fixer cross-referencing (must be before early return)
+  // Build lookup sets for AI fixer cross-referencing (kept for Recent/Domains tabs)
   const fixedPatterns = useMemo(() => new Set(fixLog.map((f: any) => `${f.domain}::${f.selector}`)), [fixLog]);
   const fixedDomains = useMemo(() => new Set(fixLog.map((f: any) => f.domain)), [fixLog]);
   const fixActionMap = useMemo(() => {
@@ -177,8 +197,8 @@ export default function CommunityLearning() {
     return (
       <div className="space-y-6">
         <div><Skeleton className="h-7 w-56" /><Skeleton className="h-4 w-80 mt-2" /></div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
         <div className="grid grid-cols-3 gap-4">
           {[1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
@@ -253,11 +273,12 @@ export default function CommunityLearning() {
       />
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Total Patterns" value={o.total_patterns} icon={Layers} iconColor="text-primary" iconBg="bg-primary/10" accentColor="border-primary/40" subtitle={`${o.patterns_last_7d} active last 7 days`} />
         <StatCard label="Domains Covered" value={o.total_domains} icon={Globe} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="border-green-500/40" subtitle={`${o.new_domains_last_7d} new this week`} />
         <StatCard label="Success Rate" value={`${o.overall_success_rate}%`} icon={Target} iconColor="text-blue-500" iconBg="bg-blue-500/10" accentColor="border-blue-500/40" subtitle={`${Number(o.total_successes).toLocaleString()} / ${Number(o.total_reports).toLocaleString()}`} />
         <StatCard label="Avg Confidence" value={o.avg_confidence ?? "—"} icon={TrendingUp} iconColor="text-purple-500" iconBg="bg-purple-500/10" accentColor="border-purple-500/40" subtitle={`${o.high_confidence} high / ${o.low_confidence} low`} />
+        <StatCard label="AI Generated" value={aiGeneratedCount} icon={Sparkles} iconColor="text-amber-500" iconBg="bg-amber-500/10" accentColor="border-amber-500/40" subtitle="Patterns from AI" />
       </div>
 
       {/* Health Indicators */}
@@ -303,7 +324,7 @@ export default function CommunityLearning() {
           <TabsTrigger value="activity" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><TrendingUp className="h-3.5 w-3.5" />Activity</TabsTrigger>
           <TabsTrigger value="domains" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Globe className="h-3.5 w-3.5" />Domains</TabsTrigger>
           <TabsTrigger value="recent" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Brain className="h-3.5 w-3.5" />Recent</TabsTrigger>
-          <TabsTrigger value="issues" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><AlertTriangle className="h-3.5 w-3.5" />Issues & Fixer</TabsTrigger>
+          <TabsTrigger value="ai-generator" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Sparkles className="h-3.5 w-3.5" />AI Pattern Generator</TabsTrigger>
           <TabsTrigger value="breakdown" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><BarChart3 className="h-3.5 w-3.5" />Breakdown</TabsTrigger>
           <TabsTrigger value="user-reports" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Flag className="h-3.5 w-3.5" />Reports</TabsTrigger>
         </TabsList>
@@ -431,196 +452,197 @@ export default function CommunityLearning() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="issues">
+        {/* AI Pattern Generator Tab */}
+        <TabsContent value="ai-generator">
           <div className="space-y-4">
-            {/* Header with Run Button & Schedule Info */}
+            {/* Header with Run Button */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <div>
-                  <CardTitle className="text-lg">Pattern Issues & AI Fixer</CardTitle>
+                  <CardTitle className="text-lg">AI Pattern Generator</CardTitle>
                   <CardDescription className="flex items-center gap-3 mt-1">
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <CalendarClock className="h-3.5 w-3.5" />
-                      Auto-runs every 6h
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Analyzes banner HTML with AI to generate CSS selectors
                     </span>
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Timer className="h-3.5 w-3.5" />
-                      Last run: {fixLog.length > 0 ? `${new Date(fixLog[0].created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} (${timeAgo(fixLog[0].created_at)})` : "Never"}
+                      Last run: {aiGenLog.length > 0 ? `${new Date(aiGenLog[0].created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} (${timeAgo(aiGenLog[0].created_at)})` : "Never"}
                     </span>
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleRunFixer} disabled={runningFixer} className="gap-2">
-                  {runningFixer ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  Run AI Fixer
+                <Button variant="outline" size="sm" onClick={handleRunGenerator} disabled={runningGenerator} className="gap-2">
+                  {runningGenerator ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                  Run AI Generator
                 </Button>
               </CardHeader>
             </Card>
 
             {/* Post-Run Results Panel (collapsible) */}
-            {fixLog.length > 0 && (
-              <Collapsible open={fixResultsOpen} onOpenChange={setFixResultsOpen}>
-                <Card className="border-purple-500/30">
+            {genResults && (
+              <Collapsible open={genResultsOpen} onOpenChange={setGenResultsOpen}>
+                <Card className="border-amber-500/30">
                   <CollapsibleTrigger asChild>
                     <CardHeader className="flex flex-row items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors py-3">
                       <div className="flex items-center gap-2">
-                        <Bot className="h-4 w-4 text-purple-500" />
-                        <CardTitle className="text-sm font-medium">Latest Fix Results</CardTitle>
-                        {(() => {
-                          const latestBatch = fixLog.filter((f: any) => {
-                            const t = new Date(f.created_at).getTime();
-                            const newest = new Date(fixLog[0].created_at).getTime();
-                            return newest - t < 5000;
-                          });
-                          return (
-                            <span className="text-xs text-muted-foreground">
-                              — {latestBatch.length} processed, {latestBatch.filter((f: any) => f.success).length} fixed, {latestBatch.filter((f: any) => !f.success).length} failed
-                            </span>
-                          );
-                        })()}
+                        <Sparkles className="h-4 w-4 text-amber-500" />
+                        <CardTitle className="text-sm font-medium">Latest Generation Results</CardTitle>
+                        <span className="text-xs text-muted-foreground">
+                          — {genResults.processed ?? 0} processed, {genResults.generated ?? 0} generated, {genResults.skipped ?? 0} skipped, {genResults.failed ?? 0} failed
+                        </span>
                       </div>
-                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${fixResultsOpen ? "rotate-180" : ""}`} />
+                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${genResultsOpen ? "rotate-180" : ""}`} />
                     </CardHeader>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <CardContent className="pt-0 space-y-4">
-                      {/* Stats row */}
-                      {(() => {
-                        const latestBatch = fixLog.filter((f: any) => {
-                          const t = new Date(f.created_at).getTime();
-                          const newest = new Date(fixLog[0].created_at).getTime();
-                          return newest - t < 5000;
-                        });
-                        const successes = latestBatch.filter((f: any) => f.success).length;
-                        const failures = latestBatch.filter((f: any) => !f.success).length;
-                        return (
-                          <>
-                            <div className="grid grid-cols-3 gap-3">
-                              <Card className="border-t-2 border-primary/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold tabular-nums">{latestBatch.length}</p><p className="text-[11px] text-muted-foreground">Processed</p></CardContent></Card>
-                              <Card className="border-t-2 border-green-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-green-500 tabular-nums">{successes}</p><p className="text-[11px] text-muted-foreground">Fixed</p></CardContent></Card>
-                              <Card className="border-t-2 border-red-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-red-500 tabular-nums">{failures}</p><p className="text-[11px] text-muted-foreground">Failed</p></CardContent></Card>
-                            </div>
-                            {/* Detailed fix log table */}
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Domain</TableHead>
-                                  <TableHead>Selector</TableHead>
-                                  <TableHead>Issue</TableHead>
-                                  <TableHead>Action Taken</TableHead>
-                                  <TableHead className="text-right">Status</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {latestBatch.map((f: any, i: number) => (
-                                  <TableRow key={i} className={f.success ? "even:bg-muted/30" : "bg-red-500/5"}>
-                                    <TableCell className="font-medium text-sm">{f.domain}</TableCell>
-                                    <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[180px] truncate inline-block">{f.selector}</code></TableCell>
-                                    <TableCell>
-                                      <Badge variant="outline" className={ISSUE_BADGE[f.issue_type]?.className ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
-                                        {ISSUE_BADGE[f.issue_type]?.label ?? f.issue_type}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge variant="outline" className={FIX_ACTION_BADGE[f.action_taken] ?? "bg-purple-500/15 text-purple-500 border-purple-500/30"}>
-                                        {f.action_taken.replace(/_/g, " ")}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {f.success ? (
-                                        <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">✓ Success</Badge>
-                                      ) : (
-                                        <TooltipProvider delayDuration={200}>
-                                          <UITooltip>
-                                            <TooltipTrigger asChild>
-                                              <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30 cursor-help">✗ Failed</Badge>
-                                            </TooltipTrigger>
-                                            {f.error_message && (
-                                              <TooltipContent side="left" className="max-w-xs">
-                                                <p className="text-xs">{f.error_message}</p>
-                                              </TooltipContent>
-                                            )}
-                                          </UITooltip>
-                                        </TooltipProvider>
-                                      )}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </>
-                        );
-                      })()}
+                      <div className="grid grid-cols-4 gap-3">
+                        <Card className="border-t-2 border-primary/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold tabular-nums">{genResults.processed ?? 0}</p><p className="text-[11px] text-muted-foreground">Processed</p></CardContent></Card>
+                        <Card className="border-t-2 border-green-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-green-500 tabular-nums">{genResults.generated ?? 0}</p><p className="text-[11px] text-muted-foreground">Generated</p></CardContent></Card>
+                        <Card className="border-t-2 border-muted"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-muted-foreground tabular-nums">{genResults.skipped ?? 0}</p><p className="text-[11px] text-muted-foreground">Skipped</p></CardContent></Card>
+                        <Card className="border-t-2 border-red-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-red-500 tabular-nums">{genResults.failed ?? 0}</p><p className="text-[11px] text-muted-foreground">Failed</p></CardContent></Card>
+                      </div>
+                      {genResults.results?.length > 0 && (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Domain</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Selector</TableHead>
+                              <TableHead>Action</TableHead>
+                              <TableHead className="text-right">Confidence</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {genResults.results.map((r: any, i: number) => (
+                              <TableRow key={i} className={r.status === "error" ? "bg-red-500/5" : "even:bg-muted/30"}>
+                                <TableCell className="font-medium text-sm">{r.domain}</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className={AI_STATUS_BADGE[r.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
+                                    {r.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  {r.selector ? <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.selector}</code> : <span className="text-xs text-muted-foreground">—</span>}
+                                </TableCell>
+                                <TableCell>{r.action ?? "—"}</TableCell>
+                                <TableCell className="text-right tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 100)}%` : "—"}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
                     </CardContent>
                   </CollapsibleContent>
                 </Card>
               </Collapsible>
             )}
 
-            {/* Issues Table with inline AI Fix column */}
+            {/* Section A: Pending Candidates */}
             <Card>
-              <CardContent className="pt-6">
-                {issues.length === 0 ? (
-                  <EmptyState icon={CheckCircle2} title="No issues detected!" description="All patterns are healthy." />
+              <CardHeader>
+                <CardTitle className="text-base">Pending Candidates</CardTitle>
+                <CardDescription>Unresolved missed banner reports awaiting AI processing</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {candidates.length === 0 ? (
+                  <EmptyState icon={CheckCircle2} title="No pending candidates" description="All reported domains have been processed." />
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Issue</TableHead>
                         <TableHead>Domain</TableHead>
-                        <TableHead>Selector</TableHead>
-                        <TableHead>Action</TableHead>
-                        <TableHead className="text-right">Confidence</TableHead>
                         <TableHead className="text-right">Reports</TableHead>
-                        <TableHead className="text-right">Success Rate</TableHead>
-                        <TableHead>AI Fix</TableHead>
-                        <TableHead className="text-right">Last Seen</TableHead>
+                        <TableHead>Has HTML</TableHead>
+                        <TableHead>CMP Type</TableHead>
+                        <TableHead className="text-right">Last Reported</TableHead>
+                        <TableHead className="text-right">AI Attempts</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {issues.map((p: any, i: number) => {
-                        const issue = ISSUE_BADGE[p.issue_type] ?? ISSUE_BADGE.other;
-                        const fixKey = `${p.domain}::${p.selector}`;
-                        const fix = fixActionMap.get(fixKey);
-                        const wasDeleted = fix?.action?.includes("deleted");
-                        return (
-                          <TableRow
-                            key={i}
-                            className={`even:bg-muted/30 ${wasDeleted ? "opacity-50" : ""} ${fix ? "border-l-2 border-l-purple-500/50" : ""}`}
-                          >
-                            <TableCell>
-                              <Badge variant="outline" className={issue.className}>{issue.label}</Badge>
+                      {candidates.map((c: any, i: number) => (
+                        <TableRow key={i} className="even:bg-muted/30">
+                          <TableCell className="font-medium flex items-center gap-2">
+                            <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                            {c.domain}
+                          </TableCell>
+                          <TableCell className="text-right font-medium tabular-nums">{c.report_count}</TableCell>
+                          <TableCell>
+                            {c.banner_html ? (
+                              <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">Yes</Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30">No</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{c.cmp_fingerprint ?? "unknown"}</TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">{c.last_reported ? timeAgo(c.last_reported) : "—"}</TableCell>
+                          <TableCell className="text-right tabular-nums">{c.ai_attempts ?? 0}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Section B: AI Generation Log */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">AI Generation Log</CardTitle>
+                <CardDescription>Recent AI pattern generation attempts (last 50)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {aiGenLog.length === 0 ? (
+                  <EmptyState icon={Sparkles} title="No generation history" description="Run the AI Generator to start creating patterns." />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Timestamp</TableHead>
+                          <TableHead>Domain</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Selector Generated</TableHead>
+                          <TableHead>Action</TableHead>
+                          <TableHead className="text-right">Confidence</TableHead>
+                          <TableHead>AI Model</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {aiGenLog.map((log: any, i: number) => (
+                          <TableRow key={i} className={log.status === "error" ? "bg-red-500/5" : "even:bg-muted/30"}>
+                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                              {new Date(log.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                             </TableCell>
-                            <TableCell className={`font-medium ${wasDeleted ? "line-through" : ""}`}>{p.domain}</TableCell>
+                            <TableCell className="font-medium">{log.domain}</TableCell>
                             <TableCell>
-                              <code className={`text-xs bg-muted px-1.5 py-0.5 rounded max-w-[180px] truncate inline-block ${wasDeleted ? "line-through" : ""}`}>{p.selector}</code>
+                              <Badge variant="outline" className={AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
+                                {log.status}
+                              </Badge>
                             </TableCell>
-                            <TableCell><Badge variant="outline" className={ACTION_BADGE_VARIANT[p.action_type] ?? ""}>{p.action_type}</Badge></TableCell>
-                            <TableCell className="text-right tabular-nums">{p.confidence}</TableCell>
-                            <TableCell className="text-right tabular-nums">{p.report_count}</TableCell>
-                            <TableCell className={`text-right font-medium tabular-nums ${rateColor(p.success_rate ?? 0)}`}>{p.success_rate ?? 0}%</TableCell>
                             <TableCell>
-                              {fix ? (
-                                <span className="inline-flex items-center gap-1.5">
-                                  <Bot className="h-3.5 w-3.5 text-purple-500 shrink-0" />
-                                  <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${FIX_ACTION_BADGE[fix.action] ?? "bg-purple-500/15 text-purple-500 border-purple-500/30"}`}>
-                                    {fix.action.replace(/_/g, " ")}
-                                  </Badge>
-                                  {fix.success ? (
-                                    <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
-                                  ) : (
-                                    <CircleAlert className="h-3 w-3 text-red-500 shrink-0" />
-                                  )}
-                                </span>
+                              {log.selector_generated ? (
+                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block font-mono">{log.selector_generated}</code>
                               ) : (
                                 <span className="text-xs text-muted-foreground">—</span>
                               )}
                             </TableCell>
-                            <TableCell className="text-right text-xs text-muted-foreground">{p.last_seen ? timeAgo(p.last_seen) : "—"}</TableCell>
+                            <TableCell>
+                              {log.action_type ? (
+                                <Badge variant="outline" className={ACTION_BADGE_VARIANT[log.action_type] ?? ""}>{log.action_type}</Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {log.confidence != null ? `${Math.round(log.confidence * 100)}%` : "—"}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{log.ai_model ?? "—"}</TableCell>
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
