@@ -37,7 +37,8 @@ export default function CYGrantedAccess() {
   }, []);
 
   const loadData = async () => {
-    const { data } = await supabase.from("granted_access").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("granted_access").select("*").order("created_at", { ascending: false });
+    if (error) toast({ title: "Failed to load data", description: error.message, variant: "destructive" });
     setData(data || []);
     setLoading(false);
   };
