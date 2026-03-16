@@ -67,11 +67,14 @@ export default function CYGrantedAccess() {
   };
 
   const bulkRevoke = async () => {
-    for (const id of selected) {
-      await supabase.from("granted_access").delete().eq("id", id);
+    const ids = Array.from(selected);
+    const { error } = await supabase.from("granted_access").delete().in("id", ids);
+    if (error) {
+      toast({ title: "Bulk revoke failed", description: error.message, variant: "destructive" });
+      return;
     }
     setSelected(new Set());
-    toast({ title: `Revoked ${selected.size} entries` });
+    toast({ title: `Revoked ${ids.length} entries` });
     loadData();
   };
 

@@ -114,6 +114,7 @@ export default function CommunityLearning() {
     } catch (e) {
       console.error("Failed to fetch community data", e);
     } finally {
+      hasLoadedRef.current = true;
       setLoading(false);
     }
   }, []);
