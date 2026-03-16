@@ -156,6 +156,18 @@ export default function CommunityLearning() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Build lookup sets for AI fixer cross-referencing (must be before early return)
+  const fixedPatterns = useMemo(() => new Set(fixLog.map((f: any) => `${f.domain}::${f.selector}`)), [fixLog]);
+  const fixedDomains = useMemo(() => new Set(fixLog.map((f: any) => f.domain)), [fixLog]);
+  const fixActionMap = useMemo(() => {
+    const map = new Map<string, { action: string; success: boolean }>();
+    for (const f of fixLog) {
+      const key = `${f.domain}::${f.selector}`;
+      if (!map.has(key)) map.set(key, { action: f.action_taken, success: f.success });
+    }
+    return map;
+  }, [fixLog]);
+
   if (loading) {
     return (
       <div className="space-y-6">
