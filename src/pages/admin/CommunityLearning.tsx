@@ -82,7 +82,7 @@ export default function CommunityLearning() {
   const [unresolvedReports, setUnresolvedReports] = useState<any[]>([]);
   const [runningFixer, setRunningFixer] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
-
+  const [fixResultsOpen, setFixResultsOpen] = useState(false);
   const hasLoadedRef = useRef(false);
 
   const fetchAll = useCallback(async () => {
