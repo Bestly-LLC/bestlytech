@@ -451,9 +451,15 @@ export default function CommunityLearning() {
                   <TableBody>
                     {issues.map((p: any, i: number) => {
                       const issue = ISSUE_BADGE[p.issue_type] ?? ISSUE_BADGE.other;
+                      const isFixed = fixedPatterns.has(`${p.domain}::${p.selector}`);
                       return (
-                        <TableRow key={i} className="even:bg-muted/30">
-                          <TableCell><Badge variant="outline" className={issue.className}>{issue.label}</Badge></TableCell>
+                        <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
+                          <TableCell>
+                            <span className="inline-flex items-center gap-1">
+                              <Badge variant="outline" className={issue.className}>{issue.label}</Badge>
+                              <AiFixerIndicator domain={p.domain} selector={p.selector} />
+                            </span>
+                          </TableCell>
                           <TableCell className="font-medium">{p.domain}</TableCell>
                           <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[180px] truncate inline-block">{p.selector}</code></TableCell>
                           <TableCell><Badge variant="outline" className={ACTION_BADGE_VARIANT[p.action_type] ?? ""}>{p.action_type}</Badge></TableCell>
