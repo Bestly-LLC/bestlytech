@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot } from "lucide-react";
+import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
@@ -81,7 +82,7 @@ export default function CommunityLearning() {
   const [unresolvedReports, setUnresolvedReports] = useState<any[]>([]);
   const [runningFixer, setRunningFixer] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
-
+  const [fixResultsOpen, setFixResultsOpen] = useState(false);
   const hasLoadedRef = useRef(false);
 
   const fetchAll = useCallback(async () => {
@@ -134,7 +135,8 @@ export default function CommunityLearning() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
       toast.success(`Maintenance complete — Fixed: ${data.fix?.fixed ?? 0}, Failed: ${data.fix?.failed ?? 0}`);
-      fetchAll();
+      await fetchAll();
+      setFixResultsOpen(true);
     } catch (e: any) {
       toast.error(`Maintenance failed: ${e.message}`);
     } finally {
@@ -301,9 +303,8 @@ export default function CommunityLearning() {
           <TabsTrigger value="activity" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><TrendingUp className="h-3.5 w-3.5" />Activity</TabsTrigger>
           <TabsTrigger value="domains" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Globe className="h-3.5 w-3.5" />Domains</TabsTrigger>
           <TabsTrigger value="recent" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Brain className="h-3.5 w-3.5" />Recent</TabsTrigger>
-          <TabsTrigger value="issues" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><AlertTriangle className="h-3.5 w-3.5" />Issues</TabsTrigger>
+          <TabsTrigger value="issues" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><AlertTriangle className="h-3.5 w-3.5" />Issues & Fixer</TabsTrigger>
           <TabsTrigger value="breakdown" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><BarChart3 className="h-3.5 w-3.5" />Breakdown</TabsTrigger>
-          <TabsTrigger value="ai-fixer" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Wrench className="h-3.5 w-3.5" />AI Fixer</TabsTrigger>
           <TabsTrigger value="user-reports" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Flag className="h-3.5 w-3.5" />Reports</TabsTrigger>
         </TabsList>
 
@@ -430,54 +431,200 @@ export default function CommunityLearning() {
           </Card>
         </TabsContent>
 
-        {/* Issues Tab */}
         <TabsContent value="issues">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Pattern Issues</CardTitle></CardHeader>
-            <CardContent>
-              {issues.length === 0 ? (
-                <EmptyState icon={CheckCircle2} title="No issues detected!" description="All patterns are healthy." />
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Issue</TableHead>
-                      <TableHead>Domain</TableHead>
-                      <TableHead>Selector</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead className="text-right">Confidence</TableHead>
-                      <TableHead className="text-right">Reports</TableHead>
-                      <TableHead className="text-right">Success Rate</TableHead>
-                      <TableHead className="text-right">Last Seen</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {issues.map((p: any, i: number) => {
-                      const issue = ISSUE_BADGE[p.issue_type] ?? ISSUE_BADGE.other;
-                      const isFixed = fixedPatterns.has(`${p.domain}::${p.selector}`);
-                      return (
-                        <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
-                          <TableCell>
-                            <span className="inline-flex items-center gap-1">
-                              <Badge variant="outline" className={issue.className}>{issue.label}</Badge>
-                              <AiFixerIndicator domain={p.domain} selector={p.selector} />
+          <div className="space-y-4">
+            {/* Header with Run Button & Schedule Info */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <div>
+                  <CardTitle className="text-lg">Pattern Issues & AI Fixer</CardTitle>
+                  <CardDescription className="flex items-center gap-3 mt-1">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      Auto-runs every 6h
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Timer className="h-3.5 w-3.5" />
+                      Last run: {fixLog.length > 0 ? `${new Date(fixLog[0].created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} (${timeAgo(fixLog[0].created_at)})` : "Never"}
+                    </span>
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleRunFixer} disabled={runningFixer} className="gap-2">
+                  {runningFixer ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                  Run AI Fixer
+                </Button>
+              </CardHeader>
+            </Card>
+
+            {/* Post-Run Results Panel (collapsible) */}
+            {fixLog.length > 0 && (
+              <Collapsible open={fixResultsOpen} onOpenChange={setFixResultsOpen}>
+                <Card className="border-purple-500/30">
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="flex flex-row items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors py-3">
+                      <div className="flex items-center gap-2">
+                        <Bot className="h-4 w-4 text-purple-500" />
+                        <CardTitle className="text-sm font-medium">Latest Fix Results</CardTitle>
+                        {(() => {
+                          const latestBatch = fixLog.filter((f: any) => {
+                            const t = new Date(f.created_at).getTime();
+                            const newest = new Date(fixLog[0].created_at).getTime();
+                            return newest - t < 5000;
+                          });
+                          return (
+                            <span className="text-xs text-muted-foreground">
+                              — {latestBatch.length} processed, {latestBatch.filter((f: any) => f.success).length} fixed, {latestBatch.filter((f: any) => !f.success).length} failed
                             </span>
-                          </TableCell>
-                          <TableCell className="font-medium">{p.domain}</TableCell>
-                          <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[180px] truncate inline-block">{p.selector}</code></TableCell>
-                          <TableCell><Badge variant="outline" className={ACTION_BADGE_VARIANT[p.action_type] ?? ""}>{p.action_type}</Badge></TableCell>
-                          <TableCell className="text-right tabular-nums">{p.confidence}</TableCell>
-                          <TableCell className="text-right tabular-nums">{p.report_count}</TableCell>
-                          <TableCell className={`text-right font-medium tabular-nums ${rateColor(p.success_rate ?? 0)}`}>{p.success_rate ?? 0}%</TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">{p.last_seen ? timeAgo(p.last_seen) : "—"}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                          );
+                        })()}
+                      </div>
+                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${fixResultsOpen ? "rotate-180" : ""}`} />
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="pt-0 space-y-4">
+                      {/* Stats row */}
+                      {(() => {
+                        const latestBatch = fixLog.filter((f: any) => {
+                          const t = new Date(f.created_at).getTime();
+                          const newest = new Date(fixLog[0].created_at).getTime();
+                          return newest - t < 5000;
+                        });
+                        const successes = latestBatch.filter((f: any) => f.success).length;
+                        const failures = latestBatch.filter((f: any) => !f.success).length;
+                        return (
+                          <>
+                            <div className="grid grid-cols-3 gap-3">
+                              <Card className="border-t-2 border-primary/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold tabular-nums">{latestBatch.length}</p><p className="text-[11px] text-muted-foreground">Processed</p></CardContent></Card>
+                              <Card className="border-t-2 border-green-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-green-500 tabular-nums">{successes}</p><p className="text-[11px] text-muted-foreground">Fixed</p></CardContent></Card>
+                              <Card className="border-t-2 border-red-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-red-500 tabular-nums">{failures}</p><p className="text-[11px] text-muted-foreground">Failed</p></CardContent></Card>
+                            </div>
+                            {/* Detailed fix log table */}
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Domain</TableHead>
+                                  <TableHead>Selector</TableHead>
+                                  <TableHead>Issue</TableHead>
+                                  <TableHead>Action Taken</TableHead>
+                                  <TableHead className="text-right">Status</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {latestBatch.map((f: any, i: number) => (
+                                  <TableRow key={i} className={f.success ? "even:bg-muted/30" : "bg-red-500/5"}>
+                                    <TableCell className="font-medium text-sm">{f.domain}</TableCell>
+                                    <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[180px] truncate inline-block">{f.selector}</code></TableCell>
+                                    <TableCell>
+                                      <Badge variant="outline" className={ISSUE_BADGE[f.issue_type]?.className ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
+                                        {ISSUE_BADGE[f.issue_type]?.label ?? f.issue_type}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant="outline" className={FIX_ACTION_BADGE[f.action_taken] ?? "bg-purple-500/15 text-purple-500 border-purple-500/30"}>
+                                        {f.action_taken.replace(/_/g, " ")}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      {f.success ? (
+                                        <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">✓ Success</Badge>
+                                      ) : (
+                                        <TooltipProvider delayDuration={200}>
+                                          <UITooltip>
+                                            <TooltipTrigger asChild>
+                                              <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30 cursor-help">✗ Failed</Badge>
+                                            </TooltipTrigger>
+                                            {f.error_message && (
+                                              <TooltipContent side="left" className="max-w-xs">
+                                                <p className="text-xs">{f.error_message}</p>
+                                              </TooltipContent>
+                                            )}
+                                          </UITooltip>
+                                        </TooltipProvider>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </>
+                        );
+                      })()}
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            )}
+
+            {/* Issues Table with inline AI Fix column */}
+            <Card>
+              <CardContent className="pt-6">
+                {issues.length === 0 ? (
+                  <EmptyState icon={CheckCircle2} title="No issues detected!" description="All patterns are healthy." />
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Issue</TableHead>
+                        <TableHead>Domain</TableHead>
+                        <TableHead>Selector</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead className="text-right">Confidence</TableHead>
+                        <TableHead className="text-right">Reports</TableHead>
+                        <TableHead className="text-right">Success Rate</TableHead>
+                        <TableHead>AI Fix</TableHead>
+                        <TableHead className="text-right">Last Seen</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {issues.map((p: any, i: number) => {
+                        const issue = ISSUE_BADGE[p.issue_type] ?? ISSUE_BADGE.other;
+                        const fixKey = `${p.domain}::${p.selector}`;
+                        const fix = fixActionMap.get(fixKey);
+                        const wasDeleted = fix?.action?.includes("deleted");
+                        return (
+                          <TableRow
+                            key={i}
+                            className={`even:bg-muted/30 ${wasDeleted ? "opacity-50" : ""} ${fix ? "border-l-2 border-l-purple-500/50" : ""}`}
+                          >
+                            <TableCell>
+                              <Badge variant="outline" className={issue.className}>{issue.label}</Badge>
+                            </TableCell>
+                            <TableCell className={`font-medium ${wasDeleted ? "line-through" : ""}`}>{p.domain}</TableCell>
+                            <TableCell>
+                              <code className={`text-xs bg-muted px-1.5 py-0.5 rounded max-w-[180px] truncate inline-block ${wasDeleted ? "line-through" : ""}`}>{p.selector}</code>
+                            </TableCell>
+                            <TableCell><Badge variant="outline" className={ACTION_BADGE_VARIANT[p.action_type] ?? ""}>{p.action_type}</Badge></TableCell>
+                            <TableCell className="text-right tabular-nums">{p.confidence}</TableCell>
+                            <TableCell className="text-right tabular-nums">{p.report_count}</TableCell>
+                            <TableCell className={`text-right font-medium tabular-nums ${rateColor(p.success_rate ?? 0)}`}>{p.success_rate ?? 0}%</TableCell>
+                            <TableCell>
+                              {fix ? (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Bot className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                                  <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${FIX_ACTION_BADGE[fix.action] ?? "bg-purple-500/15 text-purple-500 border-purple-500/30"}`}>
+                                    {fix.action.replace(/_/g, " ")}
+                                  </Badge>
+                                  {fix.success ? (
+                                    <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                                  ) : (
+                                    <CircleAlert className="h-3 w-3 text-red-500 shrink-0" />
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">{p.last_seen ? timeAgo(p.last_seen) : "—"}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Breakdown Tab */}
@@ -570,112 +717,6 @@ export default function CommunityLearning() {
           </div>
         </TabsContent>
 
-        {/* AI Fixer Tab */}
-        <TabsContent value="ai-fixer">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">AI Auto-Fixer</CardTitle>
-                <CardDescription>Automated pattern maintenance — deletes stale/broken patterns, downranks low-quality ones</CardDescription>
-              </div>
-              <Button variant="outline" size="sm" onClick={handleRunFixer} disabled={runningFixer} className="gap-2">
-                {runningFixer ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                Run Now
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {/* Schedule & Last Run Info */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                <Card className="border border-border/60">
-                  <CardContent className="flex items-center gap-3 py-4">
-                    <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <CalendarClock className="h-[18px] w-[18px] text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">Every 6 hours</p>
-                      <p className="text-xs text-muted-foreground">Auto-trigger schedule (pg_cron)</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="border border-border/60">
-                  <CardContent className="flex items-center gap-3 py-4">
-                    <div className="h-9 w-9 rounded-xl bg-green-500/10 flex items-center justify-center">
-                      <Timer className="h-[18px] w-[18px] text-green-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">
-                        {fixLog.length > 0 ? new Date(fixLog[0].created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Never"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Last maintenance run{fixLog.length > 0 ? ` (${timeAgo(fixLog[0].created_at)})` : ""}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-              {fixLog.length === 0 ? (
-                <EmptyState icon={Wrench} title="No fix actions recorded yet" description="Run the AI Fixer to automatically maintain pattern quality." />
-              ) : (
-                <>
-                  {(() => {
-                    const latestBatch = fixLog.filter((f: any) => {
-                      const t = new Date(f.created_at).getTime();
-                      const newest = new Date(fixLog[0].created_at).getTime();
-                      return newest - t < 5000;
-                    });
-                    const successes = latestBatch.filter((f: any) => f.success).length;
-                    const failures = latestBatch.filter((f: any) => !f.success).length;
-                    return (
-                      <div className="grid grid-cols-3 gap-4 mb-6">
-                        <Card className="border-t-2 border-primary/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold tabular-nums">{latestBatch.length}</p><p className="text-xs text-muted-foreground">Processed</p></CardContent></Card>
-                        <Card className="border-t-2 border-green-500/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-green-500 tabular-nums">{successes}</p><p className="text-xs text-muted-foreground">Fixed</p></CardContent></Card>
-                        <Card className="border-t-2 border-red-500/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-red-500 tabular-nums">{failures}</p><p className="text-xs text-muted-foreground">Failed</p></CardContent></Card>
-                      </div>
-                    );
-                  })()}
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Domain</TableHead>
-                        <TableHead>Selector</TableHead>
-                        <TableHead>Issue</TableHead>
-                        <TableHead>Action</TableHead>
-                        <TableHead className="text-right">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {fixLog.map((f: any, i: number) => (
-                        <TableRow key={i} className={f.success ? "even:bg-muted/30" : "bg-red-500/5"}>
-                          <TableCell className="text-xs text-muted-foreground">{timeAgo(f.created_at)}</TableCell>
-                          <TableCell className="font-medium">{f.domain}</TableCell>
-                          <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[180px] truncate inline-block">{f.selector}</code></TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={ISSUE_BADGE[f.issue_type]?.className ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
-                              {ISSUE_BADGE[f.issue_type]?.label ?? f.issue_type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={FIX_ACTION_BADGE[f.action_taken] ?? "bg-purple-500/15 text-purple-500 border-purple-500/30"}>
-                              {f.action_taken.replace(/_/g, " ")}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {f.success ? (
-                              <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">Success</Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30">Failed</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* User Reports Tab */}
         <TabsContent value="user-reports">
