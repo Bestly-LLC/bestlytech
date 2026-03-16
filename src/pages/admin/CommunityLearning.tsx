@@ -652,7 +652,11 @@ export default function CommunityLearning() {
                               {ISSUE_BADGE[f.issue_type]?.label ?? f.issue_type}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-xs">{f.action_taken}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={FIX_ACTION_BADGE[f.action_taken] ?? "bg-purple-500/15 text-purple-500 border-purple-500/30"}>
+                              {f.action_taken.replace(/_/g, " ")}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="text-right">
                             {f.success ? (
                               <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">Success</Badge>
