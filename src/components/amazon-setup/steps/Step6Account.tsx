@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +9,6 @@ import { useIntakeForm } from '@/contexts/IntakeFormContext';
 import { useGuidance } from '@/contexts/GuidanceContext';
 import { GuidedLabel } from '../GuidedLabel';
 import { IntakeField } from '../IntakeField';
-import { SHOPIFY_PLANS } from '../constants';
 
 export const Step6Account = () => {
   const { formData, updateField, goNext, goBack, isPlatformSelected } = useIntakeForm();
@@ -89,21 +87,6 @@ export const Step6Account = () => {
             </div>
 
             <IntakeField name="shopify_email" label="Shopify Account Email" type="email" value={formData.shopify_email} onChange={updateField} error={errors.shopify_email} getGuidance={getGuidance} />
-
-            <div>
-              <GuidedLabel label="Shopify Plan" fieldName="shopify_plan" getGuidance={getGuidance} />
-              <RadioGroup value={formData.shopify_plan} onValueChange={v => updateField('shopify_plan', v)} className="mt-2 space-y-2">
-                {SHOPIFY_PLANS.map(plan => (
-                  <div key={plan.value} className="flex items-start gap-3 p-3 rounded-lg border border-border">
-                    <RadioGroupItem value={plan.value} id={`acct-shopify-${plan.value}`} className="mt-0.5" />
-                    <div>
-                      <Label htmlFor={`acct-shopify-${plan.value}`} className="font-medium">{plan.label}</Label>
-                      <p className="text-xs text-muted-foreground">{plan.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </RadioGroup>
-            </div>
           </div>
         )}
 
@@ -119,13 +102,6 @@ export const Step6Account = () => {
             <IntakeField name="tiktok_email" label="TikTok Shop Email" type="email" value={formData.tiktok_email} onChange={updateField} error={errors.tiktok_email} getGuidance={getGuidance} />
 
             <IntakeField name="tiktok_phone" label="TikTok Shop Phone" type="tel" value={formData.tiktok_phone} onChange={updateField} error={errors.tiktok_phone} getGuidance={getGuidance} />
-
-            <div>
-              <GuidedLabel label="TikTok Handle" fieldName="tiktok_handle" getGuidance={getGuidance} />
-              <p className="text-xs text-muted-foreground">Your @username — helps link your creator and shop accounts.</p>
-              <Input value={formData.tiktok_handle} onChange={e => updateField('tiktok_handle', e.target.value)}
-                placeholder="@yourbrand" className="mt-1" />
-            </div>
           </div>
         )}
       </CardContent>

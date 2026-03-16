@@ -21,9 +21,15 @@ export const Step7Review = () => {
   const getStateName = (code: string) => US_STATES.find(s => s.value === code)?.label || code;
   const getCountryName = (code: string) => COUNTRIES.find(c => c.value === code)?.label || code;
 
-  const requiredDocs = ['BusinessRegistration', 'BusinessAddressProof', 'IDFront', 'PersonalAddressProof'];
+  // Platform-aware required docs
+  const requiredDocs: string[] = ['IDFront'];
   if (formData.id_type === 'Drivers License') requiredDocs.push('IDBack');
-  if (formData.setup_by_representative) requiredDocs.push('RepID', 'AuthorizationLetter');
+  if (isPlatformSelected('Amazon')) {
+    requiredDocs.push('BusinessRegistration', 'BusinessAddressProof', 'PersonalAddressProof');
+  }
+  if (formData.setup_by_representative) {
+    requiredDocs.push('RepID', 'AuthorizationLetter');
+  }
   const missingDocs = requiredDocs.filter(d => !uploadedDocs.some(ud => ud.document_type === d));
 
   const platformNames = formData.selected_platforms.join(', ') || formData.platform;
@@ -37,7 +43,6 @@ export const Step7Review = () => {
       setSubmitted(true);
       setShowConfirm(false);
 
-      // Send SMS notification (fire-and-forget)
       try {
         const smsMessage = `New intake submitted by ${formData.client_name || formData.contact_first_name + ' ' + formData.contact_last_name} — ${platformNames} — ID: ${formId?.slice(0, 8)}`;
         await supabase.functions.invoke('notify-sms', { body: { message: smsMessage } });
@@ -115,7 +120,6 @@ export const Step7Review = () => {
           </Alert>
         )}
 
-        {/* Shared Sections */}
         <Section title="Client Contact Info" step={0}>
           <Field label="Name" value={formData.client_name} />
           <Field label="Email" value={formData.client_email} />
@@ -200,7 +204,7 @@ export const Step7Review = () => {
           )}
         </Section>
 
-        {/* Platform-Specific Account Sections */}
+        {/* Account Details */}
         <Section title="Account Details" step={6}>
           {isPlatformSelected('Amazon') && (
             <>
@@ -222,7 +226,6 @@ export const Step7Review = () => {
               <span className="col-span-2 text-xs font-medium text-muted-foreground uppercase tracking-wide pt-1">TikTok</span>
               <Field label="Email" value={formData.tiktok_email} />
               <Field label="Phone" value={formData.tiktok_phone} />
-              <Field label="Handle" value={formData.tiktok_handle} />
             </>
           )}
         </Section>

@@ -12,10 +12,12 @@ import { IntakeField } from '../IntakeField';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step5Auth = () => {
-  const { formData, updateField, goNext, goBack } = useIntakeForm();
+  const { formData, updateField, goNext, goBack, isPlatformSelected } = useIntakeForm();
   const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const ownerSetup = !formData.setup_by_representative;
+
+  const platformNames = formData.selected_platforms.join(', ') || 'marketplace';
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -31,7 +33,7 @@ export const Step5Auth = () => {
     <Card>
       <CardHeader>
         <CardTitle>Account Setup Authorization</CardTitle>
-        <CardDescription>Tell us who will be setting up and managing these marketplace accounts.</CardDescription>
+        <CardDescription>Tell us who will be setting up and managing these {platformNames} accounts.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
@@ -68,7 +70,7 @@ export const Step5Auth = () => {
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription className="text-sm">
-                The Letter of Authorization should be on company letterhead (or plain paper), signed by the business owner, stating that the representative is authorized to set up and manage marketplace accounts on behalf of the business. It must include the full business name and the representative's full name, and be dated within the last 180 days.
+                The Letter of Authorization should be on company letterhead (or plain paper), signed by the business owner, stating that the representative is authorized to set up and manage {platformNames} accounts on behalf of the business. It must include the full business name and the representative's full name, and be dated within the last 180 days.
               </AlertDescription>
             </Alert>
           </div>
