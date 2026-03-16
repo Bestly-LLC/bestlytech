@@ -82,8 +82,10 @@ export default function CommunityLearning() {
   const [runningFixer, setRunningFixer] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
 
+  const hasLoadedRef = useRef(false);
+
   const fetchAll = useCallback(async () => {
-    if (!overview) setLoading(true);
+    if (!hasLoadedRef.current) setLoading(true);
     try {
       const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11] = await Promise.all([
         supabase.rpc("get_community_overview" as any),
