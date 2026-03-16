@@ -25,6 +25,7 @@ const statusColor: Record<string, string> = {
 };
 
 export default function AdminDashboard() {
+  const { toast } = useToast();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
