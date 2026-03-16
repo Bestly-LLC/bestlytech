@@ -85,6 +85,9 @@ const App = () => (
                 <Route path="submissions" element={<AdminSubmissions />} />
                 <Route path="submissions/:id" element={<AdminSubmissionDetail />} />
                 <Route path="guide" element={<AdminSetupGuide />} />
+                <Route path="contacts" element={<AdminContacts />} />
+                <Route path="hires" element={<AdminHireRequests />} />
+                <Route path="waitlist" element={<AdminWaitlist />} />
                 <Route path="cookie-yeti" element={<CYDashboard />} />
                 <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
                 <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />
