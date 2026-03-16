@@ -186,18 +186,6 @@ export default function CommunityLearning() {
   const o = overview!;
   const issueCount = issues.length;
 
-  // Build lookup sets for AI fixer cross-referencing
-  const fixedPatterns = useMemo(() => new Set(fixLog.map((f: any) => `${f.domain}::${f.selector}`)), [fixLog]);
-  const fixedDomains = useMemo(() => new Set(fixLog.map((f: any) => f.domain)), [fixLog]);
-  const fixActionMap = useMemo(() => {
-    const map = new Map<string, { action: string; success: boolean }>();
-    for (const f of fixLog) {
-      const key = `${f.domain}::${f.selector}`;
-      if (!map.has(key)) map.set(key, { action: f.action_taken, success: f.success });
-    }
-    return map;
-  }, [fixLog]);
-
   const FIX_ACTION_BADGE: Record<string, string> = {
     deleted_stale: "bg-red-500/15 text-red-500 border-red-500/30",
     deleted_broken: "bg-red-500/15 text-red-500 border-red-500/30",
