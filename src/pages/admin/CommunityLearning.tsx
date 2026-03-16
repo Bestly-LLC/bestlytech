@@ -354,9 +354,11 @@ export default function CommunityLearning() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {domains.map((d: any, i: number) => (
-                    <TableRow key={i} className="even:bg-muted/30">
-                      <TableCell className="font-medium flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-muted-foreground" />{d.domain}</TableCell>
+                  {domains.map((d: any, i: number) => {
+                    const isFixed = fixedDomains.has(d.domain);
+                    return (
+                    <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
+                      <TableCell className="font-medium flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-muted-foreground" />{d.domain}<DomainAiBadge domain={d.domain} /></TableCell>
                       <TableCell className="text-right tabular-nums">{d.pattern_count}</TableCell>
                       <TableCell className="text-right tabular-nums">{Number(d.total_reports).toLocaleString()}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${rateColor(d.success_rate)}`}>{d.success_rate}%</TableCell>
