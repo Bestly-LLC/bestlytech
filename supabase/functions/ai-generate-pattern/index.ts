@@ -11,10 +11,10 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!ANTHROPIC_API_KEY) {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
     return new Response(
-      JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }),
+      JSON.stringify({ error: "LOVABLE_API_KEY not configured" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -28,7 +28,6 @@ Deno.serve(async (req) => {
   let processed = 0, generated = 0, skipped = 0, failed = 0;
 
   try {
-    // Fetch candidates
     const { data: candidates, error: fetchErr } = await supabase.rpc(
       "get_ai_generation_candidates",
       { _limit: 5 }
@@ -41,12 +40,11 @@ Deno.serve(async (req) => {
       processed++;
 
       if (!candidate.banner_html) {
-        // Skip - no HTML
         skipped++;
         await supabase.from("ai_generation_log").insert({
           domain: candidate.domain,
           status: "skipped_no_html",
-          ai_model: "claude-sonnet",
+          ai_model: "gemini-3-flash",
         });
         await supabase.rpc("mark_ai_processed", {
           _domain: candidate.domain,
@@ -57,7 +55,6 @@ Deno.serve(async (req) => {
       }
 
       try {
-        // Call Claude API
         const prompt = `You are a cookie banner analysis expert. Analyze this cookie consent banner HTML and identify the best CSS selector to DISMISS or REJECT cookies (prefer reject/decline over accept).
 
 Return ONLY valid JSON with these fields:
@@ -77,38 +74,40 @@ ${candidate.banner_html}
 Domain: ${candidate.domain}
 ${candidate.cmp_fingerprint !== "unknown" ? `CMP: ${candidate.cmp_fingerprint}` : ""}`;
 
-        const anthropicRes = await fetch(
-          "https://api.anthropic.com/v1/messages",
+        const aiRes = await fetch(
+          "https://ai.gateway.lovable.dev/v1/chat/completions",
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "x-api-key": ANTHROPIC_API_KEY,
-              "anthropic-version": "2023-06-01",
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
             },
             body: JSON.stringify({
-              model: "claude-sonnet-4-20250514",
-              max_tokens: 300,
-              messages: [{ role: "user", content: prompt }],
+              model: "google/gemini-3-flash-preview",
+              messages: [
+                {
+                  role: "system",
+                  content: "You are a cookie banner analysis expert. Always respond with valid JSON only, no markdown or explanation.",
+                },
+                { role: "user", content: prompt },
+              ],
             }),
           }
         );
 
-        if (!anthropicRes.ok) {
-          const errText = await anthropicRes.text();
-          throw new Error(`Anthropic API error ${anthropicRes.status}: ${errText}`);
+        if (!aiRes.ok) {
+          const errText = await aiRes.text();
+          throw new Error(`AI gateway error ${aiRes.status}: ${errText}`);
         }
 
-        const anthropicData = await anthropicRes.json();
-        const textBlock = anthropicData.content?.find(
-          (b: any) => b.type === "text"
-        );
-        if (!textBlock?.text) throw new Error("No text in Claude response");
+        const aiData = await aiRes.json();
+        const content = aiData.choices?.[0]?.message?.content;
+        if (!content) throw new Error("No content in AI response");
 
-        const usage = anthropicData.usage ?? {};
+        const usage = aiData.usage ?? {};
 
         // Parse JSON from response (handle markdown code blocks)
-        let jsonStr = textBlock.text.trim();
+        let jsonStr = content.trim();
         const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (jsonMatch) jsonStr = jsonMatch[1].trim();
 
@@ -120,7 +119,6 @@ ${candidate.cmp_fingerprint !== "unknown" ? `CMP: ${candidate.cmp_fingerprint}` 
 
         if (!selector) throw new Error("No selector in AI response");
 
-        // Insert into cookie_patterns via upsert_pattern
         const { error: upsertErr } = await supabase.rpc("upsert_pattern", {
           _domain: candidate.domain,
           _selector: selector,
@@ -137,16 +135,15 @@ ${candidate.cmp_fingerprint !== "unknown" ? `CMP: ${candidate.cmp_fingerprint}` 
           .eq("domain", candidate.domain)
           .eq("selector", selector);
 
-        // Log success
         await supabase.from("ai_generation_log").insert({
           domain: candidate.domain,
           status: "success",
           selector_generated: selector,
           action_type: action === "hide" ? "close" : "reject",
           confidence,
-          ai_model: "claude-sonnet",
-          prompt_tokens: usage.input_tokens ?? null,
-          completion_tokens: usage.output_tokens ?? null,
+          ai_model: "gemini-3-flash",
+          prompt_tokens: usage.prompt_tokens ?? null,
+          completion_tokens: usage.completion_tokens ?? null,
           html_source: candidate.banner_html?.substring(0, 500),
         });
 
@@ -169,7 +166,7 @@ ${candidate.cmp_fingerprint !== "unknown" ? `CMP: ${candidate.cmp_fingerprint}` 
           domain: candidate.domain,
           status: "error",
           error_message: err.message?.substring(0, 500),
-          ai_model: "claude-sonnet",
+          ai_model: "gemini-3-flash",
         });
         await supabase.rpc("mark_ai_processed", {
           _domain: candidate.domain,
