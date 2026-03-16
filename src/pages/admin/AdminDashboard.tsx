@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Clock, AlertTriangle, CheckCircle, ArrowRight } from "lucide-react";
+import { FileText, Clock, AlertTriangle, CheckCircle, ArrowRight, Mail, Briefcase, Snowflake, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
@@ -26,13 +26,17 @@ const statusColor: Record<string, string> = {
 
 export default function AdminDashboard() {
   const { toast } = useToast();
-  const [data, setData] = useState<any[]>([]);
+  const [intakes, setIntakes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
+  const [contactCount, setContactCount] = useState(0);
+  const [hireCount, setHireCount] = useState(0);
+  const [waitlistCount, setWaitlistCount] = useState(0);
+  const [cySubCount, setCySubCount] = useState(0);
 
   useAdminRealtime({
     tables: ["seller_intakes"],
-    onNewRecord: (_table, record) => setData((prev) => [record, ...prev]),
+    onNewRecord: (_table, record) => setIntakes((prev) => [record, ...prev]),
   });
 
   useEffect(() => {
@@ -40,13 +44,23 @@ export default function AdminDashboard() {
   }, []);
 
   const loadData = async () => {
-    const { data: all, error } = await supabase.from("seller_intakes").select("*").order("created_at", { ascending: false });
-    if (error) toast({ title: "Failed to load submissions", description: error.message, variant: "destructive" });
-    setData(all || []);
+    const [intakesRes, contactsRes, hiresRes, waitlistRes, cySubsRes] = await Promise.all([
+      supabase.from("seller_intakes").select("*").order("created_at", { ascending: false }),
+      supabase.from("contact_submissions").select("id", { count: "exact", head: true }).eq("status", "new"),
+      supabase.from("hire_requests").select("id", { count: "exact", head: true }).eq("status", "new"),
+      supabase.from("waitlist_subscribers").select("id", { count: "exact", head: true }),
+      supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "active"),
+    ]);
+    if (intakesRes.error) toast({ title: "Failed to load", description: intakesRes.error.message, variant: "destructive" });
+    setIntakes(intakesRes.data || []);
+    setContactCount(contactsRes.count ?? 0);
+    setHireCount(hiresRes.count ?? 0);
+    setWaitlistCount(waitlistRes.count ?? 0);
+    setCySubCount(cySubsRes.count ?? 0);
     setLoading(false);
   };
 
-  const filtered = useMemo(() => filterByDateRange(data, dateRange), [data, dateRange]);
+  const filtered = useMemo(() => filterByDateRange(intakes, dateRange), [intakes, dateRange]);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -62,18 +76,20 @@ export default function AdminDashboard() {
   const recent = filtered.slice(0, 5);
 
   const statCards = [
-    { label: "Total Submissions", value: stats.total, icon: FileText, iconColor: "text-primary", iconBg: "bg-primary/10", accentColor: "border-primary/40" },
-    { label: "New This Week", value: stats.thisWeek, icon: Clock, iconColor: "text-blue-500", iconBg: "bg-blue-500/10", accentColor: "border-blue-500/40" },
+    { label: "Intake Submissions", value: stats.total, icon: FileText, iconColor: "text-primary", iconBg: "bg-primary/10", accentColor: "border-primary/40" },
     { label: "Needs Review", value: stats.needsReview, icon: AlertTriangle, iconColor: "text-yellow-500", iconBg: "bg-yellow-500/10", accentColor: "border-yellow-500/40" },
-    { label: "Approved", value: stats.approved, icon: CheckCircle, iconColor: "text-green-500", iconBg: "bg-green-500/10", accentColor: "border-green-500/40" },
+    { label: "New Contacts", value: contactCount, icon: Mail, iconColor: "text-blue-500", iconBg: "bg-blue-500/10", accentColor: "border-blue-500/40" },
+    { label: "New Hire Requests", value: hireCount, icon: Briefcase, iconColor: "text-orange-500", iconBg: "bg-orange-500/10", accentColor: "border-orange-500/40" },
+    { label: "CY Subscribers", value: cySubCount, icon: Snowflake, iconColor: "text-cyan-500", iconBg: "bg-cyan-500/10", accentColor: "border-cyan-500/40" },
+    { label: "Waitlist", value: waitlistCount, icon: Users, iconColor: "text-green-500", iconBg: "bg-green-500/10", accentColor: "border-green-500/40" },
   ];
 
   if (loading) {
     return (
       <div className="space-y-8 max-w-6xl">
         <div><Skeleton className="h-7 w-48" /><Skeleton className="h-4 w-72 mt-2" /></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
         </div>
         <Skeleton className="h-64 rounded-xl" />
       </div>
@@ -83,11 +99,11 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-8 max-w-6xl">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <PageHeader title="Amazon Dashboard" description="Overview of marketplace seller intake submissions." />
+        <PageHeader title="Dashboard" description="Overview across all products and services." />
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {statCards.map((s) => (
           <StatCard key={s.label} {...s} />
         ))}
@@ -98,7 +114,7 @@ export default function AdminDashboard() {
           <CardHeader className="flex flex-row items-center justify-between pb-4">
             <div>
               <CardTitle className="text-base">Recent Submissions</CardTitle>
-              <CardDescription className="text-xs">Latest intake submissions from clients.</CardDescription>
+              <CardDescription className="text-xs">Latest marketplace intake submissions.</CardDescription>
             </div>
             <Link to="/admin/submissions">
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">

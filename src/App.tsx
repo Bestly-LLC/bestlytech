@@ -39,6 +39,9 @@ import CYDashboard from "./pages/admin/CYDashboard";
 import CYSubscribers from "./pages/admin/CYSubscribers";
 import CYGrantedAccess from "./pages/admin/CYGrantedAccess";
 import CommunityLearning from "./pages/admin/CommunityLearning";
+import AdminContacts from "./pages/admin/AdminContacts";
+import AdminHireRequests from "./pages/admin/AdminHireRequests";
+import AdminWaitlist from "./pages/admin/AdminWaitlist";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +85,9 @@ const App = () => (
                 <Route path="submissions" element={<AdminSubmissions />} />
                 <Route path="submissions/:id" element={<AdminSubmissionDetail />} />
                 <Route path="guide" element={<AdminSetupGuide />} />
+                <Route path="contacts" element={<AdminContacts />} />
+                <Route path="hires" element={<AdminHireRequests />} />
+                <Route path="waitlist" element={<AdminWaitlist />} />
                 <Route path="cookie-yeti" element={<CYDashboard />} />
                 <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
                 <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />
