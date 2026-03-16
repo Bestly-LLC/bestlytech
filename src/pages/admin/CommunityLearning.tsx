@@ -135,7 +135,8 @@ export default function CommunityLearning() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
       toast.success(`Maintenance complete — Fixed: ${data.fix?.fixed ?? 0}, Failed: ${data.fix?.failed ?? 0}`);
-      fetchAll();
+      await fetchAll();
+      setFixResultsOpen(true);
     } catch (e: any) {
       toast.error(`Maintenance failed: ${e.message}`);
     } finally {
