@@ -77,6 +77,51 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_generation_log: {
+        Row: {
+          action_type: string | null
+          ai_model: string | null
+          completion_tokens: number | null
+          confidence: number | null
+          created_at: string
+          domain: string
+          error_message: string | null
+          html_source: string | null
+          id: number
+          prompt_tokens: number | null
+          selector_generated: string | null
+          status: string
+        }
+        Insert: {
+          action_type?: string | null
+          ai_model?: string | null
+          completion_tokens?: number | null
+          confidence?: number | null
+          created_at?: string
+          domain: string
+          error_message?: string | null
+          html_source?: string | null
+          id?: never
+          prompt_tokens?: number | null
+          selector_generated?: string | null
+          status: string
+        }
+        Update: {
+          action_type?: string | null
+          ai_model?: string | null
+          completion_tokens?: number | null
+          confidence?: number | null
+          created_at?: string
+          domain?: string
+          error_message?: string | null
+          html_source?: string | null
+          id?: never
+          prompt_tokens?: number | null
+          selector_generated?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       contact_submissions: {
         Row: {
           category: string | null
@@ -362,31 +407,46 @@ export type Database = {
       }
       missed_banner_reports: {
         Row: {
+          ai_attempts: number
+          ai_processed_at: string | null
+          banner_html: string | null
+          cmp_fingerprint: string | null
           created_at: string
           domain: string
           has_working_pattern: boolean
           id: number
           last_reported: string
+          page_url: string | null
           report_count: number
           resolved: boolean
           resolved_at: string | null
         }
         Insert: {
+          ai_attempts?: number
+          ai_processed_at?: string | null
+          banner_html?: string | null
+          cmp_fingerprint?: string | null
           created_at?: string
           domain: string
           has_working_pattern?: boolean
           id?: never
           last_reported?: string
+          page_url?: string | null
           report_count?: number
           resolved?: boolean
           resolved_at?: string | null
         }
         Update: {
+          ai_attempts?: number
+          ai_processed_at?: string | null
+          banner_html?: string | null
+          cmp_fingerprint?: string | null
           created_at?: string
           domain?: string
           has_working_pattern?: boolean
           id?: never
           last_reported?: string
+          page_url?: string | null
           report_count?: number
           resolved?: boolean
           resolved_at?: string | null
@@ -787,6 +847,7 @@ export type Database = {
     Functions: {
       auto_fix_pattern_issues: { Args: never; Returns: Json }
       get_action_type_stats: { Args: never; Returns: Json }
+      get_ai_generation_candidates: { Args: { _limit?: number }; Returns: Json }
       get_cmp_distribution: { Args: never; Returns: Json }
       get_community_overview: { Args: never; Returns: Json }
       get_confidence_distribution: { Args: never; Returns: Json }
@@ -796,9 +857,22 @@ export type Database = {
       get_source_breakdown: { Args: never; Returns: Json }
       get_top_domains: { Args: { p_limit?: number }; Returns: Json }
       get_unresolved_reports: { Args: { p_limit?: number }; Returns: Json }
+      mark_ai_processed: {
+        Args: { _domain: string; _resolved?: boolean }
+        Returns: undefined
+      }
       process_user_reports: { Args: never; Returns: Json }
       record_pattern_success: {
         Args: { _action_type: string; _domain: string; _selector: string }
+        Returns: undefined
+      }
+      report_missed_banner_with_html: {
+        Args: {
+          _banner_html?: string
+          _cmp_fingerprint?: string
+          _domain: string
+          _page_url?: string
+        }
         Returns: undefined
       }
       upsert_pattern: {

@@ -1,91 +1,57 @@
 
 
-# AI Pattern Generator — Full Implementation Plan
+## Integrate Apple-Native Business Modernization Program
 
-Three-part change: database migration, new edge function, and admin UI overhaul.
-
----
-
-## Part 1: SQL Migration
-
-Run a single migration that:
-
-1. **Adds columns to `missed_banner_reports`**: `banner_html TEXT`, `page_url TEXT`, `ai_processed_at TIMESTAMPTZ`, `ai_attempts INTEGER NOT NULL DEFAULT 0`, `cmp_fingerprint TEXT DEFAULT 'unknown'`
-2. **Creates `ai_generation_log` table** with identity PK, indexes on `created_at DESC` and `domain`, RLS (anon read, service_role all)
-3. **Creates 3 RPC functions**:
-   - `report_missed_banner_with_html(_domain, _page_url, _banner_html, _cmp_fingerprint)` — upserts into `missed_banner_reports` with HTML truncated to 5000 chars, granted to anon
-   - `get_ai_generation_candidates(_limit)` — returns unresolved reports not AI-processed in last 24h with <3 attempts, prioritizing those with HTML, granted to service_role
-   - `mark_ai_processed(_domain, _resolved)` — updates `ai_processed_at`, increments `ai_attempts`, optionally resolves, granted to service_role
-4. **Note**: `cookie_patterns` already has a `source` column (default `'community'`), so the `ALTER TABLE ADD COLUMN IF NOT EXISTS source` is harmless/no-op
+Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
 
 ---
 
-## Part 2: Edge Function `ai-generate-pattern`
+### 1. New Page: `src/pages/AppleModernization.tsx`
 
-New file: `supabase/functions/ai-generate-pattern/index.ts`
+A comprehensive, premium-feeling service page with the following sections:
 
-- **Config**: `verify_jwt = false` in `config.toml`
-- **Flow**:
-  1. Create service-role Supabase client
-  2. Call `get_ai_generation_candidates(5)` via RPC
-  3. For each candidate:
-     - If no `banner_html` → log as `skipped_no_html`, call `mark_ai_processed(domain, false)`
-     - If has HTML → POST to `https://api.anthropic.com/v1/messages` with `ANTHROPIC_API_KEY`, model `claude-sonnet-4-20250514`
-     - Prompt: analyze cookie banner HTML, return JSON `{selector, action, confidence}`, prefer reject/decline buttons
-     - On success: insert into `cookie_patterns` (confidence capped at 0.6, source = `ai_generated`), log success to `ai_generation_log`, call `mark_ai_processed(domain, true)`
-     - On failure: log error to `ai_generation_log`, call `mark_ai_processed(domain, false)`
-  4. Return JSON summary
-- **Secret needed**: `ANTHROPIC_API_KEY` — will use `add_secret` tool to request it
+- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
+- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
+- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
+  - Apple Discovery Infrastructure
+  - App Clips (Instant Customer Experience)
+  - Payments Modernization (Tap to Pay)
+  - Digital ID Verification
+  - Brand Trust and Identity
+  - Customer Experience Automation
+  - Commerce and Ordering
+  - Operational Analytics
+  - Apple-Ready Certification (marked as optional)
+- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
+- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
+- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
 
----
+### 2. Route Registration: `src/App.tsx`
 
-## Part 3: Admin UI — `CommunityLearning.tsx`
+- Import the new `AppleModernization` page component.
+- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
 
-### Tab rename
-- Tab trigger: `"Issues & Fixer"` → `"AI Pattern Generator"` with `Brain` icon instead of `AlertTriangle`
+### 3. Services Page Update: `src/pages/Services.tsx`
 
-### Header card rename
-- `"Pattern Issues & AI Fixer"` → `"AI Pattern Generator"`
-- Button: `"Run AI Fixer"` → `"Run AI Generator"`
-- Schedule text updated to reflect AI generation
-- `handleRunFixer` → calls `ai-generate-pattern` edge function instead of `run-pattern-maintenance`
+- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
+- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
 
-### Replace issues table content with two sections
+### 4. Header Navigation: `src/components/layout/Header.tsx`
 
-**Section A: "Pending Candidates"**
-- Query `missed_banner_reports` where `resolved = false`, ordered by `report_count DESC`
-- Columns: Domain, Reports, Has HTML (yes/no badge), CMP Type, Last Reported, AI Attempts
-- New state: `candidates` fetched in `fetchAll`
-
-**Section B: "AI Generation Log"**
-- Query `ai_generation_log` ordered by `created_at DESC`, limit 50
-- Columns: Timestamp (formatted), Domain, Status (color badge: green/red/gray), Selector (monospace, truncated), Action, Confidence (%), AI Model
-- New state: `aiGenLog` fetched in `fetchAll`
-
-### Stats card update
-- Add 5th stat card: "AI Generated" — count of `cookie_patterns` where `source = 'ai_generated'`
-- Fetched via a simple `.select("id", { count: "exact" }).eq("source", "ai_generated")` in `fetchAll`
-
-### Cleanup
-- Remove old `fixLog`, `fixActionMap`, `fixedPatterns`, `fixedDomains` state/memos (no longer needed for this tab)
-- Keep `AiFixerIndicator` and `DomainAiBadge` for the other tabs (Recent, Domains) as they still reference `pattern_fix_log`
-- Remove the collapsible "Latest Fix Results" panel — replaced by the Generation Log section
-- Post-run results now shown inline in the Generation Log (latest entries appear at top after refresh)
-
-### Collapsible post-run panel
-- After clicking "Run AI Generator", show a collapsible results panel similar to the old one but showing the AI generation summary (processed/generated/skipped/failed counts) returned by the edge function
+- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
 
 ---
 
-## Files Changed
+### Technical Details
 
-| File | Change |
-|------|--------|
-| SQL migration | Add columns to `missed_banner_reports`, create `ai_generation_log`, create 3 RPC functions |
-| `supabase/config.toml` | Add `[functions.ai-generate-pattern]` with `verify_jwt = false` |
-| `supabase/functions/ai-generate-pattern/index.ts` | New edge function |
-| `src/pages/admin/CommunityLearning.tsx` | Rename tab, replace issues content with candidates + generation log, update button handler, add AI Generated stat card |
+**New file:**
+- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
 
-## Prerequisites
-- Will need to request `ANTHROPIC_API_KEY` secret from the user before the edge function can work
+**Modified files:**
+- `src/App.tsx` -- add import and route
+- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
+
+**No database or backend changes required.** This is purely a frontend content page.
+
+The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
 
