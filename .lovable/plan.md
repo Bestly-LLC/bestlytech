@@ -1,57 +1,36 @@
 
 
-## Integrate Apple-Native Business Modernization Program
+# Visual AI Fixer Indicators
 
-Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
+## Problem
+When viewing patterns in the Issues, Recent, and Domains tabs, there's no way to tell which ones have been actioned by the AI fixer. The fix log data is siloed in the AI Fixer tab.
 
----
+## Solution
+Cross-reference patterns displayed in the **Issues**, **Recent**, and **Domains** tabs with the `fixLog` data (already fetched) to show a visual "AI Fixed" indicator on rows that were actioned.
 
-### 1. New Page: `src/pages/AppleModernization.tsx`
+### Changes to `src/pages/admin/CommunityLearning.tsx`
 
-A comprehensive, premium-feeling service page with the following sections:
+1. **Build a lookup Set** from `fixLog` keyed by `domain` (and optionally `domain+selector`) so we can quickly check if a pattern was actioned:
+   ```ts
+   const fixedDomains = new Set(fixLog.map(f => f.domain));
+   const fixedPatterns = new Set(fixLog.map(f => `${f.domain}::${f.selector}`));
+   ```
 
-- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
-- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
-- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
-  - Apple Discovery Infrastructure
-  - App Clips (Instant Customer Experience)
-  - Payments Modernization (Tap to Pay)
-  - Digital ID Verification
-  - Brand Trust and Identity
-  - Customer Experience Automation
-  - Commerce and Ordering
-  - Operational Analytics
-  - Apple-Ready Certification (marked as optional)
-- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
-- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
-- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
+2. **Issues tab** — Add an AI bot icon + tooltip on rows where `fixedPatterns` has a match. Show the action taken (e.g. "deleted_stale", "confidence_zeroed") as a small badge next to the issue badge. Color the row with a subtle blue/purple left border or background tint to distinguish AI-actioned rows.
 
-### 2. Route Registration: `src/App.tsx`
+3. **Recent tab** — Same indicator: a small `<Wrench>` or `<Bot>` icon with "AI Actioned" tooltip on rows matching `fixedPatterns`.
 
-- Import the new `AppleModernization` page component.
-- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
+4. **Domains tab** — Show a small AI badge next to domain names that appear in `fixedDomains`, indicating the fixer has touched patterns on that domain.
 
-### 3. Services Page Update: `src/pages/Services.tsx`
+5. **AI Fixer tab fix log table** — Add color-coded action badges (instead of plain text) for the "Action" column: `deleted_stale` → red destructive badge, `deleted_broken` → red, `confidence_zeroed` → amber, `confidence_halved` → amber, `skipped` → muted.
 
-- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
-- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
+### Visual Design
+- Use the existing `<Wrench>` icon (already imported) in a small 14px size with `text-purple-500` coloring
+- Add a `<Tooltip>` wrapper showing "AI Fixer: {action_taken}" on hover
+- Rows with AI actions get a subtle `border-l-2 border-purple-500/50` left accent
 
-### 4. Header Navigation: `src/components/layout/Header.tsx`
+### Import Addition
+- Add `Bot` from lucide-react (or reuse `Wrench`) and `Tooltip`/`TooltipTrigger`/`TooltipContent`/`TooltipProvider` from shadcn
 
-- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
-
----
-
-### Technical Details
-
-**New file:**
-- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
-
-**Modified files:**
-- `src/App.tsx` -- add import and route
-- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
-
-**No database or backend changes required.** This is purely a frontend content page.
-
-The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
+### No database changes needed — all data is already available in the existing `fixLog` state.
 
