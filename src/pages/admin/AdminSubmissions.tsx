@@ -179,7 +179,16 @@ export default function AdminSubmissions() {
                   </TableCell>
                   <TableCell className="text-sm">{r.client_name || "—"}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">{r.client_email || "—"}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-xs">{r.platform}</Badge></TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {(r.selected_platforms && r.selected_platforms.length > 0
+                        ? r.selected_platforms
+                        : [r.platform]
+                      ).map((p: string) => (
+                        <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
+                      ))}
+                    </div>
+                  </TableCell>
                   <TableCell><Badge className="text-xs">{r.status}</Badge></TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
