@@ -51,6 +51,22 @@ function Section({ title, defaultOpen, children }: { title: string; defaultOpen?
   );
 }
 
+function SubSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4 last:mb-0">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function getSelectedPlatforms(intake: any): string[] {
+  if (intake.selected_platforms && intake.selected_platforms.length > 0) {
+    return intake.selected_platforms;
+  }
+  return [intake.platform || "Amazon"];
+}
+
 export default function AdminSubmissionDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
@@ -67,20 +83,26 @@ export default function AdminSubmissionDetail() {
   }, [id]);
 
   const loadData = async () => {
-    const [{ data: i }, { data: d }, { data: v }, { data: g }] = await Promise.all([
+    const [{ data: i }, { data: d }, { data: v }] = await Promise.all([
       supabase.from("seller_intakes").select("*").eq("id", id!).single(),
       supabase.from("intake_documents").select("*").eq("intake_id", id!),
       supabase.from("intake_validations").select("*").eq("intake_id", id!).order("created_at"),
-      supabase.from("setup_guidance").select("*").eq("platform", "Amazon").order("display_order"),
     ]);
     if (i) {
       setIntake(i);
       setStatus(i.status);
       setNotes(i.admin_notes || "");
+      // Load guidance for all selected platforms
+      const platforms = getSelectedPlatforms(i);
+      const { data: g } = await supabase
+        .from("setup_guidance")
+        .select("*")
+        .in("platform", platforms)
+        .order("display_order");
+      setGuidance(g || []);
     }
     setDocs(d || []);
     setValidations(v || []);
-    setGuidance(g || []);
     setLoading(false);
   };
 
@@ -120,6 +142,11 @@ export default function AdminSubmissionDetail() {
     );
   }
 
+  const platforms = getSelectedPlatforms(intake);
+  const hasAmazon = platforms.includes("Amazon");
+  const hasShopify = platforms.includes("Shopify");
+  const hasTikTok = platforms.includes("TikTok");
+
   return (
     <div className="space-y-4 max-w-4xl">
         <div className="flex items-center gap-3">
@@ -131,7 +158,12 @@ export default function AdminSubmissionDetail() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">{intake.business_legal_name || "Unnamed Submission"}</h1>
-            <p className="text-muted-foreground text-sm">ID: {intake.id}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-muted-foreground text-sm">Platforms:</span>
+              {platforms.map((p: string) => (
+                <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
+              ))}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Select value={status} onValueChange={setStatus}>
@@ -202,15 +234,43 @@ export default function AdminSubmissionDetail() {
         <Section title="Brand & Product">
           <Field label="Owns Brand" value={intake.owns_brand ? "Yes" : "No"} />
           <Field label="Brand Name" value={intake.brand_name} />
-          <Field label="Store Name" value={intake.amazon_store_name} />
           <Field label="Has Trademark" value={intake.has_trademark ? "Yes" : "No"} />
           <Field label="Trademark #" value={intake.trademark_number} />
-          <Field label="Product Category" value={intake.product_category} />
-          <Field label="# Products" value={intake.number_of_products} />
-          <Field label="Fulfillment" value={intake.fulfillment_method} />
-          <Field label="Has UPCs" value={intake.has_upcs ? "Yes" : "No"} />
           <Field label="Has Diversity Certs" value={intake.has_diversity_certs ? "Yes" : "No"} />
           <Field label="Description" value={intake.product_description} />
+
+          {hasAmazon && (
+            <SubSection label="Amazon">
+              <Field label="Store Name" value={intake.amazon_store_name} />
+              <Field label="Product Category" value={intake.product_category} />
+              <Field label="# Products" value={intake.number_of_products} />
+              <Field label="Fulfillment" value={intake.fulfillment_method} />
+              <Field label="Has UPCs" value={intake.has_upcs ? "Yes" : "No"} />
+            </SubSection>
+          )}
+
+          {hasShopify && (
+            <SubSection label="Shopify">
+              <Field label="Store Name" value={intake.shopify_store_name} />
+              <Field label="Plan" value={intake.shopify_plan} />
+              <Field label="Domain" value={intake.shopify_domain} />
+              <Field label="Has Existing Shopify" value={intake.has_existing_shopify ? "Yes" : "No"} />
+              {intake.has_existing_shopify && (
+                <Field label="Existing URL" value={intake.existing_shopify_url} />
+              )}
+              <Field label="Shipping Method" value={intake.shipping_method} />
+            </SubSection>
+          )}
+
+          {hasTikTok && (
+            <SubSection label="TikTok">
+              <Field label="Shop Name" value={intake.tiktok_shop_name} />
+              <Field label="Handle" value={intake.tiktok_handle} />
+              <Field label="Category" value={intake.tiktok_category} />
+              <Field label="Fulfillment" value={intake.tiktok_fulfillment} />
+              <Field label="Has Creator Account" value={intake.has_tiktok_creator ? "Yes" : "No"} />
+            </SubSection>
+          )}
         </Section>
 
         <Section title="Authorization">
@@ -224,9 +284,27 @@ export default function AdminSubmissionDetail() {
         </Section>
 
         <Section title="Account Details">
-          <Field label="Amazon Email" value={intake.amazon_email} />
-          <Field label="Amazon Phone" value={intake.amazon_phone} />
-          <Field label="Seller Plan" value={intake.seller_plan} />
+          {hasAmazon && (
+            <SubSection label="Amazon">
+              <Field label="Email" value={intake.amazon_email} />
+              <Field label="Phone" value={intake.amazon_phone} />
+              <Field label="Seller Plan" value={intake.seller_plan} />
+            </SubSection>
+          )}
+          {hasShopify && (
+            <SubSection label="Shopify">
+              <Field label="Email" value={intake.shopify_email} />
+            </SubSection>
+          )}
+          {hasTikTok && (
+            <SubSection label="TikTok">
+              <Field label="Email" value={intake.tiktok_email} />
+              <Field label="Phone" value={intake.tiktok_phone} />
+            </SubSection>
+          )}
+          {!hasAmazon && !hasShopify && !hasTikTok && (
+            <p className="text-sm text-muted-foreground">No platform-specific account details.</p>
+          )}
         </Section>
 
         <Section title={`Documents (${docs.length})`}>
@@ -291,7 +369,10 @@ export default function AdminSubmissionDetail() {
             <div className="space-y-3">
               {guidance.map((g) => (
                 <div key={g.id} className="p-3 rounded-md bg-muted/50 border">
-                  <p className="text-sm font-medium text-foreground">{g.field_name}</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="outline" className="text-[10px]">{g.platform}</Badge>
+                    <p className="text-sm font-medium text-foreground">{g.field_name}</p>
+                  </div>
                   <p className="text-sm text-muted-foreground">{g.guidance_text}</p>
                   {g.answer_recommendation && (
                     <p className="text-sm mt-1"><span className="font-medium">Recommended:</span> {g.answer_recommendation}</p>
