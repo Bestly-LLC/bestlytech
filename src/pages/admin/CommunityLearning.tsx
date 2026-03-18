@@ -109,6 +109,7 @@ export default function CommunityLearning() {
   const [unresolvedReports, setUnresolvedReports] = useState<any[]>([]);
   const [runningGenerator, setRunningGenerator] = useState(false);
   const [runningRetry, setRunningRetry] = useState(false);
+  const [runningMaintenance, setRunningMaintenance] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
   const [deletingPattern, setDeletingPattern] = useState<string | null>(null);
   const [rerunningDomain, setRerunningDomain] = useState<string | null>(null);
@@ -220,6 +221,29 @@ export default function CommunityLearning() {
       toast.error(`Auto-retry failed: ${e.message}`);
     } finally {
       setRunningRetry(false);
+    }
+  }, [fetchAll]);
+
+  const handleRunMaintenance = useCallback(async () => {
+    setRunningMaintenance(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-pattern-maintenance`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      toast.success(`Maintenance complete — Fixed: ${data.fix?.fixed ?? 0}, Failed: ${data.fix?.failed ?? 0}, Reports resolved: ${data.reports?.newly_resolved ?? 0}`);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Maintenance failed: ${e.message}`);
+    } finally {
+      setRunningMaintenance(false);
     }
   }, [fetchAll]);
 
@@ -696,6 +720,10 @@ export default function CommunityLearning() {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleRunMaintenance} disabled={runningMaintenance} className="gap-2">
+                    {runningMaintenance ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+                    Run Maintenance
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handleRunRetry} disabled={runningRetry} className="gap-2">
                     {runningRetry ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                     Retry Failed
