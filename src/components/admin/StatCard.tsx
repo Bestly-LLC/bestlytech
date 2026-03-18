@@ -50,7 +50,7 @@ export function StatCard({
             <Icon className={`h-[18px] w-[18px] ${iconColor}`} />
           </div>
           <p className="text-2xl font-bold text-foreground tabular-nums">{value}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">{label}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">{labelWithTip}</p>
           {subtitle && <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>}
         </CardContent>
       </Card>
