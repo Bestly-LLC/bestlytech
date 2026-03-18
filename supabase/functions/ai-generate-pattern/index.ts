@@ -476,12 +476,47 @@ Deno.serve(async (req) => {
           }
         }
 
+        // ========== LAYER 4: Gemini Flash failsafe — different model, different prompt ==========
+        const fullHtmlForGemini = serverHtml || candidate.banner_html || "";
+        if (fullHtmlForGemini.length > 100) {
+          console.log(`[${candidate.domain}] All layers failed, trying Gemini Flash failsafe...`);
+          const geminiResult = await geminiFailsafe(LOVABLE_API_KEY, candidate.domain, fullHtmlForGemini);
+          if (geminiResult) {
+            await insertPattern(supabase, candidate, {
+              is_cookie_banner: true,
+              selector: geminiResult.selector,
+              action_type: geminiResult.action,
+              confidence: geminiResult.confidence,
+            }, "success_gemini_failsafe", fullHtmlForGemini.substring(0, 500));
+
+            if (geminiResult.strategy) {
+              await supabase
+                .from("cookie_patterns")
+                .update({ strategy: geminiResult.strategy.toLowerCase() } as any)
+                .eq("domain", candidate.domain)
+                .eq("selector", geminiResult.selector);
+            }
+
+            generated++;
+            results.push({
+              domain: candidate.domain,
+              status: "success_gemini_failsafe",
+              selector: geminiResult.selector,
+              action: geminiResult.action,
+              confidence: geminiResult.confidence,
+              note: `Gemini failsafe${geminiResult.strategy ? ` (strategy: ${geminiResult.strategy})` : ""}`,
+            });
+            continue;
+          }
+        }
+
         // ========== ALL PATHS FAILED → check retry limit ==========
         const diagnostics = [
           `Extension HTML: AI rejected (${reason})`,
           `Server fetch: ${serverFetchSuccess ? "OK" : "FAILED"}`,
           serverFetchSuccess ? `Server CMP check: no match` : null,
           serverFetchSuccess ? `Server AI: ${serverHtml ? "no cookie elements or AI rejected" : "N/A"}` : null,
+          `Gemini failsafe: no result`,
         ].filter(Boolean).join("; ");
 
         // After 5 attempts total, mark as permanently_failed (auto-retry will stop)
