@@ -455,7 +455,7 @@ export default function CommunityLearning() {
                      <TableHead className="text-right">Patterns<InfoTip text="Number of CSS selectors learned for this domain" /></TableHead>
                      <TableHead className="text-right">Reports<InfoTip text="Times users encountered banners on this domain" /></TableHead>
                      <TableHead className="text-right">Success Rate<InfoTip text="How often patterns successfully dismiss banners here" /></TableHead>
-                     <TableHead>Confidence<InfoTip text="Reliability score 0-1, based on success rate and volume" /></TableHead>
+                     <TableHead>Confidence<InfoTip text="Reliability score 1-10, based on success rate and volume" /></TableHead>
                      <TableHead className="text-right">Last Active<InfoTip text="When a pattern last matched a banner on this domain" /></TableHead>
                   </TableRow>
                 </TableHeader>
