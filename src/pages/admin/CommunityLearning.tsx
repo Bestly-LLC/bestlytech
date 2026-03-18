@@ -1188,6 +1188,134 @@ export default function CommunityLearning() {
           </div>
         </TabsContent>
 
+        {/* Dismissals Tab */}
+        <TabsContent value="dismissals">
+          <div className="space-y-4">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-3 gap-4">
+              <Card className="border-t-2 border-purple-500/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold tabular-nums">{dismissalReports.length}</p>
+                  <p className="text-xs text-muted-foreground">Total Dismissal Reports</p>
+                </CardContent>
+              </Card>
+              <Card className="border-t-2 border-blue-500/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold text-blue-500 tabular-nums">{dismissalsByDomain.size}</p>
+                  <p className="text-xs text-muted-foreground">Unique Domains</p>
+                </CardContent>
+              </Card>
+              <Card className="border-t-2 border-teal-500/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold text-teal-500 tabular-nums">{consensusCandidates.length}</p>
+                  <p className="text-xs text-muted-foreground">Pending Consensus<InfoTip text="Domains with dismissal reports not yet converted to patterns" /></p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Consensus Results */}
+            {consensusResults && (
+              <Card className="border-teal-500/30 bg-teal-500/5">
+                <CardContent className="py-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle2 className="h-4 w-4 text-teal-500" />
+                    <p className="text-sm font-medium">Consensus Results — {consensusResults.created ?? 0} patterns created from {consensusResults.processed ?? 0} candidates</p>
+                  </div>
+                  {consensusResults.results?.length > 0 && (
+                    <div className="space-y-1">
+                      {consensusResults.results.map((r: any, i: number) => (
+                        <p key={i} className="text-xs text-muted-foreground">
+                          {r.error ? `❌ ${r.domain}: ${r.error}` : `✅ ${r.domain} → ${r.selector} (confidence: ${Math.round((r.confidence ?? 0) * 10)}%, ${r.reports} reports)`}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Actions Bar */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <div>
+                  <CardTitle className="text-lg">Dismissal Reports</CardTitle>
+                  <CardDescription>User-reported banner dismissals from the extension</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  {selectedDismissals.size > 0 && (
+                    <Button variant="outline" size="sm" className="gap-1.5 text-red-500 border-red-500/30 hover:bg-red-500/10" disabled={deletingDismissals} onClick={handleDeleteDismissals}>
+                      {deletingDismissals ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      Delete {selectedDismissals.size} selected
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={handleRunConsensus} disabled={runningConsensus || consensusCandidates.length === 0} className="gap-2">
+                    {runningConsensus ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    Run Consensus{consensusCandidates.length > 0 ? ` (${consensusCandidates.length})` : ""}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {dismissalReports.length === 0 ? (
+                  <EmptyState icon={CheckCircle2} title="No dismissal reports" description="No user-reported banner dismissals yet." />
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-8">
+                          <Checkbox
+                            checked={selectedDismissals.size === dismissalReports.length && dismissalReports.length > 0}
+                            onCheckedChange={() => {
+                              if (selectedDismissals.size === dismissalReports.length) {
+                                setSelectedDismissals(new Set());
+                              } else {
+                                setSelectedDismissals(new Set(dismissalReports.map((r: any) => r.id)));
+                              }
+                            }}
+                          />
+                        </TableHead>
+                        <TableHead>Domain</TableHead>
+                        <TableHead>Clicked Selector</TableHead>
+                        <TableHead>Banner Selector</TableHead>
+                        <TableHead className="text-right">Reported</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dismissalReports.map((r: any) => (
+                        <TableRow key={r.id} className="even:bg-muted/30">
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedDismissals.has(r.id)}
+                              onCheckedChange={() => {
+                                setSelectedDismissals(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(r.id)) next.delete(r.id); else next.add(r.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium flex items-center gap-2">
+                            <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                            {r.domain}
+                          </TableCell>
+                          <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.clicked_selector}</code></TableCell>
+                          <TableCell>
+                            {r.banner_selector ? (
+                              <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.banner_selector}</code>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
         {/* User Reports Tab */}
         <TabsContent value="user-reports">
