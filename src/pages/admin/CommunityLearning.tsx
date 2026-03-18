@@ -135,6 +135,45 @@ export default function CommunityLearning() {
   const [deletingDismissals, setDeletingDismissals] = useState(false);
   const [togglingPattern, setTogglingPattern] = useState<string | null>(null);
 
+  // Domain sorting state
+  type DomainSortKey = "domain" | "pattern_count" | "total_reports" | "success_rate" | "avg_confidence" | "last_active";
+  const [domainSortKey, setDomainSortKey] = useState<DomainSortKey>("last_active");
+  const [domainSortAsc, setDomainSortAsc] = useState(false);
+
+  const sortedDomains = useMemo(() => {
+    const sorted = [...domains].sort((a: any, b: any) => {
+      let aVal = a[domainSortKey];
+      let bVal = b[domainSortKey];
+      if (domainSortKey === "domain") {
+        aVal = (aVal || "").toLowerCase();
+        bVal = (bVal || "").toLowerCase();
+        return domainSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      if (domainSortKey === "last_active") {
+        aVal = aVal ? new Date(aVal).getTime() : 0;
+        bVal = bVal ? new Date(bVal).getTime() : 0;
+      }
+      aVal = Number(aVal) || 0;
+      bVal = Number(bVal) || 0;
+      return domainSortAsc ? aVal - bVal : bVal - aVal;
+    });
+    return sorted;
+  }, [domains, domainSortKey, domainSortAsc]);
+
+  const handleDomainSort = (key: DomainSortKey) => {
+    if (domainSortKey === key) {
+      setDomainSortAsc(!domainSortAsc);
+    } else {
+      setDomainSortKey(key);
+      setDomainSortAsc(key === "domain"); // A-Z default for domain, desc for numbers
+    }
+  };
+
+  const SortIcon = ({ sortKey }: { sortKey: DomainSortKey }) => {
+    if (domainSortKey !== sortKey) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />;
+    return domainSortAsc ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />;
+  };
+
   const fetchAll = useCallback(async () => {
     if (!hasLoadedRef.current) setLoading(true);
     try {
