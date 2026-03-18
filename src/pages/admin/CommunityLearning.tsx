@@ -823,6 +823,11 @@ export default function CommunityLearning() {
                         <TableCell>
                           <span className="inline-flex items-center gap-1">
                             <Badge variant="outline" className={ACTION_BADGE_VARIANT[r.action_type] ?? ""}>{r.action_type}</Badge>
+                            {r.strategy && (
+                              <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-cyan-500/15 text-cyan-500 border-cyan-500/30">
+                                ⚡ {r.strategy}
+                              </Badge>
+                            )}
                             <AiFixerIndicator domain={r.domain} selector={r.selector} />
                           </span>
                         </TableCell>
