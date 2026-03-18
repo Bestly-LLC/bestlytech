@@ -23,7 +23,25 @@ export function StatCard({
   iconColor = "text-primary",
   subtitle,
   centered = false,
+  tooltip,
 }: StatCardProps) {
+  const labelWithTip = (
+    <span className="inline-flex items-center gap-1">
+      {label}
+      {tooltip && (
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[260px] text-xs">
+              {tooltip}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </span>
+  );
   if (centered) {
     return (
       <Card className={`border-t-2 ${accentColor} hover:-translate-y-0.5 transition-transform duration-200`}>
