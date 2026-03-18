@@ -194,6 +194,42 @@ export default function CommunityLearning() {
     }
   }, [fetchAll]);
 
+  const handleRerunAI = useCallback(async (domain: string) => {
+    setRerunningDomain(domain);
+    try {
+      // Clear stale AI log entries for this domain
+      await supabase.from("ai_generation_log").delete().eq("domain", domain).in("status", ["skipped_no_html", "error"]);
+      // Reset ai_attempts on missed_banner_reports
+      await supabase.from("missed_banner_reports").update({ ai_attempts: 0, ai_processed_at: null }).eq("domain", domain);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-generate-pattern`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ domain }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      const result = data.results?.[0];
+      if (result?.status === "success") {
+        toast.success(`AI generated pattern for ${domain}: ${result.selector}`);
+      } else if (result?.status === "skipped_no_html") {
+        toast.warning(`${domain}: No HTML available for AI analysis`);
+      } else {
+        toast.error(`${domain}: ${result?.error || "Unknown error"}`);
+      }
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Re-run failed: ${e.message}`);
+    } finally {
+      setRerunningDomain(null);
+    }
+  }, [fetchAll]);
+
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // Build lookup sets for AI fixer cross-referencing (kept for Recent/Domains tabs)
