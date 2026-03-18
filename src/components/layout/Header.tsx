@@ -117,7 +117,7 @@ export function Header() {
                 <img
                   src={bestlyLogo}
                   alt="Bestly LLC"
-                  className="h-9 w-auto rotate-[20deg]"
+                  className="h-9 w-auto"
                 />
                 <span className="text-xl font-semibold tracking-tight text-foreground">
                   Bestly LLC

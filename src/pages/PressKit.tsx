@@ -139,7 +139,7 @@ const PressKit = () => {
                       <img
                         src={bestlyLogo}
                         alt="Bestly LLC Logo"
-                        className="h-16 w-auto rotate-[20deg]"
+                        className="h-16 w-auto"
                       />
                     </div>
                     <div className="flex-1">
