@@ -1,57 +1,38 @@
 
 
-## Integrate Apple-Native Business Modernization Program
+## Audit: What's Still Missing
 
-Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
+### 1. Unregistered Edge Functions
+Three functions exist on disk but are **not in `config.toml`**, so they will never deploy:
+- `ai-generate-pattern`
+- `probe-report`
+- `process-dismissal-consensus`
 
----
+**Fix**: Add all three to `supabase/config.toml` with `verify_jwt = false`.
 
-### 1. New Page: `src/pages/AppleModernization.tsx`
+### 2. No Cron Jobs Actually Scheduled
+The migration only enabled `pg_cron` and `pg_net` extensions — but **no cron jobs were actually created**. The daily auto-retry and `run-pattern-maintenance` have no scheduled triggers.
 
-A comprehensive, premium-feeling service page with the following sections:
+**Fix**: Use the Supabase insert tool (not migrations) to schedule:
+- `auto-retry-failed-patterns` — daily at 6 AM UTC
+- `run-pattern-maintenance` — daily at 7 AM UTC
 
-- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
-- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
-- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
-  - Apple Discovery Infrastructure
-  - App Clips (Instant Customer Experience)
-  - Payments Modernization (Tap to Pay)
-  - Digital ID Verification
-  - Brand Trust and Identity
-  - Customer Experience Automation
-  - Commerce and Ordering
-  - Operational Analytics
-  - Apple-Ready Certification (marked as optional)
-- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
-- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
-- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
+### 3. No Admin Trigger for `run-pattern-maintenance`
+The Community Learning dashboard has a "Retry Failed" button but **no button to manually trigger the maintenance function** (pattern fixer + report processor).
 
-### 2. Route Registration: `src/App.tsx`
+**Fix**: Add a "Run Maintenance" button next to the existing "Retry Failed" button in the dashboard.
 
-- Import the new `AppleModernization` page component.
-- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
+### 4. No `permanently_failed` Email/SMS Alert
+When `auto-retry-failed-patterns` marks a domain as `permanently_failed`, no notification is sent to the admin. The `run-pattern-maintenance` function only alerts on fix failures and priority reports — not on domains that exhausted all AI retries.
 
-### 3. Services Page Update: `src/pages/Services.tsx`
+**Fix**: After the auto-retry loop, if any domains were marked `permanently_failed`, send an alert email via the existing SMTP setup.
 
-- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
-- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
+### Summary of Changes
 
-### 4. Header Navigation: `src/components/layout/Header.tsx`
-
-- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
-
----
-
-### Technical Details
-
-**New file:**
-- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
-
-**Modified files:**
-- `src/App.tsx` -- add import and route
-- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
-
-**No database or backend changes required.** This is purely a frontend content page.
-
-The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
+| File | Change |
+|---|---|
+| `supabase/config.toml` | Register `ai-generate-pattern`, `probe-report`, `process-dismissal-consensus` |
+| Database (insert, not migration) | Schedule 2 cron jobs |
+| `src/pages/admin/CommunityLearning.tsx` | Add "Run Maintenance" button |
+| `supabase/functions/auto-retry-failed-patterns/index.ts` | Send email alert on `permanently_failed` domains |
 
