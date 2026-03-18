@@ -856,10 +856,10 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
   });
   if (upsertErr) throw upsertErr;
 
-  // CMP-detected patterns start at confidence 7
+  // CMP-detected patterns start at confidence 7 + set strategy for built-in handler routing
   await supabase
     .from("cookie_patterns")
-    .update({ confidence: 7 })
+    .update({ confidence: 7, strategy: cmp.cmp_fingerprint } as any)
     .eq("domain", candidate.domain)
     .eq("selector", cmp.selector);
 
