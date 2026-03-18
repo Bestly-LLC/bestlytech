@@ -381,7 +381,7 @@ Deno.serve(async (req) => {
         });
 
         failed++;
-        results.push({ domain: candidate.domain, status: "needs_manual_review", error: diagnostics });
+        results.push({ domain: candidate.domain, status: failStatus, error: diagnostics });
 
       } catch (err: any) {
         failed++;
