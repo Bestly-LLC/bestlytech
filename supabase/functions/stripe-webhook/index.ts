@@ -60,11 +60,25 @@ serve(async (req) => {
 
   console.log("Received event:", event.type);
 
+  // Log every webhook event before processing
+  const eventEmail =
+    event.data?.object?.customer_email?.toLowerCase()?.trim() ||
+    event.data?.object?.customer_details?.email?.toLowerCase()?.trim() ||
+    null;
+
+  await supabase.from("webhook_events").insert({
+    event_type: event.type,
+    stripe_event_id: event.id,
+    email: eventEmail,
+    payload: event,
+  });
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object;
-        const email = session.customer_email || session.customer_details?.email;
+        const rawEmail = session.customer_email || session.customer_details?.email;
+        const email = rawEmail?.toLowerCase()?.trim();
         const customerId = session.customer;
         const subscriptionId = session.subscription;
         const mode = session.mode;
