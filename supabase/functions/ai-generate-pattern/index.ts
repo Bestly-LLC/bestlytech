@@ -303,10 +303,10 @@ Deno.serve(async (req) => {
         if (knownCMP) {
           console.log(`[${candidate.domain}] CMP identified via cmp_fingerprint field: ${knownCMP.name} — using known selectors`);
           await insertCMPPattern(supabase, candidate, knownCMP);
-          // Override confidence to 9 for fingerprint-matched patterns
+          // Override confidence to 9 and set strategy for fingerprint-matched patterns
           await supabase
             .from("cookie_patterns")
-            .update({ confidence: 9 })
+            .update({ confidence: 9, strategy: knownCMP.cmp_fingerprint } as any)
             .eq("domain", candidate.domain)
             .eq("selector", knownCMP.selector);
           generated++;
