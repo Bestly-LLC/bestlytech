@@ -56,6 +56,10 @@ export default function AdminSubmissions() {
 
   const filtered = data.filter((r) => {
     if (statusFilter !== "All" && r.status !== statusFilter) return false;
+    if (platformFilter !== "All") {
+      const platforms = r.selected_platforms?.length ? r.selected_platforms : [r.platform];
+      if (!platforms.some((p: string) => p.toLowerCase().includes(platformFilter.toLowerCase()))) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       return (
