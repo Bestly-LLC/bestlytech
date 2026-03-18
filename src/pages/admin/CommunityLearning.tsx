@@ -492,6 +492,7 @@ export default function CommunityLearning() {
                       <TableHead className="text-right">Reports</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead className="text-right">Discovered</TableHead>
+                      <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
