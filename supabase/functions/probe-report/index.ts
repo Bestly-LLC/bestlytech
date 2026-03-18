@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       });
 
       await supabase.from("cookie_patterns")
-        .update({ confidence: 0.6 })
+        .update({ confidence: 6 })
         .eq("domain", domain)
         .eq("selector", cmpMatch.selector);
 
