@@ -638,6 +638,22 @@ ${html}`;
 }
 
 async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN_CMPS[number]) {
+  // Check for existing high-confidence pattern
+  if (await hasExistingHighConfidencePattern(supabase, candidate.domain)) {
+    console.log(`[${candidate.domain}] Skipping CMP insert — existing high-confidence pattern found`);
+    await supabase.from("ai_generation_log").insert({
+      domain: candidate.domain,
+      status: "skipped_already_covered",
+      selector_generated: cmp.selector,
+      action_type: cmp.action,
+      confidence: 7,
+      ai_model: `cmp_detection:${cmp.name}`,
+      html_source: `Domain already has high-confidence pattern. CMP: ${cmp.name}`.substring(0, 500),
+    });
+    await supabase.rpc("mark_ai_processed", { _domain: candidate.domain, _resolved: true });
+    return;
+  }
+
   const { error: upsertErr } = await supabase.rpc("upsert_pattern", {
     _domain: candidate.domain,
     _selector: cmp.selector,
@@ -647,9 +663,10 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
   });
   if (upsertErr) throw upsertErr;
 
+  // CMP-detected patterns start at confidence 7
   await supabase
     .from("cookie_patterns")
-    .update({ confidence: 6 })
+    .update({ confidence: 7 })
     .eq("domain", candidate.domain)
     .eq("selector", cmp.selector);
 
@@ -658,7 +675,7 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
     status: "success_cmp_fallback",
     selector_generated: cmp.selector,
     action_type: cmp.action,
-    confidence: 6,
+    confidence: 7,
     ai_model: `cmp_detection:${cmp.name}`,
     html_source: `CMP detected: ${cmp.name} (signatures: ${cmp.signatures.join(", ")})`.substring(0, 500),
   });
