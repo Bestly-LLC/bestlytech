@@ -114,6 +114,12 @@ export function AdminSidebar() {
     <Sidebar collapsible="icon">
       <SidebarContent className="pt-2">
 
+        <SidebarMenu className="px-2">
+          {renderItem(dashboardItem)}
+        </SidebarMenu>
+
+        <div className="mx-3 my-2 h-px bg-border/50" />
+
         <SidebarGroup>
           <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3">
             Amazon
