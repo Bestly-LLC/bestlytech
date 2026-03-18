@@ -726,9 +726,12 @@ export default function CommunityLearning() {
                             </TableCell>
                             <TableCell className="font-medium">{log.domain}</TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
-                                {log.status}
-                              </Badge>
+                              <span className="inline-flex items-center gap-1">
+                                {log.status === "needs_manual_review" && <Flag className="h-3.5 w-3.5 text-orange-500" />}
+                                <Badge variant="outline" className={AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
+                                  {log.status.replace(/_/g, " ")}
+                                </Badge>
+                              </span>
                             </TableCell>
                             <TableCell>
                               {log.selector_generated ? (
