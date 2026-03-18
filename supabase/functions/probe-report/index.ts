@@ -188,7 +188,7 @@ ${bestMatch.html.substring(0, 8000)}`;
 
     if (parsed.is_cookie_banner && parsed.selector) {
       const action = parsed.action === "hide" ? "close" : "reject";
-      const confidence = Math.min(Math.round(Number(parsed.confidence) * 10) || 5, 6);
+      const confidence = Math.min(Math.round(Number(parsed.confidence)) || 5, 6);
 
       await supabase.rpc("upsert_pattern", {
         _domain: domain,
