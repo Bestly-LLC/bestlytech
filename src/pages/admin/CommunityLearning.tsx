@@ -629,6 +629,24 @@ export default function CommunityLearning() {
             </div>
           </CardContent>
         </Card>
+        <Card className="border-t-2 border-purple-500/40">
+          <CardContent className="flex items-center gap-3 py-4">
+            <MousePointerClick className="h-5 w-5 text-purple-500" />
+            <div>
+              <p className="text-sm font-semibold tabular-nums">{dismissalReports.length}</p>
+              <p className="text-xs text-muted-foreground">Dismissal Reports<InfoTip text="User-reported banner dismissals awaiting consensus processing" /></p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-t-2 border-teal-500/40">
+          <CardContent className="flex items-center gap-3 py-4">
+            <Users className="h-5 w-5 text-teal-500" />
+            <div>
+              <p className="text-sm font-semibold tabular-nums">{consensusPatternCount}</p>
+              <p className="text-xs text-muted-foreground">Consensus Patterns<InfoTip text="Patterns created from user dismissal consensus" /></p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabs */}
