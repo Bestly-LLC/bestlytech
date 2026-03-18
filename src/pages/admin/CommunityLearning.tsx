@@ -471,7 +471,7 @@ export default function CommunityLearning() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Progress value={d.avg_confidence * 10} className="h-2 w-16" />
-                          <span className="text-xs text-muted-foreground tabular-nums">{d.avg_confidence}</span>
+                          <span className="text-xs text-muted-foreground tabular-nums">{Math.round(d.avg_confidence * 10)}%</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">{d.last_active ? timeAgo(d.last_active) : "—"}</TableCell>
