@@ -56,6 +56,19 @@ const AI_STATUS_BADGE: Record<string, string> = {
   skipped_no_html: "bg-muted text-muted-foreground border-muted-foreground/30",
 };
 
+function InfoTip({ text }: { text: string }) {
+  return (
+    <TooltipProvider delayDuration={200}>
+      <UITooltip>
+        <TooltipTrigger asChild>
+          <Info className="h-3 w-3 text-muted-foreground/60 cursor-help inline-block ml-1" />
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[280px] text-xs">{text}</TooltipContent>
+      </UITooltip>
+    </TooltipProvider>
+  );
+}
+
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
