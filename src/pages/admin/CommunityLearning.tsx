@@ -478,10 +478,10 @@ export default function CommunityLearning() {
                       <Sparkles className="h-3.5 w-3.5" />
                       Analyzes banner HTML with AI to generate CSS selectors
                     </span>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Timer className="h-3.5 w-3.5" />
-                      Last run: {aiGenLog.length > 0 ? `${new Date(aiGenLog[0].created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} (${timeAgo(aiGenLog[0].created_at)})` : "Never"}
-                    </span>
+                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                       <Timer className="h-3.5 w-3.5" />
+                       Last run<InfoTip text="When the AI last attempted to generate patterns" />: {aiGenLog.length > 0 ? `${new Date(aiGenLog[0].created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} (${timeAgo(aiGenLog[0].created_at)})` : "Never"}
+                     </span>
                   </CardDescription>
                 </div>
                 <Button variant="outline" size="sm" onClick={handleRunGenerator} disabled={runningGenerator} className="gap-2">
