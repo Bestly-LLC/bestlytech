@@ -56,6 +56,7 @@ const AI_STATUS_BADGE: Record<string, string> = {
   error: "bg-red-500/15 text-red-500 border-red-500/30",
   skipped_no_html: "bg-muted text-muted-foreground border-muted-foreground/30",
   failed_not_cookie_banner: "bg-red-500/15 text-red-500 border-red-500/30",
+  needs_manual_review: "bg-orange-500/15 text-orange-500 border-orange-500/30",
 };
 
 function InfoTip({ text }: { text: string }) {
