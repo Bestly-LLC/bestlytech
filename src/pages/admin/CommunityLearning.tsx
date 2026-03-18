@@ -101,6 +101,7 @@ export default function CommunityLearning() {
   const [unresolvedReports, setUnresolvedReports] = useState<any[]>([]);
   const [runningGenerator, setRunningGenerator] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
+  const [rerunningDomain, setRerunningDomain] = useState<string | null>(null);
   const [genResultsOpen, setGenResultsOpen] = useState(false);
   const [genResults, setGenResults] = useState<any | null>(null);
   const [candidates, setCandidates] = useState<any[]>([]);
@@ -190,6 +191,42 @@ export default function CommunityLearning() {
       toast.error(`Processing failed: ${e.message}`);
     } finally {
       setProcessingReports(false);
+    }
+  }, [fetchAll]);
+
+  const handleRerunAI = useCallback(async (domain: string) => {
+    setRerunningDomain(domain);
+    try {
+      // Clear stale AI log entries for this domain
+      await supabase.from("ai_generation_log").delete().eq("domain", domain).in("status", ["skipped_no_html", "error"]);
+      // Reset ai_attempts on missed_banner_reports
+      await supabase.from("missed_banner_reports").update({ ai_attempts: 0, ai_processed_at: null }).eq("domain", domain);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-generate-pattern`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ domain }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      const result = data.results?.[0];
+      if (result?.status === "success") {
+        toast.success(`AI generated pattern for ${domain}: ${result.selector}`);
+      } else if (result?.status === "skipped_no_html") {
+        toast.warning(`${domain}: No HTML available for AI analysis`);
+      } else {
+        toast.error(`${domain}: ${result?.error || "Unknown error"}`);
+      }
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Re-run failed: ${e.message}`);
+    } finally {
+      setRerunningDomain(null);
     }
   }, [fetchAll]);
 
@@ -570,6 +607,7 @@ export default function CommunityLearning() {
                          <TableHead>CMP Type<InfoTip text="Consent Management Platform detected (OneTrust, Cookiebot, etc.)" /></TableHead>
                          <TableHead className="text-right">Last Reported</TableHead>
                          <TableHead className="text-right">AI Attempts<InfoTip text="Number of times AI tried to generate a pattern. Max 3 attempts" /></TableHead>
+                         <TableHead className="w-24">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -590,6 +628,22 @@ export default function CommunityLearning() {
                           <TableCell className="text-xs text-muted-foreground">{c.cmp_fingerprint ?? "unknown"}</TableCell>
                           <TableCell className="text-right text-xs text-muted-foreground">{c.last_reported ? timeAgo(c.last_reported) : "—"}</TableCell>
                           <TableCell className="text-right tabular-nums">{c.ai_attempts ?? 0}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 h-7 text-xs"
+                              disabled={rerunningDomain === c.domain}
+                              onClick={() => handleRerunAI(c.domain)}
+                            >
+                              {rerunningDomain === c.domain ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Play className="h-3 w-3" />
+                              )}
+                              Re-run AI
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

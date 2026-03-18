@@ -52,13 +52,35 @@ Deno.serve(async (req) => {
   let processed = 0, generated = 0, skipped = 0, failed = 0;
 
   try {
-    const { data: candidates, error: fetchErr } = await supabase.rpc(
-      "get_ai_generation_candidates",
-      { _limit: 5 }
-    );
-    if (fetchErr) throw fetchErr;
+    // Check for optional single-domain mode
+    let requestBody: any = {};
+    try {
+      requestBody = await req.json();
+    } catch {
+      // empty body is fine
+    }
 
-    const items = (candidates as any[]) ?? [];
+    let items: any[] = [];
+
+    if (requestBody.domain) {
+      // Single-domain mode: fetch that domain directly
+      const { data: singleDomain, error: singleErr } = await supabase
+        .from("missed_banner_reports")
+        .select("*")
+        .eq("domain", requestBody.domain)
+        .eq("resolved", false)
+        .limit(1);
+      if (singleErr) throw singleErr;
+      items = singleDomain ?? [];
+    } else {
+      // Batch mode: use RPC
+      const { data: candidates, error: fetchErr } = await supabase.rpc(
+        "get_ai_generation_candidates",
+        { _limit: 5 }
+      );
+      if (fetchErr) throw fetchErr;
+      items = (candidates as any[]) ?? [];
+    }
 
     for (const candidate of items) {
       processed++;

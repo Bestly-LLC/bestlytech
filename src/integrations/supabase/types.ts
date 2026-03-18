@@ -969,6 +969,33 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_events: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          event_type: string
+          id: string
+          payload: Json | null
+          stripe_event_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          event_type: string
+          id?: string
+          payload?: Json | null
+          stripe_event_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          stripe_event_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
