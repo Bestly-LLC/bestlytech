@@ -224,6 +224,29 @@ export default function CommunityLearning() {
     }
   }, [fetchAll]);
 
+  const handleRunMaintenance = useCallback(async () => {
+    setRunningMaintenance(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-pattern-maintenance`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      toast.success(`Maintenance complete — Fixed: ${data.fix?.fixed ?? 0}, Failed: ${data.fix?.failed ?? 0}, Reports resolved: ${data.reports?.newly_resolved ?? 0}`);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Maintenance failed: ${e.message}`);
+    } finally {
+      setRunningMaintenance(false);
+    }
+  }, [fetchAll]);
+
   const handleProcessReports = useCallback(async () => {
     setProcessingReports(true);
     try {
