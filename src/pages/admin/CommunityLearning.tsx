@@ -626,7 +626,7 @@ export default function CommunityLearning() {
                                   {r.selector ? <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.selector}</code> : <span className="text-xs text-muted-foreground">—</span>}
                                 </TableCell>
                                 <TableCell>{r.action ?? "—"}</TableCell>
-                                <TableCell className="text-right tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 100)}%` : "—"}</TableCell>
+                                <TableCell className="text-right tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 10)}%` : "—"}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
