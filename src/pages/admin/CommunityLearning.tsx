@@ -611,7 +611,7 @@ export default function CommunityLearning() {
       <PageHeader
         title="Community Learning"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <ManualPatternForm onSuccess={fetchAll} />
             <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
               <RefreshCw className="h-4 w-4" /> Refresh
@@ -623,7 +623,7 @@ export default function CommunityLearning() {
       {/* Permanently Failed Alert */}
       {aiTokenStats.permFailedCount > 0 && (
         <Card className="border-red-500/40 bg-red-500/5">
-          <CardContent className="flex items-center gap-3 py-3">
+          <CardContent className="flex flex-col sm:flex-row items-start sm:items-center gap-3 py-3">
             <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
             <div className="flex-1">
               <p className="text-sm font-medium text-red-500">
@@ -631,12 +631,14 @@ export default function CommunityLearning() {
               </p>
               <p className="text-xs text-muted-foreground">These domains exhausted all retry attempts. Consider adding patterns manually.</p>
             </div>
-            <Button variant="outline" size="sm" className="shrink-0 gap-1.5 border-amber-500/30 text-amber-500 hover:bg-amber-500/10" onClick={handleResetFailed} disabled={runningReset}>
-              {runningReset ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Resetting...</> : <><RotateCcw className="h-3.5 w-3.5" /> Reset Failed</>}
-            </Button>
-            <Button variant="outline" size="sm" className="shrink-0 gap-1.5 border-red-500/30 text-red-500 hover:bg-red-500/10" onClick={() => setActiveTab("ai-generator")}>
-              <Flag className="h-3.5 w-3.5" /> View
-            </Button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button variant="outline" size="sm" className="flex-1 sm:flex-initial shrink-0 gap-1.5 border-amber-500/30 text-amber-500 hover:bg-amber-500/10" onClick={handleResetFailed} disabled={runningReset}>
+                {runningReset ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Resetting...</> : <><RotateCcw className="h-3.5 w-3.5" /> Reset Failed</>}
+              </Button>
+              <Button variant="outline" size="sm" className="flex-1 sm:flex-initial shrink-0 gap-1.5 border-red-500/30 text-red-500 hover:bg-red-500/10" onClick={() => setActiveTab("ai-generator")}>
+                <Flag className="h-3.5 w-3.5" /> View
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -651,64 +653,64 @@ export default function CommunityLearning() {
       </div>
 
       {/* Health Indicators */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card className="border-t-2 border-green-500/40">
-          <CardContent className="flex items-center gap-3 py-4">
-            <div className="relative">
-              <Clock className="h-5 w-5 text-green-500" />
-              <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+          <CardContent className="flex items-center gap-3 py-3 px-3 sm:py-4 sm:px-6">
+            <div className="relative shrink-0">
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
+              <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2 sm:h-2.5 sm:w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 bg-green-500"></span>
               </span>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{o.patterns_last_24h}</p>
-              <p className="text-xs text-muted-foreground">Active last 24h<InfoTip text="Patterns that matched a banner in the last 24 hours" /></p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Active 24h<span className="hidden sm:inline"><InfoTip text="Patterns that matched a banner in the last 24 hours" /></span></p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-t-2 border-amber-500/40">
-          <CardContent className="flex items-center gap-3 py-4">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
-            <div>
+          <CardContent className="flex items-center gap-3 py-3 px-3 sm:py-4 sm:px-6">
+            <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500 shrink-0" />
+            <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{o.stale_patterns}</p>
-              <p className="text-xs text-muted-foreground">Stale 30d+<InfoTip text="Patterns not seen in 30+ days — may be outdated" /></p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Stale 30d+<span className="hidden sm:inline"><InfoTip text="Patterns not seen in 30+ days — may be outdated" /></span></p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-t-2 border-red-500/40">
-          <CardContent className="flex items-center gap-3 py-4">
-            <CircleAlert className="h-5 w-5 text-red-500" />
-            <div>
+          <CardContent className="flex items-center gap-3 py-3 px-3 sm:py-4 sm:px-6">
+            <CircleAlert className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 shrink-0" />
+            <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{issueCount}</p>
-              <p className="text-xs text-muted-foreground">Issues detected<InfoTip text="Patterns with very low confidence, zero successes, or other problems" /></p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Issues<span className="hidden sm:inline"><InfoTip text="Patterns with very low confidence, zero successes, or other problems" /></span></p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-t-2 border-primary/40">
-          <CardContent className="flex items-center gap-3 py-4">
-            <Coins className="h-5 w-5 text-primary" />
-            <div>
+          <CardContent className="flex items-center gap-3 py-3 px-3 sm:py-4 sm:px-6">
+            <Coins className="h-4 w-4 sm:h-5 sm:w-5 text-primary shrink-0" />
+            <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{(aiTokenStats.totalPrompt + aiTokenStats.totalCompletion).toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground">AI Tokens Used<InfoTip text={`${aiTokenStats.totalRuns} AI runs total. Prompt: ${aiTokenStats.totalPrompt.toLocaleString()}, Completion: ${aiTokenStats.totalCompletion.toLocaleString()}`} /></p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">AI Tokens<span className="hidden sm:inline"><InfoTip text={`${aiTokenStats.totalRuns} AI runs total. Prompt: ${aiTokenStats.totalPrompt.toLocaleString()}, Completion: ${aiTokenStats.totalCompletion.toLocaleString()}`} /></span></p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-t-2 border-purple-500/40">
-          <CardContent className="flex items-center gap-3 py-4">
-            <MousePointerClick className="h-5 w-5 text-purple-500" />
-            <div>
+          <CardContent className="flex items-center gap-3 py-3 px-3 sm:py-4 sm:px-6">
+            <MousePointerClick className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500 shrink-0" />
+            <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{dismissalReports.length}</p>
-              <p className="text-xs text-muted-foreground">Dismissal Reports<InfoTip text="User-reported banner dismissals awaiting consensus processing" /></p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Dismissals<span className="hidden sm:inline"><InfoTip text="User-reported banner dismissals awaiting consensus processing" /></span></p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-t-2 border-teal-500/40">
-          <CardContent className="flex items-center gap-3 py-4">
-            <Users className="h-5 w-5 text-teal-500" />
-            <div>
+          <CardContent className="flex items-center gap-3 py-3 px-3 sm:py-4 sm:px-6">
+            <Users className="h-4 w-4 sm:h-5 sm:w-5 text-teal-500 shrink-0" />
+            <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{consensusPatternCount}</p>
-              <p className="text-xs text-muted-foreground">Consensus Patterns<InfoTip text="Patterns created from user dismissal consensus" /></p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Consensus<span className="hidden sm:inline"><InfoTip text="Patterns created from user dismissal consensus" /></span></p>
             </div>
           </CardContent>
         </Card>
@@ -716,22 +718,24 @@ export default function CommunityLearning() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="inline-flex h-10 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground">
-          <TabsTrigger value="activity" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><TrendingUp className="h-3.5 w-3.5" />Activity</TabsTrigger>
-          <TabsTrigger value="domains" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Globe className="h-3.5 w-3.5" />Domains</TabsTrigger>
-          <TabsTrigger value="recent" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Brain className="h-3.5 w-3.5" />Recent</TabsTrigger>
-          <TabsTrigger value="ai-generator" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Sparkles className="h-3.5 w-3.5" />AI Pattern Generator</TabsTrigger>
-          <TabsTrigger value="breakdown" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><BarChart3 className="h-3.5 w-3.5" />Breakdown</TabsTrigger>
-          <TabsTrigger value="dismissals" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><MousePointerClick className="h-3.5 w-3.5" />Dismissals{dismissalReports.length > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{dismissalReports.length}</Badge>}</TabsTrigger>
-          <TabsTrigger value="user-reports" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Flag className="h-3.5 w-3.5" />Reports</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1 scrollbar-hide">
+          <TabsList className="inline-flex h-10 items-center justify-start rounded-lg bg-muted p-1 text-muted-foreground w-max">
+            <TabsTrigger value="activity" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><TrendingUp className="h-3.5 w-3.5 hidden sm:block" />Activity</TabsTrigger>
+            <TabsTrigger value="domains" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Globe className="h-3.5 w-3.5 hidden sm:block" />Domains</TabsTrigger>
+            <TabsTrigger value="recent" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Brain className="h-3.5 w-3.5 hidden sm:block" />Recent</TabsTrigger>
+            <TabsTrigger value="ai-generator" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Sparkles className="h-3.5 w-3.5 hidden sm:block" />AI Gen</TabsTrigger>
+            <TabsTrigger value="breakdown" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><BarChart3 className="h-3.5 w-3.5 hidden sm:block" />Breakdown</TabsTrigger>
+            <TabsTrigger value="dismissals" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><MousePointerClick className="h-3.5 w-3.5 hidden sm:block" />Dismissals{dismissalReports.length > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{dismissalReports.length}</Badge>}</TabsTrigger>
+            <TabsTrigger value="user-reports" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Flag className="h-3.5 w-3.5 hidden sm:block" />Reports</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Activity Tab */}
         <TabsContent value="activity">
           <Card>
             <CardHeader><CardTitle className="text-lg">Pattern Activity (30 days)</CardTitle></CardHeader>
             <CardContent>
-              <div className="h-[350px]">
+              <div className="h-[280px] sm:h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={activity}>
                     <defs>
@@ -764,50 +768,75 @@ export default function CommunityLearning() {
           <Card>
             <CardHeader><CardTitle className="text-lg">Top Domains</CardTitle></CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("domain")}>
-                      <span className="inline-flex items-center">Domain<SortIcon sortKey="domain" /></span>
-                    </TableHead>
-                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("pattern_count")}>
-                      <span className="inline-flex items-center justify-end">Patterns<InfoTip text="Number of CSS selectors learned for this domain" /><SortIcon sortKey="pattern_count" /></span>
-                    </TableHead>
-                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("total_reports")}>
-                      <span className="inline-flex items-center justify-end">Reports<InfoTip text="Times users encountered banners on this domain" /><SortIcon sortKey="total_reports" /></span>
-                    </TableHead>
-                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("success_rate")}>
-                      <span className="inline-flex items-center justify-end">Success Rate<InfoTip text="How often patterns successfully dismiss banners here" /><SortIcon sortKey="success_rate" /></span>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("avg_confidence")}>
-                      <span className="inline-flex items-center">Confidence<InfoTip text="Reliability score 1-100%, based on success rate and volume" /><SortIcon sortKey="avg_confidence" /></span>
-                    </TableHead>
-                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("last_active")}>
-                      <span className="inline-flex items-center justify-end">Last Active<InfoTip text="When a pattern last matched a banner on this domain" /><SortIcon sortKey="last_active" /></span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedDomains.map((d: any, i: number) => {
-                    const isFixed = fixedDomains.has(d.domain);
-                    return (
-                    <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
-                      <TableCell className="font-medium flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-muted-foreground" />{d.domain}<DomainAiBadge domain={d.domain} /></TableCell>
-                      <TableCell className="text-right tabular-nums">{d.pattern_count}</TableCell>
-                      <TableCell className="text-right tabular-nums">{Number(d.total_reports).toLocaleString()}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${rateColor(d.success_rate)}`}>{d.success_rate}%</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Progress value={d.avg_confidence * 10} className="h-2 w-16" />
-                          <span className="text-xs text-muted-foreground tabular-nums">{Math.round(d.avg_confidence * 10)}%</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground">{d.last_active ? timeAgo(d.last_active) : "—"}</TableCell>
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-3">
+                {sortedDomains.map((d: any, i: number) => {
+                  const isFixed = fixedDomains.has(d.domain);
+                  return (
+                    <div key={i} className={`border rounded-lg p-3 space-y-2 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
+                      <div className="flex items-center gap-2">
+                        <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="font-medium text-sm truncate">{d.domain}</span>
+                        <DomainAiBadge domain={d.domain} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                        <div className="flex justify-between"><span className="text-muted-foreground">Patterns</span><span className="tabular-nums font-medium">{d.pattern_count}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Reports</span><span className="tabular-nums font-medium">{Number(d.total_reports).toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Success</span><span className={`tabular-nums font-medium ${rateColor(d.success_rate)}`}>{d.success_rate}%</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Confidence</span><span className="tabular-nums">{Math.round(d.avg_confidence * 10)}%</span></div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Last active: {d.last_active ? timeAgo(d.last_active) : "—"}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("domain")}>
+                        <span className="inline-flex items-center">Domain<SortIcon sortKey="domain" /></span>
+                      </TableHead>
+                      <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("pattern_count")}>
+                        <span className="inline-flex items-center justify-end">Patterns<InfoTip text="Number of CSS selectors learned for this domain" /><SortIcon sortKey="pattern_count" /></span>
+                      </TableHead>
+                      <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("total_reports")}>
+                        <span className="inline-flex items-center justify-end">Reports<InfoTip text="Times users encountered banners on this domain" /><SortIcon sortKey="total_reports" /></span>
+                      </TableHead>
+                      <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("success_rate")}>
+                        <span className="inline-flex items-center justify-end">Success Rate<InfoTip text="How often patterns successfully dismiss banners here" /><SortIcon sortKey="success_rate" /></span>
+                      </TableHead>
+                      <TableHead className="cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("avg_confidence")}>
+                        <span className="inline-flex items-center">Confidence<InfoTip text="Reliability score 1-100%, based on success rate and volume" /><SortIcon sortKey="avg_confidence" /></span>
+                      </TableHead>
+                      <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("last_active")}>
+                        <span className="inline-flex items-center justify-end">Last Active<InfoTip text="When a pattern last matched a banner on this domain" /><SortIcon sortKey="last_active" /></span>
+                      </TableHead>
                     </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedDomains.map((d: any, i: number) => {
+                      const isFixed = fixedDomains.has(d.domain);
+                      return (
+                      <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
+                        <TableCell className="font-medium flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-muted-foreground" />{d.domain}<DomainAiBadge domain={d.domain} /></TableCell>
+                        <TableCell className="text-right tabular-nums">{d.pattern_count}</TableCell>
+                        <TableCell className="text-right tabular-nums">{Number(d.total_reports).toLocaleString()}</TableCell>
+                        <TableCell className={`text-right font-medium tabular-nums ${rateColor(d.success_rate)}`}>{d.success_rate}%</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Progress value={d.avg_confidence * 10} className="h-2 w-16" />
+                            <span className="text-xs text-muted-foreground tabular-nums">{Math.round(d.avg_confidence * 10)}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">{d.last_active ? timeAgo(d.last_active) : "—"}</TableCell>
+                      </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -817,7 +846,53 @@ export default function CommunityLearning() {
           <Card>
             <CardHeader><CardTitle className="text-lg">Recently Learned Patterns</CardTitle></CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-3">
+                {recent.map((r: any, i: number) => {
+                  const isFixed = fixedPatterns.has(`${r.domain}::${r.selector}`);
+                  const isInactive = r.is_active === false;
+                  return (
+                    <div key={i} className={`border rounded-lg p-3 space-y-2 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""} ${isInactive ? "opacity-50" : ""}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm truncate flex-1">{r.domain}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Switch
+                            checked={r.is_active !== false}
+                            disabled={togglingPattern === r.id}
+                            onCheckedChange={() => handleTogglePatternActive(r.id, r.is_active !== false)}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                            disabled={deletingPattern === `${r.domain}::${r.selector}`}
+                            onClick={() => handleDeletePattern(r.domain, r.selector, r.action_type)}
+                          >
+                            {deletingPattern === `${r.domain}::${r.selector}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded block truncate">{r.selector}</code>
+                      <div className="flex items-center flex-wrap gap-1.5">
+                        <Badge variant="outline" className={ACTION_BADGE_VARIANT[r.action_type] ?? ""}>{r.action_type}</Badge>
+                        {r.strategy && (
+                          <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-cyan-500/15 text-cyan-500 border-cyan-500/30">⚡ {r.strategy}</Badge>
+                        )}
+                        <Badge variant="secondary" className="text-[10px]">{r.source}</Badge>
+                        {isInactive && <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-muted text-muted-foreground border-muted-foreground/30">Inactive</Badge>}
+                        <AiFixerIndicator domain={r.domain} selector={r.selector} />
+                      </div>
+                      <div className="grid grid-cols-3 gap-x-3 text-xs">
+                        <div><span className="text-muted-foreground">Conf:</span> <span className="tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 10)}%` : "—"}</span></div>
+                        <div><span className="text-muted-foreground">Reports:</span> <span className="tabular-nums">{r.report_count}</span></div>
+                        <div className="text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -902,17 +977,17 @@ export default function CommunityLearning() {
           <div className="space-y-4">
             {/* Header with Run Buttons */}
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
                 <div>
                   <CardTitle className="text-lg">AI Pattern Generator</CardTitle>
                   <CardDescription className="flex items-center gap-3 mt-1 flex-wrap">
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Sparkles className="h-3.5 w-3.5" />
-                      Analyzes banner HTML with AI to generate CSS selectors
+                      Analyzes banner HTML with AI
                     </span>
                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                        <Timer className="h-3.5 w-3.5" />
-                       Last run<InfoTip text="When the AI last attempted to generate patterns" />: {aiGenLog.length > 0 ? `${new Date(aiGenLog[0].created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} (${timeAgo(aiGenLog[0].created_at)})` : "Never"}
+                       Last run: {aiGenLog.length > 0 ? timeAgo(aiGenLog[0].created_at) : "Never"}
                      </span>
                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                        <Coins className="h-3.5 w-3.5" />
@@ -920,18 +995,18 @@ export default function CommunityLearning() {
                      </span>
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={handleRunMaintenance} disabled={runningMaintenance} className="gap-2">
-                    {runningMaintenance ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
-                    Run Maintenance
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button variant="outline" size="sm" onClick={handleRunMaintenance} disabled={runningMaintenance} className="gap-1.5 text-xs sm:text-sm">
+                    {runningMaintenance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
+                    Maintenance
                   </Button>
-                  <Button variant="outline" size="sm" onClick={handleRunRetry} disabled={runningRetry} className="gap-2">
-                    {runningRetry ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                    Retry Failed
+                  <Button variant="outline" size="sm" onClick={handleRunRetry} disabled={runningRetry} className="gap-1.5 text-xs sm:text-sm">
+                    {runningRetry ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                    Retry
                   </Button>
-                  <Button variant="outline" size="sm" onClick={handleRunGenerator} disabled={runningGenerator} className="gap-2">
-                    {runningGenerator ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                    Run AI Generator
+                  <Button variant="outline" size="sm" onClick={handleRunGenerator} disabled={runningGenerator} className="gap-1.5 text-xs sm:text-sm">
+                    {runningGenerator ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                    Run AI
                   </Button>
                 </div>
               </CardHeader>
@@ -943,53 +1018,74 @@ export default function CommunityLearning() {
                 <Card className="border-amber-500/30">
                   <CollapsibleTrigger asChild>
                     <CardHeader className="flex flex-row items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors py-3">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-amber-500" />
-                        <CardTitle className="text-sm font-medium">Latest Generation Results</CardTitle>
-                        <span className="text-xs text-muted-foreground">
-                          — {genResults.processed ?? 0} processed, {genResults.generated ?? 0} generated, {genResults.skipped ?? 0} skipped, {genResults.failed ?? 0} failed
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
+                        <CardTitle className="text-sm font-medium">Latest Results</CardTitle>
+                        <span className="text-xs text-muted-foreground truncate">
+                          — {genResults.generated ?? 0} gen, {genResults.skipped ?? 0} skip, {genResults.failed ?? 0} fail
                         </span>
                       </div>
-                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${genResultsOpen ? "rotate-180" : ""}`} />
+                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${genResultsOpen ? "rotate-180" : ""}`} />
                     </CardHeader>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <CardContent className="pt-0 space-y-4">
-                      <div className="grid grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <Card className="border-t-2 border-primary/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold tabular-nums">{genResults.processed ?? 0}</p><p className="text-[11px] text-muted-foreground">Processed</p></CardContent></Card>
                         <Card className="border-t-2 border-green-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-green-500 tabular-nums">{genResults.generated ?? 0}</p><p className="text-[11px] text-muted-foreground">Generated</p></CardContent></Card>
                         <Card className="border-t-2 border-muted"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-muted-foreground tabular-nums">{genResults.skipped ?? 0}</p><p className="text-[11px] text-muted-foreground">Skipped</p></CardContent></Card>
                         <Card className="border-t-2 border-red-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-red-500 tabular-nums">{genResults.failed ?? 0}</p><p className="text-[11px] text-muted-foreground">Failed</p></CardContent></Card>
                       </div>
                       {genResults.results?.length > 0 && (
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Domain</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Selector</TableHead>
-                              <TableHead>Action</TableHead>
-                              <TableHead className="text-right">Confidence</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
+                        <>
+                          {/* Mobile gen results */}
+                          <div className="md:hidden space-y-2">
                             {genResults.results.map((r: any, i: number) => (
-                              <TableRow key={i} className={r.status === "error" ? "bg-red-500/5" : "even:bg-muted/30"}>
-                                <TableCell className="font-medium text-sm">{r.domain}</TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className={AI_STATUS_BADGE[r.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
-                                    {r.status}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  {r.selector ? <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.selector}</code> : <span className="text-xs text-muted-foreground">—</span>}
-                                </TableCell>
-                                <TableCell>{r.action ?? "—"}</TableCell>
-                                <TableCell className="text-right tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 10)}%` : "—"}</TableCell>
-                              </TableRow>
+                              <div key={i} className={`border rounded-lg p-2.5 space-y-1.5 ${r.status === "error" ? "bg-red-500/5" : ""}`}>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-medium text-sm truncate">{r.domain}</span>
+                                  <Badge variant="outline" className={`shrink-0 ${AI_STATUS_BADGE[r.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}`}>{r.status}</Badge>
+                                </div>
+                                {r.selector && <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded block truncate">{r.selector}</code>}
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                  {r.action && <span>{r.action}</span>}
+                                  {r.confidence != null && <span className="tabular-nums">{Math.round(r.confidence * 10)}%</span>}
+                                </div>
+                              </div>
                             ))}
-                          </TableBody>
-                        </Table>
+                          </div>
+                          {/* Desktop gen results */}
+                          <div className="hidden md:block">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Domain</TableHead>
+                                  <TableHead>Status</TableHead>
+                                  <TableHead>Selector</TableHead>
+                                  <TableHead>Action</TableHead>
+                                  <TableHead className="text-right">Confidence</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {genResults.results.map((r: any, i: number) => (
+                                  <TableRow key={i} className={r.status === "error" ? "bg-red-500/5" : "even:bg-muted/30"}>
+                                    <TableCell className="font-medium text-sm">{r.domain}</TableCell>
+                                    <TableCell>
+                                      <Badge variant="outline" className={AI_STATUS_BADGE[r.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
+                                        {r.status}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                      {r.selector ? <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.selector}</code> : <span className="text-xs text-muted-foreground">—</span>}
+                                    </TableCell>
+                                    <TableCell>{r.action ?? "—"}</TableCell>
+                                    <TableCell className="text-right tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 10)}%` : "—"}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </>
                       )}
                     </CardContent>
                   </CollapsibleContent>
@@ -999,28 +1095,28 @@ export default function CommunityLearning() {
 
             {/* Section A: Pending Candidates */}
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <CardTitle className="text-base">Pending Candidates</CardTitle>
                   <CardDescription>Unresolved missed banner reports awaiting AI processing</CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {/* Filter buttons */}
                   <div className="flex items-center border rounded-md overflow-hidden">
                     {(["all", "never_processed", "failed"] as const).map(filter => (
                       <button
                         key={filter}
                         onClick={() => { setCandidateFilter(filter); setSelectedCandidates(new Set()); }}
-                        className={`px-2.5 py-1 text-xs font-medium transition-colors ${candidateFilter === filter ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                        className={`px-2.5 py-1.5 sm:py-1 text-xs font-medium transition-colors ${candidateFilter === filter ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                       >
-                        {filter === "all" ? "All" : filter === "never_processed" ? "Never Processed" : "Previously Failed"}
+                        {filter === "all" ? "All" : filter === "never_processed" ? "New" : "Failed"}
                       </button>
                     ))}
                   </div>
                   {selectedCandidates.size > 0 && (
                     <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" disabled={bulkRerunning} onClick={handleBulkRerunAI}>
                       {bulkRerunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-                      Re-run {selectedCandidates.size} selected
+                      Re-run {selectedCandidates.size}
                     </Button>
                   )}
                 </div>
@@ -1029,79 +1125,127 @@ export default function CommunityLearning() {
                 {filteredCandidates.length === 0 ? (
                   <EmptyState icon={CheckCircle2} title="No pending candidates" description={candidateFilter !== "all" ? "No candidates match this filter." : "All reported domains have been processed."} />
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-8">
-                          <Checkbox
-                            checked={selectedCandidates.size === filteredCandidates.length && filteredCandidates.length > 0}
-                            onCheckedChange={toggleAllCandidates}
-                          />
-                        </TableHead>
-                        <TableHead>Domain</TableHead>
-                        <TableHead className="text-right">Reports</TableHead>
-                         <TableHead>Has HTML<InfoTip text="Whether we captured the banner's HTML. Reports WITH HTML produce much better AI-generated patterns" /></TableHead>
-                         <TableHead>CMP Type<InfoTip text="Consent Management Platform detected (OneTrust, Cookiebot, etc.)" /></TableHead>
-                         <TableHead>Status<InfoTip text="Whether AI has attempted to process this domain" /></TableHead>
-                         <TableHead className="text-right">AI Attempts<InfoTip text="Number of times AI tried to generate a pattern. Max 5 before permanently failed" /></TableHead>
-                         <TableHead className="w-24">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                  <>
+                    {/* Mobile candidates */}
+                    <div className="md:hidden space-y-3">
                       {filteredCandidates.map((c: any, i: number) => {
                         const isNeverProcessed = c.ai_attempts === 0 && !aiLoggedDomains.has(c.domain);
                         return (
-                        <TableRow key={i} className={`even:bg-muted/30 ${isNeverProcessed ? "border-l-2 border-l-amber-500/50" : ""}`}>
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedCandidates.has(c.domain)}
-                              onCheckedChange={() => toggleCandidateSelection(c.domain)}
-                            />
-                          </TableCell>
-                          <TableCell className="font-medium flex items-center gap-2">
-                            <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                            {c.domain}
-                          </TableCell>
-                          <TableCell className="text-right font-medium tabular-nums">{c.report_count}</TableCell>
-                          <TableCell>
-                            {c.banner_html ? (
-                              <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">Yes</Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30">No</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{c.cmp_fingerprint ?? "unknown"}</TableCell>
-                          <TableCell>
-                            {isNeverProcessed ? (
-                              <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30">Never processed</Badge>
-                            ) : c.ai_attempts >= 5 ? (
-                              <Badge variant="outline" className="bg-red-900/15 text-red-400 border-red-900/30">Permanently failed</Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-blue-500/15 text-blue-500 border-blue-500/30">Attempted</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">{c.ai_attempts ?? 0}</TableCell>
-                          <TableCell>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1 h-7 text-xs"
-                              disabled={rerunningDomain === c.domain}
-                              onClick={() => handleRerunAI(c.domain)}
-                            >
-                              {rerunningDomain === c.domain ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
+                          <div key={i} className={`border rounded-lg p-3 space-y-2 ${isNeverProcessed ? "border-l-2 border-l-amber-500/50" : ""}`}>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={selectedCandidates.has(c.domain)}
+                                onCheckedChange={() => toggleCandidateSelection(c.domain)}
+                              />
+                              <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-sm truncate flex-1">{c.domain}</span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1 h-7 text-xs shrink-0"
+                                disabled={rerunningDomain === c.domain}
+                                onClick={() => handleRerunAI(c.domain)}
+                              >
+                                {rerunningDomain === c.domain ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                                AI
+                              </Button>
+                            </div>
+                            <div className="flex items-center flex-wrap gap-1.5">
+                              {c.banner_html ? (
+                                <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30 text-[10px]">HTML ✓</Badge>
                               ) : (
-                                <Play className="h-3 w-3" />
+                                <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30 text-[10px]">No HTML</Badge>
                               )}
-                              Re-run AI
-                            </Button>
-                          </TableCell>
-                        </TableRow>
+                              {isNeverProcessed ? (
+                                <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[10px]">Never processed</Badge>
+                              ) : c.ai_attempts >= 5 ? (
+                                <Badge variant="outline" className="bg-red-900/15 text-red-400 border-red-900/30 text-[10px]">Perm. failed</Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-blue-500/15 text-blue-500 border-blue-500/30 text-[10px]">Attempted</Badge>
+                              )}
+                              <span className="text-[11px] text-muted-foreground">{c.cmp_fingerprint ?? "unknown"} · {c.report_count} reports · {c.ai_attempts ?? 0} attempts</span>
+                            </div>
+                          </div>
                         );
                       })}
-                    </TableBody>
-                  </Table>
+                    </div>
+                    {/* Desktop candidates */}
+                    <div className="hidden md:block">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-8">
+                              <Checkbox
+                                checked={selectedCandidates.size === filteredCandidates.length && filteredCandidates.length > 0}
+                                onCheckedChange={toggleAllCandidates}
+                              />
+                            </TableHead>
+                            <TableHead>Domain</TableHead>
+                            <TableHead className="text-right">Reports</TableHead>
+                             <TableHead>Has HTML<InfoTip text="Whether we captured the banner's HTML" /></TableHead>
+                             <TableHead>CMP Type<InfoTip text="Consent Management Platform detected" /></TableHead>
+                             <TableHead>Status</TableHead>
+                             <TableHead className="text-right">AI Attempts</TableHead>
+                             <TableHead className="w-24">Action</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredCandidates.map((c: any, i: number) => {
+                            const isNeverProcessed = c.ai_attempts === 0 && !aiLoggedDomains.has(c.domain);
+                            return (
+                            <TableRow key={i} className={`even:bg-muted/30 ${isNeverProcessed ? "border-l-2 border-l-amber-500/50" : ""}`}>
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedCandidates.has(c.domain)}
+                                  onCheckedChange={() => toggleCandidateSelection(c.domain)}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium flex items-center gap-2">
+                                <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                                {c.domain}
+                              </TableCell>
+                              <TableCell className="text-right font-medium tabular-nums">{c.report_count}</TableCell>
+                              <TableCell>
+                                {c.banner_html ? (
+                                  <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">Yes</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30">No</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{c.cmp_fingerprint ?? "unknown"}</TableCell>
+                              <TableCell>
+                                {isNeverProcessed ? (
+                                  <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30">Never processed</Badge>
+                                ) : c.ai_attempts >= 5 ? (
+                                  <Badge variant="outline" className="bg-red-900/15 text-red-400 border-red-900/30">Permanently failed</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-blue-500/15 text-blue-500 border-blue-500/30">Attempted</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">{c.ai_attempts ?? 0}</TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1 h-7 text-xs"
+                                  disabled={rerunningDomain === c.domain}
+                                  onClick={() => handleRerunAI(c.domain)}
+                                >
+                                  {rerunningDomain === c.domain ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Play className="h-3 w-3" />
+                                  )}
+                                  Re-run AI
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -1116,64 +1260,90 @@ export default function CommunityLearning() {
                 {aiGenLog.length === 0 ? (
                   <EmptyState icon={Sparkles} title="No generation history" description="Run the AI Generator to start creating patterns." />
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Timestamp</TableHead>
-                          <TableHead>Domain</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Selector Generated</TableHead>
-                          <TableHead>Action</TableHead>
-                          <TableHead className="text-right">Confidence</TableHead>
-                          <TableHead className="text-right">Tokens<InfoTip text="Prompt + completion tokens used for this AI call" /></TableHead>
-                          <TableHead>AI Model</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {aiGenLog.map((log: any, i: number) => (
-                          <TableRow key={i} className={log.status === "error" ? "bg-red-500/5" : log.status === "permanently_failed" ? "bg-red-900/5" : "even:bg-muted/30"}>
-                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                              {new Date(log.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                            </TableCell>
-                            <TableCell className="font-medium">{log.domain}</TableCell>
-                            <TableCell>
-                              <span className="inline-flex items-center gap-1">
-                                {log.status === "needs_manual_review" && <Flag className="h-3.5 w-3.5 text-orange-500" />}
-                                {log.status === "permanently_failed" && <AlertTriangle className="h-3.5 w-3.5 text-red-400" />}
-                                {log.status === "success_probe" && <Target className="h-3.5 w-3.5 text-teal-500" />}
-                                {log.status === "success_consensus" && <Shield className="h-3.5 w-3.5 text-purple-500" />}
-                                <Badge variant="outline" className={AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
-                                  {log.status.replace(/_/g, " ")}
-                                </Badge>
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              {log.selector_generated ? (
-                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block font-mono">{log.selector_generated}</code>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {log.action_type ? (
-                                <Badge variant="outline" className={ACTION_BADGE_VARIANT[log.action_type] ?? ""}>{log.action_type}</Badge>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right tabular-nums">
-                              {log.confidence != null ? `${Math.round(log.confidence * 10)}%` : "—"}
-                            </TableCell>
-                            <TableCell className="text-right tabular-nums text-xs text-muted-foreground">
-                              {(log.prompt_tokens || log.completion_tokens) ? `${((log.prompt_tokens || 0) + (log.completion_tokens || 0)).toLocaleString()}` : "—"}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{log.ai_model ?? "—"}</TableCell>
+                  <>
+                    {/* Mobile AI log */}
+                    <div className="md:hidden space-y-3">
+                      {aiGenLog.map((log: any, i: number) => (
+                        <div key={i} className={`border rounded-lg p-2.5 space-y-1.5 ${log.status === "error" ? "bg-red-500/5" : log.status === "permanently_failed" ? "bg-red-900/5" : ""}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-sm truncate">{log.domain}</span>
+                            <span className="inline-flex items-center gap-1 shrink-0">
+                              {log.status === "permanently_failed" && <AlertTriangle className="h-3 w-3 text-red-400" />}
+                              <Badge variant="outline" className={`text-[10px] ${AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}`}>
+                                {log.status.replace(/_/g, " ")}
+                              </Badge>
+                            </span>
+                          </div>
+                          {log.selector_generated && <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded block truncate">{log.selector_generated}</code>}
+                          <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
+                            {log.action_type && <Badge variant="outline" className={`text-[10px] ${ACTION_BADGE_VARIANT[log.action_type] ?? ""}`}>{log.action_type}</Badge>}
+                            {log.confidence != null && <span className="tabular-nums">Conf: {Math.round(log.confidence * 10)}%</span>}
+                            {(log.prompt_tokens || log.completion_tokens) && <span className="tabular-nums">{(log.prompt_tokens || 0) + (log.completion_tokens || 0)} tok</span>}
+                            <span>{new Date(log.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Desktop AI log */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Timestamp</TableHead>
+                            <TableHead>Domain</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Selector Generated</TableHead>
+                            <TableHead>Action</TableHead>
+                            <TableHead className="text-right">Confidence</TableHead>
+                            <TableHead className="text-right">Tokens</TableHead>
+                            <TableHead>AI Model</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                        </TableHeader>
+                        <TableBody>
+                          {aiGenLog.map((log: any, i: number) => (
+                            <TableRow key={i} className={log.status === "error" ? "bg-red-500/5" : log.status === "permanently_failed" ? "bg-red-900/5" : "even:bg-muted/30"}>
+                              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                {new Date(log.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </TableCell>
+                              <TableCell className="font-medium">{log.domain}</TableCell>
+                              <TableCell>
+                                <span className="inline-flex items-center gap-1">
+                                  {log.status === "needs_manual_review" && <Flag className="h-3.5 w-3.5 text-orange-500" />}
+                                  {log.status === "permanently_failed" && <AlertTriangle className="h-3.5 w-3.5 text-red-400" />}
+                                  {log.status === "success_probe" && <Target className="h-3.5 w-3.5 text-teal-500" />}
+                                  {log.status === "success_consensus" && <Shield className="h-3.5 w-3.5 text-purple-500" />}
+                                  <Badge variant="outline" className={AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
+                                    {log.status.replace(/_/g, " ")}
+                                  </Badge>
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {log.selector_generated ? (
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block font-mono">{log.selector_generated}</code>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {log.action_type ? (
+                                  <Badge variant="outline" className={ACTION_BADGE_VARIANT[log.action_type] ?? ""}>{log.action_type}</Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {log.confidence != null ? `${Math.round(log.confidence * 10)}%` : "—"}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums text-xs text-muted-foreground">
+                                {(log.prompt_tokens || log.completion_tokens) ? `${(log.prompt_tokens || 0) + (log.completion_tokens || 0)}` : "—"}
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{log.ai_model ?? "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -1182,7 +1352,7 @@ export default function CommunityLearning() {
 
         {/* Breakdown Tab */}
         <TabsContent value="breakdown">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-4">
             <Card>
               <CardHeader><CardTitle className="text-lg">Confidence Distribution</CardTitle></CardHeader>
               <CardContent>
@@ -1190,12 +1360,12 @@ export default function CommunityLearning() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={confDist}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                      <XAxis dataKey="range" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
                       <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
                       <Bar dataKey="count" name="Patterns" radius={[4, 4, 0, 0]}>
                         {confDist.map((_: any, i: number) => (
-                          <Cell key={i} fill={CONFIDENCE_COLORS[i] ?? "hsl(var(--primary))"} />
+                          <Cell key={i} fill={CONFIDENCE_COLORS[i % CONFIDENCE_COLORS.length]} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -1226,28 +1396,44 @@ export default function CommunityLearning() {
             <Card>
               <CardHeader><CardTitle className="text-lg">CMP Fingerprints</CardTitle></CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>CMP</TableHead>
-                      <TableHead className="text-right">Patterns</TableHead>
-                      <TableHead className="text-right">Domains</TableHead>
-                      <TableHead className="text-right">Confidence</TableHead>
-                      <TableHead className="text-right">Success</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cmpDist.map((c: any, i: number) => (
-                      <TableRow key={i} className="even:bg-muted/30">
-                        <TableCell className="font-medium">{c.cmp_fingerprint}</TableCell>
-                        <TableCell className="text-right tabular-nums">{c.pattern_count}</TableCell>
-                        <TableCell className="text-right tabular-nums">{c.domain_count}</TableCell>
-                        <TableCell className="text-right tabular-nums">{Math.round(c.avg_confidence * 10)}%</TableCell>
-                        <TableCell className={`text-right font-medium tabular-nums ${rateColor(c.success_rate)}`}>{c.success_rate}%</TableCell>
+                {/* Mobile CMP cards */}
+                <div className="md:hidden space-y-2">
+                  {cmpDist.map((c: any, i: number) => (
+                    <div key={i} className="border rounded-lg p-2.5 flex items-center justify-between gap-3">
+                      <span className="font-medium text-sm truncate">{c.cmp_fingerprint}</span>
+                      <div className="flex items-center gap-3 text-xs shrink-0">
+                        <span className="tabular-nums">{c.pattern_count}p</span>
+                        <span className="tabular-nums">{c.domain_count}d</span>
+                        <span className={`tabular-nums font-medium ${rateColor(c.success_rate)}`}>{c.success_rate}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop CMP table */}
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>CMP</TableHead>
+                        <TableHead className="text-right">Patterns</TableHead>
+                        <TableHead className="text-right">Domains</TableHead>
+                        <TableHead className="text-right">Confidence</TableHead>
+                        <TableHead className="text-right">Success</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {cmpDist.map((c: any, i: number) => (
+                        <TableRow key={i} className="even:bg-muted/30">
+                          <TableCell className="font-medium">{c.cmp_fingerprint}</TableCell>
+                          <TableCell className="text-right tabular-nums">{c.pattern_count}</TableCell>
+                          <TableCell className="text-right tabular-nums">{c.domain_count}</TableCell>
+                          <TableCell className="text-right tabular-nums">{Math.round(c.avg_confidence * 10)}%</TableCell>
+                          <TableCell className={`text-right font-medium tabular-nums ${rateColor(c.success_rate)}`}>{c.success_rate}%</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
 
@@ -1274,23 +1460,23 @@ export default function CommunityLearning() {
         <TabsContent value="dismissals">
           <div className="space-y-4">
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-3 sm:gap-4">
               <Card className="border-t-2 border-purple-500/40">
-                <CardContent className="py-3 text-center">
-                  <p className="text-2xl font-bold tabular-nums">{dismissalReports.length}</p>
-                  <p className="text-xs text-muted-foreground">Total Dismissal Reports</p>
+                <CardContent className="py-2.5 sm:py-3 text-center">
+                  <p className="text-lg sm:text-2xl font-bold tabular-nums">{dismissalReports.length}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Total Reports</p>
                 </CardContent>
               </Card>
               <Card className="border-t-2 border-blue-500/40">
-                <CardContent className="py-3 text-center">
-                  <p className="text-2xl font-bold text-blue-500 tabular-nums">{dismissalsByDomain.size}</p>
-                  <p className="text-xs text-muted-foreground">Unique Domains</p>
+                <CardContent className="py-2.5 sm:py-3 text-center">
+                  <p className="text-lg sm:text-2xl font-bold text-blue-500 tabular-nums">{dismissalsByDomain.size}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Unique Domains</p>
                 </CardContent>
               </Card>
               <Card className="border-t-2 border-teal-500/40">
-                <CardContent className="py-3 text-center">
-                  <p className="text-2xl font-bold text-teal-500 tabular-nums">{consensusCandidates.length}</p>
-                  <p className="text-xs text-muted-foreground">Pending Consensus<InfoTip text="Domains with dismissal reports not yet converted to patterns" /></p>
+                <CardContent className="py-2.5 sm:py-3 text-center">
+                  <p className="text-lg sm:text-2xl font-bold text-teal-500 tabular-nums">{consensusCandidates.length}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Pending<span className="hidden sm:inline"> Consensus</span></p>
                 </CardContent>
               </Card>
             </div>
@@ -1301,13 +1487,13 @@ export default function CommunityLearning() {
                 <CardContent className="py-3">
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle2 className="h-4 w-4 text-teal-500" />
-                    <p className="text-sm font-medium">Consensus Results — {consensusResults.created ?? 0} patterns created from {consensusResults.processed ?? 0} candidates</p>
+                    <p className="text-sm font-medium">Consensus — {consensusResults.created ?? 0} patterns from {consensusResults.processed ?? 0} candidates</p>
                   </div>
                   {consensusResults.results?.length > 0 && (
                     <div className="space-y-1">
                       {consensusResults.results.map((r: any, i: number) => (
-                        <p key={i} className="text-xs text-muted-foreground">
-                          {r.error ? `❌ ${r.domain}: ${r.error}` : `✅ ${r.domain} → ${r.selector} (confidence: ${Math.round((r.confidence ?? 0) * 10)}%, ${r.reports} reports)`}
+                        <p key={i} className="text-xs text-muted-foreground break-all">
+                          {r.error ? `❌ ${r.domain}: ${r.error}` : `✅ ${r.domain} → ${r.selector} (${Math.round((r.confidence ?? 0) * 10)}%, ${r.reports} reports)`}
                         </p>
                       ))}
                     </div>
@@ -1318,21 +1504,21 @@ export default function CommunityLearning() {
 
             {/* Actions Bar */}
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
                 <div>
                   <CardTitle className="text-lg">Dismissal Reports</CardTitle>
                   <CardDescription>User-reported banner dismissals from the extension</CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {selectedDismissals.size > 0 && (
                     <Button variant="outline" size="sm" className="gap-1.5 text-red-500 border-red-500/30 hover:bg-red-500/10" disabled={deletingDismissals} onClick={handleDeleteDismissals}>
                       {deletingDismissals ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                      Delete {selectedDismissals.size} selected
+                      Delete {selectedDismissals.size}
                     </Button>
                   )}
                   <Button variant="outline" size="sm" onClick={handleRunConsensus} disabled={runningConsensus || consensusCandidates.length === 0} className="gap-2">
                     {runningConsensus ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                    Run Consensus{consensusCandidates.length > 0 ? ` (${consensusCandidates.length})` : ""}
+                    Consensus{consensusCandidates.length > 0 ? ` (${consensusCandidates.length})` : ""}
                   </Button>
                 </div>
               </CardHeader>
@@ -1340,31 +1526,12 @@ export default function CommunityLearning() {
                 {dismissalReports.length === 0 ? (
                   <EmptyState icon={CheckCircle2} title="No dismissal reports" description="No user-reported banner dismissals yet." />
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-8">
-                          <Checkbox
-                            checked={selectedDismissals.size === dismissalReports.length && dismissalReports.length > 0}
-                            onCheckedChange={() => {
-                              if (selectedDismissals.size === dismissalReports.length) {
-                                setSelectedDismissals(new Set());
-                              } else {
-                                setSelectedDismissals(new Set(dismissalReports.map((r: any) => r.id)));
-                              }
-                            }}
-                          />
-                        </TableHead>
-                        <TableHead>Domain</TableHead>
-                        <TableHead>Clicked Selector</TableHead>
-                        <TableHead>Banner Selector</TableHead>
-                        <TableHead className="text-right">Reported</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                  <>
+                    {/* Mobile dismissals */}
+                    <div className="md:hidden space-y-3">
                       {dismissalReports.map((r: any) => (
-                        <TableRow key={r.id} className="even:bg-muted/30">
-                          <TableCell>
+                        <div key={r.id} className="border rounded-lg p-2.5 space-y-1.5">
+                          <div className="flex items-center gap-2">
                             <Checkbox
                               checked={selectedDismissals.has(r.id)}
                               onCheckedChange={() => {
@@ -1375,24 +1542,72 @@ export default function CommunityLearning() {
                                 });
                               }}
                             />
-                          </TableCell>
-                          <TableCell className="font-medium flex items-center gap-2">
-                            <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                            {r.domain}
-                          </TableCell>
-                          <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.clicked_selector}</code></TableCell>
-                          <TableCell>
-                            {r.banner_selector ? (
-                              <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.banner_selector}</code>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
-                        </TableRow>
+                            <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="font-medium text-sm truncate flex-1">{r.domain}</span>
+                            <span className="text-[11px] text-muted-foreground shrink-0">{r.created_at ? timeAgo(r.created_at) : "—"}</span>
+                          </div>
+                          <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded block truncate">{r.clicked_selector}</code>
+                          {r.banner_selector && <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded block truncate text-muted-foreground">{r.banner_selector}</code>}
+                        </div>
                       ))}
-                    </TableBody>
-                  </Table>
+                    </div>
+                    {/* Desktop dismissals */}
+                    <div className="hidden md:block">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-8">
+                              <Checkbox
+                                checked={selectedDismissals.size === dismissalReports.length && dismissalReports.length > 0}
+                                onCheckedChange={() => {
+                                  if (selectedDismissals.size === dismissalReports.length) {
+                                    setSelectedDismissals(new Set());
+                                  } else {
+                                    setSelectedDismissals(new Set(dismissalReports.map((r: any) => r.id)));
+                                  }
+                                }}
+                              />
+                            </TableHead>
+                            <TableHead>Domain</TableHead>
+                            <TableHead>Clicked Selector</TableHead>
+                            <TableHead>Banner Selector</TableHead>
+                            <TableHead className="text-right">Reported</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {dismissalReports.map((r: any) => (
+                            <TableRow key={r.id} className="even:bg-muted/30">
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedDismissals.has(r.id)}
+                                  onCheckedChange={() => {
+                                    setSelectedDismissals(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(r.id)) next.delete(r.id); else next.add(r.id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium flex items-center gap-2">
+                                <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                                {r.domain}
+                              </TableCell>
+                              <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.clicked_selector}</code></TableCell>
+                              <TableCell>
+                                {r.banner_selector ? (
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.banner_selector}</code>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -1402,12 +1617,12 @@ export default function CommunityLearning() {
         {/* User Reports Tab */}
         <TabsContent value="user-reports">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <CardTitle className="text-lg">Missed Banner Reports</CardTitle>
                 <CardDescription>Domains reported by users where cookie banners weren't handled</CardDescription>
               </div>
-              <Button variant="outline" size="sm" onClick={handleProcessReports} disabled={processingReports} className="gap-2">
+              <Button variant="outline" size="sm" onClick={handleProcessReports} disabled={processingReports} className="gap-2 w-full sm:w-auto">
                 {processingReports ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 Process Reports
               </Button>
@@ -1418,43 +1633,69 @@ export default function CommunityLearning() {
               ) : (
                 <>
                   <div className="grid grid-cols-2 gap-4 mb-6">
-                    <Card className="border-t-2 border-primary/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold tabular-nums">{unresolvedReports.length}</p><p className="text-xs text-muted-foreground">Unresolved</p></CardContent></Card>
-                    <Card className="border-t-2 border-amber-500/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-amber-500 tabular-nums">{unresolvedReports.filter((r: any) => r.report_count >= 3).length}</p><p className="text-xs text-muted-foreground">Priority (3+ reports)<InfoTip text="Domains reported 3+ times — highest priority for fixing" /></p></CardContent></Card>
+                    <Card className="border-t-2 border-primary/40"><CardContent className="py-3 text-center"><p className="text-xl sm:text-2xl font-bold tabular-nums">{unresolvedReports.length}</p><p className="text-[10px] sm:text-xs text-muted-foreground">Unresolved</p></CardContent></Card>
+                    <Card className="border-t-2 border-amber-500/40"><CardContent className="py-3 text-center"><p className="text-xl sm:text-2xl font-bold text-amber-500 tabular-nums">{unresolvedReports.filter((r: any) => r.report_count >= 3).length}</p><p className="text-[10px] sm:text-xs text-muted-foreground">Priority (3+)</p></CardContent></Card>
                   </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Domain</TableHead>
-                        <TableHead className="text-right">Reports</TableHead>
-                        <TableHead>Working Pattern?<InfoTip text="Whether an existing pattern covers this domain" /></TableHead>
-                        <TableHead className="text-right">Last Reported</TableHead>
-                        <TableHead className="text-right">First Seen</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {unresolvedReports.map((r: any, i: number) => (
-                        <TableRow key={i} className="even:bg-muted/30">
-                          <TableCell className="font-medium flex items-center gap-2">
-                            <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                            {r.domain}
-                            {r.report_count >= 3 && (
-                              <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[10px]">Priority</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-medium tabular-nums">{r.report_count}</TableCell>
-                          <TableCell>
-                            {r.has_working_pattern ? (
-                              <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">Yes</Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30">No</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">{r.last_reported ? timeAgo(r.last_reported) : "—"}</TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
+                  {/* Mobile user reports */}
+                  <div className="md:hidden space-y-3">
+                    {unresolvedReports.map((r: any, i: number) => (
+                      <div key={i} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="font-medium text-sm truncate flex-1">{r.domain}</span>
+                          {r.report_count >= 3 && (
+                            <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[10px] shrink-0">Priority</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="tabular-nums font-medium">{r.report_count} reports</span>
+                          {r.has_working_pattern ? (
+                            <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30 text-[10px]">Pattern ✓</Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30 text-[10px]">No pattern</Badge>
+                          )}
+                          <span className="text-muted-foreground ml-auto">{r.last_reported ? timeAgo(r.last_reported) : "—"}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Desktop user reports */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Domain</TableHead>
+                          <TableHead className="text-right">Reports</TableHead>
+                          <TableHead>Working Pattern?</TableHead>
+                          <TableHead className="text-right">Last Reported</TableHead>
+                          <TableHead className="text-right">First Seen</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {unresolvedReports.map((r: any, i: number) => (
+                          <TableRow key={i} className="even:bg-muted/30">
+                            <TableCell className="font-medium flex items-center gap-2">
+                              <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                              {r.domain}
+                              {r.report_count >= 3 && (
+                                <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[10px]">Priority</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium tabular-nums">{r.report_count}</TableCell>
+                            <TableCell>
+                              {r.has_working_pattern ? (
+                                <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30">Yes</Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30">No</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">{r.last_reported ? timeAgo(r.last_reported) : "—"}</TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </>
               )}
             </CardContent>
