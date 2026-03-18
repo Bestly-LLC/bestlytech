@@ -303,10 +303,10 @@ Deno.serve(async (req) => {
         if (knownCMP) {
           console.log(`[${candidate.domain}] CMP identified via cmp_fingerprint field: ${knownCMP.name} — using known selectors`);
           await insertCMPPattern(supabase, candidate, knownCMP);
-          // Override confidence to 9 for fingerprint-matched patterns
+          // Override confidence to 9 and set strategy for fingerprint-matched patterns
           await supabase
             .from("cookie_patterns")
-            .update({ confidence: 9 })
+            .update({ confidence: 9, strategy: knownCMP.cmp_fingerprint } as any)
             .eq("domain", candidate.domain)
             .eq("selector", knownCMP.selector);
           generated++;
@@ -476,12 +476,47 @@ Deno.serve(async (req) => {
           }
         }
 
+        // ========== LAYER 4: Gemini Flash failsafe — different model, different prompt ==========
+        const fullHtmlForGemini = serverHtml || candidate.banner_html || "";
+        if (fullHtmlForGemini.length > 100) {
+          console.log(`[${candidate.domain}] All layers failed, trying Gemini Flash failsafe...`);
+          const geminiResult = await geminiFailsafe(LOVABLE_API_KEY, candidate.domain, fullHtmlForGemini);
+          if (geminiResult) {
+            await insertPattern(supabase, candidate, {
+              is_cookie_banner: true,
+              selector: geminiResult.selector,
+              action_type: geminiResult.action,
+              confidence: geminiResult.confidence,
+            }, "success_gemini_failsafe", fullHtmlForGemini.substring(0, 500));
+
+            if (geminiResult.strategy) {
+              await supabase
+                .from("cookie_patterns")
+                .update({ strategy: geminiResult.strategy.toLowerCase() } as any)
+                .eq("domain", candidate.domain)
+                .eq("selector", geminiResult.selector);
+            }
+
+            generated++;
+            results.push({
+              domain: candidate.domain,
+              status: "success_gemini_failsafe",
+              selector: geminiResult.selector,
+              action: geminiResult.action,
+              confidence: geminiResult.confidence,
+              note: `Gemini failsafe${geminiResult.strategy ? ` (strategy: ${geminiResult.strategy})` : ""}`,
+            });
+            continue;
+          }
+        }
+
         // ========== ALL PATHS FAILED → check retry limit ==========
         const diagnostics = [
           `Extension HTML: AI rejected (${reason})`,
           `Server fetch: ${serverFetchSuccess ? "OK" : "FAILED"}`,
           serverFetchSuccess ? `Server CMP check: no match` : null,
           serverFetchSuccess ? `Server AI: ${serverHtml ? "no cookie elements or AI rejected" : "N/A"}` : null,
+          `Gemini failsafe: no result`,
         ].filter(Boolean).join("; ");
 
         // After 5 attempts total, mark as permanently_failed (auto-retry will stop)
@@ -821,10 +856,10 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
   });
   if (upsertErr) throw upsertErr;
 
-  // CMP-detected patterns start at confidence 7
+  // CMP-detected patterns start at confidence 7 + set strategy for built-in handler routing
   await supabase
     .from("cookie_patterns")
-    .update({ confidence: 7 })
+    .update({ confidence: 7, strategy: cmp.cmp_fingerprint } as any)
     .eq("domain", candidate.domain)
     .eq("selector", cmp.selector);
 
@@ -926,4 +961,108 @@ async function logFailure(supabase: any, candidate: any, reason: string, usage?:
     _domain: candidate.domain,
     _resolved: false,
   });
+}
+
+// ---------- Gemini Flash Failsafe ----------
+const GEMINI_FAILSAFE_MODEL = "google/gemini-2.5-flash";
+
+async function geminiFailsafe(apiKey: string, domain: string, html: string): Promise<{ selector: string; action: string; confidence: number; strategy?: string } | null> {
+  const prompt = `You are analyzing the HTML of ${domain} to find how to dismiss its cookie consent banner.
+
+The HTML may not contain the actual banner elements (they might be injected by JavaScript), but it WILL contain clues:
+- <script> tags loading consent management platforms (CMPs)
+- Meta tags or config objects referencing cookie consent
+- CSS classes or IDs that hint at the consent system
+
+Your job:
+1. Identify what consent system this site uses (e.g., Usercentrics, OneTrust, CookieBot, custom, etc.)
+2. Based on that system, provide the best CSS selector to click to REJECT or DENY cookies
+3. If it's a known CMP that uses shadow DOM (like Usercentrics), say so — the extension has built-in handlers
+
+Rules:
+- Prefer reject/deny over accept
+- If you can identify the CMP but can't determine a specific selector, return the CMP name as "strategy"
+- Only return JSON, no markdown
+
+HTML (first 15000 chars):
+${html.substring(0, 15000)}`;
+
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: GEMINI_FAILSAFE_MODEL,
+        messages: [
+          { role: "system", content: "You analyze web pages to identify cookie consent management platforms and how to dismiss them. Return only valid JSON." },
+          { role: "user", content: prompt },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "identify_cookie_consent",
+              description: "Report the cookie consent system and how to dismiss it.",
+              parameters: {
+                type: "object",
+                properties: {
+                  cmp_detected: { type: "string", description: "Name of CMP or 'custom' or 'unknown'" },
+                  strategy: { type: "string", description: "CMP name in lowercase if known CMP, null if custom. Used for built-in handler routing." },
+                  selector: { type: "string", description: "CSS selector for reject/deny button" },
+                  action: { type: "string", enum: ["reject", "accept", "close", "necessary", "save"], description: "What the button does" },
+                  confidence: { type: "number", description: "1-10 confidence score" },
+                  reasoning: { type: "string", description: "Brief explanation" },
+                },
+                required: ["cmp_detected", "selector", "action", "confidence"],
+                additionalProperties: false,
+              },
+            },
+          },
+        ],
+        tool_choice: { type: "function", function: { name: "identify_cookie_consent" } },
+      }),
+    });
+
+    if (!response.ok) {
+      console.log(`Gemini failsafe HTTP error for ${domain}: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    let parsed: any;
+
+    if (toolCall?.function?.arguments) {
+      parsed = JSON.parse(toolCall.function.arguments);
+    } else {
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) return null;
+      let jsonStr = content.trim();
+      const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) jsonStr = jsonMatch[1].trim();
+      parsed = JSON.parse(jsonStr);
+    }
+
+    if (parsed.strategy && parsed.strategy !== "custom" && parsed.strategy !== "unknown" && parsed.strategy !== "null") {
+      return {
+        selector: parsed.selector || "",
+        action: parsed.action || "reject",
+        confidence: Math.min(parsed.confidence || 5, 7),
+        strategy: parsed.strategy,
+      };
+    }
+    if (parsed.selector) {
+      return {
+        selector: parsed.selector,
+        action: parsed.action || "reject",
+        confidence: Math.min(parsed.confidence || 4, 6),
+      };
+    }
+  } catch (e) {
+    console.log(`Gemini failsafe error for ${domain}: ${e}`);
+  }
+  return null;
 }

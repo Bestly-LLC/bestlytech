@@ -56,6 +56,8 @@ const CONFIDENCE_COLORS = ["hsl(0,84%,60%)", "hsl(25,95%,53%)", "hsl(45,93%,47%)
 const AI_STATUS_BADGE: Record<string, string> = {
   success: "bg-green-600/15 text-green-600 border-green-600/30",
   success_cmp_fallback: "bg-blue-500/15 text-blue-500 border-blue-500/30",
+  success_cmp_fingerprint: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
+  success_gemini_failsafe: "bg-cyan-500/15 text-cyan-500 border-cyan-500/30",
   success_probe: "bg-teal-500/15 text-teal-500 border-teal-500/30",
   success_consensus: "bg-purple-500/15 text-purple-500 border-purple-500/30",
   error: "bg-red-500/15 text-red-500 border-red-500/30",
@@ -111,6 +113,7 @@ export default function CommunityLearning() {
   const [runningGenerator, setRunningGenerator] = useState(false);
   const [runningRetry, setRunningRetry] = useState(false);
   const [runningMaintenance, setRunningMaintenance] = useState(false);
+  const [runningReset, setRunningReset] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
   const [deletingPattern, setDeletingPattern] = useState<string | null>(null);
   const [rerunningDomain, setRerunningDomain] = useState<string | null>(null);
@@ -305,6 +308,26 @@ export default function CommunityLearning() {
       toast.error(`Maintenance failed: ${e.message}`);
     } finally {
       setRunningMaintenance(false);
+    }
+  }, [fetchAll]);
+
+  const handleResetFailed = useCallback(async () => {
+    setRunningReset(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-failed-patterns`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      toast.success(`Reset complete — ${data.reset_count ?? 0} domains re-queued for evaluation`);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Reset failed: ${e.message}`);
+    } finally {
+      setRunningReset(false);
     }
   }, [fetchAll]);
 
@@ -608,6 +631,9 @@ export default function CommunityLearning() {
               </p>
               <p className="text-xs text-muted-foreground">These domains exhausted all retry attempts. Consider adding patterns manually.</p>
             </div>
+            <Button variant="outline" size="sm" className="shrink-0 gap-1.5 border-amber-500/30 text-amber-500 hover:bg-amber-500/10" onClick={handleResetFailed} disabled={runningReset}>
+              {runningReset ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Resetting...</> : <><RotateCcw className="h-3.5 w-3.5" /> Reset Failed</>}
+            </Button>
             <Button variant="outline" size="sm" className="shrink-0 gap-1.5 border-red-500/30 text-red-500 hover:bg-red-500/10" onClick={() => setActiveTab("ai-generator")}>
               <Flag className="h-3.5 w-3.5" /> View
             </Button>
@@ -821,6 +847,11 @@ export default function CommunityLearning() {
                         <TableCell>
                           <span className="inline-flex items-center gap-1">
                             <Badge variant="outline" className={ACTION_BADGE_VARIANT[r.action_type] ?? ""}>{r.action_type}</Badge>
+                            {r.strategy && (
+                              <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-cyan-500/15 text-cyan-500 border-cyan-500/30">
+                                ⚡ {r.strategy}
+                              </Badge>
+                            )}
                             <AiFixerIndicator domain={r.domain} selector={r.selector} />
                           </span>
                         </TableCell>

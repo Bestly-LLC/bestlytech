@@ -1,0 +1,1 @@
+ALTER TABLE public.cookie_patterns ADD COLUMN IF NOT EXISTS strategy TEXT;
