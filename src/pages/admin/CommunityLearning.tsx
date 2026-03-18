@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, Sparkles, Info, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { ManualPatternForm } from "@/components/admin/ManualPatternForm";
 import { StatCard } from "@/components/admin/StatCard";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -343,9 +344,12 @@ export default function CommunityLearning() {
       <PageHeader
         title="Community Learning"
         actions={
-          <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
-            <RefreshCw className="h-4 w-4" /> Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <ManualPatternForm onSuccess={fetchAll} />
+            <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+          </div>
         }
       />
 
