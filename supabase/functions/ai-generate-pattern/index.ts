@@ -319,7 +319,7 @@ Deno.serve(async (req) => {
             cmp: extensionCMP.name,
             selector: extensionCMP.selector,
             action: extensionCMP.action,
-            confidence: 6,
+            confidence: 7,
             note: "CMP detected in extension HTML (Layer 1)",
           });
           continue;
@@ -361,8 +361,8 @@ Deno.serve(async (req) => {
               cmp: serverCMP.name,
               selector: serverCMP.selector,
               action: serverCMP.action,
-              confidence: 6,
-              note: "CMP detected in server HTML (Layer 3a)",
+            confidence: 7,
+            note: "CMP detected in server HTML (Layer 3a)",
             });
             continue;
           }
@@ -457,9 +457,46 @@ interface AIResult {
   is_cookie_banner: boolean;
   selector?: string;
   action?: string;
+  action_type?: string;
   confidence?: number;
   rejection_reason?: string;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
+}
+
+// Validate that selector text and action_type are not contradictory
+function validateSelectorAction(selector: string, actionType: string): { valid: boolean; corrected?: string; reason?: string } {
+  const lower = selector.toLowerCase();
+  const acceptPatterns = /accept|agree|allow|got-it|gotit|ok-button/i;
+  const rejectPatterns = /reject|decline|deny|refuse|opt-out|optout/i;
+  const closePatterns = /close|dismiss|x-button|btn-close/i;
+  const necessaryPatterns = /necessary|essential|required-only/i;
+
+  if (acceptPatterns.test(lower) && actionType === "reject") {
+    return { valid: false, corrected: "accept", reason: `Selector "${selector}" contains accept-like text but was labeled as reject` };
+  }
+  if (rejectPatterns.test(lower) && actionType === "accept") {
+    return { valid: false, corrected: "reject", reason: `Selector "${selector}" contains reject-like text but was labeled as accept` };
+  }
+  if (closePatterns.test(lower) && !["close", "reject"].includes(actionType)) {
+    return { valid: false, corrected: "close", reason: `Selector "${selector}" contains close-like text but was labeled as ${actionType}` };
+  }
+  if (necessaryPatterns.test(lower) && actionType !== "necessary") {
+    return { valid: false, corrected: "necessary", reason: `Selector "${selector}" contains necessary-like text but was labeled as ${actionType}` };
+  }
+  return { valid: true };
+}
+
+// Check if domain already has a high-confidence active pattern
+async function hasExistingHighConfidencePattern(supabase: any, domain: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("cookie_patterns")
+    .select("id, confidence")
+    .eq("domain", domain)
+    .eq("is_active", true)
+    .gte("confidence", 7)
+    .limit(1);
+  if (error) return false;
+  return (data?.length ?? 0) > 0;
 }
 
 async function callAI(apiKey: string, html: string, domain: string, cmpFingerprint?: string): Promise<AIResult> {
@@ -490,7 +527,13 @@ If it IS a cookie banner, identify the best CSS selector to DISMISS or REJECT co
 Rules when is_cookie_banner is true:
 - Prefer reject/decline/necessary-only buttons over accept buttons
 - If no reject button exists, use a close/dismiss button
-- If only accept exists, use it but set confidence lower
+- If only accept exists, use it — but set action_type to "accept" (NOT "reject")
+- CRITICAL: action_type must match what the button ACTUALLY DOES:
+  - "accept" = accepts all cookies (button says "Accept", "OK", "Got it", "Agree", "Allow all")
+  - "reject" = rejects/declines cookies (button says "Reject", "Decline", "Deny", "Refuse")
+  - "necessary" = keeps only essential cookies (button says "Necessary only", "Essential only")
+  - "save" = saves current cookie preferences (button says "Save preferences", "Confirm choices")
+  - "close" = closes/hides the banner without making a cookie choice (X button, close icon)
 - The selector must be specific enough to not match other elements
 - The selector MUST reference an element that exists in the provided HTML
 
@@ -535,10 +578,10 @@ ${html}`;
                     type: "string",
                     description: "CSS selector for the reject/decline/dismiss button. Only set if is_cookie_banner is true.",
                   },
-                  action: {
+                  action_type: {
                     type: "string",
-                    enum: ["click", "hide"],
-                    description: "Whether to click the button or hide the banner element. Only set if is_cookie_banner is true.",
+                    enum: ["accept", "reject", "necessary", "save", "close"],
+                    description: "What the button ACTUALLY DOES. 'accept' = accepts all cookies, 'reject' = rejects/declines, 'necessary' = essential only, 'save' = saves current preferences, 'close' = closes/hides banner. Must match the button's real function, NOT the user's desired outcome.",
                   },
                   confidence: {
                     type: "number",
@@ -580,10 +623,14 @@ ${html}`;
     parsed = JSON.parse(jsonStr);
   }
 
+  // Support both old "action" field and new "action_type" field
+  const actionType = parsed.action_type || (parsed.action === "hide" ? "close" : "reject");
+
   return {
     is_cookie_banner: parsed.is_cookie_banner !== false,
     selector: parsed.selector,
-    action: parsed.action === "hide" ? "hide" : "click",
+    action: parsed.action,
+    action_type: actionType,
     confidence: parsed.confidence,
     rejection_reason: parsed.rejection_reason,
     usage: { prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens },
@@ -591,6 +638,22 @@ ${html}`;
 }
 
 async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN_CMPS[number]) {
+  // Check for existing high-confidence pattern
+  if (await hasExistingHighConfidencePattern(supabase, candidate.domain)) {
+    console.log(`[${candidate.domain}] Skipping CMP insert — existing high-confidence pattern found`);
+    await supabase.from("ai_generation_log").insert({
+      domain: candidate.domain,
+      status: "skipped_already_covered",
+      selector_generated: cmp.selector,
+      action_type: cmp.action,
+      confidence: 7,
+      ai_model: `cmp_detection:${cmp.name}`,
+      html_source: `Domain already has high-confidence pattern. CMP: ${cmp.name}`.substring(0, 500),
+    });
+    await supabase.rpc("mark_ai_processed", { _domain: candidate.domain, _resolved: true });
+    return;
+  }
+
   const { error: upsertErr } = await supabase.rpc("upsert_pattern", {
     _domain: candidate.domain,
     _selector: cmp.selector,
@@ -600,9 +663,10 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
   });
   if (upsertErr) throw upsertErr;
 
+  // CMP-detected patterns start at confidence 7
   await supabase
     .from("cookie_patterns")
-    .update({ confidence: 6 })
+    .update({ confidence: 7 })
     .eq("domain", candidate.domain)
     .eq("selector", cmp.selector);
 
@@ -611,7 +675,7 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
     status: "success_cmp_fallback",
     selector_generated: cmp.selector,
     action_type: cmp.action,
-    confidence: 6,
+    confidence: 7,
     ai_model: `cmp_detection:${cmp.name}`,
     html_source: `CMP detected: ${cmp.name} (signatures: ${cmp.signatures.join(", ")})`.substring(0, 500),
   });
@@ -624,14 +688,42 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
 
 async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, status: string, htmlOverride?: string) {
   const selector = aiResult.selector!;
-  const action = aiResult.action === "hide" ? "close" : "reject";
+  let actionType = aiResult.action_type || (aiResult.action === "hide" ? "close" : "reject");
+
+  // Validate selector/action_type for contradictions
+  const validation = validateSelectorAction(selector, actionType);
+  if (!validation.valid && validation.corrected) {
+    console.log(`[${candidate.domain}] Selector/action contradiction: ${validation.reason}. Auto-correcting to "${validation.corrected}"`);
+    actionType = validation.corrected;
+    status = status + "_autocorrected";
+  }
+
+  // Check for existing high-confidence pattern
+  if (await hasExistingHighConfidencePattern(supabase, candidate.domain)) {
+    console.log(`[${candidate.domain}] Skipping AI insert — existing high-confidence pattern found`);
+    await supabase.from("ai_generation_log").insert({
+      domain: candidate.domain,
+      status: "skipped_already_covered",
+      selector_generated: selector,
+      action_type: actionType,
+      confidence: Number(aiResult.confidence) || 5,
+      ai_model: AI_MODEL_LABEL,
+      prompt_tokens: aiResult.usage?.prompt_tokens ?? null,
+      completion_tokens: aiResult.usage?.completion_tokens ?? null,
+      html_source: `Domain already has high-confidence pattern`.substring(0, 500),
+    });
+    await supabase.rpc("mark_ai_processed", { _domain: candidate.domain, _resolved: true });
+    return;
+  }
+
   const rawConfidence = Number(aiResult.confidence) || 5;
+  // AI patterns cap at 6, let success tracking promote them
   const confidence = Math.min(Math.round(rawConfidence), 6);
 
   const { error: upsertErr } = await supabase.rpc("upsert_pattern", {
     _domain: candidate.domain,
     _selector: selector,
-    _action_type: action,
+    _action_type: actionType,
     _cmp_fingerprint: candidate.cmp_fingerprint || "generic",
     _source: "ai_generated",
   });
@@ -648,7 +740,7 @@ async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, 
     domain: candidate.domain,
     status,
     selector_generated: selector,
-    action_type: action,
+    action_type: actionType,
     confidence,
     ai_model: AI_MODEL_LABEL,
     prompt_tokens: aiResult.usage?.prompt_tokens ?? null,
