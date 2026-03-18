@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, Sparkles, Info, Trash2, Zap, Coins, RotateCcw, MousePointerClick, Users } from "lucide-react";
+import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, ChevronUp, ArrowUpDown, Sparkles, Info, Trash2, Zap, Coins, RotateCcw, MousePointerClick, Users } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { ManualPatternForm } from "@/components/admin/ManualPatternForm";
@@ -134,6 +134,45 @@ export default function CommunityLearning() {
   const [selectedDismissals, setSelectedDismissals] = useState<Set<string>>(new Set());
   const [deletingDismissals, setDeletingDismissals] = useState(false);
   const [togglingPattern, setTogglingPattern] = useState<string | null>(null);
+
+  // Domain sorting state
+  type DomainSortKey = "domain" | "pattern_count" | "total_reports" | "success_rate" | "avg_confidence" | "last_active";
+  const [domainSortKey, setDomainSortKey] = useState<DomainSortKey>("last_active");
+  const [domainSortAsc, setDomainSortAsc] = useState(false);
+
+  const sortedDomains = useMemo(() => {
+    const sorted = [...domains].sort((a: any, b: any) => {
+      let aVal = a[domainSortKey];
+      let bVal = b[domainSortKey];
+      if (domainSortKey === "domain") {
+        aVal = (aVal || "").toLowerCase();
+        bVal = (bVal || "").toLowerCase();
+        return domainSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      if (domainSortKey === "last_active") {
+        aVal = aVal ? new Date(aVal).getTime() : 0;
+        bVal = bVal ? new Date(bVal).getTime() : 0;
+      }
+      aVal = Number(aVal) || 0;
+      bVal = Number(bVal) || 0;
+      return domainSortAsc ? aVal - bVal : bVal - aVal;
+    });
+    return sorted;
+  }, [domains, domainSortKey, domainSortAsc]);
+
+  const handleDomainSort = (key: DomainSortKey) => {
+    if (domainSortKey === key) {
+      setDomainSortAsc(!domainSortAsc);
+    } else {
+      setDomainSortKey(key);
+      setDomainSortAsc(key === "domain"); // A-Z default for domain, desc for numbers
+    }
+  };
+
+  const SortIcon = ({ sortKey }: { sortKey: DomainSortKey }) => {
+    if (domainSortKey !== sortKey) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />;
+    return domainSortAsc ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />;
+  };
 
   const fetchAll = useCallback(async () => {
     if (!hasLoadedRef.current) setLoading(true);
@@ -702,16 +741,28 @@ export default function CommunityLearning() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Domain</TableHead>
-                     <TableHead className="text-right">Patterns<InfoTip text="Number of CSS selectors learned for this domain" /></TableHead>
-                     <TableHead className="text-right">Reports<InfoTip text="Times users encountered banners on this domain" /></TableHead>
-                     <TableHead className="text-right">Success Rate<InfoTip text="How often patterns successfully dismiss banners here" /></TableHead>
-                     <TableHead>Confidence<InfoTip text="Reliability score 1-100%, based on success rate and volume" /></TableHead>
-                     <TableHead className="text-right">Last Active<InfoTip text="When a pattern last matched a banner on this domain" /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("domain")}>
+                      <span className="inline-flex items-center">Domain<SortIcon sortKey="domain" /></span>
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("pattern_count")}>
+                      <span className="inline-flex items-center justify-end">Patterns<InfoTip text="Number of CSS selectors learned for this domain" /><SortIcon sortKey="pattern_count" /></span>
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("total_reports")}>
+                      <span className="inline-flex items-center justify-end">Reports<InfoTip text="Times users encountered banners on this domain" /><SortIcon sortKey="total_reports" /></span>
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("success_rate")}>
+                      <span className="inline-flex items-center justify-end">Success Rate<InfoTip text="How often patterns successfully dismiss banners here" /><SortIcon sortKey="success_rate" /></span>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("avg_confidence")}>
+                      <span className="inline-flex items-center">Confidence<InfoTip text="Reliability score 1-100%, based on success rate and volume" /><SortIcon sortKey="avg_confidence" /></span>
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("last_active")}>
+                      <span className="inline-flex items-center justify-end">Last Active<InfoTip text="When a pattern last matched a banner on this domain" /><SortIcon sortKey="last_active" /></span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {domains.map((d: any, i: number) => {
+                  {sortedDomains.map((d: any, i: number) => {
                     const isFixed = fixedDomains.has(d.domain);
                     return (
                     <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
