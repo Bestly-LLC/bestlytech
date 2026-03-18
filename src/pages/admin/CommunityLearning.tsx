@@ -731,6 +731,9 @@ export default function CommunityLearning() {
                             <TableCell>
                               <span className="inline-flex items-center gap-1">
                                 {log.status === "needs_manual_review" && <Flag className="h-3.5 w-3.5 text-orange-500" />}
+                                {log.status === "permanently_failed" && <AlertTriangle className="h-3.5 w-3.5 text-red-400" />}
+                                {log.status === "success_probe" && <Target className="h-3.5 w-3.5 text-teal-500" />}
+                                {log.status === "success_consensus" && <Shield className="h-3.5 w-3.5 text-purple-500" />}
                                 <Badge variant="outline" className={AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
                                   {log.status.replace(/_/g, " ")}
                                 </Badge>
