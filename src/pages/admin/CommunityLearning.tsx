@@ -758,7 +758,7 @@ export default function CommunityLearning() {
                               )}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {log.confidence != null ? `${Math.round(log.confidence * 100)}%` : "—"}
+                              {log.confidence != null ? `${Math.round(log.confidence * 10)}%` : "—"}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">{log.ai_model ?? "—"}</TableCell>
                           </TableRow>
