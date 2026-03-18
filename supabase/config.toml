@@ -9,6 +9,8 @@ project_id = "keowunrxpxlbgebujbao"
     verify_jwt = false
   [functions.process-email-queue]
     verify_jwt = true
+  [functions.report-missed-banner]
+    verify_jwt = false
   [functions.report-site]
     verify_jwt = false
   [functions.run-pattern-maintenance]
