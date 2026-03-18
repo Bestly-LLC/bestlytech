@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, Sparkles, Info, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, Sparkles, Info, Trash2, Zap, Coins, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { ManualPatternForm } from "@/components/admin/ManualPatternForm";
@@ -107,6 +108,7 @@ export default function CommunityLearning() {
   const [fixLog, setFixLog] = useState<any[]>([]);
   const [unresolvedReports, setUnresolvedReports] = useState<any[]>([]);
   const [runningGenerator, setRunningGenerator] = useState(false);
+  const [runningRetry, setRunningRetry] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
   const [deletingPattern, setDeletingPattern] = useState<string | null>(null);
   const [rerunningDomain, setRerunningDomain] = useState<string | null>(null);
@@ -115,12 +117,16 @@ export default function CommunityLearning() {
   const [candidates, setCandidates] = useState<any[]>([]);
   const [aiGenLog, setAiGenLog] = useState<any[]>([]);
   const [aiGeneratedCount, setAiGeneratedCount] = useState(0);
+  const [aiTokenStats, setAiTokenStats] = useState({ totalPrompt: 0, totalCompletion: 0, totalRuns: 0, permFailedCount: 0 });
+  const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
+  const [bulkRerunning, setBulkRerunning] = useState(false);
+  const [candidateFilter, setCandidateFilter] = useState<"all" | "never_processed" | "failed">("all");
   const hasLoadedRef = useRef(false);
 
   const fetchAll = useCallback(async () => {
     if (!hasLoadedRef.current) setLoading(true);
     try {
-      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14] = await Promise.all([
+      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15] = await Promise.all([
         supabase.rpc("get_community_overview" as any),
         supabase.rpc("get_daily_pattern_activity" as any, { p_days: 30 }),
         supabase.rpc("get_top_domains" as any, { p_limit: 25 }),
@@ -132,12 +138,11 @@ export default function CommunityLearning() {
         supabase.rpc("get_source_breakdown" as any),
         supabase.from("pattern_fix_log").select("*").order("created_at", { ascending: false }).limit(25),
         supabase.rpc("get_unresolved_reports" as any, { p_limit: 50 }),
-        // New: candidates for AI generation
         supabase.from("missed_banner_reports").select("*").eq("resolved", false).order("report_count", { ascending: false }).limit(50),
-        // New: AI generation log
         supabase.from("ai_generation_log").select("*").order("created_at", { ascending: false }).limit(50),
-        // New: AI generated count
         supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("source", "ai_generated"),
+        // AI token usage stats
+        supabase.from("ai_generation_log").select("prompt_tokens, completion_tokens, status"),
       ]);
       setOverview(r1.data as any);
       setActivity(r2.data as any ?? []);
@@ -153,6 +158,13 @@ export default function CommunityLearning() {
       setCandidates(r12.data as any ?? []);
       setAiGenLog(r13.data as any ?? []);
       setAiGeneratedCount(r14.count ?? 0);
+
+      // Calculate token stats
+      const allLogs = r15.data as any[] ?? [];
+      const totalPrompt = allLogs.reduce((s: number, l: any) => s + (l.prompt_tokens || 0), 0);
+      const totalCompletion = allLogs.reduce((s: number, l: any) => s + (l.completion_tokens || 0), 0);
+      const permFailedCount = allLogs.filter((l: any) => l.status === "permanently_failed").length;
+      setAiTokenStats({ totalPrompt, totalCompletion, totalRuns: allLogs.length, permFailedCount });
     } catch (e) {
       console.error("Failed to fetch community data", e);
     } finally {
@@ -187,6 +199,30 @@ export default function CommunityLearning() {
     }
   }, [fetchAll]);
 
+  const handleRunRetry = useCallback(async () => {
+    setRunningRetry(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auto-retry-failed-patterns`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ triggered_by: "admin" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      toast.success(`Auto-retry complete — Processed: ${data.processed ?? 0}, Succeeded: ${data.succeeded ?? 0}, Failed: ${data.still_failed ?? 0}`);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Auto-retry failed: ${e.message}`);
+    } finally {
+      setRunningRetry(false);
+    }
+  }, [fetchAll]);
+
   const handleProcessReports = useCallback(async () => {
     setProcessingReports(true);
     try {
@@ -205,9 +241,7 @@ export default function CommunityLearning() {
   const handleRerunAI = useCallback(async (domain: string) => {
     setRerunningDomain(domain);
     try {
-      // Clear stale AI log entries for this domain
       await supabase.from("ai_generation_log").delete().eq("domain", domain).in("status", ["skipped_no_html", "error"]);
-      // Reset ai_attempts on missed_banner_reports
       await supabase.from("missed_banner_reports").update({ ai_attempts: 0, ai_processed_at: null }).eq("domain", domain);
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -238,6 +272,38 @@ export default function CommunityLearning() {
     }
   }, [fetchAll]);
 
+  const handleBulkRerunAI = useCallback(async () => {
+    if (selectedCandidates.size === 0) return;
+    setBulkRerunning(true);
+    const domains = Array.from(selectedCandidates);
+    let succeeded = 0;
+    let failed = 0;
+    for (const domain of domains) {
+      try {
+        await supabase.from("ai_generation_log").delete().eq("domain", domain).in("status", ["skipped_no_html", "error"]);
+        await supabase.from("missed_banner_reports").update({ ai_attempts: 0, ai_processed_at: null }).eq("domain", domain);
+
+        const { data: { session } } = await supabase.auth.getSession();
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-generate-pattern`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ domain }),
+        });
+        if (res.ok) succeeded++; else failed++;
+      } catch {
+        failed++;
+      }
+    }
+    toast.success(`Bulk re-run complete: ${succeeded} succeeded, ${failed} failed`);
+    setSelectedCandidates(new Set());
+    await fetchAll();
+    setBulkRerunning(false);
+  }, [selectedCandidates, fetchAll]);
+
   const handleDeletePattern = useCallback(async (domain: string, selector: string, actionType: string) => {
     const key = `${domain}::${selector}`;
     setDeletingPattern(key);
@@ -260,7 +326,7 @@ export default function CommunityLearning() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Build lookup sets for AI fixer cross-referencing (kept for Recent/Domains tabs)
+  // Build lookup sets for AI fixer cross-referencing
   const fixedPatterns = useMemo(() => new Set(fixLog.map((f: any) => `${f.domain}::${f.selector}`)), [fixLog]);
   const fixedDomains = useMemo(() => new Set(fixLog.map((f: any) => f.domain)), [fixLog]);
   const fixActionMap = useMemo(() => {
@@ -271,6 +337,33 @@ export default function CommunityLearning() {
     }
     return map;
   }, [fixLog]);
+
+  // Build set of domains that have AI log entries for filter
+  const aiLoggedDomains = useMemo(() => new Set(aiGenLog.map((l: any) => l.domain)), [aiGenLog]);
+
+  // Filter candidates based on selected filter
+  const filteredCandidates = useMemo(() => {
+    if (candidateFilter === "all") return candidates;
+    if (candidateFilter === "never_processed") return candidates.filter((c: any) => c.ai_attempts === 0 && !aiLoggedDomains.has(c.domain));
+    if (candidateFilter === "failed") return candidates.filter((c: any) => c.ai_attempts > 0 || aiLoggedDomains.has(c.domain));
+    return candidates;
+  }, [candidates, candidateFilter, aiLoggedDomains]);
+
+  const toggleCandidateSelection = (domain: string) => {
+    setSelectedCandidates(prev => {
+      const next = new Set(prev);
+      if (next.has(domain)) next.delete(domain); else next.add(domain);
+      return next;
+    });
+  };
+
+  const toggleAllCandidates = () => {
+    if (selectedCandidates.size === filteredCandidates.length) {
+      setSelectedCandidates(new Set());
+    } else {
+      setSelectedCandidates(new Set(filteredCandidates.map((c: any) => c.domain)));
+    }
+  };
 
   if (loading) {
     return (
@@ -353,6 +446,24 @@ export default function CommunityLearning() {
         }
       />
 
+      {/* Permanently Failed Alert */}
+      {aiTokenStats.permFailedCount > 0 && (
+        <Card className="border-red-500/40 bg-red-500/5">
+          <CardContent className="flex items-center gap-3 py-3">
+            <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-500">
+                {aiTokenStats.permFailedCount} domain{aiTokenStats.permFailedCount > 1 ? "s" : ""} permanently failed
+              </p>
+              <p className="text-xs text-muted-foreground">These domains exhausted all retry attempts. Consider adding patterns manually.</p>
+            </div>
+            <Button variant="outline" size="sm" className="shrink-0 gap-1.5 border-red-500/30 text-red-500 hover:bg-red-500/10" onClick={() => setActiveTab("ai-generator")}>
+              <Flag className="h-3.5 w-3.5" /> View
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Overview Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Total Patterns" value={o.total_patterns} icon={Layers} iconColor="text-primary" iconBg="bg-primary/10" accentColor="border-primary/40" subtitle={`${o.patterns_last_7d} active last 7 days`} tooltip="Cookie banner CSS selectors learned by the community network" />
@@ -363,7 +474,7 @@ export default function CommunityLearning() {
       </div>
 
       {/* Health Indicators */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-t-2 border-green-500/40">
           <CardContent className="flex items-center gap-3 py-4">
             <div className="relative">
@@ -394,6 +505,15 @@ export default function CommunityLearning() {
             <div>
               <p className="text-sm font-semibold tabular-nums">{issueCount}</p>
               <p className="text-xs text-muted-foreground">Issues detected<InfoTip text="Patterns with very low confidence, zero successes, or other problems" /></p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-t-2 border-primary/40">
+          <CardContent className="flex items-center gap-3 py-4">
+            <Coins className="h-5 w-5 text-primary" />
+            <div>
+              <p className="text-sm font-semibold tabular-nums">{(aiTokenStats.totalPrompt + aiTokenStats.totalCompletion).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">AI Tokens Used<InfoTip text={`${aiTokenStats.totalRuns} AI runs total. Prompt: ${aiTokenStats.totalPrompt.toLocaleString()}, Completion: ${aiTokenStats.totalCompletion.toLocaleString()}`} /></p>
             </div>
           </CardContent>
         </Card>
@@ -555,12 +675,12 @@ export default function CommunityLearning() {
         {/* AI Pattern Generator Tab */}
         <TabsContent value="ai-generator">
           <div className="space-y-4">
-            {/* Header with Run Button */}
+            {/* Header with Run Buttons */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <div>
                   <CardTitle className="text-lg">AI Pattern Generator</CardTitle>
-                  <CardDescription className="flex items-center gap-3 mt-1">
+                  <CardDescription className="flex items-center gap-3 mt-1 flex-wrap">
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Sparkles className="h-3.5 w-3.5" />
                       Analyzes banner HTML with AI to generate CSS selectors
@@ -569,12 +689,22 @@ export default function CommunityLearning() {
                        <Timer className="h-3.5 w-3.5" />
                        Last run<InfoTip text="When the AI last attempted to generate patterns" />: {aiGenLog.length > 0 ? `${new Date(aiGenLog[0].created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} (${timeAgo(aiGenLog[0].created_at)})` : "Never"}
                      </span>
+                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                       <Coins className="h-3.5 w-3.5" />
+                       {aiTokenStats.totalRuns} runs · {(aiTokenStats.totalPrompt + aiTokenStats.totalCompletion).toLocaleString()} tokens
+                     </span>
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleRunGenerator} disabled={runningGenerator} className="gap-2">
-                  {runningGenerator ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  Run AI Generator
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleRunRetry} disabled={runningRetry} className="gap-2">
+                    {runningRetry ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                    Retry Failed
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleRunGenerator} disabled={runningGenerator} className="gap-2">
+                    {runningGenerator ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    Run AI Generator
+                  </Button>
+                </div>
               </CardHeader>
             </Card>
 
@@ -640,29 +770,65 @@ export default function CommunityLearning() {
 
             {/* Section A: Pending Candidates */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Pending Candidates</CardTitle>
-                <CardDescription>Unresolved missed banner reports awaiting AI processing</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Pending Candidates</CardTitle>
+                  <CardDescription>Unresolved missed banner reports awaiting AI processing</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Filter buttons */}
+                  <div className="flex items-center border rounded-md overflow-hidden">
+                    {(["all", "never_processed", "failed"] as const).map(filter => (
+                      <button
+                        key={filter}
+                        onClick={() => { setCandidateFilter(filter); setSelectedCandidates(new Set()); }}
+                        className={`px-2.5 py-1 text-xs font-medium transition-colors ${candidateFilter === filter ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                      >
+                        {filter === "all" ? "All" : filter === "never_processed" ? "Never Processed" : "Previously Failed"}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedCandidates.size > 0 && (
+                    <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" disabled={bulkRerunning} onClick={handleBulkRerunAI}>
+                      {bulkRerunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                      Re-run {selectedCandidates.size} selected
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                {candidates.length === 0 ? (
-                  <EmptyState icon={CheckCircle2} title="No pending candidates" description="All reported domains have been processed." />
+                {filteredCandidates.length === 0 ? (
+                  <EmptyState icon={CheckCircle2} title="No pending candidates" description={candidateFilter !== "all" ? "No candidates match this filter." : "All reported domains have been processed."} />
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-8">
+                          <Checkbox
+                            checked={selectedCandidates.size === filteredCandidates.length && filteredCandidates.length > 0}
+                            onCheckedChange={toggleAllCandidates}
+                          />
+                        </TableHead>
                         <TableHead>Domain</TableHead>
                         <TableHead className="text-right">Reports</TableHead>
                          <TableHead>Has HTML<InfoTip text="Whether we captured the banner's HTML. Reports WITH HTML produce much better AI-generated patterns" /></TableHead>
                          <TableHead>CMP Type<InfoTip text="Consent Management Platform detected (OneTrust, Cookiebot, etc.)" /></TableHead>
-                         <TableHead className="text-right">Last Reported</TableHead>
-                         <TableHead className="text-right">AI Attempts<InfoTip text="Number of times AI tried to generate a pattern. Max 3 attempts" /></TableHead>
+                         <TableHead>Status<InfoTip text="Whether AI has attempted to process this domain" /></TableHead>
+                         <TableHead className="text-right">AI Attempts<InfoTip text="Number of times AI tried to generate a pattern. Max 5 before permanently failed" /></TableHead>
                          <TableHead className="w-24">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {candidates.map((c: any, i: number) => (
-                        <TableRow key={i} className="even:bg-muted/30">
+                      {filteredCandidates.map((c: any, i: number) => {
+                        const isNeverProcessed = c.ai_attempts === 0 && !aiLoggedDomains.has(c.domain);
+                        return (
+                        <TableRow key={i} className={`even:bg-muted/30 ${isNeverProcessed ? "border-l-2 border-l-amber-500/50" : ""}`}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedCandidates.has(c.domain)}
+                              onCheckedChange={() => toggleCandidateSelection(c.domain)}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium flex items-center gap-2">
                             <Globe className="h-3.5 w-3.5 text-muted-foreground" />
                             {c.domain}
@@ -676,7 +842,15 @@ export default function CommunityLearning() {
                             )}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{c.cmp_fingerprint ?? "unknown"}</TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">{c.last_reported ? timeAgo(c.last_reported) : "—"}</TableCell>
+                          <TableCell>
+                            {isNeverProcessed ? (
+                              <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30">Never processed</Badge>
+                            ) : c.ai_attempts >= 5 ? (
+                              <Badge variant="outline" className="bg-red-900/15 text-red-400 border-red-900/30">Permanently failed</Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-blue-500/15 text-blue-500 border-blue-500/30">Attempted</Badge>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right tabular-nums">{c.ai_attempts ?? 0}</TableCell>
                           <TableCell>
                             <Button
@@ -695,7 +869,8 @@ export default function CommunityLearning() {
                             </Button>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 )}
@@ -722,12 +897,13 @@ export default function CommunityLearning() {
                           <TableHead>Selector Generated</TableHead>
                           <TableHead>Action</TableHead>
                           <TableHead className="text-right">Confidence</TableHead>
+                          <TableHead className="text-right">Tokens<InfoTip text="Prompt + completion tokens used for this AI call" /></TableHead>
                           <TableHead>AI Model</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {aiGenLog.map((log: any, i: number) => (
-                          <TableRow key={i} className={log.status === "error" ? "bg-red-500/5" : "even:bg-muted/30"}>
+                          <TableRow key={i} className={log.status === "error" ? "bg-red-500/5" : log.status === "permanently_failed" ? "bg-red-900/5" : "even:bg-muted/30"}>
                             <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                               {new Date(log.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                             </TableCell>
@@ -759,6 +935,9 @@ export default function CommunityLearning() {
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
                               {log.confidence != null ? `${Math.round(log.confidence * 10)}%` : "—"}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums text-xs text-muted-foreground">
+                              {(log.prompt_tokens || log.completion_tokens) ? `${((log.prompt_tokens || 0) + (log.completion_tokens || 0)).toLocaleString()}` : "—"}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">{log.ai_model ?? "—"}</TableCell>
                           </TableRow>
