@@ -1,57 +1,38 @@
 
 
-## Integrate Apple-Native Business Modernization Program
+## Better Admin Management of the Dismissal Consensus Pipeline
 
-Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
+Currently the Community Learning dashboard has no visibility into dismissal reports or the consensus process. You can't see what users are dismissing, can't trigger consensus processing, and can't toggle patterns on/off with the new `is_active` column. Here's what to add:
 
----
+### 1. New "Dismissals" Tab on Community Learning
 
-### 1. New Page: `src/pages/AppleModernization.tsx`
+Add a tab between "Reports" and "AI Pattern Generator" showing:
 
-A comprehensive, premium-feeling service page with the following sections:
+- **Summary cards**: Total dismissal reports, unique domains, pending consensus candidates (domains not yet converted to patterns)
+- **Dismissal Reports table**: Domain, clicked selector, banner selector, timestamp — grouped by domain with report counts
+- **"Run Consensus" button**: Triggers the `process-dismissal-consensus` edge function and shows results (created count, details)
+- **Bulk delete**: Select and clear false-positive dismissal reports
 
-- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
-- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
-- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
-  - Apple Discovery Infrastructure
-  - App Clips (Instant Customer Experience)
-  - Payments Modernization (Tap to Pay)
-  - Digital ID Verification
-  - Brand Trust and Identity
-  - Customer Experience Automation
-  - Commerce and Ordering
-  - Operational Analytics
-  - Apple-Ready Certification (marked as optional)
-- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
-- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
-- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
+### 2. Pattern Active/Inactive Toggle
 
-### 2. Route Registration: `src/App.tsx`
+On the **Recent** tab's pattern table and the **Domains** detail view, add a toggle switch in each row to flip `is_active` on/off. This lets you soft-disable a bad pattern without deleting it. Inactive patterns get a visual indicator (muted row + badge).
 
-- Import the new `AppleModernization` page component.
-- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
+### 3. Overview Stats Update
 
-### 3. Services Page Update: `src/pages/Services.tsx`
+Add to the existing overview cards or health indicators:
+- **Dismissal Reports** count (from `dismissal_reports` table)
+- **Consensus Patterns** count (patterns where `source = 'user_consensus'`)
 
-- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
-- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
+### Files to Modify
 
-### 4. Header Navigation: `src/components/layout/Header.tsx`
-
-- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
-
----
+| File | Change |
+|---|---|
+| `src/pages/admin/CommunityLearning.tsx` | Add "Dismissals" tab with table, Run Consensus button, and summary cards. Add `is_active` toggle to Recent tab rows. Fetch dismissal_reports data and consensus pattern count. |
 
 ### Technical Details
 
-**New file:**
-- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
-
-**Modified files:**
-- `src/App.tsx` -- add import and route
-- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
-
-**No database or backend changes required.** This is purely a frontend content page.
-
-The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
+- Fetch dismissal reports: `supabase.from("dismissal_reports").select("*").order("created_at", { ascending: false }).limit(100)`
+- Run consensus: `fetch(VITE_SUPABASE_URL + "/functions/v1/process-dismissal-consensus", { method: "POST", headers: { Authorization: Bearer token } })`
+- Toggle active: `supabase.from("cookie_patterns").update({ is_active: !current }).eq("id", patternId)`
+- The `find_dismissal_consensus` function already returns pending candidates — we can call it via RPC to show a preview before running consensus
 
