@@ -602,7 +602,7 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
 
   await supabase
     .from("cookie_patterns")
-    .update({ confidence: 0.55 })
+    .update({ confidence: 6 })
     .eq("domain", candidate.domain)
     .eq("selector", cmp.selector);
 
