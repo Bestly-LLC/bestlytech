@@ -168,8 +168,8 @@ ${candidate.cmp_fingerprint !== "unknown" ? `CMP: ${candidate.cmp_fingerprint}` 
           const reason = parsed.rejection_reason || "not a cookie banner";
           await supabase.from("ai_generation_log").insert({
             domain: candidate.domain,
-            status: "skipped_not_cookie_banner",
-            error_message: reason.substring(0, 500),
+            status: "failed_not_cookie_banner",
+            error_message: `Captured HTML is not a cookie banner: ${reason}`.substring(0, 500),
             ai_model: "gemini-3-flash",
             prompt_tokens: usage.prompt_tokens ?? null,
             completion_tokens: usage.completion_tokens ?? null,
@@ -179,8 +179,8 @@ ${candidate.cmp_fingerprint !== "unknown" ? `CMP: ${candidate.cmp_fingerprint}` 
             _domain: candidate.domain,
             _resolved: false,
           });
-          skipped++;
-          results.push({ domain: candidate.domain, status: "skipped_not_cookie_banner", reason });
+          failed++;
+          results.push({ domain: candidate.domain, status: "failed_not_cookie_banner", error: `Captured HTML is not a cookie banner: ${reason}` });
           continue;
         }
 
