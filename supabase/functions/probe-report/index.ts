@@ -153,7 +153,7 @@ ${bestMatch.html.substring(0, 8000)}`;
                 is_cookie_banner: { type: "boolean" },
                 selector: { type: "string", description: "CSS selector for reject/dismiss button" },
                 action: { type: "string", enum: ["click", "hide"] },
-                confidence: { type: "number" },
+                confidence: { type: "number", description: "Confidence score 1-10" },
               },
               required: ["is_cookie_banner"],
               additionalProperties: false,
