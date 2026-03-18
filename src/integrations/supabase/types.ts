@@ -163,6 +163,7 @@ export type Database = {
           created_at: string
           domain: string
           id: string
+          is_active: boolean
           last_seen: string | null
           report_count: number
           selector: string
@@ -177,6 +178,7 @@ export type Database = {
           created_at?: string
           domain: string
           id?: string
+          is_active?: boolean
           last_seen?: string | null
           report_count?: number
           selector: string
@@ -191,6 +193,7 @@ export type Database = {
           created_at?: string
           domain?: string
           id?: string
+          is_active?: boolean
           last_seen?: string | null
           report_count?: number
           selector?: string
