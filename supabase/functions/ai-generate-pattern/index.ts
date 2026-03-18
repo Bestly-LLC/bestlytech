@@ -688,14 +688,42 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
 
 async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, status: string, htmlOverride?: string) {
   const selector = aiResult.selector!;
-  const action = aiResult.action === "hide" ? "close" : "reject";
+  let actionType = aiResult.action_type || (aiResult.action === "hide" ? "close" : "reject");
+
+  // Validate selector/action_type for contradictions
+  const validation = validateSelectorAction(selector, actionType);
+  if (!validation.valid && validation.corrected) {
+    console.log(`[${candidate.domain}] Selector/action contradiction: ${validation.reason}. Auto-correcting to "${validation.corrected}"`);
+    actionType = validation.corrected;
+    status = status + "_autocorrected";
+  }
+
+  // Check for existing high-confidence pattern
+  if (await hasExistingHighConfidencePattern(supabase, candidate.domain)) {
+    console.log(`[${candidate.domain}] Skipping AI insert — existing high-confidence pattern found`);
+    await supabase.from("ai_generation_log").insert({
+      domain: candidate.domain,
+      status: "skipped_already_covered",
+      selector_generated: selector,
+      action_type: actionType,
+      confidence: Number(aiResult.confidence) || 5,
+      ai_model: AI_MODEL_LABEL,
+      prompt_tokens: aiResult.usage?.prompt_tokens ?? null,
+      completion_tokens: aiResult.usage?.completion_tokens ?? null,
+      html_source: `Domain already has high-confidence pattern`.substring(0, 500),
+    });
+    await supabase.rpc("mark_ai_processed", { _domain: candidate.domain, _resolved: true });
+    return;
+  }
+
   const rawConfidence = Number(aiResult.confidence) || 5;
+  // AI patterns cap at 6, let success tracking promote them
   const confidence = Math.min(Math.round(rawConfidence), 6);
 
   const { error: upsertErr } = await supabase.rpc("upsert_pattern", {
     _domain: candidate.domain,
     _selector: selector,
-    _action_type: action,
+    _action_type: actionType,
     _cmp_fingerprint: candidate.cmp_fingerprint || "generic",
     _source: "ai_generated",
   });
@@ -712,7 +740,7 @@ async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, 
     domain: candidate.domain,
     status,
     selector_generated: selector,
-    action_type: action,
+    action_type: actionType,
     confidence,
     ai_model: AI_MODEL_LABEL,
     prompt_tokens: aiResult.usage?.prompt_tokens ?? null,
