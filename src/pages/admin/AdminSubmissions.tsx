@@ -124,7 +124,7 @@ export default function AdminSubmissions() {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -134,7 +134,7 @@ export default function AdminSubmissions() {
           </SelectContent>
         </Select>
         <Select value={platformFilter} onValueChange={(v) => { setPlatformFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue placeholder="Platform" />
           </SelectTrigger>
           <SelectContent>
