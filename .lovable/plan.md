@@ -1,59 +1,57 @@
 
 
-# Server-Side Fallback for AI Pattern Generator
+## Integrate Apple-Native Business Modernization Program
 
-## Problem
-The extension fails to capture cookie banner HTML on sites like Shein (late-loading, iframe, shadow DOM). It sends generic page HTML, the AI correctly rejects it, and no pattern is ever created.
+Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
 
-## Solution
+---
 
-### 1. Add Known CMP Signatures Map + Server-Side Fetch Fallback
+### 1. New Page: `src/pages/AppleModernization.tsx`
 
-In `supabase/functions/ai-generate-pattern/index.ts`, after the AI rejects extension HTML as `is_cookie_banner: false`:
+A comprehensive, premium-feeling service page with the following sections:
 
-**Step A — Fetch the page server-side** using `fetch(page_url || "https://" + domain)` with a browser-like User-Agent.
+- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
+- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
+- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
+  - Apple Discovery Infrastructure
+  - App Clips (Instant Customer Experience)
+  - Payments Modernization (Tap to Pay)
+  - Digital ID Verification
+  - Brand Trust and Identity
+  - Customer Experience Automation
+  - Commerce and Ordering
+  - Operational Analytics
+  - Apple-Ready Certification (marked as optional)
+- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
+- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
+- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
 
-**Step B — Check for known CMP signatures** in the fetched HTML. A hardcoded map of ~7 CMPs:
-- OneTrust → `#onetrust-reject-all-handler`
-- Cookiebot → `#CybotCookiebotDialogBodyButtonDecline`
-- Didomi → `.didomi-continue-without-agreeing`
-- Quantcast → `#qc-cmp2-container [mode="secondary"]`
-- TrustArc → `.truste-consent-required`
-- Complianz → `.cmplz-deny`
+### 2. Route Registration: `src/App.tsx`
 
-If a known CMP is detected, insert the standard pattern directly via `upsert_pattern` and log as `success_cmp_fallback`. No AI call needed.
+- Import the new `AppleModernization` page component.
+- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
 
-**Step C — If no known CMP**, extract cookie-related HTML elements from the fetched page (elements with class/id matching cookie, consent, gdpr, etc.) and send that extracted HTML to the AI for a second attempt.
+### 3. Services Page Update: `src/pages/Services.tsx`
 
-**Step D — If second AI attempt also fails**, then log as `failed_not_cookie_banner`.
+- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
+- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
 
-### 2. Updated Flow Logic (inside the `for` loop)
+### 4. Header Navigation: `src/components/layout/Header.tsx`
 
-```text
-1. AI analyzes extension HTML
-2. is_cookie_banner === true  → generate pattern (existing)
-3. is_cookie_banner === false →
-   a. fetch page server-side
-   b. check known CMP signatures → insert standard pattern, log success_cmp_fallback
-   c. no known CMP → extract cookie-related elements → AI attempt #2
-   d. attempt #2 succeeds → generate pattern (log as success)
-   e. attempt #2 fails → log failed_not_cookie_banner
-```
+- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
 
-### 3. Admin UI Badge Update
+---
 
-In `CommunityLearning.tsx`, add `success_cmp_fallback` to `AI_STATUS_BADGE` with a distinct color (e.g., blue) to distinguish CMP-detected patterns from AI-generated ones.
+### Technical Details
 
-### 4. Data Cleanup
+**New file:**
+- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
 
-Delete the current `failed_not_cookie_banner` log entry for `us.shein.com` and reset `ai_attempts`/`ai_processed_at` on `missed_banner_reports` so it gets re-processed.
+**Modified files:**
+- `src/App.tsx` -- add import and route
+- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
 
-## Files to Modify
-1. **`supabase/functions/ai-generate-pattern/index.ts`** — server-side fetch, CMP detection map, second AI attempt, new status
-2. **`src/pages/admin/CommunityLearning.tsx`** — add `success_cmp_fallback` badge
+**No database or backend changes required.** This is purely a frontend content page.
 
-## Technical Notes
-- Server-side fetch won't execute JS, so dynamically-injected CMP scripts won't render. But the `<script src="...cookiebot...">` tags and CMP container divs are usually in the static HTML, which is enough for signature detection.
-- The CMP signature map covers the most common providers (~80% of sites with cookie banners).
-- The extracted-elements fallback handles less common CMPs that aren't in the map but still have identifiable cookie-related class names in static HTML.
+The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
 
