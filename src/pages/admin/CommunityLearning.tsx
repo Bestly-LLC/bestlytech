@@ -311,6 +311,26 @@ export default function CommunityLearning() {
     }
   }, [fetchAll]);
 
+  const handleResetFailed = useCallback(async () => {
+    setRunningReset(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-failed-patterns`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      toast.success(`Reset complete — ${data.reset_count ?? 0} domains re-queued for evaluation`);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Reset failed: ${e.message}`);
+    } finally {
+      setRunningReset(false);
+    }
+  }, [fetchAll]);
+
   const handleProcessReports = useCallback(async () => {
     setProcessingReports(true);
     try {
