@@ -623,10 +623,14 @@ ${html}`;
     parsed = JSON.parse(jsonStr);
   }
 
+  // Support both old "action" field and new "action_type" field
+  const actionType = parsed.action_type || (parsed.action === "hide" ? "close" : "reject");
+
   return {
     is_cookie_banner: parsed.is_cookie_banner !== false,
     selector: parsed.selector,
-    action: parsed.action === "hide" ? "hide" : "click",
+    action: parsed.action,
+    action_type: actionType,
     confidence: parsed.confidence,
     rejection_reason: parsed.rejection_reason,
     usage: { prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens },
