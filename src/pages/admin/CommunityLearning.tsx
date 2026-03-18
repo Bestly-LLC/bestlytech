@@ -307,7 +307,7 @@ export default function CommunityLearning() {
             </div>
             <div>
               <p className="text-sm font-semibold tabular-nums">{o.patterns_last_24h}</p>
-              <p className="text-xs text-muted-foreground">Active last 24h</p>
+              <p className="text-xs text-muted-foreground">Active last 24h<InfoTip text="Patterns that matched a banner in the last 24 hours" /></p>
             </div>
           </CardContent>
         </Card>
