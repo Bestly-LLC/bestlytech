@@ -265,7 +265,6 @@ export default function CommunityLearning() {
     <div className="space-y-6">
       <PageHeader
         title="Community Learning"
-        description="Cookie pattern intelligence from the Cookie Yeti network"
         actions={
           <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
             <RefreshCw className="h-4 w-4" /> Refresh
