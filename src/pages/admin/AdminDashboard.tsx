@@ -82,8 +82,11 @@ export default function AdminDashboard() {
   const statCards = [
     { label: "Intake Submissions", value: stats.total, icon: FileText, iconColor: "text-primary", iconBg: "bg-primary/10", accentColor: "border-primary/40" },
     { label: "Needs Review", value: stats.needsReview, icon: AlertTriangle, iconColor: "text-yellow-500", iconBg: "bg-yellow-500/10", accentColor: "border-yellow-500/40" },
+    { label: "Amazon", value: stats.amazon, icon: ShoppingBag, iconColor: "text-amber-600", iconBg: "bg-amber-600/10", accentColor: "border-amber-600/40" },
+    { label: "Shopify", value: stats.shopify, icon: Store, iconColor: "text-emerald-600", iconBg: "bg-emerald-600/10", accentColor: "border-emerald-600/40" },
+    { label: "TikTok", value: stats.tiktok, icon: Video, iconColor: "text-pink-500", iconBg: "bg-pink-500/10", accentColor: "border-pink-500/40" },
     { label: "New Contacts", value: contactCount, icon: Mail, iconColor: "text-blue-500", iconBg: "bg-blue-500/10", accentColor: "border-blue-500/40" },
-    { label: "New Hire Requests", value: hireCount, icon: Briefcase, iconColor: "text-orange-500", iconBg: "bg-orange-500/10", accentColor: "border-orange-500/40" },
+    { label: "Hire Requests", value: hireCount, icon: Briefcase, iconColor: "text-orange-500", iconBg: "bg-orange-500/10", accentColor: "border-orange-500/40" },
     { label: "CY Subscribers", value: cySubCount, icon: Snowflake, iconColor: "text-cyan-500", iconBg: "bg-cyan-500/10", accentColor: "border-cyan-500/40" },
     { label: "Waitlist", value: waitlistCount, icon: Users, iconColor: "text-green-500", iconBg: "bg-green-500/10", accentColor: "border-green-500/40" },
   ];
