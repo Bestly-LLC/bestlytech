@@ -102,46 +102,79 @@ export default function AdminContacts() {
 
       <Card className="border-border/50">
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs">Name</TableHead>
-                <TableHead className="text-xs">Email</TableHead>
-                <TableHead className="text-xs">Category</TableHead>
-                <TableHead className="text-xs">Subject</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Date</TableHead>
-                <TableHead className="text-xs w-20">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paged.map((r) => (
-                <TableRow key={r.id} className="even:bg-muted/30">
-                  <TableCell className="font-medium text-sm">{r.name}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{r.email}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-xs">{r.category || "—"}</Badge></TableCell>
-                  <TableCell className="text-sm max-w-[200px] truncate">{r.subject}</TableCell>
-                  <TableCell>
-                    <Select value={r.status || "new"} onValueChange={(v) => updateStatus(r.id, v)}>
-                      <SelectTrigger className="h-7 w-[100px] text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {STATUSES.filter(s => s !== "All").map((s) => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setViewing(r)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
+          {/* Desktop table */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs">Name</TableHead>
+                  <TableHead className="text-xs">Email</TableHead>
+                  <TableHead className="text-xs">Category</TableHead>
+                  <TableHead className="text-xs">Subject</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Date</TableHead>
+                  <TableHead className="text-xs w-20">Actions</TableHead>
                 </TableRow>
-              ))}
-              {paged.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="p-0"><EmptyState icon={Mail} title="No contacts found" description="Contact submissions will appear here." /></TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {paged.map((r) => (
+                  <TableRow key={r.id} className="even:bg-muted/30">
+                    <TableCell className="font-medium text-sm">{r.name}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{r.email}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{r.category || "—"}</Badge></TableCell>
+                    <TableCell className="text-sm max-w-[200px] truncate">{r.subject}</TableCell>
+                    <TableCell>
+                      <Select value={r.status || "new"} onValueChange={(v) => updateStatus(r.id, v)}>
+                        <SelectTrigger className="h-7 w-[100px] text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {STATUSES.filter(s => s !== "All").map((s) => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setViewing(r)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {paged.length === 0 && (
+                  <TableRow><TableCell colSpan={7} className="p-0"><EmptyState icon={Mail} title="No contacts found" description="Contact submissions will appear here." /></TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          {/* Mobile cards */}
+          <div className="md:hidden divide-y divide-border">
+            {paged.map((r) => (
+              <div key={r.id} className="p-3 space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{r.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{r.email}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={() => setViewing(r)}>
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-foreground line-clamp-1">{r.subject}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline" className="text-[10px]">{r.category || "—"}</Badge>
+                  <Select value={r.status || "new"} onValueChange={(v) => updateStatus(r.id, v)}>
+                    <SelectTrigger className="h-6 w-[90px] text-[10px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {STATUSES.filter(s => s !== "All").map((s) => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-[10px] text-muted-foreground ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</span>
+                </div>
+              </div>
+            ))}
+            {paged.length === 0 && (
+              <div className="p-4"><EmptyState icon={Mail} title="No contacts found" description="Contact submissions will appear here." /></div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

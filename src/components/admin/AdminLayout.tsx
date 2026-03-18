@@ -34,18 +34,18 @@ export function AdminLayout() {
         <div className="min-h-screen flex w-full bg-background">
           <AdminSidebar />
           <div className="flex-1 flex flex-col min-w-0">
-            <header className="sticky top-0 z-30 h-14 flex items-center justify-between border-b bg-card/80 backdrop-blur-md px-4 shadow-[0_1px_3px_0_hsl(var(--border)/0.4)]">
-              <div className="flex items-center gap-3">
+            <header className="sticky top-0 z-30 h-12 sm:h-14 flex items-center justify-between border-b bg-card/80 backdrop-blur-md px-3 sm:px-4 shadow-[0_1px_3px_0_hsl(var(--border)/0.4)]">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <SidebarTrigger />
-                <Separator orientation="vertical" className="h-5" />
-                <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-primary" />
-                  <span className="font-semibold text-foreground text-sm tracking-tight">Bestly Admin</span>
+                <Separator orientation="vertical" className="h-5 hidden sm:block" />
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Shield className="h-4 w-4 text-primary shrink-0" />
+                  <span className="font-semibold text-foreground text-sm tracking-tight hidden sm:inline">Bestly Admin</span>
                 </div>
                 <Separator orientation="vertical" className="h-4 hidden sm:block" />
-                <span className="text-xs text-muted-foreground hidden sm:inline">{currentLabel}</span>
+                <span className="text-xs text-muted-foreground hidden sm:inline truncate">{currentLabel}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground h-8 gap-1.5 text-xs hidden sm:flex">

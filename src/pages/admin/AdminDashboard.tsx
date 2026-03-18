@@ -130,49 +130,75 @@ export default function AdminDashboard() {
             </Link>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs">Business Name</TableHead>
-                  <TableHead className="text-xs">Contact</TableHead>
-                  <TableHead className="text-xs">Platform</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs">Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recent.map((r) => (
-                  <TableRow key={r.id} className="even:bg-muted/30">
-                    <TableCell>
-                      <Link to={`/admin/submissions/${r.id}`} className="text-primary hover:underline font-medium text-sm">
-                        {r.business_legal_name || "Unnamed"}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{r.client_name || "—"}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
-                          <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={statusColor[r.status] as any} className="text-xs">{r.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
-                    </TableCell>
+            {/* Desktop table */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="text-xs">Business Name</TableHead>
+                    <TableHead className="text-xs">Contact</TableHead>
+                    <TableHead className="text-xs">Platform</TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">Date</TableHead>
                   </TableRow>
-                ))}
-                {recent.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="p-0">
-                      <EmptyState icon={FileText} title="No submissions yet" description="Intake submissions will appear here once clients submit their information." />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {recent.map((r) => (
+                    <TableRow key={r.id} className="even:bg-muted/30">
+                      <TableCell>
+                        <Link to={`/admin/submissions/${r.id}`} className="text-primary hover:underline font-medium text-sm">
+                          {r.business_legal_name || "Unnamed"}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{r.client_name || "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
+                            <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={statusColor[r.status] as any} className="text-xs">{r.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {recent.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="p-0">
+                        <EmptyState icon={FileText} title="No submissions yet" description="Intake submissions will appear here once clients submit their information." />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-border">
+              {recent.map((r) => (
+                <Link key={r.id} to={`/admin/submissions/${r.id}`} className="block p-3 hover:bg-muted/50 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium text-primary truncate">{r.business_legal_name || "Unnamed"}</p>
+                    <Badge variant={statusColor[r.status] as any} className="text-[10px] shrink-0">{r.status}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{r.client_name || "—"}</p>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
+                      <Badge key={p} variant="outline" className="text-[10px] px-1.5 py-0">{p}</Badge>
+                    ))}
+                    <span className="text-[10px] text-muted-foreground ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}</span>
+                  </div>
+                </Link>
+              ))}
+              {recent.length === 0 && (
+                <div className="p-4">
+                  <EmptyState icon={FileText} title="No submissions yet" description="Intake submissions will appear here once clients submit their information." />
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
