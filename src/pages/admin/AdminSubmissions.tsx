@@ -133,6 +133,16 @@ export default function AdminSubmissions() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={platformFilter} onValueChange={(v) => { setPlatformFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Platform" />
+          </SelectTrigger>
+          <SelectContent>
+            {PLATFORMS.map((p) => (
+              <SelectItem key={p} value={p}>{p === "All" ? "All Platforms" : p}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {selected.size > 0 && (

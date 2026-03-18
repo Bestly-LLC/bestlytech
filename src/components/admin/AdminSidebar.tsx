@@ -122,7 +122,7 @@ export function AdminSidebar() {
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3">
-            Amazon
+            Marketplace
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{amazonItems.map(renderItem)}</SidebarMenu>
