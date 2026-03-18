@@ -1,0 +1,1 @@
+UPDATE cookie_patterns SET action_type = 'accept' WHERE domain = 'skatepro.com' AND selector = 'button#accept' AND action_type = 'reject';
