@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { alertEmail } from "../_shared/email-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,10 +21,6 @@ Deno.serve(async (req) => {
   try {
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    // Find domains eligible for retry:
-    // - Not resolved
-    // - ai_attempts < 5 (after 5, it's permanently_failed)
-    // - Not processed in last 24h
     const { data: candidates, error: fetchErr } = await supabase
       .from("missed_banner_reports")
       .select("*")
@@ -40,7 +38,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Cross-reference with ai_generation_log to find failed OR never-processed domains
     const domains = candidates.map((c: any) => c.domain);
     const { data: allLogs } = await supabase
       .from("ai_generation_log")
@@ -48,18 +45,15 @@ Deno.serve(async (req) => {
       .in("domain", domains)
       .order("created_at", { ascending: false });
 
-    // Domains that failed in the log
     const failedDomains = new Set(
       (allLogs ?? [])
         .filter((l: any) => ["needs_manual_review", "failed_not_cookie_banner", "error"].includes(l.status))
         .map((l: any) => l.domain)
     );
 
-    // Domains that have NO log entries at all (never processed)
     const loggedDomains = new Set((allLogs ?? []).map((l: any) => l.domain));
     const neverProcessed = new Set(domains.filter((d: string) => !loggedDomains.has(d)));
 
-    // Retry both failed and never-processed domains
     const retryable = candidates.filter(
       (c: any) => failedDomains.has(c.domain) || neverProcessed.has(c.domain)
     );
@@ -69,19 +63,12 @@ Deno.serve(async (req) => {
     let stillFailed = 0;
     let permanentlyFailed = 0;
     const results: any[] = [];
+    const permFailedDomains: string[] = [];
 
     for (const candidate of retryable) {
       processed++;
 
       try {
-        // Call the existing ai-generate-pattern function via HTTP
-        // Using service role key for auth (the function checks admin role,
-        // but we'll call it with a flag to indicate it's a retry)
-        // Actually, the ai-generate-pattern requires admin auth.
-        // For the cron job, we need to bypass that. Instead, we'll inline the logic.
-        
-        // For simplicity and to avoid auth issues, we directly process here
-        // by calling the function with service role key
         const res = await fetch(`${supabaseUrl}/functions/v1/ai-generate-pattern`, {
           method: "POST",
           headers: {
@@ -98,11 +85,10 @@ Deno.serve(async (req) => {
           succeeded++;
           results.push({ domain: candidate.domain, status: result.status });
         } else {
-          // Check if we've hit the retry limit
           const newAttempts = (candidate.ai_attempts || 0) + 1;
           if (newAttempts >= 5) {
             permanentlyFailed++;
-            // Log permanently_failed status
+            permFailedDomains.push(candidate.domain);
             await supabase.from("ai_generation_log").insert({
               domain: candidate.domain,
               status: "permanently_failed",
@@ -118,6 +104,56 @@ Deno.serve(async (req) => {
       } catch (err: any) {
         stillFailed++;
         results.push({ domain: candidate.domain, status: "retry_error", error: err.message });
+      }
+    }
+
+    // Send email alert if any domains permanently failed
+    if (permFailedDomains.length > 0) {
+      const smtpEmail = Deno.env.get("PRIVATEMAIL_EMAIL");
+      const smtpPassword = Deno.env.get("PRIVATEMAIL_PASSWORD");
+
+      if (smtpEmail && smtpPassword) {
+        try {
+          const html = alertEmail({
+            title: "Domains Permanently Failed",
+            severity: "danger",
+            summary: `<strong>${permFailedDomains.length} domain(s)</strong> exhausted all 5 AI retry attempts and have been marked as permanently failed. Manual pattern creation is required.`,
+            stats: [
+              { label: "Permanently Failed", value: permFailedDomains.length },
+              { label: "Total Processed", value: processed },
+              { label: "Succeeded", value: succeeded },
+              { label: "Still Failing", value: stillFailed },
+            ],
+            items: permFailedDomains.map((d) => ({
+              label: d,
+              detail: "Exhausted 5 AI retry attempts",
+            })),
+            timestamp: new Date().toISOString(),
+          });
+
+          const client = new SMTPClient({
+            connection: {
+              hostname: "mail.privateemail.com",
+              port: 465,
+              tls: true,
+              auth: { username: smtpEmail, password: smtpPassword },
+            },
+          });
+
+          try {
+            await client.send({
+              from: smtpEmail,
+              to: "jaredbest@icloud.com",
+              subject: "Cookie Yeti: Domains Permanently Failed",
+              html,
+            });
+            console.log(`Alert email sent for ${permFailedDomains.length} permanently failed domain(s)`);
+          } finally {
+            await client.close();
+          }
+        } catch (emailErr: any) {
+          console.error("Failed to send permanently_failed alert email:", emailErr.message);
+        }
       }
     }
 

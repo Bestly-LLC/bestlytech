@@ -720,6 +720,10 @@ export default function CommunityLearning() {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleRunMaintenance} disabled={runningMaintenance} className="gap-2">
+                    {runningMaintenance ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+                    Run Maintenance
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handleRunRetry} disabled={runningRetry} className="gap-2">
                     {runningRetry ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                     Retry Failed
