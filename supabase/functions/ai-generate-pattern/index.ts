@@ -992,7 +992,7 @@ ${html.substring(0, 15000)}`;
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: \`Bearer \${apiKey}\`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: GEMINI_FAILSAFE_MODEL,
@@ -1027,7 +1027,7 @@ ${html.substring(0, 15000)}`;
     });
 
     if (!response.ok) {
-      console.log(\`Gemini failsafe HTTP error for \${domain}: \${response.status}\`);
+      console.log(`Gemini failsafe HTTP error for ${domain}: ${response.status}`);
       return null;
     }
 
@@ -1041,7 +1041,7 @@ ${html.substring(0, 15000)}`;
       const content = data.choices?.[0]?.message?.content;
       if (!content) return null;
       let jsonStr = content.trim();
-      const jsonMatch = jsonStr.match(/\`\`\`(?:json)?\\s*([\\s\\S]*?)\`\`\`/);
+      const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (jsonMatch) jsonStr = jsonMatch[1].trim();
       parsed = JSON.parse(jsonStr);
     }
@@ -1062,7 +1062,7 @@ ${html.substring(0, 15000)}`;
       };
     }
   } catch (e) {
-    console.log(\`Gemini failsafe error for \${domain}: \${e}\`);
+    console.log(`Gemini failsafe error for ${domain}: ${e}`);
   }
   return null;
 }
