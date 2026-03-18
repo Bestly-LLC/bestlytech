@@ -780,7 +780,7 @@ export default function CommunityLearning() {
                       <TableRow>
                         <TableHead>Domain</TableHead>
                         <TableHead className="text-right">Reports</TableHead>
-                        <TableHead>Working Pattern?</TableHead>
+                        <TableHead>Working Pattern?<InfoTip text="Whether an existing pattern covers this domain" /></TableHead>
                         <TableHead className="text-right">Last Reported</TableHead>
                         <TableHead className="text-right">First Seen</TableHead>
                       </TableRow>
