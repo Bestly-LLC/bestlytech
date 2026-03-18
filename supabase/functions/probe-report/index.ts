@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
         status: "success_probe",
         selector_generated: cmpMatch.selector,
         action_type: cmpMatch.action,
-        confidence: 0.6,
+        confidence: 6,
         ai_model: `probe_cmp:${cmpMatch.name}`,
         html_source: `Probe found CMP: ${cmpMatch.name} via selector ${bestMatch.selector}`.substring(0, 500),
       });
