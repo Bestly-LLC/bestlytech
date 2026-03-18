@@ -751,6 +751,7 @@ export default function CommunityLearning() {
                       <TableHead className="text-right">Confidence</TableHead>
                       <TableHead className="text-right">Reports</TableHead>
                       <TableHead>Source</TableHead>
+                      <TableHead className="text-center">Active<InfoTip text="Toggle to soft-disable a pattern without deleting it" /></TableHead>
                       <TableHead className="text-right">Discovered</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
@@ -758,9 +759,13 @@ export default function CommunityLearning() {
                   <TableBody>
                     {recent.map((r: any, i: number) => {
                       const isFixed = fixedPatterns.has(`${r.domain}::${r.selector}`);
+                      const isInactive = r.is_active === false;
                       return (
-                      <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
-                        <TableCell className="font-medium">{r.domain}</TableCell>
+                      <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""} ${isInactive ? "opacity-50" : ""}`}>
+                        <TableCell className="font-medium">
+                          {r.domain}
+                          {isInactive && <Badge variant="outline" className="ml-1.5 text-[10px] py-0 px-1.5 bg-muted text-muted-foreground border-muted-foreground/30">Inactive</Badge>}
+                        </TableCell>
                         <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.selector}</code></TableCell>
                         <TableCell>
                           <span className="inline-flex items-center gap-1">
@@ -773,6 +778,13 @@ export default function CommunityLearning() {
                         <TableCell className="text-right tabular-nums">{r.report_count}</TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-[10px]">{r.source}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch
+                            checked={r.is_active !== false}
+                            disabled={togglingPattern === r.id}
+                            onCheckedChange={() => handleTogglePatternActive(r.id, r.is_active !== false)}
+                          />
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
                         <TableCell>
