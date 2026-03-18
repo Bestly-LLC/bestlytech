@@ -257,6 +257,33 @@ export type Database = {
         }
         Relationships: []
       }
+      dismissal_reports: {
+        Row: {
+          banner_html: string | null
+          banner_selector: string | null
+          clicked_selector: string
+          created_at: string | null
+          domain: string
+          id: string
+        }
+        Insert: {
+          banner_html?: string | null
+          banner_selector?: string | null
+          clicked_selector: string
+          created_at?: string | null
+          domain: string
+          id?: string
+        }
+        Update: {
+          banner_html?: string | null
+          banner_selector?: string | null
+          clicked_selector?: string
+          created_at?: string | null
+          domain?: string
+          id?: string
+        }
+        Relationships: []
+      }
       email_send_log: {
         Row: {
           created_at: string
@@ -1010,6 +1037,7 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      find_dismissal_consensus: { Args: never; Returns: Json }
       get_action_type_stats: { Args: never; Returns: Json }
       get_ai_generation_candidates: { Args: { _limit?: number }; Returns: Json }
       get_cmp_distribution: { Args: never; Returns: Json }
