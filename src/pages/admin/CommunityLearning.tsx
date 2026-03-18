@@ -628,6 +628,22 @@ export default function CommunityLearning() {
                           <TableCell className="text-xs text-muted-foreground">{c.cmp_fingerprint ?? "unknown"}</TableCell>
                           <TableCell className="text-right text-xs text-muted-foreground">{c.last_reported ? timeAgo(c.last_reported) : "—"}</TableCell>
                           <TableCell className="text-right tabular-nums">{c.ai_attempts ?? 0}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 h-7 text-xs"
+                              disabled={rerunningDomain === c.domain}
+                              onClick={() => handleRerunAI(c.domain)}
+                            >
+                              {rerunningDomain === c.domain ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Play className="h-3 w-3" />
+                              )}
+                              Re-run AI
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
