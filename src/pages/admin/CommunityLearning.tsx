@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, Sparkles } from "lucide-react";
+import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, Sparkles, Info } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
@@ -55,6 +55,19 @@ const AI_STATUS_BADGE: Record<string, string> = {
   error: "bg-red-500/15 text-red-500 border-red-500/30",
   skipped_no_html: "bg-muted text-muted-foreground border-muted-foreground/30",
 };
+
+function InfoTip({ text }: { text: string }) {
+  return (
+    <TooltipProvider delayDuration={200}>
+      <UITooltip>
+        <TooltipTrigger asChild>
+          <Info className="h-3 w-3 text-muted-foreground/60 cursor-help inline-block ml-1" />
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[280px] text-xs">{text}</TooltipContent>
+      </UITooltip>
+    </TooltipProvider>
+  );
+}
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -265,7 +278,6 @@ export default function CommunityLearning() {
     <div className="space-y-6">
       <PageHeader
         title="Community Learning"
-        description="Cookie pattern intelligence from the Cookie Yeti network"
         actions={
           <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
             <RefreshCw className="h-4 w-4" /> Refresh
@@ -275,11 +287,11 @@ export default function CommunityLearning() {
 
       {/* Overview Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard label="Total Patterns" value={o.total_patterns} icon={Layers} iconColor="text-primary" iconBg="bg-primary/10" accentColor="border-primary/40" subtitle={`${o.patterns_last_7d} active last 7 days`} />
-        <StatCard label="Domains Covered" value={o.total_domains} icon={Globe} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="border-green-500/40" subtitle={`${o.new_domains_last_7d} new this week`} />
-        <StatCard label="Success Rate" value={`${o.overall_success_rate}%`} icon={Target} iconColor="text-blue-500" iconBg="bg-blue-500/10" accentColor="border-blue-500/40" subtitle={`${Number(o.total_successes).toLocaleString()} / ${Number(o.total_reports).toLocaleString()}`} />
-        <StatCard label="Avg Confidence" value={o.avg_confidence ?? "—"} icon={TrendingUp} iconColor="text-purple-500" iconBg="bg-purple-500/10" accentColor="border-purple-500/40" subtitle={`${o.high_confidence} high / ${o.low_confidence} low`} />
-        <StatCard label="AI Generated" value={aiGeneratedCount} icon={Sparkles} iconColor="text-amber-500" iconBg="bg-amber-500/10" accentColor="border-amber-500/40" subtitle="Patterns from AI" />
+        <StatCard label="Total Patterns" value={o.total_patterns} icon={Layers} iconColor="text-primary" iconBg="bg-primary/10" accentColor="border-primary/40" subtitle={`${o.patterns_last_7d} active last 7 days`} tooltip="Cookie banner CSS selectors learned by the community network" />
+        <StatCard label="Domains Covered" value={o.total_domains} icon={Globe} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="border-green-500/40" subtitle={`${o.new_domains_last_7d} new this week`} tooltip="Unique websites where Cookie Yeti has learned patterns" />
+        <StatCard label="Success Rate" value={`${o.overall_success_rate}%`} icon={Target} iconColor="text-blue-500" iconBg="bg-blue-500/10" accentColor="border-blue-500/40" subtitle={`${Number(o.total_successes).toLocaleString()} / ${Number(o.total_reports).toLocaleString()}`} tooltip="Percentage of pattern matches that successfully dismissed a banner. Calculated from success_count / report_count across all patterns" />
+        <StatCard label="Avg Confidence" value={o.avg_confidence ?? "—"} icon={TrendingUp} iconColor="text-purple-500" iconBg="bg-purple-500/10" accentColor="border-purple-500/40" subtitle={`${o.high_confidence} high / ${o.low_confidence} low`} tooltip="Mean confidence score (0-1) across all active patterns. Higher = more reliable. Based on success rate and report volume" />
+        <StatCard label="AI Generated" value={aiGeneratedCount} icon={Sparkles} iconColor="text-amber-500" iconBg="bg-amber-500/10" accentColor="border-amber-500/40" subtitle="Patterns from AI" tooltip="Patterns created by AI analysis of reported banner HTML" />
       </div>
 
       {/* Health Indicators */}
@@ -295,7 +307,7 @@ export default function CommunityLearning() {
             </div>
             <div>
               <p className="text-sm font-semibold tabular-nums">{o.patterns_last_24h}</p>
-              <p className="text-xs text-muted-foreground">Active last 24h</p>
+              <p className="text-xs text-muted-foreground">Active last 24h<InfoTip text="Patterns that matched a banner in the last 24 hours" /></p>
             </div>
           </CardContent>
         </Card>
@@ -304,7 +316,7 @@ export default function CommunityLearning() {
             <AlertTriangle className="h-5 w-5 text-amber-500" />
             <div>
               <p className="text-sm font-semibold tabular-nums">{o.stale_patterns}</p>
-              <p className="text-xs text-muted-foreground">Stale 30d+</p>
+              <p className="text-xs text-muted-foreground">Stale 30d+<InfoTip text="Patterns not seen in 30+ days — may be outdated" /></p>
             </div>
           </CardContent>
         </Card>
@@ -313,7 +325,7 @@ export default function CommunityLearning() {
             <CircleAlert className="h-5 w-5 text-red-500" />
             <div>
               <p className="text-sm font-semibold tabular-nums">{issueCount}</p>
-              <p className="text-xs text-muted-foreground">Issues detected</p>
+              <p className="text-xs text-muted-foreground">Issues detected<InfoTip text="Patterns with very low confidence, zero successes, or other problems" /></p>
             </div>
           </CardContent>
         </Card>
@@ -372,11 +384,11 @@ export default function CommunityLearning() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Domain</TableHead>
-                    <TableHead className="text-right">Patterns</TableHead>
-                    <TableHead className="text-right">Reports</TableHead>
-                    <TableHead className="text-right">Success Rate</TableHead>
-                    <TableHead>Confidence</TableHead>
-                    <TableHead className="text-right">Last Active</TableHead>
+                     <TableHead className="text-right">Patterns<InfoTip text="Number of CSS selectors learned for this domain" /></TableHead>
+                     <TableHead className="text-right">Reports<InfoTip text="Times users encountered banners on this domain" /></TableHead>
+                     <TableHead className="text-right">Success Rate<InfoTip text="How often patterns successfully dismiss banners here" /></TableHead>
+                     <TableHead>Confidence<InfoTip text="Reliability score 0-1, based on success rate and volume" /></TableHead>
+                     <TableHead className="text-right">Last Active<InfoTip text="When a pattern last matched a banner on this domain" /></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -466,10 +478,10 @@ export default function CommunityLearning() {
                       <Sparkles className="h-3.5 w-3.5" />
                       Analyzes banner HTML with AI to generate CSS selectors
                     </span>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Timer className="h-3.5 w-3.5" />
-                      Last run: {aiGenLog.length > 0 ? `${new Date(aiGenLog[0].created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} (${timeAgo(aiGenLog[0].created_at)})` : "Never"}
-                    </span>
+                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                       <Timer className="h-3.5 w-3.5" />
+                       Last run<InfoTip text="When the AI last attempted to generate patterns" />: {aiGenLog.length > 0 ? `${new Date(aiGenLog[0].created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} (${timeAgo(aiGenLog[0].created_at)})` : "Never"}
+                     </span>
                   </CardDescription>
                 </div>
                 <Button variant="outline" size="sm" onClick={handleRunGenerator} disabled={runningGenerator} className="gap-2">
@@ -554,10 +566,10 @@ export default function CommunityLearning() {
                       <TableRow>
                         <TableHead>Domain</TableHead>
                         <TableHead className="text-right">Reports</TableHead>
-                        <TableHead>Has HTML</TableHead>
-                        <TableHead>CMP Type</TableHead>
-                        <TableHead className="text-right">Last Reported</TableHead>
-                        <TableHead className="text-right">AI Attempts</TableHead>
+                         <TableHead>Has HTML<InfoTip text="Whether we captured the banner's HTML. Reports WITH HTML produce much better AI-generated patterns" /></TableHead>
+                         <TableHead>CMP Type<InfoTip text="Consent Management Platform detected (OneTrust, Cookiebot, etc.)" /></TableHead>
+                         <TableHead className="text-right">Last Reported</TableHead>
+                         <TableHead className="text-right">AI Attempts<InfoTip text="Number of times AI tried to generate a pattern. Max 3 attempts" /></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -761,14 +773,14 @@ export default function CommunityLearning() {
                 <>
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <Card className="border-t-2 border-primary/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold tabular-nums">{unresolvedReports.length}</p><p className="text-xs text-muted-foreground">Unresolved</p></CardContent></Card>
-                    <Card className="border-t-2 border-amber-500/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-amber-500 tabular-nums">{unresolvedReports.filter((r: any) => r.report_count >= 3).length}</p><p className="text-xs text-muted-foreground">Priority (3+ reports)</p></CardContent></Card>
+                    <Card className="border-t-2 border-amber-500/40"><CardContent className="py-3 text-center"><p className="text-2xl font-bold text-amber-500 tabular-nums">{unresolvedReports.filter((r: any) => r.report_count >= 3).length}</p><p className="text-xs text-muted-foreground">Priority (3+ reports)<InfoTip text="Domains reported 3+ times — highest priority for fixing" /></p></CardContent></Card>
                   </div>
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Domain</TableHead>
                         <TableHead className="text-right">Reports</TableHead>
-                        <TableHead>Working Pattern?</TableHead>
+                        <TableHead>Working Pattern?<InfoTip text="Whether an existing pattern covers this domain" /></TableHead>
                         <TableHead className="text-right">Last Reported</TableHead>
                         <TableHead className="text-right">First Seen</TableHead>
                       </TableRow>

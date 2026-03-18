@@ -112,12 +112,6 @@ export function AdminSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent className="pt-2">
-        {!collapsed && (
-          <div className="px-4 py-3 mb-1">
-            <span className="text-sm font-bold tracking-tight text-foreground">Bestly</span>
-            <span className="text-[10px] text-muted-foreground ml-1.5 font-medium">Admin</span>
-          </div>
-        )}
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3">
