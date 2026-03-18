@@ -457,9 +457,46 @@ interface AIResult {
   is_cookie_banner: boolean;
   selector?: string;
   action?: string;
+  action_type?: string;
   confidence?: number;
   rejection_reason?: string;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
+}
+
+// Validate that selector text and action_type are not contradictory
+function validateSelectorAction(selector: string, actionType: string): { valid: boolean; corrected?: string; reason?: string } {
+  const lower = selector.toLowerCase();
+  const acceptPatterns = /accept|agree|allow|got-it|gotit|ok-button/i;
+  const rejectPatterns = /reject|decline|deny|refuse|opt-out|optout/i;
+  const closePatterns = /close|dismiss|x-button|btn-close/i;
+  const necessaryPatterns = /necessary|essential|required-only/i;
+
+  if (acceptPatterns.test(lower) && actionType === "reject") {
+    return { valid: false, corrected: "accept", reason: `Selector "${selector}" contains accept-like text but was labeled as reject` };
+  }
+  if (rejectPatterns.test(lower) && actionType === "accept") {
+    return { valid: false, corrected: "reject", reason: `Selector "${selector}" contains reject-like text but was labeled as accept` };
+  }
+  if (closePatterns.test(lower) && !["close", "reject"].includes(actionType)) {
+    return { valid: false, corrected: "close", reason: `Selector "${selector}" contains close-like text but was labeled as ${actionType}` };
+  }
+  if (necessaryPatterns.test(lower) && actionType !== "necessary") {
+    return { valid: false, corrected: "necessary", reason: `Selector "${selector}" contains necessary-like text but was labeled as ${actionType}` };
+  }
+  return { valid: true };
+}
+
+// Check if domain already has a high-confidence active pattern
+async function hasExistingHighConfidencePattern(supabase: any, domain: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("cookie_patterns")
+    .select("id, confidence")
+    .eq("domain", domain)
+    .eq("is_active", true)
+    .gte("confidence", 7)
+    .limit(1);
+  if (error) return false;
+  return (data?.length ?? 0) > 0;
 }
 
 async function callAI(apiKey: string, html: string, domain: string, cmpFingerprint?: string): Promise<AIResult> {
