@@ -1,52 +1,57 @@
 
 
-# Auto-Process Missed Banner Reports Immediately
+## Integrate Apple-Native Business Modernization Program
 
-## Problem
-When the extension reports a missed banner via the `report_missed_banner_with_html` RPC, nothing happens until the cron job runs (every 6 hours). The domain sits idle waiting for processing.
+Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
 
-## Solution
-Create a new edge function `report-missed-banner` that:
-1. Accepts the same parameters as the existing RPC (`domain`, `page_url`, `banner_html`, `cmp_fingerprint`)
-2. Calls the existing `report_missed_banner_with_html` RPC to save the report
-3. Immediately calls `ai-generate-pattern` (via internal HTTP) in single-domain mode to process it right away
-4. Returns the AI result to the caller (so the extension could even get a pattern back in real-time)
+---
 
-The cron job (`auto-retry-failed-patterns`) remains as a safety net for retries.
+### 1. New Page: `src/pages/AppleModernization.tsx`
 
-## Changes
+A comprehensive, premium-feeling service page with the following sections:
 
-### 1. New edge function: `supabase/functions/report-missed-banner/index.ts`
-- Accept POST with `{ domain, page_url?, banner_html?, cmp_fingerprint? }`
-- Use service role client to call `report_missed_banner_with_html` RPC
-- Fire-and-forget (or await) internal call to `ai-generate-pattern` with `{ domain }` using service role key
-- Return combined result: report saved + AI processing outcome
-- Set `verify_jwt = false` in config.toml (extension calls this without auth)
+- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
+- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
+- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
+  - Apple Discovery Infrastructure
+  - App Clips (Instant Customer Experience)
+  - Payments Modernization (Tap to Pay)
+  - Digital ID Verification
+  - Brand Trust and Identity
+  - Customer Experience Automation
+  - Commerce and Ordering
+  - Operational Analytics
+  - Apple-Ready Certification (marked as optional)
+- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
+- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
+- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
 
-### 2. Update `supabase/config.toml`
-- Add `[functions.report-missed-banner]` with `verify_jwt = false`
+### 2. Route Registration: `src/App.tsx`
+
+- Import the new `AppleModernization` page component.
+- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
+
+### 3. Services Page Update: `src/pages/Services.tsx`
+
+- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
+- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
+
+### 4. Header Navigation: `src/components/layout/Header.tsx`
+
+- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
+
+---
 
 ### Technical Details
 
-The extension currently calls `supabase.rpc("report_missed_banner_with_html", {...})` directly. The new function wraps that RPC call and chains the AI processing. The extension would need to switch to calling this edge function instead, but since we control only the backend here, we'll make the function available and the extension can be updated separately.
+**New file:**
+- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
 
-Alternatively, to make this work without any extension changes: we can use a **database webhook/trigger** approach — but Deno edge functions can't be triggered by DB webhooks in Lovable Cloud. So the cleanest path is the new edge function.
+**Modified files:**
+- `src/App.tsx` -- add import and route
+- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
 
-The `ai-generate-pattern` already supports single-domain mode (`{ domain: "example.com" }`), so the internal call is straightforward:
+**No database or backend changes required.** This is purely a frontend content page.
 
-```typescript
-// Fire off AI processing for this domain immediately
-fetch(`${supabaseUrl}/functions/v1/ai-generate-pattern`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${serviceRoleKey}`,
-  },
-  body: JSON.stringify({ domain }),
-});
-```
-
-### Files
-- **New**: `supabase/functions/report-missed-banner/index.ts`
-- **Edit**: `supabase/config.toml` (add function entry)
+The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
 
