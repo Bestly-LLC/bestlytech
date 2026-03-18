@@ -1,6 +1,8 @@
 project_id = "keowunrxpxlbgebujbao"
 
 [functions]
+  [functions.ai-generate-pattern]
+    verify_jwt = false
   [functions.auth-email-hook]
     verify_jwt = false
   [functions.auto-retry-failed-patterns]
@@ -8,6 +10,10 @@ project_id = "keowunrxpxlbgebujbao"
   [functions.create-checkout]
     verify_jwt = false
   [functions.notify-sms]
+    verify_jwt = false
+  [functions.probe-report]
+    verify_jwt = false
+  [functions.process-dismissal-consensus]
     verify_jwt = false
   [functions.process-email-queue]
     verify_jwt = true
