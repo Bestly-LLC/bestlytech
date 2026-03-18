@@ -56,6 +56,7 @@ const AI_STATUS_BADGE: Record<string, string> = {
   error: "bg-red-500/15 text-red-500 border-red-500/30",
   skipped_no_html: "bg-muted text-muted-foreground border-muted-foreground/30",
   failed_not_cookie_banner: "bg-red-500/15 text-red-500 border-red-500/30",
+  needs_manual_review: "bg-orange-500/15 text-orange-500 border-orange-500/30",
 };
 
 function InfoTip({ text }: { text: string }) {
@@ -725,9 +726,12 @@ export default function CommunityLearning() {
                             </TableCell>
                             <TableCell className="font-medium">{log.domain}</TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
-                                {log.status}
-                              </Badge>
+                              <span className="inline-flex items-center gap-1">
+                                {log.status === "needs_manual_review" && <Flag className="h-3.5 w-3.5 text-orange-500" />}
+                                <Badge variant="outline" className={AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
+                                  {log.status.replace(/_/g, " ")}
+                                </Badge>
+                              </span>
                             </TableCell>
                             <TableCell>
                               {log.selector_generated ? (
