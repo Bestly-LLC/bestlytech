@@ -29,7 +29,7 @@ export function ManualPatternForm({ onSuccess }: ManualPatternFormProps) {
   const [actionType, setActionType] = useState("reject");
   const [cmp, setCmp] = useState("generic");
   const [customCmp, setCustomCmp] = useState("");
-  const [confidence, setConfidence] = useState([0.9]);
+  const [confidence, setConfidence] = useState([9]);
 
   const resetForm = () => {
     setDomain("");
