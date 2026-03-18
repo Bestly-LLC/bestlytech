@@ -316,7 +316,7 @@ export default function CommunityLearning() {
             <AlertTriangle className="h-5 w-5 text-amber-500" />
             <div>
               <p className="text-sm font-semibold tabular-nums">{o.stale_patterns}</p>
-              <p className="text-xs text-muted-foreground">Stale 30d+</p>
+              <p className="text-xs text-muted-foreground">Stale 30d+<InfoTip text="Patterns not seen in 30+ days — may be outdated" /></p>
             </div>
           </CardContent>
         </Card>
