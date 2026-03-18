@@ -6,29 +6,34 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-// Known CMP signatures (mirrored from ai-generate-pattern)
-const KNOWN_CMPS: { name: string; signatures: string[]; selector: string; action: string; cmp_fingerprint: string }[] = [
-  { name: "OneTrust", signatures: ["onetrust", "optanon", "otBannerSdk"], selector: "#onetrust-reject-all-handler, .ot-pc-refuse-all-btn", action: "reject", cmp_fingerprint: "onetrust" },
-  { name: "Cookiebot", signatures: ["cookiebot", "CybotCookiebot"], selector: "#CybotCookiebotDialogBodyButtonDecline", action: "reject", cmp_fingerprint: "cookiebot" },
-  { name: "Didomi", signatures: ["didomi"], selector: '.didomi-continue-without-agreeing, [data-testid="notice-disagree-button"]', action: "reject", cmp_fingerprint: "didomi" },
-  { name: "Quantcast", signatures: ["quantcast", "qc-cmp"], selector: '#qc-cmp2-container [mode="secondary"], .qc-cmp2-summary-buttons button:first-child', action: "reject", cmp_fingerprint: "quantcast" },
-  { name: "TrustArc", signatures: ["truste", "consent.trustarc", "trustarc"], selector: ".truste-consent-required, #truste-consent-button", action: "reject", cmp_fingerprint: "trustarc" },
-  { name: "Complianz", signatures: ["complianz", "cmplz"], selector: ".cmplz-deny", action: "reject", cmp_fingerprint: "complianz" },
-  { name: "Osano", signatures: ["osano"], selector: ".osano-cm-deny, .osano-cm-denyAll", action: "reject", cmp_fingerprint: "osano" },
-  { name: "Usercentrics", signatures: ["usercentrics", "uc-banner"], selector: '[data-testid="uc-deny-all-button"], .uc-btn-deny', action: "reject", cmp_fingerprint: "usercentrics" },
-  { name: "Iubenda", signatures: ["iubenda"], selector: ".iubenda-cs-reject-btn, #iubenda-cs-banner .iubenda-cs-close-btn", action: "reject", cmp_fingerprint: "iubenda" },
-  { name: "LiveRamp/PrivacyManager", signatures: ["privacymanager", "liveramp", "_brlbs"], selector: '._brlbs-decline, [data-brlbs-action="decline"]', action: "reject", cmp_fingerprint: "liveramp" },
-  { name: "CookieYes", signatures: ["cookieyes", "cky-consent"], selector: '.cky-btn-reject, [data-cky-tag="reject-button"]', action: "reject", cmp_fingerprint: "cookieyes" },
-  { name: "Termly", signatures: ["termly", "t-consentPrompt"], selector: '[data-tid="banner-decline"], .t-declineAllButton', action: "reject", cmp_fingerprint: "termly" },
-  { name: "Klaro", signatures: ["klaro", "cookie-modal"], selector: ".cm-btn-decline, .klaro .cn-decline", action: "reject", cmp_fingerprint: "klaro" },
-  { name: "Civic/CookieControl", signatures: ["civicuk", "CookieControl", "civic-cookie"], selector: "#ccc-reject-settings, .ccc-reject-button", action: "reject", cmp_fingerprint: "civic" },
-  { name: "Sourcepoint", signatures: ["sp-cc", "sourcepoint", "sp_choice"], selector: '[title="Reject"], [title="REJECT ALL"], .sp_choice_type_11', action: "reject", cmp_fingerprint: "sourcepoint" },
+// Known CMP signatures + CDN/script URL patterns (mirrored from ai-generate-pattern)
+const KNOWN_CMPS: { name: string; signatures: string[]; scriptSignatures: string[]; selector: string; action: string; cmp_fingerprint: string }[] = [
+  { name: "OneTrust", signatures: ["onetrust", "optanon", "otBannerSdk"], scriptSignatures: ["cdn.cookielaw.org", "onetrust.com/consent", "otSDKStub", "otBannerSdk"], selector: "#onetrust-reject-all-handler, .ot-pc-refuse-all-btn", action: "reject", cmp_fingerprint: "onetrust" },
+  { name: "Cookiebot", signatures: ["cookiebot", "CybotCookiebot"], scriptSignatures: ["consent.cookiebot.com", "cookiebot.com/uc.js", "CookieConsent.js"], selector: "#CybotCookiebotDialogBodyButtonDecline", action: "reject", cmp_fingerprint: "cookiebot" },
+  { name: "Didomi", signatures: ["didomi"], scriptSignatures: ["sdk.privacy-center.org", "didomi.io/sdk", "didomi-sdk"], selector: '.didomi-continue-without-agreeing, [data-testid="notice-disagree-button"]', action: "reject", cmp_fingerprint: "didomi" },
+  { name: "Quantcast", signatures: ["quantcast", "qc-cmp"], scriptSignatures: ["quantcast.mgr.consensu.org", "cmp2.js", "quantcast.com/choice"], selector: '#qc-cmp2-container [mode="secondary"], .qc-cmp2-summary-buttons button:first-child', action: "reject", cmp_fingerprint: "quantcast" },
+  { name: "TrustArc", signatures: ["truste", "consent.trustarc", "trustarc"], scriptSignatures: ["consent.trustarc.com", "trustarc.com/notice", "truste.com"], selector: ".truste-consent-required, #truste-consent-button", action: "reject", cmp_fingerprint: "trustarc" },
+  { name: "Complianz", signatures: ["complianz", "cmplz"], scriptSignatures: ["complianz-gdpr", "cmplz-cookiebanner"], selector: ".cmplz-deny", action: "reject", cmp_fingerprint: "complianz" },
+  { name: "Osano", signatures: ["osano"], scriptSignatures: ["cmp.osano.com", "osano.com/webcmp"], selector: ".osano-cm-deny, .osano-cm-denyAll", action: "reject", cmp_fingerprint: "osano" },
+  { name: "Usercentrics", signatures: ["usercentrics", "uc-banner"], scriptSignatures: ["usercentrics.eu", "app.usercentrics.eu"], selector: '[data-testid="uc-deny-all-button"], .uc-btn-deny', action: "reject", cmp_fingerprint: "usercentrics" },
+  { name: "Iubenda", signatures: ["iubenda"], scriptSignatures: ["cdn.iubenda.com", "iubenda.com/cs"], selector: ".iubenda-cs-reject-btn, #iubenda-cs-banner .iubenda-cs-close-btn", action: "reject", cmp_fingerprint: "iubenda" },
+  { name: "LiveRamp/PrivacyManager", signatures: ["privacymanager", "liveramp", "_brlbs"], scriptSignatures: ["liveramp.com", "privacymanager.io"], selector: '._brlbs-decline, [data-brlbs-action="decline"]', action: "reject", cmp_fingerprint: "liveramp" },
+  { name: "CookieYes", signatures: ["cookieyes", "cky-consent"], scriptSignatures: ["cdn-cookieyes.com", "cookieyes.com/client_data"], selector: '.cky-btn-reject, [data-cky-tag="reject-button"]', action: "reject", cmp_fingerprint: "cookieyes" },
+  { name: "Termly", signatures: ["termly", "t-consentPrompt"], scriptSignatures: ["app.termly.io/embed", "termly.io/resource-blocker"], selector: '[data-tid="banner-decline"], .t-declineAllButton', action: "reject", cmp_fingerprint: "termly" },
+  { name: "Klaro", signatures: ["klaro", "cookie-modal"], scriptSignatures: ["kiprotect.com/klaro", "klaro.js", "klaro-config"], selector: ".cm-btn-decline, .klaro .cn-decline", action: "reject", cmp_fingerprint: "klaro" },
+  { name: "Civic/CookieControl", signatures: ["civicuk", "CookieControl", "civic-cookie"], scriptSignatures: ["cc.cdn.civiccomputing.com", "cookiecontrol"], selector: "#ccc-reject-settings, .ccc-reject-button", action: "reject", cmp_fingerprint: "civic" },
+  { name: "Sourcepoint", signatures: ["sp-cc", "sourcepoint", "sp_choice"], scriptSignatures: ["sourcepoint.mgr.consensu.org", "cdn.privacy-mgmt.com", "sourcepoint.com"], selector: '[title="Reject"], [title="REJECT ALL"], .sp_choice_type_11', action: "reject", cmp_fingerprint: "sourcepoint" },
+  { name: "CookieFirst", signatures: ["cookiefirst", "cf-container"], scriptSignatures: ["consent.cookiefirst.com", "cookiefirst.com/widget"], selector: ".cookiefirst-reject-all, button[data-cookiefirst-action='reject']", action: "reject", cmp_fingerprint: "cookiefirst" },
+  { name: "Admiral", signatures: ["admiral-cmp", "admiral"], scriptSignatures: ["cdn.admiral.com", "admiral.com/cmp"], selector: ".admiral-cmp button[class*='reject'], .admiral-cmp button:last-child", action: "reject", cmp_fingerprint: "admiral" },
 ];
 
 function detectKnownCMP(html: string): typeof KNOWN_CMPS[number] | null {
   const lower = html.toLowerCase();
   for (const cmp of KNOWN_CMPS) {
     if (cmp.signatures.some((sig) => lower.includes(sig.toLowerCase()))) {
+      return cmp;
+    }
+    if (cmp.scriptSignatures.some((sig) => lower.includes(sig.toLowerCase()))) {
       return cmp;
     }
   }
