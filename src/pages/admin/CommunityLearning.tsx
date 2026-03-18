@@ -344,9 +344,12 @@ export default function CommunityLearning() {
       <PageHeader
         title="Community Learning"
         actions={
-          <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
-            <RefreshCw className="h-4 w-4" /> Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <ManualPatternForm onSuccess={fetchAll} />
+            <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+          </div>
         }
       />
 
