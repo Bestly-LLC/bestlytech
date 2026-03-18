@@ -122,7 +122,7 @@ RULES:
 1. Prefer reject/decline/necessary-only buttons
 2. If no reject, use close/dismiss
 3. If only accept, use it with lower confidence
-4. Output a specific CSS selector that would work on this page`;
+4. Output a specific CSS selector that would work on this page. Confidence is on a 1-10 scale.`;
 
     const userPrompt = `Domain: ${domain}
 Banner found at selector: ${bestMatch.selector}
