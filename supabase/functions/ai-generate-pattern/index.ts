@@ -578,10 +578,10 @@ ${html}`;
                     type: "string",
                     description: "CSS selector for the reject/decline/dismiss button. Only set if is_cookie_banner is true.",
                   },
-                  action: {
+                  action_type: {
                     type: "string",
-                    enum: ["click", "hide"],
-                    description: "Whether to click the button or hide the banner element. Only set if is_cookie_banner is true.",
+                    enum: ["accept", "reject", "necessary", "save", "close"],
+                    description: "What the button ACTUALLY DOES. 'accept' = accepts all cookies, 'reject' = rejects/declines, 'necessary' = essential only, 'save' = saves current preferences, 'close' = closes/hides banner. Must match the button's real function, NOT the user's desired outcome.",
                   },
                   confidence: {
                     type: "number",
