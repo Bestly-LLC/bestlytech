@@ -631,6 +631,9 @@ export default function CommunityLearning() {
               </p>
               <p className="text-xs text-muted-foreground">These domains exhausted all retry attempts. Consider adding patterns manually.</p>
             </div>
+            <Button variant="outline" size="sm" className="shrink-0 gap-1.5 border-amber-500/30 text-amber-500 hover:bg-amber-500/10" onClick={handleResetFailed} disabled={runningReset}>
+              {runningReset ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Resetting...</> : <><RotateCcw className="h-3.5 w-3.5" /> Reset Failed</>}
+            </Button>
             <Button variant="outline" size="sm" className="shrink-0 gap-1.5 border-red-500/30 text-red-500 hover:bg-red-500/10" onClick={() => setActiveTab("ai-generator")}>
               <Flag className="h-3.5 w-3.5" /> View
             </Button>
