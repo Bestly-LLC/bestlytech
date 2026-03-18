@@ -40,19 +40,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Cross-reference with ai_generation_log to only retry domains that actually failed
+    // Cross-reference with ai_generation_log to find failed OR never-processed domains
     const domains = candidates.map((c: any) => c.domain);
-    const { data: failedLogs } = await supabase
+    const { data: allLogs } = await supabase
       .from("ai_generation_log")
       .select("domain, status")
       .in("domain", domains)
-      .in("status", ["needs_manual_review", "failed_not_cookie_banner", "error"])
       .order("created_at", { ascending: false });
 
-    const failedDomains = new Set((failedLogs ?? []).map((l: any) => l.domain));
+    // Domains that failed in the log
+    const failedDomains = new Set(
+      (allLogs ?? [])
+        .filter((l: any) => ["needs_manual_review", "failed_not_cookie_banner", "error"].includes(l.status))
+        .map((l: any) => l.domain)
+    );
 
-    // Filter to only domains with a failed status in the log
-    const retryable = candidates.filter((c: any) => failedDomains.has(c.domain));
+    // Domains that have NO log entries at all (never processed)
+    const loggedDomains = new Set((allLogs ?? []).map((l: any) => l.domain));
+    const neverProcessed = new Set(domains.filter((d: string) => !loggedDomains.has(d)));
+
+    // Retry both failed and never-processed domains
+    const retryable = candidates.filter(
+      (c: any) => failedDomains.has(c.domain) || neverProcessed.has(c.domain)
+    );
 
     let processed = 0;
     let succeeded = 0;
