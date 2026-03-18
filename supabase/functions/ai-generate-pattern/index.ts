@@ -101,14 +101,18 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const prompt = `You are a cookie banner analysis expert. Analyze this cookie consent banner HTML and identify the best CSS selector to DISMISS or REJECT cookies (prefer reject/decline over accept).
+        const prompt = `You are a cookie banner analysis expert. First, determine if this HTML is actually a cookie consent / privacy / GDPR banner. If it is a signup form, newsletter popup, registration modal, promotional overlay, age gate, or any non-cookie element, set "is_cookie_banner" to false.
+
+If it IS a cookie banner, analyze it and identify the best CSS selector to DISMISS or REJECT cookies (prefer reject/decline over accept).
 
 Return ONLY valid JSON with these fields:
-- "selector": a CSS selector for the reject/decline/dismiss button (prefer specific selectors like IDs or data attributes)
-- "action": either "click" or "hide"
-- "confidence": a number 0-1 indicating how confident you are
+- "is_cookie_banner": true if this is a cookie/consent/privacy banner, false otherwise
+- "rejection_reason": if is_cookie_banner is false, a short explanation of what the HTML actually is (e.g. "signup popup", "newsletter modal")
+- "selector": a CSS selector for the reject/decline/dismiss button (only if is_cookie_banner is true)
+- "action": either "click" or "hide" (only if is_cookie_banner is true)
+- "confidence": a number 0-1 indicating how confident you are (only if is_cookie_banner is true)
 
-Rules:
+Rules (only apply when is_cookie_banner is true):
 - Prefer reject/decline/necessary-only buttons over accept buttons
 - If no reject button exists, use a close/dismiss button
 - If only accept exists, use it but set confidence lower
@@ -133,7 +137,7 @@ ${candidate.cmp_fingerprint !== "unknown" ? `CMP: ${candidate.cmp_fingerprint}` 
               messages: [
                 {
                   role: "system",
-                  content: "You are a cookie banner analysis expert. Always respond with valid JSON only, no markdown or explanation.",
+                  content: "You are a cookie banner analysis expert. Always respond with valid JSON only, no markdown or explanation. You must first determine whether the provided HTML is actually a cookie consent banner before analyzing it.",
                 },
                 { role: "user", content: prompt },
               ],
@@ -158,6 +162,28 @@ ${candidate.cmp_fingerprint !== "unknown" ? `CMP: ${candidate.cmp_fingerprint}` 
         if (jsonMatch) jsonStr = jsonMatch[1].trim();
 
         const parsed = JSON.parse(jsonStr);
+
+        // Check if AI determined this is NOT a cookie banner
+        if (parsed.is_cookie_banner === false) {
+          const reason = parsed.rejection_reason || "not a cookie banner";
+          await supabase.from("ai_generation_log").insert({
+            domain: candidate.domain,
+            status: "skipped_not_cookie_banner",
+            error_message: reason.substring(0, 500),
+            ai_model: "gemini-3-flash",
+            prompt_tokens: usage.prompt_tokens ?? null,
+            completion_tokens: usage.completion_tokens ?? null,
+            html_source: candidate.banner_html?.substring(0, 500),
+          });
+          await supabase.rpc("mark_ai_processed", {
+            _domain: candidate.domain,
+            _resolved: false,
+          });
+          skipped++;
+          results.push({ domain: candidate.domain, status: "skipped_not_cookie_banner", reason });
+          continue;
+        }
+
         const selector = parsed.selector;
         const action = parsed.action === "hide" ? "hide" : "click";
         const rawConfidence = Number(parsed.confidence) || 0.5;

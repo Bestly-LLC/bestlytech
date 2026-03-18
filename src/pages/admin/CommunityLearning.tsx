@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, Sparkles, Info } from "lucide-react";
+import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, Sparkles, Info, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
@@ -54,6 +54,7 @@ const AI_STATUS_BADGE: Record<string, string> = {
   success: "bg-green-600/15 text-green-600 border-green-600/30",
   error: "bg-red-500/15 text-red-500 border-red-500/30",
   skipped_no_html: "bg-muted text-muted-foreground border-muted-foreground/30",
+  skipped_not_cookie_banner: "bg-amber-500/15 text-amber-500 border-amber-500/30",
 };
 
 function InfoTip({ text }: { text: string }) {
@@ -101,6 +102,7 @@ export default function CommunityLearning() {
   const [unresolvedReports, setUnresolvedReports] = useState<any[]>([]);
   const [runningGenerator, setRunningGenerator] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
+  const [deletingPattern, setDeletingPattern] = useState<string | null>(null);
   const [rerunningDomain, setRerunningDomain] = useState<string | null>(null);
   const [genResultsOpen, setGenResultsOpen] = useState(false);
   const [genResults, setGenResults] = useState<any | null>(null);
@@ -227,6 +229,26 @@ export default function CommunityLearning() {
       toast.error(`Re-run failed: ${e.message}`);
     } finally {
       setRerunningDomain(null);
+    }
+  }, [fetchAll]);
+
+  const handleDeletePattern = useCallback(async (domain: string, selector: string, actionType: string) => {
+    const key = `${domain}::${selector}`;
+    setDeletingPattern(key);
+    try {
+      const { error } = await supabase
+        .from("cookie_patterns")
+        .delete()
+        .eq("domain", domain)
+        .eq("selector", selector)
+        .eq("action_type", actionType);
+      if (error) throw error;
+      toast.success(`Deleted pattern for ${domain}`);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Delete failed: ${e.message}`);
+    } finally {
+      setDeletingPattern(null);
     }
   }, [fetchAll]);
 
@@ -470,6 +492,7 @@ export default function CommunityLearning() {
                       <TableHead className="text-right">Reports</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead className="text-right">Discovered</TableHead>
+                      <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -492,6 +515,24 @@ export default function CommunityLearning() {
                           <Badge variant="secondary" className="text-[10px]">{r.source}</Badge>
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
+                        <TableCell>
+                          <TooltipProvider delayDuration={200}>
+                            <UITooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                                  disabled={deletingPattern === `${r.domain}::${r.selector}`}
+                                  onClick={() => handleDeletePattern(r.domain, r.selector, r.action_type)}
+                                >
+                                  {deletingPattern === `${r.domain}::${r.selector}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left"><p className="text-xs">Delete this pattern</p></TooltipContent>
+                            </UITooltip>
+                          </TooltipProvider>
+                        </TableCell>
                       </TableRow>
                       );
                     })}
