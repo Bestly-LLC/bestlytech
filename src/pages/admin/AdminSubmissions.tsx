@@ -146,9 +146,9 @@ export default function AdminSubmissions() {
       </div>
 
       {selected.size > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 sm:px-4 py-2">
           <span className="text-sm font-medium">{selected.size} selected</span>
-          <span className="text-muted-foreground">·</span>
+          <span className="text-muted-foreground hidden sm:inline">·</span>
           {["Submitted", "In Review", "Issues Flagged", "Approved"].map((status) => (
             <Button key={status} variant="outline" size="sm" className="text-xs h-7" onClick={() => bulkUpdateStatus(status)}>
               Mark {status}
