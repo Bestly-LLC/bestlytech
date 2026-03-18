@@ -150,6 +150,13 @@ export default function AdminDashboard() {
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{r.client_name || "—"}</TableCell>
                     <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
+                          <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       <Badge variant={statusColor[r.status] as any} className="text-xs">{r.status}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
