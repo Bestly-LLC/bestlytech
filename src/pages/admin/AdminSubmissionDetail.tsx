@@ -16,7 +16,7 @@ const STATUSES = ["Draft", "Submitted", "In Review", "Issues Flagged", "Approved
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-1 py-1.5">
-      <span className="text-sm font-medium text-muted-foreground w-48 shrink-0">{label}</span>
+      <span className="text-sm font-medium text-muted-foreground w-36 sm:w-48 shrink-0">{label}</span>
       <span className="text-sm text-foreground">{value || "—"}</span>
     </div>
   );
