@@ -1,15 +1,17 @@
-import { LucideIcon } from "lucide-react";
+import { LucideIcon, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface StatCardProps {
   label: string;
   value: number | string;
   icon: LucideIcon;
-  accentColor?: string; // tailwind border-color class e.g. "border-primary"
-  iconBg?: string;      // tailwind bg class e.g. "bg-primary/10"
-  iconColor?: string;   // tailwind text class e.g. "text-primary"
+  accentColor?: string;
+  iconBg?: string;
+  iconColor?: string;
   subtitle?: string;
   centered?: boolean;
+  tooltip?: string;
 }
 
 export function StatCard({
