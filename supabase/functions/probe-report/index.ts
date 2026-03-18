@@ -8,7 +8,7 @@ const corsHeaders = {
 
 // Known CMP signatures + CDN/script URL patterns (mirrored from ai-generate-pattern)
 const KNOWN_CMPS: { name: string; signatures: string[]; scriptSignatures: string[]; selector: string; action: string; cmp_fingerprint: string }[] = [
-  { name: "OneTrust", signatures: ["onetrust", "optanon", "otBannerSdk"], scriptSignatures: ["cdn.cookielaw.org", "onetrust.com/consent", "otSDKStub", "otBannerSdk"], selector: "#onetrust-reject-all-handler, .ot-pc-refuse-all-btn", action: "reject", cmp_fingerprint: "onetrust" },
+  { name: "OneTrust", signatures: ["onetrust", "optanon", "otBannerSdk"], scriptSignatures: ["cdn.cookielaw.org", "onetrust.com/consent", "otSDKStub", "otBannerSdk"], selector: "#onetrust-reject-all-handler, .ot-pc-refuse-all-btn, .save-preference-btn-handler, .onetrust-close-btn-handler", action: "reject", cmp_fingerprint: "onetrust" },
   { name: "Cookiebot", signatures: ["cookiebot", "CybotCookiebot"], scriptSignatures: ["consent.cookiebot.com", "cookiebot.com/uc.js", "CookieConsent.js"], selector: "#CybotCookiebotDialogBodyButtonDecline", action: "reject", cmp_fingerprint: "cookiebot" },
   { name: "Didomi", signatures: ["didomi"], scriptSignatures: ["sdk.privacy-center.org", "didomi.io/sdk", "didomi-sdk"], selector: '.didomi-continue-without-agreeing, [data-testid="notice-disagree-button"]', action: "reject", cmp_fingerprint: "didomi" },
   { name: "Quantcast", signatures: ["quantcast", "qc-cmp"], scriptSignatures: ["quantcast.mgr.consensu.org", "cmp2.js", "quantcast.com/choice"], selector: '#qc-cmp2-container [mode="secondary"], .qc-cmp2-summary-buttons button:first-child', action: "reject", cmp_fingerprint: "quantcast" },

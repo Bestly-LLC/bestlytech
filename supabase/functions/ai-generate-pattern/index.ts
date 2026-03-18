@@ -12,7 +12,7 @@ const KNOWN_CMPS: { name: string; signatures: string[]; scriptSignatures: string
     name: "OneTrust",
     signatures: ["onetrust", "optanon", "otBannerSdk"],
     scriptSignatures: ["cdn.cookielaw.org", "onetrust.com/consent", "otSDKStub", "otBannerSdk"],
-    selector: "#onetrust-reject-all-handler, .ot-pc-refuse-all-btn",
+    selector: "#onetrust-reject-all-handler, .ot-pc-refuse-all-btn, .save-preference-btn-handler, .onetrust-close-btn-handler",
     action: "reject",
     cmp_fingerprint: "onetrust",
   },
