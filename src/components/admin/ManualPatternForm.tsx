@@ -149,7 +149,7 @@ export function ManualPatternForm({ onSuccess }: ManualPatternFormProps) {
           )}
 
           <div className="space-y-1.5">
-            <Label>Confidence: {confidence[0]}/10</Label>
+            <Label>Confidence: {confidence[0] * 10}%</Label>
             <Slider value={confidence} onValueChange={setConfidence} min={1} max={10} step={1} className="mt-2" />
           </div>
 

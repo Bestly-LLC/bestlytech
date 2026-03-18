@@ -358,7 +358,7 @@ export default function CommunityLearning() {
         <StatCard label="Total Patterns" value={o.total_patterns} icon={Layers} iconColor="text-primary" iconBg="bg-primary/10" accentColor="border-primary/40" subtitle={`${o.patterns_last_7d} active last 7 days`} tooltip="Cookie banner CSS selectors learned by the community network" />
         <StatCard label="Domains Covered" value={o.total_domains} icon={Globe} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="border-green-500/40" subtitle={`${o.new_domains_last_7d} new this week`} tooltip="Unique websites where Cookie Yeti has learned patterns" />
         <StatCard label="Success Rate" value={`${o.overall_success_rate}%`} icon={Target} iconColor="text-blue-500" iconBg="bg-blue-500/10" accentColor="border-blue-500/40" subtitle={`${Number(o.total_successes).toLocaleString()} / ${Number(o.total_reports).toLocaleString()}`} tooltip="Percentage of pattern matches that successfully dismissed a banner. Calculated from success_count / report_count across all patterns" />
-        <StatCard label="Avg Confidence" value={o.avg_confidence ?? "—"} icon={TrendingUp} iconColor="text-purple-500" iconBg="bg-purple-500/10" accentColor="border-purple-500/40" subtitle={`${o.high_confidence} high / ${o.low_confidence} low`} tooltip="Mean confidence score (1-10) across all active patterns. Higher = more reliable. Based on success rate and report volume" />
+        <StatCard label="Avg Confidence" value={o.avg_confidence != null ? `${Math.round(o.avg_confidence * 10)}%` : "—"} icon={TrendingUp} iconColor="text-purple-500" iconBg="bg-purple-500/10" accentColor="border-purple-500/40" subtitle={`${o.high_confidence} high / ${o.low_confidence} low`} tooltip="Mean confidence score across all active patterns. Higher = more reliable. Based on success rate and report volume" />
         <StatCard label="AI Generated" value={aiGeneratedCount} icon={Sparkles} iconColor="text-amber-500" iconBg="bg-amber-500/10" accentColor="border-amber-500/40" subtitle="Patterns from AI" tooltip="Patterns created by AI analysis of reported banner HTML" />
       </div>
 
@@ -455,7 +455,7 @@ export default function CommunityLearning() {
                      <TableHead className="text-right">Patterns<InfoTip text="Number of CSS selectors learned for this domain" /></TableHead>
                      <TableHead className="text-right">Reports<InfoTip text="Times users encountered banners on this domain" /></TableHead>
                      <TableHead className="text-right">Success Rate<InfoTip text="How often patterns successfully dismiss banners here" /></TableHead>
-                     <TableHead>Confidence<InfoTip text="Reliability score 1-10, based on success rate and volume" /></TableHead>
+                     <TableHead>Confidence<InfoTip text="Reliability score 1-100%, based on success rate and volume" /></TableHead>
                      <TableHead className="text-right">Last Active<InfoTip text="When a pattern last matched a banner on this domain" /></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -471,7 +471,7 @@ export default function CommunityLearning() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Progress value={d.avg_confidence * 10} className="h-2 w-16" />
-                          <span className="text-xs text-muted-foreground tabular-nums">{d.avg_confidence}</span>
+                          <span className="text-xs text-muted-foreground tabular-nums">{Math.round(d.avg_confidence * 10)}%</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">{d.last_active ? timeAgo(d.last_active) : "—"}</TableCell>
@@ -518,7 +518,7 @@ export default function CommunityLearning() {
                           </span>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.cmp_fingerprint}</TableCell>
-                        <TableCell className="text-right tabular-nums">{r.confidence}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 10)}%` : "—"}</TableCell>
                         <TableCell className="text-right tabular-nums">{r.report_count}</TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-[10px]">{r.source}</Badge>
@@ -626,7 +626,7 @@ export default function CommunityLearning() {
                                   {r.selector ? <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.selector}</code> : <span className="text-xs text-muted-foreground">—</span>}
                                 </TableCell>
                                 <TableCell>{r.action ?? "—"}</TableCell>
-                                <TableCell className="text-right tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 100)}%` : "—"}</TableCell>
+                                <TableCell className="text-right tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 10)}%` : "—"}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -758,7 +758,7 @@ export default function CommunityLearning() {
                               )}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {log.confidence != null ? `${Math.round(log.confidence * 100)}%` : "—"}
+                              {log.confidence != null ? `${Math.round(log.confidence * 10)}%` : "—"}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">{log.ai_model ?? "—"}</TableCell>
                           </TableRow>
@@ -834,7 +834,7 @@ export default function CommunityLearning() {
                         <TableCell className="font-medium">{c.cmp_fingerprint}</TableCell>
                         <TableCell className="text-right tabular-nums">{c.pattern_count}</TableCell>
                         <TableCell className="text-right tabular-nums">{c.domain_count}</TableCell>
-                        <TableCell className="text-right tabular-nums">{c.avg_confidence}</TableCell>
+                        <TableCell className="text-right tabular-nums">{Math.round(c.avg_confidence * 10)}%</TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${rateColor(c.success_rate)}`}>{c.success_rate}%</TableCell>
                       </TableRow>
                     ))}
