@@ -292,17 +292,71 @@ Deno.serve(async (req) => {
       processed++;
 
       if (!candidate.banner_html) {
+        // Instead of skipping, try server-side fetch + CMP detection
+        console.log(`[${candidate.domain}] No extension HTML — attempting server-side fetch for CMP detection`);
+        const serverHtml = await fetchPageHtml(candidate.domain, candidate.page_url);
+
+        if (serverHtml) {
+          // Check for known CMP via script tags / elements
+          const serverCMP = detectKnownCMP(serverHtml);
+          if (serverCMP) {
+            console.log(`[${candidate.domain}] Known CMP detected via server fetch (no extension HTML): ${serverCMP.name}`);
+            await insertCMPPattern(supabase, candidate, serverCMP);
+            generated++;
+            results.push({
+              domain: candidate.domain,
+              status: "success_cmp_fallback",
+              cmp: serverCMP.name,
+              selector: serverCMP.selector,
+              action: serverCMP.action,
+              confidence: 7,
+              note: "CMP detected via server fetch (no extension HTML)",
+            });
+            continue;
+          }
+
+          // No CMP found — try extracting cookie elements and running AI
+          const extractedHtml = extractCookieElements(serverHtml);
+          if (extractedHtml && extractedHtml.length >= 50) {
+            console.log(`[${candidate.domain}] No CMP match, trying AI on ${extractedHtml.length} chars of server-extracted elements`);
+            try {
+              const aiResult = await callAI(LOVABLE_API_KEY, extractedHtml, candidate.domain, candidate.cmp_fingerprint);
+              if (aiResult.is_cookie_banner && aiResult.selector) {
+                await insertPattern(supabase, candidate, aiResult, "success", extractedHtml);
+                generated++;
+                results.push({
+                  domain: candidate.domain,
+                  status: "success",
+                  selector: aiResult.selector,
+                  action: aiResult.action,
+                  confidence: aiResult.confidence,
+                  note: "AI analysis on server HTML (no extension HTML)",
+                });
+                continue;
+              }
+            } catch (aiErr: any) {
+              console.log(`[${candidate.domain}] AI fallback failed: ${aiErr.message}`);
+            }
+          }
+        }
+
+        // All server-side attempts failed — now skip
         skipped++;
+        const currentAttempts = candidate.ai_attempts ?? 0;
+        const skipStatus = currentAttempts >= 4 ? "permanently_failed" : "skipped_no_html";
         await supabase.from("ai_generation_log").insert({
           domain: candidate.domain,
-          status: "skipped_no_html",
+          status: skipStatus,
+          error_message: serverHtml
+            ? "Server fetched but no CMP detected and no usable cookie elements"
+            : "No extension HTML and server fetch failed",
           ai_model: AI_MODEL_LABEL,
         });
         await supabase.rpc("mark_ai_processed", {
           _domain: candidate.domain,
           _resolved: false,
         });
-        results.push({ domain: candidate.domain, status: "skipped_no_html" });
+        results.push({ domain: candidate.domain, status: skipStatus });
         continue;
       }
 
