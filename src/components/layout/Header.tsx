@@ -48,7 +48,7 @@ export function Header() {
             <img 
               src={bestlyLogo} 
               alt="Bestly LLC" 
-              className="h-9 w-auto rotate-[20deg] transition-transform group-hover:scale-105" 
+              className="h-9 w-auto transition-transform group-hover:scale-105" 
             />
             <span className="text-xl font-semibold tracking-tight text-foreground">
               Bestly
