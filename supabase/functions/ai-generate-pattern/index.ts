@@ -625,8 +625,8 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
 async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, status: string, htmlOverride?: string) {
   const selector = aiResult.selector!;
   const action = aiResult.action === "hide" ? "close" : "reject";
-  const rawConfidence = Number(aiResult.confidence) || 0.5;
-  const confidence = Math.min(rawConfidence, 0.6);
+  const rawConfidence = Number(aiResult.confidence) || 5;
+  const confidence = Math.min(Math.round(rawConfidence), 6);
 
   const { error: upsertErr } = await supabase.rpc("upsert_pattern", {
     _domain: candidate.domain,
