@@ -607,6 +607,7 @@ export default function CommunityLearning() {
                          <TableHead>CMP Type<InfoTip text="Consent Management Platform detected (OneTrust, Cookiebot, etc.)" /></TableHead>
                          <TableHead className="text-right">Last Reported</TableHead>
                          <TableHead className="text-right">AI Attempts<InfoTip text="Number of times AI tried to generate a pattern. Max 3 attempts" /></TableHead>
+                         <TableHead className="w-24">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
