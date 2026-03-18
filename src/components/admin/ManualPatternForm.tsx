@@ -38,7 +38,7 @@ export function ManualPatternForm({ onSuccess }: ManualPatternFormProps) {
     setActionType("reject");
     setCmp("generic");
     setCustomCmp("");
-    setConfidence([0.9]);
+    setConfidence([9]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
