@@ -65,11 +65,15 @@ export default function AdminDashboard() {
   const stats = useMemo(() => {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 86400000);
+    const getPlatforms = (r: any): string[] => r.selected_platforms?.length ? r.selected_platforms : [r.platform];
     return {
       total: filtered.length,
       thisWeek: filtered.filter((r) => new Date(r.created_at!) > weekAgo).length,
       needsReview: filtered.filter((r) => r.status === "Submitted" || r.status === "In Review").length,
       approved: filtered.filter((r) => r.status === "Approved").length,
+      amazon: filtered.filter((r) => getPlatforms(r).some((p: string) => p.toLowerCase().includes("amazon"))).length,
+      shopify: filtered.filter((r) => getPlatforms(r).some((p: string) => p.toLowerCase().includes("shopify"))).length,
+      tiktok: filtered.filter((r) => getPlatforms(r).some((p: string) => p.toLowerCase().includes("tiktok"))).length,
     };
   }, [filtered]);
 
