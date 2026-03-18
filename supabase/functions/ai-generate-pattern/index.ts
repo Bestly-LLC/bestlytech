@@ -319,7 +319,7 @@ Deno.serve(async (req) => {
             cmp: extensionCMP.name,
             selector: extensionCMP.selector,
             action: extensionCMP.action,
-            confidence: 6,
+            confidence: 7,
             note: "CMP detected in extension HTML (Layer 1)",
           });
           continue;
