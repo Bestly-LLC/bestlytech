@@ -518,7 +518,7 @@ export default function CommunityLearning() {
                           </span>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.cmp_fingerprint}</TableCell>
-                        <TableCell className="text-right tabular-nums">{r.confidence}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 10)}%` : "—"}</TableCell>
                         <TableCell className="text-right tabular-nums">{r.report_count}</TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-[10px]">{r.source}</Badge>
