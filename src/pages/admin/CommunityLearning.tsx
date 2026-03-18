@@ -8,7 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, Sparkles, Info, Trash2, Zap, Coins, RotateCcw } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, Sparkles, Info, Trash2, Zap, Coins, RotateCcw, MousePointerClick, Users } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { ManualPatternForm } from "@/components/admin/ManualPatternForm";
@@ -124,10 +125,20 @@ export default function CommunityLearning() {
   const [candidateFilter, setCandidateFilter] = useState<"all" | "never_processed" | "failed">("all");
   const hasLoadedRef = useRef(false);
 
+  // Dismissals state
+  const [dismissalReports, setDismissalReports] = useState<any[]>([]);
+  const [consensusCandidates, setConsensusCandidates] = useState<any[]>([]);
+  const [consensusPatternCount, setConsensusPatternCount] = useState(0);
+  const [runningConsensus, setRunningConsensus] = useState(false);
+  const [consensusResults, setConsensusResults] = useState<any | null>(null);
+  const [selectedDismissals, setSelectedDismissals] = useState<Set<string>>(new Set());
+  const [deletingDismissals, setDeletingDismissals] = useState(false);
+  const [togglingPattern, setTogglingPattern] = useState<string | null>(null);
+
   const fetchAll = useCallback(async () => {
     if (!hasLoadedRef.current) setLoading(true);
     try {
-      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15] = await Promise.all([
+      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18] = await Promise.all([
         supabase.rpc("get_community_overview" as any),
         supabase.rpc("get_daily_pattern_activity" as any, { p_days: 30 }),
         supabase.rpc("get_top_domains" as any, { p_limit: 25 }),
@@ -144,6 +155,12 @@ export default function CommunityLearning() {
         supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("source", "ai_generated"),
         // AI token usage stats
         supabase.from("ai_generation_log").select("prompt_tokens, completion_tokens, status"),
+        // Dismissal reports
+        supabase.from("dismissal_reports").select("*").order("created_at", { ascending: false }).limit(200),
+        // Consensus candidates via RPC
+        supabase.rpc("find_dismissal_consensus" as any),
+        // Consensus pattern count
+        supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("source", "user_consensus"),
       ]);
       setOverview(r1.data as any);
       setActivity(r2.data as any ?? []);
@@ -166,6 +183,11 @@ export default function CommunityLearning() {
       const totalCompletion = allLogs.reduce((s: number, l: any) => s + (l.completion_tokens || 0), 0);
       const permFailedCount = allLogs.filter((l: any) => l.status === "permanently_failed").length;
       setAiTokenStats({ totalPrompt, totalCompletion, totalRuns: allLogs.length, permFailedCount });
+
+      // Dismissal data
+      setDismissalReports(r16.data as any[] ?? []);
+      setConsensusCandidates(r17.data as any[] ?? []);
+      setConsensusPatternCount(r18.count ?? 0);
     } catch (e) {
       console.error("Failed to fetch community data", e);
     } finally {
@@ -349,6 +371,72 @@ export default function CommunityLearning() {
   }, [fetchAll]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const handleRunConsensus = useCallback(async () => {
+    setRunningConsensus(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-dismissal-consensus`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      toast.success(`Consensus complete — Created: ${data.created ?? 0} patterns from ${data.processed ?? 0} candidates`);
+      setConsensusResults(data);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Consensus failed: ${e.message}`);
+    } finally {
+      setRunningConsensus(false);
+    }
+  }, [fetchAll]);
+
+  const handleTogglePatternActive = useCallback(async (patternId: string, currentActive: boolean) => {
+    setTogglingPattern(patternId);
+    try {
+      const { error } = await supabase
+        .from("cookie_patterns")
+        .update({ is_active: !currentActive } as any)
+        .eq("id", patternId);
+      if (error) throw error;
+      toast.success(`Pattern ${!currentActive ? "activated" : "deactivated"}`);
+      setRecent(prev => prev.map((r: any) => r.id === patternId ? { ...r, is_active: !currentActive } : r));
+    } catch (e: any) {
+      toast.error(`Toggle failed: ${e.message}`);
+    } finally {
+      setTogglingPattern(null);
+    }
+  }, []);
+
+  const handleDeleteDismissals = useCallback(async () => {
+    if (selectedDismissals.size === 0) return;
+    setDeletingDismissals(true);
+    try {
+      for (const id of selectedDismissals) {
+        await supabase.from("dismissal_reports").delete().eq("id", id);
+      }
+      toast.success(`Deleted ${selectedDismissals.size} dismissal report(s)`);
+      setSelectedDismissals(new Set());
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Delete failed: ${e.message}`);
+    } finally {
+      setDeletingDismissals(false);
+    }
+  }, [selectedDismissals, fetchAll]);
+
+  const dismissalsByDomain = useMemo(() => {
+    const map = new Map<string, { count: number; reports: any[] }>();
+    for (const r of dismissalReports) {
+      const existing = map.get(r.domain) ?? { count: 0, reports: [] };
+      existing.count++;
+      existing.reports.push(r);
+      map.set(r.domain, existing);
+    }
+    return map;
+  }, [dismissalReports]);
 
   // Build lookup sets for AI fixer cross-referencing
   const fixedPatterns = useMemo(() => new Set(fixLog.map((f: any) => `${f.domain}::${f.selector}`)), [fixLog]);
@@ -541,6 +629,24 @@ export default function CommunityLearning() {
             </div>
           </CardContent>
         </Card>
+        <Card className="border-t-2 border-purple-500/40">
+          <CardContent className="flex items-center gap-3 py-4">
+            <MousePointerClick className="h-5 w-5 text-purple-500" />
+            <div>
+              <p className="text-sm font-semibold tabular-nums">{dismissalReports.length}</p>
+              <p className="text-xs text-muted-foreground">Dismissal Reports<InfoTip text="User-reported banner dismissals awaiting consensus processing" /></p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-t-2 border-teal-500/40">
+          <CardContent className="flex items-center gap-3 py-4">
+            <Users className="h-5 w-5 text-teal-500" />
+            <div>
+              <p className="text-sm font-semibold tabular-nums">{consensusPatternCount}</p>
+              <p className="text-xs text-muted-foreground">Consensus Patterns<InfoTip text="Patterns created from user dismissal consensus" /></p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabs */}
@@ -551,6 +657,7 @@ export default function CommunityLearning() {
           <TabsTrigger value="recent" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Brain className="h-3.5 w-3.5" />Recent</TabsTrigger>
           <TabsTrigger value="ai-generator" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Sparkles className="h-3.5 w-3.5" />AI Pattern Generator</TabsTrigger>
           <TabsTrigger value="breakdown" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><BarChart3 className="h-3.5 w-3.5" />Breakdown</TabsTrigger>
+          <TabsTrigger value="dismissals" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><MousePointerClick className="h-3.5 w-3.5" />Dismissals{dismissalReports.length > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{dismissalReports.length}</Badge>}</TabsTrigger>
           <TabsTrigger value="user-reports" className="gap-1.5 rounded-md px-3 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Flag className="h-3.5 w-3.5" />Reports</TabsTrigger>
         </TabsList>
 
@@ -644,6 +751,7 @@ export default function CommunityLearning() {
                       <TableHead className="text-right">Confidence</TableHead>
                       <TableHead className="text-right">Reports</TableHead>
                       <TableHead>Source</TableHead>
+                      <TableHead className="text-center">Active<InfoTip text="Toggle to soft-disable a pattern without deleting it" /></TableHead>
                       <TableHead className="text-right">Discovered</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
@@ -651,9 +759,13 @@ export default function CommunityLearning() {
                   <TableBody>
                     {recent.map((r: any, i: number) => {
                       const isFixed = fixedPatterns.has(`${r.domain}::${r.selector}`);
+                      const isInactive = r.is_active === false;
                       return (
-                      <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
-                        <TableCell className="font-medium">{r.domain}</TableCell>
+                      <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""} ${isInactive ? "opacity-50" : ""}`}>
+                        <TableCell className="font-medium">
+                          {r.domain}
+                          {isInactive && <Badge variant="outline" className="ml-1.5 text-[10px] py-0 px-1.5 bg-muted text-muted-foreground border-muted-foreground/30">Inactive</Badge>}
+                        </TableCell>
                         <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.selector}</code></TableCell>
                         <TableCell>
                           <span className="inline-flex items-center gap-1">
@@ -666,6 +778,13 @@ export default function CommunityLearning() {
                         <TableCell className="text-right tabular-nums">{r.report_count}</TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-[10px]">{r.source}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch
+                            checked={r.is_active !== false}
+                            disabled={togglingPattern === r.id}
+                            onCheckedChange={() => handleTogglePatternActive(r.id, r.is_active !== false)}
+                          />
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
                         <TableCell>
@@ -1069,6 +1188,134 @@ export default function CommunityLearning() {
           </div>
         </TabsContent>
 
+        {/* Dismissals Tab */}
+        <TabsContent value="dismissals">
+          <div className="space-y-4">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-3 gap-4">
+              <Card className="border-t-2 border-purple-500/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold tabular-nums">{dismissalReports.length}</p>
+                  <p className="text-xs text-muted-foreground">Total Dismissal Reports</p>
+                </CardContent>
+              </Card>
+              <Card className="border-t-2 border-blue-500/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold text-blue-500 tabular-nums">{dismissalsByDomain.size}</p>
+                  <p className="text-xs text-muted-foreground">Unique Domains</p>
+                </CardContent>
+              </Card>
+              <Card className="border-t-2 border-teal-500/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold text-teal-500 tabular-nums">{consensusCandidates.length}</p>
+                  <p className="text-xs text-muted-foreground">Pending Consensus<InfoTip text="Domains with dismissal reports not yet converted to patterns" /></p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Consensus Results */}
+            {consensusResults && (
+              <Card className="border-teal-500/30 bg-teal-500/5">
+                <CardContent className="py-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle2 className="h-4 w-4 text-teal-500" />
+                    <p className="text-sm font-medium">Consensus Results — {consensusResults.created ?? 0} patterns created from {consensusResults.processed ?? 0} candidates</p>
+                  </div>
+                  {consensusResults.results?.length > 0 && (
+                    <div className="space-y-1">
+                      {consensusResults.results.map((r: any, i: number) => (
+                        <p key={i} className="text-xs text-muted-foreground">
+                          {r.error ? `❌ ${r.domain}: ${r.error}` : `✅ ${r.domain} → ${r.selector} (confidence: ${Math.round((r.confidence ?? 0) * 10)}%, ${r.reports} reports)`}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Actions Bar */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <div>
+                  <CardTitle className="text-lg">Dismissal Reports</CardTitle>
+                  <CardDescription>User-reported banner dismissals from the extension</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  {selectedDismissals.size > 0 && (
+                    <Button variant="outline" size="sm" className="gap-1.5 text-red-500 border-red-500/30 hover:bg-red-500/10" disabled={deletingDismissals} onClick={handleDeleteDismissals}>
+                      {deletingDismissals ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      Delete {selectedDismissals.size} selected
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={handleRunConsensus} disabled={runningConsensus || consensusCandidates.length === 0} className="gap-2">
+                    {runningConsensus ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    Run Consensus{consensusCandidates.length > 0 ? ` (${consensusCandidates.length})` : ""}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {dismissalReports.length === 0 ? (
+                  <EmptyState icon={CheckCircle2} title="No dismissal reports" description="No user-reported banner dismissals yet." />
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-8">
+                          <Checkbox
+                            checked={selectedDismissals.size === dismissalReports.length && dismissalReports.length > 0}
+                            onCheckedChange={() => {
+                              if (selectedDismissals.size === dismissalReports.length) {
+                                setSelectedDismissals(new Set());
+                              } else {
+                                setSelectedDismissals(new Set(dismissalReports.map((r: any) => r.id)));
+                              }
+                            }}
+                          />
+                        </TableHead>
+                        <TableHead>Domain</TableHead>
+                        <TableHead>Clicked Selector</TableHead>
+                        <TableHead>Banner Selector</TableHead>
+                        <TableHead className="text-right">Reported</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dismissalReports.map((r: any) => (
+                        <TableRow key={r.id} className="even:bg-muted/30">
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedDismissals.has(r.id)}
+                              onCheckedChange={() => {
+                                setSelectedDismissals(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(r.id)) next.delete(r.id); else next.add(r.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium flex items-center gap-2">
+                            <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                            {r.domain}
+                          </TableCell>
+                          <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.clicked_selector}</code></TableCell>
+                          <TableCell>
+                            {r.banner_selector ? (
+                              <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.banner_selector}</code>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
         {/* User Reports Tab */}
         <TabsContent value="user-reports">
