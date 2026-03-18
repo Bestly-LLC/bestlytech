@@ -20,8 +20,8 @@ const BRAND_COLORS = {
   codeBg: "#f1f5f9",
 };
 
-// Published logo — Vite-hashed asset served from the live site
-const LOGO_URL = "https://bestlytech.lovable.app/assets/bestly-logo.png";
+// Logo served from public storage bucket
+const LOGO_URL = "https://keowunrxpxlbgebujbao.supabase.co/storage/v1/object/public/email-assets/bestly-logo.png";
 
 function baseLayout(content: string, footerNote?: string): string {
   return `<!DOCTYPE html>
