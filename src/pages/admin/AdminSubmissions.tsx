@@ -36,6 +36,7 @@ export default function AdminSubmissions() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [platformFilter, setPlatformFilter] = useState("All");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
