@@ -135,6 +135,7 @@ export default function AdminDashboard() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="text-xs">Business Name</TableHead>
                   <TableHead className="text-xs">Contact</TableHead>
+                  <TableHead className="text-xs">Platform</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
                   <TableHead className="text-xs">Date</TableHead>
                 </TableRow>
