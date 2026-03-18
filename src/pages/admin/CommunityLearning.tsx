@@ -372,6 +372,72 @@ export default function CommunityLearning() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  const handleRunConsensus = useCallback(async () => {
+    setRunningConsensus(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-dismissal-consensus`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      toast.success(`Consensus complete — Created: ${data.created ?? 0} patterns from ${data.processed ?? 0} candidates`);
+      setConsensusResults(data);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Consensus failed: ${e.message}`);
+    } finally {
+      setRunningConsensus(false);
+    }
+  }, [fetchAll]);
+
+  const handleTogglePatternActive = useCallback(async (patternId: string, currentActive: boolean) => {
+    setTogglingPattern(patternId);
+    try {
+      const { error } = await supabase
+        .from("cookie_patterns")
+        .update({ is_active: !currentActive } as any)
+        .eq("id", patternId);
+      if (error) throw error;
+      toast.success(`Pattern ${!currentActive ? "activated" : "deactivated"}`);
+      setRecent(prev => prev.map((r: any) => r.id === patternId ? { ...r, is_active: !currentActive } : r));
+    } catch (e: any) {
+      toast.error(`Toggle failed: ${e.message}`);
+    } finally {
+      setTogglingPattern(null);
+    }
+  }, []);
+
+  const handleDeleteDismissals = useCallback(async () => {
+    if (selectedDismissals.size === 0) return;
+    setDeletingDismissals(true);
+    try {
+      for (const id of selectedDismissals) {
+        await supabase.from("dismissal_reports").delete().eq("id", id);
+      }
+      toast.success(`Deleted ${selectedDismissals.size} dismissal report(s)`);
+      setSelectedDismissals(new Set());
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Delete failed: ${e.message}`);
+    } finally {
+      setDeletingDismissals(false);
+    }
+  }, [selectedDismissals, fetchAll]);
+
+  const dismissalsByDomain = useMemo(() => {
+    const map = new Map<string, { count: number; reports: any[] }>();
+    for (const r of dismissalReports) {
+      const existing = map.get(r.domain) ?? { count: 0, reports: [] };
+      existing.count++;
+      existing.reports.push(r);
+      map.set(r.domain, existing);
+    }
+    return map;
+  }, [dismissalReports]);
+
   // Build lookup sets for AI fixer cross-referencing
   const fixedPatterns = useMemo(() => new Set(fixLog.map((f: any) => `${f.domain}::${f.selector}`)), [fixLog]);
   const fixedDomains = useMemo(() => new Set(fixLog.map((f: any) => f.domain)), [fixLog]);
