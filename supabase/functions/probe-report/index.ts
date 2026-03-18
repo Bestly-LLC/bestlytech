@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       });
 
       await supabase.from("cookie_patterns")
-        .update({ confidence: 0.6 })
+        .update({ confidence: 6 })
         .eq("domain", domain)
         .eq("selector", cmpMatch.selector);
 
@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
         status: "success_probe",
         selector_generated: cmpMatch.selector,
         action_type: cmpMatch.action,
-        confidence: 0.6,
+        confidence: 6,
         ai_model: `probe_cmp:${cmpMatch.name}`,
         html_source: `Probe found CMP: ${cmpMatch.name} via selector ${bestMatch.selector}`.substring(0, 500),
       });
@@ -122,7 +122,7 @@ RULES:
 1. Prefer reject/decline/necessary-only buttons
 2. If no reject, use close/dismiss
 3. If only accept, use it with lower confidence
-4. Output a specific CSS selector that would work on this page`;
+4. Output a specific CSS selector that would work on this page. Confidence is on a 1-10 scale.`;
 
     const userPrompt = `Domain: ${domain}
 Banner found at selector: ${bestMatch.selector}
@@ -153,7 +153,7 @@ ${bestMatch.html.substring(0, 8000)}`;
                 is_cookie_banner: { type: "boolean" },
                 selector: { type: "string", description: "CSS selector for reject/dismiss button" },
                 action: { type: "string", enum: ["click", "hide"] },
-                confidence: { type: "number" },
+                confidence: { type: "number", description: "Confidence score 1-10" },
               },
               required: ["is_cookie_banner"],
               additionalProperties: false,
@@ -188,7 +188,7 @@ ${bestMatch.html.substring(0, 8000)}`;
 
     if (parsed.is_cookie_banner && parsed.selector) {
       const action = parsed.action === "hide" ? "close" : "reject";
-      const confidence = Math.min(Number(parsed.confidence) || 0.5, 0.6);
+      const confidence = Math.min(Math.round(Number(parsed.confidence)) || 5, 6);
 
       await supabase.rpc("upsert_pattern", {
         _domain: domain,

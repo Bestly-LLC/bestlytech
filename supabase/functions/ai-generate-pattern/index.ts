@@ -319,7 +319,7 @@ Deno.serve(async (req) => {
             cmp: extensionCMP.name,
             selector: extensionCMP.selector,
             action: extensionCMP.action,
-            confidence: 0.55,
+            confidence: 6,
             note: "CMP detected in extension HTML (Layer 1)",
           });
           continue;
@@ -361,7 +361,7 @@ Deno.serve(async (req) => {
               cmp: serverCMP.name,
               selector: serverCMP.selector,
               action: serverCMP.action,
-              confidence: 0.55,
+              confidence: 6,
               note: "CMP detected in server HTML (Layer 3a)",
             });
             continue;
@@ -542,7 +542,7 @@ ${html}`;
                   },
                   confidence: {
                     type: "number",
-                    description: "Confidence score 0-1. Only set if is_cookie_banner is true.",
+                    description: "Confidence score 1-10. Only set if is_cookie_banner is true.",
                   },
                 },
                 required: ["is_cookie_banner"],
@@ -602,7 +602,7 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
 
   await supabase
     .from("cookie_patterns")
-    .update({ confidence: 0.55 })
+    .update({ confidence: 6 })
     .eq("domain", candidate.domain)
     .eq("selector", cmp.selector);
 
@@ -611,7 +611,7 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
     status: "success_cmp_fallback",
     selector_generated: cmp.selector,
     action_type: cmp.action,
-    confidence: 0.55,
+    confidence: 6,
     ai_model: `cmp_detection:${cmp.name}`,
     html_source: `CMP detected: ${cmp.name} (signatures: ${cmp.signatures.join(", ")})`.substring(0, 500),
   });
@@ -625,8 +625,8 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
 async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, status: string, htmlOverride?: string) {
   const selector = aiResult.selector!;
   const action = aiResult.action === "hide" ? "close" : "reject";
-  const rawConfidence = Number(aiResult.confidence) || 0.5;
-  const confidence = Math.min(rawConfidence, 0.6);
+  const rawConfidence = Number(aiResult.confidence) || 5;
+  const confidence = Math.min(Math.round(rawConfidence), 6);
 
   const { error: upsertErr } = await supabase.rpc("upsert_pattern", {
     _domain: candidate.domain,
