@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { alertEmail } from "../_shared/email-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -523,11 +525,83 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ========== HEALTH ALERT: Email if batch has issues ==========
+    const failureRate = processed > 0 ? failed / processed : 0;
+    const shouldAlert = (failureRate > 0.5 && processed >= 2) || (processed >= 3 && generated === 0);
+
+    if (shouldAlert) {
+      try {
+        const smtpEmail = Deno.env.get("PRIVATEMAIL_EMAIL");
+        const smtpPassword = Deno.env.get("PRIVATEMAIL_PASSWORD");
+        if (smtpEmail && smtpPassword) {
+          const failedItems = results
+            .filter((r: any) => r.status === "error" || r.status === "needs_manual_review" || r.status === "permanently_failed")
+            .map((r: any) => ({ label: r.domain, detail: r.error || r.status }));
+
+          const severity = generated === 0 ? "danger" : "warning";
+          const html = alertEmail({
+            title: "AI Generation Health Alert",
+            severity,
+            summary: generated === 0
+              ? `The AI pattern generator processed <strong>${processed} candidate(s)</strong> but generated <strong>zero</strong> successful patterns.`
+              : `The AI pattern generator had a <strong>${Math.round(failureRate * 100)}% failure rate</strong> (${failed}/${processed} candidates failed).`,
+            stats: [
+              { label: "Processed", value: processed },
+              { label: "Generated", value: generated },
+              { label: "Failed", value: failed },
+              { label: "Skipped", value: skipped },
+            ],
+            items: failedItems.length > 0 ? failedItems : undefined,
+            timestamp: new Date().toISOString(),
+          });
+
+          const client = new SMTPClient({
+            connection: { hostname: "mail.privateemail.com", port: 465, tls: true, auth: { username: smtpEmail, password: smtpPassword } },
+          });
+          try {
+            await client.send({ from: smtpEmail, to: "jaredbest@icloud.com", subject: "Cookie Yeti: AI Generation Health Alert", html });
+            console.log("Health alert email sent");
+          } finally {
+            await client.close();
+          }
+        }
+      } catch (emailErr: any) {
+        console.error("Failed to send health alert email:", emailErr.message);
+      }
+    }
+
     return new Response(
-      JSON.stringify({ processed, generated, skipped, failed, results }),
+      JSON.stringify({ processed, generated, skipped, failed, results, alert_sent: shouldAlert }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {
+    // Critical error — send alert for unexpected failures
+    try {
+      const smtpEmail = Deno.env.get("PRIVATEMAIL_EMAIL");
+      const smtpPassword = Deno.env.get("PRIVATEMAIL_PASSWORD");
+      if (smtpEmail && smtpPassword) {
+        const html = alertEmail({
+          title: "AI Generation Critical Error",
+          severity: "danger",
+          summary: `The AI pattern generator encountered an <strong>unhandled error</strong> and could not complete its batch.`,
+          stats: [
+            { label: "Processed Before Crash", value: processed },
+            { label: "Generated Before Crash", value: generated },
+          ],
+          items: [{ label: "Error", detail: err.message || "Unknown error" }],
+          timestamp: new Date().toISOString(),
+        });
+        const client = new SMTPClient({
+          connection: { hostname: "mail.privateemail.com", port: 465, tls: true, auth: { username: smtpEmail, password: smtpPassword } },
+        });
+        try {
+          await client.send({ from: smtpEmail, to: "jaredbest@icloud.com", subject: "Cookie Yeti: AI Generation CRITICAL ERROR", html });
+        } finally {
+          await client.close();
+        }
+      }
+    } catch { /* don't let email failure mask the real error */ }
+
     return new Response(
       JSON.stringify({ error: err.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
