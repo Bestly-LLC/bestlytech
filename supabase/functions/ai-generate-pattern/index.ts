@@ -611,7 +611,7 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
     status: "success_cmp_fallback",
     selector_generated: cmp.selector,
     action_type: cmp.action,
-    confidence: 0.55,
+    confidence: 6,
     ai_model: `cmp_detection:${cmp.name}`,
     html_source: `CMP detected: ${cmp.name} (signatures: ${cmp.signatures.join(", ")})`.substring(0, 500),
   });
