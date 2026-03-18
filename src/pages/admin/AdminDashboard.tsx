@@ -166,7 +166,7 @@ export default function AdminDashboard() {
                 ))}
                 {recent.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="p-0">
+                    <TableCell colSpan={5} className="p-0">
                       <EmptyState icon={FileText} title="No submissions yet" description="Intake submissions will appear here once clients submit their information." />
                     </TableCell>
                   </TableRow>
