@@ -566,10 +566,10 @@ export default function CommunityLearning() {
                       <TableRow>
                         <TableHead>Domain</TableHead>
                         <TableHead className="text-right">Reports</TableHead>
-                        <TableHead>Has HTML</TableHead>
-                        <TableHead>CMP Type</TableHead>
-                        <TableHead className="text-right">Last Reported</TableHead>
-                        <TableHead className="text-right">AI Attempts</TableHead>
+                         <TableHead>Has HTML<InfoTip text="Whether we captured the banner's HTML. Reports WITH HTML produce much better AI-generated patterns" /></TableHead>
+                         <TableHead>CMP Type<InfoTip text="Consent Management Platform detected (OneTrust, Cookiebot, etc.)" /></TableHead>
+                         <TableHead className="text-right">Last Reported</TableHead>
+                         <TableHead className="text-right">AI Attempts<InfoTip text="Number of times AI tried to generate a pattern. Max 3 attempts" /></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
