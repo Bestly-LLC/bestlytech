@@ -17,6 +17,7 @@ import { ExportButton } from "@/components/admin/ExportButton";
 import { useToast } from "@/hooks/use-toast";
 
 const STATUSES = ["All", "Draft", "Submitted", "In Review", "Issues Flagged", "Approved"];
+const PLATFORMS = ["All", "Amazon", "Shopify", "TikTok"];
 const PAGE_SIZE = 20;
 
 const EXPORT_COLUMNS = [
@@ -35,6 +36,7 @@ export default function AdminSubmissions() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [platformFilter, setPlatformFilter] = useState("All");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
@@ -54,6 +56,10 @@ export default function AdminSubmissions() {
 
   const filtered = data.filter((r) => {
     if (statusFilter !== "All" && r.status !== statusFilter) return false;
+    if (platformFilter !== "All") {
+      const platforms = r.selected_platforms?.length ? r.selected_platforms : [r.platform];
+      if (!platforms.some((p: string) => p.toLowerCase().includes(platformFilter.toLowerCase()))) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -124,6 +130,16 @@ export default function AdminSubmissions() {
           <SelectContent>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={platformFilter} onValueChange={(v) => { setPlatformFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Platform" />
+          </SelectTrigger>
+          <SelectContent>
+            {PLATFORMS.map((p) => (
+              <SelectItem key={p} value={p}>{p === "All" ? "All Platforms" : p}</SelectItem>
             ))}
           </SelectContent>
         </Select>

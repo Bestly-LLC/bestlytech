@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Clock, AlertTriangle, CheckCircle, ArrowRight, Mail, Briefcase, Snowflake, Users } from "lucide-react";
+import { FileText, Clock, AlertTriangle, CheckCircle, ArrowRight, Mail, Briefcase, Snowflake, Users, ShoppingBag, Store, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
@@ -65,11 +65,15 @@ export default function AdminDashboard() {
   const stats = useMemo(() => {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 86400000);
+    const getPlatforms = (r: any): string[] => r.selected_platforms?.length ? r.selected_platforms : [r.platform];
     return {
       total: filtered.length,
       thisWeek: filtered.filter((r) => new Date(r.created_at!) > weekAgo).length,
       needsReview: filtered.filter((r) => r.status === "Submitted" || r.status === "In Review").length,
       approved: filtered.filter((r) => r.status === "Approved").length,
+      amazon: filtered.filter((r) => getPlatforms(r).some((p: string) => p.toLowerCase().includes("amazon"))).length,
+      shopify: filtered.filter((r) => getPlatforms(r).some((p: string) => p.toLowerCase().includes("shopify"))).length,
+      tiktok: filtered.filter((r) => getPlatforms(r).some((p: string) => p.toLowerCase().includes("tiktok"))).length,
     };
   }, [filtered]);
 
@@ -78,8 +82,11 @@ export default function AdminDashboard() {
   const statCards = [
     { label: "Intake Submissions", value: stats.total, icon: FileText, iconColor: "text-primary", iconBg: "bg-primary/10", accentColor: "border-primary/40" },
     { label: "Needs Review", value: stats.needsReview, icon: AlertTriangle, iconColor: "text-yellow-500", iconBg: "bg-yellow-500/10", accentColor: "border-yellow-500/40" },
+    { label: "Amazon", value: stats.amazon, icon: ShoppingBag, iconColor: "text-amber-600", iconBg: "bg-amber-600/10", accentColor: "border-amber-600/40" },
+    { label: "Shopify", value: stats.shopify, icon: Store, iconColor: "text-emerald-600", iconBg: "bg-emerald-600/10", accentColor: "border-emerald-600/40" },
+    { label: "TikTok", value: stats.tiktok, icon: Video, iconColor: "text-pink-500", iconBg: "bg-pink-500/10", accentColor: "border-pink-500/40" },
     { label: "New Contacts", value: contactCount, icon: Mail, iconColor: "text-blue-500", iconBg: "bg-blue-500/10", accentColor: "border-blue-500/40" },
-    { label: "New Hire Requests", value: hireCount, icon: Briefcase, iconColor: "text-orange-500", iconBg: "bg-orange-500/10", accentColor: "border-orange-500/40" },
+    { label: "Hire Requests", value: hireCount, icon: Briefcase, iconColor: "text-orange-500", iconBg: "bg-orange-500/10", accentColor: "border-orange-500/40" },
     { label: "CY Subscribers", value: cySubCount, icon: Snowflake, iconColor: "text-cyan-500", iconBg: "bg-cyan-500/10", accentColor: "border-cyan-500/40" },
     { label: "Waitlist", value: waitlistCount, icon: Users, iconColor: "text-green-500", iconBg: "bg-green-500/10", accentColor: "border-green-500/40" },
   ];
@@ -128,6 +135,7 @@ export default function AdminDashboard() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="text-xs">Business Name</TableHead>
                   <TableHead className="text-xs">Contact</TableHead>
+                  <TableHead className="text-xs">Platform</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
                   <TableHead className="text-xs">Date</TableHead>
                 </TableRow>
@@ -142,6 +150,13 @@ export default function AdminDashboard() {
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{r.client_name || "—"}</TableCell>
                     <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
+                          <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       <Badge variant={statusColor[r.status] as any} className="text-xs">{r.status}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
@@ -151,7 +166,7 @@ export default function AdminDashboard() {
                 ))}
                 {recent.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="p-0">
+                    <TableCell colSpan={5} className="p-0">
                       <EmptyState icon={FileText} title="No submissions yet" description="Intake submissions will appear here once clients submit their information." />
                     </TableCell>
                   </TableRow>
