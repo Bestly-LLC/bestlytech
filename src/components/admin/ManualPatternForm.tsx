@@ -149,8 +149,8 @@ export function ManualPatternForm({ onSuccess }: ManualPatternFormProps) {
           )}
 
           <div className="space-y-1.5">
-            <Label>Confidence: {confidence[0].toFixed(2)}</Label>
-            <Slider value={confidence} onValueChange={setConfidence} min={0} max={1} step={0.05} className="mt-2" />
+            <Label>Confidence: {confidence[0]}/10</Label>
+            <Slider value={confidence} onValueChange={setConfidence} min={1} max={10} step={1} className="mt-2" />
           </div>
 
           <Button type="submit" disabled={saving} className="w-full">

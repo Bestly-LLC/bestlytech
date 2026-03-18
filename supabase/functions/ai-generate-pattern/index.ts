@@ -361,7 +361,7 @@ Deno.serve(async (req) => {
               cmp: serverCMP.name,
               selector: serverCMP.selector,
               action: serverCMP.action,
-              confidence: 0.55,
+              confidence: 6,
               note: "CMP detected in server HTML (Layer 3a)",
             });
             continue;

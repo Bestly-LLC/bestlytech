@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
         });
 
         // Set confidence based on report count
-        const confidence = Math.min(0.5 + (entry.report_count * 0.05), 0.85);
+        const confidence = Math.min(5 + entry.report_count, 9);
         await supabase.from("cookie_patterns")
           .update({ confidence })
           .eq("domain", entry.domain)
