@@ -834,7 +834,7 @@ export default function CommunityLearning() {
                         <TableCell className="font-medium">{c.cmp_fingerprint}</TableCell>
                         <TableCell className="text-right tabular-nums">{c.pattern_count}</TableCell>
                         <TableCell className="text-right tabular-nums">{c.domain_count}</TableCell>
-                        <TableCell className="text-right tabular-nums">{c.avg_confidence}</TableCell>
+                        <TableCell className="text-right tabular-nums">{Math.round(c.avg_confidence * 10)}%</TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${rateColor(c.success_rate)}`}>{c.success_rate}%</TableCell>
                       </TableRow>
                     ))}
