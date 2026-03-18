@@ -125,6 +125,16 @@ export default function CommunityLearning() {
   const [candidateFilter, setCandidateFilter] = useState<"all" | "never_processed" | "failed">("all");
   const hasLoadedRef = useRef(false);
 
+  // Dismissals state
+  const [dismissalReports, setDismissalReports] = useState<any[]>([]);
+  const [consensusCandidates, setConsensusCandidates] = useState<any[]>([]);
+  const [consensusPatternCount, setConsensusPatternCount] = useState(0);
+  const [runningConsensus, setRunningConsensus] = useState(false);
+  const [consensusResults, setConsensusResults] = useState<any | null>(null);
+  const [selectedDismissals, setSelectedDismissals] = useState<Set<string>>(new Set());
+  const [deletingDismissals, setDeletingDismissals] = useState(false);
+  const [togglingPattern, setTogglingPattern] = useState<string | null>(null);
+
   const fetchAll = useCallback(async () => {
     if (!hasLoadedRef.current) setLoading(true);
     try {
