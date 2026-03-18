@@ -29,8 +29,9 @@ import { Badge } from "@/components/ui/badge";
 
 type CountKeys = "submissions" | "contacts" | "hires" | "cySubscribers";
 
+const dashboardItem = { title: "Dashboard", url: "/admin", icon: LayoutDashboard };
+
 const amazonItems = [
-  { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
   { title: "Submissions", url: "/admin/submissions", icon: FileText, countKey: "submissions" as CountKeys },
   { title: "Setup Guide", url: "/admin/guide", icon: BookOpen },
 ];
@@ -112,6 +113,12 @@ export function AdminSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent className="pt-2">
+
+        <SidebarMenu className="px-2">
+          {renderItem(dashboardItem)}
+        </SidebarMenu>
+
+        <div className="mx-3 my-2 h-px bg-border/50" />
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3">
