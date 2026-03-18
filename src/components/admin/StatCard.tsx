@@ -59,15 +59,15 @@ export function StatCard({
 
   return (
     <Card className={`border-t-2 ${accentColor} hover:-translate-y-0.5 transition-transform duration-200`}>
-      <CardContent className="pt-6">
+      <CardContent className="pt-4 sm:pt-6 pb-4 sm:pb-6">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{labelWithTip}</p>
-            <p className="text-3xl font-bold text-foreground mt-1 tabular-nums">{value}</p>
-            {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide truncate">{labelWithTip}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-foreground mt-0.5 sm:mt-1 tabular-nums">{value}</p>
+            {subtitle && <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
           </div>
-          <div className={`h-10 w-10 rounded-xl ${iconBg} flex items-center justify-center`}>
-            <Icon className={`h-5 w-5 ${iconColor}`} />
+          <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}>
+            <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${iconColor}`} />
           </div>
         </div>
       </CardContent>

@@ -124,7 +124,7 @@ export default function AdminSubmissions() {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -134,7 +134,7 @@ export default function AdminSubmissions() {
           </SelectContent>
         </Select>
         <Select value={platformFilter} onValueChange={(v) => { setPlatformFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue placeholder="Platform" />
           </SelectTrigger>
           <SelectContent>
@@ -146,9 +146,9 @@ export default function AdminSubmissions() {
       </div>
 
       {selected.size > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 sm:px-4 py-2">
           <span className="text-sm font-medium">{selected.size} selected</span>
-          <span className="text-muted-foreground">·</span>
+          <span className="text-muted-foreground hidden sm:inline">·</span>
           {["Submitted", "In Review", "Issues Flagged", "Approved"].map((status) => (
             <Button key={status} variant="outline" size="sm" className="text-xs h-7" onClick={() => bulkUpdateStatus(status)}>
               Mark {status}
@@ -162,67 +162,96 @@ export default function AdminSubmissions() {
 
       <Card className="border-border/50">
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={selected.size === paged.length && paged.length > 0}
-                    onCheckedChange={(checked) => {
-                      setSelected(checked ? new Set(paged.map((r) => r.id)) : new Set());
-                    }}
-                  />
-                </TableHead>
-                <TableHead className="text-xs">Business Name</TableHead>
-                <TableHead className="text-xs">Contact</TableHead>
-                <TableHead className="text-xs">Email</TableHead>
-                <TableHead className="text-xs">Platform</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Submitted</TableHead>
-                <TableHead className="text-xs">Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paged.map((r) => (
-                <TableRow key={r.id} className="even:bg-muted/30">
-                  <TableCell>
-                    <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} />
-                  </TableCell>
-                  <TableCell>
-                    <Link to={`/admin/submissions/${r.id}`} className="text-primary hover:underline font-medium text-sm">
-                      {r.business_legal_name || "Unnamed"}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-sm">{r.client_name || "—"}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{r.client_email || "—"}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {(r.selected_platforms && r.selected_platforms.length > 0
-                        ? r.selected_platforms
-                        : [r.platform]
-                      ).map((p: string) => (
-                        <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell><Badge className="text-xs">{r.status}</Badge></TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {r.updated_at ? new Date(r.updated_at).toLocaleDateString() : "—"}
-                  </TableCell>
+          {/* Desktop table */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={selected.size === paged.length && paged.length > 0}
+                      onCheckedChange={(checked) => {
+                        setSelected(checked ? new Set(paged.map((r) => r.id)) : new Set());
+                      }}
+                    />
+                  </TableHead>
+                  <TableHead className="text-xs">Business Name</TableHead>
+                  <TableHead className="text-xs">Contact</TableHead>
+                  <TableHead className="text-xs">Email</TableHead>
+                  <TableHead className="text-xs">Platform</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Submitted</TableHead>
+                  <TableHead className="text-xs">Updated</TableHead>
                 </TableRow>
-              ))}
-              {paged.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="p-0">
-                    <EmptyState icon={FileText} title="No submissions found" description="Try adjusting your search or filter criteria." />
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {paged.map((r) => (
+                  <TableRow key={r.id} className="even:bg-muted/30">
+                    <TableCell>
+                      <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} />
+                    </TableCell>
+                    <TableCell>
+                      <Link to={`/admin/submissions/${r.id}`} className="text-primary hover:underline font-medium text-sm">
+                        {r.business_legal_name || "Unnamed"}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-sm">{r.client_name || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{r.client_email || "—"}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {(r.selected_platforms && r.selected_platforms.length > 0
+                          ? r.selected_platforms
+                          : [r.platform]
+                        ).map((p: string) => (
+                          <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell><Badge className="text-xs">{r.status}</Badge></TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {r.updated_at ? new Date(r.updated_at).toLocaleDateString() : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {paged.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="p-0">
+                      <EmptyState icon={FileText} title="No submissions found" description="Try adjusting your search or filter criteria." />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          {/* Mobile cards */}
+          <div className="md:hidden divide-y divide-border">
+            {paged.map((r) => (
+              <div key={r.id} className="p-3 flex gap-3 items-start">
+                <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} className="mt-0.5" />
+                <Link to={`/admin/submissions/${r.id}`} className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium text-primary truncate">{r.business_legal_name || "Unnamed"}</p>
+                    <Badge className="text-[10px] shrink-0">{r.status}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{r.client_name || "—"} · {r.client_email || ""}</p>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
+                      <Badge key={p} variant="outline" className="text-[10px] px-1.5 py-0">{p}</Badge>
+                    ))}
+                    <span className="text-[10px] text-muted-foreground ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}</span>
+                  </div>
+                </Link>
+              </div>
+            ))}
+            {paged.length === 0 && (
+              <div className="p-4">
+                <EmptyState icon={FileText} title="No submissions found" description="Try adjusting your search or filter criteria." />
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

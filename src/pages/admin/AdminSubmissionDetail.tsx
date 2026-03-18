@@ -16,7 +16,7 @@ const STATUSES = ["Draft", "Submitted", "In Review", "Issues Flagged", "Approved
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-1 py-1.5">
-      <span className="text-sm font-medium text-muted-foreground w-48 shrink-0">{label}</span>
+      <span className="text-sm font-medium text-muted-foreground w-36 sm:w-48 shrink-0">{label}</span>
       <span className="text-sm text-foreground">{value || "—"}</span>
     </div>
   );
@@ -165,9 +165,9 @@ export default function AdminSubmissionDetail() {
               ))}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
