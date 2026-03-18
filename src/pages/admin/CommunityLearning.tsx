@@ -101,6 +101,7 @@ export default function CommunityLearning() {
   const [unresolvedReports, setUnresolvedReports] = useState<any[]>([]);
   const [runningGenerator, setRunningGenerator] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
+  const [rerunningDomain, setRerunningDomain] = useState<string | null>(null);
   const [genResultsOpen, setGenResultsOpen] = useState(false);
   const [genResults, setGenResults] = useState<any | null>(null);
   const [candidates, setCandidates] = useState<any[]>([]);
