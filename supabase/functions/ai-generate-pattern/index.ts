@@ -349,7 +349,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ========== ALL PATHS FAILED → needs_manual_review ==========
+        // ========== ALL PATHS FAILED → check retry limit ==========
         const diagnostics = [
           `Extension HTML: AI rejected (${reason})`,
           `Server fetch: ${serverFetchSuccess ? "OK" : "FAILED"}`,
@@ -357,10 +357,14 @@ Deno.serve(async (req) => {
           serverFetchSuccess ? `Server AI: ${serverHtml ? "no cookie elements or AI rejected" : "N/A"}` : null,
         ].filter(Boolean).join("; ");
 
+        // After 5 attempts total, mark as permanently_failed (auto-retry will stop)
+        const currentAttempts = candidate.ai_attempts ?? 0;
+        const failStatus = currentAttempts >= 4 ? "permanently_failed" : "needs_manual_review";
+
         await supabase.from("ai_generation_log").insert({
           domain: candidate.domain,
-          status: "needs_manual_review",
-          error_message: diagnostics.substring(0, 500),
+          status: failStatus,
+          error_message: `${diagnostics}${failStatus === "permanently_failed" ? ` [Exhausted ${currentAttempts + 1} attempts]` : ""}`.substring(0, 500),
           ai_model: AI_MODEL_LABEL,
           prompt_tokens: aiResult.usage?.prompt_tokens ?? null,
           completion_tokens: aiResult.usage?.completion_tokens ?? null,
