@@ -29,8 +29,9 @@ import { Badge } from "@/components/ui/badge";
 
 type CountKeys = "submissions" | "contacts" | "hires" | "cySubscribers";
 
+const dashboardItem = { title: "Dashboard", url: "/admin", icon: LayoutDashboard };
+
 const amazonItems = [
-  { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
   { title: "Submissions", url: "/admin/submissions", icon: FileText, countKey: "submissions" as CountKeys },
   { title: "Setup Guide", url: "/admin/guide", icon: BookOpen },
 ];
