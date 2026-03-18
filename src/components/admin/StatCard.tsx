@@ -62,7 +62,7 @@ export function StatCard({
       <CardContent className="pt-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{labelWithTip}</p>
             <p className="text-3xl font-bold text-foreground mt-1 tabular-nums">{value}</p>
             {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
           </div>
