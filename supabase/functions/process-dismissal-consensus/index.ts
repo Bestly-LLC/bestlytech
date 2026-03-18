@@ -35,11 +35,24 @@ Deno.serve(async (req) => {
 
     for (const entry of entries) {
       try {
+        // Infer action_type from the clicked_selector text
+        const selectorLower = (entry.clicked_selector || "").toLowerCase();
+        let inferredAction = "reject"; // default
+        if (/accept|agree|allow|got-it|gotit|ok-button/i.test(selectorLower)) {
+          inferredAction = "accept";
+        } else if (/close|dismiss|x-button|btn-close/i.test(selectorLower)) {
+          inferredAction = "close";
+        } else if (/necessary|essential|required-only/i.test(selectorLower)) {
+          inferredAction = "necessary";
+        } else if (/save|confirm|preferences/i.test(selectorLower)) {
+          inferredAction = "save";
+        }
+
         // Insert pattern from consensus
         await supabase.rpc("upsert_pattern", {
           _domain: entry.domain,
           _selector: entry.clicked_selector,
-          _action_type: "reject", // User dismissed = reject intent
+          _action_type: inferredAction,
           _cmp_fingerprint: "generic",
           _source: "user_consensus",
         });
@@ -56,10 +69,10 @@ Deno.serve(async (req) => {
           domain: entry.domain,
           status: "success_consensus",
           selector_generated: entry.clicked_selector,
-          action_type: "reject",
+          action_type: inferredAction,
           confidence,
           ai_model: "user_consensus",
-          html_source: `Consensus from ${entry.report_count} user dismissals. Banner: ${entry.banner_selector || "unknown"}`.substring(0, 500),
+          html_source: `Consensus from ${entry.report_count} user dismissals. Banner: ${entry.banner_selector || "unknown"}. Inferred action: ${inferredAction}`.substring(0, 500),
         });
 
         // Mark missed_banner_reports as resolved
@@ -74,7 +87,7 @@ Deno.serve(async (req) => {
           .eq("domain", entry.domain);
 
         created++;
-        results.push({ domain: entry.domain, selector: entry.clicked_selector, confidence, reports: entry.report_count });
+        results.push({ domain: entry.domain, selector: entry.clicked_selector, action_type: inferredAction, confidence, reports: entry.report_count });
       } catch (err: any) {
         results.push({ domain: entry.domain, error: err.message });
       }
