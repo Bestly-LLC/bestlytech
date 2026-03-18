@@ -168,6 +168,7 @@ export type Database = {
           report_count: number
           selector: string
           source: string
+          strategy: string | null
           success_count: number
           updated_at: string
         }
@@ -183,6 +184,7 @@ export type Database = {
           report_count?: number
           selector: string
           source?: string
+          strategy?: string | null
           success_count?: number
           updated_at?: string
         }
@@ -198,6 +200,7 @@ export type Database = {
           report_count?: number
           selector?: string
           source?: string
+          strategy?: string | null
           success_count?: number
           updated_at?: string
         }
