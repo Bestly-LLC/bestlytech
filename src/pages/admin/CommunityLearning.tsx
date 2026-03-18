@@ -274,11 +274,11 @@ export default function CommunityLearning() {
 
       {/* Overview Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard label="Total Patterns" value={o.total_patterns} icon={Layers} iconColor="text-primary" iconBg="bg-primary/10" accentColor="border-primary/40" subtitle={`${o.patterns_last_7d} active last 7 days`} />
-        <StatCard label="Domains Covered" value={o.total_domains} icon={Globe} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="border-green-500/40" subtitle={`${o.new_domains_last_7d} new this week`} />
-        <StatCard label="Success Rate" value={`${o.overall_success_rate}%`} icon={Target} iconColor="text-blue-500" iconBg="bg-blue-500/10" accentColor="border-blue-500/40" subtitle={`${Number(o.total_successes).toLocaleString()} / ${Number(o.total_reports).toLocaleString()}`} />
-        <StatCard label="Avg Confidence" value={o.avg_confidence ?? "—"} icon={TrendingUp} iconColor="text-purple-500" iconBg="bg-purple-500/10" accentColor="border-purple-500/40" subtitle={`${o.high_confidence} high / ${o.low_confidence} low`} />
-        <StatCard label="AI Generated" value={aiGeneratedCount} icon={Sparkles} iconColor="text-amber-500" iconBg="bg-amber-500/10" accentColor="border-amber-500/40" subtitle="Patterns from AI" />
+        <StatCard label="Total Patterns" value={o.total_patterns} icon={Layers} iconColor="text-primary" iconBg="bg-primary/10" accentColor="border-primary/40" subtitle={`${o.patterns_last_7d} active last 7 days`} tooltip="Cookie banner CSS selectors learned by the community network" />
+        <StatCard label="Domains Covered" value={o.total_domains} icon={Globe} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="border-green-500/40" subtitle={`${o.new_domains_last_7d} new this week`} tooltip="Unique websites where Cookie Yeti has learned patterns" />
+        <StatCard label="Success Rate" value={`${o.overall_success_rate}%`} icon={Target} iconColor="text-blue-500" iconBg="bg-blue-500/10" accentColor="border-blue-500/40" subtitle={`${Number(o.total_successes).toLocaleString()} / ${Number(o.total_reports).toLocaleString()}`} tooltip="Percentage of pattern matches that successfully dismissed a banner. Calculated from success_count / report_count across all patterns" />
+        <StatCard label="Avg Confidence" value={o.avg_confidence ?? "—"} icon={TrendingUp} iconColor="text-purple-500" iconBg="bg-purple-500/10" accentColor="border-purple-500/40" subtitle={`${o.high_confidence} high / ${o.low_confidence} low`} tooltip="Mean confidence score (0-1) across all active patterns. Higher = more reliable. Based on success rate and report volume" />
+        <StatCard label="AI Generated" value={aiGeneratedCount} icon={Sparkles} iconColor="text-amber-500" iconBg="bg-amber-500/10" accentColor="border-amber-500/40" subtitle="Patterns from AI" tooltip="Patterns created by AI analysis of reported banner HTML" />
       </div>
 
       {/* Health Indicators */}
