@@ -741,16 +741,28 @@ export default function CommunityLearning() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Domain</TableHead>
-                     <TableHead className="text-right">Patterns<InfoTip text="Number of CSS selectors learned for this domain" /></TableHead>
-                     <TableHead className="text-right">Reports<InfoTip text="Times users encountered banners on this domain" /></TableHead>
-                     <TableHead className="text-right">Success Rate<InfoTip text="How often patterns successfully dismiss banners here" /></TableHead>
-                     <TableHead>Confidence<InfoTip text="Reliability score 1-100%, based on success rate and volume" /></TableHead>
-                     <TableHead className="text-right">Last Active<InfoTip text="When a pattern last matched a banner on this domain" /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("domain")}>
+                      <span className="inline-flex items-center">Domain<SortIcon sortKey="domain" /></span>
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("pattern_count")}>
+                      <span className="inline-flex items-center justify-end">Patterns<InfoTip text="Number of CSS selectors learned for this domain" /><SortIcon sortKey="pattern_count" /></span>
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("total_reports")}>
+                      <span className="inline-flex items-center justify-end">Reports<InfoTip text="Times users encountered banners on this domain" /><SortIcon sortKey="total_reports" /></span>
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("success_rate")}>
+                      <span className="inline-flex items-center justify-end">Success Rate<InfoTip text="How often patterns successfully dismiss banners here" /><SortIcon sortKey="success_rate" /></span>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("avg_confidence")}>
+                      <span className="inline-flex items-center">Confidence<InfoTip text="Reliability score 1-100%, based on success rate and volume" /><SortIcon sortKey="avg_confidence" /></span>
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("last_active")}>
+                      <span className="inline-flex items-center justify-end">Last Active<InfoTip text="When a pattern last matched a banner on this domain" /><SortIcon sortKey="last_active" /></span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {domains.map((d: any, i: number) => {
+                  {sortedDomains.map((d: any, i: number) => {
                     const isFixed = fixedDomains.has(d.domain);
                     return (
                     <TableRow key={i} className={`even:bg-muted/30 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
