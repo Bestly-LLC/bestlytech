@@ -1,107 +1,57 @@
 
 
-# Make Pattern Generation Fully Autonomous
+## Integrate Apple-Native Business Modernization Program
 
-## Scope Clarification
+Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
 
-This plan covers the **server-side infrastructure** (edge functions, database tables, cron jobs, admin UI). The **extension-side changes** (DOM probe logic, dismissal click listener, `buildSelector`, messaging) are in a separate codebase and will need to be implemented there separately — but the edge functions they call will be ready.
+---
 
-## Changes
+### 1. New Page: `src/pages/AppleModernization.tsx`
 
-### 1. Database Changes (Migration)
+A comprehensive, premium-feeling service page with the following sections:
 
-**Add retry tracking columns to `ai_generation_log`** (not `cookie_patterns` — statuses live in `ai_generation_log`):
-- `retry_count INT DEFAULT 0` on `missed_banner_reports` (already has `ai_attempts`, so we reuse that as the retry counter — no new column needed)
+- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
+- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
+- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
+  - Apple Discovery Infrastructure
+  - App Clips (Instant Customer Experience)
+  - Payments Modernization (Tap to Pay)
+  - Digital ID Verification
+  - Brand Trust and Identity
+  - Customer Experience Automation
+  - Commerce and Ordering
+  - Operational Analytics
+  - Apple-Ready Certification (marked as optional)
+- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
+- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
+- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
 
-**Create `dismissal_reports` table:**
-```sql
-CREATE TABLE dismissal_reports (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  domain TEXT NOT NULL,
-  clicked_selector TEXT NOT NULL,
-  banner_selector TEXT,
-  banner_html TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX idx_dismissal_domain ON dismissal_reports(domain);
-ALTER TABLE dismissal_reports ENABLE ROW LEVEL SECURITY;
--- Public insert (extension reports), service role full access
-```
+### 2. Route Registration: `src/App.tsx`
 
-**Create `find_dismissal_consensus` RPC function** that finds domains with 3+ matching dismissal reports not already covered by `cookie_patterns`.
+- Import the new `AppleModernization` page component.
+- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
 
-**Add `permanently_failed` status** handling — after 5 total `ai_attempts`, the auto-retry skips the domain.
+### 3. Services Page Update: `src/pages/Services.tsx`
 
-### 2. Edge Function: `auto-retry-failed-patterns`
+- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
+- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
 
-New edge function (`supabase/functions/auto-retry-failed-patterns/index.ts`):
-- Queries `missed_banner_reports` where `resolved = false` AND `ai_attempts < 5` AND (`ai_processed_at IS NULL` OR `ai_processed_at < now() - 24h`)
-- Cross-references `ai_generation_log` for domains with status `needs_manual_review`, `failed_not_cookie_banner`, or `error`
-- For each domain, calls `ai-generate-pattern` internally (reuses the same pipeline: CMP check → AI → server fetch)
-- If `ai_attempts >= 5` after this run, logs `permanently_failed` status
-- No auth required (called by cron) — `verify_jwt = false`
+### 4. Header Navigation: `src/components/layout/Header.tsx`
 
-### 3. Edge Function: `probe-report`
+- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
 
-New edge function (`supabase/functions/probe-report/index.ts`):
-- Receives `{ domain, probeResults: [{ selector, html, visible }] }` from the extension
-- Picks the best match (visible, largest HTML)
-- Runs it through `detectKnownCMP` first, then AI analysis if no CMP match
-- On success, inserts pattern via `upsert_pattern` and logs as `success_probe` in `ai_generation_log`
-- Marks the `missed_banner_reports` entry as resolved
-- No auth required (called by extension) — `verify_jwt = false`
+---
 
-### 4. Edge Function: `process-dismissal-consensus`
+### Technical Details
 
-New edge function (`supabase/functions/process-dismissal-consensus/index.ts`):
-- Calls `find_dismissal_consensus` RPC
-- For each domain with 3+ matching dismissals, inserts pattern with `source = 'user_consensus'`, `confidence = 0.85`
-- Logs as `success_consensus` in `ai_generation_log`
-- Deletes processed dismissal reports
-- No auth required (called by cron) — `verify_jwt = false`
+**New file:**
+- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
 
-### 5. pg_cron Jobs (via insert tool, not migration)
+**Modified files:**
+- `src/App.tsx` -- add import and route
+- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
 
-Two cron jobs:
-- `auto-retry-failed-patterns`: daily at 3 AM UTC
-- `process-dismissal-consensus`: daily at 4 AM UTC
+**No database or backend changes required.** This is purely a frontend content page.
 
-Both use `net.http_post` to call the edge functions with the anon key.
-
-### 6. Update `ai-generate-pattern` Flow
-
-Change the final failure status from `needs_manual_review` to check `ai_attempts`:
-- If `ai_attempts >= 4` (this will be the 5th), log as `permanently_failed`
-- Otherwise keep logging as `needs_manual_review` (the auto-retry cron will pick it up)
-
-### 7. Admin UI Updates (`CommunityLearning.tsx`)
-
-Add badge styles for new statuses:
-- `permanently_failed`: red/dark styling
-- `success_probe`: green/teal styling
-- `success_consensus`: purple styling
-
-Remove or repurpose the manual review flag icon since domains now auto-resolve.
-
-### 8. Update `config.toml`
-
-Add entries for the three new edge functions with `verify_jwt = false`.
-
-## Files to Create/Modify
-
-1. **`supabase/functions/auto-retry-failed-patterns/index.ts`** — new
-2. **`supabase/functions/probe-report/index.ts`** — new
-3. **`supabase/functions/process-dismissal-consensus/index.ts`** — new
-4. **`supabase/functions/ai-generate-pattern/index.ts`** — update final failure logic for `permanently_failed`
-5. **`src/pages/admin/CommunityLearning.tsx`** — new status badges
-6. **Migration** — `dismissal_reports` table + `find_dismissal_consensus` RPC + RLS policies
-7. **pg_cron setup** — via insert tool (2 cron jobs)
-8. **`supabase/config.toml`** — 3 new function entries (auto-updated)
-
-## Technical Notes
-
-- The auto-retry function reuses the existing `ai-generate-pattern` pipeline by calling it via HTTP, so no code duplication.
-- `ai_attempts` on `missed_banner_reports` already serves as the retry counter — no new columns needed there.
-- The probe-report function shares the same `KNOWN_CMPS` array and AI calling logic. To avoid duplication, the CMP detection and AI calling code will be inlined (edge functions can't import from sibling function directories in Deno Deploy).
-- Extension-side changes (probe selector list, dismissal click listener, messaging) are documented but implemented in the extension repo, not here.
+The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
 

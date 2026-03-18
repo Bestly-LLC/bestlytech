@@ -176,32 +176,37 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Require admin auth
+  // Require admin auth (or service role for cron retries)
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  const authClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const token = authHeader.replace("Bearer ", "");
+  const isServiceRole = token === serviceRoleKey;
 
-  const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace("Bearer ", ""));
-  if (claimsError || !claimsData?.claims) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  if (!isServiceRole) {
+    const authClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Verify admin role using service role client
+    const svcCheck = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
+    const { data: isAdmin } = await svcCheck.rpc("has_role", { _user_id: claimsData.claims.sub, _role: "admin" });
+    if (!isAdmin) {
+      return new Response(JSON.stringify({ error: "Forbidden: admin role required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
   }
 
-  // Verify admin role using service role client
-  const svcClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
-  const { data: isAdmin } = await svcClient.rpc("has_role", { _user_id: claimsData.claims.sub, _role: "admin" });
-  if (!isAdmin) {
-    return new Response(JSON.stringify({ error: "Forbidden: admin role required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
+  const svcClient = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
 
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) {
@@ -349,7 +354,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ========== ALL PATHS FAILED → needs_manual_review ==========
+        // ========== ALL PATHS FAILED → check retry limit ==========
         const diagnostics = [
           `Extension HTML: AI rejected (${reason})`,
           `Server fetch: ${serverFetchSuccess ? "OK" : "FAILED"}`,
@@ -357,10 +362,14 @@ Deno.serve(async (req) => {
           serverFetchSuccess ? `Server AI: ${serverHtml ? "no cookie elements or AI rejected" : "N/A"}` : null,
         ].filter(Boolean).join("; ");
 
+        // After 5 attempts total, mark as permanently_failed (auto-retry will stop)
+        const currentAttempts = candidate.ai_attempts ?? 0;
+        const failStatus = currentAttempts >= 4 ? "permanently_failed" : "needs_manual_review";
+
         await supabase.from("ai_generation_log").insert({
           domain: candidate.domain,
-          status: "needs_manual_review",
-          error_message: diagnostics.substring(0, 500),
+          status: failStatus,
+          error_message: `${diagnostics}${failStatus === "permanently_failed" ? ` [Exhausted ${currentAttempts + 1} attempts]` : ""}`.substring(0, 500),
           ai_model: AI_MODEL_LABEL,
           prompt_tokens: aiResult.usage?.prompt_tokens ?? null,
           completion_tokens: aiResult.usage?.completion_tokens ?? null,
@@ -372,7 +381,7 @@ Deno.serve(async (req) => {
         });
 
         failed++;
-        results.push({ domain: candidate.domain, status: "needs_manual_review", error: diagnostics });
+        results.push({ domain: candidate.domain, status: failStatus, error: diagnostics });
 
       } catch (err: any) {
         failed++;

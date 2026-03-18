@@ -53,10 +53,13 @@ const CONFIDENCE_COLORS = ["hsl(0,84%,60%)", "hsl(25,95%,53%)", "hsl(45,93%,47%)
 const AI_STATUS_BADGE: Record<string, string> = {
   success: "bg-green-600/15 text-green-600 border-green-600/30",
   success_cmp_fallback: "bg-blue-500/15 text-blue-500 border-blue-500/30",
+  success_probe: "bg-teal-500/15 text-teal-500 border-teal-500/30",
+  success_consensus: "bg-purple-500/15 text-purple-500 border-purple-500/30",
   error: "bg-red-500/15 text-red-500 border-red-500/30",
   skipped_no_html: "bg-muted text-muted-foreground border-muted-foreground/30",
   failed_not_cookie_banner: "bg-red-500/15 text-red-500 border-red-500/30",
   needs_manual_review: "bg-orange-500/15 text-orange-500 border-orange-500/30",
+  permanently_failed: "bg-red-900/15 text-red-400 border-red-900/30",
 };
 
 function InfoTip({ text }: { text: string }) {
@@ -728,6 +731,9 @@ export default function CommunityLearning() {
                             <TableCell>
                               <span className="inline-flex items-center gap-1">
                                 {log.status === "needs_manual_review" && <Flag className="h-3.5 w-3.5 text-orange-500" />}
+                                {log.status === "permanently_failed" && <AlertTriangle className="h-3.5 w-3.5 text-red-400" />}
+                                {log.status === "success_probe" && <Target className="h-3.5 w-3.5 text-teal-500" />}
+                                {log.status === "success_consensus" && <Shield className="h-3.5 w-3.5 text-purple-500" />}
                                 <Badge variant="outline" className={AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}>
                                   {log.status.replace(/_/g, " ")}
                                 </Badge>
