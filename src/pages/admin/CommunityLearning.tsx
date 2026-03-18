@@ -325,7 +325,7 @@ export default function CommunityLearning() {
             <CircleAlert className="h-5 w-5 text-red-500" />
             <div>
               <p className="text-sm font-semibold tabular-nums">{issueCount}</p>
-              <p className="text-xs text-muted-foreground">Issues detected</p>
+              <p className="text-xs text-muted-foreground">Issues detected<InfoTip text="Patterns with very low confidence, zero successes, or other problems" /></p>
             </div>
           </CardContent>
         </Card>
