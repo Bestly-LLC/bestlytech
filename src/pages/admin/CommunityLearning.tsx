@@ -232,6 +232,26 @@ export default function CommunityLearning() {
     }
   }, [fetchAll]);
 
+  const handleDeletePattern = useCallback(async (domain: string, selector: string, actionType: string) => {
+    const key = `${domain}::${selector}`;
+    setDeletingPattern(key);
+    try {
+      const { error } = await supabase
+        .from("cookie_patterns")
+        .delete()
+        .eq("domain", domain)
+        .eq("selector", selector)
+        .eq("action_type", actionType);
+      if (error) throw error;
+      toast.success(`Deleted pattern for ${domain}`);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Delete failed: ${e.message}`);
+    } finally {
+      setDeletingPattern(null);
+    }
+  }, [fetchAll]);
+
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // Build lookup sets for AI fixer cross-referencing (kept for Recent/Domains tabs)
