@@ -138,7 +138,7 @@ export default function CommunityLearning() {
   const fetchAll = useCallback(async () => {
     if (!hasLoadedRef.current) setLoading(true);
     try {
-      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15] = await Promise.all([
+      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18] = await Promise.all([
         supabase.rpc("get_community_overview" as any),
         supabase.rpc("get_daily_pattern_activity" as any, { p_days: 30 }),
         supabase.rpc("get_top_domains" as any, { p_limit: 25 }),
@@ -155,6 +155,12 @@ export default function CommunityLearning() {
         supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("source", "ai_generated"),
         // AI token usage stats
         supabase.from("ai_generation_log").select("prompt_tokens, completion_tokens, status"),
+        // Dismissal reports
+        supabase.from("dismissal_reports").select("*").order("created_at", { ascending: false }).limit(200),
+        // Consensus candidates via RPC
+        supabase.rpc("find_dismissal_consensus" as any),
+        // Consensus pattern count
+        supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("source", "user_consensus"),
       ]);
       setOverview(r1.data as any);
       setActivity(r2.data as any ?? []);
@@ -177,6 +183,11 @@ export default function CommunityLearning() {
       const totalCompletion = allLogs.reduce((s: number, l: any) => s + (l.completion_tokens || 0), 0);
       const permFailedCount = allLogs.filter((l: any) => l.status === "permanently_failed").length;
       setAiTokenStats({ totalPrompt, totalCompletion, totalRuns: allLogs.length, permFailedCount });
+
+      // Dismissal data
+      setDismissalReports(r16.data as any[] ?? []);
+      setConsensusCandidates(r17.data as any[] ?? []);
+      setConsensusPatternCount(r18.count ?? 0);
     } catch (e) {
       console.error("Failed to fetch community data", e);
     } finally {
