@@ -515,6 +515,24 @@ export default function CommunityLearning() {
                           <Badge variant="secondary" className="text-[10px]">{r.source}</Badge>
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</TableCell>
+                        <TableCell>
+                          <TooltipProvider delayDuration={200}>
+                            <UITooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                                  disabled={deletingPattern === `${r.domain}::${r.selector}`}
+                                  onClick={() => handleDeletePattern(r.domain, r.selector, r.action_type)}
+                                >
+                                  {deletingPattern === `${r.domain}::${r.selector}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left"><p className="text-xs">Delete this pattern</p></TooltipContent>
+                            </UITooltip>
+                          </TooltipProvider>
+                        </TableCell>
                       </TableRow>
                       );
                     })}
