@@ -470,7 +470,7 @@ export default function CommunityLearning() {
                       <TableCell className={`text-right font-medium tabular-nums ${rateColor(d.success_rate)}`}>{d.success_rate}%</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Progress value={d.avg_confidence * 100} className="h-2 w-16" />
+                          <Progress value={d.avg_confidence * 10} className="h-2 w-16" />
                           <span className="text-xs text-muted-foreground tabular-nums">{d.avg_confidence}</span>
                         </div>
                       </TableCell>
