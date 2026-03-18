@@ -542,7 +542,7 @@ ${html}`;
                   },
                   confidence: {
                     type: "number",
-                    description: "Confidence score 0-1. Only set if is_cookie_banner is true.",
+                    description: "Confidence score 1-10. Only set if is_cookie_banner is true.",
                   },
                 },
                 required: ["is_cookie_banner"],
