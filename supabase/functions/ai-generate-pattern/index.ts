@@ -527,7 +527,13 @@ If it IS a cookie banner, identify the best CSS selector to DISMISS or REJECT co
 Rules when is_cookie_banner is true:
 - Prefer reject/decline/necessary-only buttons over accept buttons
 - If no reject button exists, use a close/dismiss button
-- If only accept exists, use it but set confidence lower
+- If only accept exists, use it — but set action_type to "accept" (NOT "reject")
+- CRITICAL: action_type must match what the button ACTUALLY DOES:
+  - "accept" = accepts all cookies (button says "Accept", "OK", "Got it", "Agree", "Allow all")
+  - "reject" = rejects/declines cookies (button says "Reject", "Decline", "Deny", "Refuse")
+  - "necessary" = keeps only essential cookies (button says "Necessary only", "Essential only")
+  - "save" = saves current cookie preferences (button says "Save preferences", "Confirm choices")
+  - "close" = closes/hides the banner without making a cookie choice (X button, close icon)
 - The selector must be specific enough to not match other elements
 - The selector MUST reference an element that exists in the provided HTML
 
