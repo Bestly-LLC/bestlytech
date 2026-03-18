@@ -3,6 +3,8 @@ project_id = "keowunrxpxlbgebujbao"
 [functions]
   [functions.auth-email-hook]
     verify_jwt = false
+  [functions.auto-retry-failed-patterns]
+    verify_jwt = false
   [functions.create-checkout]
     verify_jwt = false
   [functions.notify-sms]
