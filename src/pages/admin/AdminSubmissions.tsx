@@ -17,6 +17,7 @@ import { ExportButton } from "@/components/admin/ExportButton";
 import { useToast } from "@/hooks/use-toast";
 
 const STATUSES = ["All", "Draft", "Submitted", "In Review", "Issues Flagged", "Approved"];
+const PLATFORMS = ["All", "Amazon", "Shopify", "TikTok"];
 const PAGE_SIZE = 20;
 
 const EXPORT_COLUMNS = [
