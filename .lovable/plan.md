@@ -1,57 +1,49 @@
 
 
-## Integrate Apple-Native Business Modernization Program
+## Add AI System Health Alert Emails
 
-Create a dedicated service page for the Apple-Native Business Modernization Program and integrate it into the site's navigation and services ecosystem.
+### What You Get
+A proactive email alert sent to you (jaredbest@icloud.com) from Bestly whenever the AI pattern generation system has issues. You won't need to monitor the dashboard — the system will tell you when something needs attention.
 
----
+### What Already Exists
+- `auto-retry-failed-patterns`: Already emails you when domains exhaust 5 retry attempts (permanently failed)
+- `run-pattern-maintenance`: Already emails you for pattern fix failures and high-report domains
+- Both use PrivateMail SMTP + the shared `alertEmail` template
 
-### 1. New Page: `src/pages/AppleModernization.tsx`
+### What's Missing
+The main `ai-generate-pattern` function processes batches silently. If the AI model fails, if most candidates error out, or if the system encounters unexpected issues, nobody knows until you manually check the dashboard.
 
-A comprehensive, premium-feeling service page with the following sections:
+### The Fix
 
-- **Hero**: Headline "Apple-Native Infrastructure for Local Businesses" with a subtitle emphasizing operational enablement over marketing. CTA links to `/hire`.
-- **Program Overview**: Brief executive summary of what the program delivers (discovery, payments, identity, engagement, analytics).
-- **Core Components (A-I)**: A grid of 9 service component cards using `GlowCard`, each with an icon, title, key deliverables (bullet list), and outcome statement. Components:
-  - Apple Discovery Infrastructure
-  - App Clips (Instant Customer Experience)
-  - Payments Modernization (Tap to Pay)
-  - Digital ID Verification
-  - Brand Trust and Identity
-  - Customer Experience Automation
-  - Commerce and Ordering
-  - Operational Analytics
-  - Apple-Ready Certification (marked as optional)
-- **Service Tiers**: 4-tier pricing/packaging section (Presence Setup, Conversion Stack, Commerce and Identity Stack, Enterprise Modernization) displayed as stacked cards showing what each tier includes, with each tier building on the previous.
-- **Target Verticals**: A compact grid showing ideal business types (bars, restaurants, retail, salons, fitness, events, hospitality).
-- **CTA Section**: "Ready to Modernize?" with link to `/hire`.
+**File:** `supabase/functions/ai-generate-pattern/index.ts`
 
-### 2. Route Registration: `src/App.tsx`
+Add an alert email at the end of the batch processing (after the `for` loop, before the response) that fires when:
+- **High failure rate**: More than 50% of candidates in a batch failed
+- **Zero successes in a batch of 3+**: Processed several but generated nothing
+- **Unexpected errors**: Any uncaught error in the main try/catch
 
-- Import the new `AppleModernization` page component.
-- Add route: `<Route path="/apple-modernization" element={<AppleModernization />} />`
+The email will use the existing `alertEmail` template and PrivateMail SMTP (same pattern as `auto-retry-failed-patterns`). It will include:
+- Stats: processed, generated, failed, skipped counts
+- List of failed domains with their error reasons
+- Timestamp
 
-### 3. Services Page Update: `src/pages/Services.tsx`
+This is ~40 lines added to the existing response section of `ai-generate-pattern/index.ts`. No new functions, no new files, no database changes.
 
-- Add a new entry to the `services` array for "Apple Business Modernization" with the `Apple` icon (using a relevant Lucide icon like `Smartphone` or `MapPin`) and a short description.
-- Add a featured callout card below the services grid linking to `/apple-modernization` to highlight it as a flagship program.
+### Technical Detail
 
-### 4. Header Navigation: `src/components/layout/Header.tsx`
+```text
+End of batch processing flow:
 
-- Add `/apple-modernization` to the `isProductsActive` check or ensure the "Services" nav link highlights when on this route. No new top-level nav item needed -- it is discoverable via the Services page.
+  [existing loop finishes]
+       ↓
+  Check: failures > 50% of processed OR (processed >= 3 AND generated == 0)
+       ↓ yes
+  Build alertEmail with failure details
+  Send via PrivateMail SMTP to jaredbest@icloud.com
+  Subject: "Cookie Yeti: AI Generation Alert"
+       ↓
+  [existing response]
+```
 
----
-
-### Technical Details
-
-**New file:**
-- `src/pages/AppleModernization.tsx` -- follows the same pattern as existing pages (Layout, SEOHead, AnimatedSection, GlowCard, GradientText). Uses Lucide icons throughout (MapPin, Smartphone, CreditCard, ShieldCheck, Fingerprint, Mail, Repeat, ShoppingCart, BarChart3, Award, etc.).
-
-**Modified files:**
-- `src/App.tsx` -- add import and route
-- `src/pages/Services.tsx` -- add service entry and featured callout card linking to the new page
-
-**No database or backend changes required.** This is purely a frontend content page.
-
-The page will follow existing design conventions: `GlowCard` for component cards, `AnimatedSection` for scroll animations, `GradientText` for headline accents, consistent spacing and typography, and the same CTA button styles used across the site.
+Import `SMTPClient` and `alertEmail` (already used in sibling functions). Use `PRIVATEMAIL_EMAIL` and `PRIVATEMAIL_PASSWORD` secrets (already configured).
 
