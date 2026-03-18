@@ -52,6 +52,7 @@ const CONFIDENCE_COLORS = ["hsl(0,84%,60%)", "hsl(25,95%,53%)", "hsl(45,93%,47%)
 
 const AI_STATUS_BADGE: Record<string, string> = {
   success: "bg-green-600/15 text-green-600 border-green-600/30",
+  success_cmp_fallback: "bg-blue-500/15 text-blue-500 border-blue-500/30",
   error: "bg-red-500/15 text-red-500 border-red-500/30",
   skipped_no_html: "bg-muted text-muted-foreground border-muted-foreground/30",
   failed_not_cookie_banner: "bg-red-500/15 text-red-500 border-red-500/30",
