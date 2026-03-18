@@ -291,6 +291,36 @@ Deno.serve(async (req) => {
     for (const candidate of items) {
       processed++;
 
+      // ========== LAYER 0: cmp_fingerprint field check ==========
+      // If the extension already identified the CMP, use known selectors immediately
+      if (candidate.cmp_fingerprint && candidate.cmp_fingerprint !== "unknown" && candidate.cmp_fingerprint !== "generic") {
+        const knownCMP = KNOWN_CMPS.find(
+          (cmp) => cmp.cmp_fingerprint === candidate.cmp_fingerprint.toLowerCase() ||
+                   cmp.name.toLowerCase() === candidate.cmp_fingerprint.toLowerCase()
+        );
+        if (knownCMP) {
+          console.log(`[${candidate.domain}] CMP identified via cmp_fingerprint field: ${knownCMP.name} — using known selectors`);
+          await insertCMPPattern(supabase, candidate, knownCMP);
+          // Override confidence to 9 for fingerprint-matched patterns
+          await supabase
+            .from("cookie_patterns")
+            .update({ confidence: 9 })
+            .eq("domain", candidate.domain)
+            .eq("selector", knownCMP.selector);
+          generated++;
+          results.push({
+            domain: candidate.domain,
+            status: "success_cmp_fingerprint",
+            cmp: knownCMP.name,
+            selector: knownCMP.selector,
+            action: knownCMP.action,
+            confidence: 9,
+            note: "CMP matched via cmp_fingerprint field (Layer 0)",
+          });
+          continue;
+        }
+      }
+
       if (!candidate.banner_html) {
         // Instead of skipping, try server-side fetch + CMP detection
         console.log(`[${candidate.domain}] No extension HTML — attempting server-side fetch for CMP detection`);
