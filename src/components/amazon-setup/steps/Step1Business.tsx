@@ -21,6 +21,8 @@ export const Step1Business = () => {
 
   const validateEin = (v: string) => /^\d{2}-\d{7}$/.test(v);
 
+  const hasDoc = (type: string) => uploadedDocs.some(d => d.document_type === type);
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (!formData.business_legal_name.trim()) e.business_legal_name = 'Required';
@@ -40,6 +42,8 @@ export const Step1Business = () => {
       if (!formData.operating_state) e.operating_state = 'Required';
       if (!formData.operating_zip.trim()) e.operating_zip = 'Required';
     }
+    if (!hasDoc('BusinessRegistration')) e.BusinessRegistration = 'Registration document is required';
+    if (!hasDoc('BusinessAddressProof')) e.BusinessAddressProof = 'Proof of business address is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
