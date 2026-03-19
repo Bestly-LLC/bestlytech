@@ -70,7 +70,9 @@ export const Step5Auth = () => {
               {errors.rep_relationship && <p className="text-xs text-destructive mt-1">{errors.rep_relationship}</p>}
             </div>
             <DocumentUpload documentType="RepID" label="Representative's Government ID" required />
+            {errors.RepID && <p className="text-xs text-destructive">{errors.RepID}</p>}
             <DocumentUpload documentType="AuthorizationLetter" label="Letter of Authorization" required />
+            {errors.AuthorizationLetter && <p className="text-xs text-destructive">{errors.AuthorizationLetter}</p>}
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription className="text-sm">
