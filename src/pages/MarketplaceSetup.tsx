@@ -7,17 +7,15 @@ import { Step0Readiness } from '@/components/amazon-setup/steps/Step0Readiness';
 import { Step1Business } from '@/components/amazon-setup/steps/Step1Business';
 import { Step2Owner } from '@/components/amazon-setup/steps/Step2Owner';
 import { Step3Bank } from '@/components/amazon-setup/steps/Step3Bank';
-import { Step4Brand } from '@/components/amazon-setup/steps/Step4Brand';
-import { Step5Auth } from '@/components/amazon-setup/steps/Step5Auth';
-import { Step6Account } from '@/components/amazon-setup/steps/Step6Account';
-import { Step7Review } from '@/components/amazon-setup/steps/Step7Review';
+import { Step4BrandAccounts } from '@/components/amazon-setup/steps/Step4BrandAccounts';
+import { Step5Review } from '@/components/amazon-setup/steps/Step5Review';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Save, LogOut } from 'lucide-react';
+import { Save, LogOut, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const FormContent = () => {
-  const { currentStep, saving, formId, saveNow } = useIntakeForm();
+  const { currentStep, saving, formId, saveNow, lastSavedAt } = useIntakeForm();
   const { toast } = useToast();
 
   const steps = [
@@ -25,16 +23,14 @@ const FormContent = () => {
     <Step1Business key={1} />,
     <Step2Owner key={2} />,
     <Step3Bank key={3} />,
-    <Step4Brand key={4} />,
-    <Step5Auth key={5} />,
-    <Step6Account key={6} />,
-    <Step7Review key={7} />,
+    <Step4BrandAccounts key={4} />,
+    <Step5Review key={5} />,
   ];
 
   const handleSaveAndExit = async () => {
     await saveNow();
     toast({
-      title: '✓ Progress saved',
+      title: '\u2713 Progress saved',
       description: `Bookmark this page or save your ID (${formId?.slice(0, 8)}) to return later.`,
       duration: 5000,
     });
@@ -49,6 +45,11 @@ const FormContent = () => {
           {saving && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Save className="w-3 h-3 animate-pulse" /> Saving...
+            </div>
+          )}
+          {!saving && lastSavedAt && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock className="w-3 h-3" /> Last saved {lastSavedAt.toLocaleTimeString()}
             </div>
           )}
           {formId && (

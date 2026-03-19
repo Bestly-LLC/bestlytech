@@ -616,17 +616,25 @@ export type Database = {
           amazon_email: string | null
           amazon_phone: string | null
           amazon_store_name: string | null
+          bank_country: string | null
+          bank_email: string | null
           bank_name: string | null
           birth_country: string | null
           brand_name: string | null
+          brand_registry_enrolled: boolean | null
+          business_email: string | null
           business_legal_name: string | null
+          business_phone: string | null
           business_type: string | null
+          business_website: string | null
+          card_holder_name: string | null
           citizenship_country: string | null
           client_email: string | null
           client_name: string | null
           client_phone: string | null
           client_timezone: string | null
           completed_steps: number[] | null
+          consent_authorized: boolean | null
           contact_first_name: string | null
           contact_last_name: string | null
           contact_middle_name: string | null
@@ -638,22 +646,31 @@ export type Database = {
           existing_shopify_url: string | null
           fulfillment_method: string | null
           has_diversity_certs: boolean | null
+          has_existing_amazon_account: boolean | null
+          has_existing_amazon_listings: boolean | null
           has_existing_shopify: boolean | null
+          has_existing_shopify_account: boolean | null
+          has_existing_tiktok_account: boolean | null
           has_tiktok_creator: boolean | null
           has_trademark: boolean | null
           has_upcs: boolean | null
+          iban: string | null
           id: string
           id_country_of_issue: string | null
           id_expiry_date: string | null
           id_number: string | null
           id_type: string | null
+          is_us_bank: boolean | null
           number_of_products: string | null
           operating_address: string | null
           operating_city: string | null
           operating_state: string | null
           operating_zip: string | null
+          owner_title: string | null
+          ownership_percentage: string | null
           owns_brand: boolean | null
           phone_number: string | null
+          plan_fba_warehousing: boolean | null
           platform: string
           preferred_contact_method: string | null
           product_category: string | null
@@ -670,26 +687,57 @@ export type Database = {
           residential_state: string | null
           residential_zip: string | null
           routing_number_last4: string | null
+          same_bank_all_platforms: boolean | null
           selected_platforms: string[] | null
           seller_plan: string | null
           setup_by_representative: boolean | null
           shipping_method: string | null
+          shopify_account_holder: string | null
+          shopify_account_last4: string | null
+          shopify_account_type: string | null
+          shopify_bank_name: string | null
           shopify_domain: string | null
           shopify_email: string | null
+          shopify_has_domain: boolean | null
+          shopify_has_logo: boolean | null
+          shopify_payment_gateway: string | null
+          shopify_phone: string | null
           shopify_plan: string | null
+          shopify_preferred_domain: string | null
+          shopify_product_description: string | null
+          shopify_routing_last4: string | null
           shopify_store_name: string | null
+          shopify_theme_style: string | null
+          special_instructions: string | null
           ssn_itin: string | null
           state_of_registration: string | null
           status: string
+          swift_bic: string | null
+          target_amazon_marketplace: string | null
           tax_residency: string | null
+          tiktok_account_holder: string | null
+          tiktok_account_last4: string | null
+          tiktok_account_type: string | null
+          tiktok_bank_email: string | null
+          tiktok_bank_name: string | null
           tiktok_category: string | null
           tiktok_email: string | null
+          tiktok_follower_count: string | null
           tiktok_fulfillment: string | null
           tiktok_handle: string | null
+          tiktok_has_existing_content: boolean | null
           tiktok_phone: string | null
+          tiktok_price_range: string | null
+          tiktok_product_description: string | null
+          tiktok_routing_last4: string | null
           tiktok_shop_name: string | null
+          tiktok_warehouse_address: string | null
+          tiktok_warehouse_city: string | null
+          tiktok_warehouse_state: string | null
+          tiktok_warehouse_zip: string | null
           trademark_number: string | null
           updated_at: string | null
+          years_in_business: string | null
         }
         Insert: {
           account_holder_name?: string | null
@@ -700,17 +748,25 @@ export type Database = {
           amazon_email?: string | null
           amazon_phone?: string | null
           amazon_store_name?: string | null
+          bank_country?: string | null
+          bank_email?: string | null
           bank_name?: string | null
           birth_country?: string | null
           brand_name?: string | null
+          brand_registry_enrolled?: boolean | null
+          business_email?: string | null
           business_legal_name?: string | null
+          business_phone?: string | null
           business_type?: string | null
+          business_website?: string | null
+          card_holder_name?: string | null
           citizenship_country?: string | null
           client_email?: string | null
           client_name?: string | null
           client_phone?: string | null
           client_timezone?: string | null
           completed_steps?: number[] | null
+          consent_authorized?: boolean | null
           contact_first_name?: string | null
           contact_last_name?: string | null
           contact_middle_name?: string | null
@@ -722,22 +778,31 @@ export type Database = {
           existing_shopify_url?: string | null
           fulfillment_method?: string | null
           has_diversity_certs?: boolean | null
+          has_existing_amazon_account?: boolean | null
+          has_existing_amazon_listings?: boolean | null
           has_existing_shopify?: boolean | null
+          has_existing_shopify_account?: boolean | null
+          has_existing_tiktok_account?: boolean | null
           has_tiktok_creator?: boolean | null
           has_trademark?: boolean | null
           has_upcs?: boolean | null
+          iban?: string | null
           id?: string
           id_country_of_issue?: string | null
           id_expiry_date?: string | null
           id_number?: string | null
           id_type?: string | null
+          is_us_bank?: boolean | null
           number_of_products?: string | null
           operating_address?: string | null
           operating_city?: string | null
           operating_state?: string | null
           operating_zip?: string | null
+          owner_title?: string | null
+          ownership_percentage?: string | null
           owns_brand?: boolean | null
           phone_number?: string | null
+          plan_fba_warehousing?: boolean | null
           platform?: string
           preferred_contact_method?: string | null
           product_category?: string | null
@@ -754,26 +819,57 @@ export type Database = {
           residential_state?: string | null
           residential_zip?: string | null
           routing_number_last4?: string | null
+          same_bank_all_platforms?: boolean | null
           selected_platforms?: string[] | null
           seller_plan?: string | null
           setup_by_representative?: boolean | null
           shipping_method?: string | null
+          shopify_account_holder?: string | null
+          shopify_account_last4?: string | null
+          shopify_account_type?: string | null
+          shopify_bank_name?: string | null
           shopify_domain?: string | null
           shopify_email?: string | null
+          shopify_has_domain?: boolean | null
+          shopify_has_logo?: boolean | null
+          shopify_payment_gateway?: string | null
+          shopify_phone?: string | null
           shopify_plan?: string | null
+          shopify_preferred_domain?: string | null
+          shopify_product_description?: string | null
+          shopify_routing_last4?: string | null
           shopify_store_name?: string | null
+          shopify_theme_style?: string | null
+          special_instructions?: string | null
           ssn_itin?: string | null
           state_of_registration?: string | null
           status?: string
+          swift_bic?: string | null
+          target_amazon_marketplace?: string | null
           tax_residency?: string | null
+          tiktok_account_holder?: string | null
+          tiktok_account_last4?: string | null
+          tiktok_account_type?: string | null
+          tiktok_bank_email?: string | null
+          tiktok_bank_name?: string | null
           tiktok_category?: string | null
           tiktok_email?: string | null
+          tiktok_follower_count?: string | null
           tiktok_fulfillment?: string | null
           tiktok_handle?: string | null
+          tiktok_has_existing_content?: boolean | null
           tiktok_phone?: string | null
+          tiktok_price_range?: string | null
+          tiktok_product_description?: string | null
+          tiktok_routing_last4?: string | null
           tiktok_shop_name?: string | null
+          tiktok_warehouse_address?: string | null
+          tiktok_warehouse_city?: string | null
+          tiktok_warehouse_state?: string | null
+          tiktok_warehouse_zip?: string | null
           trademark_number?: string | null
           updated_at?: string | null
+          years_in_business?: string | null
         }
         Update: {
           account_holder_name?: string | null
@@ -784,17 +880,25 @@ export type Database = {
           amazon_email?: string | null
           amazon_phone?: string | null
           amazon_store_name?: string | null
+          bank_country?: string | null
+          bank_email?: string | null
           bank_name?: string | null
           birth_country?: string | null
           brand_name?: string | null
+          brand_registry_enrolled?: boolean | null
+          business_email?: string | null
           business_legal_name?: string | null
+          business_phone?: string | null
           business_type?: string | null
+          business_website?: string | null
+          card_holder_name?: string | null
           citizenship_country?: string | null
           client_email?: string | null
           client_name?: string | null
           client_phone?: string | null
           client_timezone?: string | null
           completed_steps?: number[] | null
+          consent_authorized?: boolean | null
           contact_first_name?: string | null
           contact_last_name?: string | null
           contact_middle_name?: string | null
@@ -806,22 +910,31 @@ export type Database = {
           existing_shopify_url?: string | null
           fulfillment_method?: string | null
           has_diversity_certs?: boolean | null
+          has_existing_amazon_account?: boolean | null
+          has_existing_amazon_listings?: boolean | null
           has_existing_shopify?: boolean | null
+          has_existing_shopify_account?: boolean | null
+          has_existing_tiktok_account?: boolean | null
           has_tiktok_creator?: boolean | null
           has_trademark?: boolean | null
           has_upcs?: boolean | null
+          iban?: string | null
           id?: string
           id_country_of_issue?: string | null
           id_expiry_date?: string | null
           id_number?: string | null
           id_type?: string | null
+          is_us_bank?: boolean | null
           number_of_products?: string | null
           operating_address?: string | null
           operating_city?: string | null
           operating_state?: string | null
           operating_zip?: string | null
+          owner_title?: string | null
+          ownership_percentage?: string | null
           owns_brand?: boolean | null
           phone_number?: string | null
+          plan_fba_warehousing?: boolean | null
           platform?: string
           preferred_contact_method?: string | null
           product_category?: string | null
@@ -838,26 +951,57 @@ export type Database = {
           residential_state?: string | null
           residential_zip?: string | null
           routing_number_last4?: string | null
+          same_bank_all_platforms?: boolean | null
           selected_platforms?: string[] | null
           seller_plan?: string | null
           setup_by_representative?: boolean | null
           shipping_method?: string | null
+          shopify_account_holder?: string | null
+          shopify_account_last4?: string | null
+          shopify_account_type?: string | null
+          shopify_bank_name?: string | null
           shopify_domain?: string | null
           shopify_email?: string | null
+          shopify_has_domain?: boolean | null
+          shopify_has_logo?: boolean | null
+          shopify_payment_gateway?: string | null
+          shopify_phone?: string | null
           shopify_plan?: string | null
+          shopify_preferred_domain?: string | null
+          shopify_product_description?: string | null
+          shopify_routing_last4?: string | null
           shopify_store_name?: string | null
+          shopify_theme_style?: string | null
+          special_instructions?: string | null
           ssn_itin?: string | null
           state_of_registration?: string | null
           status?: string
+          swift_bic?: string | null
+          target_amazon_marketplace?: string | null
           tax_residency?: string | null
+          tiktok_account_holder?: string | null
+          tiktok_account_last4?: string | null
+          tiktok_account_type?: string | null
+          tiktok_bank_email?: string | null
+          tiktok_bank_name?: string | null
           tiktok_category?: string | null
           tiktok_email?: string | null
+          tiktok_follower_count?: string | null
           tiktok_fulfillment?: string | null
           tiktok_handle?: string | null
+          tiktok_has_existing_content?: boolean | null
           tiktok_phone?: string | null
+          tiktok_price_range?: string | null
+          tiktok_product_description?: string | null
+          tiktok_routing_last4?: string | null
           tiktok_shop_name?: string | null
+          tiktok_warehouse_address?: string | null
+          tiktok_warehouse_city?: string | null
+          tiktok_warehouse_state?: string | null
+          tiktok_warehouse_zip?: string | null
           trademark_number?: string | null
           updated_at?: string | null
+          years_in_business?: string | null
         }
         Relationships: []
       }

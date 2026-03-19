@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Info, ShoppingCart, Store, Video } from 'lucide-react';
 import { useIntakeForm } from '@/contexts/IntakeFormContext';
-import { TIMEZONES, PLATFORM_OPTIONS, READINESS_ITEMS } from '../constants';
+import { TIMEZONES, PLATFORM_OPTIONS, READINESS_ITEMS, autoFormatPhone } from '../constants';
 
 const PLATFORM_ICONS: Record<string, React.ReactNode> = {
   Amazon: <ShoppingCart className="w-5 h-5" />,
@@ -20,11 +20,9 @@ export const Step0Readiness = () => {
   const { formData, updateField, goNext, isPlatformSelected, togglePlatform } = useIntakeForm();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Build deduplicated checklist from selected platforms
   const checklist = useMemo(() => {
     const seen = new Set<string>();
     const items: { text: string; platforms: string[] }[] = [];
-
     for (const platform of formData.selected_platforms) {
       const platformItems = READINESS_ITEMS[platform] || [];
       for (const item of platformItems) {
@@ -32,7 +30,10 @@ export const Step0Readiness = () => {
           seen.add(item.key);
           items.push({ text: item.text, platforms: [platform] });
         } else {
-          const existing = items.find(i => READINESS_ITEMS[platform]?.some(ri => ri.key === item.key && ri.text === item.text) || i.text === item.text);
+          const existing = items.find(i => {
+            const ri = READINESS_ITEMS[platform]?.find(r => r.key === item.key);
+            return ri && i.text === ri.text;
+          }) || items.find(i => i.text === item.text);
           if (existing && !existing.platforms.includes(platform)) {
             existing.platforms.push(platform);
           }
@@ -43,10 +44,7 @@ export const Step0Readiness = () => {
   }, [formData.selected_platforms]);
 
   const [checks, setChecks] = useState<Record<string, boolean>>({});
-
-  const toggleCheck = (text: string) => {
-    setChecks(prev => ({ ...prev, [text]: !prev[text] }));
-  };
+  const toggleCheck = (text: string) => setChecks(prev => ({ ...prev, [text]: !prev[text] }));
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -68,7 +66,6 @@ export const Step0Readiness = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Platform Selection */}
         <div className="space-y-3">
           <label className="text-sm font-medium">Which platforms are you setting up? <span className="text-destructive">*</span></label>
           <div className="grid gap-3">
@@ -98,7 +95,6 @@ export const Step0Readiness = () => {
           {errors.platforms && <p className="text-xs text-destructive">{errors.platforms}</p>}
         </div>
 
-        {/* Dynamic Readiness Checklist */}
         {checklist.length > 0 && (
           <div className="space-y-3">
             <h3 className="text-sm font-medium">Documents & Information Needed</h3>
@@ -123,33 +119,33 @@ export const Step0Readiness = () => {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Don't have all of these yet? No problem — you can save your progress and come back anytime.
+            Don't have all of these yet? No problem &mdash; you can save your progress and come back anytime.
           </AlertDescription>
         </Alert>
 
-        {/* Contact Info */}
         <div className="space-y-4 pt-4 border-t border-border">
           <h3 className="font-medium text-base">Contact Information</h3>
-
           <div>
             <label className="text-sm font-medium">Your Name <span className="text-destructive">*</span></label>
             <p className="text-xs text-muted-foreground mb-1">Who should we contact about this setup?</p>
             <Input value={formData.client_name} onChange={e => updateField('client_name', e.target.value)} />
             {errors.client_name && <p className="text-xs text-destructive mt-1">{errors.client_name}</p>}
           </div>
-
           <div>
             <label className="text-sm font-medium">Your Email <span className="text-destructive">*</span></label>
             <Input type="email" value={formData.client_email} onChange={e => updateField('client_email', e.target.value)} />
             {errors.client_email && <p className="text-xs text-destructive mt-1">{errors.client_email}</p>}
           </div>
-
           <div>
             <label className="text-sm font-medium">Your Phone <span className="text-destructive">*</span></label>
-            <Input type="tel" value={formData.client_phone} onChange={e => updateField('client_phone', e.target.value)} />
+            <Input
+              type="tel"
+              value={formData.client_phone}
+              onChange={e => updateField('client_phone', autoFormatPhone(e.target.value))}
+              placeholder="(XXX) XXX-XXXX"
+            />
             {errors.client_phone && <p className="text-xs text-destructive mt-1">{errors.client_phone}</p>}
           </div>
-
           <div>
             <label className="text-sm font-medium">Preferred Contact Method</label>
             <Select value={formData.preferred_contact_method} onValueChange={(v) => updateField('preferred_contact_method', v)}>
@@ -161,7 +157,6 @@ export const Step0Readiness = () => {
               </SelectContent>
             </Select>
           </div>
-
           <div>
             <label className="text-sm font-medium">Your Timezone</label>
             <Select value={formData.client_timezone} onValueChange={(v) => updateField('client_timezone', v)}>
@@ -176,7 +171,7 @@ export const Step0Readiness = () => {
         </div>
       </CardContent>
       <CardFooter className="flex justify-end">
-        <Button onClick={() => validate() && goNext()}>Get Started →</Button>
+        <Button onClick={() => validate() && goNext()}>Get Started &rarr;</Button>
       </CardFooter>
     </Card>
   );
