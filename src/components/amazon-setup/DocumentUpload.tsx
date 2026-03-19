@@ -2,7 +2,6 @@ import { useState, useRef, useCallback } from 'react';
 import { Upload, CheckCircle2, AlertCircle, X, FileText, Image, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { supabase } from '@/integrations/supabase/client';
 import { useIntakeForm } from '@/contexts/IntakeFormContext';
 import { cn } from '@/lib/utils';
 
