@@ -15,7 +15,7 @@ import { IntakeField } from '../IntakeField';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step2Owner = () => {
-  const { formData, updateField, goNext, goBack } = useIntakeForm();
+  const { formData, updateField, goNext, goBack, uploadedDocs } = useIntakeForm();
   const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
