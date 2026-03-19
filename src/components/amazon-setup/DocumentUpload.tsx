@@ -137,9 +137,9 @@ export const DocumentUpload = ({
         >
           <input ref={inputRef} type="file" accept={accept} onChange={onSelect} className="hidden" />
           {uploading ? (
-            <div className="space-y-2">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">Uploading...</p>
-              <Progress value={70} className="h-2" />
             </div>
           ) : (
             <>
