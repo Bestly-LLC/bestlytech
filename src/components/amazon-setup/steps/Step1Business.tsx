@@ -180,12 +180,14 @@ export const Step1Business = () => {
             description="Upload your Certificate of Formation, Articles of Organization, or equivalent state filing document. Do NOT upload your IRS EIN letter here — Amazon does not accept it as a registration document."
             required
           />
+          {errors.BusinessRegistration && <p className="text-xs text-destructive">{errors.BusinessRegistration}</p>}
           <DocumentUpload
             documentType="BusinessAddressProof"
             label="Proof of Business Address"
             description="Upload a bank account STATEMENT (not a bank letter) showing your business name and address. Must be a full statement with transactions, dated within the last 180 days. Utility bills also accepted."
             required
           />
+          {errors.BusinessAddressProof && <p className="text-xs text-destructive">{errors.BusinessAddressProof}</p>}
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">

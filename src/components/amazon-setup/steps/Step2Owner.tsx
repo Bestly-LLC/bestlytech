@@ -180,6 +180,7 @@ export const Step2Owner = () => {
 
           <DocumentUpload documentType="PersonalAddressProof" label="Proof of Personal Address"
             description="Bank statement or utility bill showing the owner's name and residential address, dated within 180 days" required />
+          {errors.PersonalAddressProof && <p className="text-xs text-destructive">{errors.PersonalAddressProof}</p>}
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">

@@ -19,11 +19,15 @@ export const Step5Auth = () => {
 
   const platformNames = formData.selected_platforms.join(', ') || 'marketplace';
 
+  const hasDoc = (type: string) => uploadedDocs.some(d => d.document_type === type);
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (formData.setup_by_representative) {
       if (!formData.rep_name.trim()) e.rep_name = 'Required';
       if (!formData.rep_relationship) e.rep_relationship = 'Required';
+      if (!hasDoc('RepID')) e.RepID = 'Representative ID is required';
+      if (!hasDoc('AuthorizationLetter')) e.AuthorizationLetter = 'Authorization letter is required';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
