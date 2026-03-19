@@ -86,9 +86,14 @@ export const DocumentUpload = ({
 
   const removeDoc = async () => {
     if (!existingDoc) return;
-    await supabase.storage.from('intake-documents').remove([existingDoc.file_path]);
-    await (supabase as any).from('intake_documents').delete().eq('id', existingDoc.id);
-    await refreshDocs();
+    try {
+      await supabase.storage.from('intake-documents').remove([existingDoc.file_path]);
+      const { error: delError } = await supabase.from('intake_documents').delete().eq('id', existingDoc.id);
+      if (delError) throw delError;
+      await refreshDocs();
+    } catch (e: any) {
+      setError(e.message || 'Failed to remove document');
+    }
   };
 
   const formatSize = (bytes: number) => {
