@@ -295,7 +295,7 @@ export const Step4BrandAccounts = () => {
               <Switch checked={formData.shopify_has_domain} onCheckedChange={v => updateField('shopify_has_domain', v)} />
             </div>
             {formData.shopify_has_domain ? (
-              <IntakeField name="shopify_domain" label="Your Domain" value={formData.shopify_domain} onChange={updateField} error={{}} getGuidance={getGuidance} placeholder="yourbrand.com" />
+              <IntakeField name="shopify_domain" label="Your Domain" value={formData.shopify_domain} onChange={updateField} error={undefined} getGuidance={getGuidance} placeholder="yourbrand.com" />
             ) : (
               <div>
                 <label className="text-sm font-medium">Preferred Domain Name</label>
@@ -444,9 +444,9 @@ export const Step4BrandAccounts = () => {
             <div className="space-y-3 pl-4 border-l-2 border-border">
               <h4 className="font-medium text-sm">Warehouse/Return Address</h4>
               <p className="text-xs text-muted-foreground">Must be a physical address (no P.O. boxes). Must be verifiable by USPS.</p>
-              <IntakeField name="tiktok_warehouse_address" label="Street Address" value={formData.tiktok_warehouse_address} onChange={updateField} error={{}} getGuidance={getGuidance} required={false} />
+              <IntakeField name="tiktok_warehouse_address" label="Street Address" value={formData.tiktok_warehouse_address} onChange={updateField} error={undefined} getGuidance={getGuidance} required={false} />
               <div className="grid grid-cols-2 gap-3">
-                <IntakeField name="tiktok_warehouse_city" label="City" value={formData.tiktok_warehouse_city} onChange={updateField} error={{}} getGuidance={getGuidance} required={false} />
+                <IntakeField name="tiktok_warehouse_city" label="City" value={formData.tiktok_warehouse_city} onChange={updateField} error={undefined} getGuidance={getGuidance} required={false} />
                 <div>
                   <label className="text-sm font-medium">State</label>
                   <Select value={formData.tiktok_warehouse_state} onValueChange={v => updateField('tiktok_warehouse_state', v)}>
@@ -457,7 +457,7 @@ export const Step4BrandAccounts = () => {
                   </Select>
                 </div>
               </div>
-              <IntakeField name="tiktok_warehouse_zip" label="ZIP Code" placeholder="XXXXX" value={formData.tiktok_warehouse_zip} onChange={updateField} error={{}} getGuidance={getGuidance} required={false} />
+              <IntakeField name="tiktok_warehouse_zip" label="ZIP Code" placeholder="XXXXX" value={formData.tiktok_warehouse_zip} onChange={updateField} error={undefined} getGuidance={getGuidance} required={false} />
             </div>
 
             <div>

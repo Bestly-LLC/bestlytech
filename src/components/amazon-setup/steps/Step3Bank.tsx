@@ -243,15 +243,15 @@ export const Step3Bank = () => {
             {hasShopify && formData.selected_platforms[0] !== 'Shopify' && (
               <div className="space-y-3 pl-4 border-l-2 border-border">
                 <h4 className="font-medium text-sm">Bank Account for Shopify Payouts</h4>
-                <IntakeField name="shopify_bank_name" label="Bank Name" value={formData.shopify_bank_name} onChange={updateField} error={{}} getGuidance={getGuidance} />
-                <IntakeField name="shopify_account_holder" label="Account Holder" value={formData.shopify_account_holder} onChange={updateField} error={{}} getGuidance={getGuidance} />
+                <IntakeField name="shopify_bank_name" label="Bank Name" value={formData.shopify_bank_name} onChange={updateField} error={undefined} getGuidance={getGuidance} />
+                <IntakeField name="shopify_account_holder" label="Account Holder" value={formData.shopify_account_holder} onChange={updateField} error={undefined} getGuidance={getGuidance} />
               </div>
             )}
             {hasTikTok && formData.selected_platforms[0] !== 'TikTok' && (
               <div className="space-y-3 pl-4 border-l-2 border-border">
                 <h4 className="font-medium text-sm">Bank Account for TikTok Payouts</h4>
-                <IntakeField name="tiktok_bank_name" label="Bank Name" value={formData.tiktok_bank_name} onChange={updateField} error={{}} getGuidance={getGuidance} />
-                <IntakeField name="tiktok_account_holder" label="Account Holder" value={formData.tiktok_account_holder} onChange={updateField} error={{}} getGuidance={getGuidance} />
+                <IntakeField name="tiktok_bank_name" label="Bank Name" value={formData.tiktok_bank_name} onChange={updateField} error={undefined} getGuidance={getGuidance} />
+                <IntakeField name="tiktok_account_holder" label="Account Holder" value={formData.tiktok_account_holder} onChange={updateField} error={undefined} getGuidance={getGuidance} />
                 <div>
                   <label className="text-sm font-medium">Email for TikTok Bank</label>
                   <Input type="email" value={formData.tiktok_bank_email} onChange={e => updateField('tiktok_bank_email', e.target.value)} className="mt-1" />
