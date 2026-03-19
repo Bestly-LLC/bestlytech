@@ -12,7 +12,7 @@ import { IntakeField } from '../IntakeField';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step5Auth = () => {
-  const { formData, updateField, goNext, goBack, isPlatformSelected } = useIntakeForm();
+  const { formData, updateField, goNext, goBack, isPlatformSelected, uploadedDocs } = useIntakeForm();
   const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const ownerSetup = !formData.setup_by_representative;
