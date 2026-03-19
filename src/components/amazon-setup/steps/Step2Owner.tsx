@@ -19,6 +19,8 @@ export const Step2Owner = () => {
   const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const hasDoc = (type: string) => uploadedDocs.some(d => d.document_type === type);
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (!formData.contact_first_name.trim()) e.contact_first_name = 'Required';
@@ -41,6 +43,9 @@ export const Step2Owner = () => {
     if (!formData.residential_zip.trim()) e.residential_zip = 'Required';
     else if (!/^\d{5}$/.test(formData.residential_zip)) e.residential_zip = '5 digits';
     if (!formData.phone_number.trim()) e.phone_number = 'Required';
+    if (!hasDoc('IDFront')) e.IDFront = 'Government ID (front) is required';
+    if (formData.id_type === 'Drivers License' && !hasDoc('IDBack')) e.IDBack = 'ID back is required for driver\'s licenses';
+    if (!hasDoc('PersonalAddressProof')) e.PersonalAddressProof = 'Proof of personal address is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
