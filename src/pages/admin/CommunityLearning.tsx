@@ -113,6 +113,7 @@ export default function CommunityLearning() {
   const [runningGenerator, setRunningGenerator] = useState(false);
   const [runningRetry, setRunningRetry] = useState(false);
   const [runningMaintenance, setRunningMaintenance] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [runningReset, setRunningReset] = useState(false);
   const [processingReports, setProcessingReports] = useState(false);
   const [deletingPattern, setDeletingPattern] = useState<string | null>(null);
@@ -237,6 +238,15 @@ export default function CommunityLearning() {
       setLoading(false);
     }
   }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchAll();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchAll]);
 
   const handleRunGenerator = useCallback(async () => {
     setRunningGenerator(true);
@@ -613,8 +623,8 @@ export default function CommunityLearning() {
         actions={
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <ManualPatternForm onSuccess={fetchAll} />
-            <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
-              <RefreshCw className="h-4 w-4" /> Refresh
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className="gap-2">
+              <RefreshCw className={`h-4 w-4 transition-transform ${refreshing ? "animate-spin" : ""}`} /> {refreshing ? "Refreshing…" : "Refresh"}
             </Button>
           </div>
         }
