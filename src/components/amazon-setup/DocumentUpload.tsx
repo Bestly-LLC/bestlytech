@@ -42,10 +42,11 @@ export const DocumentUpload = ({
 
       // Remove old doc record if exists
       if (existingDoc) {
-        await (supabase as any).from('intake_documents').delete().eq('id', existingDoc.id);
+        const { error: delError } = await supabase.from('intake_documents').delete().eq('id', existingDoc.id);
+        if (delError) throw delError;
       }
 
-      await (supabase as any).from('intake_documents').insert({
+      const { error: insertError } = await supabase.from('intake_documents').insert({
         intake_id: formId,
         document_type: documentType,
         file_name: file.name,
@@ -53,9 +54,19 @@ export const DocumentUpload = ({
         file_size: file.size,
         mime_type: file.type,
       });
+      if (insertError) throw insertError;
       await refreshDocs();
     } catch (e: any) {
-      setError(e.message || 'Upload failed');
+      const msg = e.message || 'Upload failed';
+      if (msg.includes('mime') || msg.includes('type')) {
+        setError('Invalid file type. Please upload a PDF, JPG, or PNG.');
+      } else if (msg.includes('size') || msg.includes('too large')) {
+        setError('File is too large. Maximum size is 10MB.');
+      } else if (msg.includes('row-level security')) {
+        setError('Permission denied. The form may have already been submitted.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setUploading(false);
     }
