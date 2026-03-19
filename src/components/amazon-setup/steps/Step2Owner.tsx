@@ -15,9 +15,11 @@ import { IntakeField } from '../IntakeField';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step2Owner = () => {
-  const { formData, updateField, goNext, goBack } = useIntakeForm();
+  const { formData, updateField, goNext, goBack, uploadedDocs } = useIntakeForm();
   const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const hasDoc = (type: string) => uploadedDocs.some(d => d.document_type === type);
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -41,6 +43,9 @@ export const Step2Owner = () => {
     if (!formData.residential_zip.trim()) e.residential_zip = 'Required';
     else if (!/^\d{5}$/.test(formData.residential_zip)) e.residential_zip = '5 digits';
     if (!formData.phone_number.trim()) e.phone_number = 'Required';
+    if (!hasDoc('IDFront')) e.IDFront = 'Government ID (front) is required';
+    if (formData.id_type === 'Drivers License' && !hasDoc('IDBack')) e.IDBack = 'ID back is required for driver\'s licenses';
+    if (!hasDoc('PersonalAddressProof')) e.PersonalAddressProof = 'Proof of personal address is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -145,8 +150,12 @@ export const Step2Owner = () => {
           )}
 
           <DocumentUpload documentType="IDFront" label="ID — Front" required />
+          {errors.IDFront && <p className="text-xs text-destructive">{errors.IDFront}</p>}
           {formData.id_type === 'Drivers License' && (
-            <DocumentUpload documentType="IDBack" label="ID — Back" description="Required for driver's licenses" required />
+            <>
+              <DocumentUpload documentType="IDBack" label="ID — Back" description="Required for driver's licenses" required />
+              {errors.IDBack && <p className="text-xs text-destructive">{errors.IDBack}</p>}
+            </>
           )}
         </div>
 
@@ -171,6 +180,7 @@ export const Step2Owner = () => {
 
           <DocumentUpload documentType="PersonalAddressProof" label="Proof of Personal Address"
             description="Bank statement or utility bill showing the owner's name and residential address, dated within 180 days" required />
+          {errors.PersonalAddressProof && <p className="text-xs text-destructive">{errors.PersonalAddressProof}</p>}
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">

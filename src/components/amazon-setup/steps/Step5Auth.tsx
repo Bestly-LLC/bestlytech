@@ -12,18 +12,22 @@ import { IntakeField } from '../IntakeField';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step5Auth = () => {
-  const { formData, updateField, goNext, goBack, isPlatformSelected } = useIntakeForm();
+  const { formData, updateField, goNext, goBack, isPlatformSelected, uploadedDocs } = useIntakeForm();
   const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const ownerSetup = !formData.setup_by_representative;
 
   const platformNames = formData.selected_platforms.join(', ') || 'marketplace';
 
+  const hasDoc = (type: string) => uploadedDocs.some(d => d.document_type === type);
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (formData.setup_by_representative) {
       if (!formData.rep_name.trim()) e.rep_name = 'Required';
       if (!formData.rep_relationship) e.rep_relationship = 'Required';
+      if (!hasDoc('RepID')) e.RepID = 'Representative ID is required';
+      if (!hasDoc('AuthorizationLetter')) e.AuthorizationLetter = 'Authorization letter is required';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -66,7 +70,9 @@ export const Step5Auth = () => {
               {errors.rep_relationship && <p className="text-xs text-destructive mt-1">{errors.rep_relationship}</p>}
             </div>
             <DocumentUpload documentType="RepID" label="Representative's Government ID" required />
+            {errors.RepID && <p className="text-xs text-destructive">{errors.RepID}</p>}
             <DocumentUpload documentType="AuthorizationLetter" label="Letter of Authorization" required />
+            {errors.AuthorizationLetter && <p className="text-xs text-destructive">{errors.AuthorizationLetter}</p>}
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription className="text-sm">

@@ -14,12 +14,14 @@ import { IntakeField } from '../IntakeField';
 import { DocumentUpload } from '../DocumentUpload';
 
 export const Step1Business = () => {
-  const { formData, updateField, goNext, goBack } = useIntakeForm();
+  const { formData, updateField, goNext, goBack, uploadedDocs } = useIntakeForm();
   const { getGuidance } = useGuidance();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [otherAgent, setOtherAgent] = useState('');
 
   const validateEin = (v: string) => /^\d{2}-\d{7}$/.test(v);
+
+  const hasDoc = (type: string) => uploadedDocs.some(d => d.document_type === type);
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -40,6 +42,8 @@ export const Step1Business = () => {
       if (!formData.operating_state) e.operating_state = 'Required';
       if (!formData.operating_zip.trim()) e.operating_zip = 'Required';
     }
+    if (!hasDoc('BusinessRegistration')) e.BusinessRegistration = 'Registration document is required';
+    if (!hasDoc('BusinessAddressProof')) e.BusinessAddressProof = 'Proof of business address is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -176,12 +180,14 @@ export const Step1Business = () => {
             description="Upload your Certificate of Formation, Articles of Organization, or equivalent state filing document. Do NOT upload your IRS EIN letter here — Amazon does not accept it as a registration document."
             required
           />
+          {errors.BusinessRegistration && <p className="text-xs text-destructive">{errors.BusinessRegistration}</p>}
           <DocumentUpload
             documentType="BusinessAddressProof"
             label="Proof of Business Address"
             description="Upload a bank account STATEMENT (not a bank letter) showing your business name and address. Must be a full statement with transactions, dated within the last 180 days. Utility bills also accepted."
             required
           />
+          {errors.BusinessAddressProof && <p className="text-xs text-destructive">{errors.BusinessAddressProof}</p>}
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">
