@@ -50,27 +50,42 @@ export const Step5Review = () => {
       setSubmitted(true);
       setShowConfirm(false);
 
-      try {
-        const smsMessage = `New intake submitted by ${formData.client_name || formData.contact_first_name + ' ' + formData.contact_last_name} \u2014 ${platformNames} \u2014 ID: ${formId?.slice(0, 8)}`;
-        await supabase.functions.invoke('notify-sms', { body: { message: smsMessage } });
-      } catch (smsErr) {
-        console.error('SMS notification failed:', smsErr);
-      }
-
-      // Customer confirmation email
+      // Send rich notification (admin + customer emails + SMS)
       try {
         await supabase.functions.invoke('notify-sms', {
           body: {
-            message: `customer_confirmation`,
-            customer_email: formData.client_email,
-            customer_name: formData.client_name || `${formData.contact_first_name} ${formData.contact_last_name}`,
-            platforms: platformNames,
-            business_name: formData.business_legal_name,
-            form_id: formId,
+            intake: {
+              id: formId,
+              client_name: formData.client_name || `${formData.contact_first_name} ${formData.contact_last_name}`.trim(),
+              client_email: formData.client_email,
+              client_phone: formData.client_phone,
+              preferred_contact_method: formData.preferred_contact_method,
+              client_timezone: formData.client_timezone,
+              business_legal_name: formData.business_legal_name,
+              business_type: formData.business_type,
+              state_of_registration: formData.state_of_registration,
+              ein: formData.ein,
+              platform: formData.platform,
+              selected_platforms: formData.selected_platforms,
+              amazon_store_name: formData.amazon_store_name,
+              amazon_email: formData.amazon_email,
+              seller_plan: formData.seller_plan,
+              product_category: formData.product_category,
+              fulfillment_method: formData.fulfillment_method,
+              shopify_store_name: formData.shopify_store_name,
+              shopify_email: formData.shopify_email,
+              shopify_plan: formData.shopify_plan,
+              shipping_method: formData.shipping_method,
+              tiktok_shop_name: formData.tiktok_shop_name,
+              tiktok_email: formData.tiktok_email,
+              tiktok_category: formData.tiktok_category,
+              tiktok_fulfillment: formData.tiktok_fulfillment,
+              _doc_count: uploadedDocs.length,
+            },
           },
         });
-      } catch (e) {
-        console.error('Customer confirmation failed:', e);
+      } catch (notifyErr) {
+        console.error('Notification failed:', notifyErr);
       }
     } catch (e) {
       toast({ title: 'Submission failed', description: 'Please try again', variant: 'destructive' });

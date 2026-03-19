@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, Search, FileText } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, FileText, ArrowUp, ArrowDown } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,46 +30,68 @@ const EXPORT_COLUMNS = [
   { key: "updated_at", label: "Updated" },
 ];
 
+type SortKey = "business_legal_name" | "client_name" | "status" | "created_at" | "updated_at";
+type SortDir = "asc" | "desc";
+
 export default function AdminSubmissions() {
   const [data, setData] = useState<any[]>([]);
+  const [docCounts, setDocCounts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [platformFilter, setPlatformFilter] = useState("All");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sortKey, setSortKey] = useState<SortKey>("created_at");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
-    const { data: rows, error } = await supabase
-      .from("seller_intakes")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const [{ data: rows, error }, { data: docRows }] = await Promise.all([
+      supabase.from("seller_intakes").select("*").order("created_at", { ascending: false }),
+      supabase.from("intake_documents").select("intake_id"),
+    ]);
     if (error) toast({ title: "Failed to load submissions", description: error.message, variant: "destructive" });
     setData(rows || []);
+    // Build doc count map
+    const counts: Record<string, number> = {};
+    (docRows || []).forEach((d: any) => {
+      counts[d.intake_id] = (counts[d.intake_id] || 0) + 1;
+    });
+    setDocCounts(counts);
     setLoading(false);
   };
 
-  const filtered = data.filter((r) => {
-    if (statusFilter !== "All" && r.status !== statusFilter) return false;
-    if (platformFilter !== "All") {
-      const platforms = r.selected_platforms?.length ? r.selected_platforms : [r.platform];
-      if (!platforms.some((p: string) => p.toLowerCase().includes(platformFilter.toLowerCase()))) return false;
-    }
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        (r.business_legal_name || "").toLowerCase().includes(q) ||
-        (r.client_name || "").toLowerCase().includes(q) ||
-        (r.client_email || "").toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
+  const filtered = data
+    .filter((r) => {
+      if (statusFilter !== "All" && r.status !== statusFilter) return false;
+      if (platformFilter !== "All") {
+        const platforms = r.selected_platforms?.length ? r.selected_platforms : [r.platform];
+        if (!platforms.some((p: string) => p.toLowerCase().includes(platformFilter.toLowerCase()))) return false;
+      }
+      if (search) {
+        const q = search.toLowerCase();
+        return (
+          (r.business_legal_name || "").toLowerCase().includes(q) ||
+          (r.client_name || "").toLowerCase().includes(q) ||
+          (r.client_email || "").toLowerCase().includes(q) ||
+          (r.client_phone || "").toLowerCase().includes(q) ||
+          (r.ein || "").toLowerCase().includes(q)
+        );
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const aVal = a[sortKey] || "";
+      const bVal = b[sortKey] || "";
+      const cmp = String(aVal).localeCompare(String(bVal));
+      return sortDir === "asc" ? cmp : -cmp;
+    });
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -80,12 +102,23 @@ export default function AdminSubmissions() {
     setSelected(next);
   };
 
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    if (sortKey !== col) return null;
+    return sortDir === "asc" ? <ArrowUp className="h-3 w-3 inline ml-1" /> : <ArrowDown className="h-3 w-3 inline ml-1" />;
+  };
+
   const bulkUpdateStatus = async (newStatus: string) => {
     const ids = Array.from(selected);
-    const { error } = await supabase
-      .from("seller_intakes")
-      .update({ status: newStatus })
-      .in("id", ids);
+    const { error } = await supabase.from("seller_intakes").update({ status: newStatus }).in("id", ids);
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
@@ -93,6 +126,14 @@ export default function AdminSubmissions() {
       setSelected(new Set());
       loadData();
     }
+  };
+
+  const formatPhone = (phone: string | null) => {
+    if (!phone) return "—";
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    if (digits.length === 11 && digits[0] === "1") return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+    return phone;
   };
 
   if (loading) {
@@ -117,30 +158,22 @@ export default function AdminSubmissions() {
         <div className="relative max-w-xs flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name or email..."
+            placeholder="Search name, email, phone, EIN..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
             className="pl-9"
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-full sm:w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[160px]"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
-            ))}
+            {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={platformFilter} onValueChange={(v) => { setPlatformFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-full sm:w-[160px]">
-            <SelectValue placeholder="Platform" />
-          </SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[160px]"><SelectValue placeholder="Platform" /></SelectTrigger>
           <SelectContent>
-            {PLATFORMS.map((p) => (
-              <SelectItem key={p} value={p}>{p === "All" ? "All Platforms" : p}</SelectItem>
-            ))}
+            {PLATFORMS.map((p) => <SelectItem key={p} value={p}>{p === "All" ? "All Platforms" : p}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -148,7 +181,7 @@ export default function AdminSubmissions() {
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 sm:px-4 py-2">
           <span className="text-sm font-medium">{selected.size} selected</span>
-          <span className="text-muted-foreground hidden sm:inline">·</span>
+          <span className="text-muted-foreground hidden sm:inline">&middot;</span>
           {["Submitted", "In Review", "Issues Flagged", "Approved"].map((status) => (
             <Button key={status} variant="outline" size="sm" className="text-xs h-7" onClick={() => bulkUpdateStatus(status)}>
               Mark {status}
@@ -175,25 +208,45 @@ export default function AdminSubmissions() {
                       }}
                     />
                   </TableHead>
-                  <TableHead className="text-xs">Business Name</TableHead>
-                  <TableHead className="text-xs">Contact</TableHead>
+                  <TableHead className="text-xs cursor-pointer select-none" onClick={() => handleSort("business_legal_name")}>
+                    Business Name <SortIcon col="business_legal_name" />
+                  </TableHead>
+                  <TableHead className="text-xs cursor-pointer select-none" onClick={() => handleSort("client_name")}>
+                    Contact <SortIcon col="client_name" />
+                  </TableHead>
                   <TableHead className="text-xs">Email</TableHead>
                   <TableHead className="text-xs">Platform</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs">Submitted</TableHead>
-                  <TableHead className="text-xs">Updated</TableHead>
+                  <TableHead className="text-xs">Timezone</TableHead>
+                  <TableHead className="text-xs">Docs</TableHead>
+                  <TableHead className="text-xs cursor-pointer select-none" onClick={() => handleSort("status")}>
+                    Status <SortIcon col="status" />
+                  </TableHead>
+                  <TableHead className="text-xs cursor-pointer select-none" onClick={() => handleSort("created_at")}>
+                    Submitted <SortIcon col="created_at" />
+                  </TableHead>
+                  <TableHead className="text-xs cursor-pointer select-none" onClick={() => handleSort("updated_at")}>
+                    Updated <SortIcon col="updated_at" />
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paged.map((r) => (
-                  <TableRow key={r.id} className="even:bg-muted/30">
-                    <TableCell>
+                  <TableRow
+                    key={r.id}
+                    className="even:bg-muted/30 cursor-pointer"
+                    onClick={(e) => {
+                      // Don't navigate if clicking checkbox
+                      if ((e.target as HTMLElement).closest('[role="checkbox"]')) return;
+                      navigate(`/admin/submissions/${r.id}`);
+                    }}
+                  >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} />
                     </TableCell>
                     <TableCell>
-                      <Link to={`/admin/submissions/${r.id}`} className="text-primary hover:underline font-medium text-sm">
+                      <span className="text-primary font-medium text-sm">
                         {r.business_legal_name || "Unnamed"}
-                      </Link>
+                      </span>
                     </TableCell>
                     <TableCell className="text-sm">{r.client_name || "—"}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{r.client_email || "—"}</TableCell>
@@ -207,6 +260,8 @@ export default function AdminSubmissions() {
                         ))}
                       </div>
                     </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{r.client_timezone || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{docCounts[r.id] || 0} files</TableCell>
                     <TableCell><Badge className="text-xs">{r.status}</Badge></TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
@@ -218,7 +273,7 @@ export default function AdminSubmissions() {
                 ))}
                 {paged.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="p-0">
+                    <TableCell colSpan={10} className="p-0">
                       <EmptyState icon={FileText} title="No submissions found" description="Try adjusting your search or filter criteria." />
                     </TableCell>
                   </TableRow>
@@ -229,21 +284,30 @@ export default function AdminSubmissions() {
           {/* Mobile cards */}
           <div className="md:hidden divide-y divide-border">
             {paged.map((r) => (
-              <div key={r.id} className="p-3 flex gap-3 items-start">
+              <div
+                key={r.id}
+                className="p-3 flex gap-3 items-start cursor-pointer"
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('[role="checkbox"]')) return;
+                  navigate(`/admin/submissions/${r.id}`);
+                }}
+              >
                 <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} className="mt-0.5" />
-                <Link to={`/admin/submissions/${r.id}`} className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium text-primary truncate">{r.business_legal_name || "Unnamed"}</p>
                     <Badge className="text-[10px] shrink-0">{r.status}</Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{r.client_name || "—"} · {r.client_email || ""}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{r.client_name || "—"} &middot; {r.client_email || ""}</p>
                   <div className="flex items-center gap-1.5 mt-1.5">
                     {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
                       <Badge key={p} variant="outline" className="text-[10px] px-1.5 py-0">{p}</Badge>
                     ))}
-                    <span className="text-[10px] text-muted-foreground ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}</span>
+                    <span className="text-[10px] text-muted-foreground ml-auto">
+                      {docCounts[r.id] || 0} docs &middot; {r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}
+                    </span>
                   </div>
-                </Link>
+                </div>
               </div>
             ))}
             {paged.length === 0 && (
