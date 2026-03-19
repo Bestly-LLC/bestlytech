@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
-import { Upload, CheckCircle2, AlertCircle, X, FileText, Image } from 'lucide-react';
+import { Upload, CheckCircle2, AlertCircle, X, FileText, Image, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { useIntakeForm } from '@/contexts/IntakeFormContext';
 import { cn } from '@/lib/utils';
@@ -42,10 +41,11 @@ export const DocumentUpload = ({
 
       // Remove old doc record if exists
       if (existingDoc) {
-        await (supabase as any).from('intake_documents').delete().eq('id', existingDoc.id);
+        const { error: delError } = await supabase.from('intake_documents').delete().eq('id', existingDoc.id);
+        if (delError) throw delError;
       }
 
-      await (supabase as any).from('intake_documents').insert({
+      const { error: insertError } = await supabase.from('intake_documents').insert({
         intake_id: formId,
         document_type: documentType,
         file_name: file.name,
@@ -53,9 +53,19 @@ export const DocumentUpload = ({
         file_size: file.size,
         mime_type: file.type,
       });
+      if (insertError) throw insertError;
       await refreshDocs();
     } catch (e: any) {
-      setError(e.message || 'Upload failed');
+      const msg = e.message || 'Upload failed';
+      if (msg.includes('mime') || msg.includes('type')) {
+        setError('Invalid file type. Please upload a PDF, JPG, or PNG.');
+      } else if (msg.includes('size') || msg.includes('too large')) {
+        setError('File is too large. Maximum size is 10MB.');
+      } else if (msg.includes('row-level security')) {
+        setError('Permission denied. The form may have already been submitted.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setUploading(false);
     }
@@ -75,9 +85,14 @@ export const DocumentUpload = ({
 
   const removeDoc = async () => {
     if (!existingDoc) return;
-    await supabase.storage.from('intake-documents').remove([existingDoc.file_path]);
-    await (supabase as any).from('intake_documents').delete().eq('id', existingDoc.id);
-    await refreshDocs();
+    try {
+      await supabase.storage.from('intake-documents').remove([existingDoc.file_path]);
+      const { error: delError } = await supabase.from('intake_documents').delete().eq('id', existingDoc.id);
+      if (delError) throw delError;
+      await refreshDocs();
+    } catch (e: any) {
+      setError(e.message || 'Failed to remove document');
+    }
   };
 
   const formatSize = (bytes: number) => {
@@ -121,9 +136,9 @@ export const DocumentUpload = ({
         >
           <input ref={inputRef} type="file" accept={accept} onChange={onSelect} className="hidden" />
           {uploading ? (
-            <div className="space-y-2">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">Uploading...</p>
-              <Progress value={70} className="h-2" />
             </div>
           ) : (
             <>
