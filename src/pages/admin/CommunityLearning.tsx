@@ -239,6 +239,15 @@ export default function CommunityLearning() {
     }
   }, []);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchAll();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchAll]);
+
   const handleRunGenerator = useCallback(async () => {
     setRunningGenerator(true);
     try {
