@@ -150,8 +150,12 @@ export const Step2Owner = () => {
           )}
 
           <DocumentUpload documentType="IDFront" label="ID — Front" required />
+          {errors.IDFront && <p className="text-xs text-destructive">{errors.IDFront}</p>}
           {formData.id_type === 'Drivers License' && (
-            <DocumentUpload documentType="IDBack" label="ID — Back" description="Required for driver's licenses" required />
+            <>
+              <DocumentUpload documentType="IDBack" label="ID — Back" description="Required for driver's licenses" required />
+              {errors.IDBack && <p className="text-xs text-destructive">{errors.IDBack}</p>}
+            </>
           )}
         </div>
 
