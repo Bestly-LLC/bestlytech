@@ -42,12 +42,12 @@ const CONFIG = {
     lifetime: "$149.99",
   },
   platforms: [
-    { name: "Chrome", available: true, icon: Chrome },
-    { name: "Safari (iOS + macOS)", available: true, icon: Globe },
+    { name: "Chrome", available: false, icon: Chrome },
+    { name: "Safari (iOS + macOS)", available: false, icon: Globe },
   ],
   links: {
-    chrome: "https://chromewebstore.google.com/detail/cookie-yeti/kfdgjhogdcoifmflbhcoijfibmfhknkh",
-    safari: "https://apps.apple.com/us/app/cookie-yeti/id6743440341",
+    chrome: "#",
+    safari: "#",
   },
   features: [
     {
