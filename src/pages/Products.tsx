@@ -84,7 +84,7 @@ const statusColors: Record<ProductStatus, string> = {
 
 export default function Products() {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="What We're Building | Bestly LLC"
         description="Explore our portfolio of privacy-first products including Cookie Yeti, InventoryProof, and HOKU — software, AI tools, and physical products built with privacy at the core."
