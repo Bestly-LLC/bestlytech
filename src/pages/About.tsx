@@ -34,7 +34,7 @@ const operatingPrinciples = [
 
 export default function About() {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="About Jared Best | Founder of Bestly LLC"
         description="Founder-led technology studio based in Los Angeles. We build privacy-first software, consumer products, and business tools — without the trade-offs."
