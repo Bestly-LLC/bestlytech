@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
+import { SEOHead } from "@/components/SEOHead";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { GlowCard } from "@/components/ui/GlowCard";
