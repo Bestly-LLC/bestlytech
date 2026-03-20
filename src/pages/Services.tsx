@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { GlowCard } from "@/components/ui/GlowCard";
@@ -71,7 +70,7 @@ const audiences = [
 
 export default function Services() {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Services | Jared Best - Business Development & Technology"
         description="Web development, business consulting, AI automation, and venture studio services."
@@ -291,6 +290,6 @@ export default function Services() {
           </AnimatedSection>
         </div>
       </section>
-    </Layout>
+    </>
   );
 }

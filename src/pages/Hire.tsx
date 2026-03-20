@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Button } from "@/components/ui/button";
@@ -125,7 +124,7 @@ export default function Hire() {
   };
 
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Hire Jared Best | Business Development & Technology"
         description="Partner with me on your next project. From web development to AI automation, I offer consulting, advisory, and revenue-share partnerships for startups and small businesses."
@@ -466,6 +465,6 @@ export default function Hire() {
           )}
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

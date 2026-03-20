@@ -1,11 +1,10 @@
-import { Layout } from "@/components/layout/Layout";
 import { Link } from "react-router-dom";
 
 export default function TermsOfService() {
   const lastUpdated = "December 4, 2024";
 
   return (
-    <Layout>
+    <>
       <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8 lg:py-24">
         {/* Page Header */}
         <div className="mb-12">
@@ -351,6 +350,6 @@ export default function TermsOfService() {
           </div>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

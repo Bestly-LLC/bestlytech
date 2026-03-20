@@ -1,10 +1,9 @@
-import { Layout } from "@/components/layout/Layout";
 import { Link } from "react-router-dom";
 import { CheckCircle } from "lucide-react";
 
 export default function DeveloperCompliance() {
   return (
-    <Layout>
+    <>
       <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8 lg:py-24">
         {/* Page Header */}
         <div className="mb-12">
@@ -282,6 +281,6 @@ export default function DeveloperCompliance() {
           </div>
         </section>
       </div>
-    </Layout>
+    </>
   );
 }

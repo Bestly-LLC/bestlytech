@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { ScrollProgress } from "@/components/ScrollProgress";
-import { PageTransition } from "@/components/PageTransition";
+import { Layout } from "@/components/layout/Layout";
 import Index from "./pages/Index";
 import About from "./pages/About";
 import Products from "./pages/Products";
@@ -55,8 +55,9 @@ const App = () => (
         <BrowserRouter>
           <ScrollToTop />
           <ScrollProgress />
-          <PageTransition>
-            <Routes>
+          <Routes>
+            {/* Public pages with persistent Header/Footer */}
+            <Route element={<Layout />}>
               <Route path="/" element={<Index />} />
               <Route path="/about" element={<About />} />
               <Route path="/products" element={<Products />} />
@@ -77,27 +78,30 @@ const App = () => (
               <Route path="/services" element={<Services />} />
               <Route path="/apple-modernization" element={<AppleModernization />} />
               <Route path="/marketplace-setup" element={<MarketplaceSetup />} />
-              
               <Route path="/support" element={<CookieYetiSupport />} />
-              <Route path="/links" element={<Links />} />
-              {/* Admin Routes */}
-              <Route path="/admin/login" element={<AdminLogin />} />
-              <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-                <Route index element={<AdminDashboard />} />
-                <Route path="submissions" element={<AdminSubmissions />} />
-                <Route path="submissions/:id" element={<AdminSubmissionDetail />} />
-                <Route path="guide" element={<AdminSetupGuide />} />
-                <Route path="contacts" element={<AdminContacts />} />
-                <Route path="hires" element={<AdminHireRequests />} />
-                <Route path="waitlist" element={<AdminWaitlist />} />
-                <Route path="cookie-yeti" element={<CYDashboard />} />
-                <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
-                <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />
-                <Route path="cookie-yeti/community" element={<CommunityLearning />} />
-              </Route>
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </PageTransition>
+            </Route>
+
+            {/* Standalone pages (no Header/Footer) */}
+            <Route path="/links" element={<Links />} />
+
+            {/* Admin Routes */}
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="submissions" element={<AdminSubmissions />} />
+              <Route path="submissions/:id" element={<AdminSubmissionDetail />} />
+              <Route path="guide" element={<AdminSetupGuide />} />
+              <Route path="contacts" element={<AdminContacts />} />
+              <Route path="hires" element={<AdminHireRequests />} />
+              <Route path="waitlist" element={<AdminWaitlist />} />
+              <Route path="cookie-yeti" element={<CYDashboard />} />
+              <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
+              <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />
+              <Route path="cookie-yeti/community" element={<CommunityLearning />} />
+            </Route>
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

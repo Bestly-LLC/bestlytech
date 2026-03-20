@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -69,7 +68,7 @@ const PressKit = () => {
   ];
 
   return (
-    <Layout>
+    <>
       <div className="bg-background">
         {/* Hero Section */}
         <section className="py-20 sm:py-24">
@@ -402,7 +401,7 @@ const PressKit = () => {
           </div>
         </section>
       </div>
-    </Layout>
+    </>
   );
 };
 

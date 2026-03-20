@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
+
 
 // This is a template page for product-specific legal information
 // It will be used for each product when they launch
@@ -16,7 +16,7 @@ export default function ProductLegal() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8 lg:py-24">
         {/* Page Header */}
         <div className="mb-12">
@@ -206,6 +206,6 @@ export default function ProductLegal() {
           </div>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { GlowCard } from "@/components/ui/GlowCard";
@@ -172,7 +171,7 @@ const verticals = [
 
 export default function AppleModernization() {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Apple Business Modernization | Bestly"
         description="Apple-native infrastructure for local businesses. Discovery, payments, identity verification, and automation — all built on Apple's ecosystem."
@@ -355,6 +354,6 @@ export default function AppleModernization() {
           </AnimatedSection>
         </div>
       </section>
-    </Layout>
+    </>
   );
 }

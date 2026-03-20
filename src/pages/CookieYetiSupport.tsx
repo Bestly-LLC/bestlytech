@@ -1,4 +1,3 @@
-import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Mail, HelpCircle, Snowflake } from "lucide-react";
@@ -45,7 +44,7 @@ const faqs = [
 
 const CookieYetiSupport = () => {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Cookie Yeti Support | Bestly LLC"
         description="Get help with Cookie Yeti. Find answers to frequently asked questions or contact our support team."
@@ -127,7 +126,7 @@ const CookieYetiSupport = () => {
           </div>
         </section>
       </div>
-    </Layout>
+    </>
   );
 };
 

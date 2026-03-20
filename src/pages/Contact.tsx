@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Button } from "@/components/ui/button";
@@ -75,7 +74,7 @@ export default function Contact() {
   };
 
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Contact Us"
         description="Have a question, partnership inquiry, or need support? Contact Bestly LLC and we'll get back to you within 2-3 business days."
@@ -286,6 +285,6 @@ export default function Contact() {
         </div>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

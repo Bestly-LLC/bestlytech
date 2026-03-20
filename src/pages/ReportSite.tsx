@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -99,7 +98,7 @@ export default function ReportSite() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="min-h-screen bg-background">
         {/* Header */}
         <section className="border-b border-border bg-secondary/20">
@@ -227,6 +226,6 @@ export default function ReportSite() {
           </div>
         </section>
       </div>
-    </Layout>
+    </>
   );
 }

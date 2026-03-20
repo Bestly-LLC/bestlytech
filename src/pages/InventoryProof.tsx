@@ -1,4 +1,3 @@
-import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 
@@ -76,7 +75,7 @@ const InventoryProof = () => {
   ];
 
   return (
-    <Layout>
+    <>
       <SEOHead
         title="InventoryProof - AI-Powered Home Inventory | Bestly LLC"
         description="Create insurance-ready documentation of your belongings in minutes with AI-powered video analysis."
@@ -291,7 +290,7 @@ const InventoryProof = () => {
           </div>
         </div>
       </section>
-    </Layout>
+    </>
   );
 };
 

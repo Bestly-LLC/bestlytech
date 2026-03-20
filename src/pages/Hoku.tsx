@@ -1,4 +1,3 @@
-import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { WaitlistForm } from "@/components/WaitlistForm";
@@ -59,7 +58,7 @@ const ingredients = [
 
 const Hoku = () => {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="HOKU - Premium Hypochlorous Acid Skincare | Bestly LLC"
         description="HOKU delivers pharmaceutical-grade hypochlorous acid skincare using advanced electrolysis manufacturing. Gentle, effective skincare inspired by nature."
@@ -363,7 +362,7 @@ const Hoku = () => {
           </div>
         </div>
       </section>
-    </Layout>
+    </>
   );
 };
 

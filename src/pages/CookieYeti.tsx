@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
 import comingSoonAppstore from "@/assets/coming-soon-appstore.jpg";
 
@@ -117,7 +116,7 @@ const CONFIG = {
 
 export default function CookieYeti() {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Cookie Yeti – Automatic Cookie Consent Handler | Bestly LLC"
         description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection. Coming soon to Chrome and App Store."
@@ -618,6 +617,6 @@ export default function CookieYeti() {
           </div>
         </div>
       </section>
-    </Layout>
+    </>
   );
 }
