@@ -49,7 +49,7 @@ const PressKit = () => {
       description:
         "A premium skincare brand delivering pharmaceutical-grade hypochlorous acid formulations using advanced electrolysis manufacturing and vacuum-sealed packaging.",
       category: "Physical Product",
-      status: "In Development",
+      status: "Coming Soon",
     },
     {
       name: "NeckPilot",

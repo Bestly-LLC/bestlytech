@@ -52,7 +52,7 @@ const products: Product[] = [
     name: "HOKU",
     description: "Pharmaceutical-grade skincare, simplified. A daily facial mist backed by science, not marketing.",
     category: "Physical Product",
-    status: "In Development",
+    status: "Coming Soon",
     icon: Droplets,
     website: "https://hoku-clean.com",
   },
