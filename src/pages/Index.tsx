@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout/Layout";
+import { products } from "@/config/products";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Link } from "react-router-dom";
@@ -64,8 +65,8 @@ const trustPrinciples = [
 ];
 
 const metrics = [
-  { value: 3, label: "Products Shipped", suffix: "" },
-  { value: 100, label: "Privacy Score", suffix: "%" },
+  { value: products.length, label: "Products Built", suffix: "" },
+  { value: 100, label: "Privacy First", suffix: "%" },
   { value: 0, label: "User Data Sold", suffix: "" },
 ];
 
