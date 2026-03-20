@@ -1,25 +1,67 @@
 
 
-# Replace Homepage Metrics with Real, Evergreen Data
+# SaaS-Style Smooth Page Transitions
 
 ## Problem
-The current metrics (`3 Products Shipped`, `100% Privacy Score`, `0 User Data Sold`) are hardcoded and partially inaccurate (there are 4 products in `products.ts`, not 3).
+When clicking nav links, the page "flashes" because:
+1. `PageTransition` uses `key={location.pathname}`, which **unmounts and remounts** the entire component tree (including Layout/Header/Footer) on every route change
+2. The `animate-page-enter` animation starts from `opacity: 0`, causing a visible flash
+
+The Header/Footer re-render on every navigation because `<Layout>` is embedded inside each page component rather than wrapping routes at the app level.
 
 ## Solution
-Make the metrics derive from real data:
+Restructure so the Header and Footer are persistent (never unmount), and only the inner page content crossfades.
 
-1. **"4 Products Built"** — dynamically count from `src/config/products.ts` (currently 4, auto-updates when products are added/removed)
-2. **"0 User Data Sold"** — this is factual and evergreen (Bestly's privacy stance), keep it
-3. **"100% Privacy First"** — reword from "Privacy Score" (which sounds made-up) to a commitment statement
+### 1. Move Layout to wrap Routes in `App.tsx`
+- Create a new `<AppLayout>` component that renders Header + `<Outlet />` + Footer
+- Use it as a layout route wrapping all public pages
+- The `/links` route and admin routes stay outside (they already skip Layout)
+- This means Header/Footer **never unmount** during navigation
 
-## Changes
+### 2. Remove `<Layout>` from every page component
+- Every public page currently imports and wraps with `<Layout>`. Remove that wrapper from all ~20 page files, keeping just the inner content.
 
-### `src/pages/Index.tsx` (lines 1-70)
-- Import `products` from `@/config/products`
-- Change metrics array to:
-  - `{ value: products.length, label: "Products Built", suffix: "" }`
-  - `{ value: 0, label: "User Data Sold", suffix: "" }`
-  - `{ value: 100, label: "Privacy First", suffix: "%" }`
+### 3. Rework `PageTransition` for crossfade (not remount)
+- Instead of using `key` to force remount (which destroys and recreates DOM), use a CSS transition that fades content in without the opacity-0 flash
+- Use `useLocation` to trigger a brief fade transition on the `<main>` content only
+- Animation: quick 150ms opacity transition (no translateY jump) — feels instant like a SaaS app
 
-One file, ~3 line changes. The product count stays accurate automatically as the products config evolves.
+### 4. Keep ScrollToTop behavior
+- `ScrollToTop` stays as-is (scrolls to top on route change)
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `src/App.tsx` | Add layout route with `<Outlet>`, remove `<PageTransition>` wrapper around all routes |
+| `src/components/layout/Layout.tsx` | Refactor to use `<Outlet>` instead of `children` prop |
+| `src/components/PageTransition.tsx` | Replace key-based remount with a subtle opacity transition (no flash) |
+| `src/pages/Index.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/About.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/Products.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/CookieYeti.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/CookieYetiPrivacy.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/InventoryProof.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/Hoku.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/NeckPilot.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/PressKit.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/PrivacyPolicy.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/TermsOfService.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/DeveloperCompliance.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/Contact.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/ProductLegal.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/ReportSite.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/Hire.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/Services.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/AppleModernization.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/MarketplaceSetup.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/CookieYetiSupport.tsx` | Remove `<Layout>` wrapper |
+| `src/pages/NotFound.tsx` | Remove `<Layout>` wrapper (if present) |
+| `tailwind.config.ts` | Soften `page-enter` animation (150ms, opacity only) |
+
+## Result
+- Header and footer stay mounted — zero flash
+- Only the `<main>` content area transitions with a subtle 150ms fade
+- Feels like a single-page SaaS app
+- No layout shift, no white flash
 
