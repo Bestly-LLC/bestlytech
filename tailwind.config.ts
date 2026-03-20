@@ -160,7 +160,7 @@ export default {
         "gradient-shift": "gradient-shift 8s ease infinite",
         "shimmer": "shimmer 2s linear infinite",
         "counter": "counter 0.5s ease-out forwards",
-        "page-enter": "page-enter 0.4s ease-out forwards",
+        "page-enter": "page-enter 0.15s ease-out forwards",
       },
     },
   },
