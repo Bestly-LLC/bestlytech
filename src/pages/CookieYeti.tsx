@@ -120,7 +120,7 @@ export default function CookieYeti() {
     <Layout>
       <SEOHead
         title="Cookie Yeti – Automatic Cookie Consent Handler | Bestly LLC"
-        description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection. Available now for Chrome and Safari."
+        description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection. Coming soon to Chrome and App Store."
       />
       
       {/* Hero Section */}
