@@ -1,27 +1,28 @@
 
 
-# Cookie Yeti "Coming Soon" + Press Kit Fixes
+# Product Status Audit — Fix All Pages
 
-## Changes
+## Current vs Correct Statuses
 
-### 1. Copy uploaded asset
-- `user-uploads://iphone-app-store-android-coming-soon.jpg` → `src/assets/coming-soon-appstore.jpg`
+| Product | Current (wrong) | Correct |
+|---------|-----------------|---------|
+| Cookie Yeti | Coming Soon | Coming Soon ✓ |
+| InventoryProof | In Development | **Active** |
+| HOKU | In Development | **Coming Soon** |
+| NeckPilot | In Development | In Development ✓ |
 
-### 2. `src/pages/CookieYeti.tsx`
-- Hero: "Available Now" → "Coming Soon" (amber styling)
-- Replace download buttons with the uploaded App Store coming soon image + a "Coming Soon to Chrome Desktop" badge
-- Platform Availability section: green "Live" → amber "Coming Soon"
-- Final CTA: replace download buttons with coming soon badges
-- CONFIG: set `available: false`
+## Files to Update
 
-### 3. `src/pages/PressKit.tsx`
-- **Fix invalid email**: Replace `press@bestly.tech` (line 257/260) with `support@bestly.tech`
-- Cookie Yeti status: `"Active"` → `"Coming Soon"`
-- Add NeckPilot to the products array with status "In Development"
+### 1. `src/pages/Products.tsx`
+- Line 46: InventoryProof `"In Development"` → `"Active"`
+- Line 55: HOKU `"In Development"` → `"Coming Soon"`
 
-| File | Action |
-|------|--------|
-| `src/assets/coming-soon-appstore.jpg` | New asset |
-| `src/pages/CookieYeti.tsx` | Convert to "Coming Soon" |
-| `src/pages/PressKit.tsx` | Fix email, update status, add NeckPilot |
+### 2. `src/pages/PressKit.tsx`
+- Line 44: InventoryProof `"In Development"` → `"Active"`
+- Line 52: HOKU `"In Development"` → `"Coming Soon"`
+
+### 3. `src/config/products.ts` & `src/pages/Links.tsx`
+- These only carry name/description/href — no status field, so no changes needed.
+
+Two files, four line changes total.
 
