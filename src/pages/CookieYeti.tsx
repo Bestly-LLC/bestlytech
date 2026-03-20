@@ -117,7 +117,7 @@ const CONFIG = {
 
 export default function CookieYeti() {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Cookie Yeti – Automatic Cookie Consent Handler | Bestly LLC"
         description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection. Coming soon to Chrome and App Store."
