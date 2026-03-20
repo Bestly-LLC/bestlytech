@@ -282,6 +282,6 @@ export default function DeveloperCompliance() {
           </div>
         </section>
       </div>
-    </Layout>
+    </>
   );
 }

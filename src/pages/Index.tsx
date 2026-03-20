@@ -286,6 +286,6 @@ export default function Index() {
           </AnimatedSection>
         </div>
       </section>
-    </Layout>
+    </>
   );
 }

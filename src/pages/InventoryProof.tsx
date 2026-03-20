@@ -291,7 +291,7 @@ const InventoryProof = () => {
           </div>
         </div>
       </section>
-    </Layout>
+    </>
   );
 };
 

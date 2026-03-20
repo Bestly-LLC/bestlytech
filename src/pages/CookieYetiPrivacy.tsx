@@ -175,6 +175,6 @@ export default function CookieYetiPrivacy() {
           </section>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

@@ -402,7 +402,7 @@ const PressKit = () => {
           </div>
         </section>
       </div>
-    </Layout>
+    </>
   );
 };
 

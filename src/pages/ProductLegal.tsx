@@ -206,6 +206,6 @@ export default function ProductLegal() {
           </div>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

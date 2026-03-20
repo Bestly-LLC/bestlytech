@@ -618,6 +618,6 @@ export default function CookieYeti() {
           </div>
         </div>
       </section>
-    </Layout>
+    </>
   );
 }

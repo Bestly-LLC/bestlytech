@@ -349,7 +349,7 @@ const NeckPilot = () => {
           </div>
         </div>
       </section>
-    </Layout>
+    </>
   );
 };
 

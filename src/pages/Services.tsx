@@ -291,6 +291,6 @@ export default function Services() {
           </AnimatedSection>
         </div>
       </section>
-    </Layout>
+    </>
   );
 }

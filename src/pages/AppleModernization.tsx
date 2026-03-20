@@ -355,6 +355,6 @@ export default function AppleModernization() {
           </AnimatedSection>
         </div>
       </section>
-    </Layout>
+    </>
   );
 }

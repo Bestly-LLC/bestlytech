@@ -127,7 +127,7 @@ const CookieYetiSupport = () => {
           </div>
         </section>
       </div>
-    </Layout>
+    </>
   );
 };
 

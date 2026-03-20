@@ -357,6 +357,6 @@ export default function PrivacyPolicy() {
           </div>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

@@ -227,6 +227,6 @@ export default function ReportSite() {
           </div>
         </section>
       </div>
-    </Layout>
+    </>
   );
 }

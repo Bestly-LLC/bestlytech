@@ -224,6 +224,6 @@ export default function About() {
           </AnimatedSection>
         </div>
       </section>
-    </Layout>
+    </>
   );
 }

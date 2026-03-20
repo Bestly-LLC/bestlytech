@@ -83,7 +83,7 @@ const MarketplaceSetup = () => {
           <FormContent />
         </GuidanceProvider>
       </IntakeFormProvider>
-    </Layout>
+    </>
   );
 };
 

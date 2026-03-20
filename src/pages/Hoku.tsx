@@ -363,7 +363,7 @@ const Hoku = () => {
           </div>
         </div>
       </section>
-    </Layout>
+    </>
   );
 };
 

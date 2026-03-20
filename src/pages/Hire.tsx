@@ -466,6 +466,6 @@ export default function Hire() {
           )}
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

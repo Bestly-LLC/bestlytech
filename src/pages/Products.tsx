@@ -248,6 +248,6 @@ export default function Products() {
           </AnimatedSection>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }
