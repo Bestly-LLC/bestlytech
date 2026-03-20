@@ -108,7 +108,7 @@ const nb = {
 
 const NeckPilot = () => {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="NeckPilot — Posture Awareness Powered by AirPods | Bestly LLC"
         description="NeckPilot uses AirPods motion sensors for real-time head and neck posture tracking. Live Activities, gentle alerts, and privacy-first design. Coming soon from Bestly."
