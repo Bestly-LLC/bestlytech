@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout/Layout";
+import { products } from "@/config/products";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Link } from "react-router-dom";
