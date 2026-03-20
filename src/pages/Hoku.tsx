@@ -1,4 +1,4 @@
-import { Layout } from "@/components/layout/Layout";
+import { SEOHead } from "@/components/SEOHead";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { WaitlistForm } from "@/components/WaitlistForm";
