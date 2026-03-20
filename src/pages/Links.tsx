@@ -73,7 +73,7 @@ export default function Links() {
       {/* Links */}
       <div className="w-full max-w-md flex flex-col gap-3">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-1">Products</p>
-        {products.map((item) => (
+        {productLinks.map((item) => (
           <LinkButton key={item.label} item={item} />
         ))}
 
