@@ -79,6 +79,7 @@ const App = () => (
               <Route path="/marketplace-setup" element={<MarketplaceSetup />} />
               
               <Route path="/support" element={<CookieYetiSupport />} />
+              <Route path="/links" element={<Links />} />
               {/* Admin Routes */}
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
