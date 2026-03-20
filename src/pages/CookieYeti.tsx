@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
+import { SEOHead } from "@/components/SEOHead";
 import { SEOHead } from "@/components/SEOHead";
 import comingSoonAppstore from "@/assets/coming-soon-appstore.jpg";
 
