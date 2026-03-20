@@ -1,5 +1,4 @@
 import { SEOHead } from "@/components/SEOHead";
-import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";

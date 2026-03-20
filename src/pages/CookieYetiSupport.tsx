@@ -1,5 +1,4 @@
 import { SEOHead } from "@/components/SEOHead";
-import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Mail, HelpCircle, Snowflake } from "lucide-react";
 import { Button } from "@/components/ui/button";

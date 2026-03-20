@@ -1,5 +1,4 @@
 import { SEOHead } from '@/components/SEOHead';
-import { SEOHead } from '@/components/SEOHead';
 import { IntakeFormProvider, useIntakeForm } from '@/contexts/IntakeFormContext';
 import { GuidanceProvider } from '@/contexts/GuidanceContext';
 import { StepProgress } from '@/components/amazon-setup/StepProgress';
