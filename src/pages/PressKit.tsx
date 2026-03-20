@@ -219,6 +219,8 @@ const PressKit = () => {
                             className={`text-xs font-medium px-2 py-1 rounded ${
                               product.status === "Active"
                                 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                : product.status === "Coming Soon"
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
                                 : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
                             }`}
                           >
