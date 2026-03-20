@@ -172,7 +172,7 @@ const verticals = [
 
 export default function AppleModernization() {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Apple Business Modernization | Bestly"
         description="Apple-native infrastructure for local businesses. Discovery, payments, identity verification, and automation — all built on Apple's ecosystem."
