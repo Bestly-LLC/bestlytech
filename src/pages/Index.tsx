@@ -65,8 +65,8 @@ const trustPrinciples = [
 ];
 
 const metrics = [
-  { value: 3, label: "Products Shipped", suffix: "" },
-  { value: 100, label: "Privacy Score", suffix: "%" },
+  { value: products.length, label: "Products Built", suffix: "" },
+  { value: 100, label: "Privacy First", suffix: "%" },
   { value: 0, label: "User Data Sold", suffix: "" },
 ];
 
