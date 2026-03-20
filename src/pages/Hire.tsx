@@ -125,7 +125,7 @@ export default function Hire() {
   };
 
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Hire Jared Best | Business Development & Technology"
         description="Partner with me on your next project. From web development to AI automation, I offer consulting, advisory, and revenue-share partnerships for startups and small businesses."
