@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
+
 
 // This is a template page for product-specific legal information
 // It will be used for each product when they launch
