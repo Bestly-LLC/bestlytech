@@ -72,7 +72,7 @@ const metrics = [
 
 export default function Index() {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Bestly – Products That Respect People"
         description="Bestly is a product studio building software, hardware, and AI tools with privacy at the core."
