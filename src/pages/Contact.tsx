@@ -75,7 +75,7 @@ export default function Contact() {
   };
 
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Contact Us"
         description="Have a question, partnership inquiry, or need support? Contact Bestly LLC and we'll get back to you within 2-3 business days."
