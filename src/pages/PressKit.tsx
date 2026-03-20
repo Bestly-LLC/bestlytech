@@ -69,7 +69,7 @@ const PressKit = () => {
   ];
 
   return (
-    <Layout>
+    <>
       <div className="bg-background">
         {/* Hero Section */}
         <section className="py-20 sm:py-24">
