@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ChevronDown, Droplets } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,45 +7,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import inventoryproofIcon from "@/assets/inventoryproof-icon.png";
-import neckpilotIcon from "@/assets/neckpilot-icon.png";
-import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
-import type { LucideIcon } from "lucide-react";
-
-interface Product {
-  name: string;
-  description: string;
-  href: string;
-  icon?: LucideIcon;
-  image?: string;
-}
-
-const products: Product[] = [
-  {
-    name: "Cookie Yeti",
-    description: "Privacy-focused cookie consent handler",
-    href: "/cookie-yeti",
-    image: cookieYetiIcon,
-  },
-  {
-    name: "InventoryProof",
-    description: "AI-powered home inventory documentation",
-    href: "/inventory-proof",
-    image: inventoryproofIcon,
-  },
-  {
-    name: "HOKU",
-    description: "Premium hypochlorous acid skincare",
-    href: "/hoku",
-    icon: Droplets,
-  },
-  {
-    name: "NeckPilot",
-    description: "Posture awareness powered by AirPods",
-    href: "/neckpilot",
-    image: neckpilotIcon,
-  },
-];
+import { products } from "@/config/products";
+import type { Product } from "@/config/products";
 
 interface ProductsDropdownProps {
   className?: string;

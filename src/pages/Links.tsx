@@ -1,10 +1,7 @@
 import { ExternalLink, Globe, Briefcase, Phone, Newspaper, Wrench, Instagram, Twitter } from "lucide-react";
 import bestlyLogo from "@/assets/bestly-logo.png";
 import jaredHeadshot from "@/assets/jared-headshot.png";
-import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
-import inventoryProofIcon from "@/assets/inventoryproof-icon.png";
-import hokuBottle from "@/assets/hoku-bottle.png";
-import neckpilotIcon from "@/assets/neckpilot-icon.png";
+import { products as sharedProducts } from "@/config/products";
 
 interface LinkItem {
   label: string;
@@ -14,12 +11,12 @@ interface LinkItem {
   external?: boolean;
 }
 
-const products: LinkItem[] = [
-  { label: "Cookie Yeti", href: "/cookie-yeti", image: cookieYetiIcon },
-  { label: "InventoryProof", href: "https://inventoryproof.com", image: inventoryProofIcon, external: true },
-  { label: "HOKU", href: "https://hoku-clean.com", image: hokuBottle, external: true },
-  { label: "NeckPilot", href: "/neckpilot", image: neckpilotIcon },
-];
+const productLinks: LinkItem[] = sharedProducts.map((p) => ({
+  label: p.name,
+  href: p.href,
+  image: p.image,
+  external: p.href.startsWith("http"),
+}));
 
 const pages: LinkItem[] = [
   { label: "Bestly Website", href: "/", icon: <Globe className="h-5 w-5" /> },
@@ -76,7 +73,7 @@ export default function Links() {
       {/* Links */}
       <div className="w-full max-w-md flex flex-col gap-3">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-1">Products</p>
-        {products.map((item) => (
+        {productLinks.map((item) => (
           <LinkButton key={item.label} item={item} />
         ))}
 
