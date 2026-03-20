@@ -41,7 +41,7 @@ const PressKit = () => {
       description:
         "A mobile-first platform that uses AI-powered video analysis to help homeowners and renters create insurance-ready documentation of their belongings in minutes.",
       category: "Mobile Platform",
-      status: "In Development",
+      status: "Active",
     },
     {
       name: "HOKU",
