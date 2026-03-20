@@ -43,7 +43,7 @@ const products: Product[] = [
     name: "InventoryProof",
     description: "Walk through your home. Get an insurance-ready inventory report in minutes, powered by AI.",
     category: "Platform",
-    status: "In Development",
+    status: "Active",
     icon: Smartphone,
     website: "https://inventoryproof.com",
   },
