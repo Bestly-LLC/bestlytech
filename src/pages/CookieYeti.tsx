@@ -150,27 +150,27 @@ export default function CookieYeti() {
             
             <div className="mt-8">
               <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-sm px-4 py-1">
-                Available Now
+                Coming Soon
               </Badge>
             </div>
             
-            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" asChild>
-                <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
-                  <Chrome className="h-5 w-5 mr-2" />
-                  Download for Chrome
-                </a>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
-                  <Globe className="h-5 w-5 mr-2" />
-                  Download for Safari
-                </a>
-              </Button>
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
+              <img
+                src={comingSoonAppstore}
+                alt="Coming Soon to App Store and Android"
+                className="h-auto w-64 rounded-xl shadow-md"
+              />
+              <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
+                <Chrome className="h-8 w-8 text-muted-foreground" />
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
+                  <p className="text-xs text-muted-foreground">Coming Soon</p>
+                </div>
+              </div>
             </div>
             
-            <p className="mt-4 text-sm text-muted-foreground">
-              Available on Chrome and Safari (iOS + macOS)
+            <p className="mt-6 text-sm text-muted-foreground">
+              Coming soon to Chrome and App Store
             </p>
             
             <div className="mt-6">
