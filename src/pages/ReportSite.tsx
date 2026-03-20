@@ -99,7 +99,7 @@ export default function ReportSite() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="min-h-screen bg-background">
         {/* Header */}
         <section className="border-b border-border bg-secondary/20">
