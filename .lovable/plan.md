@@ -1,28 +1,25 @@
 
 
-# Product Status Audit — Fix All Pages
+# Replace Homepage Metrics with Real, Evergreen Data
 
-## Current vs Correct Statuses
+## Problem
+The current metrics (`3 Products Shipped`, `100% Privacy Score`, `0 User Data Sold`) are hardcoded and partially inaccurate (there are 4 products in `products.ts`, not 3).
 
-| Product | Current (wrong) | Correct |
-|---------|-----------------|---------|
-| Cookie Yeti | Coming Soon | Coming Soon ✓ |
-| InventoryProof | In Development | **Active** |
-| HOKU | In Development | **Coming Soon** |
-| NeckPilot | In Development | In Development ✓ |
+## Solution
+Make the metrics derive from real data:
 
-## Files to Update
+1. **"4 Products Built"** — dynamically count from `src/config/products.ts` (currently 4, auto-updates when products are added/removed)
+2. **"0 User Data Sold"** — this is factual and evergreen (Bestly's privacy stance), keep it
+3. **"100% Privacy First"** — reword from "Privacy Score" (which sounds made-up) to a commitment statement
 
-### 1. `src/pages/Products.tsx`
-- Line 46: InventoryProof `"In Development"` → `"Active"`
-- Line 55: HOKU `"In Development"` → `"Coming Soon"`
+## Changes
 
-### 2. `src/pages/PressKit.tsx`
-- Line 44: InventoryProof `"In Development"` → `"Active"`
-- Line 52: HOKU `"In Development"` → `"Coming Soon"`
+### `src/pages/Index.tsx` (lines 1-70)
+- Import `products` from `@/config/products`
+- Change metrics array to:
+  - `{ value: products.length, label: "Products Built", suffix: "" }`
+  - `{ value: 0, label: "User Data Sold", suffix: "" }`
+  - `{ value: 100, label: "Privacy First", suffix: "%" }`
 
-### 3. `src/config/products.ts` & `src/pages/Links.tsx`
-- These only carry name/description/href — no status field, so no changes needed.
-
-Two files, four line changes total.
+One file, ~3 line changes. The product count stays accurate automatically as the products config evolves.
 
