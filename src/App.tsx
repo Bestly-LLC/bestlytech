@@ -28,6 +28,7 @@ import AppleModernization from "./pages/AppleModernization";
 import MarketplaceSetup from "./pages/MarketplaceSetup";
 import CookieYetiSupport from "./pages/CookieYetiSupport";
 import NotFound from "./pages/NotFound";
+import Links from "./pages/Links";
 import { AdminRoute } from "@/components/admin/AdminRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import AdminLogin from "./pages/admin/AdminLogin";
