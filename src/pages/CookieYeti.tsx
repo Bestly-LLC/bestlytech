@@ -594,25 +594,25 @@ export default function CookieYeti() {
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto">
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Ready for Distraction-Free Browsing?
+              Cookie Yeti Is Coming Soon
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Download Cookie Yeti now and reclaim your browsing experience.
+              We're putting the finishing touches on Cookie Yeti. Stay tuned for launch on Chrome and the App Store.
             </p>
             
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" asChild>
-                <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
-                  <Chrome className="h-5 w-5 mr-2" />
-                  Download for Chrome
-                </a>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
-                  <Globe className="h-5 w-5 mr-2" />
-                  Download for Safari
-                </a>
-              </Button>
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
+              <img
+                src={comingSoonAppstore}
+                alt="Coming Soon to App Store and Android"
+                className="h-auto w-56 rounded-xl shadow-md"
+              />
+              <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
+                <Chrome className="h-8 w-8 text-muted-foreground" />
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
+                  <p className="text-xs text-muted-foreground">Coming Soon</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

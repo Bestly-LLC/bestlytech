@@ -264,10 +264,10 @@ const PressKit = () => {
                         Press Inquiries
                       </p>
                       <a
-                        href="mailto:press@bestly.tech"
+                        href="mailto:support@bestly.tech"
                         className="text-primary hover:underline"
                       >
-                        press@bestly.tech
+                        support@bestly.tech
                       </a>
                     </div>
                   </div>
