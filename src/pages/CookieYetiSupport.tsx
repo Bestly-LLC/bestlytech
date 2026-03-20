@@ -45,7 +45,7 @@ const faqs = [
 
 const CookieYetiSupport = () => {
   return (
-    <Layout>
+    <>
       <SEOHead
         title="Cookie Yeti Support | Bestly LLC"
         description="Get help with Cookie Yeti. Find answers to frequently asked questions or contact our support team."
