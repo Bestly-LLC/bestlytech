@@ -141,8 +141,8 @@ export default {
           "100%": { transform: "translateY(0)", opacity: "1" },
         },
         "page-enter": {
-          "0%": { opacity: "0", transform: "translateY(8px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
         },
       },
       animation: {
