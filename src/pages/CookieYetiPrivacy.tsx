@@ -17,7 +17,7 @@ export default function CookieYetiPrivacy() {
   });
 
   return (
-    <Layout>
+    <>
       <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8 lg:py-24">
         <header className="mb-12">
           <h1 className="text-4xl font-semibold tracking-tight text-foreground">
