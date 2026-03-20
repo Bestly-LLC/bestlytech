@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
+import { AnimatedSection } from "@/components/AnimatedSection";
 import comingSoonAppstore from "@/assets/coming-soon-appstore.jpg";
 
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,6 @@ import {
 
 // ============================================
 // EDITABLE CONFIGURATION
-// Update these values to change content easily
 // ============================================
 const CONFIG = {
   version: "1.0.1",
@@ -126,66 +126,77 @@ export default function CookieYeti() {
       <section className="relative overflow-hidden bg-gradient-to-b from-secondary/50 to-background">
         <div className="mx-auto max-w-7xl px-6 py-20 lg:px-8 lg:py-32">
           <div className="text-center max-w-3xl mx-auto">
-            <div className="flex justify-center mb-8">
-              <div className="relative">
-                <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 overflow-hidden">
-                  <img src={cookieYetiIcon} alt="Cookie Yeti" className="h-16 w-16 object-contain" />
+            <AnimatedSection>
+              <div className="flex justify-center mb-8">
+                <div className="relative">
+                  <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 overflow-hidden">
+                    <img src={cookieYetiIcon} alt="Cookie Yeti" className="h-16 w-16 object-contain" />
+                  </div>
+                  <Badge className="absolute -top-2 -right-2 bg-primary text-primary-foreground">
+                    v{CONFIG.version}
+                  </Badge>
                 </div>
-                <Badge className="absolute -top-2 -right-2 bg-primary text-primary-foreground">
-                  v{CONFIG.version}
+              </div>
+            </AnimatedSection>
+            
+            <AnimatedSection delay={80}>
+              <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
+                Cookie Yeti
+              </h1>
+              <p className="mt-4 text-xl text-primary font-medium">
+                Distraction-Free Browsing, Automatically
+              </p>
+            </AnimatedSection>
+
+            <AnimatedSection delay={160}>
+              <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
+                Automatically handles cookie consent pop-ups and cleans tracking cookies from sites you visit. 
+                5 banner handles per day free, unlimited with Pro. No data collection. Just peaceful browsing.
+              </p>
+            </AnimatedSection>
+            
+            <AnimatedSection delay={240}>
+              <div className="mt-8">
+                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-sm px-4 py-1">
+                  Coming Soon
                 </Badge>
               </div>
-            </div>
-            
-            <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
-              Cookie Yeti
-            </h1>
-            <p className="mt-4 text-xl text-primary font-medium">
-              Distraction-Free Browsing, Automatically
-            </p>
-            <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              Automatically handles cookie consent pop-ups and cleans tracking cookies from sites you visit. 
-              5 banner handles per day free, unlimited with Pro. No data collection. Just peaceful browsing.
-            </p>
-            
-            <div className="mt-8">
-              <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-sm px-4 py-1">
-                Coming Soon
-              </Badge>
-            </div>
-            
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
-              <img
-                src={comingSoonAppstore}
-                alt="Coming Soon to App Store and Android"
-                className="h-auto w-64 rounded-xl shadow-md"
-              />
-              <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
-                <Chrome className="h-8 w-8 text-muted-foreground" />
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
-                  <p className="text-xs text-muted-foreground">Coming Soon</p>
+              
+              <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
+                <img
+                  src={comingSoonAppstore}
+                  alt="Coming Soon to App Store and Android"
+                  className="h-auto w-64 rounded-xl shadow-md"
+                />
+                <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
+                  <Chrome className="h-8 w-8 text-muted-foreground" />
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
+                    <p className="text-xs text-muted-foreground">Coming Soon</p>
+                  </div>
                 </div>
               </div>
-            </div>
+              
+              <p className="mt-6 text-sm text-muted-foreground">
+                Coming soon to Chrome and App Store
+              </p>
+            </AnimatedSection>
             
-            <p className="mt-6 text-sm text-muted-foreground">
-              Coming soon to Chrome and App Store
-            </p>
-            
-            <div className="mt-6">
-              <Link 
-                to="/privacy" 
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
-              >
-                View Privacy Policy
-              </Link>
-            </div>
-            
-            <div className="mt-8 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Shield className="h-4 w-4" />
-              <span>100% Privacy-First • No Data Collection • No Tracking</span>
-            </div>
+            <AnimatedSection delay={320}>
+              <div className="mt-6">
+                <Link 
+                  to="/privacy" 
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
+                >
+                  View Privacy Policy
+                </Link>
+              </div>
+              
+              <div className="mt-8 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Shield className="h-4 w-4" />
+                <span>100% Privacy-First • No Data Collection • No Tracking</span>
+              </div>
+            </AnimatedSection>
           </div>
         </div>
       </section>
@@ -193,14 +204,16 @@ export default function CookieYeti() {
       {/* How It Works */}
       <section className="py-20 lg:py-24 border-t border-border">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              How It Works
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Three simple steps to distraction-free browsing
-            </p>
-          </div>
+          <AnimatedSection>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                How It Works
+              </h2>
+              <p className="mt-4 text-lg text-muted-foreground">
+                Three simple steps to distraction-free browsing
+              </p>
+            </div>
+          </AnimatedSection>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12">
             {[
@@ -222,21 +235,23 @@ export default function CookieYeti() {
                 title: "Browse Freely",
                 description: "That's it! Cookie Yeti works silently in the background while you enjoy the web.",
               },
-            ].map((item) => (
-              <div key={item.step} className="relative text-center">
-                <div className="flex justify-center mb-6">
-                  <div className="relative">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary border border-border">
-                      <item.icon className="h-7 w-7 text-foreground" />
-                    </div>
-                    <div className="absolute -top-2 -left-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                      {item.step}
+            ].map((item, index) => (
+              <AnimatedSection key={item.step} delay={index * 100}>
+                <div className="relative text-center">
+                  <div className="flex justify-center mb-6">
+                    <div className="relative">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary border border-border">
+                        <item.icon className="h-7 w-7 text-foreground" />
+                      </div>
+                      <div className="absolute -top-2 -left-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                        {item.step}
+                      </div>
                     </div>
                   </div>
+                  <h3 className="text-xl font-semibold text-foreground mb-3">{item.title}</h3>
+                  <p className="text-muted-foreground leading-relaxed">{item.description}</p>
                 </div>
-                <h3 className="text-xl font-semibold text-foreground mb-3">{item.title}</h3>
-                <p className="text-muted-foreground leading-relaxed">{item.description}</p>
-              </div>
+              </AnimatedSection>
             ))}
           </div>
         </div>
@@ -245,27 +260,28 @@ export default function CookieYeti() {
       {/* Key Features */}
       <section className="py-20 lg:py-24 bg-secondary/30 border-t border-border">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Key Features
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Everything you need for a cleaner browsing experience
-            </p>
-          </div>
+          <AnimatedSection>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Key Features
+              </h2>
+              <p className="mt-4 text-lg text-muted-foreground">
+                Everything you need for a cleaner browsing experience
+              </p>
+            </div>
+          </AnimatedSection>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {CONFIG.features.map((feature) => (
-              <div
-                key={feature.title}
-                className="rounded-xl border border-border bg-card p-6 transition-all hover:shadow-md"
-              >
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary mb-4">
-                  <feature.icon className="h-6 w-6 text-foreground" />
+            {CONFIG.features.map((feature, index) => (
+              <AnimatedSection key={feature.title} delay={index * 80}>
+                <div className="rounded-xl border border-border bg-card p-6 transition-all hover:shadow-md">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary mb-4">
+                    <feature.icon className="h-6 w-6 text-foreground" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
-              </div>
+              </AnimatedSection>
             ))}
           </div>
         </div>
@@ -275,39 +291,45 @@ export default function CookieYeti() {
       <section className="py-20 lg:py-24 border-t border-border">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
-            <div className="flex justify-center mb-6">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                <Shield className="h-8 w-8 text-primary" />
-              </div>
-            </div>
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Built for Privacy
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Cookie Yeti operates entirely on your device. Your privacy preferences never leave your browser.
-            </p>
-            
-            <div className="mt-10 grid grid-cols-2 md:grid-cols-3 gap-4">
-              {[
-                "No data collection",
-                "No tracking",
-                "No selling or sharing",
-                "No ads",
-                "Free tier available",
-                "All settings stored locally",
-              ].map((item) => (
-                <div key={item} className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
-                  <span className="text-foreground">{item}</span>
+            <AnimatedSection>
+              <div className="flex justify-center mb-6">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                  <Shield className="h-8 w-8 text-primary" />
                 </div>
-              ))}
-            </div>
+              </div>
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Built for Privacy
+              </h2>
+              <p className="mt-4 text-lg text-muted-foreground">
+                Cookie Yeti operates entirely on your device. Your privacy preferences never leave your browser.
+              </p>
+            </AnimatedSection>
             
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button variant="outline" asChild>
-                <Link to="/privacy">View Full Privacy Policy</Link>
-              </Button>
-            </div>
+            <AnimatedSection delay={100}>
+              <div className="mt-10 grid grid-cols-2 md:grid-cols-3 gap-4">
+                {[
+                  "No data collection",
+                  "No tracking",
+                  "No selling or sharing",
+                  "No ads",
+                  "Free tier available",
+                  "All settings stored locally",
+                ].map((item) => (
+                  <div key={item} className="flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                    <span className="text-foreground">{item}</span>
+                  </div>
+                ))}
+              </div>
+            </AnimatedSection>
+            
+            <AnimatedSection delay={200}>
+              <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <Button variant="outline" asChild>
+                  <Link to="/privacy">View Full Privacy Policy</Link>
+                </Button>
+              </div>
+            </AnimatedSection>
           </div>
         </div>
       </section>
@@ -315,296 +337,214 @@ export default function CookieYeti() {
       {/* Pricing */}
       <section className="py-20 lg:py-24 bg-secondary/30 border-t border-border">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Simple, Fair Pricing
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Choose the plan that works for you
-            </p>
-          </div>
+          <AnimatedSection>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Simple, Fair Pricing
+              </h2>
+              <p className="mt-4 text-lg text-muted-foreground">
+                Choose the plan that works for you
+              </p>
+            </div>
+          </AnimatedSection>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {/* Free Tier */}
-            <div className="rounded-xl border border-border bg-card p-8">
-              <div className="text-center">
-                <h3 className="text-xl font-semibold text-foreground">Free</h3>
-                <div className="mt-4">
-                  <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.free}</span>
+            <AnimatedSection delay={0}>
+              <div className="rounded-xl border border-border bg-card p-8">
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-foreground">Free</h3>
+                  <div className="mt-4">
+                    <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.free}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">5 banner handles per day</p>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">5 banner handles per day</p>
+                <ul className="mt-8 space-y-4">
+                  {[
+                    { icon: Clock, text: "5 banner handles per day" },
+                    { icon: Settings, text: "Basic preferences" },
+                    { icon: Globe, text: "Works on popular sites" },
+                  ].map((item) => (
+                    <li key={item.text} className="flex items-center gap-3">
+                      <item.icon className="h-5 w-5 text-muted-foreground shrink-0" />
+                      <span className="text-sm text-muted-foreground">{item.text}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button variant="outline" className="w-full mt-8">Get Started Free</Button>
               </div>
-              
-              <ul className="mt-8 space-y-4">
-                {[
-                  { icon: Clock, text: "5 banner handles per day" },
-                  { icon: Settings, text: "Basic preferences" },
-                  { icon: Globe, text: "Works on popular sites" },
-                ].map((item) => (
-                  <li key={item.text} className="flex items-center gap-3">
-                    <item.icon className="h-5 w-5 text-muted-foreground shrink-0" />
-                    <span className="text-sm text-muted-foreground">{item.text}</span>
-                  </li>
-                ))}
-              </ul>
-              
-              <Button variant="outline" className="w-full mt-8">
-                Get Started Free
-              </Button>
-            </div>
+            </AnimatedSection>
             
             {/* Monthly Tier */}
-            <div className="rounded-xl border border-border bg-card p-8">
-              <div className="text-center">
-                <h3 className="text-xl font-semibold text-foreground">Monthly</h3>
-                <div className="mt-4">
-                  <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.monthly}</span>
-                  <span className="text-muted-foreground ml-1">/mo</span>
+            <AnimatedSection delay={100}>
+              <div className="rounded-xl border border-border bg-card p-8">
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-foreground">Monthly</h3>
+                  <div className="mt-4">
+                    <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.monthly}</span>
+                    <span className="text-muted-foreground ml-1">/mo</span>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">Billed monthly</p>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">Billed monthly</p>
+                <ul className="mt-8 space-y-4">
+                  {[
+                    { icon: Infinity, text: "Unlimited sites" },
+                    { icon: Shield, text: "Tracking cookie cleaning" },
+                    { icon: Settings, text: "Saved preferences" },
+                    { icon: CheckCircle2, text: "Cancel anytime" },
+                  ].map((item) => (
+                    <li key={item.text} className="flex items-center gap-3">
+                      <item.icon className="h-5 w-5 text-primary shrink-0" />
+                      <span className="text-sm text-foreground">{item.text}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button variant="outline" className="w-full mt-8">Subscribe Monthly</Button>
               </div>
-              
-              <ul className="mt-8 space-y-4">
-                {[
-                  { icon: Infinity, text: "Unlimited sites" },
-                  { icon: Shield, text: "Tracking cookie cleaning" },
-                  { icon: Settings, text: "Saved preferences" },
-                  { icon: CheckCircle2, text: "Cancel anytime" },
-                ].map((item) => (
-                  <li key={item.text} className="flex items-center gap-3">
-                    <item.icon className="h-5 w-5 text-primary shrink-0" />
-                    <span className="text-sm text-foreground">{item.text}</span>
-                  </li>
-                ))}
-              </ul>
-              
-              <Button variant="outline" className="w-full mt-8">
-                Subscribe Monthly
-              </Button>
-            </div>
+            </AnimatedSection>
             
             {/* Yearly Tier */}
-            <div className="rounded-xl border-2 border-primary bg-card p-8 relative">
-              <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
-                Recommended
-              </Badge>
-              <div className="text-center">
-                <h3 className="text-xl font-semibold text-foreground">Yearly</h3>
-                <div className="mt-4">
-                  <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.yearly}</span>
-                  <span className="text-muted-foreground ml-1">/yr</span>
+            <AnimatedSection delay={200}>
+              <div className="rounded-xl border-2 border-primary bg-card p-8 relative">
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
+                  Recommended
+                </Badge>
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-foreground">Yearly</h3>
+                  <div className="mt-4">
+                    <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.yearly}</span>
+                    <span className="text-muted-foreground ml-1">/yr</span>
+                  </div>
+                  <p className="mt-2 text-sm font-medium text-primary">Save 33%</p>
                 </div>
-                <p className="mt-2 text-sm font-medium text-primary">Save 33%</p>
+                <ul className="mt-8 space-y-4">
+                  {[
+                    { icon: Infinity, text: "Unlimited sites" },
+                    { icon: Shield, text: "Tracking cookie cleaning" },
+                    { icon: Settings, text: "Saved preferences" },
+                    { icon: Headphones, text: "Priority support" },
+                  ].map((item) => (
+                    <li key={item.text} className="flex items-center gap-3">
+                      <item.icon className="h-5 w-5 text-primary shrink-0" />
+                      <span className="text-sm text-foreground">{item.text}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button className="w-full mt-8">Subscribe Yearly</Button>
               </div>
-              
-              <ul className="mt-8 space-y-4">
-                {[
-                  { icon: Infinity, text: "Unlimited sites" },
-                  { icon: Shield, text: "Tracking cookie cleaning" },
-                  { icon: Settings, text: "Saved preferences" },
-                  { icon: Headphones, text: "Priority support" },
-                ].map((item) => (
-                  <li key={item.text} className="flex items-center gap-3">
-                    <item.icon className="h-5 w-5 text-primary shrink-0" />
-                    <span className="text-sm text-foreground">{item.text}</span>
-                  </li>
-                ))}
-              </ul>
-              
-              <Button className="w-full mt-8">
-                Subscribe Yearly
-              </Button>
-            </div>
+            </AnimatedSection>
             
             {/* Lifetime Tier */}
-            <div className="rounded-xl border border-border bg-card p-8 md:col-span-3 max-w-md mx-auto w-full">
-              <div className="text-center">
-                <h3 className="text-xl font-semibold text-foreground">Lifetime</h3>
-                <div className="mt-4">
-                  <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.lifetime}</span>
+            <AnimatedSection delay={300} className="md:col-span-3 max-w-md mx-auto w-full">
+              <div className="rounded-xl border border-border bg-card p-8">
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-foreground">Lifetime</h3>
+                  <div className="mt-4">
+                    <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.lifetime}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">One-time payment, forever access</p>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">One-time payment, forever access</p>
+                <ul className="mt-8 space-y-4">
+                  {[
+                    { icon: Infinity, text: "Unlimited everything, forever" },
+                    { icon: Shield, text: "Tracking cookie cleaning" },
+                    { icon: Headphones, text: "Priority support" },
+                    { icon: CheckCircle2, text: "All future updates included" },
+                  ].map((item) => (
+                    <li key={item.text} className="flex items-center gap-3">
+                      <item.icon className="h-5 w-5 text-primary shrink-0" />
+                      <span className="text-sm text-foreground">{item.text}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button variant="outline" className="w-full mt-8">Buy Lifetime</Button>
               </div>
-              
-              <ul className="mt-8 space-y-4">
-                {[
-                  { icon: Infinity, text: "Unlimited everything, forever" },
-                  { icon: Shield, text: "Tracking cookie cleaning" },
-                  { icon: Headphones, text: "Priority support" },
-                  { icon: CheckCircle2, text: "All future updates included" },
-                ].map((item) => (
-                  <li key={item.text} className="flex items-center gap-3">
-                    <item.icon className="h-5 w-5 text-primary shrink-0" />
-                    <span className="text-sm text-foreground">{item.text}</span>
-                  </li>
-                ))}
-              </ul>
-              
-              <Button variant="outline" className="w-full mt-8">
-                Buy Lifetime
-              </Button>
-            </div>
+            </AnimatedSection>
           </div>
           
-          <p className="text-center text-sm text-muted-foreground mt-8">
-            * Prices may vary by platform and region.
-          </p>
+          <AnimatedSection delay={400}>
+            <p className="text-center text-sm text-muted-foreground mt-8">
+              * Prices may vary by platform and region.
+            </p>
+          </AnimatedSection>
         </div>
       </section>
 
       {/* Stats Visualization */}
       <section className="py-20 lg:py-24 border-t border-border">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Your Browsing, Your Control
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Cookie Yeti shows you exactly how much time you're saving
-            </p>
-          </div>
+          <AnimatedSection>
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Your Browsing, Your Control
+              </h2>
+              <p className="mt-4 text-lg text-muted-foreground">
+                Cookie Yeti shows you exactly how much time you're saving
+              </p>
+            </div>
+          </AnimatedSection>
           
           <div className="grid grid-cols-3 gap-4 max-w-2xl mx-auto">
             {[
               { label: "Today", value: CONFIG.stats.today },
               { label: "This Week", value: CONFIG.stats.week },
               { label: "All Time", value: CONFIG.stats.allTime.toLocaleString() },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center p-6 rounded-xl bg-secondary/50 border border-border">
-                <div className="text-3xl sm:text-4xl font-bold text-foreground">{stat.value}</div>
-                <div className="text-sm text-muted-foreground mt-1">{stat.label}</div>
-              </div>
+            ].map((stat, index) => (
+              <AnimatedSection key={stat.label} delay={index * 100}>
+                <div className="text-center p-6 rounded-xl bg-secondary/50 border border-border">
+                  <div className="text-3xl sm:text-4xl font-bold text-foreground">{stat.value}</div>
+                  <div className="text-sm text-muted-foreground mt-1">{stat.label}</div>
+                </div>
+              </AnimatedSection>
             ))}
           </div>
           
-          <p className="text-center text-sm text-muted-foreground mt-6 flex items-center justify-center gap-2">
-            <Shield className="h-4 w-4" />
-            All stats stored locally on your device
-          </p>
+          <AnimatedSection delay={300}>
+            <p className="text-center text-sm text-muted-foreground mt-6 flex items-center justify-center gap-2">
+              <Shield className="h-4 w-4" />
+              All stats stored locally on your device
+            </p>
+          </AnimatedSection>
         </div>
       </section>
 
       {/* Platform Availability */}
       <section className="py-20 lg:py-24 bg-secondary/30 border-t border-border">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Coming Soon
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Cookie Yeti will be available on your favorite platforms
-            </p>
-          </div>
-          
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            {CONFIG.platforms.map((platform) => (
-              <div
-                key={platform.name}
-                className="flex items-center gap-3 px-6 py-3 rounded-full border border-border bg-card"
-              >
-                <platform.icon className="h-5 w-5 text-muted-foreground" />
-                <span className="font-medium text-foreground">{platform.name}</span>
-                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
-                  Coming Soon
-                </Badge>
-              </div>
-            ))}
-          </div>
-          
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
-            <img
-              src={comingSoonAppstore}
-              alt="Coming Soon to App Store and Android"
-              className="h-auto w-64 rounded-xl shadow-md"
-            />
-            <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
-              <Chrome className="h-8 w-8 text-muted-foreground" />
-              <div className="text-left">
-                <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
-                <p className="text-xs text-muted-foreground">Coming Soon</p>
-              </div>
+          <AnimatedSection>
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Coming Soon
+              </h2>
+              <p className="mt-4 text-lg text-muted-foreground">
+                Cookie Yeti will be available on your favorite platforms
+              </p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Support */}
-      <section className="py-20 lg:py-24 border-t border-border">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Need Help?
-            </h2>
-            
-            <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="p-6 rounded-xl border border-border bg-card">
-                <AlertTriangle className="h-8 w-8 text-foreground mx-auto mb-4" />
-                <h3 className="font-semibold text-foreground mb-2">Report a Site</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Found a website where Cookie Yeti doesn't work correctly?
-                </p>
-                <Button variant="outline" asChild className="w-full">
-                  <Link to="/report-site">Report Issue</Link>
-                </Button>
-              </div>
-              
-              <div className="p-6 rounded-xl border border-border bg-card">
-                <Mail className="h-8 w-8 text-foreground mx-auto mb-4" />
-                <h3 className="font-semibold text-foreground mb-2">Contact Support</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Questions, feedback, or need assistance?
-                </p>
-                <Button variant="outline" asChild className="w-full">
-                  <a href="mailto:support@bestly.tech">Email Support</a>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section className="py-20 lg:py-24 bg-secondary/30 border-t border-border">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Frequently Asked Questions
-            </h2>
-          </div>
+          </AnimatedSection>
           
-          <div className="max-w-3xl mx-auto">
-            <Accordion type="single" collapsible className="w-full">
-              {CONFIG.faqs.map((faq, index) => (
-                <AccordionItem key={index} value={`item-${index}`}>
-                  <AccordionTrigger className="text-left text-foreground">
-                    {faq.question}
-                  </AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground">
-                    {faq.answer}
-                  </AccordionContent>
-                </AccordionItem>
+          <AnimatedSection delay={100}>
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              {CONFIG.platforms.map((platform) => (
+                <div
+                  key={platform.name}
+                  className="flex items-center gap-3 px-6 py-3 rounded-full border border-border bg-card"
+                >
+                  <platform.icon className="h-5 w-5 text-muted-foreground" />
+                  <span className="font-medium text-foreground">{platform.name}</span>
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
+                    Coming Soon
+                  </Badge>
+                </div>
               ))}
-            </Accordion>
-          </div>
-        </div>
-      </section>
-
-      {/* Final CTA */}
-      <section className="py-20 lg:py-24 border-t border-border">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Cookie Yeti Is Coming Soon
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              We're putting the finishing touches on Cookie Yeti. Stay tuned for launch on Chrome and the App Store.
-            </p>
-            
+            </div>
+          </AnimatedSection>
+          
+          <AnimatedSection delay={200}>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
               <img
                 src={comingSoonAppstore}
                 alt="Coming Soon to App Store and Android"
-                className="h-auto w-56 rounded-xl shadow-md"
+                className="h-auto w-64 rounded-xl shadow-md"
               />
               <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
                 <Chrome className="h-8 w-8 text-muted-foreground" />
@@ -614,6 +554,110 @@ export default function CookieYeti() {
                 </div>
               </div>
             </div>
+          </AnimatedSection>
+        </div>
+      </section>
+
+      {/* Support */}
+      <section className="py-20 lg:py-24 border-t border-border">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="max-w-2xl mx-auto text-center">
+            <AnimatedSection>
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Need Help?
+              </h2>
+            </AnimatedSection>
+            
+            <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <AnimatedSection delay={80}>
+                <div className="p-6 rounded-xl border border-border bg-card">
+                  <AlertTriangle className="h-8 w-8 text-foreground mx-auto mb-4" />
+                  <h3 className="font-semibold text-foreground mb-2">Report a Site</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Found a website where Cookie Yeti doesn't work correctly?
+                  </p>
+                  <Button variant="outline" asChild className="w-full">
+                    <Link to="/report-site">Report Issue</Link>
+                  </Button>
+                </div>
+              </AnimatedSection>
+              
+              <AnimatedSection delay={160}>
+                <div className="p-6 rounded-xl border border-border bg-card">
+                  <Mail className="h-8 w-8 text-foreground mx-auto mb-4" />
+                  <h3 className="font-semibold text-foreground mb-2">Contact Support</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Questions, feedback, or need assistance?
+                  </p>
+                  <Button variant="outline" asChild className="w-full">
+                    <a href="mailto:support@bestly.tech">Email Support</a>
+                  </Button>
+                </div>
+              </AnimatedSection>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="py-20 lg:py-24 bg-secondary/30 border-t border-border">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <AnimatedSection>
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Frequently Asked Questions
+              </h2>
+            </div>
+          </AnimatedSection>
+          
+          <AnimatedSection delay={100}>
+            <div className="max-w-3xl mx-auto">
+              <Accordion type="single" collapsible className="w-full">
+                {CONFIG.faqs.map((faq, index) => (
+                  <AccordionItem key={index} value={`item-${index}`}>
+                    <AccordionTrigger className="text-left text-foreground">
+                      {faq.question}
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      {faq.answer}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </div>
+          </AnimatedSection>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="py-20 lg:py-24 border-t border-border">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="text-center max-w-2xl mx-auto">
+            <AnimatedSection>
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Cookie Yeti Is Coming Soon
+              </h2>
+              <p className="mt-4 text-lg text-muted-foreground">
+                We're putting the finishing touches on Cookie Yeti. Stay tuned for launch on Chrome and the App Store.
+              </p>
+            </AnimatedSection>
+            
+            <AnimatedSection delay={100}>
+              <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
+                <img
+                  src={comingSoonAppstore}
+                  alt="Coming Soon to App Store and Android"
+                  className="h-auto w-56 rounded-xl shadow-md"
+                />
+                <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
+                  <Chrome className="h-8 w-8 text-muted-foreground" />
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
+                    <p className="text-xs text-muted-foreground">Coming Soon</p>
+                  </div>
+                </div>
+              </div>
+            </AnimatedSection>
           </div>
         </div>
       </section>
