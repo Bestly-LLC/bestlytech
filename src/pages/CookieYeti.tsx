@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/SEOHead";
+import comingSoonAppstore from "@/assets/coming-soon-appstore.jpg";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,12 +43,12 @@ const CONFIG = {
     lifetime: "$149.99",
   },
   platforms: [
-    { name: "Chrome", available: true, icon: Chrome },
-    { name: "Safari (iOS + macOS)", available: true, icon: Globe },
+    { name: "Chrome", available: false, icon: Chrome },
+    { name: "Safari (iOS + macOS)", available: false, icon: Globe },
   ],
   links: {
-    chrome: "https://chromewebstore.google.com/detail/cookie-yeti/kfdgjhogdcoifmflbhcoijfibmfhknkh",
-    safari: "https://apps.apple.com/us/app/cookie-yeti/id6743440341",
+    chrome: "#",
+    safari: "#",
   },
   features: [
     {
@@ -119,7 +120,7 @@ export default function CookieYeti() {
     <Layout>
       <SEOHead
         title="Cookie Yeti – Automatic Cookie Consent Handler | Bestly LLC"
-        description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection. Available now for Chrome and Safari."
+        description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection. Coming soon to Chrome and App Store."
       />
       
       {/* Hero Section */}
@@ -150,27 +151,27 @@ export default function CookieYeti() {
             
             <div className="mt-8">
               <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-sm px-4 py-1">
-                Available Now
+                Coming Soon
               </Badge>
             </div>
             
-            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" asChild>
-                <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
-                  <Chrome className="h-5 w-5 mr-2" />
-                  Download for Chrome
-                </a>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
-                  <Globe className="h-5 w-5 mr-2" />
-                  Download for Safari
-                </a>
-              </Button>
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
+              <img
+                src={comingSoonAppstore}
+                alt="Coming Soon to App Store and Android"
+                className="h-auto w-64 rounded-xl shadow-md"
+              />
+              <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
+                <Chrome className="h-8 w-8 text-muted-foreground" />
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
+                  <p className="text-xs text-muted-foreground">Coming Soon</p>
+                </div>
+              </div>
             </div>
             
-            <p className="mt-4 text-sm text-muted-foreground">
-              Available on Chrome and Safari (iOS + macOS)
+            <p className="mt-6 text-sm text-muted-foreground">
+              Coming soon to Chrome and App Store
             </p>
             
             <div className="mt-6">
@@ -489,10 +490,10 @@ export default function CookieYeti() {
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Available Now
+              Coming Soon
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Get Cookie Yeti on your favorite browser
+              Cookie Yeti will be available on your favorite platforms
             </p>
           </div>
           
@@ -500,30 +501,30 @@ export default function CookieYeti() {
             {CONFIG.platforms.map((platform) => (
               <div
                 key={platform.name}
-                className="flex items-center gap-3 px-6 py-3 rounded-full border bg-primary/10 border-primary/30"
+                className="flex items-center gap-3 px-6 py-3 rounded-full border border-border bg-card"
               >
-                <platform.icon className="h-5 w-5 text-primary" />
+                <platform.icon className="h-5 w-5 text-muted-foreground" />
                 <span className="font-medium text-foreground">{platform.name}</span>
-                <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs">
-                  Live
+                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
+                  Coming Soon
                 </Badge>
               </div>
             ))}
           </div>
           
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button asChild>
-              <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
-                <Chrome className="h-5 w-5 mr-2" />
-                Chrome Web Store
-              </a>
-            </Button>
-            <Button variant="outline" asChild>
-              <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
-                <Globe className="h-5 w-5 mr-2" />
-                App Store
-              </a>
-            </Button>
+          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
+            <img
+              src={comingSoonAppstore}
+              alt="Coming Soon to App Store and Android"
+              className="h-auto w-64 rounded-xl shadow-md"
+            />
+            <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
+              <Chrome className="h-8 w-8 text-muted-foreground" />
+              <div className="text-left">
+                <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
+                <p className="text-xs text-muted-foreground">Coming Soon</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -594,25 +595,25 @@ export default function CookieYeti() {
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto">
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Ready for Distraction-Free Browsing?
+              Cookie Yeti Is Coming Soon
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Download Cookie Yeti now and reclaim your browsing experience.
+              We're putting the finishing touches on Cookie Yeti. Stay tuned for launch on Chrome and the App Store.
             </p>
             
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" asChild>
-                <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
-                  <Chrome className="h-5 w-5 mr-2" />
-                  Download for Chrome
-                </a>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
-                  <Globe className="h-5 w-5 mr-2" />
-                  Download for Safari
-                </a>
-              </Button>
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
+              <img
+                src={comingSoonAppstore}
+                alt="Coming Soon to App Store and Android"
+                className="h-auto w-56 rounded-xl shadow-md"
+              />
+              <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
+                <Chrome className="h-8 w-8 text-muted-foreground" />
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
+                  <p className="text-xs text-muted-foreground">Coming Soon</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

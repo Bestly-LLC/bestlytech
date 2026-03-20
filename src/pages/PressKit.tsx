@@ -33,7 +33,7 @@ const PressKit = () => {
       description:
         "A privacy-focused browser extension that automatically detects and dismisses cookie consent banners without compromising user privacy or accepting tracking cookies.",
       category: "Browser Extension",
-      status: "Active",
+      status: "Coming Soon",
     },
     {
       name: "InventoryProof",
@@ -49,6 +49,14 @@ const PressKit = () => {
       description:
         "A premium skincare brand delivering pharmaceutical-grade hypochlorous acid formulations using advanced electrolysis manufacturing and vacuum-sealed packaging.",
       category: "Physical Product",
+      status: "In Development",
+    },
+    {
+      name: "NeckPilot",
+      tagline: "Posture awareness powered by AirPods.",
+      description:
+        "An iOS app that leverages AirPods motion sensors to monitor head and neck posture in real time, providing gentle alerts to help users maintain healthy alignment throughout the day.",
+      category: "Mobile App",
       status: "In Development",
     },
   ];
@@ -211,6 +219,8 @@ const PressKit = () => {
                             className={`text-xs font-medium px-2 py-1 rounded ${
                               product.status === "Active"
                                 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                : product.status === "Coming Soon"
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
                                 : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
                             }`}
                           >
@@ -254,10 +264,10 @@ const PressKit = () => {
                         Press Inquiries
                       </p>
                       <a
-                        href="mailto:press@bestly.tech"
+                        href="mailto:support@bestly.tech"
                         className="text-primary hover:underline"
                       >
-                        press@bestly.tech
+                        support@bestly.tech
                       </a>
                     </div>
                   </div>
