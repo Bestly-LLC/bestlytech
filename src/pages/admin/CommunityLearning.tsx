@@ -1027,7 +1027,18 @@ export default function CommunityLearning() {
                     </span>
                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                        <Timer className="h-3.5 w-3.5" />
-                       Last run: {aiGenLog.length > 0 ? timeAgo(aiGenLog[0].created_at) : "Never"}
+                       Last run: {aiGenLog.length > 0 ? (
+                         <>
+                           {timeAgo(aiGenLog[0].created_at)}
+                           <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 ml-0.5">
+                             {inferRunSource(aiGenLog[0].created_at) === "auto" ? "auto" : "manual"}
+                           </Badge>
+                         </>
+                       ) : "Never"}
+                     </span>
+                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                       <Clock className="h-3.5 w-3.5" />
+                       Next auto-run: {nextAutoRun()}
                      </span>
                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                        <Coins className="h-3.5 w-3.5" />
