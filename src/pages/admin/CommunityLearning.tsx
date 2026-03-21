@@ -705,6 +705,72 @@ export default function CommunityLearning() {
         </Card>
       )}
 
+      {/* System Heartbeat Monitor */}
+      {(() => {
+        const now = Date.now();
+        const heartbeats = [
+          {
+            label: "AI Generator",
+            icon: Sparkles,
+            lastRun: aiGenLog.find((l: any) => l.status?.startsWith("success"))?.created_at,
+            thresholds: [24, 72], // hours: green < 24h, yellow < 72h, red > 72h
+          },
+          {
+            label: "Report Ingestion",
+            icon: Flag,
+            lastRun: candidates.length > 0 ? candidates.reduce((latest: any, c: any) => (!latest || new Date(c.last_reported) > new Date(latest) ? c.last_reported : latest), null) : null,
+            thresholds: [24, 72],
+          },
+          {
+            label: "Pattern Learning",
+            icon: Brain,
+            lastRun: recent.length > 0 ? recent[0]?.created_at : null,
+            thresholds: [48, 168], // patterns can take longer
+          },
+          {
+            label: "Cron Jobs",
+            icon: CalendarClock,
+            lastRun: fixLog.length > 0 ? fixLog[0]?.created_at : null,
+            thresholds: [26, 50], // should run daily, 26h allows for drift
+          },
+        ];
+
+        return (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-2.5 px-4">
+            <span className="text-xs font-medium text-muted-foreground mr-1">System Status</span>
+            {heartbeats.map((hb) => {
+              const hoursAgo = hb.lastRun ? (now - new Date(hb.lastRun).getTime()) / 3600000 : Infinity;
+              const status = hoursAgo <= hb.thresholds[0] ? "green" : hoursAgo <= hb.thresholds[1] ? "yellow" : "red";
+              const statusColor = status === "green" ? "bg-green-500" : status === "yellow" ? "bg-amber-500" : "bg-red-500";
+              const textColor = status === "green" ? "text-green-500" : status === "yellow" ? "text-amber-500" : "text-red-500";
+              const Icon = hb.icon;
+              return (
+                <TooltipProvider key={hb.label} delayDuration={150}>
+                  <UITooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-muted/30 cursor-default">
+                        <span className="relative flex h-2 w-2">
+                          {status === "green" && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />}
+                          <span className={`relative inline-flex rounded-full h-2 w-2 ${statusColor}`} />
+                        </span>
+                        <Icon className={`h-3 w-3 ${textColor}`} />
+                        <span className="text-[11px] font-medium text-foreground hidden sm:inline">{hb.label}</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs max-w-[220px]">
+                      <p className="font-medium">{hb.label}</p>
+                      <p className="text-muted-foreground">
+                        {hb.lastRun ? `Last: ${timeAgo(hb.lastRun)}` : "No activity recorded"}
+                      </p>
+                    </TooltipContent>
+                  </UITooltip>
+                </TooltipProvider>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {/* Overview Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Total Patterns" value={o.total_patterns} icon={Layers} iconColor="text-primary" iconBg="bg-primary/10" accentColor="border-primary/40" subtitle={`${o.patterns_last_7d} active last 7 days`} tooltip="Cookie banner CSS selectors learned by the community network" />
