@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { activationCodeEmail } from "../_shared/email-template.ts";
 
 const corsHeaders = {
@@ -25,13 +24,6 @@ serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const smtpUser = Deno.env.get("PRIVATEMAIL_EMAIL");
-    const smtpPass = Deno.env.get("PRIVATEMAIL_PASSWORD");
-
-    if (!smtpUser || !smtpPass) {
-      throw new Error("PRIVATEMAIL_EMAIL or PRIVATEMAIL_PASSWORD is not configured");
-    }
-
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // Rate limit: max 5 codes per email per hour
@@ -71,30 +63,27 @@ serve(async (req: Request) => {
 
     if (insertError) throw new Error(`Insert failed: ${insertError.message}`);
 
-    // Send branded HTML email via PrivateMail SMTP (port 465, TLS)
+    // Render the branded HTML email
     const html = activationCodeEmail(code);
+    const messageId = crypto.randomUUID();
 
-    const client = new SMTPClient({
-      connection: {
-        hostname: "mail.privateemail.com",
-        port: 465,
-        tls: true,
-        auth: {
-          username: smtpUser,
-          password: smtpPass,
-        },
+    // Enqueue via the Lovable email queue (sends from noreply@bestly.tech)
+    const { error: enqueueError } = await supabase.rpc("enqueue_email", {
+      queue_name: "transactional_emails",
+      payload: {
+        message_id: messageId,
+        to: email,
+        from: "Cookie Yeti <noreply@bestly.tech>",
+        sender_domain: "notify.bestly.tech",
+        subject: "Your Cookie Yeti activation code",
+        html,
+        purpose: "transactional",
+        label: "activation_code",
+        queued_at: new Date().toISOString(),
       },
     });
 
-    await client.send({
-      from: smtpUser,
-      to: email,
-      subject: "Your Cookie Yeti activation code",
-      content: "auto",
-      html,
-    });
-
-    await client.close();
+    if (enqueueError) throw new Error(`Enqueue failed: ${enqueueError.message}`);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
