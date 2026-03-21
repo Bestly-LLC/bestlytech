@@ -642,9 +642,16 @@ export default function CommunityLearning() {
               <p className="text-xs text-muted-foreground">These domains exhausted all retry attempts. Consider adding patterns manually.</p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Button variant="outline" size="sm" className="flex-1 sm:flex-initial shrink-0 gap-1.5 border-amber-500/30 text-amber-500 hover:bg-amber-500/10" onClick={handleResetFailed} disabled={runningReset}>
-                {runningReset ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Resetting...</> : <><RotateCcw className="h-3.5 w-3.5" /> Reset Failed</>}
-              </Button>
+              <TooltipProvider delayDuration={300}>
+                <UITooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="sm" className="flex-1 sm:flex-initial shrink-0 gap-1.5 border-amber-500/30 text-amber-500 hover:bg-amber-500/10" onClick={handleResetFailed} disabled={runningReset}>
+                      {runningReset ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Resetting...</> : <><RotateCcw className="h-3.5 w-3.5" /> Reset Failed</>}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[240px] text-center">Re-queues permanently failed domains for fresh AI analysis (older than 30 days)</TooltipContent>
+                </UITooltip>
+              </TooltipProvider>
               <Button variant="outline" size="sm" className="flex-1 sm:flex-initial shrink-0 gap-1.5 border-red-500/30 text-red-500 hover:bg-red-500/10" onClick={() => setActiveTab("ai-generator")}>
                 <Flag className="h-3.5 w-3.5" /> View
               </Button>
