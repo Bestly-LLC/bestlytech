@@ -267,7 +267,23 @@ export default function CommunityLearning() {
     }
   }, []);
 
-  const handleRefresh = useCallback(async () => {
+  // Refetch activity when days change
+  useEffect(() => {
+    if (!hasLoadedRef.current) return; // skip on initial load (fetchAll handles it)
+    (async () => {
+      const { data } = await supabase.rpc("get_daily_pattern_activity" as any, { p_days: activityDays });
+      setActivity(data as any ?? []);
+    })();
+  }, [activityDays]);
+
+  const toggleSeries = (key: string) => {
+    setVisibleSeries(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) { if (next.size > 1) next.delete(key); } else next.add(key);
+      return next;
+    });
+  };
+
     setRefreshing(true);
     try {
       await fetchAll();
