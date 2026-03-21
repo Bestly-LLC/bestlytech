@@ -284,6 +284,7 @@ export default function CommunityLearning() {
     });
   };
 
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await fetchAll();
