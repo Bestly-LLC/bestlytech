@@ -1005,20 +1005,37 @@ export default function CommunityLearning() {
                      </span>
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Button variant="outline" size="sm" onClick={handleRunMaintenance} disabled={runningMaintenance} className="gap-1.5 text-xs sm:text-sm">
-                    {runningMaintenance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
-                    Maintenance
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleRunRetry} disabled={runningRetry} className="gap-1.5 text-xs sm:text-sm">
-                    {runningRetry ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                    Retry
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleRunGenerator} disabled={runningGenerator} className="gap-1.5 text-xs sm:text-sm">
-                    {runningGenerator ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                    Run AI
-                  </Button>
-                </div>
+                <TooltipProvider delayDuration={300}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <UITooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={handleRunMaintenance} disabled={runningMaintenance} className="gap-1.5 text-xs sm:text-sm">
+                          {runningMaintenance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
+                          Maintenance
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-[240px] text-center">Runs auto-fix on broken patterns and processes unresolved user reports</TooltipContent>
+                    </UITooltip>
+                    <UITooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={handleRunRetry} disabled={runningRetry} className="gap-1.5 text-xs sm:text-sm">
+                          {runningRetry ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                          Retry
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-[240px] text-center">Re-attempts pattern generation on domains that previously failed (up to 5 tries)</TooltipContent>
+                    </UITooltip>
+                    <UITooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={handleRunGenerator} disabled={runningGenerator} className="gap-1.5 text-xs sm:text-sm">
+                          {runningGenerator ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                          Run AI
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-[240px] text-center">Triggers AI analysis on all pending missed-banner reports to generate new CSS selectors</TooltipContent>
+                    </UITooltip>
+                  </div>
+                </TooltipProvider>
               </CardHeader>
             </Card>
 
