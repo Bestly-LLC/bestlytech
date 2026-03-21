@@ -265,7 +265,7 @@ export default function CommunityLearning() {
       hasLoadedRef.current = true;
       setLoading(false);
     }
-  }, []);
+  }, [activityDays]);
 
   // Refetch activity when days change
   useEffect(() => {
