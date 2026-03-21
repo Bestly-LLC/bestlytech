@@ -1,28 +1,45 @@
 
 
-# Add Info Tooltips to AI Action Buttons
+# Enhanced Activity Graph Controls
 
-## Problem
-The three action buttons in the AI Generator tab header — **Maintenance**, **Retry**, and **Run AI** — plus the **Reset Failed** button in the permanently-failed alert have no explanation of what they do. They're cryptic without context.
+## What Changes
 
-## Solution
-Wrap each button in a tooltip (using the existing `InfoTip`-style pattern) that explains what it does on hover. All four buttons are useful and serve distinct purposes, so none should be removed — they just need clarity.
+Add interactive controls above the Activity graph so you can toggle individual data series on/off, switch time ranges, and choose between chart types.
 
-### Tooltip text for each button
+### Controls to Add
 
-| Button | Tooltip |
-|--------|---------|
-| **Run AI** | "Triggers AI analysis on all pending missed-banner reports to generate new CSS selectors" |
-| **Retry** | "Re-attempts pattern generation on domains that previously failed (up to 5 tries)" |
-| **Maintenance** | "Runs auto-fix on broken patterns and processes unresolved user reports" |
-| **Reset Failed** | "Re-queues permanently failed domains for fresh AI analysis (older than 30 days)" |
+1. **Series toggle chips** — Clickable pill buttons for each series (Reports, New Patterns, New Domains, Active Patterns). Click to show/hide that line. Active chips are colored to match their line; inactive chips are muted.
 
-## Implementation
-Wrap each `<Button>` in a `<TooltipProvider>/<UITooltip>/<TooltipTrigger>/<TooltipContent>` block at lines 1008-1021 and 645-647 in `src/pages/admin/CommunityLearning.tsx`. The component already imports all tooltip primitives.
+2. **Time range selector** — Dropdown or button group: 7 days, 14 days, 30 days, 90 days. Currently hardcoded to 30 days via the `p_days` parameter. The DB function `get_daily_pattern_activity` already accepts `p_days`, so this just requires passing a different value and re-fetching.
 
-## Files Changed
+3. **Chart type toggle** — Small icon button group to switch between Area chart (current) and Bar chart (stacked bars, useful for comparing daily totals side-by-side).
 
-| File | Change |
-|------|--------|
-| `src/pages/admin/CommunityLearning.tsx` | Wrap 4 buttons with tooltip explanations |
+### Layout
+
+```text
+┌─────────────────────────────────────────────────────┐
+│ Pattern Activity                                    │
+│                                                     │
+│ [7d] [14d] [30d] [90d]    [Area ▣] [Bar ▥]        │
+│                                                     │
+│ ● Reports  ● New Patterns  ● New Domains  ○ Active │
+│                                                     │
+│ ┌─────────────────────────────────────────────┐     │
+│ │           ~ chart area ~                    │     │
+│ └─────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────┘
+```
+
+## Technical Details
+
+### File: `src/pages/admin/CommunityLearning.tsx`
+
+- Add state: `activityDays` (default 30), `visibleSeries` (Set of enabled keys), `chartType` ('area' | 'bar')
+- Re-fetch activity data when `activityDays` changes (call `get_daily_pattern_activity` with new `p_days`)
+- Render series toggle chips in the CardHeader area, each colored to match its line
+- Conditionally render `<AreaChart>` or `<BarChart>` based on `chartType`
+- Only render `<Area>`/`<Bar>`/`<Line>` components for series present in `visibleSeries`
+- Import `BarChart, Bar` from recharts (already using recharts)
+
+No database changes needed — the existing function supports variable day ranges.
 
