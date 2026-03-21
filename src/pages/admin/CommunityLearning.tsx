@@ -152,6 +152,11 @@ export default function CommunityLearning() {
   const [candidateFilter, setCandidateFilter] = useState<"all" | "never_processed" | "failed">("all");
   const hasLoadedRef = useRef(false);
 
+  // Activity graph controls
+  const [activityDays, setActivityDays] = useState(30);
+  const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set(["reports", "new_patterns", "new_domains", "active_patterns"]));
+  const [chartType, setChartType] = useState<"area" | "bar">("area");
+
   // Dismissals state
   const [dismissalReports, setDismissalReports] = useState<any[]>([]);
   const [consensusCandidates, setConsensusCandidates] = useState<any[]>([]);
