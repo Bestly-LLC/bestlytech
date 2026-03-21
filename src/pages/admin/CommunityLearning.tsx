@@ -795,35 +795,103 @@ export default function CommunityLearning() {
         {/* Activity Tab */}
         <TabsContent value="activity">
           <Card>
-            <CardHeader><CardTitle className="text-lg">Pattern Activity (30 days)</CardTitle></CardHeader>
+            <CardHeader className="pb-2">
+              <div className="flex flex-col gap-3">
+                <CardTitle className="text-lg">Pattern Activity</CardTitle>
+                {/* Time range & chart type controls */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center rounded-lg border border-border bg-muted/50 p-0.5">
+                    {([7, 14, 30, 90] as const).map(d => (
+                      <button
+                        key={d}
+                        onClick={() => setActivityDays(d)}
+                        className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${activityDays === d ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        {d}d
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center rounded-lg border border-border bg-muted/50 p-0.5 ml-auto">
+                    <button
+                      onClick={() => setChartType("area")}
+                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${chartType === "area" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      Area
+                    </button>
+                    <button
+                      onClick={() => setChartType("bar")}
+                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${chartType === "bar" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      Bar
+                    </button>
+                  </div>
+                </div>
+                {/* Series toggle chips */}
+                <div className="flex flex-wrap gap-1.5">
+                  {([
+                    { key: "reports", label: "Reports", color: "hsl(200,80%,50%)" },
+                    { key: "new_patterns", label: "New Patterns", color: "hsl(270,60%,55%)" },
+                    { key: "new_domains", label: "New Domains", color: "hsl(142,76%,36%)" },
+                    { key: "active_patterns", label: "Active Patterns", color: "hsl(45,93%,47%)" },
+                  ] as const).map(s => {
+                    const active = visibleSeries.has(s.key);
+                    return (
+                      <button
+                        key={s.key}
+                        onClick={() => toggleSeries(s.key)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${active ? "border-current" : "border-border text-muted-foreground opacity-50"}`}
+                        style={active ? { color: s.color, borderColor: s.color, backgroundColor: s.color + "15" } : undefined}
+                      >
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: active ? s.color : "currentColor" }} />
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardHeader>
             <CardContent>
               <div className="h-[280px] sm:h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={activity}>
-                    <defs>
-                      <linearGradient id="gradNew" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(270,60%,55%)" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="hsl(270,60%,55%)" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="gradDomains" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(142,76%,36%)" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="hsl(142,76%,36%)" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="gradReports" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(200,80%,50%)" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="hsl(200,80%,50%)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
-                    <Area type="monotone" dataKey="reports" stroke="hsl(200,80%,50%)" strokeWidth={2} fill="url(#gradReports)" name="Reports" />
-                    <Area type="monotone" dataKey="new_patterns" stroke="hsl(270,60%,55%)" strokeWidth={2} fill="url(#gradNew)" name="New Patterns" />
-                    <Area type="monotone" dataKey="new_domains" stroke="hsl(142,76%,36%)" strokeWidth={2} fill="url(#gradDomains)" name="New Domains" />
-                    <Line type="monotone" dataKey="active_patterns" stroke="hsl(45,93%,47%)" strokeWidth={2} strokeDasharray="5 5" name="Active Patterns" dot={false} />
-                    <Legend />
-                  </AreaChart>
+                  {chartType === "area" ? (
+                    <AreaChart data={activity}>
+                      <defs>
+                        <linearGradient id="gradNew" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(270,60%,55%)" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="hsl(270,60%,55%)" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gradDomains" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(142,76%,36%)" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="hsl(142,76%,36%)" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gradReports" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(200,80%,50%)" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="hsl(200,80%,50%)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      {visibleSeries.has("reports") && <Area type="monotone" dataKey="reports" stroke="hsl(200,80%,50%)" strokeWidth={2} fill="url(#gradReports)" name="Reports" />}
+                      {visibleSeries.has("new_patterns") && <Area type="monotone" dataKey="new_patterns" stroke="hsl(270,60%,55%)" strokeWidth={2} fill="url(#gradNew)" name="New Patterns" />}
+                      {visibleSeries.has("new_domains") && <Area type="monotone" dataKey="new_domains" stroke="hsl(142,76%,36%)" strokeWidth={2} fill="url(#gradDomains)" name="New Domains" />}
+                      {visibleSeries.has("active_patterns") && <Line type="monotone" dataKey="active_patterns" stroke="hsl(45,93%,47%)" strokeWidth={2} strokeDasharray="5 5" name="Active Patterns" dot={false} />}
+                      <Legend />
+                    </AreaChart>
+                  ) : (
+                    <BarChart data={activity}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      {visibleSeries.has("reports") && <Bar dataKey="reports" fill="hsl(200,80%,50%)" name="Reports" radius={[2, 2, 0, 0]} />}
+                      {visibleSeries.has("new_patterns") && <Bar dataKey="new_patterns" fill="hsl(270,60%,55%)" name="New Patterns" radius={[2, 2, 0, 0]} />}
+                      {visibleSeries.has("new_domains") && <Bar dataKey="new_domains" fill="hsl(142,76%,36%)" name="New Domains" radius={[2, 2, 0, 0]} />}
+                      {visibleSeries.has("active_patterns") && <Bar dataKey="active_patterns" fill="hsl(45,93%,47%)" name="Active Patterns" radius={[2, 2, 0, 0]} />}
+                      <Legend />
+                    </BarChart>
+                  )}
                 </ResponsiveContainer>
               </div>
             </CardContent>
