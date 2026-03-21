@@ -211,7 +211,7 @@ export default function CommunityLearning() {
     try {
       const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18] = await Promise.all([
         supabase.rpc("get_community_overview" as any),
-        supabase.rpc("get_daily_pattern_activity" as any, { p_days: 30 }),
+        supabase.rpc("get_daily_pattern_activity" as any, { p_days: activityDays }),
         supabase.rpc("get_top_domains" as any, { p_limit: 25 }),
         supabase.rpc("get_recently_learned" as any, { p_limit: 50 }),
         supabase.rpc("get_pattern_issues" as any, { p_limit: 50 }),
