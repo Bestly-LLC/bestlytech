@@ -90,6 +90,29 @@ function timeAgo(dateStr: string) {
   return `${days}d ago`;
 }
 
+/** Cron jobs run at 06:00 UTC (auto-retry) and 07:00 UTC (maintenance). */
+function inferRunSource(dateStr: string): "auto" | "manual" {
+  const d = new Date(dateStr);
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  // Within ~5 min of cron schedule → likely automated
+  if ((h === 6 && m < 5) || (h === 7 && m < 5) || (h === 3 && m < 5)) return "auto";
+  return "manual";
+}
+
+function nextAutoRun(): string {
+  const now = new Date();
+  // Next 06:00 UTC
+  const next = new Date(now);
+  next.setUTCHours(6, 0, 0, 0);
+  if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+  const diff = next.getTime() - now.getTime();
+  const hrs = Math.floor(diff / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  if (hrs > 0) return `${hrs}h ${mins}m`;
+  return `${mins}m`;
+}
+
 function rateColor(rate: number) {
   if (rate >= 80) return "text-green-500";
   if (rate >= 50) return "text-amber-500";
