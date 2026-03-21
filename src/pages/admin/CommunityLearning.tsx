@@ -90,6 +90,29 @@ function timeAgo(dateStr: string) {
   return `${days}d ago`;
 }
 
+/** Cron jobs run at 06:00 UTC (auto-retry) and 07:00 UTC (maintenance). */
+function inferRunSource(dateStr: string): "auto" | "manual" {
+  const d = new Date(dateStr);
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  // Within ~5 min of cron schedule → likely automated
+  if ((h === 6 && m < 5) || (h === 7 && m < 5) || (h === 3 && m < 5)) return "auto";
+  return "manual";
+}
+
+function nextAutoRun(): string {
+  const now = new Date();
+  // Next 06:00 UTC
+  const next = new Date(now);
+  next.setUTCHours(6, 0, 0, 0);
+  if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+  const diff = next.getTime() - now.getTime();
+  const hrs = Math.floor(diff / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  if (hrs > 0) return `${hrs}h ${mins}m`;
+  return `${mins}m`;
+}
+
 function rateColor(rate: number) {
   if (rate >= 80) return "text-green-500";
   if (rate >= 50) return "text-amber-500";
@@ -1004,7 +1027,18 @@ export default function CommunityLearning() {
                     </span>
                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                        <Timer className="h-3.5 w-3.5" />
-                       Last run: {aiGenLog.length > 0 ? timeAgo(aiGenLog[0].created_at) : "Never"}
+                       Last run: {aiGenLog.length > 0 ? (
+                         <>
+                           {timeAgo(aiGenLog[0].created_at)}
+                           <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 ml-0.5">
+                             {inferRunSource(aiGenLog[0].created_at) === "auto" ? "auto" : "manual"}
+                           </Badge>
+                         </>
+                       ) : "Never"}
+                     </span>
+                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                       <Clock className="h-3.5 w-3.5" />
+                       Next auto-run: {nextAutoRun()}
                      </span>
                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                        <Coins className="h-3.5 w-3.5" />
