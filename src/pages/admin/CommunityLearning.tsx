@@ -1931,6 +1931,94 @@ export default function CommunityLearning() {
           </div>
         </TabsContent>
 
+        {/* Manual Review Tab */}
+        <TabsContent value="manual-review">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Manual Review — No Banner HTML</CardTitle>
+              <CardDescription>Domains reported where the extension couldn't capture banner HTML. Use "Fetch & Process" to attempt server-side detection.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {noHtmlReports.length === 0 ? (
+                <EmptyState icon={CheckCircle2} title="No reports needing review" description="All reported domains have captured banner HTML." />
+              ) : (
+                <>
+                  {/* Mobile */}
+                  <div className="md:hidden space-y-3">
+                    {noHtmlReports.map((c: any, i: number) => (
+                      <div key={i} className="border rounded-lg p-3 space-y-2 border-l-2 border-l-amber-500/50">
+                        <div className="flex items-center gap-2">
+                          <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="font-medium text-sm truncate flex-1">{c.domain}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1 h-7 text-xs shrink-0"
+                            disabled={fetchingDomain === c.domain}
+                            onClick={() => handleFetchAndProcess(c.domain, c.page_url)}
+                          >
+                            {fetchingDomain === c.domain ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                            Fetch
+                          </Button>
+                        </div>
+                        <div className="flex items-center flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+                          <span className="tabular-nums">{c.report_count} reports</span>
+                          <span>·</span>
+                          <span>{c.cmp_fingerprint ?? "unknown"}</span>
+                          <span>·</span>
+                          <span>{c.last_reported ? timeAgo(c.last_reported) : "—"}</span>
+                        </div>
+                        {c.page_url && <p className="text-[11px] text-muted-foreground truncate">{c.page_url}</p>}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Desktop */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Domain</TableHead>
+                          <TableHead className="text-right">Reports</TableHead>
+                          <TableHead>CMP</TableHead>
+                          <TableHead>Page URL</TableHead>
+                          <TableHead className="text-right">Last Reported</TableHead>
+                          <TableHead className="w-32">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {noHtmlReports.map((c: any, i: number) => (
+                          <TableRow key={i} className="even:bg-muted/30 border-l-2 border-l-amber-500/50">
+                            <TableCell className="font-medium flex items-center gap-2">
+                              <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                              {c.domain}
+                            </TableCell>
+                            <TableCell className="text-right font-medium tabular-nums">{c.report_count}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{c.cmp_fingerprint ?? "unknown"}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{c.page_url || "—"}</TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">{c.last_reported ? timeAgo(c.last_reported) : "—"}</TableCell>
+                            <TableCell>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5 h-7 text-xs"
+                                disabled={fetchingDomain === c.domain}
+                                onClick={() => handleFetchAndProcess(c.domain, c.page_url)}
+                              >
+                                {fetchingDomain === c.domain ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                                Fetch & Process
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* User Reports Tab */}
         <TabsContent value="user-reports">
           <Card>
