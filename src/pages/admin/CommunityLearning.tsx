@@ -150,6 +150,7 @@ export default function CommunityLearning() {
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [bulkRerunning, setBulkRerunning] = useState(false);
   const [candidateFilter, setCandidateFilter] = useState<"all" | "never_processed" | "failed">("all");
+  const [fetchingDomain, setFetchingDomain] = useState<string | null>(null);
   const hasLoadedRef = useRef(false);
 
   // Activity graph controls
