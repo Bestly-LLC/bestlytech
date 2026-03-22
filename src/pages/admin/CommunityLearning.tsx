@@ -600,6 +600,20 @@ export default function CommunityLearning() {
   // Build set of domains that have AI log entries for filter
   const aiLoggedDomains = useMemo(() => new Set(aiGenLog.map((l: any) => l.domain)), [aiGenLog]);
 
+  // No-HTML reports for Manual Review tab
+  const noHtmlReports = useMemo(() => candidates.filter((c: any) => !c.banner_html || c.banner_html.trim().length === 0), [candidates]);
+
+  // Skipped domains from AI log (deduplicated by domain, latest per domain)
+  const skippedDomains = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const log of aiGenLog) {
+      if (log.status === "skipped_no_html" && !map.has(log.domain)) {
+        map.set(log.domain, log);
+      }
+    }
+    return Array.from(map.values());
+  }, [aiGenLog]);
+
   // Filter candidates based on selected filter
   const filteredCandidates = useMemo(() => {
     if (candidateFilter === "all") return candidates;
