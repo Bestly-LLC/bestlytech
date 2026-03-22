@@ -950,8 +950,8 @@ export default function CommunityLearning() {
                       <button
                         key={s.key}
                         onClick={() => toggleSeries(s.key)}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${active ? "border-current" : "border-border text-muted-foreground opacity-50"}`}
-                        style={active ? { color: s.color, borderColor: s.color, backgroundColor: s.color + "15" } : undefined}
+                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${active ? "text-foreground" : "border-border text-muted-foreground opacity-50"}`}
+                         style={active ? { borderColor: s.color, backgroundColor: s.color + "20" } : undefined}
                       >
                         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: active ? s.color : "currentColor" }} />
                         {s.label}
