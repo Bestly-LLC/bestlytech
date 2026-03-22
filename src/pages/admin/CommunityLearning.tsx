@@ -488,6 +488,35 @@ export default function CommunityLearning() {
     }
   }, [fetchAll]);
 
+  // Handler: Fetch & Process (calls report-missed-banner for server-side fetch)
+  const handleFetchAndProcess = useCallback(async (domain: string, pageUrl?: string) => {
+    setFetchingDomain(domain);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/report-missed-banner`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ domain, page_url: pageUrl || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      if (data.ai_processing?.results?.[0]?.status?.startsWith("success")) {
+        toast.success(`Pattern generated for ${domain}!`);
+      } else {
+        toast.info(`Fetch & process triggered for ${domain}. AI result: ${data.ai_processing?.results?.[0]?.status || "pending"}`);
+      }
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Fetch & Process failed: ${e.message}`);
+    } finally {
+      setFetchingDomain(null);
+    }
+  }, [fetchAll]);
+
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const handleRunConsensus = useCallback(async () => {
