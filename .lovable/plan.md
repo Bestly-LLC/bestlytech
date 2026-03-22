@@ -1,45 +1,60 @@
 
 
-# Enhanced Activity Graph Controls
+# Surface "No Banner Detected" Reports in Admin Panel
 
-## What Changes
+## Overview
 
-Add interactive controls above the Activity graph so you can toggle individual data series on/off, switch time ranges, and choose between chart types.
+Three changes: a new "Manual Review" tab for no-HTML reports, a "Skipped" section in the AI Gen tab, and auto-triggering the edge function on empty-HTML reports.
 
-### Controls to Add
+## 1. New "Manual Review" Tab
 
-1. **Series toggle chips** — Clickable pill buttons for each series (Reports, New Patterns, New Domains, Active Patterns). Click to show/hide that line. Active chips are colored to match their line; inactive chips are muted.
+**File:** `src/pages/admin/CommunityLearning.tsx`
 
-2. **Time range selector** — Dropdown or button group: 7 days, 14 days, 30 days, 90 days. Currently hardcoded to 30 days via the `p_days` parameter. The DB function `get_daily_pattern_activity` already accepts `p_days`, so this just requires passing a different value and re-fetching.
+Add a new tab between "Reports" and the end (or after "Reports") called "Manual Review" with an `AlertTriangle` icon.
 
-3. **Chart type toggle** — Small icon button group to switch between Area chart (current) and Bar chart (stacked bars, useful for comparing daily totals side-by-side).
+- Filter `candidates` (already fetched from `missed_banner_reports`) for rows where `banner_html` is null/empty and `resolved = false`
+- Display: domain, report_count, last_reported, cmp_fingerprint, page_url
+- Each row gets a "Fetch & Process" button that calls `report-missed-banner` edge function with `{ domain, page_url }` (no `banner_html`) — triggering server-side fetch + AI generation
+- Show a count badge on the tab
+- Reuse the existing `handleRerunAI` pattern for the fetch call, but target `report-missed-banner` instead of `ai-generate-pattern`
 
-### Layout
+## 2. Skipped Domains Section in AI Gen Tab
 
-```text
-┌─────────────────────────────────────────────────────┐
-│ Pattern Activity                                    │
-│                                                     │
-│ [7d] [14d] [30d] [90d]    [Area ▣] [Bar ▥]        │
-│                                                     │
-│ ● Reports  ● New Patterns  ● New Domains  ○ Active │
-│                                                     │
-│ ┌─────────────────────────────────────────────┐     │
-│ │           ~ chart area ~                    │     │
-│ └─────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────┘
-```
+**File:** `src/pages/admin/CommunityLearning.tsx`
+
+In the existing "AI Gen" tab content, add a collapsible section below the current AI log table:
+
+- Filter `aiGenLog` for `status === 'skipped_no_html'`
+- Show domain, `created_at` (time ago), and a "Retry" button
+- Retry calls `report-missed-banner` with the domain (server-side fetch attempt)
+- Deduplicate by domain (show latest skip per domain)
+
+## 3. Auto-Trigger Server-Side Fetch for Empty HTML
+
+**File:** `supabase/functions/report-missed-banner/index.ts`
+
+Currently the edge function always calls `ai-generate-pattern` after saving the report. The AI generator already has a `fetchAndExtractBannerHTML()` fallback (Layer 3 in the pipeline), so no changes needed to the AI function itself.
+
+The change: when `banner_html` is empty/null, still trigger `ai-generate-pattern` (it already is), but pass a hint flag so the AI function knows to prioritize server-side fetch. Actually, looking at the existing code, `report-missed-banner` already calls `ai-generate-pattern` unconditionally — so empty-HTML reports already auto-trigger AI. The issue is the AI skips them because it checks `banner_html` on the `missed_banner_reports` row.
+
+**Fix:** In `report-missed-banner/index.ts`, when `banner_html` is empty, pass `{ domain, force_server_fetch: true }` to `ai-generate-pattern`. Then in `ai-generate-pattern/index.ts`, when `force_server_fetch` is true OR `banner_html` is empty, skip the "skipped_no_html" early return and jump straight to the server-side fetch layer.
+
+### Database Changes
+None required.
+
+### Edge Function Changes
+
+**`supabase/functions/report-missed-banner/index.ts`:**
+- Pass `force_server_fetch: true` when `banner_html` is empty
+
+**`supabase/functions/ai-generate-pattern/index.ts`:**
+- Accept `force_server_fetch` param
+- When true, bypass the `skipped_no_html` check and go to server-side fetch
 
 ## Technical Details
 
-### File: `src/pages/admin/CommunityLearning.tsx`
-
-- Add state: `activityDays` (default 30), `visibleSeries` (Set of enabled keys), `chartType` ('area' | 'bar')
-- Re-fetch activity data when `activityDays` changes (call `get_daily_pattern_activity` with new `p_days`)
-- Render series toggle chips in the CardHeader area, each colored to match its line
-- Conditionally render `<AreaChart>` or `<BarChart>` based on `chartType`
-- Only render `<Area>`/`<Bar>`/`<Line>` components for series present in `visibleSeries`
-- Import `BarChart, Bar` from recharts (already using recharts)
-
-No database changes needed — the existing function supports variable day ranges.
+- New state: `noHtmlReports` derived from existing `candidates` data (already fetched)
+- New handler: `handleFetchAndProcess(domain, page_url)` — calls `report-missed-banner` edge function
+- Tab badge shows count of no-HTML unresolved reports
+- Skipped section in AI Gen uses existing `aiGenLog` state filtered by status
 
