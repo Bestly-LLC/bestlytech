@@ -150,6 +150,7 @@ export default function CommunityLearning() {
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [bulkRerunning, setBulkRerunning] = useState(false);
   const [candidateFilter, setCandidateFilter] = useState<"all" | "never_processed" | "failed">("all");
+  const [fetchingDomain, setFetchingDomain] = useState<string | null>(null);
   const hasLoadedRef = useRef(false);
 
   // Activity graph controls
@@ -487,6 +488,35 @@ export default function CommunityLearning() {
     }
   }, [fetchAll]);
 
+  // Handler: Fetch & Process (calls report-missed-banner for server-side fetch)
+  const handleFetchAndProcess = useCallback(async (domain: string, pageUrl?: string) => {
+    setFetchingDomain(domain);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/report-missed-banner`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ domain, page_url: pageUrl || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      if (data.ai_processing?.results?.[0]?.status?.startsWith("success")) {
+        toast.success(`Pattern generated for ${domain}!`);
+      } else {
+        toast.info(`Fetch & process triggered for ${domain}. AI result: ${data.ai_processing?.results?.[0]?.status || "pending"}`);
+      }
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(`Fetch & Process failed: ${e.message}`);
+    } finally {
+      setFetchingDomain(null);
+    }
+  }, [fetchAll]);
+
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const handleRunConsensus = useCallback(async () => {
@@ -569,6 +599,20 @@ export default function CommunityLearning() {
 
   // Build set of domains that have AI log entries for filter
   const aiLoggedDomains = useMemo(() => new Set(aiGenLog.map((l: any) => l.domain)), [aiGenLog]);
+
+  // No-HTML reports for Manual Review tab
+  const noHtmlReports = useMemo(() => candidates.filter((c: any) => !c.banner_html || c.banner_html.trim().length === 0), [candidates]);
+
+  // Skipped domains from AI log (deduplicated by domain, latest per domain)
+  const skippedDomains = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const log of aiGenLog) {
+      if (log.status === "skipped_no_html" && !map.has(log.domain)) {
+        map.set(log.domain, log);
+      }
+    }
+    return Array.from(map.values());
+  }, [aiGenLog]);
 
   // Filter candidates based on selected filter
   const filteredCandidates = useMemo(() => {
@@ -854,6 +898,7 @@ export default function CommunityLearning() {
             <TabsTrigger value="ai-generator" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Sparkles className="h-3.5 w-3.5 hidden sm:block" />AI Gen</TabsTrigger>
             <TabsTrigger value="breakdown" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><BarChart3 className="h-3.5 w-3.5 hidden sm:block" />Breakdown</TabsTrigger>
             <TabsTrigger value="dismissals" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><MousePointerClick className="h-3.5 w-3.5 hidden sm:block" />Dismissals{dismissalReports.length > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{dismissalReports.length}</Badge>}</TabsTrigger>
+            <TabsTrigger value="manual-review" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><AlertTriangle className="h-3.5 w-3.5 hidden sm:block" />Review{noHtmlReports.length > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{noHtmlReports.length}</Badge>}</TabsTrigger>
             <TabsTrigger value="user-reports" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Flag className="h-3.5 w-3.5 hidden sm:block" />Reports</TabsTrigger>
           </TabsList>
         </div>
@@ -1576,6 +1621,49 @@ export default function CommunityLearning() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Skipped — No HTML Section */}
+            {skippedDomains.length > 0 && (
+              <Collapsible>
+                <Card className="border-muted-foreground/20">
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="flex flex-row items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors py-3">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium">Skipped — No HTML</CardTitle>
+                        <Badge variant="secondary" className="text-[10px]">{skippedDomains.length}</Badge>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="pt-0">
+                      <div className="space-y-2">
+                        {skippedDomains.map((log: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between gap-3 border rounded-lg p-2.5">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-sm truncate">{log.domain}</span>
+                              <span className="text-[11px] text-muted-foreground shrink-0">{log.created_at ? timeAgo(log.created_at) : "—"}</span>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 h-7 text-xs shrink-0"
+                              disabled={fetchingDomain === log.domain}
+                              onClick={() => handleFetchAndProcess(log.domain)}
+                            >
+                              {fetchingDomain === log.domain ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                              Retry
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            )}
           </div>
         </TabsContent>
 
@@ -1841,6 +1929,94 @@ export default function CommunityLearning() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* Manual Review Tab */}
+        <TabsContent value="manual-review">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Manual Review — No Banner HTML</CardTitle>
+              <CardDescription>Domains reported where the extension couldn't capture banner HTML. Use "Fetch & Process" to attempt server-side detection.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {noHtmlReports.length === 0 ? (
+                <EmptyState icon={CheckCircle2} title="No reports needing review" description="All reported domains have captured banner HTML." />
+              ) : (
+                <>
+                  {/* Mobile */}
+                  <div className="md:hidden space-y-3">
+                    {noHtmlReports.map((c: any, i: number) => (
+                      <div key={i} className="border rounded-lg p-3 space-y-2 border-l-2 border-l-amber-500/50">
+                        <div className="flex items-center gap-2">
+                          <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="font-medium text-sm truncate flex-1">{c.domain}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1 h-7 text-xs shrink-0"
+                            disabled={fetchingDomain === c.domain}
+                            onClick={() => handleFetchAndProcess(c.domain, c.page_url)}
+                          >
+                            {fetchingDomain === c.domain ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                            Fetch
+                          </Button>
+                        </div>
+                        <div className="flex items-center flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+                          <span className="tabular-nums">{c.report_count} reports</span>
+                          <span>·</span>
+                          <span>{c.cmp_fingerprint ?? "unknown"}</span>
+                          <span>·</span>
+                          <span>{c.last_reported ? timeAgo(c.last_reported) : "—"}</span>
+                        </div>
+                        {c.page_url && <p className="text-[11px] text-muted-foreground truncate">{c.page_url}</p>}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Desktop */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Domain</TableHead>
+                          <TableHead className="text-right">Reports</TableHead>
+                          <TableHead>CMP</TableHead>
+                          <TableHead>Page URL</TableHead>
+                          <TableHead className="text-right">Last Reported</TableHead>
+                          <TableHead className="w-32">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {noHtmlReports.map((c: any, i: number) => (
+                          <TableRow key={i} className="even:bg-muted/30 border-l-2 border-l-amber-500/50">
+                            <TableCell className="font-medium flex items-center gap-2">
+                              <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                              {c.domain}
+                            </TableCell>
+                            <TableCell className="text-right font-medium tabular-nums">{c.report_count}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{c.cmp_fingerprint ?? "unknown"}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{c.page_url || "—"}</TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">{c.last_reported ? timeAgo(c.last_reported) : "—"}</TableCell>
+                            <TableCell>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5 h-7 text-xs"
+                                disabled={fetchingDomain === c.domain}
+                                onClick={() => handleFetchAndProcess(c.domain, c.page_url)}
+                              >
+                                {fetchingDomain === c.domain ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                                Fetch & Process
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* User Reports Tab */}
