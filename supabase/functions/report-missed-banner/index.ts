@@ -45,6 +45,7 @@ Deno.serve(async (req) => {
 
     // 2. Immediately trigger AI processing for this domain
     let aiResult: any = null;
+    const noBannerHtml = !banner_html || (typeof banner_html === "string" && banner_html.trim().length === 0);
     try {
       const aiRes = await fetch(`${supabaseUrl}/functions/v1/ai-generate-pattern`, {
         method: "POST",
@@ -52,7 +53,10 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${serviceRoleKey}`,
         },
-        body: JSON.stringify({ domain: trimmedDomain }),
+        body: JSON.stringify({
+          domain: trimmedDomain,
+          ...(noBannerHtml ? { force_server_fetch: true } : {}),
+        }),
       });
       aiResult = await aiRes.json();
     } catch (aiErr: any) {
