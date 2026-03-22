@@ -1621,6 +1621,49 @@ export default function CommunityLearning() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Skipped — No HTML Section */}
+            {skippedDomains.length > 0 && (
+              <Collapsible>
+                <Card className="border-muted-foreground/20">
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="flex flex-row items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors py-3">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium">Skipped — No HTML</CardTitle>
+                        <Badge variant="secondary" className="text-[10px]">{skippedDomains.length}</Badge>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="pt-0">
+                      <div className="space-y-2">
+                        {skippedDomains.map((log: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between gap-3 border rounded-lg p-2.5">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-sm truncate">{log.domain}</span>
+                              <span className="text-[11px] text-muted-foreground shrink-0">{log.created_at ? timeAgo(log.created_at) : "—"}</span>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 h-7 text-xs shrink-0"
+                              disabled={fetchingDomain === log.domain}
+                              onClick={() => handleFetchAndProcess(log.domain)}
+                            >
+                              {fetchingDomain === log.domain ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                              Retry
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            )}
           </div>
         </TabsContent>
 
