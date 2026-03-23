@@ -209,6 +209,25 @@ async function fetchPageHtml(domain: string, pageUrl?: string): Promise<string |
 const AI_MODEL = "google/gemini-2.5-pro";
 const AI_MODEL_LABEL = "gemini-2.5-pro";
 
+// Banned selectors that would match entire page structures
+const BANNED_SELECTORS = ['body', 'html', 'head', 'body *', 'html *', '*'];
+
+// Domains that should never get cookie patterns (major web apps without standard banners)
+const EXCLUDED_DOMAINS = [
+  'icloud.com', 'mail.google.com', 'drive.google.com', 'docs.google.com',
+  'outlook.live.com', 'outlook.office.com', 'teams.microsoft.com',
+  'accounts.google.com', 'appleid.apple.com',
+];
+
+function isDomainExcluded(domain: string): boolean {
+  const d = domain.toLowerCase();
+  return EXCLUDED_DOMAINS.some(ed => d === ed || d.endsWith('.' + ed));
+}
+
+function isSelectorBanned(selector: string): boolean {
+  return BANNED_SELECTORS.includes(selector.trim().toLowerCase());
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
