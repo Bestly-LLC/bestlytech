@@ -766,7 +766,7 @@ export default function CommunityLearning() {
           {
             label: "Report Ingestion",
             icon: Flag,
-            lastRun: candidates.length > 0 ? candidates.reduce((latest: any, c: any) => (!latest || new Date(c.last_reported) > new Date(latest) ? c.last_reported : latest), null) : null,
+            lastRun: latestReportTime,
             thresholds: [24, 72],
           },
           {
