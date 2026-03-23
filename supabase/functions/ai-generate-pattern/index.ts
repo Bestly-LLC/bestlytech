@@ -209,6 +209,25 @@ async function fetchPageHtml(domain: string, pageUrl?: string): Promise<string |
 const AI_MODEL = "google/gemini-2.5-pro";
 const AI_MODEL_LABEL = "gemini-2.5-pro";
 
+// Banned selectors that would match entire page structures
+const BANNED_SELECTORS = ['body', 'html', 'head', 'body *', 'html *', '*'];
+
+// Domains that should never get cookie patterns (major web apps without standard banners)
+const EXCLUDED_DOMAINS = [
+  'icloud.com', 'mail.google.com', 'drive.google.com', 'docs.google.com',
+  'outlook.live.com', 'outlook.office.com', 'teams.microsoft.com',
+  'accounts.google.com', 'appleid.apple.com',
+];
+
+function isDomainExcluded(domain: string): boolean {
+  const d = domain.toLowerCase();
+  return EXCLUDED_DOMAINS.some(ed => d === ed || d.endsWith('.' + ed));
+}
+
+function isSelectorBanned(selector: string): boolean {
+  return BANNED_SELECTORS.includes(selector.trim().toLowerCase());
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -292,6 +311,21 @@ Deno.serve(async (req) => {
 
     for (const candidate of items) {
       processed++;
+
+      // ========== GUARD: Excluded domains ==========
+      if (isDomainExcluded(candidate.domain)) {
+        console.log(`[${candidate.domain}] Skipping — excluded domain`);
+        skipped++;
+        await supabase.from("ai_generation_log").insert({
+          domain: candidate.domain,
+          status: "skipped_excluded_domain",
+          error_message: "Domain is on the exclusion list (major web app without standard cookie banners)",
+          ai_model: AI_MODEL_LABEL,
+        });
+        await supabase.rpc("mark_ai_processed", { _domain: candidate.domain, _resolved: true });
+        results.push({ domain: candidate.domain, status: "skipped_excluded_domain" });
+        continue;
+      }
 
       // ========== LAYER 0: cmp_fingerprint field check ==========
       // If the extension already identified the CMP, use known selectors immediately
@@ -881,6 +915,21 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
 
 async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, status: string, htmlOverride?: string) {
   const selector = aiResult.selector!;
+
+  // Reject banned selectors
+  if (isSelectorBanned(selector)) {
+    console.warn(`[${candidate.domain}] Rejected dangerous selector "${selector}"`);
+    await supabase.from("ai_generation_log").insert({
+      domain: candidate.domain,
+      status: "rejected_dangerous_selector",
+      selector_generated: selector,
+      error_message: `Selector "${selector}" is a banned structural element`,
+      ai_model: AI_MODEL_LABEL,
+    });
+    await supabase.rpc("mark_ai_processed", { _domain: candidate.domain, _resolved: false });
+    return;
+  }
+
   let actionType = aiResult.action_type || (aiResult.action === "hide" ? "close" : "reject");
 
   // Validate selector/action_type for contradictions
