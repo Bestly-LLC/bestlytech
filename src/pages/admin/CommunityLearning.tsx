@@ -263,6 +263,7 @@ export default function CommunityLearning() {
       setDismissalReports(r16.data as any[] ?? []);
       setConsensusCandidates(r17.data as any[] ?? []);
       setConsensusPatternCount(r18.count ?? 0);
+      setLatestReportTime(r19.data?.[0]?.last_reported ?? null);
     } catch (e) {
       console.error("Failed to fetch community data", e);
     } finally {
