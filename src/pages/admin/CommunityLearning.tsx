@@ -151,6 +151,7 @@ export default function CommunityLearning() {
   const [bulkRerunning, setBulkRerunning] = useState(false);
   const [candidateFilter, setCandidateFilter] = useState<"all" | "never_processed" | "failed">("all");
   const [fetchingDomain, setFetchingDomain] = useState<string | null>(null);
+  const [latestReportTime, setLatestReportTime] = useState<string | null>(null);
   const hasLoadedRef = useRef(false);
 
   // Activity graph controls
@@ -210,12 +211,12 @@ export default function CommunityLearning() {
   const fetchAll = useCallback(async () => {
     if (!hasLoadedRef.current) setLoading(true);
     try {
-      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18] = await Promise.all([
+      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19] = await Promise.all([
         supabase.rpc("get_community_overview" as any),
         supabase.rpc("get_daily_pattern_activity" as any, { p_days: activityDays }),
-        supabase.rpc("get_top_domains" as any, { p_limit: 25 }),
-        supabase.rpc("get_recently_learned" as any, { p_limit: 50 }),
-        supabase.rpc("get_pattern_issues" as any, { p_limit: 50 }),
+        supabase.rpc("get_top_domains" as any, { p_limit: 30 }),
+        supabase.rpc("get_recently_learned" as any, { p_limit: 25 }),
+        supabase.rpc("get_pattern_issues" as any, { p_limit: 25 }),
         supabase.rpc("get_cmp_distribution" as any),
         supabase.rpc("get_action_type_stats" as any),
         supabase.rpc("get_confidence_distribution" as any),
@@ -233,6 +234,8 @@ export default function CommunityLearning() {
         supabase.rpc("find_dismissal_consensus" as any),
         // Consensus pattern count
         supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("source", "user_consensus"),
+        // Latest report timestamp (for heartbeat — includes resolved reports)
+        supabase.from("missed_banner_reports").select("last_reported").order("last_reported", { ascending: false }).limit(1),
       ]);
       setOverview(r1.data as any);
       setActivity(r2.data as any ?? []);
@@ -260,6 +263,7 @@ export default function CommunityLearning() {
       setDismissalReports(r16.data as any[] ?? []);
       setConsensusCandidates(r17.data as any[] ?? []);
       setConsensusPatternCount(r18.count ?? 0);
+      setLatestReportTime(r19.data?.[0]?.last_reported ?? null);
     } catch (e) {
       console.error("Failed to fetch community data", e);
     } finally {
@@ -762,7 +766,7 @@ export default function CommunityLearning() {
           {
             label: "Report Ingestion",
             icon: Flag,
-            lastRun: candidates.length > 0 ? candidates.reduce((latest: any, c: any) => (!latest || new Date(c.last_reported) > new Date(latest) ? c.last_reported : latest), null) : null,
+            lastRun: latestReportTime,
             thresholds: [24, 72],
           },
           {
