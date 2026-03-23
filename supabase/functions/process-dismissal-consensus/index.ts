@@ -33,8 +33,25 @@ Deno.serve(async (req) => {
     let created = 0;
     const results: any[] = [];
 
+    const BANNED_SELECTORS = ['body', 'html', 'head', 'body *', 'html *', '*'];
+    const EXCLUDED_DOMAINS = [
+      'icloud.com', 'mail.google.com', 'drive.google.com', 'docs.google.com',
+      'outlook.live.com', 'outlook.office.com', 'teams.microsoft.com',
+      'accounts.google.com', 'appleid.apple.com',
+    ];
+
     for (const entry of entries) {
       try {
+        // Guard: skip banned selectors and excluded domains
+        if (BANNED_SELECTORS.includes((entry.clicked_selector || '').trim().toLowerCase())) {
+          results.push({ domain: entry.domain, error: `Rejected banned selector: ${entry.clicked_selector}` });
+          continue;
+        }
+        const domainLower = (entry.domain || '').toLowerCase();
+        if (EXCLUDED_DOMAINS.some((ed: string) => domainLower === ed || domainLower.endsWith('.' + ed))) {
+          results.push({ domain: entry.domain, error: 'Excluded domain' });
+          continue;
+        }
         // Infer action_type from the clicked_selector text
         const selectorLower = (entry.clicked_selector || "").toLowerCase();
         let inferredAction = "reject"; // default

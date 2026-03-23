@@ -915,6 +915,21 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
 
 async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, status: string, htmlOverride?: string) {
   const selector = aiResult.selector!;
+
+  // Reject banned selectors
+  if (isSelectorBanned(selector)) {
+    console.warn(`[${candidate.domain}] Rejected dangerous selector "${selector}"`);
+    await supabase.from("ai_generation_log").insert({
+      domain: candidate.domain,
+      status: "rejected_dangerous_selector",
+      selector_generated: selector,
+      error_message: `Selector "${selector}" is a banned structural element`,
+      ai_model: AI_MODEL_LABEL,
+    });
+    await supabase.rpc("mark_ai_processed", { _domain: candidate.domain, _resolved: false });
+    return;
+  }
+
   let actionType = aiResult.action_type || (aiResult.action === "hide" ? "close" : "reject");
 
   // Validate selector/action_type for contradictions
