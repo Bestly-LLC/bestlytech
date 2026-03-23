@@ -312,6 +312,21 @@ Deno.serve(async (req) => {
     for (const candidate of items) {
       processed++;
 
+      // ========== GUARD: Excluded domains ==========
+      if (isDomainExcluded(candidate.domain)) {
+        console.log(`[${candidate.domain}] Skipping — excluded domain`);
+        skipped++;
+        await supabase.from("ai_generation_log").insert({
+          domain: candidate.domain,
+          status: "skipped_excluded_domain",
+          error_message: "Domain is on the exclusion list (major web app without standard cookie banners)",
+          ai_model: AI_MODEL_LABEL,
+        });
+        await supabase.rpc("mark_ai_processed", { _domain: candidate.domain, _resolved: true });
+        results.push({ domain: candidate.domain, status: "skipped_excluded_domain" });
+        continue;
+      }
+
       // ========== LAYER 0: cmp_fingerprint field check ==========
       // If the extension already identified the CMP, use known selectors immediately
       if (candidate.cmp_fingerprint && candidate.cmp_fingerprint !== "unknown" && candidate.cmp_fingerprint !== "generic") {
