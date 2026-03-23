@@ -64,12 +64,65 @@ Deno.serve(async (req) => {
       aiResult = { error: aiErr.message, note: "Report saved, AI will retry later" };
     }
 
+    // 3. Check for persistent no-HTML failures and send email alert
+    let emailAlertSent = false;
+    if (noBannerHtml) {
+      try {
+        const { data: report } = await supabase
+          .from("missed_banner_reports")
+          .select("report_count, resolved")
+          .eq("domain", trimmedDomain)
+          .single();
+
+        if (report && report.report_count >= 3 && !report.resolved) {
+          const emailPayload = {
+            to: "jaredbest@icloud.com",
+            from: "noreply@bestly.tech",
+            subject: `Cookie Yeti: ${trimmedDomain} needs manual review`,
+            html: `
+              <div style="font-family:'Plus Jakarta Sans',sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:32px;">
+                <div style="background:#1a2766;color:#ffffff;padding:24px;border-radius:12px 12px 0 0;text-align:center;">
+                  <h1 style="margin:0;font-size:20px;">🍪 Cookie Yeti Alert</h1>
+                </div>
+                <div style="background:#ffffff;padding:24px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;">
+                  <p style="color:#334155;font-size:16px;margin:0 0 16px;">
+                    <strong>${trimmedDomain}</strong> has been reported <strong>${report.report_count} times</strong> but no banner HTML was captured by the extension.
+                  </p>
+                  <p style="color:#64748b;font-size:14px;margin:0 0 16px;">
+                    The AI generator cannot process this domain without banner HTML. Manual review is needed.
+                  </p>
+                  <p style="color:#64748b;font-size:14px;margin:0;">
+                    Page URL: ${page_url || "Not provided"}<br/>
+                    CMP: ${cmp_fingerprint || "unknown"}
+                  </p>
+                  <div style="margin-top:24px;text-align:center;">
+                    <a href="https://bestlytech.lovable.app/admin/community-learning" style="display:inline-block;background:#1a2766;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Open Dashboard</a>
+                  </div>
+                </div>
+              </div>
+            `,
+            purpose: "transactional",
+            idempotency_key: `manual-review-${trimmedDomain}-${Math.floor(Date.now() / 86400000)}`,
+          };
+
+          await supabase.rpc("enqueue_email", {
+            queue_name: "transactional_emails",
+            payload: emailPayload,
+          });
+          emailAlertSent = true;
+        }
+      } catch (alertErr: any) {
+        console.error("Email alert error (non-fatal):", alertErr.message);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         domain: trimmedDomain,
         report_saved: true,
         ai_processing: aiResult,
+        email_alert_sent: emailAlertSent,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
