@@ -151,6 +151,7 @@ export default function CommunityLearning() {
   const [bulkRerunning, setBulkRerunning] = useState(false);
   const [candidateFilter, setCandidateFilter] = useState<"all" | "never_processed" | "failed">("all");
   const [fetchingDomain, setFetchingDomain] = useState<string | null>(null);
+  const [latestReportTime, setLatestReportTime] = useState<string | null>(null);
   const hasLoadedRef = useRef(false);
 
   // Activity graph controls
