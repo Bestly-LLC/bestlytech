@@ -19,7 +19,7 @@ const OrderConfirmationEmail = ({ plan, amount, orderDate }: OrderConfirmationPr
     <Preview>Your {SITE_NAME} order is confirmed — {plan || 'subscription'} plan</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Img src={LOGO_URL} width="120" height="auto" alt="Bestly" style={logo} />
+        <a href="https://bestly.tech" style={{ textDecoration: 'none' }}><Img src={LOGO_URL} width="120" height="auto" alt="Bestly" style={logo} /></a>
         <Section style={headerBanner}>
           <Text style={headerEmoji}>🎉</Text>
           <Heading style={h1}>Order Confirmed!</Heading>

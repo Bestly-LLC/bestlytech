@@ -17,7 +17,7 @@ const WelcomeEmail = ({ plan }: WelcomeProps) => (
     <Preview>Welcome to {SITE_NAME} — let's get you set up!</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Img src={LOGO_URL} width="120" height="auto" alt="Bestly" style={logo} />
+        <a href="https://bestly.tech" style={{ textDecoration: 'none' }}><Img src={LOGO_URL} width="120" height="auto" alt="Bestly" style={logo} /></a>
         <Heading style={h1}>Welcome to {SITE_NAME}! 🐻‍❄️</Heading>
         <Text style={text}>
           You're all set with the <strong>{plan || 'Premium'}</strong> plan. Here's how to get started in under a minute:

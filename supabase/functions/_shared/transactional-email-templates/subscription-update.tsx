@@ -45,7 +45,7 @@ const SubscriptionUpdateEmail = ({ status = 'renewed', plan, periodEnd }: Subscr
       <Preview>{config.title} — {SITE_NAME}</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Img src={LOGO_URL} width="120" height="auto" alt="Bestly" style={logo} />
+          <a href="https://bestly.tech" style={{ textDecoration: 'none' }}><Img src={LOGO_URL} width="120" height="auto" alt="Bestly" style={logo} /></a>
           <Section style={{ textAlign: 'center' as const, marginBottom: '24px' }}>
             <Text style={{ fontSize: '40px', margin: '0 0 8px' }}>{config.emoji}</Text>
             <Heading style={{ ...h1, color: config.color }}>{config.title}</Heading>

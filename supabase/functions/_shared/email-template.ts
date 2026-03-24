@@ -107,8 +107,10 @@ ${FONT_IMPORT}
 <tr><td align="center">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
 <tr><td style="background:${CY.header};border-radius:16px 16px 0 0;padding:32px 32px 24px;text-align:center;">
+<a href="https://bestly.tech" style="text-decoration:none;">
 <img src="https://bestlytech.lovable.app/images/cookieyeti-icon.png" alt="Cookie Yeti" width="64" height="64" style="display:block;margin:0 auto 12px;border-radius:14px;" />
 <h1 style="margin:0;font-size:28px;font-weight:800;color:#fff;letter-spacing:-0.5px;font-family:${FONT_STACK};">Cookie Yeti</h1>
+</a>
 <p style="margin:6px 0 0;font-size:13px;color:${CY.ice};letter-spacing:0.5px;font-weight:500;">Distraction-Free Browsing, Automatically</p>
 </td></tr>
 <tr><td style="background:#fff;padding:36px 32px 32px;border-left:1px solid ${CY.border};border-right:1px solid ${CY.border};">
