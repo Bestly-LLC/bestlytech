@@ -39,6 +39,7 @@ export function ChangePasswordDialog() {
   const [loading, setLoading] = useState(false);
   const [hasPasskey, setHasPasskey] = useState<boolean | null>(null);
   const [registeringPasskey, setRegisteringPasskey] = useState(false);
+  const [deletingPasskey, setDeletingPasskey] = useState(false);
 
   useEffect(() => {
     if (open) checkPasskey();
@@ -142,6 +143,31 @@ export function ChangePasswordDialog() {
     }
   };
 
+  const handleDeletePasskey = async () => {
+    setDeletingPasskey(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.user) {
+        toast.error("Not authenticated");
+        return;
+      }
+      const { error } = await supabase
+        .from("passkey_credentials")
+        .delete()
+        .eq("user_id", session.session.user.id);
+      if (error) {
+        toast.error("Failed to remove passkey");
+      } else {
+        setHasPasskey(false);
+        toast.success("Passkey removed. You can register a new one.");
+      }
+    } catch {
+      toast.error("Failed to remove passkey");
+    } finally {
+      setDeletingPasskey(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -164,9 +190,20 @@ export function ChangePasswordDialog() {
               <span className="text-sm font-medium">Passkey</span>
             </div>
             {hasPasskey ? (
-              <span className="flex items-center gap-1 text-xs text-green-600">
-                <Check className="h-3 w-3" /> Registered
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1 text-xs text-green-600">
+                  <Check className="h-3 w-3" /> Registered
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-destructive hover:text-destructive h-7 px-2"
+                  onClick={handleDeletePasskey}
+                  disabled={deletingPasskey}
+                >
+                  {deletingPasskey ? "Removing…" : "Remove"}
+                </Button>
+              </div>
             ) : (
               <Button
                 variant="outline"
@@ -180,7 +217,12 @@ export function ChangePasswordDialog() {
           </div>
           {hasPasskey && (
             <p className="text-xs text-muted-foreground">
-              You can sign in using Face ID, Touch ID, or your device PIN.
+              Synced via iCloud Keychain across all your Apple devices. Remove to re-register.
+            </p>
+          )}
+          {!hasPasskey && hasPasskey !== null && (
+            <p className="text-xs text-muted-foreground">
+              Register a passkey to sign in with Face ID, Touch ID, or your device PIN.
             </p>
           )}
         </div>
