@@ -6,6 +6,23 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// In-memory rate limiter: email -> { count, resetAt }
+const attempts = new Map<string, { count: number; resetAt: number }>();
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
+function checkRateLimit(email: string): boolean {
+  const now = Date.now();
+  const entry = attempts.get(email);
+  if (!entry || now > entry.resetAt) {
+    attempts.set(email, { count: 1, resetAt: now + WINDOW_MS });
+    return true;
+  }
+  entry.count++;
+  if (entry.count > MAX_ATTEMPTS) return false;
+  return true;
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -21,6 +38,16 @@ serve(async (req: Request) => {
       );
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Rate limit check
+    if (!checkRateLimit(normalizedEmail)) {
+      return new Response(
+        JSON.stringify({ error: "Too many attempts. Please wait a few minutes." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -29,7 +56,7 @@ serve(async (req: Request) => {
     const { data: rows, error: selectError } = await supabase
       .from("activation_codes")
       .select("*")
-      .eq("email", email.toLowerCase())
+      .eq("email", normalizedEmail)
       .eq("code", code)
       .eq("active", false)
       .gt("expires_at", new Date().toISOString())
@@ -72,6 +99,9 @@ serve(async (req: Request) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Clear rate limit on success
+    attempts.delete(normalizedEmail);
 
     return new Response(
       JSON.stringify({ success: true, activated: true, code }),
