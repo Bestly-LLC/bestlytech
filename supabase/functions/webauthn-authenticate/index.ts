@@ -265,11 +265,20 @@ Deno.serve(async (req) => {
         return errorResponse("User presence flag not set");
       }
 
-      // Verify counter (prevent replay)
+      // Verify counter when the authenticator actually supports a monotonic counter.
+      // Safari/iCloud synced passkeys can legitimately return 0 or a non-incrementing value,
+      // so we log suspicious cases instead of hard-failing valid assertions.
       const counterBytes = authDataBytes.slice(33, 37);
       const counter = (counterBytes[0] << 24) | (counterBytes[1] << 16) | (counterBytes[2] << 8) | counterBytes[3];
-      if (storedCred.counter > 0 && counter <= storedCred.counter) {
-        return errorResponse("Security error: counter replay detected. Please re-register your passkey.");
+      const counterLooksSuspicious = storedCred.counter > 0 && counter <= storedCred.counter;
+      if (counterLooksSuspicious) {
+        console.warn("Non-incrementing WebAuthn counter detected", {
+          credentialId,
+          storedCounter: storedCred.counter,
+          receivedCounter: counter,
+          deviceType: storedCred.device_type,
+          transports: storedCred.transports,
+        });
       }
 
       // *** CRYPTOGRAPHIC SIGNATURE VERIFICATION ***
@@ -313,11 +322,11 @@ Deno.serve(async (req) => {
         return errorResponse("Not an admin");
       }
 
-      // Update counter and last_used
+      // Update counter only when it increases.
       await supabaseAdmin
         .from("passkey_credentials")
         .update({
-          counter,
+          counter: counter > storedCred.counter ? counter : storedCred.counter,
           last_used: new Date().toISOString(),
         })
         .eq("id", storedCred.id);
