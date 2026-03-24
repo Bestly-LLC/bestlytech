@@ -1,0 +1,1 @@
+DROP POLICY "Anyone can insert cookie patterns" ON public.cookie_patterns;
