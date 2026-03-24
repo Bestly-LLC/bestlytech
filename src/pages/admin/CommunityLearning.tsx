@@ -1048,29 +1048,83 @@ export default function CommunityLearning() {
           </Card>
         </TabsContent>
 
-        {/* Domains Tab */}
+        {/* Domains Tab (merged with Recent) */}
         <TabsContent value="domains">
           <Card>
-            <CardHeader><CardTitle className="text-lg">Top Domains</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-lg">Domains & Patterns</CardTitle>
+              <CardDescription>Click a domain to expand and see individual patterns. {sortedDomains.length} domains, {recent.length} patterns loaded.</CardDescription>
+            </CardHeader>
             <CardContent>
               {/* Mobile cards */}
               <div className="md:hidden space-y-3">
                 {sortedDomains.map((d: any, i: number) => {
                   const isFixed = fixedDomains.has(d.domain);
+                  const isExpanded = expandedDomains.has(d.domain);
+                  const domainPatterns = patternsByDomain.get(d.domain) || [];
                   return (
-                    <div key={i} className={`border rounded-lg p-3 space-y-2 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
-                      <div className="flex items-center gap-2">
-                        <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="font-medium text-sm truncate">{d.domain}</span>
-                        <DomainAiBadge domain={d.domain} />
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                        <div className="flex justify-between"><span className="text-muted-foreground">Patterns</span><span className="tabular-nums font-medium">{d.pattern_count}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Reports</span><span className="tabular-nums font-medium">{Number(d.total_reports).toLocaleString()}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Success</span><span className={`tabular-nums font-medium ${rateColor(d.success_rate)}`}>{d.success_rate}%</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Confidence</span><span className="tabular-nums">{Math.round(d.avg_confidence * 10)}%</span></div>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">Last active: {d.last_active ? timeAgo(d.last_active) : "—"}</p>
+                    <div key={i} className={`border rounded-lg overflow-hidden ${isFixed ? "border-l-2 border-l-purple-500/50" : ""}`}>
+                      <button
+                        className="w-full p-3 space-y-2 text-left hover:bg-muted/30 transition-colors"
+                        onClick={() => toggleDomainExpand(d.domain)}
+                      >
+                        <div className="flex items-center gap-2">
+                          {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                          <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="font-medium text-sm truncate">{d.domain}</span>
+                          <DomainAiBadge domain={d.domain} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs ml-7">
+                          <div className="flex justify-between"><span className="text-muted-foreground">Patterns</span><span className="tabular-nums font-medium">{d.pattern_count}</span></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">Reports</span><span className="tabular-nums font-medium">{Number(d.total_reports).toLocaleString()}</span></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">Success</span><span className={`tabular-nums font-medium ${rateColor(d.success_rate)}`}>{d.success_rate}%</span></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">Confidence</span><span className="tabular-nums">{Math.round(d.avg_confidence * 10)}%</span></div>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground ml-7">Last active: {d.last_active ? timeAgo(d.last_active) : "—"}</p>
+                      </button>
+                      {isExpanded && domainPatterns.length > 0 && (
+                        <div className="border-t bg-muted/20 p-2 space-y-2">
+                          {domainPatterns.map((r: any, j: number) => {
+                            const isPatternFixed = fixedPatterns.has(`${r.domain}::${r.selector}`);
+                            const isInactive = r.is_active === false;
+                            return (
+                              <div key={j} className={`border rounded-lg p-2.5 space-y-1.5 bg-background ${isPatternFixed ? "border-l-2 border-l-purple-500/50" : ""} ${isInactive ? "opacity-50" : ""}`}>
+                                <div className="flex items-center justify-between">
+                                  <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded truncate flex-1">{r.selector}</code>
+                                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                    <Switch
+                                      checked={r.is_active !== false}
+                                      disabled={togglingPattern === r.id}
+                                      onCheckedChange={() => handleTogglePatternActive(r.id, r.is_active !== false)}
+                                    />
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500"
+                                      disabled={deletingPattern === `${r.domain}::${r.selector}`}
+                                      onClick={() => handleDeletePattern(r.domain, r.selector, r.action_type)}>
+                                      {deletingPattern === `${r.domain}::${r.selector}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="flex items-center flex-wrap gap-1">
+                                  <Badge variant="outline" className={`text-[10px] ${ACTION_BADGE_VARIANT[r.action_type] ?? ""}`}>{r.action_type}</Badge>
+                                  {r.strategy && <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-cyan-500/15 text-cyan-500 border-cyan-500/30">⚡ {r.strategy}</Badge>}
+                                  <Badge variant="secondary" className="text-[10px]">{r.source}</Badge>
+                                  <AiFixerIndicator domain={r.domain} selector={r.selector} />
+                                </div>
+                                <div className="grid grid-cols-3 gap-x-3 text-[11px]">
+                                  <div><span className="text-muted-foreground">Conf:</span> <span className="tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 10)}%` : "—"}</span></div>
+                                  <div><span className="text-muted-foreground">Reports:</span> <span className="tabular-nums">{r.report_count}</span></div>
+                                  <div className="text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {isExpanded && domainPatterns.length === 0 && (
+                        <div className="border-t bg-muted/20 p-3">
+                          <p className="text-xs text-muted-foreground text-center">No pattern details available</p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1080,6 +1134,7 @@ export default function CommunityLearning() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-8"></TableHead>
                       <TableHead className="cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("domain")}>
                         <span className="inline-flex items-center">Domain<SortIcon sortKey="domain" /></span>
                       </TableHead>
