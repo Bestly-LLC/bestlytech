@@ -28,6 +28,42 @@ async function verifyStripeSignature(
   return expectedSig === signature;
 }
 
+// Helper to send transactional email via Edge Function
+async function sendEmail(
+  supabase: any,
+  templateName: string,
+  recipientEmail: string,
+  idempotencyKey: string,
+  templateData?: Record<string, any>
+) {
+  try {
+    const { error } = await supabase.functions.invoke("send-transactional-email", {
+      body: {
+        templateName,
+        recipientEmail,
+        idempotencyKey,
+        ...(templateData ? { templateData } : {}),
+      },
+    });
+    if (error) {
+      console.error(`Failed to send ${templateName} email:`, error);
+    } else {
+      console.log(`Queued ${templateName} email to ${recipientEmail}`);
+    }
+  } catch (err) {
+    console.error(`Error sending ${templateName} email:`, err);
+  }
+}
+
+function formatAmount(amountInCents: number | null | undefined): string {
+  if (!amountInCents) return "—";
+  return `$${(amountInCents / 100).toFixed(2)}`;
+}
+
+function formatPlanName(plan: string): string {
+  return plan.charAt(0).toUpperCase() + plan.slice(1);
+}
+
 serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -96,7 +132,6 @@ serve(async (req) => {
         if (mode === "payment") {
           plan = "lifetime";
         } else if (subscriptionId) {
-          // Fetch subscription to get plan details and period end
           const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
           if (STRIPE_SECRET_KEY) {
             const subRes = await fetch(`https://api.stripe.com/v1/subscriptions/${subscriptionId}`, {
@@ -131,13 +166,27 @@ serve(async (req) => {
 
         if (error) console.error("Upsert error:", error);
         else console.log("Subscription upserted for", email);
+
+        // Send order confirmation email
+        const amountTotal = session.amount_total;
+        await sendEmail(supabase, "order-confirmation", email, `order-confirm-${event.id}`, {
+          plan: formatPlanName(plan),
+          amount: formatAmount(amountTotal),
+          orderDate: new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+        });
+
+        // Send welcome email
+        await sendEmail(supabase, "welcome", email, `welcome-${event.id}`, {
+          plan: formatPlanName(plan),
+        });
+
         break;
       }
 
       case "customer.subscription.updated": {
         const subscription = event.data.object;
         const customerId = subscription.customer;
-        const status = subscription.cancel_at_period_end ? "canceled" : subscription.status === "past_due" ? "past_due" : "active";
+        const subStatus = subscription.cancel_at_period_end ? "canceled" : subscription.status === "past_due" ? "past_due" : "active";
         const periodEnd = subscription.current_period_end
           ? new Date(subscription.current_period_end * 1000).toISOString()
           : null;
@@ -145,7 +194,7 @@ serve(async (req) => {
         const { error } = await supabase
           .from("subscriptions")
           .update({
-            status,
+            status: subStatus,
             current_period_end: periodEnd,
             updated_at: new Date().toISOString(),
           })
@@ -153,12 +202,40 @@ serve(async (req) => {
 
         if (error) console.error("Update error:", error);
         else console.log("Subscription updated for customer", customerId);
+
+        // Look up email for notification
+        const { data: subRecord } = await supabase
+          .from("subscriptions")
+          .select("email, plan")
+          .eq("stripe_customer_id", customerId)
+          .maybeSingle();
+
+        if (subRecord?.email) {
+          const emailStatus = subStatus === "active" ? "renewed" : subStatus;
+          const formattedPeriodEnd = periodEnd
+            ? new Date(periodEnd).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+            : undefined;
+
+          await sendEmail(supabase, "subscription-update", subRecord.email, `sub-update-${event.id}`, {
+            status: emailStatus,
+            plan: formatPlanName(subRecord.plan || "subscription"),
+            periodEnd: formattedPeriodEnd,
+          });
+        }
+
         break;
       }
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object;
         const customerId = subscription.customer;
+
+        // Look up email before updating status
+        const { data: subRecord } = await supabase
+          .from("subscriptions")
+          .select("email, plan")
+          .eq("stripe_customer_id", customerId)
+          .maybeSingle();
 
         const { error } = await supabase
           .from("subscriptions")
@@ -170,6 +247,14 @@ serve(async (req) => {
 
         if (error) console.error("Delete error:", error);
         else console.log("Subscription canceled for customer", customerId);
+
+        if (subRecord?.email) {
+          await sendEmail(supabase, "subscription-update", subRecord.email, `sub-cancel-${event.id}`, {
+            status: "canceled",
+            plan: formatPlanName(subRecord.plan || "subscription"),
+          });
+        }
+
         break;
       }
 
