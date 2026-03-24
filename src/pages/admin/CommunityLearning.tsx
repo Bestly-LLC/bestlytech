@@ -1690,8 +1690,39 @@ export default function CommunityLearning() {
         {/* Breakdown Tab */}
         <TabsContent value="breakdown">
           <div className="space-y-4">
+            {/* Summary Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Card className="border-t-2 border-primary/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold tabular-nums">{cmpDist.length}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">CMPs Detected</p>
+                </CardContent>
+              </Card>
+              <Card className="border-t-2 border-accent/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold tabular-nums">{actionStats.length > 0 ? actionStats.reduce((a: any, b: any) => a.count > b.count ? a : b).action_type : "—"}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Top Action</p>
+                </CardContent>
+              </Card>
+              <Card className="border-t-2 border-secondary/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold tabular-nums">{sourceDist.length > 0 ? sourceDist.reduce((a: any, b: any) => a.count > b.count ? a : b).source : "—"}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Top Source</p>
+                </CardContent>
+              </Card>
+              <Card className="border-t-2 border-muted-foreground/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold tabular-nums">{overview ? `${Math.round(overview.avg_confidence * 100)}%` : "—"}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Avg Confidence</p>
+                </CardContent>
+              </Card>
+            </div>
+
             <Card>
-              <CardHeader><CardTitle className="text-lg">Confidence Distribution</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-lg">Confidence Distribution</CardTitle>
+                <CardDescription>How patterns are distributed across confidence levels</CardDescription>
+              </CardHeader>
               <CardContent>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1712,7 +1743,10 @@ export default function CommunityLearning() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-lg">Action Types</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-lg">Action Types</CardTitle>
+                <CardDescription>Which dismiss actions are most common across all patterns</CardDescription>
+              </CardHeader>
               <CardContent>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1731,13 +1765,28 @@ export default function CommunityLearning() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-lg">CMP Fingerprints</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-lg">CMP Fingerprints</CardTitle>
+                <CardDescription>Consent Management Platforms detected across the network</CardDescription>
+              </CardHeader>
               <CardContent>
                 {/* Mobile CMP cards */}
                 <div className="md:hidden space-y-2">
                   {cmpDist.map((c: any, i: number) => (
                     <div key={i} className="border rounded-lg p-2.5 flex items-center justify-between gap-3">
-                      <span className="font-medium text-sm truncate">{c.cmp_fingerprint}</span>
+                      <span className="font-medium text-sm truncate inline-flex items-center gap-1.5">
+                        {c.cmp_fingerprint}
+                        <TooltipProvider delayDuration={200}>
+                          <UITooltip>
+                            <TooltipTrigger asChild>
+                              <Eye className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help shrink-0" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[260px] text-xs">
+                              {CMP_DESCRIPTIONS[c.cmp_fingerprint?.toLowerCase()] ?? `${c.cmp_fingerprint} — Third-party consent management platform`}
+                            </TooltipContent>
+                          </UITooltip>
+                        </TooltipProvider>
+                      </span>
                       <div className="flex items-center gap-3 text-xs shrink-0">
                         <span className="tabular-nums">{c.pattern_count}p</span>
                         <span className="tabular-nums">{c.domain_count}d</span>
@@ -1761,7 +1810,21 @@ export default function CommunityLearning() {
                     <TableBody>
                       {cmpDist.map((c: any, i: number) => (
                         <TableRow key={i} className="even:bg-muted/30">
-                          <TableCell className="font-medium">{c.cmp_fingerprint}</TableCell>
+                          <TableCell className="font-medium">
+                            <span className="inline-flex items-center gap-1.5">
+                              {c.cmp_fingerprint}
+                              <TooltipProvider delayDuration={200}>
+                                <UITooltip>
+                                  <TooltipTrigger asChild>
+                                    <Eye className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-[280px] text-xs">
+                                    {CMP_DESCRIPTIONS[c.cmp_fingerprint?.toLowerCase()] ?? `${c.cmp_fingerprint} — Third-party consent management platform`}
+                                  </TooltipContent>
+                                </UITooltip>
+                              </TooltipProvider>
+                            </span>
+                          </TableCell>
                           <TableCell className="text-right tabular-nums">{c.pattern_count}</TableCell>
                           <TableCell className="text-right tabular-nums">{c.domain_count}</TableCell>
                           <TableCell className="text-right tabular-nums">{Math.round(c.avg_confidence * 10)}%</TableCell>
@@ -1775,7 +1838,10 @@ export default function CommunityLearning() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-lg">Source Breakdown</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-lg">Source Breakdown</CardTitle>
+                <CardDescription>How patterns were created — community reports, AI, or manual</CardDescription>
+              </CardHeader>
               <CardContent>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
