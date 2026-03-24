@@ -1,0 +1,1 @@
+DELETE FROM subscriptions WHERE id = '7ebc22da-d46e-49da-9cbb-a0c80e61951a' AND email = 'jaredbest@icloud.com';
