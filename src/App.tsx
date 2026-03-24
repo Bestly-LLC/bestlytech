@@ -29,6 +29,7 @@ import MarketplaceSetup from "./pages/MarketplaceSetup";
 import CookieYetiSupport from "./pages/CookieYetiSupport";
 import NotFound from "./pages/NotFound";
 import Links from "./pages/Links";
+import EmailUnsubscribe from "./pages/EmailUnsubscribe";
 import { AdminRoute } from "@/components/admin/AdminRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import AdminLogin from "./pages/admin/AdminLogin";
@@ -83,6 +84,7 @@ const App = () => (
 
             {/* Standalone pages (no Header/Footer) */}
             <Route path="/links" element={<Links />} />
+            <Route path="/unsubscribe" element={<EmailUnsubscribe />} />
 
             {/* Admin Routes */}
             <Route path="/admin/login" element={<AdminLogin />} />
