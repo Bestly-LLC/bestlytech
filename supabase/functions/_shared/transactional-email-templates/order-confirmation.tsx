@@ -67,7 +67,7 @@ export const template = {
   component: OrderConfirmationEmail,
   subject: "You're in — order confirmed",
   displayName: 'Order confirmation',
-  previewData: { plan: 'Yearly', amount: '$29.99', orderDate: 'March 24, 2026' },
+  previewData: { plan: 'Yearly', amount: '$7.99', orderDate: 'March 24, 2026' },
 } satisfies TemplateEntry
 
 /* ── Styles ── */
