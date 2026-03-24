@@ -1,61 +1,49 @@
 
 
-# Admin Panel Audit & Fixes
+# Apple-esque Admin Login Redesign
 
-## Findings
+## Design Direction
 
-| Page | Archive | Delete | Bulk Actions | Other Issues |
-|------|---------|--------|-------------|--------------|
-| **Submissions** | No | No | Status only | Missing archive + delete |
-| **Contacts** | Via status dropdown | No | None | No bulk actions, no delete |
-| **Hire Requests** | Via status dropdown | No | None | No bulk actions, no delete |
-| **Waitlist** | No | No | None | No actions at all — read-only |
-| **CY Subscribers** | No | No | None | Read-only list |
-| **CY Granted Access** | N/A | Yes ✓ | Yes (bulk delete) ✓ | Good |
-| **Submission Detail** | No | No | N/A | No archive/delete from detail view |
+Inspired by Apple's sign-in screens (iCloud, Apple ID): ultra-clean, centered, generous whitespace, SF-style typography, frosted glass, subtle backdrop blur, no visible card borders — just floating content on a refined gradient.
 
-## Plan
+## Visual Changes
 
-### 1. Submissions — Add Archive & Delete (`AdminSubmissions.tsx`)
-- Add "Archive" and "Delete" to the bulk action bar (alongside existing "Mark Submitted", etc.)
-- Archive = set status to "Archived", Delete = hard delete from `seller_intakes` + associated `intake_documents`
-- Add "Archived" to the STATUSES filter array
-- Add per-row action menu (three-dot `DropdownMenu`) with Archive and Delete options
-- Delete shows a confirmation dialog
+**Layout**
+- Remove the `Card` wrapper entirely — content floats on the page like Apple's login
+- Full-screen dark gradient background with a subtle radial glow behind the form
+- Center-aligned, narrower max-width (~360px) with generous vertical spacing
 
-### 2. Contacts — Add Delete & Bulk Actions (`AdminContacts.tsx`)
-- Add checkbox column for multi-select (like Submissions has)
-- Add bulk action bar: "Mark Read", "Mark Replied", "Archive", "Delete"
-- Add per-row delete button (trash icon) with confirmation
-- Delete = hard delete from `contact_submissions`
+**Header**
+- Bestly logo larger and centered, no shield icon
+- "Admin" as a single word subtitle in light muted text, Apple-style
+- Remove "Secure access for authorized personnel only" — Apple never explains, it implies
 
-### 3. Hire Requests — Add Delete & Bulk Actions (`AdminHireRequests.tsx`)
-- Add checkbox column for multi-select
-- Add bulk action bar: "Mark Contacted", "Archive", "Delete"
-- Add per-row delete button with confirmation
+**Buttons — Apple Sign In**
+- Black pill button with white Apple logo + white text (Apple's official style)
+- Rounded-full (fully rounded corners), `h-12`, bold but not heavy
 
-### 4. Waitlist — Add Delete (`AdminWaitlist.tsx`)
-- Add checkbox column for multi-select
-- Add bulk delete action
-- Add per-row delete button with confirmation
+**Buttons — Passkey**
+- White/light pill button with fingerprint icon, same rounded-full shape
+- Subtle border, no fill — secondary treatment
 
-### 5. Submission Detail — Add Archive & Delete (`AdminSubmissionDetail.tsx`)
-- Add Archive and Delete buttons to the detail page header
-- Delete navigates back to `/admin/submissions` after confirmation
+**Divider**
+- Thin line with centered "or" in small muted text — keep but make more minimal
 
-### Technical Details
+**Form Fields**
+- Borderless inputs with light bottom-border only (like Apple's text fields)
+- Larger text, more padding, placeholder text only (no labels above)
+- Remove visible `Label` components, use placeholder instead
 
-- All delete operations use `supabase.from(table).delete().in("id", ids)` or `.eq("id", id)`
-- For submission deletes, also cascade-delete from `intake_documents` and `intake_validations`
-- All deletes wrapped in `AlertDialog` confirmation
-- Bulk action bars follow the existing pattern from `AdminSubmissions.tsx`
-- Import `Trash2, Archive, MoreHorizontal` from lucide-react as needed
-- Add `DropdownMenu` for per-row actions on Submissions (archive/delete in one menu)
+**Sign In Button**
+- Full-width, rounded-full, solid primary gradient or deep blue
+- Clean "Sign In" text, no icon
 
-### Files Modified
-- `src/pages/admin/AdminSubmissions.tsx`
-- `src/pages/admin/AdminContacts.tsx`
-- `src/pages/admin/AdminHireRequests.tsx`
-- `src/pages/admin/AdminWaitlist.tsx`
-- `src/pages/admin/AdminSubmissionDetail.tsx`
+**Loading State**
+- Replace spinner with a pulsing Apple-style dot animation
+
+**Animation**
+- Fade-in + slight slide-up on mount using CSS or framer-motion
+
+## Files Modified
+- `src/pages/admin/AdminLogin.tsx` — complete visual overhaul, same logic preserved
 
