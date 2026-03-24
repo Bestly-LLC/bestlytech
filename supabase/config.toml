@@ -37,3 +37,7 @@ project_id = "keowunrxpxlbgebujbao"
     verify_jwt = false
   [functions.validate-intake]
     verify_jwt = false
+  [functions.webauthn-register]
+    verify_jwt = false
+  [functions.webauthn-authenticate]
+    verify_jwt = false

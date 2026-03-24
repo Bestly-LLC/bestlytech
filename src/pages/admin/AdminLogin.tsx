@@ -13,6 +13,22 @@ import { lovable } from "@/integrations/lovable/index";
 import { supabase } from "@/integrations/supabase/client";
 import bestlyLogo from "@/assets/bestly-logo.png";
 
+function bufferToBase64url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+function base64urlToBuffer(base64url: string): ArrayBuffer {
+  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = base64.length % 4 === 0 ? "" : "=".repeat(4 - (base64.length % 4));
+  const binary = atob(base64 + pad);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
 export default function AdminLogin() {
   const { user, loading, isAdmin, signIn } = useAdminAuth();
   const [email, setEmail] = useState("");
@@ -79,8 +95,6 @@ export default function AdminLogin() {
   const handlePasskeySignIn = async () => {
     setPasskeyLoading(true);
     try {
-      // Use WebAuthn / passkey via Supabase's built-in support
-      // First check if the browser supports WebAuthn
       if (!window.PublicKeyCredential) {
         toast({
           title: "Not Supported",
@@ -90,13 +104,116 @@ export default function AdminLogin() {
         return;
       }
 
-      // Supabase doesn't have native passkey support yet, so we use
-      // signInWithOAuth as the primary passwordless method.
-      // For now, show a helpful message about passkey availability.
-      toast({
-        title: "Passkeys Coming Soon",
-        description: "Passkey authentication will be available in a future update. Use Apple Sign In or email/password for now.",
+      // Step 1: Get authentication options from edge function
+      const optionsRes = await supabase.functions.invoke("webauthn-authenticate", {
+        body: {
+          action: "options",
+          origin: window.location.origin,
+          // No email = discoverable credential flow
+        },
       });
+
+      if (optionsRes.error || optionsRes.data?.error) {
+        toast({
+          title: "Passkey Error",
+          description: optionsRes.data?.error || "Failed to start passkey authentication",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const options = optionsRes.data;
+
+      // Step 2: Call WebAuthn API
+      const publicKeyOptions: PublicKeyCredentialRequestOptions = {
+        challenge: base64urlToBuffer(options.challenge),
+        rpId: options.rpId,
+        timeout: options.timeout,
+        userVerification: options.userVerification as UserVerificationRequirement,
+        allowCredentials: (options.allowCredentials || []).map((c: any) => ({
+          id: base64urlToBuffer(c.id),
+          type: c.type,
+          transports: c.transports,
+        })),
+      };
+
+      const assertion = (await navigator.credentials.get({
+        publicKey: publicKeyOptions,
+      })) as PublicKeyCredential;
+
+      if (!assertion) {
+        toast({
+          title: "Cancelled",
+          description: "Passkey authentication was cancelled.",
+        });
+        return;
+      }
+
+      const assertionResponse = assertion.response as AuthenticatorAssertionResponse;
+
+      // Step 3: Verify with edge function
+      const verifyRes = await supabase.functions.invoke("webauthn-authenticate", {
+        body: {
+          action: "verify",
+          origin: window.location.origin,
+          credential: {
+            id: assertion.id,
+            rawId: bufferToBase64url(assertion.rawId),
+            type: assertion.type,
+            response: {
+              clientDataJSON: bufferToBase64url(assertionResponse.clientDataJSON),
+              authenticatorData: bufferToBase64url(assertionResponse.authenticatorData),
+              signature: bufferToBase64url(assertionResponse.signature),
+              userHandle: assertionResponse.userHandle
+                ? bufferToBase64url(assertionResponse.userHandle)
+                : null,
+            },
+          },
+        },
+      });
+
+      if (verifyRes.error || verifyRes.data?.error) {
+        toast({
+          title: "Authentication Failed",
+          description: verifyRes.data?.error || "Passkey verification failed",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Step 4: Use the token_hash to create a session
+      const { token_hash, email: userEmail } = verifyRes.data;
+
+      const { error: otpError } = await supabase.auth.verifyOtp({
+        token_hash,
+        type: "magiclink",
+      });
+
+      if (otpError) {
+        toast({
+          title: "Session Failed",
+          description: otpError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({ title: "Welcome back!", description: `Signed in as ${userEmail}` });
+      navigate("/admin");
+    } catch (err) {
+      console.error("Passkey error:", err);
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        toast({
+          title: "Cancelled",
+          description: "Passkey authentication was cancelled.",
+        });
+      } else {
+        toast({
+          title: "Passkey Error",
+          description: err instanceof Error ? err.message : "An unexpected error occurred",
+          variant: "destructive",
+        });
+      }
     } finally {
       setPasskeyLoading(false);
     }
