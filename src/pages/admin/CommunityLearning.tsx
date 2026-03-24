@@ -132,7 +132,43 @@ function nextAutoRun(): string {
 function rateColor(rate: number) {
   if (rate >= 80) return "text-green-500";
   if (rate >= 50) return "text-amber-500";
+  if (rate >= 20) return "text-orange-500";
   return "text-red-500";
+}
+
+/** Compute a domain health score (0-100) from confidence, recency, and volume */
+function computeDomainHealth(d: { avg_confidence: number; last_active?: string; total_reports?: number; success_rate?: number }) {
+  // Base: confidence (0-10 scale → 0-100)
+  const confScore = Math.min((d.avg_confidence || 0) * 10, 100);
+  
+  // Recency bonus/penalty (±15 points)
+  let recencyMod = 0;
+  if (d.last_active) {
+    const daysSince = (Date.now() - new Date(d.last_active).getTime()) / 86400000;
+    if (daysSince < 1) recencyMod = 15;
+    else if (daysSince < 7) recencyMod = 10;
+    else if (daysSince < 14) recencyMod = 5;
+    else if (daysSince > 30) recencyMod = -15;
+    else if (daysSince > 21) recencyMod = -10;
+  }
+  
+  // Volume bonus (up to 10 points for high-traffic domains)
+  const reports = Number(d.total_reports) || 0;
+  const volumeMod = reports >= 50 ? 10 : reports >= 10 ? 5 : reports >= 3 ? 2 : 0;
+  
+  // Success rate bonus if tracked (up to 10 points)
+  const sr = Number(d.success_rate) || 0;
+  const successMod = sr > 0 ? Math.min(sr / 10, 10) : 0;
+  
+  return Math.max(0, Math.min(100, Math.round(confScore + recencyMod + volumeMod + successMod)));
+}
+
+function healthLabel(score: number) {
+  if (score >= 80) return "Excellent";
+  if (score >= 60) return "Good";
+  if (score >= 40) return "Fair";
+  if (score >= 20) return "Weak";
+  return "Poor";
 }
 
 export default function CommunityLearning() {
