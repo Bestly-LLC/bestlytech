@@ -109,21 +109,7 @@ export default function AdminDashboard() {
     <div className="space-y-8 max-w-6xl">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <PageHeader title="Dashboard" description="Overview across all products and services." />
-        <div className="flex items-center gap-2">
-          {hasPasskey === false && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={handleRegisterPasskey}
-              disabled={registeringPasskey}
-            >
-              <Fingerprint className="h-3.5 w-3.5" />
-              {registeringPasskey ? "Registering..." : "Register Passkey"}
-            </Button>
-          )}
-          <DateRangeFilter value={dateRange} onChange={setDateRange} />
-        </div>
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
