@@ -1,40 +1,63 @@
 
 
-# Real-Time Dismissal Processing
+# Cookie Yeti Transactional Email Setup
 
-## Current Problem
-Dismissal reports (when a user clicks a cookie banner button) are inserted directly into the `dismissal_reports` table by the extension. They sit there until either a manual "Run Consensus" click or the daily cron job processes them. This means a user could dismiss a banner and another user visiting the same site minutes later still won't benefit.
+## What We're Building
 
-## Solution
-Create a new edge function `report-dismissal` that the extension calls instead of inserting directly. This function will:
-1. Save the dismissal report to `dismissal_reports`
-2. Immediately run consensus logic for that specific domain (inline, not calling the full batch function)
-3. If consensus is met (threshold = 1, so a single report suffices), create the pattern right away
+Three branded email templates for Cookie Yeti, all sent through the existing email infrastructure (notify.bestly.tech domain, already verified):
 
-This mirrors how `report-missed-banner` works — save the report, then immediately process it.
+1. **Order Confirmation** — Triggered after a successful Stripe payment (checkout.session.completed). Shows the plan purchased (Monthly/Yearly/Lifetime), amount, and a thank-you message.
 
-## Changes
+2. **Welcome Email** — Triggered after a new subscription is created (same webhook, after the order confirmation). Welcomes the user to Cookie Yeti, explains what they get, and links to download/activate.
 
-### 1. New Edge Function: `supabase/functions/report-dismissal/index.ts`
-- Accept `{ domain, clicked_selector, banner_selector, banner_html }` from the extension
-- Insert into `dismissal_reports`
-- Check if the domain already has an active pattern with confidence >= 5 — if so, skip
-- If no existing pattern, immediately run the consensus logic inline:
-  - Infer `action_type` from the clicked_selector text (same regex as existing consensus function)
-  - Call `upsert_pattern` RPC to create/update the pattern
-  - Set confidence to `min(5 + report_count, 9)`
-  - Log to `ai_generation_log` with source `user_consensus`
-  - Mark any matching `missed_banner_reports` as resolved
-  - Clean up processed dismissal reports for that domain
-- Return result with pattern details
+3. **Subscription Status Notification** — Triggered on subscription changes: renewal success, cancellation, past_due, or expiration. Keeps users informed about their account status.
 
-### 2. Update `supabase/config.toml`
-- Add `[functions.report-dismissal]` with `verify_jwt = false` (extension calls it unauthenticated)
+## Approach
 
-### 3. Keep the daily cron as a safety net
-- The existing daily consensus cron stays as a fallback for any edge cases
+The project already has a working email queue (`enqueue_email` RPC, `process-email-queue` cron) and the `send-activation-code` function already sends via this queue. However, there's no formal transactional email scaffold (no `send-transactional-email` Edge Function, no registry, no unsubscribe page).
 
-## Technical Notes
-- The extension currently inserts directly into `dismissal_reports` via the Supabase client. After this change, the extension should call this edge function instead. Since the extension code isn't in this repo, this function will work alongside direct inserts — the cron catches anything that bypasses the function.
-- No database changes needed — all existing tables and RPCs are sufficient.
+**We'll scaffold the full transactional infrastructure first**, then create the three templates.
+
+## Steps
+
+### 1. Scaffold transactional email infrastructure
+- Use the scaffold tool to create `send-transactional-email`, `handle-email-unsubscribe`, `handle-email-suppression` Edge Functions and the registry pattern
+- This builds on top of the existing queue infrastructure
+
+### 2. Create three email templates
+All in `supabase/functions/_shared/transactional-email-templates/`:
+
+- **`order-confirmation.tsx`** — Cookie Yeti arctic/ice theme (matching existing activation code style). Shows plan name, amount paid, order date. Subject: "Your Cookie Yeti order is confirmed"
+- **`welcome.tsx`** — Warm welcome with quick-start steps (install extension, activate with code, enjoy). Subject: "Welcome to Cookie Yeti!"
+- **`subscription-update.tsx`** — Dynamic template handling renewal, cancellation, past_due, and expiration states with appropriate messaging. Subject varies by status.
+
+All templates will use the Cookie Yeti navy/ice palette (#1a365d, #bfdbfe) and Plus Jakarta Sans typography to match the existing activation code email branding.
+
+### 3. Register templates in `registry.ts`
+
+### 4. Wire up the Stripe webhook
+Update `stripe-webhook/index.ts` to send emails on:
+- `checkout.session.completed` → order-confirmation + welcome
+- `customer.subscription.updated` → subscription-update (renewal/past_due)
+- `customer.subscription.deleted` → subscription-update (canceled)
+
+Each send uses `supabase.functions.invoke('send-transactional-email', ...)` with proper idempotency keys derived from the Stripe event ID.
+
+### 5. Create unsubscribe page
+Add a `/email-unsubscribe` route in the app that validates tokens and processes unsubscribes via the `handle-email-unsubscribe` Edge Function.
+
+### 6. Deploy all Edge Functions
+Deploy `send-transactional-email`, `handle-email-unsubscribe`, `handle-email-suppression`, and the updated `stripe-webhook`.
+
+## Files Modified/Created
+- `supabase/functions/send-transactional-email/index.ts` — scaffolded
+- `supabase/functions/handle-email-unsubscribe/index.ts` — scaffolded
+- `supabase/functions/handle-email-suppression/index.ts` — scaffolded
+- `supabase/functions/_shared/transactional-email-templates/registry.ts`
+- `supabase/functions/_shared/transactional-email-templates/order-confirmation.tsx`
+- `supabase/functions/_shared/transactional-email-templates/welcome.tsx`
+- `supabase/functions/_shared/transactional-email-templates/subscription-update.tsx`
+- `supabase/functions/stripe-webhook/index.ts` — add email sends
+- `src/pages/EmailUnsubscribe.tsx` — unsubscribe page
+- `src/App.tsx` — add route
 
