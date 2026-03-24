@@ -26,6 +26,33 @@ function base64urlToBuffer(base64url: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+function speakWelcome(name: string) {
+  if (!("speechSynthesis" in window)) return;
+  // Cancel any pending speech
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(`Welcome, ${name}`);
+  utterance.rate = 0.95;
+  utterance.pitch = 1.0;
+  utterance.volume = 0.8;
+  // Try to pick a good voice (prefer Samantha/Karen on macOS, or any en-US)
+  const pickVoice = () => {
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(
+      (v) => v.name.includes("Samantha") || v.name.includes("Karen")
+    );
+    const fallback = voices.find((v) => v.lang.startsWith("en"));
+    if (preferred) utterance.voice = preferred;
+    else if (fallback) utterance.voice = fallback;
+    window.speechSynthesis.speak(utterance);
+  };
+  // Voices may load async
+  if (window.speechSynthesis.getVoices().length > 0) {
+    pickVoice();
+  } else {
+    window.speechSynthesis.onvoiceschanged = pickVoice;
+  }
+}
+
 export default function AdminLogin() {
   const { user, loading, isAdmin, signIn } = useAdminAuth();
   const [email, setEmail] = useState("");
@@ -66,6 +93,7 @@ export default function AdminLogin() {
         variant: "destructive",
       });
     } else {
+      speakWelcome("Jared");
       navigate("/admin");
     }
   };
@@ -83,6 +111,7 @@ export default function AdminLogin() {
           variant: "destructive",
         });
       }
+      // Voice will play after redirect back, handled by the auth state check
     } catch (err) {
       toast({
         title: "Apple Sign In Failed",
@@ -114,9 +143,11 @@ export default function AdminLogin() {
       });
 
       if (optionsRes.error || optionsRes.data?.error) {
+        const errMsg = optionsRes.data?.error || optionsRes.error?.message || "Failed to start passkey authentication";
+        console.error("Passkey options error:", { error: optionsRes.error, data: optionsRes.data });
         toast({
           title: "Passkey Error",
-          description: optionsRes.data?.error || "Failed to start passkey authentication",
+          description: errMsg,
           variant: "destructive",
         });
         return;
@@ -197,6 +228,7 @@ export default function AdminLogin() {
         return;
       }
 
+      speakWelcome("Jared");
       toast({ title: "Welcome back!", description: `Signed in as ${userEmail}` });
       navigate("/admin");
     } catch (err) {
