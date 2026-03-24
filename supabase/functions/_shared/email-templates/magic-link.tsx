@@ -25,7 +25,7 @@ export const MagicLinkEmail = ({ siteName, confirmationUrl }: MagicLinkEmailProp
     <Preview>Your login link for {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Img src="https://keowunrxpxlbgebujbao.supabase.co/storage/v1/object/public/email-assets/bestly-logo.png" width="120" height="auto" alt="Bestly" style={logo} />
+        <a href="https://bestly.tech" style={{ textDecoration: 'none' }}><Img src="https://keowunrxpxlbgebujbao.supabase.co/storage/v1/object/public/email-assets/bestly-logo.png" width="120" height="auto" alt="Bestly" style={logo} /></a>
         <Heading style={h1}>Your login link</Heading>
         <Text style={text}>Click the button below to log in to {siteName}. This link will expire shortly.</Text>
         <Button style={button} href={confirmationUrl}>Log In</Button>
