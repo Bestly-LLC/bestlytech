@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, ChevronUp, ArrowUpDown, Sparkles, Info, Trash2, Zap, Coins, RotateCcw, MousePointerClick, Users } from "lucide-react";
+import { Brain, RefreshCw, Globe, Target, TrendingUp, Shield, Clock, AlertTriangle, CircleAlert, CheckCircle2, Wrench, Flag, Play, Loader2, BarChart3, Layers, Timer, CalendarClock, Bot, ChevronDown, ChevronUp, ArrowUpDown, Sparkles, Info, Trash2, Zap, Coins, RotateCcw, MousePointerClick, Users, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { ManualPatternForm } from "@/components/admin/ManualPatternForm";
@@ -52,6 +52,22 @@ const ISSUE_BADGE: Record<string, { label: string; className: string }> = {
 };
 
 const CONFIDENCE_COLORS = ["hsl(0,84%,60%)", "hsl(25,95%,53%)", "hsl(45,93%,47%)", "hsl(142,60%,50%)", "hsl(250,60%,55%)"];
+
+const CMP_DESCRIPTIONS: Record<string, string> = {
+  onetrust: "OneTrust — Enterprise consent platform used by large corporations",
+  cookiebot: "Cookiebot by Usercentrics — GDPR/CCPA cookie consent manager",
+  quantcast: "Quantcast Choice — Free CMP focused on GDPR compliance",
+  didomi: "Didomi — Privacy & consent management for publishers",
+  osano: "Osano — Data privacy platform with cookie consent",
+  trustarc: "TrustArc — Privacy compliance and consent manager",
+  iubenda: "iubenda — Cookie/privacy policy generator and consent solution",
+  termly: "Termly — Cookie consent banner and policy generator",
+  complianz: "Complianz — WordPress GDPR/CCPA cookie consent plugin",
+  cookiefirst: "CookieFirst — Cookie consent management platform",
+  klaro: "Klaro — Open-source privacy consent manager",
+  civic: "Civic Cookie Control — UK-focused cookie consent tool",
+  unknown: "Unknown — CMP could not be identified from the banner",
+};
 
 const AI_STATUS_BADGE: Record<string, string> = {
   success: "bg-green-600/15 text-green-600 border-green-600/30",
@@ -987,7 +1003,7 @@ export default function CommunityLearning() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })} />
                       <YAxis tick={{ fontSize: 11 }} />
-                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12, color: "hsl(var(--foreground))" }} />
                       {visibleSeries.has("reports") && <Area type="monotone" dataKey="reports" stroke="hsl(200,80%,50%)" strokeWidth={2} fill="url(#gradReports)" name="Reports" />}
                       {visibleSeries.has("new_patterns") && <Area type="monotone" dataKey="new_patterns" stroke="hsl(270,60%,55%)" strokeWidth={2} fill="url(#gradNew)" name="New Patterns" />}
                       {visibleSeries.has("new_domains") && <Area type="monotone" dataKey="new_domains" stroke="hsl(142,76%,36%)" strokeWidth={2} fill="url(#gradDomains)" name="New Domains" />}
@@ -999,7 +1015,7 @@ export default function CommunityLearning() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })} />
                       <YAxis tick={{ fontSize: 11 }} />
-                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12, color: "hsl(var(--foreground))" }} />
                       {visibleSeries.has("reports") && <Bar dataKey="reports" fill="hsl(200,80%,50%)" name="Reports" radius={[2, 2, 0, 0]} />}
                       {visibleSeries.has("new_patterns") && <Bar dataKey="new_patterns" fill="hsl(270,60%,55%)" name="New Patterns" radius={[2, 2, 0, 0]} />}
                       {visibleSeries.has("new_domains") && <Bar dataKey="new_domains" fill="hsl(142,76%,36%)" name="New Domains" radius={[2, 2, 0, 0]} />}
@@ -1674,8 +1690,39 @@ export default function CommunityLearning() {
         {/* Breakdown Tab */}
         <TabsContent value="breakdown">
           <div className="space-y-4">
+            {/* Summary Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Card className="border-t-2 border-primary/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold tabular-nums">{cmpDist.length}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">CMPs Detected</p>
+                </CardContent>
+              </Card>
+              <Card className="border-t-2 border-accent/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold tabular-nums">{actionStats.length > 0 ? actionStats.reduce((a: any, b: any) => a.count > b.count ? a : b).action_type : "—"}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Top Action</p>
+                </CardContent>
+              </Card>
+              <Card className="border-t-2 border-secondary/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold tabular-nums">{sourceDist.length > 0 ? sourceDist.reduce((a: any, b: any) => a.count > b.count ? a : b).source : "—"}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Top Source</p>
+                </CardContent>
+              </Card>
+              <Card className="border-t-2 border-muted-foreground/40">
+                <CardContent className="py-3 text-center">
+                  <p className="text-2xl font-bold tabular-nums">{overview ? `${Math.round(overview.avg_confidence * 100)}%` : "—"}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Avg Confidence</p>
+                </CardContent>
+              </Card>
+            </div>
+
             <Card>
-              <CardHeader><CardTitle className="text-lg">Confidence Distribution</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-lg">Confidence Distribution</CardTitle>
+                <CardDescription>How patterns are distributed across confidence levels</CardDescription>
+              </CardHeader>
               <CardContent>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1683,7 +1730,7 @@ export default function CommunityLearning() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="range" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
-                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12, color: "hsl(var(--foreground))" }} />
                       <Bar dataKey="count" name="Patterns" radius={[4, 4, 0, 0]}>
                         {confDist.map((_: any, i: number) => (
                           <Cell key={i} fill={CONFIDENCE_COLORS[i % CONFIDENCE_COLORS.length]} />
@@ -1696,7 +1743,10 @@ export default function CommunityLearning() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-lg">Action Types</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-lg">Action Types</CardTitle>
+                <CardDescription>Which dismiss actions are most common across all patterns</CardDescription>
+              </CardHeader>
               <CardContent>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1706,7 +1756,7 @@ export default function CommunityLearning() {
                           <Cell key={i} fill={ACTION_COLORS[a.action_type] ?? "hsl(var(--muted))"} />
                         ))}
                       </Pie>
-                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12, color: "hsl(var(--foreground))" }} />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
@@ -1715,13 +1765,28 @@ export default function CommunityLearning() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-lg">CMP Fingerprints</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-lg">CMP Fingerprints</CardTitle>
+                <CardDescription>Consent Management Platforms detected across the network</CardDescription>
+              </CardHeader>
               <CardContent>
                 {/* Mobile CMP cards */}
                 <div className="md:hidden space-y-2">
                   {cmpDist.map((c: any, i: number) => (
                     <div key={i} className="border rounded-lg p-2.5 flex items-center justify-between gap-3">
-                      <span className="font-medium text-sm truncate">{c.cmp_fingerprint}</span>
+                      <span className="font-medium text-sm truncate inline-flex items-center gap-1.5">
+                        {c.cmp_fingerprint}
+                        <TooltipProvider delayDuration={200}>
+                          <UITooltip>
+                            <TooltipTrigger asChild>
+                              <Eye className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help shrink-0" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[260px] text-xs">
+                              {CMP_DESCRIPTIONS[c.cmp_fingerprint?.toLowerCase()] ?? `${c.cmp_fingerprint} — Third-party consent management platform`}
+                            </TooltipContent>
+                          </UITooltip>
+                        </TooltipProvider>
+                      </span>
                       <div className="flex items-center gap-3 text-xs shrink-0">
                         <span className="tabular-nums">{c.pattern_count}p</span>
                         <span className="tabular-nums">{c.domain_count}d</span>
@@ -1745,7 +1810,21 @@ export default function CommunityLearning() {
                     <TableBody>
                       {cmpDist.map((c: any, i: number) => (
                         <TableRow key={i} className="even:bg-muted/30">
-                          <TableCell className="font-medium">{c.cmp_fingerprint}</TableCell>
+                          <TableCell className="font-medium">
+                            <span className="inline-flex items-center gap-1.5">
+                              {c.cmp_fingerprint}
+                              <TooltipProvider delayDuration={200}>
+                                <UITooltip>
+                                  <TooltipTrigger asChild>
+                                    <Eye className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-[280px] text-xs">
+                                    {CMP_DESCRIPTIONS[c.cmp_fingerprint?.toLowerCase()] ?? `${c.cmp_fingerprint} — Third-party consent management platform`}
+                                  </TooltipContent>
+                                </UITooltip>
+                              </TooltipProvider>
+                            </span>
+                          </TableCell>
                           <TableCell className="text-right tabular-nums">{c.pattern_count}</TableCell>
                           <TableCell className="text-right tabular-nums">{c.domain_count}</TableCell>
                           <TableCell className="text-right tabular-nums">{Math.round(c.avg_confidence * 10)}%</TableCell>
@@ -1759,7 +1838,10 @@ export default function CommunityLearning() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-lg">Source Breakdown</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-lg">Source Breakdown</CardTitle>
+                <CardDescription>How patterns were created — community reports, AI, or manual</CardDescription>
+              </CardHeader>
               <CardContent>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1767,7 +1849,7 @@ export default function CommunityLearning() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis type="number" tick={{ fontSize: 11 }} />
                       <YAxis type="category" dataKey="source" tick={{ fontSize: 11 }} width={80} />
-                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12, color: "hsl(var(--foreground))" }} />
                       <Bar dataKey="count" name="Patterns" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
