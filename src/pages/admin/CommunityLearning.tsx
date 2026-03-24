@@ -231,7 +231,7 @@ export default function CommunityLearning() {
         supabase.rpc("get_community_overview" as any),
         supabase.rpc("get_daily_pattern_activity" as any, { p_days: activityDays }),
         supabase.rpc("get_top_domains" as any, { p_limit: 30 }),
-        supabase.rpc("get_recently_learned" as any, { p_limit: 25 }),
+        supabase.rpc("get_recently_learned" as any, { p_limit: 100 }),
         supabase.rpc("get_pattern_issues" as any, { p_limit: 25 }),
         supabase.rpc("get_cmp_distribution" as any),
         supabase.rpc("get_action_type_stats" as any),
