@@ -78,6 +78,7 @@ serve(async (req: Request) => {
         sender_domain: "notify.bestly.tech",
         subject: "Your Cookie Yeti activation code",
         html,
+        text: `Your Cookie Yeti activation code is: ${code}\n\nThis code expires in 15 minutes.\nEnter this code in the Cookie Yeti extension to activate Pro.\n\nIf you didn't request this code, you can safely ignore this email.`,
         purpose: "transactional",
         label: "activation_code",
         queued_at: new Date().toISOString(),
