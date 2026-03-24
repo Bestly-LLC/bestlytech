@@ -84,6 +84,7 @@ const App = () => (
 
             {/* Standalone pages (no Header/Footer) */}
             <Route path="/links" element={<Links />} />
+            <Route path="/unsubscribe" element={<EmailUnsubscribe />} />
 
             {/* Admin Routes */}
             <Route path="/admin/login" element={<AdminLogin />} />
