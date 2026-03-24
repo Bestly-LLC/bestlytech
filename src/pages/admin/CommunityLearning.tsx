@@ -189,6 +189,26 @@ export default function CommunityLearning() {
   type DomainSortKey = "domain" | "pattern_count" | "total_reports" | "success_rate" | "avg_confidence" | "last_active";
   const [domainSortKey, setDomainSortKey] = useState<DomainSortKey>("last_active");
   const [domainSortAsc, setDomainSortAsc] = useState(false);
+  const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
+
+  // Group recent patterns by domain for expandable rows
+  const patternsByDomain = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const r of recent) {
+      const list = map.get(r.domain) || [];
+      list.push(r);
+      map.set(r.domain, list);
+    }
+    return map;
+  }, [recent]);
+
+  const toggleDomainExpand = (domain: string) => {
+    setExpandedDomains(prev => {
+      const next = new Set(prev);
+      if (next.has(domain)) next.delete(domain); else next.add(domain);
+      return next;
+    });
+  };
 
   const sortedDomains = useMemo(() => {
     const sorted = [...domains].sort((a: any, b: any) => {
