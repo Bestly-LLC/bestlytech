@@ -1248,14 +1248,8 @@ export default function CommunityLearning() {
             </CardContent>
           </Card>
         </TabsContent>
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm truncate flex-1">{r.domain}</span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Switch
-                            checked={r.is_active !== false}
-                            disabled={togglingPattern === r.id}
-                            onCheckedChange={() => handleTogglePatternActive(r.id, r.is_active !== false)}
-                          />
+
+
                           <Button
                             variant="ghost"
                             size="icon"
