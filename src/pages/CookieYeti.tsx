@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import comingSoonAppstore from "@/assets/coming-soon-appstore.jpg";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +30,11 @@ import {
   Headphones,
   Mail,
   AlertTriangle,
+  Activity,
+  TrendingUp,
+  Database,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 // ============================================
