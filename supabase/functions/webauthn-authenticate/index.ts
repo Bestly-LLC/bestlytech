@@ -206,6 +206,7 @@ Deno.serve(async (req) => {
         .single();
 
       if (!storedCred) {
+        console.error("Credential not found in DB:", credentialId);
         return new Response(JSON.stringify({ error: "Credential not found" }), {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -272,7 +273,8 @@ Deno.serve(async (req) => {
       );
       const rpIdHashActual = authDataBytes.slice(0, 32);
       if (!rpIdHashExpected.every((b, i) => b === rpIdHashActual[i])) {
-        return new Response(JSON.stringify({ error: "rpIdHash mismatch" }), {
+        console.error("rpIdHash mismatch", { rpId, expectedHash: Array.from(rpIdHashExpected).slice(0,4), actualHash: Array.from(rpIdHashActual).slice(0,4) });
+        return new Response(JSON.stringify({ error: "rpIdHash mismatch — passkey was registered on a different domain" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
