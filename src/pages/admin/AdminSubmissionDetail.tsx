@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,9 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, ChevronDown, Copy, Download, Play, Check, Minimize2, Maximize2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Copy, Download, Play, Check, Minimize2, Maximize2, Archive, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
-const STATUSES = ["Draft", "Submitted", "In Review", "Issues Flagged", "Approved"];
+const STATUSES = ["Draft", "Submitted", "In Review", "Issues Flagged", "Approved", "Archived"];
 
 function formatDate(d: string | null | undefined): string {
   if (!d) return "—";
@@ -109,6 +110,7 @@ function formatAddress(...parts: (string | null | undefined)[]): string {
 export default function AdminSubmissionDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [intake, setIntake] = useState<any>(null);
   const [docs, setDocs] = useState<any[]>([]);
   const [validations, setValidations] = useState<any[]>([]);
@@ -117,6 +119,7 @@ export default function AdminSubmissionDetail() {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [compact, setCompact] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (id) loadData();
@@ -149,6 +152,32 @@ export default function AdminSubmissionDetail() {
     await supabase.from("seller_intakes").update({ status, admin_notes: notes }).eq("id", id!);
     toast({ title: "Saved", description: "Status and notes updated." });
     loadData();
+  };
+
+  const handleArchive = async () => {
+    const { error } = await supabase.from("seller_intakes").update({ status: "Archived" }).eq("id", id!);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Submission archived" });
+      setStatus("Archived");
+      loadData();
+    }
+  };
+
+  const handleDelete = async () => {
+    await Promise.all([
+      supabase.from("intake_documents").delete().eq("intake_id", id!),
+      supabase.from("intake_validations").delete().eq("intake_id", id!),
+    ]);
+    const { error } = await supabase.from("seller_intakes").delete().eq("id", id!);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Submission deleted" });
+      navigate("/admin/submissions");
+    }
+    setShowDeleteConfirm(false);
   };
 
   const runValidation = async () => {
@@ -224,6 +253,12 @@ export default function AdminSubmissionDetail() {
           <Button onClick={saveStatus} size="sm">Save</Button>
           <Button onClick={runValidation} variant="outline" size="sm">
             <Play className="h-3 w-3 mr-1" /> Validate
+          </Button>
+          <Button onClick={handleArchive} variant="outline" size="sm">
+            <Archive className="h-3 w-3 mr-1" /> Archive
+          </Button>
+          <Button onClick={() => setShowDeleteConfirm(true)} variant="outline" size="sm" className="text-destructive hover:text-destructive">
+            <Trash2 className="h-3 w-3 mr-1" /> Delete
           </Button>
         </div>
       </div>
@@ -488,6 +523,23 @@ export default function AdminSubmissionDetail() {
         />
         <Button onClick={saveStatus} size="sm" className="mt-2">Save Notes</Button>
       </Section>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this submission?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{intake.business_legal_name || "Unnamed"}" along with all associated documents and validations. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDelete}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
