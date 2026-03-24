@@ -122,6 +122,45 @@ const CONFIG = {
 };
 
 export default function CookieYeti() {
+  const [serviceStatus, setServiceStatus] = useState<'operational' | 'degraded' | 'down' | 'checking'>('checking');
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [liveStats, setLiveStats] = useState<{
+    total_patterns: number;
+    total_domains: number;
+    high_confidence: number;
+    avg_confidence: number;
+    overall_success_rate: number;
+    patterns_last_24h: number;
+    new_domains_last_7d: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const start = Date.now();
+        const { data, error } = await supabase
+          .from('cookie_patterns')
+          .select('id', { count: 'exact', head: true });
+        const latency = Date.now() - start;
+        setServiceStatus(error ? 'degraded' : latency > 5000 ? 'degraded' : 'operational');
+        setLastChecked(new Date());
+      } catch {
+        setServiceStatus('down');
+        setLastChecked(new Date());
+      }
+    };
+
+    const fetchStats = async () => {
+      const { data } = await supabase.rpc('get_community_overview');
+      if (data) setLiveStats(data as any);
+    };
+
+    checkStatus();
+    fetchStats();
+    const interval = setInterval(() => { checkStatus(); fetchStats(); }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <>
       <SEOHead
