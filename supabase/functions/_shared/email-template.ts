@@ -41,6 +41,7 @@ ${FONT_IMPORT}
 <tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
 <tr><td style="background:${BRAND.primary};border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
+<a href="https://bestly.tech" style="text-decoration:none;">
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
 <tr>
 <td style="vertical-align:middle;padding-right:14px;">
@@ -51,6 +52,7 @@ ${FONT_IMPORT}
 </td>
 </tr>
 </table>
+</a>
 <p style="margin:8px 0 0;font-size:12px;color:rgba(255,255,255,0.6);letter-spacing:0.5px;font-weight:500;">System Monitoring</p>
 </td></tr>
 <tr><td style="height:4px;background:linear-gradient(90deg,${BRAND.primary},${BRAND.accent},transparent);font-size:0;line-height:0;">&nbsp;</td></tr>
