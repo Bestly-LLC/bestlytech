@@ -9,14 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, Search, FileText, ArrowUp, ArrowDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, FileText, ArrowUp, ArrowDown, MoreHorizontal, Archive, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ExportButton } from "@/components/admin/ExportButton";
 import { useToast } from "@/hooks/use-toast";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
-const STATUSES = ["All", "Draft", "Submitted", "In Review", "Issues Flagged", "Approved"];
+const STATUSES = ["All", "Draft", "Submitted", "In Review", "Issues Flagged", "Approved", "Archived"];
 const PLATFORMS = ["All", "Amazon", "Shopify", "TikTok"];
 const PAGE_SIZE = 20;
 
@@ -44,6 +46,7 @@ export default function AdminSubmissions() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -58,7 +61,6 @@ export default function AdminSubmissions() {
     ]);
     if (error) toast({ title: "Failed to load submissions", description: error.message, variant: "destructive" });
     setData(rows || []);
-    // Build doc count map
     const counts: Record<string, number> = {};
     (docRows || []).forEach((d: any) => {
       counts[d.intake_id] = (counts[d.intake_id] || 0) + 1;
@@ -128,6 +130,23 @@ export default function AdminSubmissions() {
     }
   };
 
+  const handleDelete = async (ids: string[]) => {
+    // Cascade delete documents and validations first
+    await Promise.all([
+      supabase.from("intake_documents").delete().in("intake_id", ids),
+      supabase.from("intake_validations").delete().in("intake_id", ids),
+    ]);
+    const { error } = await supabase.from("seller_intakes").delete().in("id", ids);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: `Deleted ${ids.length} submission${ids.length > 1 ? "s" : ""}` });
+      setSelected(new Set());
+      loadData();
+    }
+    setDeleteConfirm(null);
+  };
+
   const formatPhone = (phone: string | null) => {
     if (!phone) return "—";
     const digits = phone.replace(/\D/g, "");
@@ -187,6 +206,12 @@ export default function AdminSubmissions() {
               Mark {status}
             </Button>
           ))}
+          <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => bulkUpdateStatus("Archived")}>
+            <Archive className="h-3 w-3 mr-1" /> Archive
+          </Button>
+          <Button variant="outline" size="sm" className="text-xs h-7 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm(Array.from(selected))}>
+            <Trash2 className="h-3 w-3 mr-1" /> Delete
+          </Button>
           <Button variant="ghost" size="sm" className="text-xs h-7 ml-auto" onClick={() => setSelected(new Set())}>
             Clear
           </Button>
@@ -227,6 +252,7 @@ export default function AdminSubmissions() {
                   <TableHead className="text-xs cursor-pointer select-none" onClick={() => handleSort("updated_at")}>
                     Updated <SortIcon col="updated_at" />
                   </TableHead>
+                  <TableHead className="text-xs w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -235,8 +261,7 @@ export default function AdminSubmissions() {
                     key={r.id}
                     className="even:bg-muted/30 cursor-pointer"
                     onClick={(e) => {
-                      // Don't navigate if clicking checkbox
-                      if ((e.target as HTMLElement).closest('[role="checkbox"]')) return;
+                      if ((e.target as HTMLElement).closest('[role="checkbox"]') || (e.target as HTMLElement).closest('[data-row-actions]')) return;
                       navigate(`/admin/submissions/${r.id}`);
                     }}
                   >
@@ -269,11 +294,28 @@ export default function AdminSubmissions() {
                     <TableCell className="text-muted-foreground text-sm">
                       {r.updated_at ? new Date(r.updated_at).toLocaleDateString() : "—"}
                     </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()} data-row-actions>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => bulkUpdateStatus("Archived").then(() => { setSelected(new Set()); }) && void supabase.from("seller_intakes").update({ status: "Archived" }).eq("id", r.id).then(() => { toast({ title: "Archived" }); loadData(); })}>
+                            <Archive className="h-3.5 w-3.5 mr-2" /> Archive
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteConfirm([r.id])}>
+                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {paged.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="p-0">
+                    <TableCell colSpan={11} className="p-0">
                       <EmptyState icon={FileText} title="No submissions found" description="Try adjusting your search or filter criteria." />
                     </TableCell>
                   </TableRow>
@@ -288,7 +330,7 @@ export default function AdminSubmissions() {
                 key={r.id}
                 className="p-3 flex gap-3 items-start cursor-pointer"
                 onClick={(e) => {
-                  if ((e.target as HTMLElement).closest('[role="checkbox"]')) return;
+                  if ((e.target as HTMLElement).closest('[role="checkbox"]') || (e.target as HTMLElement).closest('[data-row-actions]')) return;
                   navigate(`/admin/submissions/${r.id}`);
                 }}
               >
@@ -296,7 +338,24 @@ export default function AdminSubmissions() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium text-primary truncate">{r.business_legal_name || "Unnamed"}</p>
-                    <Badge className="text-[10px] shrink-0">{r.status}</Badge>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Badge className="text-[10px]">{r.status}</Badge>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-row-actions>
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => supabase.from("seller_intakes").update({ status: "Archived" }).eq("id", r.id).then(() => { toast({ title: "Archived" }); loadData(); })}>
+                            <Archive className="h-3.5 w-3.5 mr-2" /> Archive
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteConfirm([r.id])}>
+                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{r.client_name || "—"} &middot; {r.client_email || ""}</p>
                   <div className="flex items-center gap-1.5 mt-1.5">
@@ -332,6 +391,23 @@ export default function AdminSubmissions() {
           </Button>
         </div>
       )}
+
+      <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteConfirm?.length === 1 ? "submission" : `${deleteConfirm?.length} submissions`}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the selected submission{(deleteConfirm?.length || 0) > 1 ? "s" : ""} along with all associated documents and validations. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
