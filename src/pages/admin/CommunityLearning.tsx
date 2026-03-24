@@ -1015,7 +1015,7 @@ export default function CommunityLearning() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })} />
                       <YAxis tick={{ fontSize: 11 }} />
-                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12, color: "hsl(var(--foreground))" }} />
                       {visibleSeries.has("reports") && <Bar dataKey="reports" fill="hsl(200,80%,50%)" name="Reports" radius={[2, 2, 0, 0]} />}
                       {visibleSeries.has("new_patterns") && <Bar dataKey="new_patterns" fill="hsl(270,60%,55%)" name="New Patterns" radius={[2, 2, 0, 0]} />}
                       {visibleSeries.has("new_domains") && <Bar dataKey="new_domains" fill="hsl(142,76%,36%)" name="New Domains" radius={[2, 2, 0, 0]} />}
