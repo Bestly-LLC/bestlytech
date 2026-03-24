@@ -66,6 +66,25 @@ serve(async (req: Request) => {
     // Render the branded HTML email
     const html = activationCodeEmail(code);
     const messageId = crypto.randomUUID();
+    const lowerEmail = email.toLowerCase();
+
+    // Get or create unsubscribe token for this email
+    const { data: existingToken } = await supabase
+      .from("email_unsubscribe_tokens")
+      .select("token")
+      .eq("email", lowerEmail)
+      .is("used_at", null)
+      .limit(1)
+      .single();
+
+    let unsubscribeToken = existingToken?.token;
+    if (!unsubscribeToken) {
+      unsubscribeToken = crypto.randomUUID();
+      await supabase.from("email_unsubscribe_tokens").insert({
+        email: lowerEmail,
+        token: unsubscribeToken,
+      });
+    }
 
     // Enqueue via the Lovable email queue (sends from noreply@bestly.tech)
     const { error: enqueueError } = await supabase.rpc("enqueue_email", {
@@ -79,6 +98,7 @@ serve(async (req: Request) => {
         subject: "Your Cookie Yeti activation code",
         html,
         text: `Your Cookie Yeti activation code is: ${code}\n\nThis code expires in 15 minutes.\nEnter this code in the Cookie Yeti extension to activate Pro.\n\nIf you didn't request this code, you can safely ignore this email.`,
+        unsubscribe_token: unsubscribeToken,
         purpose: "transactional",
         label: "activation_code",
         queued_at: new Date().toISOString(),
