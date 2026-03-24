@@ -1,58 +1,40 @@
 
 
-# Apple-esque Admin Panel Redesign
+# Real-Time Dismissal Processing
 
-Apply the same dark, minimal, floating aesthetic from the login page across the entire admin shell and its content pages.
+## Current Problem
+Dismissal reports (when a user clicks a cookie banner button) are inserted directly into the `dismissal_reports` table by the extension. They sit there until either a manual "Run Consensus" click or the daily cron job processes them. This means a user could dismiss a banner and another user visiting the same site minutes later still won't benefit.
+
+## Solution
+Create a new edge function `report-dismissal` that the extension calls instead of inserting directly. This function will:
+1. Save the dismissal report to `dismissal_reports`
+2. Immediately run consensus logic for that specific domain (inline, not calling the full batch function)
+3. If consensus is met (threshold = 1, so a single report suffices), create the pattern right away
+
+This mirrors how `report-missed-banner` works — save the report, then immediately process it.
 
 ## Changes
 
-### 1. AdminLayout (`src/components/admin/AdminLayout.tsx`)
-- **Background**: Force dark theme on the admin shell — `bg-black` base with the same subtle radial glow overlay from the login
-- **Header**: Remove `bg-card/80` border-b shadow style. Replace with a transparent/frosted glass bar: `bg-white/[0.03] backdrop-blur-xl border-b border-white/[0.06]`. Remove Shield icon and "Bestly Admin" text — keep it minimal (just sidebar trigger + breadcrumb on left, actions on right)
-- **Breadcrumb**: Render in `text-white/40` instead of `text-muted-foreground`
-- **Action buttons**: Style as `text-white/50 hover:text-white hover:bg-white/5` — no visible borders
-- **User email pill**: Green dot + email in `text-white/40`
-- **Main content area**: Remove default padding background, let pages float on the dark canvas
+### 1. New Edge Function: `supabase/functions/report-dismissal/index.ts`
+- Accept `{ domain, clicked_selector, banner_selector, banner_html }` from the extension
+- Insert into `dismissal_reports`
+- Check if the domain already has an active pattern with confidence >= 5 — if so, skip
+- If no existing pattern, immediately run the consensus logic inline:
+  - Infer `action_type` from the clicked_selector text (same regex as existing consensus function)
+  - Call `upsert_pattern` RPC to create/update the pattern
+  - Set confidence to `min(5 + report_count, 9)`
+  - Log to `ai_generation_log` with source `user_consensus`
+  - Mark any matching `missed_banner_reports` as resolved
+  - Clean up processed dismissal reports for that domain
+- Return result with pattern details
 
-### 2. AdminSidebar (`src/components/admin/AdminSidebar.tsx`)
-- **Background**: Deep black `bg-[#0a0a0a]` with `border-r border-white/[0.06]`
-- **Group labels**: `text-white/25` uppercase tracking
-- **Menu items**: `text-white/50 hover:text-white hover:bg-white/5` — active state uses `bg-white/[0.08]` with a white left accent bar instead of themed sidebar colors
-- **Dividers**: `bg-white/[0.06]`
-- **Badges (counts)**: `bg-white/10 text-white/60` — subtle, not colorful
+### 2. Update `supabase/config.toml`
+- Add `[functions.report-dismissal]` with `verify_jwt = false` (extension calls it unauthenticated)
 
-### 3. StatCard (`src/components/admin/StatCard.tsx`)
-- Remove the `border-t-2` colored accent — too corporate
-- Card style: `bg-white/[0.03] border border-white/[0.06] rounded-2xl` — frosted glass look
-- Value: `text-white text-3xl font-semibold` (not bold)
-- Label: `text-white/40 text-xs`
-- Icon container: `bg-white/[0.05]` with icon in `text-white/40`
-- Hover: subtle `hover:bg-white/[0.05]` transition
+### 3. Keep the daily cron as a safety net
+- The existing daily consensus cron stays as a fallback for any edge cases
 
-### 4. Dashboard Page (`src/pages/admin/AdminDashboard.tsx`)
-- **PageHeader**: Title in `text-white`, description in `text-white/40`
-- **Cards** (Recent Submissions, Activity Feed): `bg-white/[0.03] border-white/[0.06]` — same frosted glass
-- **Table**: Remove zebra striping, use `border-b border-white/[0.04]` row dividers. Text in `text-white/60`, links in `text-white hover:text-white/80`
-- **Badges**: More muted — outline style with `border-white/15 text-white/60`
-
-### 5. PageHeader (`src/components/admin/PageHeader.tsx`)
-- Title: `text-white`
-- Description: `text-white/40`
-
-### 6. Global Admin Overrides (in `src/index.css` or AdminLayout)
-- Add a scoping class `.admin-shell` on the AdminLayout wrapper div to scope dark overrides without affecting the rest of the site
-- Override CSS variables under `.admin-shell` to force the Apple-dark palette:
-  - `--background: 0 0% 0%` (pure black)
-  - `--card: 0 0% 5%` (near-black)
-  - `--border: 0 0% 10%`
-  - `--foreground: 0 0% 100%`
-  - Cards use `bg-white/[0.03]` explicitly rather than relying on `bg-card`
-
-### Files Modified
-- `src/components/admin/AdminLayout.tsx` — dark shell, frosted header, add `.admin-shell` class
-- `src/components/admin/AdminSidebar.tsx` — dark sidebar styling
-- `src/components/admin/StatCard.tsx` — frosted glass cards, remove colored accents
-- `src/components/admin/PageHeader.tsx` — white text
-- `src/pages/admin/AdminDashboard.tsx` — frosted cards, muted table
-- `src/index.css` — `.admin-shell` CSS variable overrides
+## Technical Notes
+- The extension currently inserts directly into `dismissal_reports` via the Supabase client. After this change, the extension should call this edge function instead. Since the extension code isn't in this repo, this function will work alongside direct inserts — the cron catches anything that bypasses the function.
+- No database changes needed — all existing tables and RPCs are sufficient.
 
