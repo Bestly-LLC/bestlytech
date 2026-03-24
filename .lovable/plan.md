@@ -1,63 +1,88 @@
 
 
-# Cookie Yeti Transactional Email Setup
+# Rebrand Cookie Yeti Emails — Apple-Playful Design
 
-## What We're Building
+## Overview
 
-Three branded email templates for Cookie Yeti, all sent through the existing email infrastructure (notify.bestly.tech domain, already verified):
+Redesign all four Cookie Yeti email templates around the yeti icon as the hero element, with an Apple-inspired clean/minimal layout that still feels fun and playful. Think Apple's product announcement emails — generous whitespace, centered layout, bold typography, subtle gradients — but with the yeti's personality.
 
-1. **Order Confirmation** — Triggered after a successful Stripe payment (checkout.session.completed). Shows the plan purchased (Monthly/Yearly/Lifetime), amount, and a thank-you message.
+## Design Direction
 
-2. **Welcome Email** — Triggered after a new subscription is created (same webhook, after the order confirmation). Welcomes the user to Cookie Yeti, explains what they get, and links to download/activate.
+- **Hero element**: The Cookie Yeti icon (uploaded image) centered at the top of every email, displayed large and prominent (like Apple's product hero shots)
+- **Color palette**: Deep navy header (#0f172a) with the yeti icon floating on it, clean white body, soft ice-blue accents (#bfdbfe, #e0f2fe) for info boxes
+- **Typography**: Plus Jakarta Sans, tight letter-spacing on headings, generous line-height on body — same Apple-like precision but warmer
+- **Playful touches**: Subtle emoji usage, friendly copy tone ("You're in." not "Your order has been confirmed"), rounded corners, soft shadows
+- **No Bestly logo** on Cookie Yeti emails — the yeti icon IS the brand mark. "Cookie Yeti" text sits beneath it.
 
-3. **Subscription Status Notification** — Triggered on subscription changes: renewal success, cancellation, past_due, or expiration. Keeps users informed about their account status.
+## Files Changed
 
-## Approach
+### 1. Upload the new Cookie Yeti icon to email-assets storage bucket
+- Upload the provided `CookieYeti-icon-2.png` so it's accessible via a public URL for all email templates
 
-The project already has a working email queue (`enqueue_email` RPC, `process-email-queue` cron) and the `send-activation-code` function already sends via this queue. However, there's no formal transactional email scaffold (no `send-transactional-email` Edge Function, no registry, no unsubscribe page).
+### 2. `supabase/functions/_shared/transactional-email-templates/order-confirmation.tsx`
+- Replace Bestly logo with large centered yeti icon (~80px)
+- Add "Cookie Yeti" wordmark below icon, linked to bestly.tech
+- Apple-style centered layout: icon → wordmark → bold headline → order details card → footer
+- Headline: "You're in." (playful, confident)
+- Order details in a clean card with soft ice-blue background
+- Minimal footer with "Cookie Yeti by Bestly" text
 
-**We'll scaffold the full transactional infrastructure first**, then create the three templates.
+### 3. `supabase/functions/_shared/transactional-email-templates/welcome.tsx`
+- Same yeti-icon-first header treatment
+- Headline: "Welcome aboard." with a subtle snowflake or yeti emoji
+- Steps redesigned as Apple-style numbered list with bold step titles, light descriptions
+- CTA button with rounded pill shape, navy background
+- Warm, concise copy
 
-## Steps
+### 4. `supabase/functions/_shared/transactional-email-templates/subscription-update.tsx`
+- Same yeti-icon header
+- Status-specific headlines kept playful: "All good." (renewed), "We'll miss you." (canceled), "Heads up." (past_due), "Time's up." (expired)
+- Clean status card with color-coded left border (green/red/amber/gray)
+- Action buttons for past_due/expired/canceled states
 
-### 1. Scaffold transactional email infrastructure
-- Use the scaffold tool to create `send-transactional-email`, `handle-email-unsubscribe`, `handle-email-suppression` Edge Functions and the registry pattern
-- This builds on top of the existing queue infrastructure
+### 5. `supabase/functions/_shared/email-template.ts` (activationCodeEmail function)
+- Update to use the new icon from storage bucket instead of the lovable.app URL
+- Match the same Apple-playful design system: large centered yeti icon, "Cookie Yeti" wordmark, clean white body
+- Activation code box with the same ice-blue styling but cleaner, more spacious layout
 
-### 2. Create three email templates
-All in `supabase/functions/_shared/transactional-email-templates/`:
+### 6. Redeploy edge functions
+- Deploy `send-transactional-email`, `auth-email-hook`, and `send-activation-code` to apply changes
 
-- **`order-confirmation.tsx`** — Cookie Yeti arctic/ice theme (matching existing activation code style). Shows plan name, amount paid, order date. Subject: "Your Cookie Yeti order is confirmed"
-- **`welcome.tsx`** — Warm welcome with quick-start steps (install extension, activate with code, enjoy). Subject: "Welcome to Cookie Yeti!"
-- **`subscription-update.tsx`** — Dynamic template handling renewal, cancellation, past_due, and expiration states with appropriate messaging. Subject varies by status.
+## Shared Design System (all templates)
 
-All templates will use the Cookie Yeti navy/ice palette (#1a365d, #bfdbfe) and Plus Jakarta Sans typography to match the existing activation code email branding.
-
-### 3. Register templates in `registry.ts`
-
-### 4. Wire up the Stripe webhook
-Update `stripe-webhook/index.ts` to send emails on:
-- `checkout.session.completed` → order-confirmation + welcome
-- `customer.subscription.updated` → subscription-update (renewal/past_due)
-- `customer.subscription.deleted` → subscription-update (canceled)
-
-Each send uses `supabase.functions.invoke('send-transactional-email', ...)` with proper idempotency keys derived from the Stripe event ID.
-
-### 5. Create unsubscribe page
-Add a `/email-unsubscribe` route in the app that validates tokens and processes unsubscribes via the `handle-email-unsubscribe` Edge Function.
-
-### 6. Deploy all Edge Functions
-Deploy `send-transactional-email`, `handle-email-unsubscribe`, `handle-email-suppression`, and the updated `stripe-webhook`.
-
-## Files Modified/Created
-- `supabase/functions/send-transactional-email/index.ts` — scaffolded
-- `supabase/functions/handle-email-unsubscribe/index.ts` — scaffolded
-- `supabase/functions/handle-email-suppression/index.ts` — scaffolded
-- `supabase/functions/_shared/transactional-email-templates/registry.ts`
-- `supabase/functions/_shared/transactional-email-templates/order-confirmation.tsx`
-- `supabase/functions/_shared/transactional-email-templates/welcome.tsx`
-- `supabase/functions/_shared/transactional-email-templates/subscription-update.tsx`
-- `supabase/functions/stripe-webhook/index.ts` — add email sends
-- `src/pages/EmailUnsubscribe.tsx` — unsubscribe page
-- `src/App.tsx` — add route
+```text
+┌─────────────────────────────┐
+│     (deep navy #0f172a)     │
+│                             │
+│       🏔️ [Yeti Icon]        │
+│        80×80, rounded       │
+│                             │
+│       Cookie Yeti           │
+│    (white, 20px, bold)      │
+│                             │
+│    tagline in ice-blue      │
+│                             │
+├─────────────────────────────┤
+│                             │
+│     (white body, 36px pad)  │
+│                             │
+│   Big Bold Headline.        │
+│   (#0f172a, 28px, -0.5px)   │
+│                             │
+│   Friendly body copy        │
+│   (#64748b, 15px, 1.7 lh)  │
+│                             │
+│   ┌─ ice-blue card ───────┐ │
+│   │  details / code / etc │ │
+│   └───────────────────────┘ │
+│                             │
+│      [ CTA Button ]         │
+│   (navy pill, 14px bold)    │
+│                             │
+├─────────────────────────────┤
+│     (navy footer)           │
+│  Cookie Yeti by Bestly      │
+│  Los Angeles, CA            │
+└─────────────────────────────┘
+```
 
