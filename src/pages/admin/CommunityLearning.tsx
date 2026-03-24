@@ -248,6 +248,11 @@ export default function CommunityLearning() {
 
   const sortedDomains = useMemo(() => {
     const sorted = [...domains].sort((a: any, b: any) => {
+      if (domainSortKey === "health") {
+        const aVal = computeDomainHealth(a);
+        const bVal = computeDomainHealth(b);
+        return domainSortAsc ? aVal - bVal : bVal - aVal;
+      }
       let aVal = a[domainSortKey];
       let bVal = b[domainSortKey];
       if (domainSortKey === "domain") {
