@@ -64,11 +64,20 @@ export default function AdminDashboard() {
 
   const checkPasskey = async () => {
     const { data: session } = await supabase.auth.getSession();
-    if (!session?.session?.user) return;
-    const { count } = await supabase
+    if (!session?.session?.user) {
+      console.log("checkPasskey: no session yet");
+      setHasPasskey(false);
+      return;
+    }
+    const { count, error } = await supabase
       .from("passkey_credentials")
       .select("id", { count: "exact", head: true })
       .eq("user_id", session.session.user.id);
+    if (error) {
+      console.error("checkPasskey error:", error);
+      setHasPasskey(false);
+      return;
+    }
     setHasPasskey((count ?? 0) > 0);
   };
 
