@@ -1,70 +1,61 @@
 
 
-# Merge Activity + AI Gen into "Pipeline" Tab & Fix Build Errors
+# Admin Panel Audit & Fixes
 
-## Build Errors
+## Findings
 
-The file has cascading JSX parse errors starting at line 932. From my reading, the JSX structure appears correct (all tags close properly, `</Tabs>` at line 2207). This is likely caused by an orphaned code fragment or invisible character introduced during prior edits. The safest fix is to carefully rewrite the Tabs section, which I'll do as part of the merge.
+| Page | Archive | Delete | Bulk Actions | Other Issues |
+|------|---------|--------|-------------|--------------|
+| **Submissions** | No | No | Status only | Missing archive + delete |
+| **Contacts** | Via status dropdown | No | None | No bulk actions, no delete |
+| **Hire Requests** | Via status dropdown | No | None | No bulk actions, no delete |
+| **Waitlist** | No | No | None | No actions at all — read-only |
+| **CY Subscribers** | No | No | None | Read-only list |
+| **CY Granted Access** | N/A | Yes ✓ | Yes (bulk delete) ✓ | Good |
+| **Submission Detail** | No | No | N/A | No archive/delete from detail view |
 
-## Tab Merge: Activity + AI Gen → "Pipeline"
+## Plan
 
-**Name options considered:** "Pipeline" conveys the report-to-pattern flow. Other candidates: "Operations", "Engine", "Monitor". I'll go with **"Pipeline"** — it's short, clear, and describes the data flowing from reports through AI to patterns.
+### 1. Submissions — Add Archive & Delete (`AdminSubmissions.tsx`)
+- Add "Archive" and "Delete" to the bulk action bar (alongside existing "Mark Submitted", etc.)
+- Archive = set status to "Archived", Delete = hard delete from `seller_intakes` + associated `intake_documents`
+- Add "Archived" to the STATUSES filter array
+- Add per-row action menu (three-dot `DropdownMenu`) with Archive and Delete options
+- Delete shows a confirmation dialog
 
-### New "Pipeline" tab layout
+### 2. Contacts — Add Delete & Bulk Actions (`AdminContacts.tsx`)
+- Add checkbox column for multi-select (like Submissions has)
+- Add bulk action bar: "Mark Read", "Mark Replied", "Archive", "Delete"
+- Add per-row delete button (trash icon) with confirmation
+- Delete = hard delete from `contact_submissions`
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ PIPELINE                                                     │
-│                                                              │
-│ [Action buttons: Maintenance | Retry | Run AI | Reset]       │
-│ Last run: 2h ago (auto) · Next: in 13m · 12 runs · 4.2k tok │
-│                                                              │
-│ ┌─ Pattern Activity Chart ─────────────────────────────────┐ │
-│ │  (Area/Bar toggle, series chips, time range selector)    │ │
-│ └──────────────────────────────────────────────────────────┘ │
-│                                                              │
-│ ┌─ Post-Run Results (collapsible, shown after manual run) ─┐ │
-│ └──────────────────────────────────────────────────────────┘ │
-│                                                              │
-│ ┌─ Pending Candidates ────────────────────────────────────┐  │
-│ │  Filter: All | New | Failed    [Bulk re-run selected]   │  │
-│ │  Table with checkboxes, domain, reports, HTML, CMP...   │  │
-│ └──────────────────────────────────────────────────────────┘ │
-│                                                              │
-│ ┌─ AI Generation Log (last 50) ───────────────────────────┐  │
-│ └──────────────────────────────────────────────────────────┘ │
-│                                                              │
-│ ┌─ Skipped — No HTML (collapsible) ───────────────────────┐  │
-│ └──────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
+### 3. Hire Requests — Add Delete & Bulk Actions (`AdminHireRequests.tsx`)
+- Add checkbox column for multi-select
+- Add bulk action bar: "Mark Contacted", "Archive", "Delete"
+- Add per-row delete button with confirmation
 
-### Changes in `src/pages/admin/CommunityLearning.tsx`
+### 4. Waitlist — Add Delete (`AdminWaitlist.tsx`)
+- Add checkbox column for multi-select
+- Add bulk delete action
+- Add per-row delete button with confirmation
 
-1. **Remove the "Activity" and "AI Gen" TabsTriggers** (lines 935, 937). Replace with a single trigger:
-   ```tsx
-   <TabsTrigger value="pipeline">
-     <Zap className="h-3.5 w-3.5 hidden sm:block" />Pipeline
-   </TabsTrigger>
-   ```
+### 5. Submission Detail — Add Archive & Delete (`AdminSubmissionDetail.tsx`)
+- Add Archive and Delete buttons to the detail page header
+- Delete navigates back to `/admin/submissions` after confirmation
 
-2. **Remove `<TabsContent value="activity">` (lines 946-1049)** and **`<TabsContent value="ai-generator">` (lines 1254-1700)**
+### Technical Details
 
-3. **Create a single `<TabsContent value="pipeline">`** containing, in order:
-   - The AI Gen header card with action buttons, last run info, token stats (from old AI Gen tab)
-   - The Pattern Activity chart with time range + chart type controls + series chips (from old Activity tab)
-   - Post-Run Results collapsible (from old AI Gen tab)
-   - Pending Candidates section with filters (from old AI Gen tab)
-   - AI Generation Log table (from old AI Gen tab)
-   - Skipped — No HTML collapsible (from old AI Gen tab)
+- All delete operations use `supabase.from(table).delete().in("id", ids)` or `.eq("id", id)`
+- For submission deletes, also cascade-delete from `intake_documents` and `intake_validations`
+- All deletes wrapped in `AlertDialog` confirmation
+- Bulk action bars follow the existing pattern from `AdminSubmissions.tsx`
+- Import `Trash2, Archive, MoreHorizontal` from lucide-react as needed
+- Add `DropdownMenu` for per-row actions on Submissions (archive/delete in one menu)
 
-4. **Update `activeTab` default** from `"activity"` to `"pipeline"` if it was the default
-
-5. **Fix build errors**: While restructuring, ensure all JSX elements are properly nested and closed. The rewrite of this section will resolve the cascading parse errors.
-
-### Tab bar after merge
-
-Pipeline | Domains | Breakdown | Dismissals | Review | Reports
-
-Down from 7 tabs to 6 — cleaner and less cognitive load.
+### Files Modified
+- `src/pages/admin/AdminSubmissions.tsx`
+- `src/pages/admin/AdminContacts.tsx`
+- `src/pages/admin/AdminHireRequests.tsx`
+- `src/pages/admin/AdminWaitlist.tsx`
+- `src/pages/admin/AdminSubmissionDetail.tsx`
 
