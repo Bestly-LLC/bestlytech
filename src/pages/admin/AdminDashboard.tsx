@@ -3,8 +3,6 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileText, Clock, AlertTriangle, CheckCircle, ArrowRight, Mail, Briefcase, Snowflake, Users, ShoppingBag, Store, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,13 +14,12 @@ import { DateRangeFilter, filterByDateRange, type DateRange } from "@/components
 import { ActivityFeed } from "@/components/admin/ActivityFeed";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
 
-
 const statusColor: Record<string, string> = {
-  Draft: "secondary",
-  Submitted: "default",
-  "In Review": "outline",
-  "Issues Flagged": "destructive",
-  Approved: "default",
+  Draft: "text-white/40",
+  Submitted: "text-blue-400",
+  "In Review": "text-amber-400",
+  "Issues Flagged": "text-red-400",
+  Approved: "text-green-400",
 };
 
 export default function AdminDashboard() {
@@ -43,7 +40,6 @@ export default function AdminDashboard() {
   useEffect(() => {
     loadData();
   }, []);
-
 
   const loadData = async () => {
     const [intakesRes, contactsRes, hiresRes, waitlistRes, cySubsRes] = await Promise.all([
@@ -82,25 +78,25 @@ export default function AdminDashboard() {
   const recent = filtered.slice(0, 5);
 
   const statCards = [
-    { label: "Intake Submissions", value: stats.total, icon: FileText, iconColor: "text-primary", iconBg: "bg-primary/10", accentColor: "border-primary/40" },
-    { label: "Needs Review", value: stats.needsReview, icon: AlertTriangle, iconColor: "text-yellow-500", iconBg: "bg-yellow-500/10", accentColor: "border-yellow-500/40" },
-    { label: "Amazon", value: stats.amazon, icon: ShoppingBag, iconColor: "text-amber-600", iconBg: "bg-amber-600/10", accentColor: "border-amber-600/40" },
-    { label: "Shopify", value: stats.shopify, icon: Store, iconColor: "text-emerald-600", iconBg: "bg-emerald-600/10", accentColor: "border-emerald-600/40" },
-    { label: "TikTok", value: stats.tiktok, icon: Video, iconColor: "text-pink-500", iconBg: "bg-pink-500/10", accentColor: "border-pink-500/40" },
-    { label: "New Contacts", value: contactCount, icon: Mail, iconColor: "text-blue-500", iconBg: "bg-blue-500/10", accentColor: "border-blue-500/40" },
-    { label: "Hire Requests", value: hireCount, icon: Briefcase, iconColor: "text-orange-500", iconBg: "bg-orange-500/10", accentColor: "border-orange-500/40" },
-    { label: "CY Subscribers", value: cySubCount, icon: Snowflake, iconColor: "text-cyan-500", iconBg: "bg-cyan-500/10", accentColor: "border-cyan-500/40" },
-    { label: "Waitlist", value: waitlistCount, icon: Users, iconColor: "text-green-500", iconBg: "bg-green-500/10", accentColor: "border-green-500/40" },
+    { label: "Intake Submissions", value: stats.total, icon: FileText },
+    { label: "Needs Review", value: stats.needsReview, icon: AlertTriangle },
+    { label: "Amazon", value: stats.amazon, icon: ShoppingBag },
+    { label: "Shopify", value: stats.shopify, icon: Store },
+    { label: "TikTok", value: stats.tiktok, icon: Video },
+    { label: "New Contacts", value: contactCount, icon: Mail },
+    { label: "Hire Requests", value: hireCount, icon: Briefcase },
+    { label: "CY Subscribers", value: cySubCount, icon: Snowflake },
+    { label: "Waitlist", value: waitlistCount, icon: Users },
   ];
 
   if (loading) {
     return (
       <div className="space-y-8 max-w-6xl">
-        <div><Skeleton className="h-7 w-48" /><Skeleton className="h-4 w-72 mt-2" /></div>
+        <div><Skeleton className="h-7 w-48 bg-white/[0.05]" /><Skeleton className="h-4 w-72 mt-2 bg-white/[0.05]" /></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-24 rounded-2xl bg-white/[0.03]" />)}
         </div>
-        <Skeleton className="h-64 rounded-xl" />
+        <Skeleton className="h-64 rounded-2xl bg-white/[0.03]" />
       </div>
     );
   }
@@ -119,90 +115,89 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <Card className="border-border/50">
-          <CardHeader className="flex flex-row items-center justify-between pb-4">
+        {/* Recent Submissions */}
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4">
             <div>
-              <CardTitle className="text-base">Recent Submissions</CardTitle>
-              <CardDescription className="text-xs">Latest marketplace intake submissions.</CardDescription>
+              <h3 className="text-[15px] font-semibold text-white">Recent Submissions</h3>
+              <p className="text-xs text-white/30 mt-0.5">Latest marketplace intake submissions.</p>
             </div>
             <Link to="/admin/submissions">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
+              <Button variant="ghost" size="sm" className="text-xs text-white/30 hover:text-white hover:bg-white/5 border-0">
                 View all <ArrowRight className="h-3 w-3 ml-1" />
               </Button>
             </Link>
-          </CardHeader>
-          <CardContent className="p-0">
-            {/* Desktop table */}
-            <div className="hidden md:block">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs">Business Name</TableHead>
-                    <TableHead className="text-xs">Contact</TableHead>
-                    <TableHead className="text-xs">Platform</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
-                    <TableHead className="text-xs">Date</TableHead>
+          </div>
+          {/* Desktop table */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent border-b border-white/[0.06]">
+                  <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Business</TableHead>
+                  <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Contact</TableHead>
+                  <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Platform</TableHead>
+                  <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Status</TableHead>
+                  <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recent.map((r) => (
+                  <TableRow key={r.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                    <TableCell>
+                      <Link to={`/admin/submissions/${r.id}`} className="text-white hover:text-white/80 font-medium text-sm transition-colors">
+                        {r.business_legal_name || "Unnamed"}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-white/40 text-sm">{r.client_name || "—"}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
+                          <span key={p} className="text-xs text-white/50 border border-white/10 rounded-full px-2 py-0.5">{p}</span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`text-xs font-medium ${statusColor[r.status] || "text-white/40"}`}>{r.status}</span>
+                    </TableCell>
+                    <TableCell className="text-white/30 text-sm">
+                      {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recent.map((r) => (
-                    <TableRow key={r.id} className="even:bg-muted/30">
-                      <TableCell>
-                        <Link to={`/admin/submissions/${r.id}`} className="text-primary hover:underline font-medium text-sm">
-                          {r.business_legal_name || "Unnamed"}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{r.client_name || "—"}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
-                            <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={statusColor[r.status] as any} className="text-xs">{r.status}</Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {recent.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="p-0">
-                        <EmptyState icon={FileText} title="No submissions yet" description="Intake submissions will appear here once clients submit their information." />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-            {/* Mobile cards */}
-            <div className="md:hidden divide-y divide-border">
-              {recent.map((r) => (
-                <Link key={r.id} to={`/admin/submissions/${r.id}`} className="block p-3 hover:bg-muted/50 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium text-primary truncate">{r.business_legal_name || "Unnamed"}</p>
-                    <Badge variant={statusColor[r.status] as any} className="text-[10px] shrink-0">{r.status}</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{r.client_name || "—"}</p>
-                  <div className="flex items-center gap-1.5 mt-1.5">
-                    {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
-                      <Badge key={p} variant="outline" className="text-[10px] px-1.5 py-0">{p}</Badge>
-                    ))}
-                    <span className="text-[10px] text-muted-foreground ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}</span>
-                  </div>
-                </Link>
-              ))}
-              {recent.length === 0 && (
-                <div className="p-4">
-                  <EmptyState icon={FileText} title="No submissions yet" description="Intake submissions will appear here once clients submit their information." />
+                ))}
+                {recent.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="p-0">
+                      <EmptyState icon={FileText} title="No submissions yet" description="Intake submissions will appear here once clients submit their information." />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          {/* Mobile cards */}
+          <div className="md:hidden divide-y divide-white/[0.06]">
+            {recent.map((r) => (
+              <Link key={r.id} to={`/admin/submissions/${r.id}`} className="block p-3 hover:bg-white/[0.03] transition-colors">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium text-white truncate">{r.business_legal_name || "Unnamed"}</p>
+                  <span className={`text-[10px] font-medium shrink-0 ${statusColor[r.status] || "text-white/40"}`}>{r.status}</span>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                <p className="text-xs text-white/30 mt-0.5">{r.client_name || "—"}</p>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
+                    <span key={p} className="text-[10px] text-white/40 border border-white/10 rounded-full px-1.5 py-0">{p}</span>
+                  ))}
+                  <span className="text-[10px] text-white/20 ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}</span>
+                </div>
+              </Link>
+            ))}
+            {recent.length === 0 && (
+              <div className="p-4">
+                <EmptyState icon={FileText} title="No submissions yet" description="Intake submissions will appear here once clients submit their information." />
+              </div>
+            )}
+          </div>
+        </div>
 
         <ActivityFeed />
       </div>

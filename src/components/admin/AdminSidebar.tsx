@@ -25,7 +25,6 @@ import {
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Badge } from "@/components/ui/badge";
 
 type CountKeys = "submissions" | "contacts" | "hires" | "cySubscribers";
 
@@ -89,8 +88,8 @@ export function AdminSidebar() {
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all relative",
               active
-                ? "bg-sidebar-accent text-sidebar-primary font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-sidebar-primary"
-                : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                ? "bg-white/[0.08] text-white font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-white"
+                : "text-white/40 hover:text-white hover:bg-white/[0.05]"
             )}
           >
             <item.icon className="h-[18px] w-[18px] shrink-0" />
@@ -98,9 +97,9 @@ export function AdminSidebar() {
               <span className="flex-1 flex items-center justify-between">
                 {item.title}
                 {count > 0 && (
-                  <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-[10px] font-semibold tabular-nums">
+                  <span className="h-5 min-w-5 px-1.5 text-[10px] font-medium tabular-nums bg-white/10 text-white/60 rounded-full inline-flex items-center justify-center">
                     {count}
-                  </Badge>
+                  </span>
                 )}
               </span>
             )}
@@ -112,16 +111,16 @@ export function AdminSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarContent className="pt-2">
+      <SidebarContent className="pt-2 bg-[#0a0a0a] border-r border-white/[0.06]">
 
         <SidebarMenu className="px-2">
           {renderItem(dashboardItem)}
         </SidebarMenu>
 
-        <div className="mx-3 my-2 h-px bg-border/50" />
+        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3">
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
             Marketplace
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -129,10 +128,10 @@ export function AdminSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <div className="mx-3 my-2 h-px bg-border/50" />
+        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3">
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
             General
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -140,10 +139,10 @@ export function AdminSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <div className="mx-3 my-2 h-px bg-border/50" />
+        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3">
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
             ❄️ Cookie Yeti
           </SidebarGroupLabel>
           <SidebarGroupContent>
