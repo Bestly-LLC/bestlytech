@@ -1665,7 +1665,11 @@ export default function CommunityLearning() {
                             </TableCell>
                             <TableCell className="text-right tabular-nums">{d.pattern_count}</TableCell>
                             <TableCell className="text-right tabular-nums">{Number(d.total_reports).toLocaleString()}</TableCell>
-                            <TableCell className={`text-right font-medium tabular-nums ${rateColor(d.success_rate)}`}>{d.success_rate}%</TableCell>
+                            {(() => { const h = computeDomainHealth(d); return (
+                              <TableCell className={`text-right font-medium tabular-nums ${rateColor(h)}`}>
+                                <UITooltip><TooltipTrigger asChild><span className="cursor-help">{h}%</span></TooltipTrigger><TooltipContent className="text-xs"><p className="font-medium">{healthLabel(h)}</p><p className="text-muted-foreground">Confidence: {Math.round(d.avg_confidence * 10)}%</p>{Number(d.success_rate) > 0 && <p className="text-muted-foreground">Verified: {d.success_rate}%</p>}</TooltipContent></UITooltip>
+                              </TableCell>
+                            ); })()}
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <Progress value={d.avg_confidence * 10} className="h-2 w-16" />
