@@ -42,7 +42,6 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadData();
-    checkPasskey();
   }, []);
 
   const checkPasskey = async () => {
