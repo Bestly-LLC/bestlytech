@@ -1635,8 +1635,8 @@ export default function CommunityLearning() {
                       <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("total_reports")}>
                         <span className="inline-flex items-center justify-end">Reports<InfoTip text="Times users encountered banners on this domain" /><SortIcon sortKey="total_reports" /></span>
                       </TableHead>
-                      <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("success_rate")}>
-                        <span className="inline-flex items-center justify-end">Success Rate<InfoTip text="How often patterns successfully dismiss banners here" /><SortIcon sortKey="success_rate" /></span>
+                      <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("health")}>
+                        <span className="inline-flex items-center justify-end">Health<InfoTip text="Composite score (0-100%) combining confidence, recency, report volume, and verified successes" /><SortIcon sortKey="health" /></span>
                       </TableHead>
                       <TableHead className="cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("avg_confidence")}>
                         <span className="inline-flex items-center">Confidence<InfoTip text="Reliability score 1-100%, based on success rate and volume" /><SortIcon sortKey="avg_confidence" /></span>
