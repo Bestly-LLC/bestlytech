@@ -33,6 +33,7 @@ export default function AdminLogin() {
   const [submitting, setSubmitting] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
