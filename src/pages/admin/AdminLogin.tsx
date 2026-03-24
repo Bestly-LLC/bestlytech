@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ export default function AdminLogin() {
   const [submitting, setSubmitting] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -268,50 +269,64 @@ export default function AdminLogin() {
           </button>
         </div>
 
-        {/* Divider */}
-        <div className="relative flex items-center">
-          <div className="flex-1 h-px bg-white/10" />
-          <span className="px-4 text-[11px] text-white/30 font-light">or</span>
-          <div className="flex-1 h-px bg-white/10" />
+        {/* Collapsible email/password */}
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={() => setShowEmail(!showEmail)}
+            className="text-[12px] text-white/20 hover:text-white/40 transition-colors duration-200 font-light"
+          >
+            {showEmail ? "Hide" : "Sign in with email instead"}
+          </button>
         </div>
 
-        {/* Email/Password Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="Email"
-              className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[15px] pb-3 pt-1 placeholder:text-white/25 focus:outline-none focus:border-white/40 transition-colors duration-200"
-            />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="Password"
-              className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[15px] pb-3 pt-1 placeholder:text-white/25 focus:outline-none focus:border-white/40 transition-colors duration-200"
-            />
+        <div
+          className="overflow-hidden transition-all duration-300 ease-in-out"
+          style={{ maxHeight: showEmail ? "300px" : "0", opacity: showEmail ? 1 : 0 }}
+        >
+          <div className="relative flex items-center mb-6">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="px-4 text-[11px] text-white/30 font-light">or</span>
+            <div className="flex-1 h-px bg-white/10" />
           </div>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full h-12 rounded-full bg-[hsl(221,83%,53%)] text-white font-medium text-[15px] transition-all duration-200 hover:bg-[hsl(221,83%,48%)] active:scale-[0.98] disabled:opacity-50"
-          >
-            {submitting ? (
-              <span className="flex items-center justify-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-white/80 animate-pulse" style={{ animationDelay: "0ms" }} />
-                <span className="h-1.5 w-1.5 rounded-full bg-white/80 animate-pulse" style={{ animationDelay: "150ms" }} />
-                <span className="h-1.5 w-1.5 rounded-full bg-white/80 animate-pulse" style={{ animationDelay: "300ms" }} />
-              </span>
-            ) : (
-              "Sign In"
-            )}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-4">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required={showEmail}
+                placeholder="Email"
+                className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[15px] pb-3 pt-1 placeholder:text-white/25 focus:outline-none focus:border-white/40 transition-colors duration-200"
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required={showEmail}
+                placeholder="Password"
+                className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[15px] pb-3 pt-1 placeholder:text-white/25 focus:outline-none focus:border-white/40 transition-colors duration-200"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full h-12 rounded-full bg-[hsl(221,83%,53%)] text-white font-medium text-[15px] transition-all duration-200 hover:bg-[hsl(221,83%,48%)] active:scale-[0.98] disabled:opacity-50"
+            >
+              {submitting ? (
+                <span className="flex items-center justify-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white/80 animate-pulse" style={{ animationDelay: "0ms" }} />
+                  <span className="h-1.5 w-1.5 rounded-full bg-white/80 animate-pulse" style={{ animationDelay: "150ms" }} />
+                  <span className="h-1.5 w-1.5 rounded-full bg-white/80 animate-pulse" style={{ animationDelay: "300ms" }} />
+                </span>
+              ) : (
+                "Sign In"
+              )}
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Animation keyframes */}
