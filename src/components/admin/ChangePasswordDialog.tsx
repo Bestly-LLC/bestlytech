@@ -39,6 +39,7 @@ export function ChangePasswordDialog() {
   const [loading, setLoading] = useState(false);
   const [hasPasskey, setHasPasskey] = useState<boolean | null>(null);
   const [registeringPasskey, setRegisteringPasskey] = useState(false);
+  const [deletingPasskey, setDeletingPasskey] = useState(false);
 
   useEffect(() => {
     if (open) checkPasskey();
