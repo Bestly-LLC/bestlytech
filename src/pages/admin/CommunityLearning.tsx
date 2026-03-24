@@ -1566,7 +1566,9 @@ export default function CommunityLearning() {
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs ml-7">
                           <div className="flex justify-between"><span className="text-muted-foreground">Patterns</span><span className="tabular-nums font-medium">{d.pattern_count}</span></div>
                           <div className="flex justify-between"><span className="text-muted-foreground">Reports</span><span className="tabular-nums font-medium">{Number(d.total_reports).toLocaleString()}</span></div>
-                          <div className="flex justify-between"><span className="text-muted-foreground">Success</span><span className={`tabular-nums font-medium ${rateColor(d.success_rate)}`}>{d.success_rate}%</span></div>
+                          {(() => { const h = computeDomainHealth(d); return (
+                            <div className="flex justify-between"><span className="text-muted-foreground">Health</span><span className={`tabular-nums font-medium ${rateColor(h)}`}>{h}% {healthLabel(h)}</span></div>
+                          ); })()}
                           <div className="flex justify-between"><span className="text-muted-foreground">Confidence</span><span className="tabular-nums">{Math.round(d.avg_confidence * 10)}%</span></div>
                         </div>
                         <p className="text-[11px] text-muted-foreground ml-7">Last active: {d.last_active ? timeAgo(d.last_active) : "—"}</p>
