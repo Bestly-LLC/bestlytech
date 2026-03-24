@@ -143,6 +143,30 @@ export function ChangePasswordDialog() {
     }
   };
 
+  const handleDeletePasskey = async () => {
+    setDeletingPasskey(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.user) {
+        toast.error("Not authenticated");
+        return;
+      }
+      const { error } = await supabase
+        .from("passkey_credentials")
+        .delete()
+        .eq("user_id", session.session.user.id);
+      if (error) {
+        toast.error("Failed to remove passkey");
+      } else {
+        setHasPasskey(false);
+        toast.success("Passkey removed. You can register a new one.");
+      }
+    } catch {
+      toast.error("Failed to remove passkey");
+    } finally {
+      setDeletingPasskey(false);
+    }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
