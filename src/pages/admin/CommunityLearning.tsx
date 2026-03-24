@@ -53,6 +53,22 @@ const ISSUE_BADGE: Record<string, { label: string; className: string }> = {
 
 const CONFIDENCE_COLORS = ["hsl(0,84%,60%)", "hsl(25,95%,53%)", "hsl(45,93%,47%)", "hsl(142,60%,50%)", "hsl(250,60%,55%)"];
 
+const CMP_DESCRIPTIONS: Record<string, string> = {
+  onetrust: "OneTrust — Enterprise consent platform used by large corporations",
+  cookiebot: "Cookiebot by Usercentrics — GDPR/CCPA cookie consent manager",
+  quantcast: "Quantcast Choice — Free CMP focused on GDPR compliance",
+  didomi: "Didomi — Privacy & consent management for publishers",
+  osano: "Osano — Data privacy platform with cookie consent",
+  trustarc: "TrustArc — Privacy compliance and consent manager",
+  iubenda: "iubenda — Cookie/privacy policy generator and consent solution",
+  termly: "Termly — Cookie consent banner and policy generator",
+  complianz: "Complianz — WordPress GDPR/CCPA cookie consent plugin",
+  cookiefirst: "CookieFirst — Cookie consent management platform",
+  klaro: "Klaro — Open-source privacy consent manager",
+  civic: "Civic Cookie Control — UK-focused cookie consent tool",
+  unknown: "Unknown — CMP could not be identified from the banner",
+};
+
 const AI_STATUS_BADGE: Record<string, string> = {
   success: "bg-green-600/15 text-green-600 border-green-600/30",
   success_cmp_fallback: "bg-blue-500/15 text-blue-500 border-blue-500/30",
