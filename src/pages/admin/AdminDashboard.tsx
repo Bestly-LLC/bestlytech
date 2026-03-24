@@ -59,7 +59,100 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadData();
+    checkPasskey();
   }, []);
+
+  const checkPasskey = async () => {
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session?.user) return;
+    const { count } = await supabase
+      .from("passkey_credentials")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", session.session.user.id);
+    setHasPasskey((count ?? 0) > 0);
+  };
+
+  const handleRegisterPasskey = useCallback(async () => {
+    setRegisteringPasskey(true);
+    try {
+      if (!window.PublicKeyCredential) {
+        toast({ title: "Not Supported", description: "Your browser doesn't support passkeys.", variant: "destructive" });
+        return;
+      }
+
+      const optionsRes = await supabase.functions.invoke("webauthn-register", {
+        body: { action: "options", origin: window.location.origin },
+      });
+
+      if (optionsRes.error || optionsRes.data?.error) {
+        toast({ title: "Error", description: optionsRes.data?.error || "Failed to get options", variant: "destructive" });
+        return;
+      }
+
+      const options = optionsRes.data;
+
+      const credential = (await navigator.credentials.create({
+        publicKey: {
+          rp: options.rp,
+          user: {
+            id: base64urlToBuffer(options.user.id),
+            name: options.user.name,
+            displayName: options.user.displayName,
+          },
+          challenge: base64urlToBuffer(options.challenge),
+          pubKeyCredParams: options.pubKeyCredParams,
+          timeout: options.timeout,
+          authenticatorSelection: options.authenticatorSelection,
+          attestation: options.attestation,
+          excludeCredentials: (options.excludeCredentials || []).map((c: any) => ({
+            id: base64urlToBuffer(c.id),
+            type: c.type,
+          })),
+        },
+      })) as PublicKeyCredential;
+
+      if (!credential) {
+        toast({ title: "Cancelled", description: "Passkey registration was cancelled." });
+        return;
+      }
+
+      const attestationResponse = credential.response as AuthenticatorAttestationResponse;
+
+      const verifyRes = await supabase.functions.invoke("webauthn-register", {
+        body: {
+          action: "verify",
+          origin: window.location.origin,
+          credential: {
+            id: credential.id,
+            rawId: bufferToBase64url(credential.rawId),
+            type: credential.type,
+            authenticatorAttachment: (credential as any).authenticatorAttachment,
+            response: {
+              clientDataJSON: bufferToBase64url(attestationResponse.clientDataJSON),
+              attestationObject: bufferToBase64url(attestationResponse.attestationObject),
+            },
+          },
+        },
+      });
+
+      if (verifyRes.error || verifyRes.data?.error) {
+        toast({ title: "Error", description: verifyRes.data?.error || "Registration failed", variant: "destructive" });
+        return;
+      }
+
+      setHasPasskey(true);
+      toast({ title: "Passkey Registered!", description: "You can now sign in with your passkey." });
+    } catch (err) {
+      console.error("Passkey registration error:", err);
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        toast({ title: "Cancelled", description: "Passkey registration was cancelled." });
+      } else {
+        toast({ title: "Error", description: err instanceof Error ? err.message : "Registration failed", variant: "destructive" });
+      }
+    } finally {
+      setRegisteringPasskey(false);
+    }
+  }, [toast]);
 
   const loadData = async () => {
     const [intakesRes, contactsRes, hiresRes, waitlistRes, cySubsRes] = await Promise.all([
