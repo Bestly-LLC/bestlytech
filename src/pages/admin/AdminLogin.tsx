@@ -2,13 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Navigate } from "react-router-dom";
-import { Shield, Fingerprint } from "lucide-react";
+import { Fingerprint } from "lucide-react";
 import { lovable } from "@/integrations/lovable/index";
 import { supabase } from "@/integrations/supabase/client";
 import bestlyLogo from "@/assets/bestly-logo.png";
@@ -41,8 +38,12 @@ export default function AdminLogin() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="flex gap-1">
+          <div className="h-2 w-2 rounded-full bg-white/60 animate-pulse" style={{ animationDelay: "0ms" }} />
+          <div className="h-2 w-2 rounded-full bg-white/60 animate-pulse" style={{ animationDelay: "150ms" }} />
+          <div className="h-2 w-2 rounded-full bg-white/60 animate-pulse" style={{ animationDelay: "300ms" }} />
+        </div>
       </div>
     );
   }
@@ -104,12 +105,10 @@ export default function AdminLogin() {
         return;
       }
 
-      // Step 1: Get authentication options from edge function
       const optionsRes = await supabase.functions.invoke("webauthn-authenticate", {
         body: {
           action: "options",
           origin: window.location.origin,
-          // No email = discoverable credential flow
         },
       });
 
@@ -124,7 +123,6 @@ export default function AdminLogin() {
 
       const options = optionsRes.data;
 
-      // Step 2: Call WebAuthn API
       const publicKeyOptions: PublicKeyCredentialRequestOptions = {
         challenge: base64urlToBuffer(options.challenge),
         rpId: options.rpId,
@@ -151,7 +149,6 @@ export default function AdminLogin() {
 
       const assertionResponse = assertion.response as AuthenticatorAssertionResponse;
 
-      // Step 3: Verify with edge function
       const verifyRes = await supabase.functions.invoke("webauthn-authenticate", {
         body: {
           action: "verify",
@@ -181,7 +178,6 @@ export default function AdminLogin() {
         return;
       }
 
-      // Step 4: Use the token_hash to create a session
       const { token_hash, email: userEmail } = verifyRes.data;
 
       const { error: otpError } = await supabase.auth.verifyOtp({
@@ -220,84 +216,117 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted p-4">
-      <Card className="w-full max-w-sm shadow-xl border-border/50">
-        <CardHeader className="text-center space-y-3 pb-2">
+    <div className="min-h-screen flex items-center justify-center bg-black p-4">
+      {/* Subtle radial glow */}
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.03)_0%,_transparent_70%)]" />
+
+      <div
+        className="relative w-full max-w-[340px] space-y-10"
+        style={{
+          animation: "apple-fade-in 1s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+          opacity: 0,
+        }}
+      >
+        {/* Header */}
+        <div className="text-center space-y-3">
           <div className="flex justify-center">
-            <img src={bestlyLogo} alt="Bestly" className="h-8 object-contain" />
+            <img
+              src={bestlyLogo}
+              alt="Bestly"
+              className="h-12 object-contain brightness-0 invert"
+            />
           </div>
-          <div className="flex items-center justify-center gap-2">
-            <Shield className="h-4 w-4 text-primary" />
-            <CardTitle className="text-lg">Admin Portal</CardTitle>
-          </div>
-          <CardDescription className="text-xs">
-            Secure access for authorized personnel only.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Apple Sign In */}
-          <Button
+          <p className="text-[13px] text-white/40 font-light tracking-wide">
+            Admin
+          </p>
+        </div>
+
+        {/* Auth Buttons */}
+        <div className="space-y-3">
+          {/* Apple Sign In — official black pill */}
+          <button
             type="button"
-            variant="outline"
-            className="w-full gap-2 h-11 font-medium"
             onClick={handleAppleSignIn}
             disabled={oauthLoading}
+            className="w-full h-12 rounded-full bg-white text-black font-medium text-[15px] flex items-center justify-center gap-2.5 transition-all duration-200 hover:bg-white/90 active:scale-[0.98] disabled:opacity-50"
           >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="currentColor">
               <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
             </svg>
-            {oauthLoading ? "Signing in..." : "Sign in with Apple"}
-          </Button>
+            {oauthLoading ? "Signing in…" : "Sign in with Apple"}
+          </button>
 
-          {/* Passkey */}
-          <Button
+          {/* Passkey — outline pill */}
+          <button
             type="button"
-            variant="outline"
-            className="w-full gap-2 h-11 font-medium"
             onClick={handlePasskeySignIn}
             disabled={passkeyLoading}
+            className="w-full h-12 rounded-full bg-transparent text-white font-medium text-[15px] flex items-center justify-center gap-2.5 border border-white/20 transition-all duration-200 hover:bg-white/5 active:scale-[0.98] disabled:opacity-50"
           >
-            <Fingerprint className="h-4 w-4" />
-            {passkeyLoading ? "Authenticating..." : "Sign in with Passkey"}
-          </Button>
+            <Fingerprint className="h-[18px] w-[18px]" />
+            {passkeyLoading ? "Authenticating…" : "Sign in with Passkey"}
+          </button>
+        </div>
 
-          <div className="relative">
-            <Separator />
-            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground">
-              or
-            </span>
+        {/* Divider */}
+        <div className="relative flex items-center">
+          <div className="flex-1 h-px bg-white/10" />
+          <span className="px-4 text-[11px] text-white/30 font-light">or</span>
+          <div className="flex-1 h-px bg-white/10" />
+        </div>
+
+        {/* Email/Password Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-4">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="Email"
+              className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[15px] pb-3 pt-1 placeholder:text-white/25 focus:outline-none focus:border-white/40 transition-colors duration-200"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Password"
+              className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[15px] pb-3 pt-1 placeholder:text-white/25 focus:outline-none focus:border-white/40 transition-colors duration-200"
+            />
           </div>
 
-          {/* Email/Password */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-xs font-medium">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="admin@bestly.tech"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-xs font-medium">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? "Signing in..." : "Sign In"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full h-12 rounded-full bg-[hsl(221,83%,53%)] text-white font-medium text-[15px] transition-all duration-200 hover:bg-[hsl(221,83%,48%)] active:scale-[0.98] disabled:opacity-50"
+          >
+            {submitting ? (
+              <span className="flex items-center justify-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-white/80 animate-pulse" style={{ animationDelay: "0ms" }} />
+                <span className="h-1.5 w-1.5 rounded-full bg-white/80 animate-pulse" style={{ animationDelay: "150ms" }} />
+                <span className="h-1.5 w-1.5 rounded-full bg-white/80 animate-pulse" style={{ animationDelay: "300ms" }} />
+              </span>
+            ) : (
+              "Sign In"
+            )}
+          </button>
+        </form>
+      </div>
+
+      {/* Animation keyframes */}
+      <style>{`
+        @keyframes apple-fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(12px) scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
     </div>
   );
 }
