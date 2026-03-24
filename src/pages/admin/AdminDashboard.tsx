@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Clock, AlertTriangle, CheckCircle, ArrowRight, Mail, Briefcase, Snowflake, Users, ShoppingBag, Store, Video } from "lucide-react";
+import { FileText, Clock, AlertTriangle, CheckCircle, ArrowRight, Mail, Briefcase, Snowflake, Users, ShoppingBag, Store, Video, Fingerprint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
@@ -15,6 +15,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DateRangeFilter, filterByDateRange, type DateRange } from "@/components/admin/DateRangeFilter";
 import { ActivityFeed } from "@/components/admin/ActivityFeed";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
+
+function bufferToBase64url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+function base64urlToBuffer(base64url: string): ArrayBuffer {
+  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = base64.length % 4 === 0 ? "" : "=".repeat(4 - (base64.length % 4));
+  const binary = atob(base64 + pad);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
 
 const statusColor: Record<string, string> = {
   Draft: "secondary",
@@ -33,6 +49,8 @@ export default function AdminDashboard() {
   const [hireCount, setHireCount] = useState(0);
   const [waitlistCount, setWaitlistCount] = useState(0);
   const [cySubCount, setCySubCount] = useState(0);
+  const [hasPasskey, setHasPasskey] = useState<boolean | null>(null);
+  const [registeringPasskey, setRegisteringPasskey] = useState(false);
 
   useAdminRealtime({
     tables: ["seller_intakes"],
@@ -41,7 +59,100 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadData();
+    checkPasskey();
   }, []);
+
+  const checkPasskey = async () => {
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session?.user) return;
+    const { count } = await supabase
+      .from("passkey_credentials")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", session.session.user.id);
+    setHasPasskey((count ?? 0) > 0);
+  };
+
+  const handleRegisterPasskey = useCallback(async () => {
+    setRegisteringPasskey(true);
+    try {
+      if (!window.PublicKeyCredential) {
+        toast({ title: "Not Supported", description: "Your browser doesn't support passkeys.", variant: "destructive" });
+        return;
+      }
+
+      const optionsRes = await supabase.functions.invoke("webauthn-register", {
+        body: { action: "options", origin: window.location.origin },
+      });
+
+      if (optionsRes.error || optionsRes.data?.error) {
+        toast({ title: "Error", description: optionsRes.data?.error || "Failed to get options", variant: "destructive" });
+        return;
+      }
+
+      const options = optionsRes.data;
+
+      const credential = (await navigator.credentials.create({
+        publicKey: {
+          rp: options.rp,
+          user: {
+            id: base64urlToBuffer(options.user.id),
+            name: options.user.name,
+            displayName: options.user.displayName,
+          },
+          challenge: base64urlToBuffer(options.challenge),
+          pubKeyCredParams: options.pubKeyCredParams,
+          timeout: options.timeout,
+          authenticatorSelection: options.authenticatorSelection,
+          attestation: options.attestation,
+          excludeCredentials: (options.excludeCredentials || []).map((c: any) => ({
+            id: base64urlToBuffer(c.id),
+            type: c.type,
+          })),
+        },
+      })) as PublicKeyCredential;
+
+      if (!credential) {
+        toast({ title: "Cancelled", description: "Passkey registration was cancelled." });
+        return;
+      }
+
+      const attestationResponse = credential.response as AuthenticatorAttestationResponse;
+
+      const verifyRes = await supabase.functions.invoke("webauthn-register", {
+        body: {
+          action: "verify",
+          origin: window.location.origin,
+          credential: {
+            id: credential.id,
+            rawId: bufferToBase64url(credential.rawId),
+            type: credential.type,
+            authenticatorAttachment: (credential as any).authenticatorAttachment,
+            response: {
+              clientDataJSON: bufferToBase64url(attestationResponse.clientDataJSON),
+              attestationObject: bufferToBase64url(attestationResponse.attestationObject),
+            },
+          },
+        },
+      });
+
+      if (verifyRes.error || verifyRes.data?.error) {
+        toast({ title: "Error", description: verifyRes.data?.error || "Registration failed", variant: "destructive" });
+        return;
+      }
+
+      setHasPasskey(true);
+      toast({ title: "Passkey Registered!", description: "You can now sign in with your passkey." });
+    } catch (err) {
+      console.error("Passkey registration error:", err);
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        toast({ title: "Cancelled", description: "Passkey registration was cancelled." });
+      } else {
+        toast({ title: "Error", description: err instanceof Error ? err.message : "Registration failed", variant: "destructive" });
+      }
+    } finally {
+      setRegisteringPasskey(false);
+    }
+  }, [toast]);
 
   const loadData = async () => {
     const [intakesRes, contactsRes, hiresRes, waitlistRes, cySubsRes] = await Promise.all([
@@ -107,7 +218,21 @@ export default function AdminDashboard() {
     <div className="space-y-8 max-w-6xl">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <PageHeader title="Dashboard" description="Overview across all products and services." />
-        <DateRangeFilter value={dateRange} onChange={setDateRange} />
+        <div className="flex items-center gap-2">
+          {hasPasskey === false && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={handleRegisterPasskey}
+              disabled={registeringPasskey}
+            >
+              <Fingerprint className="h-3.5 w-3.5" />
+              {registeringPasskey ? "Registering..." : "Register Passkey"}
+            </Button>
+          )}
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
