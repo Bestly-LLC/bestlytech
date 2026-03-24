@@ -72,6 +72,7 @@ serve(async (req: Request) => {
       queue_name: "transactional_emails",
       payload: {
         message_id: messageId,
+        idempotency_key: messageId,
         to: email,
         from: "Cookie Yeti <noreply@bestly.tech>",
         sender_domain: "notify.bestly.tech",
