@@ -44,8 +44,8 @@ const CONFIG = {
   version: "1.0.1",
   pricing: {
     free: "Free",
-    monthly: "$4.99",
-    yearly: "$39.99",
+    monthly: "$0.99",
+    yearly: "$7.99",
     lifetime: "$149.99",
   },
   platforms: [
