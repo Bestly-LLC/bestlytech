@@ -1,44 +1,39 @@
 
 
-# Backend Bug Fixes & Redeployments
+# Fix Activation Code Email Not Sending
 
-## Status of Each Fix
+## Problem
 
-| Fix | Status | Action Needed |
-|-----|--------|---------------|
-| Fix 1: `validate-activation-code` missing `code` in response | **Needs code update + redeploy** | Yes |
-| Fix 2: `send-activation-code` SMTP leak | **Not applicable** — already uses email queue (`enqueue_email`), no SMTP client | None |
-| Fix 3: Manual Review tab + Skipped section + auto-trigger | **Already implemented** in previous messages | None |
-| Fix 4: Missing columns on `missed_banner_reports` | **Already exist** — `page_url`, `banner_html`, `cmp_fingerprint` are in the schema | None |
-| Fix 3d: Email notification for persistent failures | **Not yet implemented** | Yes |
+The `send-activation-code` edge function enqueues emails to `transactional_emails` without an `idempotency_key`. The Lovable Email API requires either `run_id` or `idempotency_key` for transactional emails. This causes `process-email-queue` to fail on every retry with error 400: "Missing run_id or idempotency_key". The email is stuck in the queue (currently at 5 failed attempts, about to hit DLQ).
 
-## Changes to Make
+## Fix
 
-### 1. Update & redeploy `validate-activation-code`
+**File:** `supabase/functions/send-activation-code/index.ts`
 
-**File:** `supabase/functions/validate-activation-code/index.ts`
+Add `idempotency_key` to the enqueue payload. Use the `messageId` (already generated as a UUID) as the idempotency key:
 
-Rewrite with the improved version from the request:
-- Return `{ success: true, activated: true, code }` on success (includes the code so extensions can store it)
-- Select `*` instead of just `id` so we have the full row
-- Better error responses with proper HTTP status codes (400 for invalid, 500 for DB errors)
-- Preserve platform from existing row if not provided in request
+```typescript
+payload: {
+  message_id: messageId,
+  idempotency_key: messageId,  // <-- ADD THIS
+  to: email,
+  from: "Cookie Yeti <noreply@bestly.tech>",
+  sender_domain: "notify.bestly.tech",
+  subject: "Your Cookie Yeti activation code",
+  html,
+  purpose: "transactional",
+  label: "activation_code",
+  queued_at: new Date().toISOString(),
+}
+```
 
-Then deploy via `deploy_edge_functions`.
+Then redeploy `send-activation-code`.
 
-### 2. Add email alert for persistent no-HTML failures
+## Also: Clear the stuck message
 
-Create a new edge function `supabase/functions/notify-manual-review/index.ts` (or add logic to an existing cron) that:
-- Queries `missed_banner_reports` for rows with `report_count >= 3`, `resolved = false`, and empty `banner_html`
-- Sends an email to jaredbest@icloud.com via the existing `enqueue_email` RPC
-- Uses the Bestly navy admin email template style
+The stuck message (msg_id 4) has failed 4+ times and will hit the DLQ on the next attempt. After deploying the fix, a new activation code request will work correctly. No database change needed — the stuck message will age out.
 
-Alternatively, add this check into the `report-missed-banner` edge function itself — after saving, if the domain hits 3+ reports with no HTML, enqueue the alert email inline. This avoids needing a new function or cron job.
+## SwitchBot Chrome Issue
 
-### Technical Details
-
-- `send-activation-code` already uses the `enqueue_email` queue system (not raw SMTP), so Fix 2 is a non-issue
-- `report-missed-banner` already passes `force_server_fetch: true` for empty HTML (Fix 3c done)
-- The Manual Review tab and Skipped section are already in `CommunityLearning.tsx` (Fix 3a/3b done)
-- Only real gaps: the `code` field in validate response, and the persistent-failure email alert
+This is a browser extension behavior difference — the pattern may work in Safari's content script context but not Chrome's. This is outside the scope of this backend fix and would need investigation in the extension codebase.
 
