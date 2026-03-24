@@ -49,8 +49,6 @@ export default function AdminDashboard() {
   const [hireCount, setHireCount] = useState(0);
   const [waitlistCount, setWaitlistCount] = useState(0);
   const [cySubCount, setCySubCount] = useState(0);
-  const [hasPasskey, setHasPasskey] = useState<boolean | null>(null);
-  const [registeringPasskey, setRegisteringPasskey] = useState(false);
 
   useAdminRealtime({
     tables: ["seller_intakes"],
