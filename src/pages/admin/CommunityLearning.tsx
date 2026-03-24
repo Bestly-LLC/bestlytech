@@ -779,7 +779,7 @@ export default function CommunityLearning() {
             label: "Cron Jobs",
             icon: CalendarClock,
             lastRun: fixLog.length > 0 ? fixLog[0]?.created_at : null,
-            thresholds: [26, 50], // should run daily, 26h allows for drift
+            thresholds: [1, 4], // batch cron runs every 15min, 1h amber / 4h red
           },
         ];
 
