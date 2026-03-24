@@ -166,6 +166,7 @@ export function ChangePasswordDialog() {
     } finally {
       setDeletingPasskey(false);
     }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
