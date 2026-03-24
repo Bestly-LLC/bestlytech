@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Clock, AlertTriangle, CheckCircle, ArrowRight, Mail, Briefcase, Snowflake, Users, ShoppingBag, Store, Video } from "lucide-react";
+import { FileText, Clock, AlertTriangle, CheckCircle, ArrowRight, Mail, Briefcase, Snowflake, Users, ShoppingBag, Store, Video, Fingerprint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
@@ -15,6 +15,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DateRangeFilter, filterByDateRange, type DateRange } from "@/components/admin/DateRangeFilter";
 import { ActivityFeed } from "@/components/admin/ActivityFeed";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
+
+function bufferToBase64url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+function base64urlToBuffer(base64url: string): ArrayBuffer {
+  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = base64.length % 4 === 0 ? "" : "=".repeat(4 - (base64.length % 4));
+  const binary = atob(base64 + pad);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
 
 const statusColor: Record<string, string> = {
   Draft: "secondary",
