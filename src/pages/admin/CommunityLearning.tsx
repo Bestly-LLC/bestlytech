@@ -132,7 +132,43 @@ function nextAutoRun(): string {
 function rateColor(rate: number) {
   if (rate >= 80) return "text-green-500";
   if (rate >= 50) return "text-amber-500";
+  if (rate >= 20) return "text-orange-500";
   return "text-red-500";
+}
+
+/** Compute a domain health score (0-100) from confidence, recency, and volume */
+function computeDomainHealth(d: { avg_confidence: number; last_active?: string; total_reports?: number; success_rate?: number }) {
+  // Base: confidence (0-10 scale → 0-100)
+  const confScore = Math.min((d.avg_confidence || 0) * 10, 100);
+  
+  // Recency bonus/penalty (±15 points)
+  let recencyMod = 0;
+  if (d.last_active) {
+    const daysSince = (Date.now() - new Date(d.last_active).getTime()) / 86400000;
+    if (daysSince < 1) recencyMod = 15;
+    else if (daysSince < 7) recencyMod = 10;
+    else if (daysSince < 14) recencyMod = 5;
+    else if (daysSince > 30) recencyMod = -15;
+    else if (daysSince > 21) recencyMod = -10;
+  }
+  
+  // Volume bonus (up to 10 points for high-traffic domains)
+  const reports = Number(d.total_reports) || 0;
+  const volumeMod = reports >= 50 ? 10 : reports >= 10 ? 5 : reports >= 3 ? 2 : 0;
+  
+  // Success rate bonus if tracked (up to 10 points)
+  const sr = Number(d.success_rate) || 0;
+  const successMod = sr > 0 ? Math.min(sr / 10, 10) : 0;
+  
+  return Math.max(0, Math.min(100, Math.round(confScore + recencyMod + volumeMod + successMod)));
+}
+
+function healthLabel(score: number) {
+  if (score >= 80) return "Excellent";
+  if (score >= 60) return "Good";
+  if (score >= 40) return "Fair";
+  if (score >= 20) return "Weak";
+  return "Poor";
 }
 
 export default function CommunityLearning() {
@@ -186,7 +222,7 @@ export default function CommunityLearning() {
   const [togglingPattern, setTogglingPattern] = useState<string | null>(null);
 
   // Domain sorting state
-  type DomainSortKey = "domain" | "pattern_count" | "total_reports" | "success_rate" | "avg_confidence" | "last_active";
+  type DomainSortKey = "domain" | "pattern_count" | "total_reports" | "health" | "avg_confidence" | "last_active";
   const [domainSortKey, setDomainSortKey] = useState<DomainSortKey>("last_active");
   const [domainSortAsc, setDomainSortAsc] = useState(false);
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
@@ -212,6 +248,11 @@ export default function CommunityLearning() {
 
   const sortedDomains = useMemo(() => {
     const sorted = [...domains].sort((a: any, b: any) => {
+      if (domainSortKey === "health") {
+        const aVal = computeDomainHealth(a);
+        const bVal = computeDomainHealth(b);
+        return domainSortAsc ? aVal - bVal : bVal - aVal;
+      }
       let aVal = a[domainSortKey];
       let bVal = b[domainSortKey];
       if (domainSortKey === "domain") {
@@ -859,7 +900,7 @@ export default function CommunityLearning() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Total Patterns" value={o.total_patterns} icon={Layers} iconColor="text-primary" iconBg="bg-primary/10" accentColor="border-primary/40" subtitle={`${o.patterns_last_7d} active last 7 days`} tooltip="Cookie banner CSS selectors learned by the community network" />
         <StatCard label="Domains Covered" value={o.total_domains} icon={Globe} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="border-green-500/40" subtitle={`${o.new_domains_last_7d} new this week`} tooltip="Unique websites where Cookie Yeti has learned patterns" />
-        <StatCard label="Success Rate" value={`${o.overall_success_rate}%`} icon={Target} iconColor="text-blue-500" iconBg="bg-blue-500/10" accentColor="border-blue-500/40" subtitle={`${Number(o.total_successes).toLocaleString()} / ${Number(o.total_reports).toLocaleString()}`} tooltip="Percentage of pattern matches that successfully dismissed a banner. Calculated from success_count / report_count across all patterns" />
+        <StatCard label="Network Health" value={(() => { const avg = domains.length > 0 ? Math.round(domains.reduce((s: number, d: any) => s + computeDomainHealth(d), 0) / domains.length) : 0; return `${avg}%`; })()} icon={Target} iconColor="text-blue-500" iconBg="bg-blue-500/10" accentColor="border-blue-500/40" subtitle={`${o.high_confidence} high confidence`} tooltip="Average health score across all domains. Combines confidence level, recent activity, report volume, and verified successes into a single 0-100% score" />
         <StatCard label="Avg Confidence" value={o.avg_confidence != null ? `${Math.round(o.avg_confidence * 10)}%` : "—"} icon={TrendingUp} iconColor="text-purple-500" iconBg="bg-purple-500/10" accentColor="border-purple-500/40" subtitle={`${o.high_confidence} high / ${o.low_confidence} low`} tooltip="Mean confidence score across all active patterns. Higher = more reliable. Based on success rate and report volume" />
         <StatCard label="AI Generated" value={aiGeneratedCount} icon={Sparkles} iconColor="text-amber-500" iconBg="bg-amber-500/10" accentColor="border-amber-500/40" subtitle="Patterns from AI" tooltip="Patterns created by AI analysis of reported banner HTML" />
       </div>
@@ -1525,7 +1566,9 @@ export default function CommunityLearning() {
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs ml-7">
                           <div className="flex justify-between"><span className="text-muted-foreground">Patterns</span><span className="tabular-nums font-medium">{d.pattern_count}</span></div>
                           <div className="flex justify-between"><span className="text-muted-foreground">Reports</span><span className="tabular-nums font-medium">{Number(d.total_reports).toLocaleString()}</span></div>
-                          <div className="flex justify-between"><span className="text-muted-foreground">Success</span><span className={`tabular-nums font-medium ${rateColor(d.success_rate)}`}>{d.success_rate}%</span></div>
+                          {(() => { const h = computeDomainHealth(d); return (
+                            <div className="flex justify-between"><span className="text-muted-foreground">Health</span><span className={`tabular-nums font-medium ${rateColor(h)}`}>{h}% {healthLabel(h)}</span></div>
+                          ); })()}
                           <div className="flex justify-between"><span className="text-muted-foreground">Confidence</span><span className="tabular-nums">{Math.round(d.avg_confidence * 10)}%</span></div>
                         </div>
                         <p className="text-[11px] text-muted-foreground ml-7">Last active: {d.last_active ? timeAgo(d.last_active) : "—"}</p>
@@ -1592,8 +1635,8 @@ export default function CommunityLearning() {
                       <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("total_reports")}>
                         <span className="inline-flex items-center justify-end">Reports<InfoTip text="Times users encountered banners on this domain" /><SortIcon sortKey="total_reports" /></span>
                       </TableHead>
-                      <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("success_rate")}>
-                        <span className="inline-flex items-center justify-end">Success Rate<InfoTip text="How often patterns successfully dismiss banners here" /><SortIcon sortKey="success_rate" /></span>
+                      <TableHead className="text-right cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("health")}>
+                        <span className="inline-flex items-center justify-end">Health<InfoTip text="Composite score (0-100%) combining confidence, recency, report volume, and verified successes" /><SortIcon sortKey="health" /></span>
                       </TableHead>
                       <TableHead className="cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleDomainSort("avg_confidence")}>
                         <span className="inline-flex items-center">Confidence<InfoTip text="Reliability score 1-100%, based on success rate and volume" /><SortIcon sortKey="avg_confidence" /></span>
@@ -1622,7 +1665,11 @@ export default function CommunityLearning() {
                             </TableCell>
                             <TableCell className="text-right tabular-nums">{d.pattern_count}</TableCell>
                             <TableCell className="text-right tabular-nums">{Number(d.total_reports).toLocaleString()}</TableCell>
-                            <TableCell className={`text-right font-medium tabular-nums ${rateColor(d.success_rate)}`}>{d.success_rate}%</TableCell>
+                            {(() => { const h = computeDomainHealth(d); return (
+                              <TableCell className={`text-right font-medium tabular-nums ${rateColor(h)}`}>
+                                <UITooltip><TooltipTrigger asChild><span className="cursor-help">{h}%</span></TooltipTrigger><TooltipContent className="text-xs"><p className="font-medium">{healthLabel(h)}</p><p className="text-muted-foreground">Confidence: {Math.round(d.avg_confidence * 10)}%</p>{Number(d.success_rate) > 0 && <p className="text-muted-foreground">Verified: {d.success_rate}%</p>}</TooltipContent></UITooltip>
+                              </TableCell>
+                            ); })()}
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <Progress value={d.avg_confidence * 10} className="h-2 w-16" />
