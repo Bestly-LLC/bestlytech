@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import comingSoonAppstore from "@/assets/coming-soon-appstore.jpg";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +30,11 @@ import {
   Headphones,
   Mail,
   AlertTriangle,
+  Activity,
+  TrendingUp,
+  Database,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 // ============================================
@@ -115,6 +122,45 @@ const CONFIG = {
 };
 
 export default function CookieYeti() {
+  const [serviceStatus, setServiceStatus] = useState<'operational' | 'degraded' | 'down' | 'checking'>('checking');
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [liveStats, setLiveStats] = useState<{
+    total_patterns: number;
+    total_domains: number;
+    high_confidence: number;
+    avg_confidence: number;
+    overall_success_rate: number;
+    patterns_last_24h: number;
+    new_domains_last_7d: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const start = Date.now();
+        const { data, error } = await supabase
+          .from('cookie_patterns')
+          .select('id', { count: 'exact', head: true });
+        const latency = Date.now() - start;
+        setServiceStatus(error ? 'degraded' : latency > 5000 ? 'degraded' : 'operational');
+        setLastChecked(new Date());
+      } catch {
+        setServiceStatus('down');
+        setLastChecked(new Date());
+      }
+    };
+
+    const fetchStats = async () => {
+      const { data } = await supabase.rpc('get_community_overview');
+      if (data) setLiveStats(data as any);
+    };
+
+    checkStatus();
+    fetchStats();
+    const interval = setInterval(() => { checkStatus(); fetchStats(); }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <>
       <SEOHead
@@ -555,6 +601,105 @@ export default function CookieYeti() {
               </div>
             </div>
           </AnimatedSection>
+        </div>
+      </section>
+
+      {/* Service Status & Live Analytics */}
+      <section className="py-20 lg:py-24 border-t border-border">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <AnimatedSection>
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Service Status
+              </h2>
+              <p className="mt-4 text-lg text-muted-foreground">
+                Real-time system health and community statistics
+              </p>
+            </div>
+          </AnimatedSection>
+
+          {/* Uptime Heartbeat */}
+          <AnimatedSection delay={80}>
+            <div className="max-w-md mx-auto mb-12">
+              <div className="rounded-xl border border-border bg-card p-6 text-center">
+                <div className="flex items-center justify-center gap-3 mb-4">
+                  {serviceStatus === 'operational' ? (
+                    <Wifi className="h-6 w-6 text-emerald-500" />
+                  ) : serviceStatus === 'degraded' ? (
+                    <Activity className="h-6 w-6 text-amber-500" />
+                  ) : serviceStatus === 'down' ? (
+                    <WifiOff className="h-6 w-6 text-destructive" />
+                  ) : (
+                    <Activity className="h-6 w-6 text-muted-foreground animate-pulse" />
+                  )}
+                  <span className="text-xl font-semibold text-foreground">
+                    {serviceStatus === 'operational' ? 'All Systems Operational' :
+                     serviceStatus === 'degraded' ? 'Degraded Performance' :
+                     serviceStatus === 'down' ? 'Service Disruption' : 'Checking...'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <span className={`inline-block h-3 w-3 rounded-full ${
+                    serviceStatus === 'operational' ? 'bg-emerald-500 animate-pulse' :
+                    serviceStatus === 'degraded' ? 'bg-amber-500 animate-pulse' :
+                    serviceStatus === 'down' ? 'bg-destructive' :
+                    'bg-muted-foreground animate-pulse'
+                  }`} />
+                  <span className="text-sm text-muted-foreground">
+                    {lastChecked ? `Last checked ${lastChecked.toLocaleTimeString()}` : 'Checking...'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </AnimatedSection>
+
+          {/* Live Analytics Grid */}
+          {liveStats && (
+            <AnimatedSection delay={160}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+                <div className="rounded-xl border border-border bg-card p-5 text-center">
+                  <Database className="h-5 w-5 text-primary mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-foreground">{liveStats.total_patterns.toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Total Patterns</div>
+                </div>
+                <div className="rounded-xl border border-border bg-card p-5 text-center">
+                  <Globe className="h-5 w-5 text-primary mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-foreground">{liveStats.total_domains.toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Domains Covered</div>
+                </div>
+                <div className="rounded-xl border border-border bg-card p-5 text-center">
+                  <TrendingUp className="h-5 w-5 text-primary mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-foreground">{liveStats.overall_success_rate}%</div>
+                  <div className="text-xs text-muted-foreground mt-1">Success Rate</div>
+                </div>
+                <div className="rounded-xl border border-border bg-card p-5 text-center">
+                  <Zap className="h-5 w-5 text-primary mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-foreground">{liveStats.patterns_last_24h}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Active Today</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto mt-4">
+                <div className="rounded-xl border border-border bg-secondary/30 p-4 text-center">
+                  <div className="text-lg font-semibold text-foreground">{liveStats.high_confidence}</div>
+                  <div className="text-xs text-muted-foreground">High Confidence Patterns</div>
+                </div>
+                <div className="rounded-xl border border-border bg-secondary/30 p-4 text-center">
+                  <div className="text-lg font-semibold text-foreground">{liveStats.avg_confidence}/10</div>
+                  <div className="text-xs text-muted-foreground">Avg. Confidence Score</div>
+                </div>
+                <div className="rounded-xl border border-border bg-secondary/30 p-4 text-center">
+                  <div className="text-lg font-semibold text-foreground">+{liveStats.new_domains_last_7d}</div>
+                  <div className="text-xs text-muted-foreground">New Domains (7 days)</div>
+                </div>
+              </div>
+
+              <p className="text-center text-xs text-muted-foreground mt-4 flex items-center justify-center gap-1">
+                <Activity className="h-3 w-3" />
+                Updates every 60 seconds • Community-driven data
+              </p>
+            </AnimatedSection>
+          )}
         </div>
       </section>
 
