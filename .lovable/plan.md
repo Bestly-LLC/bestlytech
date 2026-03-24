@@ -1,50 +1,70 @@
 
 
-# Merge Domains + Recent Tabs into a Single "Domains" View
+# Merge Activity + AI Gen into "Pipeline" Tab & Fix Build Errors
 
-## What Changes
+## Build Errors
 
-Remove the separate "Domains" and "Recent" tabs. Replace them with a single **"Domains"** tab that shows domain-level rows as expandable/collapsible sections. Clicking a domain row expands it to reveal the individual patterns underneath (the data currently in the Recent tab).
+The file has cascading JSX parse errors starting at line 932. From my reading, the JSX structure appears correct (all tags close properly, `</Tabs>` at line 2207). This is likely caused by an orphaned code fragment or invisible character introduced during prior edits. The safest fix is to carefully rewrite the Tabs section, which I'll do as part of the merge.
 
-## Design
+## Tab Merge: Activity + AI Gen → "Pipeline"
+
+**Name options considered:** "Pipeline" conveys the report-to-pattern flow. Other candidates: "Operations", "Engine", "Monitor". I'll go with **"Pipeline"** — it's short, clear, and describes the data flowing from reports through AI to patterns.
+
+### New "Pipeline" tab layout
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│ Domain          │ Patterns │ Reports │ Success │ Confidence │ Last Active │
-├─────────────────────────────────────────────────────────────┤
-│ ▶ amazon.com    │    3     │  1,204  │   92%   │   ████ 85% │   2h ago    │
-│ ▼ costco.com    │    2     │    87   │   78%   │   ███  70% │   5h ago    │
-│   ├ selector: #onetrust-accept  │ accept │ ai │ 75% │ Active ☑ │ 🗑 │
-│   └ selector: .cc-dismiss       │ close  │ community │ 65% │ Active ☑ │ 🗑 │
-│ ▶ switchbot.com │    1     │    12   │   50%   │   ██  50%  │   1d ago    │
+│ PIPELINE                                                     │
+│                                                              │
+│ [Action buttons: Maintenance | Retry | Run AI | Reset]       │
+│ Last run: 2h ago (auto) · Next: in 13m · 12 runs · 4.2k tok │
+│                                                              │
+│ ┌─ Pattern Activity Chart ─────────────────────────────────┐ │
+│ │  (Area/Bar toggle, series chips, time range selector)    │ │
+│ └──────────────────────────────────────────────────────────┘ │
+│                                                              │
+│ ┌─ Post-Run Results (collapsible, shown after manual run) ─┐ │
+│ └──────────────────────────────────────────────────────────┘ │
+│                                                              │
+│ ┌─ Pending Candidates ────────────────────────────────────┐  │
+│ │  Filter: All | New | Failed    [Bulk re-run selected]   │  │
+│ │  Table with checkboxes, domain, reports, HTML, CMP...   │  │
+│ └──────────────────────────────────────────────────────────┘ │
+│                                                              │
+│ ┌─ AI Generation Log (last 50) ───────────────────────────┐  │
+│ └──────────────────────────────────────────────────────────┘ │
+│                                                              │
+│ ┌─ Skipped — No HTML (collapsible) ───────────────────────┐  │
+│ └──────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-All existing columns from both tabs are preserved. The domain-level row keeps its sortable headers (domain, patterns, reports, success rate, confidence, last active). The expanded pattern rows show selector, action, CMP, confidence, reports, source, active toggle, and delete button.
+### Changes in `src/pages/admin/CommunityLearning.tsx`
 
-## Implementation
+1. **Remove the "Activity" and "AI Gen" TabsTriggers** (lines 935, 937). Replace with a single trigger:
+   ```tsx
+   <TabsTrigger value="pipeline">
+     <Zap className="h-3.5 w-3.5 hidden sm:block" />Pipeline
+   </TabsTrigger>
+   ```
 
-### File: `src/pages/admin/CommunityLearning.tsx`
+2. **Remove `<TabsContent value="activity">` (lines 946-1049)** and **`<TabsContent value="ai-generator">` (lines 1254-1700)**
 
-1. **Remove the "Recent" TabsTrigger** (line 917) and its **TabsContent** (lines 1110-1239)
+3. **Create a single `<TabsContent value="pipeline">`** containing, in order:
+   - The AI Gen header card with action buttons, last run info, token stats (from old AI Gen tab)
+   - The Pattern Activity chart with time range + chart type controls + series chips (from old Activity tab)
+   - Post-Run Results collapsible (from old AI Gen tab)
+   - Pending Candidates section with filters (from old AI Gen tab)
+   - AI Generation Log table (from old AI Gen tab)
+   - Skipped — No HTML collapsible (from old AI Gen tab)
 
-2. **Add expand/collapse state**: `const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set())`
+4. **Update `activeTab` default** from `"activity"` to `"pipeline"` if it was the default
 
-3. **Group `recent` patterns by domain**: Create a `useMemo` that builds a `Map<string, pattern[]>` from the `recent` array, keyed by domain
+5. **Fix build errors**: While restructuring, ensure all JSX elements are properly nested and closed. The rewrite of this section will resolve the cascading parse errors.
 
-4. **Modify the Domains TabsContent** (lines 1032-1108): After each domain row in the table, if that domain is expanded, render its child pattern rows (indented, with all the columns from the old Recent tab — selector, action, CMP, confidence, source, active toggle, delete button)
+### Tab bar after merge
 
-5. **Add click handler on domain rows**: Toggle `expandedDomains` set. Add a chevron icon (▶/▼) in the domain column to indicate expandability.
+Pipeline | Domains | Breakdown | Dismissals | Review | Reports
 
-6. **Increase the RPC limit** for `get_recently_learned` from 25 to 100 so expanded domains have full pattern coverage
-
-7. **Make all columns sortable**: The domain-level headers already have sorting. The pattern sub-rows inherit the domain's sort order. Add sorting to the "Discovered" column (map to `created_at` from the recent data).
-
-8. **Mobile view**: Merge similarly — domain cards become expandable, tapping reveals pattern cards underneath
-
-### Data Flow
-
-- `domains` state (from `get_top_domains`) = domain-level aggregate rows
-- `recent` state (from `get_recently_learned`) = individual pattern rows, grouped by domain for display under their parent
-- Both RPCs continue to be called; no backend changes needed
+Down from 7 tabs to 6 — cleaner and less cognitive load.
 
