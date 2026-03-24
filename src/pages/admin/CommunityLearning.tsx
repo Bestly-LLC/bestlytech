@@ -222,7 +222,7 @@ export default function CommunityLearning() {
   const [togglingPattern, setTogglingPattern] = useState<string | null>(null);
 
   // Domain sorting state
-  type DomainSortKey = "domain" | "pattern_count" | "total_reports" | "success_rate" | "avg_confidence" | "last_active";
+  type DomainSortKey = "domain" | "pattern_count" | "total_reports" | "health" | "avg_confidence" | "last_active";
   const [domainSortKey, setDomainSortKey] = useState<DomainSortKey>("last_active");
   const [domainSortAsc, setDomainSortAsc] = useState(false);
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
