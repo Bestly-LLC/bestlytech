@@ -1248,16 +1248,6 @@ export default function CommunityLearning() {
             </CardContent>
           </Card>
         </TabsContent>
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Recently Learned Patterns</CardTitle></CardHeader>
-            <CardContent>
-              {/* Mobile cards */}
-              <div className="md:hidden space-y-3">
-                {recent.map((r: any, i: number) => {
-                  const isFixed = fixedPatterns.has(`${r.domain}::${r.selector}`);
-                  const isInactive = r.is_active === false;
-                  return (
-                    <div key={i} className={`border rounded-lg p-3 space-y-2 ${isFixed ? "border-l-2 border-l-purple-500/50" : ""} ${isInactive ? "opacity-50" : ""}`}>
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-sm truncate flex-1">{r.domain}</span>
                         <div className="flex items-center gap-2 shrink-0">
