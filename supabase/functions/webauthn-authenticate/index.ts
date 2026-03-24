@@ -31,6 +31,84 @@ function getRpId(origin: string): string {
   }
 }
 
+// Convert ASN.1 DER ECDSA signature to raw r||s format for SubtleCrypto
+function asn1ToRaw(sig: Uint8Array): Uint8Array {
+  // ASN.1: 0x30 <len> 0x02 <rLen> <r> 0x02 <sLen> <s>
+  if (sig[0] !== 0x30) throw new Error("Invalid ASN.1 signature");
+  let offset = 2;
+  // r
+  if (sig[offset] !== 0x02) throw new Error("Invalid ASN.1 r");
+  offset++;
+  const rLen = sig[offset++];
+  let r = sig.slice(offset, offset + rLen);
+  offset += rLen;
+  // s
+  if (sig[offset] !== 0x02) throw new Error("Invalid ASN.1 s");
+  offset++;
+  const sLen = sig[offset++];
+  let s = sig.slice(offset, offset + sLen);
+
+  // Remove leading zero padding
+  if (r.length === 33 && r[0] === 0) r = r.slice(1);
+  if (s.length === 33 && s[0] === 0) s = s.slice(1);
+
+  // Pad to 32 bytes
+  const raw = new Uint8Array(64);
+  raw.set(r.length <= 32 ? r : r.slice(r.length - 32), 32 - Math.min(r.length, 32));
+  raw.set(s.length <= 32 ? s : s.slice(s.length - 32), 64 - Math.min(s.length, 32));
+  return raw;
+}
+
+async function verifySignature(
+  publicKeyData: { publicKeyJwk: JsonWebKey; algorithm: number },
+  authenticatorData: Uint8Array,
+  clientDataJSON: Uint8Array,
+  signature: Uint8Array
+): Promise<boolean> {
+  // signedData = authenticatorData || SHA-256(clientDataJSON)
+  const clientDataHash = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", clientDataJSON)
+  );
+  const signedData = new Uint8Array(authenticatorData.length + clientDataHash.length);
+  signedData.set(authenticatorData);
+  signedData.set(clientDataHash, authenticatorData.length);
+
+  if (publicKeyData.algorithm === -7) {
+    // ES256
+    const key = await crypto.subtle.importKey(
+      "jwk",
+      publicKeyData.publicKeyJwk,
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["verify"]
+    );
+    const rawSig = asn1ToRaw(signature);
+    return crypto.subtle.verify(
+      { name: "ECDSA", hash: "SHA-256" },
+      key,
+      rawSig,
+      signedData
+    );
+  } else if (publicKeyData.algorithm === -257) {
+    // RS256
+    const key = await crypto.subtle.importKey(
+      "jwk",
+      { ...publicKeyData.publicKeyJwk, alg: "RS256" },
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+    return crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      key,
+      signature,
+      signedData
+    );
+  }
+
+  throw new Error(`Unsupported algorithm: ${publicKeyData.algorithm}`);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -47,7 +125,7 @@ Deno.serve(async (req) => {
 
     if (action === "options") {
       if (!email) {
-        // Discoverable credential flow - allow any registered passkey
+        // Discoverable credential flow
         const challenge = generateChallenge();
 
         await supabaseAdmin.from("webauthn_challenges").insert({
@@ -55,22 +133,19 @@ Deno.serve(async (req) => {
           type: "authentication",
         });
 
-        const options = {
+        return new Response(JSON.stringify({
           rpId,
           challenge,
           timeout: 60000,
           userVerification: "preferred",
-          allowCredentials: [], // empty = discoverable credentials
-        };
-
-        return new Response(JSON.stringify(options), {
+          allowCredentials: [],
+        }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Email-based flow: look up user credentials
-      // First find user by email
-      const { data: userData, error: userError } = await supabaseAdmin.auth.admin.listUsers();
+      // Email-based flow
+      const { data: userData } = await supabaseAdmin.auth.admin.listUsers();
       const targetUser = userData?.users?.find(
         (u) => u.email?.toLowerCase() === email.toLowerCase()
       );
@@ -103,7 +178,7 @@ Deno.serve(async (req) => {
         email: email.toLowerCase(),
       });
 
-      const options = {
+      return new Response(JSON.stringify({
         rpId,
         challenge,
         timeout: 60000,
@@ -113,9 +188,7 @@ Deno.serve(async (req) => {
           type: "public-key",
           transports: c.transports || ["internal"],
         })),
-      };
-
-      return new Response(JSON.stringify(options), {
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -154,10 +227,9 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Parse clientDataJSON to verify challenge
-      const clientDataJSON = JSON.parse(
-        new TextDecoder().decode(base64urlToBuffer(credResponse.clientDataJSON))
-      );
+      // Parse clientDataJSON
+      const clientDataJSONBytes = base64urlToBuffer(credResponse.clientDataJSON);
+      const clientDataJSON = JSON.parse(new TextDecoder().decode(clientDataJSONBytes));
 
       if (clientDataJSON.type !== "webauthn.get") {
         return new Response(JSON.stringify({ error: "Invalid ceremony type" }), {
@@ -166,11 +238,10 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Check challenge matches any valid challenge
+      // Verify challenge
       const matchingChallenge = challenges.find(
         (c) => c.challenge === clientDataJSON.challenge
       );
-
       if (!matchingChallenge) {
         return new Response(JSON.stringify({ error: "Challenge mismatch" }), {
           status: 400,
@@ -178,7 +249,101 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Verify the user has admin role
+      // Verify origin matches rpId
+      try {
+        const originUrl = new URL(clientDataJSON.origin);
+        if (originUrl.hostname !== rpId) {
+          return new Response(JSON.stringify({ error: "Origin mismatch" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch {
+        // Allow if origin can't be parsed (localhost dev)
+      }
+
+      // Parse authenticatorData
+      const authDataBytes = base64urlToBuffer(credResponse.authenticatorData);
+
+      // Verify rpIdHash (first 32 bytes of authenticatorData)
+      const rpIdHashExpected = new Uint8Array(
+        await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rpId))
+      );
+      const rpIdHashActual = authDataBytes.slice(0, 32);
+      if (!rpIdHashExpected.every((b, i) => b === rpIdHashActual[i])) {
+        return new Response(JSON.stringify({ error: "rpIdHash mismatch" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Verify flags: UP (bit 0) must be set
+      const flags = authDataBytes[32];
+      if ((flags & 0x01) === 0) {
+        return new Response(JSON.stringify({ error: "User presence flag not set" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Verify counter (prevent replay)
+      const counterBytes = authDataBytes.slice(33, 37);
+      const counter = (counterBytes[0] << 24) | (counterBytes[1] << 16) | (counterBytes[2] << 8) | counterBytes[3];
+      if (storedCred.counter > 0 && counter <= storedCred.counter) {
+        return new Response(JSON.stringify({ error: "Counter replay detected" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // *** CRYPTOGRAPHIC SIGNATURE VERIFICATION ***
+      let publicKeyData: { publicKeyJwk: JsonWebKey; algorithm: number };
+      try {
+        publicKeyData = JSON.parse(storedCred.public_key);
+      } catch {
+        // Legacy credential stored as raw attestationObject — reject
+        return new Response(JSON.stringify({ 
+          error: "Passkey needs re-registration. Please delete and re-register your passkey." 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!publicKeyData.publicKeyJwk || !publicKeyData.algorithm) {
+        return new Response(JSON.stringify({ 
+          error: "Invalid stored key format. Please re-register your passkey." 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const signatureBytes = base64urlToBuffer(credResponse.signature);
+      let verified = false;
+      try {
+        verified = await verifySignature(
+          publicKeyData,
+          authDataBytes,
+          clientDataJSONBytes,
+          signatureBytes
+        );
+      } catch (err) {
+        console.error("Signature verification error:", err);
+        return new Response(JSON.stringify({ error: "Signature verification failed" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!verified) {
+        return new Response(JSON.stringify({ error: "Invalid signature" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Verify admin role
       const { data: hasAdmin } = await supabaseAdmin.rpc("has_role", {
         _user_id: storedCred.user_id,
         _role: "admin",
@@ -195,7 +360,7 @@ Deno.serve(async (req) => {
       await supabaseAdmin
         .from("passkey_credentials")
         .update({
-          counter: storedCred.counter + 1,
+          counter,
           last_used: new Date().toISOString(),
         })
         .eq("id", storedCred.id);
@@ -206,7 +371,7 @@ Deno.serve(async (req) => {
         .delete()
         .eq("id", matchingChallenge.id);
 
-      // Generate a magic link for the user to create a session
+      // Generate magic link
       const { data: userData } = await supabaseAdmin.auth.admin.getUserById(
         storedCred.user_id
       );
@@ -218,7 +383,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Generate a magic link token
       const { data: linkData, error: linkError } =
         await supabaseAdmin.auth.admin.generateLink({
           type: "magiclink",
@@ -233,7 +397,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Extract the token hash from the action_link
       const actionLink = linkData.properties?.action_link || "";
       const tokenHash = new URL(actionLink).searchParams.get("token") ||
         linkData.properties?.hashed_token || "";
