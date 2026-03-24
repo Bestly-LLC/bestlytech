@@ -1,71 +1,50 @@
 
 
-# Improve Community Learning Breakdown Tab & Fix Contrast Issues
+# Merge Domains + Recent Tabs into a Single "Domains" View
 
-## Problems Identified
+## What Changes
 
-1. **Recharts tooltip contrast**: All chart tooltips set `background` and `border` via CSS variables but never set `color`. In dark mode, the browser default text color (black) renders invisible against the dark card background. This affects all 5 charts (Activity area/bar, Confidence distribution, Action Types pie, Source Breakdown).
+Remove the separate "Domains" and "Recent" tabs. Replace them with a single **"Domains"** tab that shows domain-level rows as expandable/collapsible sections. Clicking a domain row expands it to reveal the individual patterns underneath (the data currently in the Recent tab).
 
-2. **CMP Fingerprints table is bare data**: The CMP names (e.g. "onetrust", "cookiebot", "quantcast") are cryptic abbreviations with no explanation of what they are. Need an eye/info icon with hover tooltip explaining each CMP.
+## Design
 
-3. **Breakdown tab is thin**: Just four charts/tables with no summary or context. Could use a quick summary row and card descriptions.
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ Domain          │ Patterns │ Reports │ Success │ Confidence │ Last Active │
+├─────────────────────────────────────────────────────────────┤
+│ ▶ amazon.com    │    3     │  1,204  │   92%   │   ████ 85% │   2h ago    │
+│ ▼ costco.com    │    2     │    87   │   78%   │   ███  70% │   5h ago    │
+│   ├ selector: #onetrust-accept  │ accept │ ai │ 75% │ Active ☑ │ 🗑 │
+│   └ selector: .cc-dismiss       │ close  │ community │ 65% │ Active ☑ │ 🗑 │
+│ ▶ switchbot.com │    1     │    12   │   50%   │   ██  50%  │   1d ago    │
+└─────────────────────────────────────────────────────────────┘
+```
 
-## Changes
+All existing columns from both tabs are preserved. The domain-level row keeps its sortable headers (domain, patterns, reports, success rate, confidence, last active). The expanded pattern rows show selector, action, CMP, confidence, reports, source, active toggle, and delete button.
+
+## Implementation
 
 ### File: `src/pages/admin/CommunityLearning.tsx`
 
-**1. Fix Recharts tooltip contrast (all instances)**
+1. **Remove the "Recent" TabsTrigger** (line 917) and its **TabsContent** (lines 1110-1239)
 
-Add `color: "hsl(var(--foreground))"` to every `contentStyle` prop on `RechartsTooltip`. There are 5 instances (lines ~990, 1002, 1686, 1709, 1770). Each becomes:
-```tsx
-contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12, color: "hsl(var(--foreground))" }}
-```
+2. **Add expand/collapse state**: `const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set())`
 
-**2. Add CMP descriptions map and eye icon tooltips**
+3. **Group `recent` patterns by domain**: Create a `useMemo` that builds a `Map<string, pattern[]>` from the `recent` array, keyed by domain
 
-Add a `CMP_DESCRIPTIONS` map near the top of the file:
-```tsx
-const CMP_DESCRIPTIONS: Record<string, string> = {
-  onetrust: "OneTrust — Enterprise consent platform used by large corporations",
-  cookiebot: "Cookiebot by Usercentrics — GDPR/CCPA cookie consent manager",
-  quantcast: "Quantcast Choice — Free CMP focused on GDPR compliance",
-  didomi: "Didomi — Privacy & consent management for publishers",
-  osano: "Osano — Data privacy platform with cookie consent",
-  trustarc: "TrustArc — Privacy compliance and consent manager",
-  iubenda: "iubenda — Cookie/privacy policy generator and consent solution",
-  termly: "Termly — Cookie consent banner and policy generator",
-  complianz: "Complianz — WordPress GDPR/CCPA cookie consent plugin",
-  cookiefirst: "CookieFirst — Cookie consent management platform",
-  klaro: "Klaro — Open-source privacy consent manager",
-  civic: "Civic Cookie Control — UK-focused cookie consent tool",
-  unknown: "Unknown — CMP could not be identified from the banner",
-};
-```
+4. **Modify the Domains TabsContent** (lines 1032-1108): After each domain row in the table, if that domain is expanded, render its child pattern rows (indented, with all the columns from the old Recent tab — selector, action, CMP, confidence, source, active toggle, delete button)
 
-Then in both the mobile and desktop CMP Fingerprints sections, add an eye icon (`Eye` from lucide-react) next to each CMP name that shows the description on hover via `UITooltip`. If the CMP isn't in the map, show a generic fallback.
+5. **Add click handler on domain rows**: Toggle `expandedDomains` set. Add a chevron icon (▶/▼) in the domain column to indicate expandability.
 
-**3. Add card descriptions to Breakdown charts**
+6. **Increase the RPC limit** for `get_recently_learned` from 25 to 100 so expanded domains have full pattern coverage
 
-Add `CardDescription` subtitles to each card explaining what the chart shows:
-- Confidence Distribution: "How patterns are distributed across confidence levels"
-- Action Types: "Which dismiss actions are most common across all patterns"
-- CMP Fingerprints: "Consent Management Platforms detected across the network"
-- Source Breakdown: "How patterns were created — community reports, AI, or manual"
+7. **Make all columns sortable**: The domain-level headers already have sorting. The pattern sub-rows inherit the domain's sort order. Add sorting to the "Discovered" column (map to `created_at` from the recent data).
 
-**4. Add summary stat row at top of Breakdown tab**
+8. **Mobile view**: Merge similarly — domain cards become expandable, tapping reveals pattern cards underneath
 
-Add a 4-column grid of quick stats pulled from existing data:
-- Total CMPs detected (cmpDist.length)
-- Most common action (from actionStats)
-- Most common source (from sourceDist)
-- Avg confidence (from overview)
+### Data Flow
 
-This gives the Breakdown tab a useful at-a-glance summary before diving into charts.
-
-### Technical Details
-
-- Import `Eye` from `lucide-react` (add to existing import)
-- All tooltip contrast fixes are the same one-line addition across 5 locations
-- CMP descriptions map is a static constant — no data fetching needed
-- Summary stats derive from already-fetched state variables
+- `domains` state (from `get_top_domains`) = domain-level aggregate rows
+- `recent` state (from `get_recently_learned`) = individual pattern rows, grouped by domain for display under their parent
+- Both RPCs continue to be called; no backend changes needed
 
