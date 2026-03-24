@@ -20,6 +20,7 @@ const BRAND = {
 };
 
 const LOGO_URL = "https://keowunrxpxlbgebujbao.supabase.co/storage/v1/object/public/email-assets/bestly-logo.png";
+const YETI_ICON_URL = "https://keowunrxpxlbgebujbao.supabase.co/storage/v1/object/public/email-assets/cookieyeti-icon.png";
 const DASHBOARD_URL = "https://bestlytech.lovable.app/admin";
 
 // Google Fonts import for Plus Jakarta Sans
@@ -80,19 +81,9 @@ ${footerNote ? `<p style="margin:0 0 14px;font-size:12px;color:rgba(255,255,255,
 
 /**
  * Activation code email — sent to end users (Cookie Yeti brand).
+ * Apple-playful design with yeti icon as hero element.
  */
 export function activationCodeEmail(code: string): string {
-  const CY = {
-    navy: "#1a365d",
-    ice: "#bfdbfe",
-    iceLight: "#e0f2fe",
-    bgTop: "#e8f4f8",
-    bgBottom: "#f0f7fa",
-    header: "#0f2847",
-    muted: "#64748b",
-    border: "#93c5fd",
-  };
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -102,36 +93,43 @@ export function activationCodeEmail(code: string): string {
 ${FONT_IMPORT}
 <title>Cookie Yeti</title>
 </head>
-<body style="margin:0;padding:0;background:linear-gradient(180deg,${CY.bgTop},${CY.bgBottom});font-family:${FONT_STACK};-webkit-text-size-adjust:100%;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px;">
+<body style="margin:0;padding:0;background:#ffffff;font-family:${FONT_STACK};-webkit-text-size-adjust:100%;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
 <tr><td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
-<tr><td style="background:${CY.header};border-radius:16px 16px 0 0;padding:32px 32px 24px;text-align:center;">
+<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;">
+
+<!-- Header -->
+<tr><td style="background:#0f172a;border-radius:16px 16px 0 0;padding:40px 32px 32px;text-align:center;">
 <a href="https://bestly.tech" style="text-decoration:none;">
-<img src="https://bestlytech.lovable.app/images/cookieyeti-icon.png" alt="Cookie Yeti" width="64" height="64" style="display:block;margin:0 auto 12px;border-radius:14px;" />
-<h1 style="margin:0;font-size:28px;font-weight:800;color:#fff;letter-spacing:-0.5px;font-family:${FONT_STACK};">Cookie Yeti</h1>
+<img src="${YETI_ICON_URL}" alt="Cookie Yeti" width="80" height="80" style="display:block;margin:0 auto 12px;border-radius:18px;" />
 </a>
-<p style="margin:6px 0 0;font-size:13px;color:${CY.ice};letter-spacing:0.5px;font-weight:500;">Distraction-Free Browsing, Automatically</p>
+<a href="https://bestly.tech" style="text-decoration:none;">
+<p style="margin:0 0 4px;font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.3px;font-family:${FONT_STACK};">Cookie Yeti</p>
+</a>
+<p style="margin:0;font-size:13px;color:#94a3b8;letter-spacing:0.5px;">Distraction-Free Browsing</p>
 </td></tr>
-<tr><td style="background:#fff;padding:36px 32px 32px;border-left:1px solid ${CY.border};border-right:1px solid ${CY.border};">
-<h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:${CY.navy};text-align:center;font-family:${FONT_STACK};">Your Activation Code</h2>
-<p style="margin:0 0 28px;font-size:14px;color:${CY.muted};line-height:1.6;text-align:center;">Enter this code in Cookie Yeti to activate your extension.</p>
-<div style="text-align:center;margin:0 0 28px;">
-<div style="display:inline-block;background:${CY.iceLight};border:2px solid ${CY.border};border-radius:14px;padding:20px 44px;">
-<span style="font-size:40px;font-weight:800;letter-spacing:10px;color:${CY.navy};font-family:'Courier New',monospace;">${code}</span>
+
+<!-- Body -->
+<tr><td style="padding:36px 32px;text-align:center;">
+<h1 style="margin:0 0 8px;font-size:28px;font-weight:700;color:#0f172a;letter-spacing:-0.5px;font-family:${FONT_STACK};">Your code.</h1>
+<p style="margin:0 0 28px;font-size:15px;color:#64748b;line-height:1.7;">Enter this code in Cookie Yeti to activate your extension.</p>
+
+<div style="display:inline-block;background:#f0f9ff;border:2px solid #e0f2fe;border-radius:16px;padding:24px 48px;margin:0 0 28px;">
+<span style="font-size:42px;font-weight:800;letter-spacing:12px;color:#0f172a;font-family:'Courier New',monospace;">${code}</span>
 </div>
-</div>
-<div style="background:${CY.iceLight};border-radius:10px;padding:14px 18px;text-align:center;">
-<p style="margin:0;font-size:13px;color:${CY.muted};line-height:1.5;">&#9201; This code expires in <strong style="color:${CY.navy};">15 minutes</strong></p>
-<p style="margin:6px 0 0;font-size:12px;color:${CY.muted};">If you didn't request this, you can safely ignore this email.</p>
+
+<div style="background:#f8fafc;border-radius:12px;padding:14px 20px;text-align:center;">
+<p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.5;">&#9201; Expires in <strong style="color:#0f172a;">15 minutes</strong></p>
+<p style="margin:6px 0 0;font-size:12px;color:#94a3b8;">Didn't request this? Safely ignore this email.</p>
 </div>
 </td></tr>
-<tr><td style="background:${CY.header};border-radius:0 0 16px 16px;padding:20px 32px;text-align:center;">
-<div style="display:inline-block;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);border-radius:20px;padding:6px 16px;margin-bottom:12px;">
-<span style="font-size:12px;font-weight:600;color:${CY.ice};letter-spacing:0.3px;">&#128737; 100% Privacy-First</span>
-</div>
-<p style="margin:0;font-size:11px;color:${CY.ice};opacity:0.7;line-height:1.5;">Cookie Yeti by Bestly Technologies &middot; Los Angeles, CA</p>
+
+<!-- Footer -->
+<tr><td style="background:#0f172a;border-radius:0 0 16px 16px;padding:24px 32px;text-align:center;">
+<p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#e2e8f0;">Cookie Yeti by Bestly</p>
+<p style="margin:0;font-size:11px;color:#64748b;">Los Angeles, CA &middot; support@bestly.tech</p>
 </td></tr>
+
 </table>
 </td></tr>
 </table>
