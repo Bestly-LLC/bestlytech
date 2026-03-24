@@ -196,6 +196,7 @@ Deno.serve(async (req) => {
     if (action === "verify") {
       const { credential } = body;
       const { id: credentialId, response: credResponse } = credential;
+      console.log("Verify attempt:", { credentialId, rpId, clientOrigin });
 
       // Look up credential
       const { data: storedCred } = await supabaseAdmin

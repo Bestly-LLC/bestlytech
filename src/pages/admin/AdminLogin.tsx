@@ -171,9 +171,11 @@ export default function AdminLogin() {
       });
 
       if (verifyRes.error || verifyRes.data?.error) {
+        const errMsg = verifyRes.data?.error || verifyRes.error?.message || "Passkey verification failed";
+        console.error("Passkey verify error:", { error: verifyRes.error, data: verifyRes.data });
         toast({
           title: "Authentication Failed",
-          description: verifyRes.data?.error || "Passkey verification failed",
+          description: errMsg,
           variant: "destructive",
         });
         return;
