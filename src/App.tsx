@@ -18,6 +18,7 @@ import NeckPilot from "./pages/NeckPilot";
 import PressKit from "./pages/PressKit";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
+import TermsOfUse from "./pages/TermsOfUse";
 import DeveloperCompliance from "./pages/DeveloperCompliance";
 import Contact from "./pages/Contact";
 import ProductLegal from "./pages/ProductLegal";
@@ -71,6 +72,7 @@ const App = () => (
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/privacy" element={<CookieYetiPrivacy />} />
               <Route path="/terms-of-service" element={<TermsOfService />} />
+              <Route path="/terms-of-use" element={<TermsOfUse />} />
               <Route path="/developer-compliance" element={<DeveloperCompliance />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/product/:productId/legal" element={<ProductLegal />} />
