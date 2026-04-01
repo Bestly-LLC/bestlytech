@@ -2,7 +2,7 @@ import { products } from "@/config/products";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Link } from "react-router-dom";
-import { Shield, Database, Lock, Globe, Monitor, Cpu, Puzzle, Smartphone, Box, Workflow, ArrowRight, CheckCircle2, MapPin } from "lucide-react";
+import { Shield, Database, Lock, Globe, Monitor, Cpu, Puzzle, Smartphone, Box, Workflow, ArrowRight, CheckCircle2, MapPin, Zap } from "lucide-react";
 import { GradientText } from "@/components/ui/GradientText";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
