@@ -136,6 +136,43 @@ export default function Index() {
         </div>
       </section>
 
+      {/* Tesla Rentals Promo */}
+      <section className="relative border-t border-border bg-secondary/20">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+        <div className="mx-auto max-w-7xl px-6 py-20 lg:px-8 lg:py-24">
+          <AnimatedSection animation="fade-in">
+            <Link to="/tesla-rentals" className="block group">
+              <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-[hsl(var(--gradient-start)/0.04)] to-[hsl(var(--gradient-end)/0.08)] p-8 sm:p-12 transition-all hover:shadow-premium hover:-translate-y-1">
+                <div className="absolute top-6 right-6 sm:top-8 sm:right-8">
+                  <ArrowRight className="h-6 w-6 text-primary transition-transform group-hover:translate-x-1" />
+                </div>
+                <div className="flex flex-col sm:flex-row items-start gap-6 sm:gap-8">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.15)] to-[hsl(var(--gradient-end)/0.15)]">
+                    <Zap className="h-8 w-8 text-primary" />
+                  </div>
+                  <div className="max-w-2xl">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-2">Now Available</p>
+                    <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+                      Tesla Rentals in Los Angeles
+                    </h3>
+                    <p className="mt-3 text-muted-foreground leading-relaxed">
+                      Explore LA in a premium electric vehicle — Model 3 and Model Y available for daily, weekly, or monthly rental on Turo.
+                    </p>
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      {["Model 3", "Model Y", "Superhost", "68+ Trips"].map((tag) => (
+                        <span key={tag} className="text-xs font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          </AnimatedSection>
+        </div>
+      </section>
+
       {/* Metrics Section */}
       <section className="relative border-t border-border bg-secondary/30">
         <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
