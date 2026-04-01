@@ -726,6 +726,7 @@ export type Database = {
           same_bank_all_platforms: boolean | null
           selected_platforms: string[] | null
           seller_plan: string | null
+          session_token: string | null
           setup_by_representative: boolean | null
           shipping_method: string | null
           shopify_account_holder: string | null
@@ -858,6 +859,7 @@ export type Database = {
           same_bank_all_platforms?: boolean | null
           selected_platforms?: string[] | null
           seller_plan?: string | null
+          session_token?: string | null
           setup_by_representative?: boolean | null
           shipping_method?: string | null
           shopify_account_holder?: string | null
@@ -990,6 +992,7 @@ export type Database = {
           same_bank_all_platforms?: boolean | null
           selected_platforms?: string[] | null
           seller_plan?: string | null
+          session_token?: string | null
           setup_by_representative?: boolean | null
           shipping_method?: string | null
           shopify_account_holder?: string | null
