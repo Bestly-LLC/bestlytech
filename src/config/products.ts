@@ -44,6 +44,7 @@ export const products: Product[] = [
     image: cookieYetiIcon,
     category: "Privacy",
     status: "Coming Soon",
+    features: ["Auto-dismiss cookie popups", "Privacy-first preferences", "Works on Chrome & Safari", "Community-powered patterns"],
   },
   {
     id: "inventory-proof",
@@ -54,6 +55,7 @@ export const products: Product[] = [
     category: "Home",
     status: "Live",
     webUrl: "https://inventoryproof.com",
+    features: ["AI-powered item detection", "Insurance-ready PDF reports", "Room-by-room walkthrough", "Cloud backup & sharing"],
   },
   {
     id: "hoku",
@@ -65,6 +67,7 @@ export const products: Product[] = [
     category: "Health",
     status: "Coming Soon",
     webUrl: "https://hoku-clean.com",
+    features: ["Pharmaceutical-grade formula", "Single-step daily routine", "Dermatologist reviewed", "Clean ingredients only"],
   },
   {
     id: "neckpilot",
@@ -74,6 +77,7 @@ export const products: Product[] = [
     image: neckpilotIcon,
     category: "Productivity",
     status: "Coming Soon",
+    features: ["AirPods motion tracking", "Real-time posture alerts", "Daily posture score", "Gentle haptic reminders"],
   },
   {
     id: "schoolpilot",
@@ -83,6 +87,7 @@ export const products: Product[] = [
     image: schoolpilotIcon,
     category: "Education",
     status: "In Development",
+    features: ["Unified schedule view", "Grade tracking & GPA", "Assignment reminders", "Parent & student modes"],
   },
   {
     id: "hoa-cure",
@@ -92,6 +97,7 @@ export const products: Product[] = [
     image: hoacureIcon,
     category: "Home",
     status: "In Development",
+    features: ["Violation tracking", "Automated dues collection", "Community announcements", "Board meeting tools"],
   },
   {
     id: "confesh",
@@ -101,6 +107,7 @@ export const products: Product[] = [
     image: confeshIcon,
     category: "Social",
     status: "In Development",
+    features: ["Fully anonymous posting", "End-to-end encryption", "No account required", "Community moderation"],
   },
 ];
 

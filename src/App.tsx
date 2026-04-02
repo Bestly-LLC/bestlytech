@@ -64,6 +64,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/about" element={<About />} />
               <Route path="/products" element={<Products />} />
+              <Route path="/apps" element={<Products />} />
               <Route path="/cookie-yeti" element={<CookieYeti />} />
               <Route path="/cookie-yeti/privacy" element={<CookieYetiPrivacy />} />
               <Route path="/inventory-proof" element={<InventoryProof />} />
