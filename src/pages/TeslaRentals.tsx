@@ -3,7 +3,9 @@ import { AnimatedSection } from "@/components/AnimatedSection";
 import { GradientText } from "@/components/ui/GradientText";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
-import { ArrowRight, Star, Zap, Calendar, Users, ExternalLink } from "lucide-react";
+import { ArrowRight, Star, ExternalLink } from "lucide-react";
+import teslaModel3 from "@/assets/tesla-model-3.avif";
+import teslaModelY from "@/assets/tesla-model-y.avif";
 
 const TURO_HOST_URL = "https://turo.com/us/en/host/2907746";
 
@@ -12,11 +14,11 @@ const vehicles = [
     name: "Tesla Model 3",
     year: "2020",
     trim: "Standard Range Plus",
-    range: "263 mi range",
+    range: "Unlimited Miles",
     seats: "5 seats",
     rating: "4.94",
     trips: "66 trips",
-    image: null,
+    image: teslaModel3,
   },
   {
     name: "Tesla Model Y",
@@ -26,7 +28,7 @@ const vehicles = [
     seats: "5 seats",
     rating: "4.67",
     trips: null,
-    image: null,
+    image: teslaModelY,
   },
 ];
 
@@ -95,9 +97,14 @@ export default function TeslaRentals() {
             {vehicles.map((vehicle, index) => (
               <AnimatedSection key={vehicle.name} delay={index * 120}>
                 <GlowCard className="h-full flex flex-col">
-                  {/* Image placeholder */}
-                  <div className="relative w-full aspect-[16/10] rounded-xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.08)] to-[hsl(var(--gradient-end)/0.12)] border border-border/50 flex items-center justify-center mb-6 overflow-hidden">
-                    <Zap className="h-16 w-16 text-primary/30" />
+                  {/* Vehicle Photo */}
+                  <div className="relative w-full aspect-[16/10] rounded-xl border border-border/50 mb-6 overflow-hidden">
+                    <img
+                      src={vehicle.image}
+                      alt={`${vehicle.year} ${vehicle.name}`}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
                     <div className="absolute bottom-3 right-3 bg-background/80 backdrop-blur-sm px-3 py-1 rounded-full border border-border/50">
                       <span className="text-xs font-medium text-muted-foreground">{vehicle.year}</span>
                     </div>
