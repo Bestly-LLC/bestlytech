@@ -1,53 +1,44 @@
 
-Fix the homepage icon system by replacing the current “What We Build” artwork with genuinely transparent, softer, Apple-style assets and lightly refining how they sit inside the cards.
 
-1. What I found
-- The glossy icons are currently only used in `src/pages/Index.tsx` inside the “What We Build” grid.
-- The hero no longer renders the floating icon cluster, so this is now a focused homepage-grid asset problem.
-- The current issue is mostly the image files themselves: they read as candy-like, too sharp, and likely include baked background/matte contamination instead of clean alpha.
+# Tesla Rentals Photos + Cookie Yeti Fix
 
-2. Replace all 6 assets with new transparent masters
-- Recreate:
-  - `src/assets/glossy-apps.png`
-  - `src/assets/glossy-ai.png`
-  - `src/assets/glossy-extension.png`
-  - `src/assets/glossy-consumer.png`
-  - `src/assets/glossy-physical.png`
-  - `src/assets/glossy-ecosystem.png`
-- Use the uploaded reference as the strict visual target:
-  - soft rounded edges
-  - translucent resin/glass feel
-  - subtle internal depth
-  - restrained highlights
-  - refined color glow
-  - no candy coating
-  - no sharp gem-like cuts
-- Generate each icon individually, not as one generic set, so each one gets tighter art direction.
-- Require true transparency: no dark backdrop, no vignette square, no gray/black matte halo around edges.
+## 1. Add Tesla car photos to vehicle cards
 
-3. Improve the icon concepts so they feel intentional
-- Apps & Platforms: rounded layered tile/grid form
-- AI & Automation: soft luminous intelligence motif
-- Browser Extensions: curved tab/ribbon-like object
-- Consumer Tech: cleaner everyday-tech form, less toy-like
-- Physical Products: complete redesign with softer volume and better silhouette
-- Connected Ecosystems: interlocking rounded forms, not shards
+- Copy the two uploaded AVIF images into `src/assets/`:
+  - `tesla-model-3.avif` (blue car)
+  - `tesla-model-y.avif` (other car)
+- Update `src/pages/TeslaRentals.tsx`:
+  - Import both images
+  - Replace the `image: null` in the vehicles array with the imported assets
+  - Replace the Zap icon placeholder with an actual `<img>` tag showing the car photo
+  - Change Model 3 range from `"263 mi range"` to `"Unlimited Miles"`
 
-4. Slightly refine how the icons are presented in code
-- Keep the existing card layout and section structure in `src/pages/Index.tsx`.
-- Adjust the image wrapper/classes only if needed so the new transparent assets read correctly:
-  - cleaner sizing
-  - softer shadow treatment
-  - optional subtle radial glow behind the icon inside the card
-- Do not re-add icons to the hero.
+## 2. Keep trip count and ratings up to date
 
-5. QA before finalizing
-- Check every icon against both dark and light backgrounds to confirm the transparency is real.
-- Reject any icon with edge fringing, boxed backgrounds, or muddy halos.
-- Verify the six icons feel like one premium family: same lighting logic, softness, polish, and restraint.
-- Pay extra attention to `glossy-physical.png`, since that is currently the weakest one.
+There's no API available from Turo to auto-pull stats. Two practical options:
+- **Manual update** (simplest): Update the hardcoded values in the vehicles array and stats whenever you check Turo
+- **Admin-editable** (recommended): Store the stats in a database table so you can update them from the admin panel without code changes. This would involve creating a `tesla_rental_stats` table and a small admin UI to edit trip count/rating.
 
-Technical details
-- Main code file: `src/pages/Index.tsx`
-- Main work: replace the 6 `src/assets/glossy-*.png` files
-- Optional polish: small wrapper/class adjustments around the `<img>` in the “What We Build” cards if the new transparent assets need cleaner staging
+I'll implement the admin-editable approach with a simple database table.
+
+## 3. Fix Cookie Yeti backend (401 errors)
+
+The Community Learning dashboard buttons (Maintenance, Run AI, Reset) are failing because:
+
+**Problem A — `run-pattern-maintenance` and `reset-failed-patterns`**: These functions require an `x-maintenance-secret` header, but the admin UI sends `Authorization: Bearer <token>` instead. Fix: update these functions to accept either the maintenance secret OR a valid admin Bearer token.
+
+**Problem B — `ai-generate-pattern`**: Uses `auth.getClaims(token)` which is not a real Supabase JS v2 method. Fix: replace with `auth.getUser(token)` which is the correct method, then read `user.id` instead of `claims.sub`.
+
+### Files to modify
+- `src/pages/TeslaRentals.tsx` — Add car photos, update range text
+- `src/assets/tesla-model-3.avif` — New file (copied from upload)
+- `src/assets/tesla-model-y.avif` — New file (copied from upload)
+- `supabase/functions/ai-generate-pattern/index.ts` — Replace `getClaims` with `getUser`
+- `supabase/functions/run-pattern-maintenance/index.ts` — Accept admin Bearer token as alternative auth
+- `supabase/functions/reset-failed-patterns/index.ts` — Same fix as maintenance
+
+### Database (optional for live stats)
+- Create `tesla_rental_stats` table with columns: `id`, `vehicle_name`, `rating`, `trips`, `updated_at`
+- Add admin RLS policies
+- Update TeslaRentals page to fetch from this table with hardcoded fallbacks
+
