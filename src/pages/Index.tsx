@@ -213,11 +213,18 @@ export default function Index() {
           <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {focusAreas.map((area, index) => (
               <AnimatedSection key={area.name} delay={index * 80}>
-                <GlowCard className="h-full">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.1)] to-[hsl(var(--gradient-end)/0.1)] transition-all group-hover:from-[hsl(var(--gradient-start)/0.2)] group-hover:to-[hsl(var(--gradient-end)/0.2)]">
-                    <area.icon className="h-6 w-6 text-primary" />
+                <GlowCard className="h-full text-center">
+                  <div className="flex justify-center mb-2">
+                    <img
+                      src={area.image}
+                      alt={area.name}
+                      loading="lazy"
+                      width={120}
+                      height={120}
+                      className="w-24 h-24 sm:w-28 sm:h-28 object-contain drop-shadow-lg transition-transform duration-500 group-hover:scale-110 group-hover:drop-shadow-2xl"
+                    />
                   </div>
-                  <h3 className="mt-5 text-lg font-semibold text-foreground">
+                  <h3 className="mt-3 text-lg font-semibold text-foreground">
                     {area.name}
                   </h3>
                   <p className="mt-2 text-muted-foreground leading-relaxed">
