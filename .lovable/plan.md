@@ -1,28 +1,35 @@
 
 
-# Fix Cookie Yeti Pricing Everywhere
+# Floating Glossy Icons Around Hero Text
 
-## Problem
+## What We're Building
 
-The correct pricing is:
-- Monthly: **$0.99/mo**
-- Yearly: **$7.99/yr**
-- Lifetime: **$149.99** (already correct)
+Add the glossy 3D icons in a scattered, floating "splatter" formation around the hero headline text — similar to how CleanMyMac positions their candy-glass icons orbiting around the central content. The icons will be absolutely positioned at various spots around the hero area, each with unique size, rotation, and a gentle floating animation at different speeds/delays.
 
-Currently the Cookie Yeti page and email preview data show $4.99/mo and $39.99/yr, and the "Save 33%" badge needs recalculating (savings are now ~33% as well: $0.99x12=$11.88 vs $7.99 = 33% savings, so badge is still accurate).
+Additionally, regenerate the icons to look more like the CleanMyMac reference — distinct geometric shapes (hexagons, rounded diamonds, blob shapes) with embedded symbols, glass-like depth, and colored glows — rather than generic glossy orbs.
 
-The email templates themselves are fine -- they receive the actual amount from Stripe at runtime. The only hardcoded wrong prices are in the preview/test data and the CookieYeti page.
+## Technical Details
 
-## Changes
+### 1. Regenerate glossy icon assets (6 images)
 
-### 1. `src/pages/CookieYeti.tsx` — Update CONFIG and FAQ
-- Change `CONFIG.pricing.monthly` from `"$4.99"` to `"$0.99"`
-- Change `CONFIG.pricing.yearly` from `"$39.99"` to `"$7.99"`
-- Update FAQ answer from `"Monthly at $4.99/mo, Yearly at $39.99/yr (save 33%)"` to `"Monthly at $0.99/mo, Yearly at $7.99/yr (save 33%)"`
+Use the AI image generation endpoint (google/gemini-3-pro-image-preview) to create 6 new icons that match the CleanMyMac style more closely:
+- Each icon should have a unique geometric glass shape (circle, hexagon, chevron, octagon, blob, star-shape)
+- Embedded white symbols inside (app grid, sparkle, lightning bolt, hand/shield, folder, gear)
+- Vibrant distinct colors per icon (green, blue, orange, pink, teal, purple)
+- Transparent background, glossy/refractive glass material
+- Save as `src/assets/glossy-*.png`, overwriting existing files
 
-### 2. `supabase/functions/_shared/transactional-email-templates/order-confirmation.tsx` — Fix preview data
-- Change `previewData` amount from `'$29.99'` to `'$7.99'`
+### 2. Add floating icons to hero section in `src/pages/Index.tsx`
 
-### 3. Redeploy edge functions
-- Deploy `send-transactional-email` so the updated preview data takes effect
+Position 6 icons absolutely within the hero `<section>` container using CSS classes:
+- Scatter them around the edges and mid-zones of the hero (top-left, top-right, mid-left, mid-right, bottom-left, bottom-right)
+- Vary sizes (w-16 to w-28)
+- Apply subtle rotation via inline `transform: rotate()`
+- Use the existing `animate-float-slow` animation with staggered `animationDelay` values
+- Add `opacity-80` so they don't overpower the text
+- Hide on small screens (`hidden sm:block`) to keep mobile clean
+
+### 3. Keep "What We Build" section as-is
+
+The grid section below will continue using the same icons in the cards — the hero icons are decorative duplicates positioned for visual impact.
 
