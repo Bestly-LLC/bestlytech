@@ -2,41 +2,48 @@ import { products } from "@/config/products";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Link } from "react-router-dom";
-import { Shield, Database, Lock, Globe, Monitor, Cpu, Puzzle, Smartphone, Box, Workflow, ArrowRight, CheckCircle2, MapPin, Zap } from "lucide-react";
+import { Shield, Database, Lock, Globe, ArrowRight, CheckCircle2, MapPin, Zap } from "lucide-react";
 import { GradientText } from "@/components/ui/GradientText";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
+
+import glossyApps from "@/assets/glossy-apps.png";
+import glossyAi from "@/assets/glossy-ai.png";
+import glossyExtension from "@/assets/glossy-extension.png";
+import glossyConsumer from "@/assets/glossy-consumer.png";
+import glossyPhysical from "@/assets/glossy-physical.png";
+import glossyEcosystem from "@/assets/glossy-ecosystem.png";
 
 const focusAreas = [
   {
     name: "Apps & Platforms",
     description: "Mobile and web products designed to work for you, not against you.",
-    icon: Monitor,
+    image: glossyApps,
   },
   {
     name: "AI & Automation",
     description: "Smart tools that are transparent about how they think.",
-    icon: Cpu,
+    image: glossyAi,
   },
   {
     name: "Browser Extensions",
     description: "Productivity without the surveillance.",
-    icon: Puzzle,
+    image: glossyExtension,
   },
   {
     name: "Consumer Tech",
     description: "Everyday tools, built to last.",
-    icon: Smartphone,
+    image: glossyConsumer,
   },
   {
     name: "Physical Products",
     description: "Real things you can hold. No data strings attached.",
-    icon: Box,
+    image: glossyPhysical,
   },
   {
     name: "Connected Ecosystems",
     description: "Software and hardware that work as one.",
-    icon: Workflow,
+    image: glossyEcosystem,
   },
 ];
 
