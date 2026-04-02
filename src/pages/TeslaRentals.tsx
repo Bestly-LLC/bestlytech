@@ -4,8 +4,8 @@ import { GradientText } from "@/components/ui/GradientText";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { ArrowRight, Star, ExternalLink } from "lucide-react";
-import teslaModel3 from "@/assets/tesla-model-3.avif";
-import teslaModelY from "@/assets/tesla-model-y.avif";
+import teslaModel3 from "@/assets/tesla-model-y.avif";
+import teslaModelY from "@/assets/tesla-model-3.avif";
 
 const TURO_HOST_URL = "https://turo.com/us/en/host/2907746";
 
