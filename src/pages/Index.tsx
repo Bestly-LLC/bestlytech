@@ -92,13 +92,6 @@ export default function Index() {
         <div className="absolute top-1/4 -left-32 w-96 h-96 bg-gradient-to-r from-[hsl(var(--gradient-start)/0.2)] to-[hsl(var(--gradient-end)/0.1)] rounded-full blur-3xl animate-float-slow" />
         <div className="absolute bottom-1/4 -right-32 w-80 h-80 bg-gradient-to-l from-[hsl(var(--gradient-end)/0.15)] to-[hsl(var(--gradient-start)/0.1)] rounded-full blur-3xl animate-float-slow" style={{ animationDelay: '-3s' }} />
         
-        {/* Floating glossy icons */}
-        <img src={glossyApps} alt="" aria-hidden="true" className="hidden sm:block absolute top-[12%] left-[8%] w-20 lg:w-28 opacity-75 animate-float-slow drop-shadow-2xl pointer-events-none" style={{ animationDelay: '0s', transform: 'rotate(-12deg)' }} />
-        <img src={glossyAi} alt="" aria-hidden="true" className="hidden sm:block absolute top-[8%] right-[10%] w-16 lg:w-24 opacity-75 animate-float-slow drop-shadow-2xl pointer-events-none" style={{ animationDelay: '-2s', transform: 'rotate(8deg)' }} />
-        <img src={glossyExtension} alt="" aria-hidden="true" className="hidden sm:block absolute top-[45%] left-[3%] w-14 lg:w-20 opacity-70 animate-float-slow drop-shadow-2xl pointer-events-none" style={{ animationDelay: '-4s', transform: 'rotate(15deg)' }} />
-        <img src={glossyConsumer} alt="" aria-hidden="true" className="hidden sm:block absolute top-[50%] right-[5%] w-16 lg:w-22 opacity-70 animate-float-slow drop-shadow-2xl pointer-events-none" style={{ animationDelay: '-1s', transform: 'rotate(-8deg)' }} />
-        <img src={glossyPhysical} alt="" aria-hidden="true" className="hidden sm:block absolute bottom-[15%] left-[12%] w-14 lg:w-20 opacity-65 animate-float-slow drop-shadow-2xl pointer-events-none" style={{ animationDelay: '-5s', transform: 'rotate(20deg)' }} />
-        <img src={glossyEcosystem} alt="" aria-hidden="true" className="hidden sm:block absolute bottom-[12%] right-[12%] w-18 lg:w-24 opacity-70 animate-float-slow drop-shadow-2xl pointer-events-none" style={{ animationDelay: '-3s', transform: 'rotate(-15deg)' }} />
         
         <div className="relative mx-auto max-w-7xl px-6 py-32 lg:px-8 lg:py-40">
           <AnimatedSection className="mx-auto max-w-4xl text-center">
