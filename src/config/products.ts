@@ -27,6 +27,8 @@ export interface Product {
   appStoreUrl?: string;
   /** Web companion / dashboard URL */
   webUrl?: string;
+  /** Key features for showcase cards */
+  features?: string[];
 }
 
 /**
