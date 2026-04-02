@@ -1,35 +1,23 @@
 
 
-# Floating Glossy Icons Around Hero Text
+# Refine Glossy Icons & Remove from Hero
 
-## What We're Building
+## What Changes
 
-Add the glossy 3D icons in a scattered, floating "splatter" formation around the hero headline text — similar to how CleanMyMac positions their candy-glass icons orbiting around the central content. The icons will be absolutely positioned at various spots around the hero area, each with unique size, rotation, and a gentle floating animation at different speeds/delays.
+1. **Remove floating icons from hero section** — Delete lines 95-101 in `Index.tsx` (the 6 absolutely-positioned `<img>` tags in the hero). The hero goes back to clean text-only.
 
-Additionally, regenerate the icons to look more like the CleanMyMac reference — distinct geometric shapes (hexagons, rounded diamonds, blob shapes) with embedded symbols, glass-like depth, and colored glows — rather than generic glossy orbs.
+2. **Regenerate 6 icons to match the CleanMyMac reference exactly** — The current icons look too candy/bubbly. The reference shows:
+   - Distinct geometric glass shapes (circle, hexagon, chevron, octagon, blob, star) with **depth, refraction, and colored rim lighting**
+   - Embedded **white 3D symbols** inside (not flat — they have volume and shadow)
+   - Rich color glow emanating from behind/below each icon
+   - Material feels like polished glass/resin, not candy — more weight, more realism
+   - Each icon uses a single dominant hue: green, blue, orange/amber, pink, teal
 
-## Technical Details
+   Regenerate all 6 using `google/gemini-3-pro-image-preview` with much more specific prompts referencing "polished glass material, refractive edges, volumetric white symbol, colored rim light, dark background, 3D render, product visualization quality." Special attention to the Physical Products icon which needs the most work.
 
-### 1. Regenerate glossy icon assets (6 images)
+3. **Icons remain in the "What We Build" grid cards only** — No changes to that section, just better assets.
 
-Use the AI image generation endpoint (google/gemini-3-pro-image-preview) to create 6 new icons that match the CleanMyMac style more closely:
-- Each icon should have a unique geometric glass shape (circle, hexagon, chevron, octagon, blob, star-shape)
-- Embedded white symbols inside (app grid, sparkle, lightning bolt, hand/shield, folder, gear)
-- Vibrant distinct colors per icon (green, blue, orange, pink, teal, purple)
-- Transparent background, glossy/refractive glass material
-- Save as `src/assets/glossy-*.png`, overwriting existing files
-
-### 2. Add floating icons to hero section in `src/pages/Index.tsx`
-
-Position 6 icons absolutely within the hero `<section>` container using CSS classes:
-- Scatter them around the edges and mid-zones of the hero (top-left, top-right, mid-left, mid-right, bottom-left, bottom-right)
-- Vary sizes (w-16 to w-28)
-- Apply subtle rotation via inline `transform: rotate()`
-- Use the existing `animate-float-slow` animation with staggered `animationDelay` values
-- Add `opacity-80` so they don't overpower the text
-- Hide on small screens (`hidden sm:block`) to keep mobile clean
-
-### 3. Keep "What We Build" section as-is
-
-The grid section below will continue using the same icons in the cards — the hero icons are decorative duplicates positioned for visual impact.
+## Files Modified
+- `src/pages/Index.tsx` — Remove lines 95-101 (hero floating icons), keep imports for the grid section
+- `src/assets/glossy-*.png` — All 6 regenerated with refined prompts
 
