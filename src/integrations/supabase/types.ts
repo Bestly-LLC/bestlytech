@@ -1137,6 +1137,33 @@ export type Database = {
         }
         Relationships: []
       }
+      system_alert_state: {
+        Row: {
+          down_systems: string[]
+          id: number
+          is_down: boolean
+          last_alert_sent: string | null
+          last_checked: string | null
+          updated_at: string
+        }
+        Insert: {
+          down_systems?: string[]
+          id?: number
+          is_down?: boolean
+          last_alert_sent?: string | null
+          last_checked?: string | null
+          updated_at?: string
+        }
+        Update: {
+          down_systems?: string[]
+          id?: number
+          is_down?: boolean
+          last_alert_sent?: string | null
+          last_checked?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
