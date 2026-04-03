@@ -233,35 +233,38 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Require admin auth (or service role for cron retries)
+  // Auth: require maintenance secret OR valid admin Bearer token OR service role
+  const maintenanceSecret = req.headers.get("x-maintenance-secret");
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
+  let authorized = false;
+
+  if (maintenanceSecret && maintenanceSecret === Deno.env.get("MAINTENANCE_SECRET")) {
+    authorized = true;
+  } else if (authHeader?.startsWith("Bearer ")) {
+    const serviceRoleKey2 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const token = authHeader.replace("Bearer ", "");
+    if (token === serviceRoleKey2) {
+      authorized = true;
+    } else {
+      const authClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: userData } = await authClient.auth.getUser(token);
+      if (userData?.user) {
+        const svcCheck = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey2);
+        const { data: isAdmin } = await svcCheck.rpc("has_role", { _user_id: userData.user.id, _role: "admin" });
+        if (isAdmin) authorized = true;
+      }
+    }
+  }
+
+  if (!authorized) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const token = authHeader.replace("Bearer ", "");
-  const isServiceRole = token === serviceRoleKey;
-
-  if (!isServiceRole) {
-    const authClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: userData, error: userError } = await authClient.auth.getUser(token);
-    if (userError || !userData?.user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // Verify admin role using service role client
-    const svcCheck = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
-    const { data: isAdmin } = await svcCheck.rpc("has_role", { _user_id: userData.user.id, _role: "admin" });
-    if (!isAdmin) {
-      return new Response(JSON.stringify({ error: "Forbidden: admin role required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-  }
 
   const svcClient = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
 
