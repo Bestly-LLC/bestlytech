@@ -3,9 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { KeyRound, Fingerprint, Check } from "lucide-react";
+import { KeyRound, Fingerprint, Shield, Trash2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { format } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -32,28 +33,39 @@ function base64urlToBuffer(base64url: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+interface PasskeyRow {
+  id: string;
+  credential_id: string;
+  device_type: string | null;
+  device_name: string | null;
+  created_at: string;
+}
+
 export function ChangePasswordDialog() {
   const [open, setOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [hasPasskey, setHasPasskey] = useState<boolean | null>(null);
+  const [passkeys, setPasskeys] = useState<PasskeyRow[]>([]);
+  const [loadingPasskeys, setLoadingPasskeys] = useState(false);
   const [registeringPasskey, setRegisteringPasskey] = useState(false);
-  const [deletingPasskey, setDeletingPasskey] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) checkPasskey();
+    if (open) loadPasskeys();
   }, [open]);
 
-  const checkPasskey = async () => {
+  const loadPasskeys = async () => {
+    setLoadingPasskeys(true);
     const { data: session } = await supabase.auth.getSession();
-    if (!session?.session?.user) { setHasPasskey(false); return; }
-    const { count, error } = await supabase
+    if (!session?.session?.user) { setPasskeys([]); setLoadingPasskeys(false); return; }
+    const { data, error } = await supabase
       .from("passkey_credentials")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", session.session.user.id);
-    if (error) { setHasPasskey(false); return; }
-    setHasPasskey((count ?? 0) > 0);
+      .select("id, credential_id, device_type, device_name, created_at")
+      .eq("user_id", session.session.user.id)
+      .order("created_at", { ascending: true });
+    if (error) { setPasskeys([]); } else { setPasskeys((data as PasskeyRow[]) || []); }
+    setLoadingPasskeys(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,7 +81,7 @@ export function ChangePasswordDialog() {
     }
   };
 
-  const handleRegisterPasskey = async () => {
+  const handleRegister = async (keyType: "platform" | "cross-platform") => {
     setRegisteringPasskey(true);
     try {
       if (!window.PublicKeyCredential) {
@@ -78,7 +90,11 @@ export function ChangePasswordDialog() {
       }
 
       const optionsRes = await supabase.functions.invoke("webauthn-register", {
-        body: { action: "options", origin: window.location.origin },
+        body: {
+          action: "options",
+          origin: window.location.origin,
+          keyType: keyType === "cross-platform" ? "cross-platform" : undefined,
+        },
       });
       if (optionsRes.error || optionsRes.data?.error) {
         toast.error(optionsRes.data?.error || "Failed to get options");
@@ -105,13 +121,14 @@ export function ChangePasswordDialog() {
         },
       })) as PublicKeyCredential;
 
-      if (!credential) { toast.info("Passkey registration was cancelled."); return; }
+      if (!credential) { toast.info("Registration was cancelled."); return; }
 
       const attestationResponse = credential.response as AuthenticatorAttestationResponse;
       const verifyRes = await supabase.functions.invoke("webauthn-register", {
         body: {
           action: "verify",
           origin: window.location.origin,
+          keyType: keyType === "cross-platform" ? "cross-platform" : undefined,
           credential: {
             id: credential.id,
             rawId: bufferToBase64url(credential.rawId),
@@ -130,11 +147,11 @@ export function ChangePasswordDialog() {
         return;
       }
 
-      setHasPasskey(true);
-      toast.success("Passkey registered! You can now sign in with it.");
+      toast.success(keyType === "cross-platform" ? "Security key registered!" : "Passkey registered!");
+      await loadPasskeys();
     } catch (err) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
-        toast.info("Passkey registration was cancelled.");
+        toast.info("Registration was cancelled.");
       } else {
         toast.error(err instanceof Error ? err.message : "Registration failed");
       }
@@ -143,28 +160,23 @@ export function ChangePasswordDialog() {
     }
   };
 
-  const handleDeletePasskey = async () => {
-    setDeletingPasskey(true);
+  const handleDeletePasskey = async (credentialDbId: string) => {
+    setDeletingId(credentialDbId);
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.user) {
-        toast.error("Not authenticated");
-        return;
-      }
       const { error } = await supabase
         .from("passkey_credentials")
         .delete()
-        .eq("user_id", session.session.user.id);
+        .eq("id", credentialDbId);
       if (error) {
-        toast.error("Failed to remove passkey");
+        toast.error("Failed to remove credential");
       } else {
-        setHasPasskey(false);
-        toast.success("Passkey removed. You can register a new one.");
+        setPasskeys((prev) => prev.filter((p) => p.id !== credentialDbId));
+        toast.success("Credential removed.");
       }
     } catch {
-      toast.error("Failed to remove passkey");
+      toast.error("Failed to remove credential");
     } finally {
-      setDeletingPasskey(false);
+      setDeletingId(null);
     }
   };
 
@@ -176,55 +188,83 @@ export function ChangePasswordDialog() {
           <span className="hidden sm:inline">Security</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
           <DialogTitle>Security Settings</DialogTitle>
-          <DialogDescription>Manage your password and passkey.</DialogDescription>
+          <DialogDescription>Manage your passkeys, security keys, and password.</DialogDescription>
         </DialogHeader>
 
-        {/* Passkey Section */}
+        {/* Passkeys & Security Keys Section */}
         <div className="space-y-3 pt-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Fingerprint className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Passkey</span>
-            </div>
-            {hasPasskey ? (
-              <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1 text-xs text-green-600">
-                  <Check className="h-3 w-3" /> Registered
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs text-destructive hover:text-destructive h-7 px-2"
-                  onClick={handleDeletePasskey}
-                  disabled={deletingPasskey}
-                >
-                  {deletingPasskey ? "Removing…" : "Remove"}
-                </Button>
-              </div>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRegisterPasskey}
-                disabled={registeringPasskey || hasPasskey === null}
-              >
-                {registeringPasskey ? "Registering…" : "Register Passkey"}
-              </Button>
-            )}
+          <div className="flex items-center gap-2 mb-2">
+            <Fingerprint className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Passkeys & Security Keys</span>
           </div>
-          {hasPasskey && (
+
+          {loadingPasskeys ? (
+            <p className="text-xs text-muted-foreground">Loading…</p>
+          ) : passkeys.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              Synced via iCloud Keychain across all your Apple devices. Remove to re-register.
+              No passkeys or security keys registered. Add one below.
             </p>
+          ) : (
+            <div className="space-y-2">
+              {passkeys.map((pk) => (
+                <div
+                  key={pk.id}
+                  className="flex items-center justify-between rounded-md border px-3 py-2"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {pk.device_type === "cross-platform" ? (
+                      <Shield className="h-4 w-4 text-muted-foreground shrink-0" />
+                    ) : (
+                      <Fingerprint className="h-4 w-4 text-muted-foreground shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {pk.device_name || (pk.device_type === "cross-platform" ? "Security Key" : "Platform Passkey")}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Registered {format(new Date(pk.created_at), "MMM d, yyyy")}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0"
+                    onClick={() => handleDeletePasskey(pk.id)}
+                    disabled={deletingId === pk.id}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           )}
-          {!hasPasskey && hasPasskey !== null && (
-            <p className="text-xs text-muted-foreground">
-              Register a passkey to sign in with Face ID, Touch ID, or your device PIN.
-            </p>
-          )}
+
+          <div className="flex gap-2 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleRegister("platform")}
+              disabled={registeringPasskey}
+              className="flex-1"
+            >
+              <Fingerprint className="h-3.5 w-3.5 mr-1.5" />
+              {registeringPasskey ? "Registering…" : "Add Passkey"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleRegister("cross-platform")}
+              disabled={registeringPasskey}
+              className="flex-1"
+            >
+              <Shield className="h-3.5 w-3.5 mr-1.5" />
+              {registeringPasskey ? "Registering…" : "Add Security Key"}
+            </Button>
+          </div>
         </div>
 
         <Separator />
