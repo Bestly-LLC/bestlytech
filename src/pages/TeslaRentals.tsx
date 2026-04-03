@@ -159,7 +159,7 @@ export default function TeslaRentals() {
       {/* Stats Bar */}
       <section className="relative border-t border-border bg-secondary/30">
         <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
-          <div className="grid grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
             {stats.map((stat, index) => (
               <AnimatedSection key={stat.label} delay={index * 100} className="text-center">
                 <div className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-foreground">

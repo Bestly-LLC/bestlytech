@@ -164,18 +164,6 @@ export function Header() {
                   >
                     Products
                   </Link>
-                  <Link
-                    to="/services"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={cn(
-                      "block rounded-xl px-4 py-3 text-base font-medium transition-all",
-                      isServicesActive
-                        ? "bg-accent text-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                    )}
-                  >
-                    Services
-                  </Link>
                   <div className="pl-4 space-y-1 mt-2">
                     <Link
                       to="/cookie-yeti"

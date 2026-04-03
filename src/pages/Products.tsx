@@ -54,7 +54,7 @@ export default function Products() {
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
+                  className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 border ${
                     activeCategory === cat
                       ? "bg-primary text-primary-foreground border-primary shadow-md"
                       : "bg-card text-muted-foreground border-border hover:text-foreground hover:border-foreground/20"
