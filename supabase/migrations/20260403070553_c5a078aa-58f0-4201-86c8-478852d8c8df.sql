@@ -1,0 +1,1 @@
+ALTER TABLE public.passkey_credentials ADD COLUMN device_name text;

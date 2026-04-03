@@ -578,6 +578,7 @@ export type Database = {
           counter: number
           created_at: string
           credential_id: string
+          device_name: string | null
           device_type: string | null
           id: string
           last_used: string | null
@@ -589,6 +590,7 @@ export type Database = {
           counter?: number
           created_at?: string
           credential_id: string
+          device_name?: string | null
           device_type?: string | null
           id?: string
           last_used?: string | null
@@ -600,6 +602,7 @@ export type Database = {
           counter?: number
           created_at?: string
           credential_id?: string
+          device_name?: string | null
           device_type?: string | null
           id?: string
           last_used?: string | null
