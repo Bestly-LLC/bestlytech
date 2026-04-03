@@ -1,48 +1,57 @@
 
 
-# Fix Cookie Yeti: Subscription Sync + Heartbeat Restoration
+# Fix Cookie Yeti Community Learning — Everything Red
 
-## Two Root Causes Found
+## Root Cause
 
-### Issue 1: "No subscription found" for granted access users
-The extension checks the `subscriptions` table for entitlement, but users in `granted_access` have **zero corresponding rows** in `subscriptions`. All 5 granted users (including your own admin email) have no subscription record. There is no trigger or mechanism syncing grants into subscriptions.
+The cron jobs are executing every 15 minutes but all edge functions return **401 Unauthorized** silently. Here's why:
 
-### Issue 2: Heartbeat monitors all red
-The `check-system-health` Edge Function is **missing from `supabase/config.toml`**, so JWT verification is enabled by default. The cron job passes the service_role key as a Bearer token, which the Supabase gateway rejects before the function even executes (401). The function boots but never processes — confirmed by logs showing only "booted" messages with no actual execution output.
+- All cron jobs pass `email_queue_service_role_key` from **Vault** as a Bearer token
+- The edge functions compare that token against `SUPABASE_SERVICE_ROLE_KEY` (Deno env var)
+- These are **different values** — the vault secret was set up for the email queue and is likely the anon key or an old value
+- Result: every cron-triggered function call fails auth, no patterns get generated, no maintenance runs, heartbeat stays red
 
-Additionally, the `ai-generate-pattern` cron is also returning 401 despite being in config.toml with `verify_jwt = false` — this may indicate a deployment sync issue that redeploying will fix.
+## Fix (3 steps)
 
----
+### 1. Add `MAINTENANCE_SECRET` to Vault
 
-## Plan
+The `MAINTENANCE_SECRET` already exists as an edge function secret. We need to also store it in Vault so pg_cron SQL can reference it. Run a migration:
 
-### 1. Create a database trigger to sync `granted_access` → `subscriptions`
+```sql
+SELECT vault.create_secret(
+  (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'email_queue_service_role_key'),
+  'maintenance_secret'
+);
+```
 
-SQL migration to:
-- Create a trigger function `sync_granted_access_to_subscriptions()` that runs AFTER INSERT on `granted_access`
-- On each new grant, upsert a row into `subscriptions` with: email (from grant), plan = `'lifetime'`, status = `'active'`, stripe_customer_id = `'granted_' || grant.id`
-- Also backfill all 5 existing granted_access users who currently have no subscription record
+Actually — since we can't read the existing vault secret reliably, the better approach: update all cron jobs to pass the maintenance secret via the `x-maintenance-secret` header instead of (or in addition to) the Bearer token. We'll insert `MAINTENANCE_SECRET` into vault so SQL can reference it.
 
-### 2. Add `check-system-health` to `config.toml`
+### 2. Update all cron jobs to use `x-maintenance-secret` header
 
-Add `[functions.check-system-health]` with `verify_jwt = false` so the cron job's service_role Bearer token reaches the function.
+Update cron jobs 11-19 (maintenance, retry, AI gen, consensus, health check) to include the maintenance secret as a header. This way even if the Bearer token is wrong, the functions will authorize via the `x-maintenance-secret` check.
 
-### 3. Redeploy critical Edge Functions
+Migration to:
+- Insert the maintenance secret value into vault (the user will need to provide it, or we create a new one and update the edge function secret too)
+- Drop and recreate each cron job with headers including `'x-maintenance-secret'` from `vault.decrypted_secrets WHERE name = 'maintenance_secret'`
+- Keep the Bearer token as a fallback
 
-Redeploy `check-system-health`, `ai-generate-pattern`, `auto-retry-failed-patterns`, `run-pattern-maintenance`, and `process-dismissal-consensus` to ensure the gateway config is in sync.
+### 3. Redeploy all critical edge functions
 
-### 4. Test the health check
+Redeploy: `check-system-health`, `ai-generate-pattern`, `auto-retry-failed-patterns`, `run-pattern-maintenance`, `process-dismissal-consensus`, `reset-failed-patterns` to ensure `verify_jwt = false` config is synced to the gateway.
 
-Call `check-system-health` directly to verify it executes and returns system status instead of 401.
+## Alternative simpler approach
 
----
+Instead of vault gymnastics, fix the vault secret itself: delete the old `email_queue_service_role_key` and re-insert it with the correct service role key value. But we don't have direct access to the service role key value.
+
+**Recommended approach**: Create a new vault secret `maintenance_secret`, set it to a known value, update the `MAINTENANCE_SECRET` edge function secret to match, then update all cron jobs to pass it via `x-maintenance-secret` header.
 
 ## Files Modified
-- `supabase/config.toml` — Add `check-system-health` entry
-- Database migration — Trigger for granted_access sync + backfill existing records
+- Database migration — Insert vault secret + update all cron job definitions
+- No code file changes needed (edge functions already accept `x-maintenance-secret`)
 
 ## Technical Details
-- The trigger uses `ON CONFLICT (email, plan)` to avoid duplicates if someone is both a paying subscriber and has granted access
-- The backfill INSERT uses `ON CONFLICT DO NOTHING` to be safe against existing records
-- The `log_granted_access` function already exists for activity logging — the new sync trigger is separate
+- The `ai-generate-pattern`, `run-pattern-maintenance`, `auto-retry-failed-patterns`, `check-system-health`, `process-dismissal-consensus` functions all already check `x-maintenance-secret` header
+- pg_net `http_post` supports arbitrary headers via jsonb — we just need to add the header
+- Once crons authenticate successfully, the heartbeat monitors will turn green within one cycle (15 min)
+- The SMS alert system will also start working — it will send a recovery text when systems come back online
 
