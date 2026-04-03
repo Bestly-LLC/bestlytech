@@ -1,44 +1,58 @@
 
 
-# Tesla Rentals Photos + Cookie Yeti Fix
+# Fix Cookie Yeti Uptime + Add Downtime SMS Alerts
 
-## 1. Add Tesla car photos to vehicle cards
+## Problem Found
 
-- Copy the two uploaded AVIF images into `src/assets/`:
-  - `tesla-model-3.avif` (blue car)
-  - `tesla-model-y.avif` (other car)
-- Update `src/pages/TeslaRentals.tsx`:
-  - Import both images
-  - Replace the `image: null` in the vehicles array with the imported assets
-  - Replace the Zap icon placeholder with an actual `<img>` tag showing the car photo
-  - Change Model 3 range from `"263 mi range"` to `"Unlimited Miles"`
+All four system heartbeat indicators (AI Generator, Report Ingestion, Pattern Learning, Cron Jobs) are red because **all cron jobs are authenticating with the anon key as a Bearer token**, which none of the edge functions accept:
 
-## 2. Keep trip count and ratings up to date
+- `auto-retry-failed-patterns` — only accepts `x-maintenance-secret` header (no Bearer fallback)
+- `process-dismissal-consensus` — only accepts `x-maintenance-secret` header (no Bearer fallback)
+- `run-pattern-maintenance` — accepts maintenance secret OR admin Bearer (but anon key is neither)
+- `ai-generate-pattern` — requires a valid admin user Bearer token (anon key fails)
 
-There's no API available from Turo to auto-pull stats. Two practical options:
-- **Manual update** (simplest): Update the hardcoded values in the vehicles array and stats whenever you check Turo
-- **Admin-editable** (recommended): Store the stats in a database table so you can update them from the admin panel without code changes. This would involve creating a `tesla_rental_stats` table and a small admin UI to edit trip count/rating.
+The cron jobs have been silently failing with 401 errors, meaning no patterns are being retried, no maintenance is running, and no batch AI generation is happening.
 
-I'll implement the admin-editable approach with a simple database table.
+## Plan
 
-## 3. Fix Cookie Yeti backend (401 errors)
+### 1. Fix cron job authentication (root cause)
 
-The Community Learning dashboard buttons (Maintenance, Run AI, Reset) are failing because:
+Update all 4 cron jobs to pass the `x-maintenance-secret` from Vault instead of the anon key as Bearer token. This requires a SQL migration to:
+- Store the maintenance secret in Vault (if not already there)
+- Update each `cron.job` to use `x-maintenance-secret` header pulled from `vault.decrypted_secrets`
 
-**Problem A — `run-pattern-maintenance` and `reset-failed-patterns`**: These functions require an `x-maintenance-secret` header, but the admin UI sends `Authorization: Bearer <token>` instead. Fix: update these functions to accept either the maintenance secret OR a valid admin Bearer token.
+### 2. Fix edge functions that lack Bearer fallback
 
-**Problem B — `ai-generate-pattern`**: Uses `auth.getClaims(token)` which is not a real Supabase JS v2 method. Fix: replace with `auth.getUser(token)` which is the correct method, then read `user.id` instead of `claims.sub`.
+Two functions only accept `x-maintenance-secret` and have no admin Bearer token fallback:
+- `auto-retry-failed-patterns` — add the same dual-auth pattern used in `reset-failed-patterns`
+- `process-dismissal-consensus` — add the same dual-auth pattern
+
+This ensures both the cron jobs (via secret) AND the admin UI buttons (via Bearer token) work.
+
+### 3. Add downtime SMS alert system
+
+Create a lightweight health-check edge function (`check-system-health`) that:
+- Queries the same data sources the heartbeat monitor uses (last AI gen, last report, last pattern, last maintenance)
+- Compares against the same thresholds
+- If any system is "red", sends an SMS via the existing Twilio integration to your number (816-500-7236)
+- Tracks alert state so it doesn't spam — only sends when transitioning from OK → down, and a recovery text when back up
+
+Schedule it via a new pg_cron job every 15 minutes.
 
 ### Files to modify
-- `src/pages/TeslaRentals.tsx` — Add car photos, update range text
-- `src/assets/tesla-model-3.avif` — New file (copied from upload)
-- `src/assets/tesla-model-y.avif` — New file (copied from upload)
-- `supabase/functions/ai-generate-pattern/index.ts` — Replace `getClaims` with `getUser`
-- `supabase/functions/run-pattern-maintenance/index.ts` — Accept admin Bearer token as alternative auth
-- `supabase/functions/reset-failed-patterns/index.ts` — Same fix as maintenance
+- `supabase/functions/auto-retry-failed-patterns/index.ts` — add admin Bearer token auth fallback
+- `supabase/functions/process-dismissal-consensus/index.ts` — add admin Bearer token auth fallback
+- `supabase/functions/check-system-health/index.ts` — new function for health monitoring + SMS alerts
 
-### Database (optional for live stats)
-- Create `tesla_rental_stats` table with columns: `id`, `vehicle_name`, `rating`, `trips`, `updated_at`
-- Add admin RLS policies
-- Update TeslaRentals page to fetch from this table with hardcoded fallbacks
+### Database changes
+- Migration to update cron jobs to use maintenance secret from Vault
+- Migration to add `check-system-health` cron job (every 15 minutes)
+- Small `system_alert_state` table to track last alert status and prevent duplicate texts
+
+### Technical details
+- The maintenance secret is already configured as a Supabase secret (`MAINTENANCE_SECRET`)
+- It needs to also be stored in Vault so pg_cron SQL can reference it via `vault.decrypted_secrets`
+- The health check function reuses the existing Twilio connector (same as `notify-sms`)
+- Alert messages will be concise, e.g. "Cookie Yeti Alert: AI Generator down (last run 73h ago). Cron Jobs down (last run 5h ago)."
+- Recovery message: "Cookie Yeti: All systems operational."
 
