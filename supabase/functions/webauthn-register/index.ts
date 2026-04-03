@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
     }
 
     const user = claimsData.user;
-    const { action, origin: clientOrigin, ...body } = await req.json();
+    const { action, origin: clientOrigin, keyType, ...body } = await req.json();
     const rpId = getRpId(clientOrigin || req.headers.get("origin") || "https://localhost");
 
     if (action === "options") {
@@ -224,6 +224,8 @@ Deno.serve(async (req) => {
         .select("credential_id")
         .eq("user_id", user.id);
 
+      const isCrossPlatform = keyType === "cross-platform";
+
       const options = {
         rp: { name: RP_NAME, id: rpId },
         user: {
@@ -238,7 +240,7 @@ Deno.serve(async (req) => {
         ],
         timeout: 60000,
         authenticatorSelection: {
-          authenticatorAttachment: "platform",
+          ...(isCrossPlatform ? {} : { authenticatorAttachment: "platform" }),
           residentKey: "preferred",
           userVerification: "preferred",
         },
