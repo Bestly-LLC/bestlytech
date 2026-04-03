@@ -321,14 +321,18 @@ Deno.serve(async (req) => {
       }
 
       // Store the JWK public key (not the raw attestationObject)
+      const detectedType = credential.authenticatorAttachment || (keyType === "cross-platform" ? "cross-platform" : "platform");
+      const deviceName = detectedType === "cross-platform" ? "Security Key" : "Platform Passkey";
+
       const { error: insertError } = await supabaseAdmin
         .from("passkey_credentials")
         .insert({
           user_id: user.id,
           credential_id: credentialId,
-          public_key: JSON.stringify(publicKeyData), // Store as JSON with alg + jwk
+          public_key: JSON.stringify(publicKeyData),
           counter: 0,
-          device_type: credential.authenticatorAttachment || "platform",
+          device_type: detectedType,
+          device_name: deviceName,
           transports: credResponse.getTransports?.() || ["internal"],
         });
 
