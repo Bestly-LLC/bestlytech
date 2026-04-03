@@ -34,9 +34,29 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Auth: maintenance secret only (called by cron)
+  // Auth: maintenance secret OR service role Bearer token
   const secret = req.headers.get("x-maintenance-secret");
-  if (!secret || secret !== Deno.env.get("MAINTENANCE_SECRET")) {
+  const authHeader = req.headers.get("Authorization");
+  let authorized = false;
+
+  if (secret && secret === Deno.env.get("MAINTENANCE_SECRET")) {
+    authorized = true;
+  } else if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.replace("Bearer ", "");
+    if (token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
+      authorized = true;
+    }
+  }
+
+  // Also check if maintenance secret was passed as Bearer token (from vault)
+  if (!authorized && authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.replace("Bearer ", "");
+    if (token === Deno.env.get("MAINTENANCE_SECRET")) {
+      authorized = true;
+    }
+  }
+
+  if (!authorized) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
