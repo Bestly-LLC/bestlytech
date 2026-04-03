@@ -54,7 +54,7 @@ export default function TeslaRentals() {
         <div className="absolute top-1/3 -left-32 w-96 h-96 bg-gradient-to-r from-[hsl(var(--gradient-start)/0.2)] to-[hsl(var(--gradient-end)/0.1)] rounded-full blur-3xl animate-float-slow" />
         <div className="absolute bottom-1/4 -right-32 w-80 h-80 bg-gradient-to-l from-[hsl(var(--gradient-end)/0.15)] to-[hsl(var(--gradient-start)/0.1)] rounded-full blur-3xl animate-float-slow" style={{ animationDelay: "-3s" }} />
 
-        <div className="relative mx-auto max-w-7xl px-6 py-28 lg:px-8 lg:py-36">
+        <div className="relative mx-auto max-w-7xl px-6 py-20 lg:px-8 lg:py-36">
           <AnimatedSection className="mx-auto max-w-3xl text-center">
             <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-6">
               Turo Superhost · Los Angeles
