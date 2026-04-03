@@ -1,58 +1,41 @@
 
 
-# Fix Cookie Yeti Uptime + Add Downtime SMS Alerts
+# Multi-Passkey & Security Key Support
 
-## Problem Found
+## What Changes
 
-All four system heartbeat indicators (AI Generator, Report Ingestion, Pattern Learning, Cron Jobs) are red because **all cron jobs are authenticating with the anon key as a Bearer token**, which none of the edge functions accept:
+The backend already supports multiple passkeys per user. The changes are primarily UI (Security dialog) and a small edge function tweak.
 
-- `auto-retry-failed-patterns` — only accepts `x-maintenance-secret` header (no Bearer fallback)
-- `process-dismissal-consensus` — only accepts `x-maintenance-secret` header (no Bearer fallback)
-- `run-pattern-maintenance` — accepts maintenance secret OR admin Bearer (but anon key is neither)
-- `ai-generate-pattern` — requires a valid admin user Bearer token (anon key fails)
+### 1. Update Security Dialog UI (`src/components/admin/ChangePasswordDialog.tsx`)
 
-The cron jobs have been silently failing with 401 errors, meaning no patterns are being retried, no maintenance is running, and no batch AI generation is happening.
+Replace the current single-passkey toggle with a list view:
+- Fetch all `passkey_credentials` rows for the user (not just count)
+- Display each passkey as a row showing: device type icon, device type label (e.g. "Platform — registered Mar 25"), and individual "Remove" button
+- Add a "Register Passkey" button and a "Register Security Key" button below the list (always visible, not hidden when one exists)
+- The `passkey_credentials` table already has `device_type`, `created_at`, and `credential_id` columns — use those for display
 
-## Plan
+### 2. Add security key support in registration
 
-### 1. Fix cron job authentication (root cause)
+Two changes:
+- **UI**: When "Register Security Key" is clicked, pass `keyType: "cross-platform"` to the edge function
+- **Edge function** (`supabase/functions/webauthn-register/index.ts`): Read an optional `keyType` field from the request body. If `keyType === "cross-platform"`, set `authenticatorSelection.authenticatorAttachment` to `"cross-platform"` instead of `"platform"`. This allows USB/NFC security keys like YubiKey.
 
-Update all 4 cron jobs to pass the `x-maintenance-secret` from Vault instead of the anon key as Bearer token. This requires a SQL migration to:
-- Store the maintenance secret in Vault (if not already there)
-- Update each `cron.job` to use `x-maintenance-secret` header pulled from `vault.decrypted_secrets`
+### 3. Individual passkey deletion
 
-### 2. Fix edge functions that lack Bearer fallback
+Change the delete handler to accept a specific `credential_id` and delete only that row, instead of deleting all passkeys for the user.
 
-Two functions only accept `x-maintenance-secret` and have no admin Bearer token fallback:
-- `auto-retry-failed-patterns` — add the same dual-auth pattern used in `reset-failed-patterns`
-- `process-dismissal-consensus` — add the same dual-auth pattern
+### 4. Add `device_name` column (optional label)
 
-This ensures both the cron jobs (via secret) AND the admin UI buttons (via Bearer token) work.
+Add a nullable `device_name` text column to `passkey_credentials` so users can label their keys (e.g. "MacBook Pro", "YubiKey 5"). Auto-populate with the `authenticatorAttachment` value on registration. Users won't edit it for now — just auto-labels like "Platform Passkey" or "Security Key".
 
-### 3. Add downtime SMS alert system
+## Files Modified
+- `src/components/admin/ChangePasswordDialog.tsx` — List all passkeys, add per-key remove, add two register buttons
+- `supabase/functions/webauthn-register/index.ts` — Accept `keyType` param, adjust `authenticatorSelection`
+- Database migration — Add `device_name` column to `passkey_credentials`
 
-Create a lightweight health-check edge function (`check-system-health`) that:
-- Queries the same data sources the heartbeat monitor uses (last AI gen, last report, last pattern, last maintenance)
-- Compares against the same thresholds
-- If any system is "red", sends an SMS via the existing Twilio integration to your number (816-500-7236)
-- Tracks alert state so it doesn't spam — only sends when transitioning from OK → down, and a recovery text when back up
-
-Schedule it via a new pg_cron job every 15 minutes.
-
-### Files to modify
-- `supabase/functions/auto-retry-failed-patterns/index.ts` — add admin Bearer token auth fallback
-- `supabase/functions/process-dismissal-consensus/index.ts` — add admin Bearer token auth fallback
-- `supabase/functions/check-system-health/index.ts` — new function for health monitoring + SMS alerts
-
-### Database changes
-- Migration to update cron jobs to use maintenance secret from Vault
-- Migration to add `check-system-health` cron job (every 15 minutes)
-- Small `system_alert_state` table to track last alert status and prevent duplicate texts
-
-### Technical details
-- The maintenance secret is already configured as a Supabase secret (`MAINTENANCE_SECRET`)
-- It needs to also be stored in Vault so pg_cron SQL can reference it via `vault.decrypted_secrets`
-- The health check function reuses the existing Twilio connector (same as `notify-sms`)
-- Alert messages will be concise, e.g. "Cookie Yeti Alert: AI Generator down (last run 73h ago). Cron Jobs down (last run 5h ago)."
-- Recovery message: "Cookie Yeti: All systems operational."
+## Technical Details
+- The `excludeCredentials` array already sends existing credential IDs to prevent duplicate registrations of the same authenticator
+- `passkey_credentials` has no unique constraint on `user_id`, so multiple rows per user already work
+- RLS allows authenticated users to SELECT and DELETE their own rows
+- The `webauthn-authenticate` function already queries all credentials for a user and tries each one, so multi-passkey login works without changes
 
