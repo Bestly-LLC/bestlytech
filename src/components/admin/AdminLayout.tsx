@@ -16,6 +16,10 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/cookie-yeti/subscribers": "Subscribers",
   "/admin/cookie-yeti/granted": "Granted Access",
   "/admin/cookie-yeti/community": "Community Learning",
+  "/admin/home-hub": "Home Hub",
+  "/admin/home-hub/pihole": "Pi-hole",
+  "/admin/home-hub/ha": "Home Assistant",
+  "/admin/home-hub/homebridge": "Homebridge",
 };
 
 export function AdminLayout() {

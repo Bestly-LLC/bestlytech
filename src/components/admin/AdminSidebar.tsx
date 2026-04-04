@@ -160,6 +160,17 @@ export function AdminSidebar() {
             <SidebarMenu>{cookieYetiItems.map(renderItem)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
+            🏠 Home Hub
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{homeHubItems.map(renderItem)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
     </Sidebar>
   );

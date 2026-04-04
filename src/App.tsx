@@ -109,6 +109,10 @@ const App = () => (
               <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
               <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />
               <Route path="cookie-yeti/community" element={<CommunityLearning />} />
+              <Route path="home-hub" element={<HomeHubOverview />} />
+              <Route path="home-hub/pihole" element={<HomeHubPihole />} />
+              <Route path="home-hub/ha" element={<HomeHubHomeAssistant />} />
+              <Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
