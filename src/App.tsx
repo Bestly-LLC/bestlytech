@@ -46,6 +46,10 @@ import CommunityLearning from "./pages/admin/CommunityLearning";
 import AdminContacts from "./pages/admin/AdminContacts";
 import AdminHireRequests from "./pages/admin/AdminHireRequests";
 import AdminWaitlist from "./pages/admin/AdminWaitlist";
+import HomeHubOverview from "./pages/admin/HomeHubOverview";
+import HomeHubPihole from "./pages/admin/HomeHubPihole";
+import HomeHubHomeAssistant from "./pages/admin/HomeHubHomeAssistant";
+import HomeHubHomebridge from "./pages/admin/HomeHubHomebridge";
 
 const queryClient = new QueryClient();
 
@@ -105,6 +109,10 @@ const App = () => (
               <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
               <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />
               <Route path="cookie-yeti/community" element={<CommunityLearning />} />
+              <Route path="home-hub" element={<HomeHubOverview />} />
+              <Route path="home-hub/pihole" element={<HomeHubPihole />} />
+              <Route path="home-hub/ha" element={<HomeHubHomeAssistant />} />
+              <Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

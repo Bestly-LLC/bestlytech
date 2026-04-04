@@ -9,6 +9,10 @@ import {
   Mail,
   Briefcase,
   ListChecks,
+  Server,
+  Shield,
+  House,
+  Plug,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -46,6 +50,13 @@ const cookieYetiItems = [
   { title: "Subscribers", url: "/admin/cookie-yeti/subscribers", icon: Users, countKey: "cySubscribers" as CountKeys },
   { title: "Granted Access", url: "/admin/cookie-yeti/granted", icon: ShieldCheck },
   { title: "Community", url: "/admin/cookie-yeti/community", icon: Brain },
+];
+
+const homeHubItems = [
+  { title: "Overview", url: "/admin/home-hub", icon: Server },
+  { title: "Pi-hole", url: "/admin/home-hub/pihole", icon: Shield },
+  { title: "Home Assistant", url: "/admin/home-hub/ha", icon: House },
+  { title: "Homebridge", url: "/admin/home-hub/homebridge", icon: Plug },
 ];
 
 export function AdminSidebar() {
@@ -147,6 +158,17 @@ export function AdminSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{cookieYetiItems.map(renderItem)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
+            🏠 Home Hub
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{homeHubItems.map(renderItem)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
