@@ -75,8 +75,9 @@ Deno.serve(async (req) => {
           .single();
 
         if (report && report.report_count >= 3 && !report.resolved) {
+          const emailTo = Deno.env.get("EMAIL_TO") || "jaredbest@icloud.com";
           const emailPayload = {
-            to: "jaredbest@icloud.com",
+            to: emailTo,
             from: "noreply@bestly.tech",
             subject: `Cookie Yeti: ${trimmedDomain} needs manual review`,
             html: `
