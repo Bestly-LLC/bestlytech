@@ -1,10 +1,9 @@
 import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Navigate } from "react-router-dom";
 import { Fingerprint } from "lucide-react";
 import { lovable } from "@/integrations/lovable/index";
 import { supabase } from "@/integrations/supabase/client";
@@ -61,7 +60,7 @@ export default function AdminLogin() {
   const [oauthLoading, setOauthLoading] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
-  const navigate = useNavigate();
+  
   const { toast } = useToast();
 
   if (loading) {
@@ -94,7 +93,7 @@ export default function AdminLogin() {
       });
     } else {
       speakWelcome("Jared");
-      navigate("/admin");
+      // Navigation handled by the isAdmin redirect in the render
     }
   };
 
@@ -230,7 +229,7 @@ export default function AdminLogin() {
 
       speakWelcome("Jared");
       toast({ title: "Welcome back!", description: `Signed in as ${userEmail}` });
-      navigate("/admin");
+      // Navigation handled by the isAdmin redirect in the render
     } catch (err) {
       console.error("Passkey error:", err);
       if (err instanceof DOMException && err.name === "NotAllowedError") {
