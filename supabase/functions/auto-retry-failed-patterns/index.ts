@@ -172,10 +172,11 @@ Deno.serve(async (req) => {
             },
           });
 
+          const emailTo = Deno.env.get("EMAIL_TO") || "jaredbest@icloud.com";
           try {
             await client.send({
               from: smtpEmail,
-              to: "jaredbest@icloud.com",
+              to: emailTo,
               subject: "Cookie Yeti: Domains Permanently Failed",
               html,
             });
