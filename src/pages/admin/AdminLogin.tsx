@@ -60,7 +60,7 @@ export default function AdminLogin() {
   const [oauthLoading, setOauthLoading] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
-  const navigate = useNavigate();
+  
   const { toast } = useToast();
 
   if (loading) {
