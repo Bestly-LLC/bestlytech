@@ -1,57 +1,72 @@
 
 
-# Fix Cookie Yeti Community Learning — Everything Red
+# Home Hub Dashboard for Admin Panel
 
-## Root Cause
+## Overview
 
-The cron jobs are executing every 15 minutes but all edge functions return **401 Unauthorized** silently. Here's why:
+Add a 4-page "Home Hub" section to the existing admin panel that monitors Pi-hole, Home Assistant, and Homebridge services running on a Raspberry Pi 5. Uses the same dark aesthetic, StatCard pattern, PageHeader, ExportButton, and table styling already in use.
 
-- All cron jobs pass `email_queue_service_role_key` from **Vault** as a Bearer token
-- The edge functions compare that token against `SUPABASE_SERVICE_ROLE_KEY` (Deno env var)
-- These are **different values** — the vault secret was set up for the email queue and is likely the anon key or an old value
-- Result: every cron-triggered function call fails auth, no patterns get generated, no maintenance runs, heartbeat stays red
+## New Files
 
-## Fix (3 steps)
+### 1. Mock API Service — `src/services/homeHubApi.ts`
+A single file exporting async functions that return mock data for all three services. Each function simulates a fetch with realistic data structures. When ready to connect real APIs, only this file changes.
 
-### 1. Add `MAINTENANCE_SECRET` to Vault
+Functions: `fetchPiholeStats()`, `fetchHomeAssistantStats()`, `fetchHomebridgeStats()`, `fetchOverviewStats()`, `piholeEnable()`, `piholeDisable()`, `piholeUpdateGravity()`, `homebridgeRestart()`, `toggleAutomation(id, enabled)`
 
-The `MAINTENANCE_SECRET` already exists as an edge function secret. We need to also store it in Vault so pg_cron SQL can reference it. Run a migration:
+### 2. Overview Page — `src/pages/admin/HomeHubOverview.tsx`
+- PageHeader: "Home Hub" + "Last Updated" timestamp + refresh button
+- 3 status cards in a row (grid-cols-1 sm:grid-cols-3) using the existing StatCard pattern plus a colored status dot (green/yellow/red span with ping animation)
+  - Pi-hole: queries blocked today, % blocked
+  - Home Assistant: devices online, active automations
+  - Homebridge: accessories, plugins active
+- Below: "Recent Activity" feed card (same pattern as ActivityFeed.tsx) with timestamped events from all services
+- Auto-refresh every 30s via `useEffect` interval
 
-```sql
-SELECT vault.create_secret(
-  (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'email_queue_service_role_key'),
-  'maintenance_secret'
-);
+### 3. Pi-hole Page — `src/pages/admin/HomeHubPihole.tsx`
+- PageHeader with Enable/Disable toggle button + Update Gravity button
+- 4 StatCards: Total Queries, Queries Blocked, Percent Blocked, Domains on Blocklist
+- Line chart (recharts, already installed): 24h queries — two lines (blocked vs allowed)
+- Two tables with search bars and ExportButton: Top Blocked Domains, Top Permitted Domains
+
+### 4. Home Assistant Page — `src/pages/admin/HomeHubHomeAssistant.tsx`
+- 4 StatCards: Entities, Automations, Active Sensors, Last Automation Triggered
+- Sensor card grid (grid-cols-1 sm:grid-cols-3): EcoFlow Delta 2 (battery icon + charge %), Earthquake sensor, Weather alert — each with status dot
+- Automation list: rows with name, toggle switch, last-triggered timestamp
+- Recent activity log card
+
+### 5. Homebridge Page — `src/pages/admin/HomeHubHomebridge.tsx`
+- 3 StatCards: Accessories, Plugins, Uptime
+- Accessory list with status indicators (SmartRent lock: locked/unlocked, Dyson: on/off)
+- Plugin list with version + update-available badge
+- Restart Homebridge button with confirmation dialog
+
+## Modified Files
+
+### `src/components/admin/AdminSidebar.tsx`
+Add a new "Home Hub" sidebar group after Cookie Yeti with 4 items:
+- Overview → `/admin/home-hub`
+- Pi-hole → `/admin/home-hub/pihole`
+- Home Assistant → `/admin/home-hub/ha`
+- Homebridge → `/admin/home-hub/homebridge`
+
+Icons: `Server`, `Shield`, `House`, `Plug`
+
+### `src/App.tsx`
+Add 4 new routes under the admin layout:
+```
+<Route path="home-hub" element={<HomeHubOverview />} />
+<Route path="home-hub/pihole" element={<HomeHubPihole />} />
+<Route path="home-hub/ha" element={<HomeHubHomeAssistant />} />
+<Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
 ```
 
-Actually — since we can't read the existing vault secret reliably, the better approach: update all cron jobs to pass the maintenance secret via the `x-maintenance-secret` header instead of (or in addition to) the Bearer token. We'll insert `MAINTENANCE_SECRET` into vault so SQL can reference it.
+### `src/components/admin/AdminLayout.tsx`
+Add breadcrumb labels for the 4 new routes to `BREADCRUMB_MAP`.
 
-### 2. Update all cron jobs to use `x-maintenance-secret` header
-
-Update cron jobs 11-19 (maintenance, retry, AI gen, consensus, health check) to include the maintenance secret as a header. This way even if the Bearer token is wrong, the functions will authorize via the `x-maintenance-secret` check.
-
-Migration to:
-- Insert the maintenance secret value into vault (the user will need to provide it, or we create a new one and update the edge function secret too)
-- Drop and recreate each cron job with headers including `'x-maintenance-secret'` from `vault.decrypted_secrets WHERE name = 'maintenance_secret'`
-- Keep the Bearer token as a fallback
-
-### 3. Redeploy all critical edge functions
-
-Redeploy: `check-system-health`, `ai-generate-pattern`, `auto-retry-failed-patterns`, `run-pattern-maintenance`, `process-dismissal-consensus`, `reset-failed-patterns` to ensure `verify_jwt = false` config is synced to the gateway.
-
-## Alternative simpler approach
-
-Instead of vault gymnastics, fix the vault secret itself: delete the old `email_queue_service_role_key` and re-insert it with the correct service role key value. But we don't have direct access to the service role key value.
-
-**Recommended approach**: Create a new vault secret `maintenance_secret`, set it to a known value, update the `MAINTENANCE_SECRET` edge function secret to match, then update all cron jobs to pass it via `x-maintenance-secret` header.
-
-## Files Modified
-- Database migration — Insert vault secret + update all cron job definitions
-- No code file changes needed (edge functions already accept `x-maintenance-secret`)
-
-## Technical Details
-- The `ai-generate-pattern`, `run-pattern-maintenance`, `auto-retry-failed-patterns`, `check-system-health`, `process-dismissal-consensus` functions all already check `x-maintenance-secret` header
-- pg_net `http_post` supports arbitrary headers via jsonb — we just need to add the header
-- Once crons authenticate successfully, the heartbeat monitors will turn green within one cycle (15 min)
-- The SMS alert system will also start working — it will send a recovery text when systems come back online
+## Design Details
+- All pages use the existing admin dark theme (bg-black, white/[0.03] cards, white/[0.06] borders)
+- Status dots: `relative flex h-2.5 w-2.5` with inner ping animation span (green-500, yellow-500, red-500)
+- Charts use dark theme colors: grid lines at white/[0.06], text at white/40
+- Tables follow the existing pattern with search input + ExportButton in a header row
+- Responsive: all grids collapse to single column on mobile
 
