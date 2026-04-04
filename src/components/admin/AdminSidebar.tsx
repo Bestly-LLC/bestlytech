@@ -52,6 +52,13 @@ const cookieYetiItems = [
   { title: "Community", url: "/admin/cookie-yeti/community", icon: Brain },
 ];
 
+const homeHubItems = [
+  { title: "Overview", url: "/admin/home-hub", icon: Server },
+  { title: "Pi-hole", url: "/admin/home-hub/pihole", icon: Shield },
+  { title: "Home Assistant", url: "/admin/home-hub/ha", icon: House },
+  { title: "Homebridge", url: "/admin/home-hub/homebridge", icon: Plug },
+];
+
 export function AdminSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
