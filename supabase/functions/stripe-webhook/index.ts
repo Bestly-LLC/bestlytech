@@ -12,6 +12,11 @@ async function verifyStripeSignature(
 
   if (!timestamp || !signature) return false;
 
+  // Reject stale webhooks (>5 minutes old) to prevent replay attacks
+  const tsSeconds = parseInt(timestamp, 10);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (Math.abs(nowSeconds - tsSeconds) > 300) return false;
+
   const signedPayload = `${timestamp}.${payload}`;
   const key = await crypto.subtle.importKey(
     "raw",
@@ -101,6 +106,20 @@ serve(async (req) => {
     event.data?.object?.customer_email?.toLowerCase()?.trim() ||
     event.data?.object?.customer_details?.email?.toLowerCase()?.trim() ||
     null;
+
+  // Deduplicate: skip if this Stripe event was already processed
+  const { data: existingEvent } = await supabase
+    .from("webhook_events")
+    .select("id")
+    .eq("stripe_event_id", event.id)
+    .maybeSingle();
+
+  if (existingEvent) {
+    return new Response(JSON.stringify({ received: true, duplicate: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   await supabase.from("webhook_events").insert({
     event_type: event.type,

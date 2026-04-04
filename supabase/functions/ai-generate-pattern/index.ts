@@ -631,7 +631,7 @@ Deno.serve(async (req) => {
             connection: { hostname: "mail.privateemail.com", port: 465, tls: true, auth: { username: smtpEmail, password: smtpPassword } },
           });
           try {
-            await client.send({ from: smtpEmail, to: "jaredbest@icloud.com", subject: "Cookie Yeti: AI Generation Health Alert", html });
+            await client.send({ from: smtpEmail, to: Deno.env.get("EMAIL_TO") || "jaredbest@icloud.com", subject: "Cookie Yeti: AI Generation Health Alert", html });
             console.log("Health alert email sent");
           } finally {
             await client.close();
@@ -667,7 +667,7 @@ Deno.serve(async (req) => {
           connection: { hostname: "mail.privateemail.com", port: 465, tls: true, auth: { username: smtpEmail, password: smtpPassword } },
         });
         try {
-          await client.send({ from: smtpEmail, to: "jaredbest@icloud.com", subject: "Cookie Yeti: AI Generation CRITICAL ERROR", html });
+          await client.send({ from: smtpEmail, to: Deno.env.get("EMAIL_TO") || "jaredbest@icloud.com", subject: "Cookie Yeti: AI Generation CRITICAL ERROR", html });
         } finally {
           await client.close();
         }

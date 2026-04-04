@@ -212,7 +212,7 @@ Request ID: ${insertedData.id}
 
       await client.send({
         from: smtpUser, // support@bestly.tech
-        to: "jaredbest@icloud.com",
+        to: Deno.env.get("EMAIL_TO") || "jaredbest@icloud.com",
         subject: `🆕 Hire Request: ${sanitizedData.project_type} from ${sanitizedData.name}`,
         content: emailBody,
       });

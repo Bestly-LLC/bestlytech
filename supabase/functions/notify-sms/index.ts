@@ -4,7 +4,7 @@ import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 const TO_NUMBER = "+18165007236";
 const FROM_NUMBER = "+12139279363";
-const ADMIN_EMAIL = "jaredbest@icloud.com";
+const ADMIN_EMAIL = Deno.env.get("EMAIL_TO") || "jaredbest@icloud.com";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
