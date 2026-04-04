@@ -9,6 +9,10 @@ import {
   Mail,
   Briefcase,
   ListChecks,
+  Server,
+  Shield,
+  House,
+  Plug,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
