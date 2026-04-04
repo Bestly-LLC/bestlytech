@@ -117,7 +117,8 @@ serve(async (req: Request) => {
         timestamp,
       });
 
-      await sendEmail(smtpEmail, smtpPassword, "jaredbest@icloud.com", "Cookie Yeti: Pattern Fix Failures", html);
+      const emailTo = Deno.env.get("EMAIL_TO") || "jaredbest@icloud.com";
+      await sendEmail(smtpEmail, smtpPassword, emailTo, "Cookie Yeti: Pattern Fix Failures", html);
     }
 
     // Send alert if there are priority domains (3+ unresolved reports)
