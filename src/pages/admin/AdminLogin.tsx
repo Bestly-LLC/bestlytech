@@ -230,7 +230,7 @@ export default function AdminLogin() {
 
       speakWelcome("Jared");
       toast({ title: "Welcome back!", description: `Signed in as ${userEmail}` });
-      navigate("/admin");
+      // Navigation handled by the isAdmin redirect in the render
     } catch (err) {
       console.error("Passkey error:", err);
       if (err instanceof DOMException && err.name === "NotAllowedError") {
