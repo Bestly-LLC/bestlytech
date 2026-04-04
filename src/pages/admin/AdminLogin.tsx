@@ -94,7 +94,7 @@ export default function AdminLogin() {
       });
     } else {
       speakWelcome("Jared");
-      navigate("/admin");
+      // Navigation handled by the isAdmin redirect in the render
     }
   };
 
