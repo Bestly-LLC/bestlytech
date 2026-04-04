@@ -46,6 +46,10 @@ import CommunityLearning from "./pages/admin/CommunityLearning";
 import AdminContacts from "./pages/admin/AdminContacts";
 import AdminHireRequests from "./pages/admin/AdminHireRequests";
 import AdminWaitlist from "./pages/admin/AdminWaitlist";
+import HomeHubOverview from "./pages/admin/HomeHubOverview";
+import HomeHubPihole from "./pages/admin/HomeHubPihole";
+import HomeHubHomeAssistant from "./pages/admin/HomeHubHomeAssistant";
+import HomeHubHomebridge from "./pages/admin/HomeHubHomebridge";
 
 const queryClient = new QueryClient();
 
