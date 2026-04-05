@@ -1333,7 +1333,19 @@ export type Database = {
       }
       find_dismissal_consensus: { Args: never; Returns: Json }
       get_action_type_stats: { Args: never; Returns: Json }
-      get_ai_generation_candidates: { Args: { _limit?: number }; Returns: Json }
+      get_ai_generation_candidates: {
+        Args: { _limit?: number }
+        Returns: {
+          ai_attempts: number
+          banner_html: string
+          cmp_fingerprint: string
+          domain: string
+          id: number
+          last_reported: string
+          page_url: string
+          report_count: number
+        }[]
+      }
       get_cmp_distribution: { Args: never; Returns: Json }
       get_community_overview: { Args: never; Returns: Json }
       get_confidence_distribution: { Args: never; Returns: Json }
@@ -1389,6 +1401,7 @@ export type Database = {
         Args: {
           _action_type: string
           _cmp_fingerprint?: string
+          _confidence?: number
           _domain: string
           _selector: string
           _source?: string
