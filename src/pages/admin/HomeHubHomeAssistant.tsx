@@ -2,9 +2,11 @@ import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { fetchHomeAssistantStats, HomeAssistantStats, toggleAutomation as apiToggle } from "@/services/homeHubApi";
-import { House, Cpu, Zap, Radio, Clock, BatteryMedium, Activity, CloudSun, AlertTriangle } from "lucide-react";
+import { House, Cpu, Zap, Radio, Clock, BatteryMedium, Activity, CloudSun, AlertTriangle, RefreshCw } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 function timeAgo(date: string): string {
   const diff = Date.now() - new Date(date).getTime();
@@ -34,33 +36,74 @@ const SENSOR_ICONS: Record<string, any> = {
 
 export default function HomeHubHomeAssistant() {
   const [data, setData] = useState<HomeAssistantStats | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    setData(await fetchHomeAssistantStats());
+    setLoading(true);
+    try {
+      const stats = await fetchHomeAssistantStats();
+      setData(stats);
+      setLastUpdated(new Date());
+    } catch {
+      // keep stale data on refresh failure
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Poll every 60s to match Pi cron cadence
+  useEffect(() => {
+    load();
+    const iv = setInterval(load, 60_000);
+    return () => clearInterval(iv);
+  }, [load]);
 
   const handleToggle = async (id: string, enabled: boolean) => {
     if (!data) return;
-    await apiToggle(id, enabled);
+    // optimistic update
     setData({
       ...data,
       automationList: data.automationList.map((a) => (a.id === id ? { ...a, enabled } : a)),
     });
+    try {
+      await apiToggle(id, enabled);
+    } catch {
+      // rollback
+      setData((d) =>
+        d ? { ...d, automationList: d.automationList.map((a) => (a.id === id ? { ...a, enabled: !enabled } : a)) } : d
+      );
+      toast.error("Toggle failed — Home Assistant may be unreachable");
+    }
   };
 
   if (!data) return null;
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Home Assistant" description="Smart home automation control" />
+      <PageHeader
+        title="Home Assistant"
+        description="Smart home automation control"
+        actions={
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="border-amber-500/30 text-amber-400/70 text-[10px]">
+              Simulated data
+            </Badge>
+            {lastUpdated && (
+              <span className="text-xs text-white/30">Updated {lastUpdated.toLocaleTimeString()}</span>
+            )}
+            <Button variant="ghost" size="icon" onClick={load} disabled={loading} className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard label="Entities" value={data.entities} icon={Cpu} />
-        <StatCard label="Automations" value={data.automations} icon={Zap} />
-        <StatCard label="Active Sensors" value={data.activeSensors} icon={Radio} />
+        <StatCard label="Automations" value={data.automations} icon={Zap} iconBg="bg-amber-500/10" iconColor="text-amber-400" />
+        <StatCard label="Active Sensors" value={data.activeSensors} icon={Radio} iconBg="bg-blue-500/10" iconColor="text-blue-400" />
         <StatCard label="Last Triggered" value={data.lastAutomationTriggered.split(" — ")[0]} icon={Clock} subtitle={data.lastAutomationTriggered.split(" — ")[1]} />
       </div>
 

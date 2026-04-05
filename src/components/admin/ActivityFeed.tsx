@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { Activity, FileText, ShieldCheck, Wrench } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
@@ -12,9 +11,9 @@ const ICON_MAP: Record<string, any> = {
 };
 
 const COLOR_MAP: Record<string, string> = {
-  new_submission: "text-primary",
-  access_granted: "text-green-500",
-  pattern_maintenance: "text-yellow-500",
+  new_submission: "text-blue-400",
+  access_granted: "text-green-400",
+  pattern_maintenance: "text-amber-400",
 };
 
 function timeAgo(date: string): string {
@@ -38,51 +37,62 @@ export function ActivityFeed() {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(20) as any)
-      .then(({ data }) => {
+      .then(({ data }: { data: any[] | null }) => {
         setEvents(data || []);
         setLoading(false);
       });
   }, []);
 
-  if (loading) return <Skeleton className="h-64 rounded-xl" />;
-
   return (
-    <Card className="border-border/50">
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-muted-foreground" />
-          <CardTitle className="text-sm font-semibold">Activity Feed</CardTitle>
+    <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-4">
+        <Activity className="h-4 w-4 text-white/30" />
+        <div>
+          <h3 className="text-[15px] font-semibold text-white">Activity Feed</h3>
+          <p className="text-xs text-white/30 mt-0.5">Recent events across the admin suite.</p>
         </div>
-        <CardDescription className="text-xs">Recent events across the admin suite.</CardDescription>
-      </CardHeader>
-      <CardContent className="p-0">
-        {events.length === 0 ? (
-          <div className="px-6 pb-6 text-sm text-muted-foreground text-center py-8">
-            No activity yet. Events will appear here as they happen.
-          </div>
-        ) : (
-          <div className="divide-y divide-border/50">
-            {events.map((e) => {
-              const Icon = ICON_MAP[e.event_type] || Activity;
-              const color = COLOR_MAP[e.event_type] || "text-muted-foreground";
-              return (
-                <div key={e.id} className="flex items-start gap-3 px-6 py-3">
-                  <div className={`mt-0.5 ${color}`}>
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm">{e.description}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{timeAgo(e.created_at)}</p>
-                  </div>
-                  <Badge variant="outline" className="text-[10px] shrink-0">
-                    {e.event_type.replace(/_/g, " ")}
-                  </Badge>
+      </div>
+
+      {loading ? (
+        <div className="divide-y divide-white/[0.06]">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-start gap-3 px-5 py-3">
+              <Skeleton className="h-4 w-4 rounded bg-white/[0.05] shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-3.5 w-3/4 rounded bg-white/[0.05]" />
+                <Skeleton className="h-3 w-1/3 rounded bg-white/[0.03]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : events.length === 0 ? (
+        <div className="px-5 py-10 text-center">
+          <Activity className="h-6 w-6 text-white/15 mx-auto mb-2" />
+          <p className="text-sm text-white/30">No activity yet</p>
+          <p className="text-xs text-white/20 mt-0.5">Events will appear here as they happen.</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-white/[0.04]">
+          {events.map((e) => {
+            const Icon = ICON_MAP[e.event_type] || Activity;
+            const color = COLOR_MAP[e.event_type] || "text-white/40";
+            return (
+              <div key={e.id} className="flex items-start gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
+                <div className={`mt-0.5 shrink-0 ${color}`}>
+                  <Icon className="h-4 w-4" />
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white/70">{e.description}</p>
+                  <p className="text-xs text-white/30 mt-0.5">{timeAgo(e.created_at)}</p>
+                </div>
+                <Badge variant="outline" className="text-[10px] shrink-0 border-white/10 text-white/30">
+                  {e.event_type.replace(/_/g, " ")}
+                </Badge>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

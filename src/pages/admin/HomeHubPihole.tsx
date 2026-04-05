@@ -40,25 +40,37 @@ export default function HomeHubPihole() {
 
   const handleToggle = async () => {
     if (!data) return;
+    const prevStatus = data.status;
+    const nextStatus = data.status === "enabled" ? "disabled" : "enabled";
     setToggling(true);
-    if (data.status === "enabled") {
-      await piholeDisable();
-      setData({ ...data, status: "disabled" });
-      toast.success("Pi-hole disabled");
-    } else {
-      await piholeEnable();
-      setData({ ...data, status: "enabled" });
-      toast.success("Pi-hole enabled");
+    setData({ ...data, status: nextStatus });
+    try {
+      if (prevStatus === "enabled") {
+        await piholeDisable();
+        toast.success("Pi-hole disabled");
+      } else {
+        await piholeEnable();
+        toast.success("Pi-hole enabled");
+      }
+    } catch {
+      setData((d) => d ? { ...d, status: prevStatus } : d);
+      toast.error("Action failed — Pi may be unreachable on this network");
+    } finally {
+      setToggling(false);
     }
-    setToggling(false);
   };
 
   const handleGravity = async () => {
     setUpdatingGravity(true);
-    const res = await piholeUpdateGravity();
-    if (data) setData({ ...data, domainsOnBlocklist: res.domainsOnBlocklist });
-    toast.success("Gravity updated successfully");
-    setUpdatingGravity(false);
+    try {
+      const res = await piholeUpdateGravity();
+      if (data) setData({ ...data, domainsOnBlocklist: res.domainsOnBlocklist });
+      toast.success("Gravity updated successfully");
+    } catch {
+      toast.error("Gravity update failed — Pi may be unreachable on this network");
+    } finally {
+      setUpdatingGravity(false);
+    }
   };
 
   const filteredBlocked = data?.topBlocked.filter((d) => d.domain.toLowerCase().includes(blockedSearch.toLowerCase())) ?? [];

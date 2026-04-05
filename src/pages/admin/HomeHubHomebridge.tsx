@@ -25,19 +25,40 @@ function statusColor(status: string) {
 export default function HomeHubHomebridge() {
   const [data, setData] = useState<HomebridgeStats | null>(null);
   const [restarting, setRestarting] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    setData(await fetchHomebridgeStats());
+    setLoading(true);
+    try {
+      const stats = await fetchHomebridgeStats();
+      setData(stats);
+      setLastUpdated(new Date());
+    } catch {
+      // keep stale data on refresh failure
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Poll every 60s to keep display current
+  useEffect(() => {
+    load();
+    const iv = setInterval(load, 60_000);
+    return () => clearInterval(iv);
+  }, [load]);
 
   const handleRestart = async () => {
     setRestarting(true);
-    await homebridgeRestart();
-    toast.success("Homebridge restarted successfully");
-    setRestarting(false);
-    load();
+    try {
+      await homebridgeRestart();
+      toast.success("Homebridge restarted successfully");
+      await load();
+    } catch {
+      toast.error("Restart failed — Homebridge may be unreachable");
+    } finally {
+      setRestarting(false);
+    }
   };
 
   if (!data) return null;
@@ -48,32 +69,45 @@ export default function HomeHubHomebridge() {
         title="Homebridge"
         description="HomeKit accessory bridge"
         actions={
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="border-white/10 text-white/60 hover:text-white hover:bg-white/5">
-                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${restarting ? "animate-spin" : ""}`} />
-                Restart Homebridge
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent className="bg-[#111] border-white/10">
-              <AlertDialogHeader>
-                <AlertDialogTitle className="text-white">Restart Homebridge?</AlertDialogTitle>
-                <AlertDialogDescription className="text-white/50">This will temporarily disconnect all accessories. They'll reconnect automatically in ~30 seconds.</AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel className="border-white/10 text-white/60 hover:bg-white/5">Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleRestart} className="bg-white text-black hover:bg-white/90">Restart</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="border-amber-500/30 text-amber-400/70 text-[10px]">
+              Simulated data
+            </Badge>
+            {lastUpdated && (
+              <span className="text-xs text-white/30">Updated {lastUpdated.toLocaleTimeString()}</span>
+            )}
+            <Button variant="ghost" size="icon" onClick={load} disabled={loading} className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="border-white/10 text-white/60 hover:text-white hover:bg-white/5">
+                  <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${restarting ? "animate-spin" : ""}`} />
+                  Restart
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="bg-[#111] border-white/10">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-white">Restart Homebridge?</AlertDialogTitle>
+                  <AlertDialogDescription className="text-white/50">This will temporarily disconnect all accessories. They'll reconnect automatically in ~30 seconds.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="border-white/10 text-white/60 hover:bg-white/5">Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleRestart} disabled={restarting} className="bg-white text-black hover:bg-white/90">
+                    {restarting ? "Restarting…" : "Restart"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         }
       />
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard label="Accessories" value={data.accessories.length} icon={Plug} />
+        <StatCard label="Accessories" value={data.accessories.length} icon={Plug} iconBg="bg-purple-500/10" iconColor="text-purple-400" />
         <StatCard label="Plugins" value={data.plugins.length} icon={Package} />
-        <StatCard label="Uptime" value={data.uptime} icon={Clock} />
+        <StatCard label="Uptime" value={data.uptime} icon={Clock} iconBg="bg-green-500/10" iconColor="text-green-400" />
       </div>
 
       {/* Accessories */}
