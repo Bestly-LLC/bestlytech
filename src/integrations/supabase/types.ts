@@ -443,6 +443,51 @@ export type Database = {
         }
         Relationships: []
       }
+      home_hub_pihole_stats: {
+        Row: {
+          active_clients: number
+          captured_at: string
+          domains_on_blocklist: number
+          hourly_chart: Json | null
+          id: string
+          percent_blocked: number
+          queries_blocked: number
+          query_types: Json | null
+          status: string
+          top_blocked: Json | null
+          top_permitted: Json | null
+          total_queries: number
+        }
+        Insert: {
+          active_clients?: number
+          captured_at?: string
+          domains_on_blocklist?: number
+          hourly_chart?: Json | null
+          id?: string
+          percent_blocked?: number
+          queries_blocked?: number
+          query_types?: Json | null
+          status: string
+          top_blocked?: Json | null
+          top_permitted?: Json | null
+          total_queries?: number
+        }
+        Update: {
+          active_clients?: number
+          captured_at?: string
+          domains_on_blocklist?: number
+          hourly_chart?: Json | null
+          id?: string
+          percent_blocked?: number
+          queries_blocked?: number
+          query_types?: Json | null
+          status?: string
+          top_blocked?: Json | null
+          top_permitted?: Json | null
+          total_queries?: number
+        }
+        Relationships: []
+      }
       intake_documents: {
         Row: {
           document_type: string
