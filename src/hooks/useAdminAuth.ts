@@ -22,29 +22,33 @@ export function useAdminAuth() {
   useEffect(() => {
     let mounted = true;
 
-    // Get initial session first
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    // 1. Restore session from storage first
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
-        await checkAdmin(u.id);
+        // Fire-and-forget; do NOT block the callback
+        checkAdmin(u.id).finally(() => {
+          if (mounted) setLoading(false);
+        });
+      } else {
+        setLoading(false);
       }
-      if (mounted) setLoading(false);
     });
 
-    // Then listen for changes
+    // 2. Listen for subsequent changes — NO await inside callback
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
         if (!mounted) return;
         const u = session?.user ?? null;
         setUser(u);
         if (u) {
-          await checkAdmin(u.id);
+          // Fire-and-forget to avoid deadlock
+          checkAdmin(u.id);
         } else {
           setIsAdmin(false);
         }
-        if (mounted) setLoading(false);
       }
     );
 
