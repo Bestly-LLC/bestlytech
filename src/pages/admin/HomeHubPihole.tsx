@@ -9,6 +9,14 @@ import { Input } from "@/components/ui/input";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { toast } from "sonner";
 
+function dataAge(capturedAt: string | null): string {
+  if (!capturedAt) return "never synced";
+  const diffSec = Math.floor((Date.now() - new Date(capturedAt).getTime()) / 1000);
+  if (diffSec < 90) return `${diffSec}s ago`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  return `${Math.floor(diffSec / 3600)}h ago`;
+}
+
 export default function HomeHubPihole() {
   const [data, setData] = useState<PiholeStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,7 +31,12 @@ export default function HomeHubPihole() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Poll every 70s — Pi pushes every 60s so this keeps UI near-realtime
+  useEffect(() => {
+    load();
+    const iv = setInterval(load, 70_000);
+    return () => clearInterval(iv);
+  }, [load]);
 
   const handleToggle = async () => {
     if (!data) return;
@@ -58,10 +71,24 @@ export default function HomeHubPihole() {
         description="DNS-level ad blocking"
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleToggle} disabled={toggling} className="border-white/10 text-white/60 hover:text-white hover:bg-white/5">
+            {data?.capturedAt && (
+              <span className="text-xs text-white/30">
+                Pi synced {dataAge(data.capturedAt)}
+              </span>
+            )}
+            {data?.status === "offline" && (
+              <span className="text-xs text-red-400/80 bg-red-500/10 border border-red-500/20 rounded-md px-2 py-1">
+                Offline
+              </span>
+            )}
+            <Button variant="outline" size="sm" onClick={load} disabled={loading} className="border-white/10 text-white/60 hover:text-white hover:bg-white/5">
+              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleToggle} disabled={toggling || data?.status === "offline"} className="border-white/10 text-white/60 hover:text-white hover:bg-white/5">
               {data?.status === "enabled" ? "Disable" : "Enable"} Pi-hole
             </Button>
-            <Button variant="outline" size="sm" onClick={handleGravity} disabled={updatingGravity} className="border-white/10 text-white/60 hover:text-white hover:bg-white/5">
+            <Button variant="outline" size="sm" onClick={handleGravity} disabled={updatingGravity || data?.status === "offline"} className="border-white/10 text-white/60 hover:text-white hover:bg-white/5">
               <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${updatingGravity ? "animate-spin" : ""}`} />
               Update Gravity
             </Button>
@@ -69,7 +96,15 @@ export default function HomeHubPihole() {
         }
       />
 
-      {data && (
+      {data?.status === "offline" && (
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-8 text-center">
+          <Shield className="h-8 w-8 text-white/20 mx-auto mb-3" />
+          <p className="text-sm text-white/50">No data yet — waiting for the Pi cron script to push its first snapshot.</p>
+          <p className="text-xs text-white/25 mt-1">Run <code className="text-white/40">scripts/push_pihole_stats.py</code> on the Raspberry Pi to start.</p>
+        </div>
+      )}
+
+      {data && data.status !== "offline" && (
         <>
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

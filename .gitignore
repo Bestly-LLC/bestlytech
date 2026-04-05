@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Pi cron script secrets
+scripts/.env
+scripts/pihole_push.log
