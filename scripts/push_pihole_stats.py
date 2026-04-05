@@ -99,10 +99,11 @@ def fetch_json(url: str) -> dict | None:
         return None
 
 
-def build_queries_over_time(over_data: dict | None) -> list[dict]:
+def build_hourly_chart(over_data: dict | None) -> list[dict]:
     """
     Aggregate Pi-hole's 10-minute interval data into hourly buckets.
-    Returns up to OVERTIME_HOURS entries: [{hour, allowed, blocked}, ...]
+    Returns up to OVERTIME_HOURS entries: [{hour, permitted, blocked}, ...]
+    Column names match the DB schema: 'permitted' and 'blocked'.
     """
     if not over_data:
         return []
@@ -116,41 +117,49 @@ def build_queries_over_time(over_data: dict | None) -> list[dict]:
             ts = int(ts_str)
         except ValueError:
             continue
-        hour_ts = ts - (ts % 3600)
-        blocked = int(ads_ot.get(ts_str, 0))
-        allowed = max(0, int(queries) - blocked)
+        hour_ts  = ts - (ts % 3600)
+        blocked  = int(ads_ot.get(ts_str, 0))
+        permitted = max(0, int(queries) - blocked)
         if hour_ts not in hourly:
-            hourly[hour_ts] = {"allowed": 0, "blocked": 0}
-        hourly[hour_ts]["allowed"] += allowed
-        hourly[hour_ts]["blocked"] += blocked
+            hourly[hour_ts] = {"permitted": 0, "blocked": 0}
+        hourly[hour_ts]["permitted"] += permitted
+        hourly[hour_ts]["blocked"]   += blocked
 
     result = []
     for hour_ts in sorted(hourly)[-OVERTIME_HOURS:]:
         dt = datetime.fromtimestamp(hour_ts, tz=timezone.utc)
-        # Use 12-hour local-ish label, e.g. "2 PM"
-        label = dt.strftime("%-I %p")
+        label = dt.strftime("%-I %p")  # e.g. "2 PM"
         result.append({
-            "hour":    label,
-            "allowed": hourly[hour_ts]["allowed"],
-            "blocked": hourly[hour_ts]["blocked"],
+            "hour":      label,
+            "permitted": hourly[hour_ts]["permitted"],
+            "blocked":   hourly[hour_ts]["blocked"],
         })
     return result
 
 
 def build_top_lists(top_data: dict | None) -> tuple[list[dict], list[dict]]:
-    """Returns (top_blocked, top_permitted) as [{domain, count}] lists."""
+    """Returns (top_blocked, top_permitted) as [{domain, hits}] lists."""
     if not top_data:
         return [], []
 
     top_blocked = [
-        {"domain": domain, "count": int(count)}
+        {"domain": domain, "hits": int(count)}
         for domain, count in (top_data.get("top_ads") or {}).items()
     ]
     top_permitted = [
-        {"domain": domain, "count": int(count)}
+        {"domain": domain, "hits": int(count)}
         for domain, count in (top_data.get("top_queries") or {}).items()
     ]
     return top_blocked, top_permitted
+
+
+def build_query_types(types_data: dict | None) -> dict:
+    """Returns {type_name: count} from the getQueryTypes response."""
+    if not types_data:
+        return {}
+    # Pi-hole returns {"querytypes": {"A": 45.3, "AAAA": 12.1, ...}} as percentages
+    # or sometimes raw counts depending on version. Store as-is.
+    return {k: v for k, v in (types_data.get("querytypes") or {}).items()}
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -162,23 +171,26 @@ def main() -> None:
 
     print(f"[{datetime.now().isoformat(timespec='seconds')}] Fetching Pi-hole stats…")
 
-    summary  = fetch_json(_pihole_url("summaryRaw"))
-    top_data = fetch_json(_pihole_url(f"topItems={TOP_N}"))
-    over_data = fetch_json(_pihole_url("overTimeData10mins"))
+    summary    = fetch_json(_pihole_url("summaryRaw"))
+    top_data   = fetch_json(_pihole_url(f"topItems={TOP_N}"))
+    over_data  = fetch_json(_pihole_url("overTimeData10mins"))
+    types_data = fetch_json(_pihole_url("getQueryTypes"))
 
     if not summary:
         print("ERROR: Could not reach Pi-hole summaryRaw endpoint.", file=sys.stderr)
         sys.exit(1)
 
     # Pi-hole v5 summaryRaw field names
-    status        = str(summary.get("status", "unknown"))
-    total_queries = int(summary.get("dns_queries_today", 0))
-    blocked       = int(summary.get("ads_blocked_today", 0))
-    pct_blocked   = float(summary.get("ads_percentage_today", 0.0))
-    blocklist_sz  = int(summary.get("domains_being_blocked", 0))
+    status           = str(summary.get("status", "unknown"))
+    total_queries    = int(summary.get("dns_queries_today", 0))
+    blocked          = int(summary.get("ads_blocked_today", 0))
+    pct_blocked      = float(summary.get("ads_percentage_today", 0.0))
+    blocklist_sz     = int(summary.get("domains_being_blocked", 0))
+    active_clients   = int(summary.get("unique_clients", 0))
 
     top_blocked, top_permitted = build_top_lists(top_data)
-    queries_over_time = build_queries_over_time(over_data)
+    hourly_chart = build_hourly_chart(over_data)
+    query_types  = build_query_types(types_data)
 
     payload = {
         "captured_at":          datetime.now(timezone.utc).isoformat(),
@@ -187,14 +199,16 @@ def main() -> None:
         "queries_blocked":      blocked,
         "percent_blocked":      round(pct_blocked, 3),
         "domains_on_blocklist": blocklist_sz,
-        "queries_over_time":    queries_over_time,
+        "active_clients":       active_clients,
         "top_blocked":          top_blocked,
         "top_permitted":        top_permitted,
+        "query_types":          query_types,
+        "hourly_chart":         hourly_chart,
     }
 
     print(
         f"  status={status}  total={total_queries:,}  blocked={blocked:,}"
-        f"  ({pct_blocked:.1f}%)  blocklist={blocklist_sz:,}"
+        f"  ({pct_blocked:.1f}%)  blocklist={blocklist_sz:,}  clients={active_clients}"
     )
 
     # POST to Supabase REST API

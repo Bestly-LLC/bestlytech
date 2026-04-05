@@ -17,9 +17,11 @@ export interface PiholeStats {
   queriesBlocked: number;
   percentBlocked: number;
   domainsOnBlocklist: number;
-  queriesOverTime: { hour: string; allowed: number; blocked: number }[];
-  topBlocked: { domain: string; count: number }[];
-  topPermitted: { domain: string; count: number }[];
+  activeClients: number;
+  topBlocked: { domain: string; hits: number }[];
+  topPermitted: { domain: string; hits: number }[];
+  queryTypes: Record<string, number>;
+  hourlyChart: { hour: string; permitted: number; blocked: number }[];
   /** ISO timestamp of the last successful push from the Pi */
   capturedAt: string | null;
 }
@@ -51,7 +53,7 @@ export interface OverviewStats {
 
 /* ───────── Pi-hole — Supabase ───────── */
 
-/** Shape of a row in home_hub_pihole_stats */
+/** Shape of a row in home_hub_pihole_stats (matches migration column names) */
 interface PiholeRow {
   id: string;
   captured_at: string;
@@ -60,9 +62,11 @@ interface PiholeRow {
   queries_blocked: number;
   percent_blocked: number;
   domains_on_blocklist: number;
-  queries_over_time: { hour: string; allowed: number; blocked: number }[];
-  top_blocked: { domain: string; count: number }[];
-  top_permitted: { domain: string; count: number }[];
+  active_clients: number;
+  top_permitted: { domain: string; hits: number }[] | null;
+  top_blocked: { domain: string; hits: number }[] | null;
+  query_types: Record<string, number> | null;
+  hourly_chart: { hour: string; permitted: number; blocked: number }[] | null;
 }
 
 const PIHOLE_OFFLINE: PiholeStats = {
@@ -71,9 +75,11 @@ const PIHOLE_OFFLINE: PiholeStats = {
   queriesBlocked: 0,
   percentBlocked: 0,
   domainsOnBlocklist: 0,
-  queriesOverTime: [],
+  activeClients: 0,
   topBlocked: [],
   topPermitted: [],
+  queryTypes: {},
+  hourlyChart: [],
   capturedAt: null,
 };
 
@@ -87,9 +93,11 @@ function rowToStats(row: PiholeRow): PiholeStats {
     queriesBlocked: row.queries_blocked,
     percentBlocked: Number(row.percent_blocked),
     domainsOnBlocklist: row.domains_on_blocklist,
-    queriesOverTime: Array.isArray(row.queries_over_time) ? row.queries_over_time : [],
+    activeClients: row.active_clients,
     topBlocked: Array.isArray(row.top_blocked) ? row.top_blocked : [],
     topPermitted: Array.isArray(row.top_permitted) ? row.top_permitted : [],
+    queryTypes: row.query_types ?? {},
+    hourlyChart: Array.isArray(row.hourly_chart) ? row.hourly_chart : [],
     capturedAt: row.captured_at,
   };
 }
