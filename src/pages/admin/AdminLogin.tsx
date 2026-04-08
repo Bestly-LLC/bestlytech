@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Fingerprint } from "lucide-react";
-import { lovable } from "@/integrations/lovable/index";
 import { supabase } from "@/integrations/supabase/client";
 import bestlyLogo from "@/assets/bestly-logo.png";
 
@@ -100,13 +99,16 @@ export default function AdminLogin() {
   const handleAppleSignIn = async () => {
     setOauthLoading(true);
     try {
-      const result = await lovable.auth.signInWithOAuth("apple", {
-        redirect_uri: window.location.origin + "/admin",
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "apple",
+        options: {
+          redirectTo: "https://bestly.tech/admin",
+        },
       });
-      if (result?.error) {
+      if (error) {
         toast({
           title: "Apple Sign In Failed",
-          description: result.error.message || "An error occurred",
+          description: error.message || "An error occurred",
           variant: "destructive",
         });
       }
