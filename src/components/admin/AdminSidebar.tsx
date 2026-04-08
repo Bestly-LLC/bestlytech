@@ -154,7 +154,7 @@ export function AdminSidebar() {
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
-            ❄️ Cookie Yeti
+            Cookie Yeti
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{cookieYetiItems.map(renderItem)}</SidebarMenu>
@@ -165,7 +165,7 @@ export function AdminSidebar() {
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
-            🏠 Home Hub
+            Home Hub
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{homeHubItems.map(renderItem)}</SidebarMenu>

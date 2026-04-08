@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { StatCard } from "@/components/admin/StatCard";
 import { fetchOverviewStats, OverviewStats } from "@/services/homeHubApi";
 import { Shield, House, Plug, RefreshCw, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function timeAgo(date: string): string {
   const diff = Date.now() - new Date(date).getTime();
@@ -37,22 +37,41 @@ const SERVICE_COLORS: Record<string, string> = {
   Homebridge: "text-purple-400",
 };
 
+function ServiceCardSkeleton() {
+  return (
+    <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-3">
+        <Skeleton className="h-4 w-24 bg-white/[0.05]" />
+        <Skeleton className="h-8 w-8 rounded-xl bg-white/[0.05]" />
+      </div>
+      <Skeleton className="h-8 w-20 bg-white/[0.05] mt-2" />
+      <Skeleton className="h-3 w-32 bg-white/[0.03] mt-2" />
+    </div>
+  );
+}
+
 export default function HomeHubOverview() {
   const [data, setData] = useState<OverviewStats | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const stats = await fetchOverviewStats();
-    setData(stats);
-    setLastUpdated(new Date());
-    setLoading(false);
+  const load = useCallback(async (manual = false) => {
+    if (manual) setRefreshing(true);
+    try {
+      const stats = await fetchOverviewStats();
+      setData(stats);
+      setLastUpdated(new Date());
+    } finally {
+      setInitialLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
+  // Poll every 30s — overview aggregates all services
   useEffect(() => {
     load();
-    const iv = setInterval(load, 30000);
+    const iv = setInterval(() => load(), 30_000);
     return () => clearInterval(iv);
   }, [load]);
 
@@ -63,9 +82,17 @@ export default function HomeHubOverview() {
         description="Raspberry Pi 5 service monitoring"
         actions={
           <div className="flex items-center gap-3">
-            <span className="text-xs text-white/30">Last updated {lastUpdated.toLocaleTimeString()}</span>
-            <Button variant="ghost" size="icon" onClick={load} disabled={loading} className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            {lastUpdated && (
+              <span className="text-xs text-white/30">Last updated {lastUpdated.toLocaleTimeString()}</span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => load(true)}
+              disabled={refreshing || initialLoading}
+              className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             </Button>
           </div>
         }
@@ -73,7 +100,13 @@ export default function HomeHubOverview() {
 
       {/* Status cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {data && (
+        {initialLoading ? (
+          <>
+            <ServiceCardSkeleton />
+            <ServiceCardSkeleton />
+            <ServiceCardSkeleton />
+          </>
+        ) : data ? (
           <>
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6 hover:bg-white/[0.05] transition-colors">
               <div className="flex items-center justify-between mb-3">
@@ -81,13 +114,18 @@ export default function HomeHubOverview() {
                   <StatusDot status={data.pihole.status} />
                   <span className="text-sm font-medium text-white">Pi-hole</span>
                 </div>
-                <div className="h-8 w-8 rounded-xl bg-white/[0.05] flex items-center justify-center">
-                  <Shield className="h-4 w-4 text-white/40" />
+                <div className="h-8 w-8 rounded-xl bg-green-500/10 flex items-center justify-center">
+                  <Shield className="h-4 w-4 text-green-400" />
                 </div>
               </div>
               <p className="text-2xl sm:text-3xl font-semibold text-white tabular-nums">{data.pihole.queriesBlocked.toLocaleString()}</p>
               <p className="text-[11px] text-white/40 mt-0.5">Queries Blocked Today</p>
-              <p className="text-[10px] text-white/25 mt-0.5">{data.pihole.percentBlocked}% blocked</p>
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-[10px] text-white/25">{data.pihole.percentBlocked}% blocked</p>
+                {data.pihole.capturedAt && (
+                  <p className="text-[10px] text-white/20">Pi synced {timeAgo(data.pihole.capturedAt)}</p>
+                )}
+              </div>
             </div>
 
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6 hover:bg-white/[0.05] transition-colors">
@@ -96,13 +134,13 @@ export default function HomeHubOverview() {
                   <StatusDot status={data.homeAssistant.status} />
                   <span className="text-sm font-medium text-white">Home Assistant</span>
                 </div>
-                <div className="h-8 w-8 rounded-xl bg-white/[0.05] flex items-center justify-center">
-                  <House className="h-4 w-4 text-white/40" />
+                <div className="h-8 w-8 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                  <House className="h-4 w-4 text-blue-400" />
                 </div>
               </div>
               <p className="text-2xl sm:text-3xl font-semibold text-white tabular-nums">{data.homeAssistant.devicesOnline}</p>
               <p className="text-[11px] text-white/40 mt-0.5">Devices Online</p>
-              <p className="text-[10px] text-white/25 mt-0.5">{data.homeAssistant.activeAutomations} active automations</p>
+              <p className="text-[10px] text-white/25 mt-1">{data.homeAssistant.activeAutomations} active automations</p>
             </div>
 
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6 hover:bg-white/[0.05] transition-colors">
@@ -111,20 +149,33 @@ export default function HomeHubOverview() {
                   <StatusDot status={data.homebridge.status} />
                   <span className="text-sm font-medium text-white">Homebridge</span>
                 </div>
-                <div className="h-8 w-8 rounded-xl bg-white/[0.05] flex items-center justify-center">
-                  <Plug className="h-4 w-4 text-white/40" />
+                <div className="h-8 w-8 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                  <Plug className="h-4 w-4 text-purple-400" />
                 </div>
               </div>
               <p className="text-2xl sm:text-3xl font-semibold text-white tabular-nums">{data.homebridge.accessories}</p>
               <p className="text-[11px] text-white/40 mt-0.5">Accessories</p>
-              <p className="text-[10px] text-white/25 mt-0.5">{data.homebridge.pluginsActive} plugins active</p>
+              <p className="text-[10px] text-white/25 mt-1">{data.homebridge.pluginsActive} plugins active</p>
             </div>
           </>
-        )}
+        ) : null}
       </div>
 
       {/* Recent Activity */}
-      {data && (
+      {initialLoading ? (
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6">
+          <Skeleton className="h-4 w-32 bg-white/[0.05] mb-4" />
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-start gap-3 py-3 border-t border-white/[0.04]">
+              <Skeleton className="h-4 w-4 rounded bg-white/[0.05] shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-3.5 w-3/4 bg-white/[0.05]" />
+                <Skeleton className="h-3 w-1/4 bg-white/[0.03]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : data ? (
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl">
           <div className="flex items-center gap-2 p-4 sm:p-6 pb-3">
             <Activity className="h-4 w-4 text-white/40" />
@@ -147,7 +198,7 @@ export default function HomeHubOverview() {
             ))}
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

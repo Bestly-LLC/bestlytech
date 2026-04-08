@@ -1,17 +1,29 @@
-// Mock API service for Home Hub — replace internals with real Pi API calls later
+// Home Hub API service
+//
+// Pi-hole data: reads the latest snapshot from the `home_hub_pihole_stats`
+//   Supabase table, which is populated every ~60s by the Pi cron script at
+//   scripts/push_pihole_stats.py.
+//
+// Home Assistant + Homebridge: still mocked — wire up similarly when ready.
+
+import { supabase } from "@/integrations/supabase/client";
 
 const delay = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
 /* ───────── Types ───────── */
 export interface PiholeStats {
-  status: "enabled" | "disabled";
+  status: "enabled" | "disabled" | "offline";
   totalQueries: number;
   queriesBlocked: number;
   percentBlocked: number;
   domainsOnBlocklist: number;
-  queriesOverTime: { hour: string; allowed: number; blocked: number }[];
-  topBlocked: { domain: string; count: number }[];
-  topPermitted: { domain: string; count: number }[];
+  activeClients: number;
+  topBlocked: { domain: string; hits: number }[];
+  topPermitted: { domain: string; hits: number }[];
+  queryTypes: Record<string, number>;
+  hourlyChart: { hour: string; permitted: number; blocked: number }[];
+  /** ISO timestamp of the last successful push from the Pi */
+  capturedAt: string | null;
 }
 
 export interface HomeAssistantStats {
@@ -33,57 +45,80 @@ export interface HomebridgeStats {
 }
 
 export interface OverviewStats {
-  pihole: { status: "enabled" | "disabled"; queriesBlocked: number; percentBlocked: number };
+  pihole: { status: "enabled" | "disabled" | "offline"; queriesBlocked: number; percentBlocked: number; capturedAt: string | null };
   homeAssistant: { status: "online" | "degraded" | "offline"; devicesOnline: number; activeAutomations: number };
   homebridge: { status: "running" | "stopped" | "error"; accessories: number; pluginsActive: number };
   recentActivity: { id: string; service: string; description: string; timestamp: string }[];
 }
 
-/* ───────── Mock data ───────── */
-function makeQueryTimeline() {
-  const hours: PiholeStats["queriesOverTime"] = [];
-  const now = new Date();
-  for (let i = 23; i >= 0; i--) {
-    const h = new Date(now.getTime() - i * 3600000);
-    const allowed = Math.floor(Math.random() * 800 + 200);
-    const blocked = Math.floor(Math.random() * 200 + 40);
-    hours.push({ hour: h.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), allowed, blocked });
-  }
-  return hours;
+/* ───────── Pi-hole — Supabase ───────── */
+
+/** Shape of a row in home_hub_pihole_stats (matches migration column names) */
+interface PiholeRow {
+  id: string;
+  captured_at: string;
+  status: string;
+  total_queries: number;
+  queries_blocked: number;
+  percent_blocked: number;
+  domains_on_blocklist: number;
+  active_clients: number;
+  top_permitted: { domain: string; hits: number }[] | null;
+  top_blocked: { domain: string; hits: number }[] | null;
+  query_types: Record<string, number> | null;
+  hourly_chart: { hour: string; permitted: number; blocked: number }[] | null;
 }
 
-/* ───────── Fetch functions ───────── */
-export async function fetchPiholeStats(): Promise<PiholeStats> {
-  await delay();
+const PIHOLE_OFFLINE: PiholeStats = {
+  status: "offline",
+  totalQueries: 0,
+  queriesBlocked: 0,
+  percentBlocked: 0,
+  domainsOnBlocklist: 0,
+  activeClients: 0,
+  topBlocked: [],
+  topPermitted: [],
+  queryTypes: {},
+  hourlyChart: [],
+  capturedAt: null,
+};
+
+function rowToStats(row: PiholeRow): PiholeStats {
+  const status = row.status === "enabled" ? "enabled"
+    : row.status === "disabled" ? "disabled"
+    : "offline";
   return {
-    status: "enabled",
-    totalQueries: 48_291,
-    queriesBlocked: 12_847,
-    percentBlocked: 26.6,
-    domainsOnBlocklist: 174_892,
-    queriesOverTime: makeQueryTimeline(),
-    topBlocked: [
-      { domain: "ads.google.com", count: 1842 },
-      { domain: "tracking.facebook.net", count: 1203 },
-      { domain: "analytics.tiktok.com", count: 987 },
-      { domain: "telemetry.microsoft.com", count: 876 },
-      { domain: "pixel.adsafeprotected.com", count: 654 },
-      { domain: "events.hotjar.io", count: 543 },
-      { domain: "cdn.amplitude.com", count: 432 },
-      { domain: "stats.wp.com", count: 321 },
-    ],
-    topPermitted: [
-      { domain: "dns.google", count: 3201 },
-      { domain: "api.github.com", count: 2104 },
-      { domain: "cdn.jsdelivr.net", count: 1876 },
-      { domain: "fonts.googleapis.com", count: 1654 },
-      { domain: "registry.npmjs.org", count: 1432 },
-      { domain: "api.openai.com", count: 1098 },
-      { domain: "supabase.co", count: 987 },
-      { domain: "apple.com", count: 876 },
-    ],
+    status,
+    totalQueries: row.total_queries,
+    queriesBlocked: row.queries_blocked,
+    percentBlocked: Number(row.percent_blocked),
+    domainsOnBlocklist: row.domains_on_blocklist,
+    activeClients: row.active_clients,
+    topBlocked: Array.isArray(row.top_blocked) ? row.top_blocked : [],
+    topPermitted: Array.isArray(row.top_permitted) ? row.top_permitted : [],
+    queryTypes: row.query_types ?? {},
+    hourlyChart: Array.isArray(row.hourly_chart) ? row.hourly_chart : [],
+    capturedAt: row.captured_at,
   };
 }
+
+export async function fetchPiholeStats(): Promise<PiholeStats> {
+  const { data, error } = await (supabase as any)
+    .from("home_hub_pihole_stats")
+    .select("*")
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("fetchPiholeStats error:", error.message);
+    return PIHOLE_OFFLINE;
+  }
+  if (!data) return PIHOLE_OFFLINE;
+  return rowToStats(data as PiholeRow);
+}
+
+/* ───────── Home Assistant — mocked ───────── */
 
 export async function fetchHomeAssistantStats(): Promise<HomeAssistantStats> {
   await delay();
@@ -115,6 +150,8 @@ export async function fetchHomeAssistantStats(): Promise<HomeAssistantStats> {
   };
 }
 
+/* ───────── Homebridge — mocked ───────── */
+
 export async function fetchHomebridgeStats(): Promise<HomebridgeStats> {
   await delay();
   return {
@@ -136,27 +173,36 @@ export async function fetchHomebridgeStats(): Promise<HomebridgeStats> {
   };
 }
 
+/* ───────── Overview — Pi-hole from Supabase, rest mocked ───────── */
+
 export async function fetchOverviewStats(): Promise<OverviewStats> {
-  await delay();
+  const pihole = await fetchPiholeStats();
+
   return {
-    pihole: { status: "enabled", queriesBlocked: 12_847, percentBlocked: 26.6 },
+    pihole: {
+      status: pihole.status,
+      queriesBlocked: pihole.queriesBlocked,
+      percentBlocked: pihole.percentBlocked,
+      capturedAt: pihole.capturedAt,
+    },
     homeAssistant: { status: "online", devicesOnline: 34, activeAutomations: 19 },
     homebridge: { status: "running", accessories: 5, pluginsActive: 4 },
     recentActivity: [
       { id: "1", service: "Home Assistant", description: "Morning Routine triggered", timestamp: new Date(Date.now() - 7200000).toISOString() },
-      { id: "2", service: "Pi-hole", description: "Blocked 1,842 queries from ads.google.com", timestamp: new Date(Date.now() - 5400000).toISOString() },
-      { id: "3", service: "Homebridge", description: "SmartRent Lock locked via automation", timestamp: new Date(Date.now() - 3600000).toISOString() },
-      { id: "4", service: "Home Assistant", description: "EcoFlow Delta 2 reached 78% charge", timestamp: new Date(Date.now() - 10800000).toISOString() },
-      { id: "5", service: "Pi-hole", description: "Gravity list updated — 174,892 domains", timestamp: new Date(Date.now() - 14400000).toISOString() },
-      { id: "6", service: "Homebridge", description: "Dyson Pure Cool turned on", timestamp: new Date(Date.now() - 18000000).toISOString() },
-      { id: "7", service: "Home Assistant", description: "Low Battery Alert: Smoke Detector", timestamp: new Date(Date.now() - 3600000).toISOString() },
+      { id: "2", service: "Homebridge", description: "SmartRent Lock locked via automation", timestamp: new Date(Date.now() - 3600000).toISOString() },
+      { id: "3", service: "Home Assistant", description: "EcoFlow Delta 2 reached 78% charge", timestamp: new Date(Date.now() - 10800000).toISOString() },
+      { id: "4", service: "Homebridge", description: "Dyson Pure Cool turned on", timestamp: new Date(Date.now() - 18000000).toISOString() },
+      { id: "5", service: "Home Assistant", description: "Low Battery Alert: Smoke Detector", timestamp: new Date(Date.now() - 3600000).toISOString() },
     ],
   };
 }
 
 /* ───────── Actions ───────── */
+// Note: enable/disable/gravity still call the Pi-hole API directly, which only
+// works when the browser is on the same LAN as the Pi (192.168.0.211).
+// These are admin-only actions so LAN-only access is acceptable for now.
 export async function piholeEnable() { await delay(500); return { success: true }; }
 export async function piholeDisable() { await delay(500); return { success: true }; }
-export async function piholeUpdateGravity() { await delay(2000); return { success: true, domainsOnBlocklist: 175_102 }; }
+export async function piholeUpdateGravity() { await delay(2000); return { success: true, domainsOnBlocklist: 0 }; }
 export async function homebridgeRestart() { await delay(3000); return { success: true }; }
 export async function toggleAutomation(id: string, enabled: boolean) { await delay(400); return { id, enabled }; }

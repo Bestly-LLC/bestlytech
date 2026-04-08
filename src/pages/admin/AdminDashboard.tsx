@@ -78,15 +78,15 @@ export default function AdminDashboard() {
   const recent = filtered.slice(0, 5);
 
   const statCards = [
-    { label: "Intake Submissions", value: stats.total, icon: FileText },
-    { label: "Needs Review", value: stats.needsReview, icon: AlertTriangle },
-    { label: "Amazon", value: stats.amazon, icon: ShoppingBag },
-    { label: "Shopify", value: stats.shopify, icon: Store },
-    { label: "TikTok", value: stats.tiktok, icon: Video },
-    { label: "New Contacts", value: contactCount, icon: Mail },
-    { label: "Hire Requests", value: hireCount, icon: Briefcase },
-    { label: "CY Subscribers", value: cySubCount, icon: Snowflake },
-    { label: "Waitlist", value: waitlistCount, icon: Users },
+    { label: "Intake Submissions", value: stats.total, icon: FileText, accentColor: "#3b82f6", iconBg: "bg-blue-500/10", iconColor: "text-blue-400" },
+    { label: "Needs Review", value: stats.needsReview, icon: AlertTriangle, accentColor: "#f59e0b", iconBg: "bg-amber-500/10", iconColor: "text-amber-400" },
+    { label: "Amazon", value: stats.amazon, icon: ShoppingBag, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
+    { label: "Shopify", value: stats.shopify, icon: Store, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
+    { label: "TikTok", value: stats.tiktok, icon: Video, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
+    { label: "New Contacts", value: contactCount, icon: Mail, accentColor: contactCount > 0 ? "#22c55e" : undefined, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
+    { label: "Hire Requests", value: hireCount, icon: Briefcase, accentColor: hireCount > 0 ? "#a78bfa" : undefined, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
+    { label: "CY Subscribers", value: cySubCount, icon: Snowflake, accentColor: "#38bdf8", iconBg: "bg-sky-500/10", iconColor: "text-sky-400" },
+    { label: "Waitlist", value: waitlistCount, icon: Users, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
   ];
 
   if (loading) {
