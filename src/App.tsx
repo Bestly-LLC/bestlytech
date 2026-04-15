@@ -71,6 +71,8 @@ const App = () => (
               <Route path="/apps" element={<Products />} />
               <Route path="/cookie-yeti" element={<CookieYeti />} />
               <Route path="/cookie-yeti/privacy" element={<CookieYetiPrivacy />} />
+              <Route path="/confesh/privacy" element={<ConfeshPrivacy />} />
+              <Route path="/confesh/support" element={<ConfeshSupport />} />
               <Route path="/inventory-proof" element={<InventoryProof />} />
               <Route path="/hoku" element={<Hoku />} />
               <Route path="/neckpilot" element={<NeckPilot />} />
