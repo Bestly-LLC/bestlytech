@@ -29,6 +29,8 @@ import AppleModernization from "./pages/AppleModernization";
 import MarketplaceSetup from "./pages/MarketplaceSetup";
 import TeslaRentals from "./pages/TeslaRentals";
 import CookieYetiSupport from "./pages/CookieYetiSupport";
+import ConfeshPrivacy from "./pages/ConfeshPrivacy";
+import ConfeshSupport from "./pages/ConfeshSupport";
 import NotFound from "./pages/NotFound";
 import Links from "./pages/Links";
 import EmailUnsubscribe from "./pages/EmailUnsubscribe";
