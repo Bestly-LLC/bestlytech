@@ -86,6 +86,10 @@ export default function AdminDashboard() {
       supabase.from("dismissal_reports").select("id", { count: "exact", head: true }),
       supabase.from("ai_generation_log").select("id", { count: "exact", head: true }),
     ]);
+    // Log any CookieYeti query errors for debugging
+    [patternsAll, patternsActive, unresolvedRes, dismissalsRes, aiGenRes].forEach((r, i) => {
+      if (r.error) console.error(`[CY Query ${i}]`, r.error.message);
+    });
     setPatternCount(patternsAll.count ?? 0);
     setActivePatternCount(patternsActive.count ?? 0);
     setUnresolvedCount(unresolvedRes.count ?? 0);
@@ -103,6 +107,10 @@ export default function AdminDashboard() {
       supabase.from("passkey_credentials" as any).select("id", { count: "exact", head: true }),
       supabase.from("passkey_credentials" as any).select("id", { count: "exact", head: true }),
     ]);
+    // Log any ops query errors for debugging
+    [devicesRes, pushRes, sentRes, failedRes, sysRes, piholeRes, usersRes, passkeysRes].forEach((r, i) => {
+      if (r.error) console.error(`[Ops Query ${i}]`, r.error.message);
+    });
     setDeviceCount(devicesRes.count ?? 0);
     setPushCount(pushRes.count ?? 0);
     setEmailsSent(sentRes.count ?? 0);

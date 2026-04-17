@@ -84,6 +84,10 @@ export default function CYDashboard() {
       supabase.from("activation_codes").select("id", { count: "exact", head: true }).eq("active", true),
     ]);
 
+    // Log any query errors for debugging
+    [pAll, pActive, dCount, aiAll, aiSuccess, fixes, missed, patterns, devices, push, activations].forEach((r, i) => {
+      if (r.error) console.error(`[CY Dashboard Query ${i}]`, r.error.message);
+    });
     setPatternCount(pAll.count ?? 0);
     setActivePatternCount(pActive.count ?? 0);
     setDismissalCount(dCount.count ?? 0);
