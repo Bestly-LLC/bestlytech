@@ -32,7 +32,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 type CountKeys = "submissions" | "contacts" | "hires" | "cySubscribers";
 
-const dashboardItem = { title: "Dashboard", url: "/admin", icon: LayoutDashboard };
+const dashboardItem = { title: "Command Center", url: "/admin", icon: LayoutDashboard };
 
 const amazonItems = [
   { title: "Submissions", url: "/admin/submissions", icon: FileText, countKey: "submissions" as CountKeys },
@@ -46,7 +46,7 @@ const generalItems = [
 ];
 
 const cookieYetiItems = [
-  { title: "CY Dashboard", url: "/admin/cookie-yeti", icon: Snowflake },
+  { title: "CY Command Center", url: "/admin/cookie-yeti", icon: Snowflake },
   { title: "Subscribers", url: "/admin/cookie-yeti/subscribers", icon: Users, countKey: "cySubscribers" as CountKeys },
   { title: "Granted Access", url: "/admin/cookie-yeti/granted", icon: ShieldCheck },
   { title: "Community", url: "/admin/cookie-yeti/community", icon: Brain },

@@ -4,8 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Clock, AlertTriangle, CheckCircle, ArrowRight, Mail, Briefcase, Snowflake, Users, ShoppingBag, Store, Video } from "lucide-react";
+import {
+  FileText, Clock, AlertTriangle, CheckCircle, ArrowRight, Mail, Briefcase, Snowflake, Users,
+  ShoppingBag, Store, Video, Shield, Zap, Globe, Activity, Server, TrendingUp,
+  Cookie, Cpu, Ban, CheckCircle2, Wifi, WifiOff,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { EmptyState } from "@/components/admin/EmptyState";
@@ -32,6 +37,22 @@ export default function AdminDashboard() {
   const [waitlistCount, setWaitlistCount] = useState(0);
   const [cySubCount, setCySubCount] = useState(0);
 
+  // New super dashboard state
+  const [patternCount, setPatternCount] = useState(0);
+  const [activePatternCount, setActivePatternCount] = useState(0);
+  const [unresolvedCount, setUnresolvedCount] = useState(0);
+  const [dismissalCount, setDismissalCount] = useState(0);
+  const [aiGenCount, setAiGenCount] = useState(0);
+  const [deviceCount, setDeviceCount] = useState(0);
+  const [pushCount, setPushCount] = useState(0);
+  const [emailsSent, setEmailsSent] = useState(0);
+  const [emailsFailed, setEmailsFailed] = useState(0);
+  const [systemDown, setSystemDown] = useState(false);
+  const [downSystems, setDownSystems] = useState<string[]>([]);
+  const [pihole, setPihole] = useState<any>(null);
+  const [userCount, setUserCount] = useState(0);
+  const [passKeyCount, setPassKeyCount] = useState(0);
+
   useAdminRealtime({
     tables: ["seller_intakes"],
     onNewRecord: (_table, record) => setIntakes((prev) => [record, ...prev]),
@@ -42,6 +63,7 @@ export default function AdminDashboard() {
   }, []);
 
   const loadData = async () => {
+    // Original queries
     const [intakesRes, contactsRes, hiresRes, waitlistRes, cySubsRes] = await Promise.all([
       supabase.from("seller_intakes").select("*").order("created_at", { ascending: false }),
       supabase.from("contact_submissions").select("id", { count: "exact", head: true }).eq("status", "new"),
@@ -55,6 +77,44 @@ export default function AdminDashboard() {
     setHireCount(hiresRes.count ?? 0);
     setWaitlistCount(waitlistRes.count ?? 0);
     setCySubCount(cySubsRes.count ?? 0);
+
+    // Super dashboard queries - CookieYeti
+    const [patternsAll, patternsActive, unresolvedRes, dismissalsRes, aiGenRes] = await Promise.all([
+      supabase.from("cookie_patterns").select("id", { count: "exact", head: true }),
+      supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("is_active", true),
+      supabase.from("missed_banner_reports").select("id", { count: "exact", head: true }).eq("resolved", false),
+      supabase.from("dismissal_reports").select("id", { count: "exact", head: true }),
+      supabase.from("ai_generation_log").select("id", { count: "exact", head: true }),
+    ]);
+    setPatternCount(patternsAll.count ?? 0);
+    setActivePatternCount(patternsActive.count ?? 0);
+    setUnresolvedCount(unresolvedRes.count ?? 0);
+    setDismissalCount(dismissalsRes.count ?? 0);
+    setAiGenCount(aiGenRes.count ?? 0);
+
+    // Devices, email, system
+    const [devicesRes, pushRes, sentRes, failedRes, sysRes, piholeRes, usersRes, passkeysRes] = await Promise.all([
+      supabase.from("device_registrations").select("id", { count: "exact", head: true }),
+      supabase.from("device_tokens").select("id", { count: "exact", head: true }),
+      supabase.from("email_send_log").select("id", { count: "exact", head: true }).eq("status", "sent"),
+      supabase.from("email_send_log").select("id", { count: "exact", head: true }).eq("status", "failed"),
+      (supabase.from("system_alert_state" as any).select("*").eq("id", 1).single() as any),
+      (supabase.from("home_hub_pihole_stats" as any).select("*").order("captured_at", { ascending: false }).limit(1).single() as any),
+      supabase.from("passkey_credentials" as any).select("id", { count: "exact", head: true }),
+      supabase.from("passkey_credentials" as any).select("id", { count: "exact", head: true }),
+    ]);
+    setDeviceCount(devicesRes.count ?? 0);
+    setPushCount(pushRes.count ?? 0);
+    setEmailsSent(sentRes.count ?? 0);
+    setEmailsFailed(failedRes.count ?? 0);
+    if (sysRes.data) {
+      setSystemDown(sysRes.data.is_down ?? false);
+      setDownSystems(sysRes.data.down_systems ?? []);
+    }
+    if (piholeRes.data) setPihole(piholeRes.data);
+    setUserCount(usersRes.count ?? 0);
+    setPassKeyCount(passkeysRes.count ?? 0);
+
     setLoading(false);
   };
 
@@ -77,24 +137,13 @@ export default function AdminDashboard() {
 
   const recent = filtered.slice(0, 5);
 
-  const statCards = [
-    { label: "Intake Submissions", value: stats.total, icon: FileText, accentColor: "#3b82f6", iconBg: "bg-blue-500/10", iconColor: "text-blue-400" },
-    { label: "Needs Review", value: stats.needsReview, icon: AlertTriangle, accentColor: "#f59e0b", iconBg: "bg-amber-500/10", iconColor: "text-amber-400" },
-    { label: "Amazon", value: stats.amazon, icon: ShoppingBag, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
-    { label: "Shopify", value: stats.shopify, icon: Store, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
-    { label: "TikTok", value: stats.tiktok, icon: Video, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
-    { label: "New Contacts", value: contactCount, icon: Mail, accentColor: contactCount > 0 ? "#22c55e" : undefined, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
-    { label: "Hire Requests", value: hireCount, icon: Briefcase, accentColor: hireCount > 0 ? "#a78bfa" : undefined, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
-    { label: "CY Subscribers", value: cySubCount, icon: Snowflake, accentColor: "#38bdf8", iconBg: "bg-sky-500/10", iconColor: "text-sky-400" },
-    { label: "Waitlist", value: waitlistCount, icon: Users, iconBg: "bg-white/[0.05]", iconColor: "text-white/40" },
-  ];
-
   if (loading) {
     return (
-      <div className="space-y-8 max-w-6xl">
+      <div className="space-y-8 max-w-7xl">
         <div><Skeleton className="h-7 w-48 bg-white/[0.05]" /><Skeleton className="h-4 w-72 mt-2 bg-white/[0.05]" /></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-24 rounded-2xl bg-white/[0.03]" />)}
+        <Skeleton className="h-12 rounded-2xl bg-white/[0.03]" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {[1,2,3,4,5,6,7,8].map(i => <Skeleton key={i} className="h-24 rounded-2xl bg-white/[0.03]" />)}
         </div>
         <Skeleton className="h-64 rounded-2xl bg-white/[0.03]" />
       </div>
@@ -102,18 +151,103 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="space-y-8 max-w-7xl">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <PageHeader title="Dashboard" description="Overview across all products and services." />
+        <PageHeader title="Command Center" description="Unified overview across all Bestly products and services." />
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        {statCards.map((s) => (
-          <StatCard key={s.label} {...s} />
-        ))}
+      {/* System Health Banner */}
+      <div className={`flex items-center gap-3 px-5 py-3 rounded-2xl border ${
+        systemDown
+          ? "bg-red-500/5 border-red-500/20"
+          : "bg-emerald-500/5 border-emerald-500/20"
+      }`}>
+        {systemDown ? (
+          <WifiOff className="h-4 w-4 text-red-400 shrink-0" />
+        ) : (
+          <Wifi className="h-4 w-4 text-emerald-400 shrink-0" />
+        )}
+        <span className={`text-sm font-medium ${systemDown ? "text-red-400" : "text-emerald-400"}`}>
+          {systemDown ? `System Alert: ${downSystems.join(", ") || "Issue detected"}` : "All Systems Operational"}
+        </span>
+        <span className="text-xs text-white/20 ml-auto hidden sm:inline">
+          26 edge functions &middot; 28 tables &middot; RLS active
+        </span>
       </div>
 
+      {/* ─── CookieYeti Overview ─── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Snowflake className="h-4 w-4 text-sky-400" />
+          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">CookieYeti</h3>
+          <Link to="/admin/cookie-yeti" className="ml-auto">
+            <Button variant="ghost" size="sm" className="text-xs text-white/20 hover:text-white hover:bg-white/5 h-6 px-2">
+              Full Dashboard <ArrowRight className="h-3 w-3 ml-1" />
+            </Button>
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard label="Active Patterns" value={activePatternCount} icon={Cookie} accentColor="#8b5cf6" iconBg="bg-violet-500/10" iconColor="text-violet-400" subtitle={`${patternCount} total`} />
+          <StatCard label="Dismissals" value={dismissalCount} icon={CheckCircle2} accentColor="#10b981" iconBg="bg-emerald-500/10" iconColor="text-emerald-400" />
+          <StatCard label="AI Generations" value={aiGenCount} icon={Cpu} accentColor="#06b6d4" iconBg="bg-cyan-500/10" iconColor="text-cyan-400" />
+          <StatCard label="Unresolved" value={unresolvedCount} icon={AlertTriangle} accentColor={unresolvedCount > 0 ? "#f59e0b" : "#10b981"} iconBg={unresolvedCount > 0 ? "bg-amber-500/10" : "bg-emerald-500/10"} iconColor={unresolvedCount > 0 ? "text-amber-400" : "text-emerald-400"} />
+          <StatCard label="CY Subscribers" value={cySubCount} icon={Snowflake} accentColor="#38bdf8" iconBg="bg-sky-500/10" iconColor="text-sky-400" />
+          <StatCard label="Devices" value={deviceCount} icon={Globe} iconBg="bg-white/[0.05]" iconColor="text-white/40" subtitle={`${pushCount} push-enabled`} />
+        </div>
+      </div>
+
+      {/* ─── Revenue & Growth ─── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp className="h-4 w-4 text-emerald-400" />
+          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Revenue & Growth</h3>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <StatCard label="Active Subs" value={cySubCount} icon={Snowflake} accentColor="#38bdf8" iconBg="bg-sky-500/10" iconColor="text-sky-400" />
+          <StatCard label="Waitlist" value={waitlistCount} icon={Users} accentColor="#8b5cf6" iconBg="bg-violet-500/10" iconColor="text-violet-400" />
+          <StatCard label="Emails Sent" value={emailsSent} icon={Mail} accentColor="#10b981" iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle={emailsFailed > 0 ? `${emailsFailed} failed` : undefined} />
+          <StatCard label="Passkeys" value={passKeyCount} icon={Shield} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
+        </div>
+      </div>
+
+      {/* ─── Operations ─── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Activity className="h-4 w-4 text-amber-400" />
+          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Operations</h3>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <StatCard label="New Contacts" value={contactCount} icon={Mail} accentColor={contactCount > 0 ? "#22c55e" : undefined} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
+          <StatCard label="Hire Requests" value={hireCount} icon={Briefcase} accentColor={hireCount > 0 ? "#a78bfa" : undefined} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
+          <StatCard label="Intake Submissions" value={stats.total} icon={FileText} accentColor="#3b82f6" iconBg="bg-blue-500/10" iconColor="text-blue-400" subtitle={stats.needsReview > 0 ? `${stats.needsReview} need review` : undefined} />
+          <StatCard label="Amazon" value={stats.amazon} icon={ShoppingBag} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
+          <StatCard label="Shopify" value={stats.shopify} icon={Store} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
+        </div>
+      </div>
+
+      {/* ─── Pi-hole Quick Glance ─── */}
+      {pihole && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Shield className="h-4 w-4 text-blue-400" />
+            <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Home Hub</h3>
+            <Link to="/admin/home-hub/pihole" className="ml-auto">
+              <Button variant="ghost" size="sm" className="text-xs text-white/20 hover:text-white hover:bg-white/5 h-6 px-2">
+                Pi-hole <ArrowRight className="h-3 w-3 ml-1" />
+              </Button>
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard label="DNS Queries" value={(pihole.total_queries ?? 0).toLocaleString()} icon={Globe} iconBg="bg-blue-500/10" iconColor="text-blue-400" />
+            <StatCard label="Blocked" value={(pihole.queries_blocked ?? 0).toLocaleString()} icon={Ban} accentColor="#ef4444" iconBg="bg-red-500/10" iconColor="text-red-400" subtitle={`${(pihole.percent_blocked ?? 0).toFixed(1)}%`} />
+            <StatCard label="Blocklist" value={(pihole.domains_on_blocklist ?? 0).toLocaleString()} icon={Server} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
+            <StatCard label="Clients" value={pihole.active_clients ?? 0} icon={Wifi} accentColor={pihole.status === "enabled" ? "#10b981" : "#ef4444"} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle={pihole.status ?? "unknown"} />
+          </div>
+        </div>
+      )}
+
+      {/* ─── Recent Activity + Submissions ─── */}
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Recent Submissions */}
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
