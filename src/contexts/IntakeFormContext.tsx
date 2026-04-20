@@ -264,10 +264,16 @@ export const IntakeFormProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
   }, []);
 
+  // SEC-02: new forms get a client-generated session_token alongside the
+  // form id. Both go into the URL (?id=<id>&s=<token>) and the client also
+  // sends the token as x-intake-token on every Supabase request, bound by
+  // RLS on seller_intakes / intake_documents. Legacy URLs without ?s= keep
+  // working because those rows have requires_session_token=false.
   useEffect(() => {
     if (!searchParams.get('id')) {
       const newId = crypto.randomUUID();
-      setSearchParams({ id: newId }, { replace: true });
+      const newToken = crypto.randomUUID();
+      setSearchParams({ id: newId, s: newToken }, { replace: true });
     }
   }, []);
 
@@ -330,11 +336,18 @@ export const IntakeFormProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const saveNow = useCallback(async (): Promise<boolean> => {
     const id = searchParams.get('id');
     if (!id) return false;
+    const sessionToken = searchParams.get('s');
     const dataStr = JSON.stringify(formData);
     if (dataStr === lastSavedRef.current) return true;
     setSaving(true);
     try {
-      const payload = sanitizePayload({ id, ...formData, completed_steps: completedSteps, status });
+      const payload = sanitizePayload({
+        id,
+        ...(sessionToken ? { session_token: sessionToken } : {}),
+        ...formData,
+        completed_steps: completedSteps,
+        status,
+      });
       const { error } = await (supabase as any)
         .from('seller_intakes')
         .upsert(payload, { onConflict: 'id' });
