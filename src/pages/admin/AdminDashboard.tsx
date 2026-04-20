@@ -86,10 +86,21 @@ export default function AdminDashboard() {
       supabase.from("dismissal_reports").select("id", { count: "exact", head: true }),
       supabase.from("ai_generation_log").select("id", { count: "exact", head: true }),
     ]);
-    // Log any CookieYeti query errors for debugging
-    [patternsAll, patternsActive, unresolvedRes, dismissalsRes, aiGenRes].forEach((r, i) => {
+    // SITE-02: surface aggregate query failures to the admin instead of
+    // silently showing zeros. Log each individually for debugging and
+    // toast once per group so the page isn't spammed.
+    const cyResults = [patternsAll, patternsActive, unresolvedRes, dismissalsRes, aiGenRes];
+    cyResults.forEach((r, i) => {
       if (r.error) console.error(`[CY Query ${i}]`, r.error.message);
     });
+    const cyFailures = cyResults.filter((r) => r.error).length;
+    if (cyFailures > 0) {
+      toast({
+        title: "CookieYeti stats unavailable",
+        description: `${cyFailures} of ${cyResults.length} queries failed. Showing partial data.`,
+        variant: "destructive",
+      });
+    }
     setPatternCount(patternsAll.count ?? 0);
     setActivePatternCount(patternsActive.count ?? 0);
     setUnresolvedCount(unresolvedRes.count ?? 0);
@@ -107,10 +118,18 @@ export default function AdminDashboard() {
       supabase.from("passkey_credentials" as any).select("id", { count: "exact", head: true }),
       supabase.from("passkey_credentials" as any).select("id", { count: "exact", head: true }),
     ]);
-    // Log any ops query errors for debugging
-    [devicesRes, pushRes, sentRes, failedRes, sysRes, piholeRes, usersRes, passkeysRes].forEach((r, i) => {
+    const opsResults = [devicesRes, pushRes, sentRes, failedRes, sysRes, piholeRes, usersRes, passkeysRes];
+    opsResults.forEach((r, i) => {
       if (r.error) console.error(`[Ops Query ${i}]`, r.error.message);
     });
+    const opsFailures = opsResults.filter((r) => r.error).length;
+    if (opsFailures > 0) {
+      toast({
+        title: "Ops stats unavailable",
+        description: `${opsFailures} of ${opsResults.length} queries failed. Showing partial data.`,
+        variant: "destructive",
+      });
+    }
     setDeviceCount(devicesRes.count ?? 0);
     setPushCount(pushRes.count ?? 0);
     setEmailsSent(sentRes.count ?? 0);
