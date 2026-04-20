@@ -8,10 +8,37 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+/**
+ * SEC-02: Each request reads the current ?s=<session-token> query param and
+ * forwards it as `x-intake-token` so the server-side RLS policies on
+ * seller_intakes/intake_documents can bind access to a token rather than
+ * just the form-ID UUID. Reading on every request (inside a fetch wrapper)
+ * means internal route changes — e.g. navigating into /marketplace-setup
+ * after the token is generated — are picked up immediately, without
+ * recreating the supabase client.
+ */
+function currentIntakeToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const t = params.get('s');
+  return t && t.length > 0 ? t : null;
+}
+
+const intakeAwareFetch: typeof fetch = (input, init) => {
+  const token = currentIntakeToken();
+  if (!token) return fetch(input, init);
+  const headers = new Headers(init?.headers);
+  headers.set('x-intake-token', token);
+  return fetch(input, { ...init, headers });
+};
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
+  global: {
+    fetch: intakeAwareFetch,
+  },
 });
