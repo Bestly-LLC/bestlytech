@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { fetchHomebridgeStats, HomebridgeStats, homebridgeRestart } from "@/services/homeHubApi";
+import { pollInterval } from "@/lib/polling";
 import { Plug, Package, Clock, Lock, Unlock, Fan, Thermometer, Camera, DoorOpen, ArrowUpCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +45,7 @@ export default function HomeHubHomebridge() {
   // Poll every 60s to keep display current
   useEffect(() => {
     load();
-    const iv = setInterval(load, 60_000);
+    const iv = setInterval(load, pollInterval(60_000));
     return () => clearInterval(iv);
   }, [load]);
 

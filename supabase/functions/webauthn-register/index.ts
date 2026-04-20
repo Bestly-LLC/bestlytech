@@ -302,10 +302,16 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Verify origin
+      // SEC-03: Verify origin. Previously a mismatch only logged a warning,
+      // which let an attacker register a passkey from a malicious origin
+      // and authenticate from the legitimate one. Now a mismatch hard-rejects.
       const expectedOrigin = clientOrigin || req.headers.get("origin");
       if (expectedOrigin && clientDataJSON.origin !== expectedOrigin) {
         console.warn(`Origin mismatch: expected ${expectedOrigin}, got ${clientDataJSON.origin}`);
+        return new Response(JSON.stringify({ error: "Origin mismatch" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       // Extract the actual COSE public key from the attestationObject

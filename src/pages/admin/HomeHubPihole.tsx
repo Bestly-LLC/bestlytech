@@ -1,8 +1,11 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { ExportButton } from "@/components/admin/ExportButton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { fetchPiholeStats, PiholeStats, piholeEnable, piholeDisable, piholeUpdateGravity } from "@/services/homeHubApi";
+import { pollInterval } from "@/lib/polling";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { Shield, Search, Database, BarChart3, ListFilter, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,21 +23,31 @@ function dataAge(capturedAt: string | null): string {
 export default function HomeHubPihole() {
   const [data, setData] = useState<PiholeStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [blockedSearch, setBlockedSearch] = useState("");
   const [permittedSearch, setPermittedSearch] = useState("");
   const [toggling, setToggling] = useState(false);
   const [updatingGravity, setUpdatingGravity] = useState(false);
 
+  // PERF-05: 300ms debounce on the domain search inputs. Top-blocked/
+  // permitted lists can hit 1000+ items and filter-on-every-keystroke was
+  // perceptibly laggy.
+  const debouncedBlockedSearch = useDebouncedValue(blockedSearch, 300);
+  const debouncedPermittedSearch = useDebouncedValue(permittedSearch, 300);
+
   const load = useCallback(async () => {
     setLoading(true);
     setData(await fetchPiholeStats());
     setLoading(false);
+    setInitialLoading(false);
   }, []);
 
-  // Poll every 70s — Pi pushes every 60s so this keeps UI near-realtime
+  // Poll every ~70s — Pi pushes every 60s so this keeps UI near-realtime.
+  // PERF-03: jitter avoids synchronised polling storms with other HomeHub
+  // pages (Overview/30s, HA/60s, Homebridge/60s).
   useEffect(() => {
     load();
-    const iv = setInterval(load, 70_000);
+    const iv = setInterval(load, pollInterval(70_000));
     return () => clearInterval(iv);
   }, [load]);
 
@@ -73,8 +86,14 @@ export default function HomeHubPihole() {
     }
   };
 
-  const filteredBlocked = data?.topBlocked.filter((d) => d.domain.toLowerCase().includes(blockedSearch.toLowerCase())) ?? [];
-  const filteredPermitted = data?.topPermitted.filter((d) => d.domain.toLowerCase().includes(permittedSearch.toLowerCase())) ?? [];
+  const filteredBlocked = useMemo(
+    () => data?.topBlocked.filter((d) => d.domain.toLowerCase().includes(debouncedBlockedSearch.toLowerCase())) ?? [],
+    [data?.topBlocked, debouncedBlockedSearch]
+  );
+  const filteredPermitted = useMemo(
+    () => data?.topPermitted.filter((d) => d.domain.toLowerCase().includes(debouncedPermittedSearch.toLowerCase())) ?? [],
+    [data?.topPermitted, debouncedPermittedSearch]
+  );
 
   return (
     <div className="space-y-6">
@@ -107,6 +126,21 @@ export default function HomeHubPihole() {
           </div>
         }
       />
+
+      {/* SITE-03: skeleton on first paint so the page isn't blank while
+          waiting for the first fetch to resolve. */}
+      {initialLoading && !data && (
+        <div className="space-y-6" role="status" aria-label="Loading Pi-hole stats">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-2xl bg-white/[0.03]" />)}
+          </div>
+          <Skeleton className="h-64 rounded-2xl bg-white/[0.03]" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Skeleton className="h-64 rounded-2xl bg-white/[0.03]" />
+            <Skeleton className="h-64 rounded-2xl bg-white/[0.03]" />
+          </div>
+        </div>
+      )}
 
       {data?.status === "offline" && (
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-8 text-center">

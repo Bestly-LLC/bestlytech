@@ -210,12 +210,19 @@ Request ID: ${insertedData.id}
         },
       });
 
-      await client.send({
-        from: smtpUser, // support@bestly.tech
-        to: Deno.env.get("EMAIL_TO") || "jaredbest@icloud.com",
-        subject: `🆕 Hire Request: ${sanitizedData.project_type} from ${sanitizedData.name}`,
-        content: emailBody,
-      });
+      // SEC-07: No hardcoded fallback. EMAIL_TO must be set in env or we
+      // skip delivery rather than leak a default personal address.
+      const emailTo = Deno.env.get("EMAIL_TO");
+      if (!emailTo) {
+        console.warn("submit-hire-request: EMAIL_TO env var not set; skipping email notification");
+      } else {
+        await client.send({
+          from: smtpUser, // support@bestly.tech
+          to: emailTo,
+          subject: `🆕 Hire Request: ${sanitizedData.project_type} from ${sanitizedData.name}`,
+          content: emailBody,
+        });
+      }
 
       await client.close();
       console.log("Email notification sent successfully");
@@ -224,11 +231,14 @@ Request ID: ${insertedData.id}
       // Don't fail the request since database save was successful
     }
 
-    // Send SMS notification via Twilio
+    // SEC-07: SMS via Twilio. Phone numbers must be configured via env
+    // (TWILIO_TO / TWILIO_FROM); no hardcoded fallbacks.
     try {
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       const TWILIO_API_KEY = Deno.env.get("TWILIO_API_KEY");
-      if (LOVABLE_API_KEY && TWILIO_API_KEY) {
+      const TWILIO_TO = Deno.env.get("TWILIO_TO");
+      const TWILIO_FROM = Deno.env.get("TWILIO_FROM");
+      if (LOVABLE_API_KEY && TWILIO_API_KEY && TWILIO_TO && TWILIO_FROM) {
         const smsBody = `New hire request from ${sanitizedData.name} — ${sanitizedData.project_type}, Budget: ${sanitizedData.budget_range || "N/A"}`;
         const smsRes = await fetch("https://connector-gateway.lovable.dev/twilio/Messages.json", {
           method: "POST",
@@ -238,8 +248,8 @@ Request ID: ${insertedData.id}
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: new URLSearchParams({
-            To: "+18165007236",
-            From: "+12139279363",
+            To: TWILIO_TO,
+            From: TWILIO_FROM,
             Body: smsBody,
           }),
         });
@@ -248,6 +258,8 @@ Request ID: ${insertedData.id}
         } else {
           console.error("SMS failed:", await smsRes.text());
         }
+      } else {
+        console.warn("submit-hire-request: SMS env vars not fully set; skipping SMS notification");
       }
     } catch (smsError) {
       console.error("SMS sending failed:", smsError);

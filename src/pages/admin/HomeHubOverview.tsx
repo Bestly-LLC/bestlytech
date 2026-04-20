@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { fetchOverviewStats, OverviewStats } from "@/services/homeHubApi";
+import { pollInterval } from "@/lib/polling";
 import { Shield, House, Plug, RefreshCw, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -71,7 +72,7 @@ export default function HomeHubOverview() {
   // Poll every 30s — overview aggregates all services
   useEffect(() => {
     load();
-    const iv = setInterval(() => load(), 30_000);
+    const iv = setInterval(() => load(), pollInterval(30_000));
     return () => clearInterval(iv);
   }, [load]);
 

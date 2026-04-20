@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { fetchHomeAssistantStats, HomeAssistantStats, toggleAutomation as apiToggle } from "@/services/homeHubApi";
+import { pollInterval } from "@/lib/polling";
 import { House, Cpu, Zap, Radio, Clock, BatteryMedium, Activity, CloudSun, AlertTriangle, RefreshCw } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +56,7 @@ export default function HomeHubHomeAssistant() {
   // Poll every 60s to match Pi cron cadence
   useEffect(() => {
     load();
-    const iv = setInterval(load, 60_000);
+    const iv = setInterval(load, pollInterval(60_000));
     return () => clearInterval(iv);
   }, [load]);
 
