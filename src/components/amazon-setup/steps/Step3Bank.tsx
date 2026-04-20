@@ -25,6 +25,12 @@ export const Step3Bank = () => {
   const hasShopify = isPlatformSelected('Shopify');
   const tiktokOnly = hasTikTok && !hasAmazon && !hasShopify;
 
+  // INTAKE-04: when the user has turned OFF "same bank for all platforms",
+  // the per-platform bank sections must actually be validated. Previously
+  // the form accepted empty Shopify/TikTok bank blocks silently.
+  const needsShopifyBank = !formData.same_bank_all_platforms && hasShopify && formData.selected_platforms[0] !== 'Shopify';
+  const needsTikTokBank = !formData.same_bank_all_platforms && hasTikTok && formData.selected_platforms[0] !== 'TikTok';
+
   const validate = () => {
     const e: Record<string, string> = {};
     if (!formData.bank_name.trim()) e.bank_name = 'Required';
@@ -43,10 +49,33 @@ export const Step3Bank = () => {
       if (!formData.credit_card_expiry) e.credit_card_expiry = 'Required';
       if (!formData.card_holder_name.trim()) e.card_holder_name = 'Required';
     }
+    if (needsShopifyBank) {
+      if (!formData.shopify_bank_name.trim()) e.shopify_bank_name = 'Required';
+      if (!formData.shopify_account_holder.trim()) e.shopify_account_holder = 'Required';
+    }
+    if (needsTikTokBank) {
+      if (!formData.tiktok_bank_name.trim()) e.tiktok_bank_name = 'Required';
+      if (!formData.tiktok_account_holder.trim()) e.tiktok_account_holder = 'Required';
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
+  // INTAKE-03: sync last-4 to formData on every keystroke instead of only on
+  // blur. The auto-save (every 30s) only reads formData — if a user typed
+  // account + routing and refreshed the tab without blurring, the data was
+  // lost. Now persistence happens as they type; the masked display still
+  // only shows last-4 when the input is unfocused.
+  const handleAccountChange = (raw: string) => {
+    const digits = raw.replace(/\D/g, '');
+    setFullAccount(digits);
+    updateField('account_number_last4', digits.length >= 4 ? digits.slice(-4) : '');
+  };
+  const handleRoutingChange = (raw: string) => {
+    const digits = raw.replace(/\D/g, '').slice(0, 9);
+    setFullRouting(digits);
+    updateField('routing_number_last4', digits.length >= 4 ? digits.slice(-4) : '');
+  };
   const handleAccountBlur = () => {
     setAccountFocused(false);
     if (fullAccount.length >= 4) updateField('account_number_last4', fullAccount.slice(-4));
@@ -125,7 +154,7 @@ export const Step3Bank = () => {
               <label className="text-sm font-medium">Account Number <span className="text-destructive">*</span></label>
               <Input
                 value={accountFocused ? fullAccount : accountDisplay}
-                onChange={e => setFullAccount(e.target.value.replace(/\D/g, ''))}
+                onChange={e => handleAccountChange(e.target.value)}
                 onFocus={() => setAccountFocused(true)}
                 onBlur={handleAccountBlur}
                 className="mt-1 font-mono"
@@ -136,7 +165,7 @@ export const Step3Bank = () => {
               <label className="text-sm font-medium">Routing Number <span className="text-destructive">*</span></label>
               <Input
                 value={routingFocused ? fullRouting : routingDisplay}
-                onChange={e => setFullRouting(e.target.value.replace(/\D/g, '').slice(0, 9))}
+                onChange={e => handleRoutingChange(e.target.value)}
                 onFocus={() => setRoutingFocused(true)}
                 onBlur={handleRoutingBlur}
                 placeholder="9 digits"
@@ -243,15 +272,15 @@ export const Step3Bank = () => {
             {hasShopify && formData.selected_platforms[0] !== 'Shopify' && (
               <div className="space-y-3 pl-4 border-l-2 border-border">
                 <h4 className="font-medium text-sm">Bank Account for Shopify Payouts</h4>
-                <IntakeField name="shopify_bank_name" label="Bank Name" value={formData.shopify_bank_name} onChange={updateField} error={undefined} getGuidance={getGuidance} />
-                <IntakeField name="shopify_account_holder" label="Account Holder" value={formData.shopify_account_holder} onChange={updateField} error={undefined} getGuidance={getGuidance} />
+                <IntakeField name="shopify_bank_name" label="Bank Name" value={formData.shopify_bank_name} onChange={updateField} error={errors.shopify_bank_name} getGuidance={getGuidance} />
+                <IntakeField name="shopify_account_holder" label="Account Holder" value={formData.shopify_account_holder} onChange={updateField} error={errors.shopify_account_holder} getGuidance={getGuidance} />
               </div>
             )}
             {hasTikTok && formData.selected_platforms[0] !== 'TikTok' && (
               <div className="space-y-3 pl-4 border-l-2 border-border">
                 <h4 className="font-medium text-sm">Bank Account for TikTok Payouts</h4>
-                <IntakeField name="tiktok_bank_name" label="Bank Name" value={formData.tiktok_bank_name} onChange={updateField} error={undefined} getGuidance={getGuidance} />
-                <IntakeField name="tiktok_account_holder" label="Account Holder" value={formData.tiktok_account_holder} onChange={updateField} error={undefined} getGuidance={getGuidance} />
+                <IntakeField name="tiktok_bank_name" label="Bank Name" value={formData.tiktok_bank_name} onChange={updateField} error={errors.tiktok_bank_name} getGuidance={getGuidance} />
+                <IntakeField name="tiktok_account_holder" label="Account Holder" value={formData.tiktok_account_holder} onChange={updateField} error={errors.tiktok_account_holder} getGuidance={getGuidance} />
                 <div>
                   <label className="text-sm font-medium">Email for TikTok Bank</label>
                   <Input type="email" value={formData.tiktok_bank_email} onChange={e => updateField('tiktok_bank_email', e.target.value)} className="mt-1" />
