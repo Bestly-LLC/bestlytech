@@ -16,13 +16,25 @@ interface DocumentUploadProps {
 export const DocumentUpload = ({
   documentType, label, description, required = false, accept = '.pdf,.jpg,.jpeg,.png',
 }: DocumentUploadProps) => {
-  const { formId, uploadedDocs, refreshDocs } = useIntakeForm();
+  const { formId, uploadedDocs, refreshDocs, saveNow } = useIntakeForm();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const existingDoc = uploadedDocs.find(d => d.document_type === documentType);
+
+  // Storage keys reject some characters and behave poorly with extra spaces.
+  // Keep it simple: collapse whitespace, strip control chars, and keep a safe
+  // subset. Preserve the original name for display via file_name.
+  const sanitizeStorageName = (name: string) => {
+    return name
+      .replace(/[\x00-\x1f\x7f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/[^\w .()\-]/g, '_')
+      .slice(0, 150) || 'upload';
+  };
 
   const handleFile = useCallback(async (file: File) => {
     if (!formId) return;
@@ -32,12 +44,31 @@ export const DocumentUpload = ({
     }
     setError('');
     setUploading(true);
+
+    // Ensure the parent seller_intakes row exists before we try to insert an
+    // intake_documents row that references it. Without this, storage uploads
+    // succeed but the DB insert fails with a FK violation and the file is
+    // effectively lost from the user's perspective.
+    const saved = await saveNow();
+    if (!saved) {
+      setError('Could not save your progress. Please check your connection and try again.');
+      setUploading(false);
+      return;
+    }
+
+    const safeName = sanitizeStorageName(file.name);
+    const path = `${formId}/${documentType}/${safeName}`;
+    let storageUploaded = false;
+
     try {
-      const path = `${formId}/${documentType}/${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from('intake-documents')
-        .upload(path, file, { upsert: true });
+        .upload(path, file, {
+          upsert: true,
+          contentType: file.type || undefined,
+        });
       if (uploadError) throw uploadError;
+      storageUploaded = true;
 
       // Remove old doc record if exists
       if (existingDoc) {
@@ -56,20 +87,27 @@ export const DocumentUpload = ({
       if (insertError) throw insertError;
       await refreshDocs();
     } catch (e: any) {
-      const msg = e.message || 'Upload failed';
+      // If the DB insert failed after the storage upload succeeded, clean up
+      // the orphaned object so it doesn't stick around forever.
+      if (storageUploaded) {
+        try { await supabase.storage.from('intake-documents').remove([path]); } catch {}
+      }
+      const msg = e?.message || 'Upload failed';
       if (msg.includes('mime') || msg.includes('type')) {
         setError('Invalid file type. Please upload a PDF, JPG, or PNG.');
       } else if (msg.includes('size') || msg.includes('too large')) {
         setError('File is too large. Maximum size is 10MB.');
       } else if (msg.includes('row-level security')) {
         setError('Permission denied. The form may have already been submitted.');
+      } else if (msg.includes('foreign key') || msg.includes('not present in table')) {
+        setError('Could not attach the file to your form. Please refresh and try again.');
       } else {
         setError(msg);
       }
     } finally {
       setUploading(false);
     }
-  }, [formId, documentType, existingDoc, refreshDocs]);
+  }, [formId, documentType, existingDoc, refreshDocs, saveNow]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

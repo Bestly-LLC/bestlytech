@@ -1,11 +1,32 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// SEC-01: Lock CORS to known first-party origins instead of '*'.
+// This endpoint is intentionally public (pre-signup Cookie Yeti checkout),
+// so JWT verification stays off, but we defense-in-depth via Origin allowlist
+// + email format validation.
+const ALLOWED_ORIGINS = new Set([
+  "https://bestly.tech",
+  "https://www.bestly.tech",
+  "https://cookieyeti.app",
+  "https://www.cookieyeti.app",
+]);
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function corsHeadersFor(origin: string | null): Record<string, string> {
+  const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://bestly.tech";
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
 
 serve(async (req) => {
+  const origin = req.headers.get("origin");
+  const corsHeaders = corsHeadersFor(origin);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -17,11 +38,29 @@ serve(async (req) => {
     });
   }
 
-  try {
-    const { email, plan } = await req.json();
+  // Reject requests that don't originate from a known first-party host.
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+    console.warn("create-checkout: rejected origin", { origin });
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
-    if (!email || !plan) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const email: unknown = body?.email;
+    const plan: unknown = body?.plan;
+
+    if (typeof email !== "string" || typeof plan !== "string" || !email || !plan) {
       return new Response(JSON.stringify({ error: "email and plan are required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (email.length > 254 || !EMAIL_RE.test(email)) {
+      return new Response(JSON.stringify({ error: "Invalid email" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

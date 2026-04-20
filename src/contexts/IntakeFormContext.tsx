@@ -205,7 +205,7 @@ interface IntakeFormContextType {
   goBack: () => void;
   formId: string;
   saving: boolean;
-  saveNow: () => Promise<void>;
+  saveNow: () => Promise<boolean>;
   lastSavedAt: Date | null;
   completedSteps: number[];
   markStepComplete: (step: number) => void;
@@ -315,23 +315,53 @@ export const IntakeFormProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setCompletedSteps(prev => prev.includes(step) ? prev : [...prev, step].sort());
   }, []);
 
-  const saveNow = useCallback(async () => {
+  // Columns stored as `date` in Postgres. PostgREST rejects empty strings on
+  // these columns with a 400, which used to silently fail the whole save.
+  const DATE_FIELDS: (keyof IntakeFormData)[] = ['date_of_birth', 'id_expiry_date'];
+
+  const sanitizePayload = (payload: Record<string, any>) => {
+    const out = { ...payload };
+    for (const f of DATE_FIELDS) {
+      if (out[f as string] === '') out[f as string] = null;
+    }
+    return out;
+  };
+
+  const saveNow = useCallback(async (): Promise<boolean> => {
     const id = searchParams.get('id');
-    if (!id) return;
+    if (!id) return false;
     const dataStr = JSON.stringify(formData);
-    if (dataStr === lastSavedRef.current) return;
+    if (dataStr === lastSavedRef.current) return true;
     setSaving(true);
     try {
-      const payload: any = { id, ...formData, completed_steps: completedSteps, status };
-      await (supabase as any).from('seller_intakes').upsert(payload, { onConflict: 'id' });
+      const payload = sanitizePayload({ id, ...formData, completed_steps: completedSteps, status });
+      const { error } = await (supabase as any)
+        .from('seller_intakes')
+        .upsert(payload, { onConflict: 'id' });
+      if (error) {
+        console.error('Save failed', error);
+        toast({
+          title: 'Save failed',
+          description: error.message || 'Could not save your progress. Please try again.',
+          variant: 'destructive',
+        });
+        return false;
+      }
       lastSavedRef.current = dataStr;
       setLastSavedAt(new Date());
-    } catch (e) {
+      return true;
+    } catch (e: any) {
       console.error('Save failed', e);
+      toast({
+        title: 'Save failed',
+        description: e?.message || 'Could not save your progress. Please try again.',
+        variant: 'destructive',
+      });
+      return false;
     } finally {
       setSaving(false);
     }
-  }, [formData, completedSteps, status, searchParams.get('id')]);
+  }, [formData, completedSteps, status, searchParams.get('id'), toast]);
 
   useEffect(() => {
     if (!loaded || !formId) return;

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://bestly.tech/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://bestly.tech/about</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://bestly.tech/products</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://bestly.tech/services</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://bestly.tech/hire</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://bestly.tech/contact</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://bestly.tech/press</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://bestly.tech/cookie-yeti</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://bestly.tech/cookie-yeti/privacy</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://bestly.tech/inventory-proof</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://bestly.tech/hoku</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://bestly.tech/neckpilot</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://bestly.tech/apple-modernization</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://bestly.tech/tesla-rentals</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://bestly.tech/report-site</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://bestly.tech/support</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://bestly.tech/confesh/privacy</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://bestly.tech/confesh/support</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://bestly.tech/privacy-policy</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://bestly.tech/terms-of-service</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://bestly.tech/terms-of-use</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://bestly.tech/developer-compliance</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+</urlset>
