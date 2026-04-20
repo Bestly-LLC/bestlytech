@@ -6,22 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// In-memory rate limiter: email -> { count, resetAt }
-const attempts = new Map<string, { count: number; resetAt: number }>();
-const MAX_ATTEMPTS = 5;
-const WINDOW_MS = 5 * 60 * 1000; // 5 minutes
-
-function checkRateLimit(email: string): boolean {
-  const now = Date.now();
-  const entry = attempts.get(email);
-  if (!entry || now > entry.resetAt) {
-    attempts.set(email, { count: 1, resetAt: now + WINDOW_MS });
-    return true;
-  }
-  entry.count++;
-  if (entry.count > MAX_ATTEMPTS) return false;
-  return true;
-}
+// SEC-04: DB-backed rate limit — the previous in-memory Map reset on every
+// Deno isolate cold start, letting an attacker with patience brute-force a
+// 6-digit code. Now gated by public.check_activation_rate_limit() which
+// stores attempts in the activation_code_attempts table.
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -40,18 +28,39 @@ serve(async (req: Request) => {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Rate limit check
-    if (!checkRateLimit(normalizedEmail)) {
-      return new Response(
-        JSON.stringify({ error: "Too many attempts. Please wait a few minutes." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // DB-backed rate limit (SEC-04).
+    const { data: rl, error: rlError } = await supabase.rpc(
+      "check_activation_rate_limit",
+      { p_email: normalizedEmail, p_action: "validate" }
+    );
+    if (rlError) {
+      console.error("rate-limit rpc error:", rlError);
+      return new Response(
+        JSON.stringify({ error: "rate_limit_unavailable" }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (rl && rl.allowed === false) {
+      return new Response(
+        JSON.stringify({
+          error: "Too many attempts. Please wait a few minutes.",
+          retry_after: rl.retry_after ?? 0,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": String(rl.retry_after ?? 60),
+          },
+        }
+      );
+    }
 
     const { data: rows, error: selectError } = await supabase
       .from("activation_codes")
@@ -100,8 +109,13 @@ serve(async (req: Request) => {
       );
     }
 
-    // Clear rate limit on success
-    attempts.delete(normalizedEmail);
+    // Reset the rate-limit counter on success so legitimate retries after
+    // a successful activation aren't penalised.
+    await supabase
+      .from("activation_code_attempts")
+      .delete()
+      .eq("email", normalizedEmail)
+      .eq("action", "validate");
 
     return new Response(
       JSON.stringify({ success: true, activated: true, code }),
