@@ -1,10 +1,23 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+// SEC-05: Lock CORS to first-party origins. The contact form is only
+// called from bestly.tech + www.bestly.tech — no reason to accept
+// requests from anywhere else.
+const ALLOWED_ORIGINS = new Set([
+  "https://bestly.tech",
+  "https://www.bestly.tech",
+]);
+
+function corsHeadersFor(origin: string | null): Record<string, string> {
+  const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://bestly.tech";
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
 
 interface ContactRequest {
   name: string;
@@ -34,9 +47,19 @@ function isRateLimited(ip: string): boolean {
 }
 
 serve(async (req: Request) => {
-  // Handle CORS preflight
+  const origin = req.headers.get("origin");
+  const corsHeaders = corsHeadersFor(origin);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+    console.warn("submit-contact: rejected origin", { origin });
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
