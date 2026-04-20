@@ -118,7 +118,7 @@ export const DocumentUpload = ({
             <p className="text-xs text-muted-foreground">{formatSize(existingDoc.file_size)}</p>
           </div>
           <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={removeDoc}>
+          <Button variant="ghost" size="icon" aria-label="Remove document" className="h-7 w-7 shrink-0" onClick={removeDoc}>
             <X className="w-4 h-4" />
           </Button>
         </div>

@@ -232,6 +232,7 @@ export function ChangePasswordDialog() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    aria-label="Delete passkey"
                     className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0"
                     onClick={() => handleDeletePasskey(pk.id)}
                     disabled={deletingId === pk.id}

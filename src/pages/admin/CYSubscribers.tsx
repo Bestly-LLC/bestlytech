@@ -196,9 +196,9 @@ export default function CYSubscribers() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-3">
-          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}><ChevronLeft className="h-4 w-4" /></Button>
+          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)} aria-label="Previous page"><ChevronLeft className="h-4 w-4" /></Button>
           <span className="text-xs text-muted-foreground tabular-nums">Page {page + 1} of {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}><ChevronRight className="h-4 w-4" /></Button>
+          <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} aria-label="Next page"><ChevronRight className="h-4 w-4" /></Button>
         </div>
       )}
 
@@ -241,7 +241,7 @@ export default function CYSubscribers() {
                     <TableCell className="text-sm text-muted-foreground">{g.granted_by || "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{g.created_at ? new Date(g.created_at).toLocaleDateString() : "—"}</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => handleRevokeAccess(g.id, g.email)} className="h-7 w-7 p-0 text-red-500 hover:text-red-600">
+                      <Button variant="ghost" size="sm" onClick={() => handleRevokeAccess(g.id, g.email)} aria-label={`Revoke access for ${g.email}`} className="h-7 w-7 p-0 text-red-500 hover:text-red-600">
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </TableCell>

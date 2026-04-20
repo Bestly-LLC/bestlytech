@@ -1556,6 +1556,7 @@ export default function CommunityLearning() {
                       <button
                         className="w-full p-3 space-y-2 text-left hover:bg-muted/30 transition-colors"
                         onClick={() => toggleDomainExpand(d.domain)}
+                        aria-label={`Toggle details for ${d.domain}`}
                       >
                         <div className="flex items-center gap-2">
                           {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
@@ -1588,7 +1589,7 @@ export default function CommunityLearning() {
                                       disabled={togglingPattern === r.id}
                                       onCheckedChange={() => handleTogglePatternActive(r.id, r.is_active !== false)}
                                     />
-                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500"
+                                    <Button variant="ghost" size="icon" aria-label="Delete pattern" className="h-6 w-6 text-muted-foreground hover:text-red-500"
                                       disabled={deletingPattern === `${r.domain}::${r.selector}`}
                                       onClick={() => handleDeletePattern(r.domain, r.selector, r.action_type)}>
                                       {deletingPattern === `${r.domain}::${r.selector}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
@@ -1713,7 +1714,7 @@ export default function CommunityLearning() {
                                     <TooltipProvider delayDuration={200}>
                                       <UITooltip>
                                         <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                                          <Button variant="ghost" size="icon" aria-label="Delete pattern" className="h-7 w-7 text-muted-foreground hover:text-red-500"
                                             disabled={deletingPattern === `${r.domain}::${r.selector}`}
                                             onClick={(e) => { e.stopPropagation(); handleDeletePattern(r.domain, r.selector, r.action_type); }}>
                                             {deletingPattern === `${r.domain}::${r.selector}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}

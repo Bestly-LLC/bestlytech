@@ -187,7 +187,7 @@ export default function CYGrantedAccess() {
                   <TableCell>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        <Button variant="ghost" size="sm" aria-label={`Revoke access for ${d.email}`} className="h-8 w-8 p-0"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
