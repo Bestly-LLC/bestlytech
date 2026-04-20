@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { SEOHead } from '@/components/SEOHead';
 import { IntakeFormProvider, useIntakeForm } from '@/contexts/IntakeFormContext';
 import { GuidanceProvider } from '@/contexts/GuidanceContext';
@@ -13,9 +14,28 @@ import { Button } from '@/components/ui/button';
 import { Save, LogOut, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
+// INTAKE-08: show autosave status as a relative "Saved Xs ago" label so
+// users can see at a glance that the 30s background save is still firing.
+function relativeTime(when: Date, now: Date): string {
+  const s = Math.max(0, Math.floor((now.getTime() - when.getTime()) / 1000));
+  if (s < 5) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
+}
+
 const FormContent = () => {
   const { currentStep, saving, formId, saveNow, lastSavedAt } = useIntakeForm();
   const { toast } = useToast();
+  // Tick every 15s so the "Saved Xs ago" label stays accurate without
+  // requiring a real save to update the UI.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const iv = setInterval(() => setNow(new Date()), 15_000);
+    return () => clearInterval(iv);
+  }, []);
 
   const steps = [
     <Step0Readiness key={0} />,
@@ -48,7 +68,8 @@ const FormContent = () => {
           )}
           {!saving && lastSavedAt && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="w-3 h-3" /> Last saved {lastSavedAt.toLocaleTimeString()}
+              <Clock className="w-3 h-3" />
+              <span title={lastSavedAt.toLocaleString()}>Saved {relativeTime(lastSavedAt, now)}</span>
             </div>
           )}
           {formId && (

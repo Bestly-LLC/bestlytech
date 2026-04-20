@@ -93,7 +93,7 @@ export default function HomeHubHomeAssistant() {
             {lastUpdated && (
               <span className="text-xs text-white/30">Updated {lastUpdated.toLocaleTimeString()}</span>
             )}
-            <Button variant="ghost" size="icon" onClick={load} disabled={loading} className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
+            <Button variant="ghost" size="icon" onClick={load} disabled={loading} aria-label="Refresh Home Assistant data" className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
           </div>

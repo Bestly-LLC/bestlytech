@@ -195,10 +195,10 @@ export default function AdminHireRequests() {
                     <TableCell className="text-muted-foreground text-sm">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setViewing(r)}>
+                        <Button variant="ghost" size="sm" aria-label="View hire request" className="h-7 w-7 p-0" onClick={() => setViewing(r)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm([r.id])}>
+                        <Button variant="ghost" size="sm" aria-label="Delete hire request" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm([r.id])}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -224,10 +224,10 @@ export default function AdminHireRequests() {
                         <p className="text-xs text-muted-foreground">{r.company || "No company"}</p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setViewing(r)}>
+                        <Button variant="ghost" size="sm" aria-label="View hire request" className="h-7 w-7 p-0" onClick={() => setViewing(r)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm([r.id])}>
+                        <Button variant="ghost" size="sm" aria-label="Delete hire request" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm([r.id])}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -256,9 +256,9 @@ export default function AdminHireRequests() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-3">
-          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}><ChevronLeft className="h-4 w-4" /></Button>
+          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)} aria-label="Previous page"><ChevronLeft className="h-4 w-4" /></Button>
           <span className="text-xs text-muted-foreground tabular-nums">Page {page + 1} of {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}><ChevronRight className="h-4 w-4" /></Button>
+          <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} aria-label="Next page"><ChevronRight className="h-4 w-4" /></Button>
         </div>
       )}
 

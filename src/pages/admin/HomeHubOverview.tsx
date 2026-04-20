@@ -91,6 +91,7 @@ export default function HomeHubOverview() {
               size="icon"
               onClick={() => load(true)}
               disabled={refreshing || initialLoading}
+              aria-label="Refresh home hub data"
               className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />

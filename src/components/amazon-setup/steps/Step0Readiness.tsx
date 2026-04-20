@@ -116,6 +116,24 @@ export const Step0Readiness = () => {
           </div>
         )}
 
+        {/* INTAKE-09: surface the specific file uploads the user will hit in
+            later steps, so they can gather PDFs/photos up front instead of
+            discovering requirements mid-form. */}
+        {formData.selected_platforms.length > 0 && (
+          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4">
+            <h3 className="text-sm font-medium">Files to have scanned or photographed</h3>
+            <p className="text-xs text-muted-foreground">Accepted formats: PDF, JPG, PNG. Max 10 MB each. You can upload these during the form — this is a heads-up so you can prep them now.</p>
+            <ul className="text-sm space-y-1.5 mt-2">
+              <li className="flex gap-2"><span className="text-muted-foreground">•</span><span><strong>Business registration</strong> — Certificate of Formation, Articles of Organization, or equivalent state filing</span></li>
+              <li className="flex gap-2"><span className="text-muted-foreground">•</span><span><strong>Proof of business address</strong> — bank statement or utility bill in the business's name, within 180 days</span></li>
+              <li className="flex gap-2"><span className="text-muted-foreground">•</span><span><strong>Government ID (front)</strong> for the primary owner — passport, driver's license, or state ID</span></li>
+              <li className="flex gap-2"><span className="text-muted-foreground">•</span><span><strong>Government ID (back)</strong> if driver's license or state ID</span></li>
+              <li className="flex gap-2"><span className="text-muted-foreground">•</span><span><strong>Proof of personal address</strong> — bank statement or utility bill for the owner, within 180 days</span></li>
+              <li className="flex gap-2 text-muted-foreground"><span>•</span><span><em>Optional:</em> Trademark doc, brand logo, diversity certification, representative ID + authorization letter (only if applicable)</span></li>
+            </ul>
+          </div>
+        )}
+
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>

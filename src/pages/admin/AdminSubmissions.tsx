@@ -297,7 +297,7 @@ export default function AdminSubmissions() {
                     <TableCell onClick={(e) => e.stopPropagation()} data-row-actions>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                          <Button variant="ghost" size="sm" aria-label="More actions" className="h-7 w-7 p-0">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -342,7 +342,7 @@ export default function AdminSubmissions() {
                       <Badge className="text-[10px]">{r.status}</Badge>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-row-actions>
+                          <Button variant="ghost" size="sm" aria-label="More actions" className="h-6 w-6 p-0" data-row-actions>
                             <MoreHorizontal className="h-3.5 w-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -380,13 +380,13 @@ export default function AdminSubmissions() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-3">
-          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
+          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)} aria-label="Previous page">
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-xs text-muted-foreground tabular-nums">
             Page {page + 1} of {totalPages}
           </span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+          <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} aria-label="Next page">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>

@@ -134,7 +134,7 @@ export default function AdminSetupGuide() {
                           placeholder="Reason"
                         />
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => deleteEntry(entry.id)}>
+                          <Button variant="ghost" size="sm" aria-label="Delete entry" onClick={() => deleteEntry(entry.id)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                           <Button size="sm" onClick={() => saveEntry(entry)}>

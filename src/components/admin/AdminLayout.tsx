@@ -59,7 +59,7 @@ export function AdminLayout() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" asChild className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
-                      <Link to="/"><Home className="h-4 w-4" /></Link>
+                      <Link to="/" aria-label="Go to home page"><Home className="h-4 w-4" /></Link>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Home</TooltipContent>
@@ -74,7 +74,7 @@ export function AdminLayout() {
                 <ChangePasswordDialog />
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" onClick={signOut} className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
+                    <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out" className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
                       <LogOut className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
