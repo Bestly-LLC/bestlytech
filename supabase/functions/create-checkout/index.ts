@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 // SEC-01: Lock CORS to known first-party origins instead of '*'.
 // This endpoint is intentionally public (pre-signup Cookie Yeti checkout),
@@ -67,21 +68,43 @@ serve(async (req) => {
     }
 
     const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
-    const priceMap: Record<string, string | undefined> = {
-      monthly: Deno.env.get("STRIPE_PRICE_MONTHLY"),
-      yearly: Deno.env.get("STRIPE_PRICE_YEARLY"),
-      lifetime: Deno.env.get("STRIPE_PRICE_LIFETIME"),
-    };
-
     if (!STRIPE_SECRET_KEY) {
+      console.error("create-checkout: STRIPE_SECRET_KEY missing");
       return new Response(JSON.stringify({ error: "Server configuration error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // CY-01: Pull price IDs from Vault via the get_stripe_config() RPC, with
+    // env-var fallback for backwards compatibility.
+    let priceMap: Record<string, string | undefined> = {};
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (supabaseUrl && supabaseServiceKey) {
+      try {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const { data: cfg, error: cfgErr } = await supabase.rpc("get_stripe_config");
+        if (cfgErr) {
+          console.warn("get_stripe_config rpc failed, falling back to env vars:", cfgErr.message);
+        } else if (cfg) {
+          priceMap = {
+            monthly: (cfg as { monthly?: string }).monthly ?? undefined,
+            yearly: (cfg as { yearly?: string }).yearly ?? undefined,
+            lifetime: (cfg as { lifetime?: string }).lifetime ?? undefined,
+          };
+        }
+      } catch (e) {
+        console.warn("get_stripe_config rpc threw:", e);
+      }
+    }
+    priceMap.monthly = priceMap.monthly || Deno.env.get("STRIPE_PRICE_MONTHLY");
+    priceMap.yearly = priceMap.yearly || Deno.env.get("STRIPE_PRICE_YEARLY");
+    priceMap.lifetime = priceMap.lifetime || Deno.env.get("STRIPE_PRICE_LIFETIME");
+
     const priceId = priceMap[plan];
     if (!priceId) {
+      console.error("create-checkout: no price ID for plan", { plan, hasMonthly: !!priceMap.monthly, hasYearly: !!priceMap.yearly, hasLifetime: !!priceMap.lifetime });
       return new Response(JSON.stringify({ error: "Invalid plan. Must be monthly, yearly, or lifetime." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
