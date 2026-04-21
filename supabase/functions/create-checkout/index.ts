@@ -4,11 +4,11 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 // This endpoint is intentionally public (pre-signup Cookie Yeti checkout),
 // so JWT verification stays off, but we defense-in-depth via Origin allowlist
 // + email format validation.
+// CY-01: Cookie Yeti lives under bestly.tech/cookie-yeti; the standalone
+// cookieyeti.app domain is not registered, so we don't accept it as an origin.
 const ALLOWED_ORIGINS = new Set([
   "https://bestly.tech",
   "https://www.bestly.tech",
-  "https://cookieyeti.app",
-  "https://www.cookieyeti.app",
 ]);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -95,8 +95,10 @@ serve(async (req) => {
     params.append("line_items[0][price]", priceId);
     params.append("line_items[0][quantity]", "1");
     params.append("mode", isSubscription ? "subscription" : "payment");
-    params.append("success_url", "https://cookieyeti.app/success");
-    params.append("cancel_url", "https://cookieyeti.app/cancel");
+    // CY-01: Stripe redirects after checkout. Point at the bestly.tech
+    // landing page routes since cookieyeti.app isn't a registered domain.
+    params.append("success_url", "https://www.bestly.tech/cookie-yeti/success?session_id={CHECKOUT_SESSION_ID}");
+    params.append("cancel_url", "https://www.bestly.tech/cookie-yeti/cancel");
 
     const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",

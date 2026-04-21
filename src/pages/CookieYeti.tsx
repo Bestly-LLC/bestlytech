@@ -7,12 +7,23 @@ import { supabase } from "@/integrations/supabase/client";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import {
   Download,
@@ -121,7 +132,10 @@ const CONFIG = {
   },
 };
 
+type CheckoutPlan = "monthly" | "yearly" | "lifetime";
+
 export default function CookieYeti() {
+  const { toast } = useToast();
   const [serviceStatus, setServiceStatus] = useState<'operational' | 'degraded' | 'down' | 'checking'>('checking');
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [liveStats, setLiveStats] = useState<{
@@ -133,6 +147,55 @@ export default function CookieYeti() {
     patterns_last_24h: number;
     new_domains_last_7d: number;
   } | null>(null);
+
+  // CY-01: checkout dialog state. Click a pricing button -> opens dialog ->
+  // user enters email -> POST to create-checkout edge function -> redirect
+  // to Stripe's hosted checkout URL.
+  const [checkoutPlan, setCheckoutPlan] = useState<CheckoutPlan | null>(null);
+  const [checkoutEmail, setCheckoutEmail] = useState("");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  const planLabels: Record<CheckoutPlan, { title: string; price: string; cadence: string }> = {
+    monthly: { title: "Monthly", price: CONFIG.pricing.monthly, cadence: "/month" },
+    yearly: { title: "Yearly", price: CONFIG.pricing.yearly, cadence: "/year" },
+    lifetime: { title: "Lifetime", price: CONFIG.pricing.lifetime, cadence: " one-time" },
+  };
+
+  const openCheckout = (plan: CheckoutPlan) => {
+    setCheckoutPlan(plan);
+    setCheckoutEmail("");
+  };
+
+  const submitCheckout = async () => {
+    if (!checkoutPlan) return;
+    const email = checkoutEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      toast({ title: "Enter a valid email", variant: "destructive" });
+      return;
+    }
+    setCheckoutLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { email, plan: checkoutPlan },
+      });
+      if (error) throw error;
+      const url = (data as { url?: string } | null)?.url;
+      if (!url) throw new Error("No checkout URL returned");
+      // Hand off to Stripe's hosted checkout.
+      window.location.href = url;
+    } catch (err) {
+      console.error("create-checkout failed:", err);
+      const msg = err instanceof Error ? err.message : "Checkout failed. Please try again.";
+      toast({
+        title: "Couldn't start checkout",
+        description: msg.includes("Forbidden")
+          ? "Request blocked. Please refresh and try again."
+          : msg,
+        variant: "destructive",
+      });
+      setCheckoutLoading(false);
+    }
+  };
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -445,7 +508,7 @@ export default function CookieYeti() {
                     </li>
                   ))}
                 </ul>
-                <Button variant="outline" className="w-full mt-8">Subscribe Monthly</Button>
+                <Button variant="outline" className="w-full mt-8" onClick={() => openCheckout("monthly")}>Subscribe Monthly</Button>
               </div>
             </AnimatedSection>
             
@@ -476,7 +539,7 @@ export default function CookieYeti() {
                     </li>
                   ))}
                 </ul>
-                <Button className="w-full mt-8">Subscribe Yearly</Button>
+                <Button className="w-full mt-8" onClick={() => openCheckout("yearly")}>Subscribe Yearly</Button>
               </div>
             </AnimatedSection>
             
@@ -503,7 +566,7 @@ export default function CookieYeti() {
                     </li>
                   ))}
                 </ul>
-                <Button variant="outline" className="w-full mt-8">Buy Lifetime</Button>
+                <Button variant="outline" className="w-full mt-8" onClick={() => openCheckout("lifetime")}>Buy Lifetime</Button>
               </div>
             </AnimatedSection>
           </div>
@@ -806,6 +869,71 @@ export default function CookieYeti() {
           </div>
         </div>
       </section>
+
+      {/* CY-01: Checkout email capture dialog */}
+      <Dialog
+        open={checkoutPlan !== null}
+        onOpenChange={(open) => {
+          if (!open && !checkoutLoading) setCheckoutPlan(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {checkoutPlan ? `Subscribe - ${planLabels[checkoutPlan].title}` : "Subscribe"}
+            </DialogTitle>
+            <DialogDescription>
+              {checkoutPlan && (
+                <>
+                  <span className="font-semibold text-foreground">
+                    {planLabels[checkoutPlan].price}
+                  </span>
+                  <span className="text-muted-foreground">{planLabels[checkoutPlan].cadence}</span>
+                  {" - you'll be redirected to Stripe to complete payment."}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4 pt-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitCheckout();
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="cy-checkout-email">Email</Label>
+              <Input
+                id="cy-checkout-email"
+                type="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                autoFocus
+                required
+                value={checkoutEmail}
+                onChange={(e) => setCheckoutEmail(e.target.value)}
+                disabled={checkoutLoading}
+              />
+              <p className="text-xs text-muted-foreground">
+                We'll send your receipt and activation details here.
+              </p>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setCheckoutPlan(null)}
+                disabled={checkoutLoading}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={checkoutLoading}>
+                {checkoutLoading ? "Redirecting..." : "Continue to payment"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
