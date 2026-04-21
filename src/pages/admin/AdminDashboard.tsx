@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DateRangeFilter, filterByDateRange, type DateRange } from "@/components/admin/DateRangeFilter";
 import { ActivityFeed } from "@/components/admin/ActivityFeed";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
+import { SystemPulse } from "@/components/admin/SystemPulse";
 
 const statusColor: Record<string, string> = {
   Draft: "text-white/40",
@@ -86,21 +87,10 @@ export default function AdminDashboard() {
       supabase.from("dismissal_reports").select("id", { count: "exact", head: true }),
       supabase.from("ai_generation_log").select("id", { count: "exact", head: true }),
     ]);
-    // SITE-02: surface aggregate query failures to the admin instead of
-    // silently showing zeros. Log each individually for debugging and
-    // toast once per group so the page isn't spammed.
-    const cyResults = [patternsAll, patternsActive, unresolvedRes, dismissalsRes, aiGenRes];
-    cyResults.forEach((r, i) => {
+    // Log any CookieYeti query errors for debugging
+    [patternsAll, patternsActive, unresolvedRes, dismissalsRes, aiGenRes].forEach((r, i) => {
       if (r.error) console.error(`[CY Query ${i}]`, r.error.message);
     });
-    const cyFailures = cyResults.filter((r) => r.error).length;
-    if (cyFailures > 0) {
-      toast({
-        title: "CookieYeti stats unavailable",
-        description: `${cyFailures} of ${cyResults.length} queries failed. Showing partial data.`,
-        variant: "destructive",
-      });
-    }
     setPatternCount(patternsAll.count ?? 0);
     setActivePatternCount(patternsActive.count ?? 0);
     setUnresolvedCount(unresolvedRes.count ?? 0);
@@ -118,18 +108,10 @@ export default function AdminDashboard() {
       supabase.from("passkey_credentials" as any).select("id", { count: "exact", head: true }),
       supabase.from("passkey_credentials" as any).select("id", { count: "exact", head: true }),
     ]);
-    const opsResults = [devicesRes, pushRes, sentRes, failedRes, sysRes, piholeRes, usersRes, passkeysRes];
-    opsResults.forEach((r, i) => {
+    // Log any ops query errors for debugging
+    [devicesRes, pushRes, sentRes, failedRes, sysRes, piholeRes, usersRes, passkeysRes].forEach((r, i) => {
       if (r.error) console.error(`[Ops Query ${i}]`, r.error.message);
     });
-    const opsFailures = opsResults.filter((r) => r.error).length;
-    if (opsFailures > 0) {
-      toast({
-        title: "Ops stats unavailable",
-        description: `${opsFailures} of ${opsResults.length} queries failed. Showing partial data.`,
-        variant: "destructive",
-      });
-    }
     setDeviceCount(devicesRes.count ?? 0);
     setPushCount(pushRes.count ?? 0);
     setEmailsSent(sentRes.count ?? 0);
@@ -184,24 +166,8 @@ export default function AdminDashboard() {
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
-      {/* System Health Banner */}
-      <div className={`flex items-center gap-3 px-5 py-3 rounded-2xl border ${
-        systemDown
-          ? "bg-red-500/5 border-red-500/20"
-          : "bg-emerald-500/5 border-emerald-500/20"
-      }`}>
-        {systemDown ? (
-          <WifiOff className="h-4 w-4 text-red-400 shrink-0" />
-        ) : (
-          <Wifi className="h-4 w-4 text-emerald-400 shrink-0" />
-        )}
-        <span className={`text-sm font-medium ${systemDown ? "text-red-400" : "text-emerald-400"}`}>
-          {systemDown ? `System Alert: ${downSystems.join(", ") || "Issue detected"}` : "All Systems Operational"}
-        </span>
-        <span className="text-xs text-white/20 ml-auto hidden sm:inline">
-          26 edge functions &middot; 28 tables &middot; RLS active
-        </span>
-      </div>
+      {/* Live System Pulse */}
+      <SystemPulse />
 
       {/* ─── CookieYeti Overview ─── */}
       <div>

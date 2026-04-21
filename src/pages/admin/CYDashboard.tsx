@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -22,6 +22,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DateRangeFilter, filterByDateRange, type DateRange } from "@/components/admin/DateRangeFilter";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
 
+// New components
+import { SystemPulse } from "@/components/admin/SystemPulse";
+import { PipelineHealthRing } from "@/components/admin/PipelineHealthRing";
+import { PatternCoverageGrid } from "@/components/admin/PatternCoverageGrid";
+import { SmartAlerts } from "@/components/admin/SmartAlerts";
+import { OperationsPanel } from "@/components/admin/OperationsPanel";
+import { DomainDeepDive } from "@/components/admin/DomainDeepDive";
+
 export default function CYDashboard() {
   const [subs, setSubs] = useState<any[]>([]);
   const [grants, setGrants] = useState<any[]>([]);
@@ -32,7 +40,7 @@ export default function CYDashboard() {
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
   const { toast } = useToast();
 
-  // New CookieYeti Command Center state
+  // CookieYeti Command Center state
   const [patternCount, setPatternCount] = useState(0);
   const [activePatternCount, setActivePatternCount] = useState(0);
   const [dismissalCount, setDismissalCount] = useState(0);
@@ -45,11 +53,29 @@ export default function CYDashboard() {
   const [pushCount, setPushCount] = useState(0);
   const [activationCount, setActivationCount] = useState(0);
 
+  // New state for upgraded components
+  const [aiStatusBreakdown, setAiStatusBreakdown] = useState<Array<{ status: string; count: number }>>([]);
+  const [domainCoverage, setDomainCoverage] = useState<any[]>([]);
+  const [allPatterns, setAllPatterns] = useState<any[]>([]);
+  const [permanentlyFailedCount, setPermanentlyFailedCount] = useState(0);
+  const [candidateCount, setCandidateCount] = useState(0);
+
+  // Domain deep dive state
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleDomainClick = useCallback((domain: string) => {
+    setSelectedDomain(domain);
+    setDrawerOpen(true);
+  }, []);
+
   useAdminRealtime({
-    tables: ["subscriptions", "granted_access"],
+    tables: ["subscriptions", "granted_access", "cookie_patterns", "missed_banner_reports"],
     onNewRecord: (table, record) => {
       if (table === "subscriptions") setSubs((p) => [record, ...p]);
       if (table === "granted_access") setGrants((p) => [record, ...p]);
+      // Refresh data when CY tables change
+      if (table === "cookie_patterns" || table === "missed_banner_reports") loadData();
     },
   });
 
@@ -66,10 +92,11 @@ export default function CYDashboard() {
     setSubs(s || []);
     setGrants(g || []);
 
-    // CookieYeti Command Center data
+    // CookieYeti Command Center data + new visualization data
     const [
       pAll, pActive, dCount, aiAll, aiSuccess, fixes,
       missed, patterns, devices, push, activations,
+      aiLogs, topDomains, allActivePatterns, permFailed, genCandidates,
     ] = await Promise.all([
       supabase.from("cookie_patterns").select("id", { count: "exact", head: true }),
       supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("is_active", true),
@@ -77,17 +104,28 @@ export default function CYDashboard() {
       supabase.from("ai_generation_log").select("id", { count: "exact", head: true }),
       supabase.from("ai_generation_log").select("id", { count: "exact", head: true }).eq("status", "success"),
       supabase.from("pattern_fix_log").select("id", { count: "exact", head: true }).eq("success", true),
-      (supabase.from("missed_banner_reports").select("*").eq("resolved", false).order("report_count", { ascending: false }).limit(10) as any),
-      (supabase.from("cookie_patterns").select("*").eq("is_active", true).order("report_count", { ascending: false }).limit(10) as any),
+      supabase.from("missed_banner_reports").select("*").eq("resolved", false).order("report_count", { ascending: false }).limit(10) as any,
+      supabase.from("cookie_patterns").select("*").eq("is_active", true).order("report_count", { ascending: false }).limit(10) as any,
       supabase.from("device_registrations").select("id", { count: "exact", head: true }),
       supabase.from("device_tokens").select("id", { count: "exact", head: true }),
       supabase.from("activation_codes").select("id", { count: "exact", head: true }).eq("active", true),
+      // New: AI status breakdown for PipelineHealthRing
+      supabase.from("ai_generation_log").select("status"),
+      // New: Domain coverage for PatternCoverageGrid
+      supabase.rpc("get_top_domains" as any, { p_limit: 50 }),
+      // New: All active patterns for SmartAlerts
+      supabase.from("cookie_patterns").select("domain, confidence, is_active, success_count, report_count").eq("is_active", true),
+      // New: Permanently failed count
+      supabase.from("ai_generation_log").select("id", { count: "exact", head: true }).eq("status", "permanently_failed"),
+      // New: Candidate count for operations panel
+      supabase.from("missed_banner_reports").select("id", { count: "exact", head: true }).eq("resolved", false),
     ]);
 
     // Log any query errors for debugging
     [pAll, pActive, dCount, aiAll, aiSuccess, fixes, missed, patterns, devices, push, activations].forEach((r, i) => {
       if (r.error) console.error(`[CY Dashboard Query ${i}]`, r.error.message);
     });
+
     setPatternCount(pAll.count ?? 0);
     setActivePatternCount(pActive.count ?? 0);
     setDismissalCount(dCount.count ?? 0);
@@ -99,6 +137,28 @@ export default function CYDashboard() {
     setDeviceCount(devices.count ?? 0);
     setPushCount(push.count ?? 0);
     setActivationCount(activations.count ?? 0);
+
+    // Process AI status breakdown for donut chart
+    if (aiLogs.data) {
+      const statusMap = new Map<string, number>();
+      (aiLogs.data as any[]).forEach((log: any) => {
+        const st = log.status || "unknown";
+        statusMap.set(st, (statusMap.get(st) || 0) + 1);
+      });
+      setAiStatusBreakdown(Array.from(statusMap.entries()).map(([status, count]) => ({ status, count })));
+    }
+
+    // Domain coverage data
+    setDomainCoverage(topDomains.data || []);
+
+    // All patterns for smart alerts
+    setAllPatterns(allActivePatterns.data || []);
+
+    // Permanently failed count
+    setPermanentlyFailedCount(permFailed.count ?? 0);
+
+    // Candidate count
+    setCandidateCount(genCandidates.count ?? 0);
 
     setLoading(false);
   };
@@ -128,7 +188,8 @@ export default function CYDashboard() {
   const monthly = activeSubs.filter((s) => s.plan === "monthly").length;
   const yearly = activeSubs.filter((s) => s.plan === "yearly").length;
   const lifetime = activeSubs.filter((s) => s.plan === "lifetime").length;
-  const aiSuccessRate = aiGenCount > 0 ? ((aiSuccessCount / aiGenCount) * 100).toFixed(1) : "N/A";
+  const aiSuccessRate = aiGenCount > 0 ? Math.round((aiSuccessCount / aiGenCount) * 100) : 0;
+  const aiSuccessRateStr = aiGenCount > 0 ? `${((aiSuccessCount / aiGenCount) * 100).toFixed(1)}%` : "N/A";
 
   const getPriority = (count: number) => {
     if (count >= 10) return { label: "critical", color: "destructive" as const };
@@ -141,19 +202,23 @@ export default function CYDashboard() {
     return (
       <div className="space-y-8 max-w-7xl">
         <div><Skeleton className="h-7 w-56" /><Skeleton className="h-4 w-72 mt-2" /></div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        <Skeleton className="h-16 rounded-2xl" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
         <div className="grid md:grid-cols-2 gap-6">
-          <Skeleton className="h-64 rounded-xl" />
-          <Skeleton className="h-64 rounded-xl" />
+          <Skeleton className="h-72 rounded-xl" />
+          <Skeleton className="h-72 rounded-xl" />
         </div>
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }
 
   return (
     <div className="space-y-8 max-w-7xl">
+      {/* ─── Header ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <PageHeader
           title="CookieYeti Command Center"
@@ -185,6 +250,18 @@ export default function CYDashboard() {
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
+      {/* ─── Live System Pulse ─── */}
+      <SystemPulse />
+
+      {/* ─── Smart Alerts ─── */}
+      <SmartAlerts
+        unresolvedReports={unresolvedReports}
+        patterns={allPatterns}
+        aiSuccessRate={aiSuccessRate}
+        permanentlyFailedCount={permanentlyFailedCount}
+        onDomainClick={handleDomainClick}
+      />
+
       {/* ─── Pattern & AI Stats ─── */}
       <div>
         <div className="flex items-center gap-2 mb-3">
@@ -194,12 +271,25 @@ export default function CYDashboard() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <StatCard label="Active Patterns" value={activePatternCount} icon={Cookie} accentColor="#8b5cf6" iconBg="bg-violet-500/10" iconColor="text-violet-400" subtitle={`${patternCount} total`} />
           <StatCard label="Dismissals" value={dismissalCount} icon={CheckCircle2} accentColor="#10b981" iconBg="bg-emerald-500/10" iconColor="text-emerald-400" />
-          <StatCard label="AI Generations" value={aiGenCount} icon={Cpu} accentColor="#06b6d4" iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle={`${aiSuccessRate}% success`} />
+          <StatCard label="AI Generations" value={aiGenCount} icon={Cpu} accentColor="#06b6d4" iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle={`${aiSuccessRateStr} success`} />
           <StatCard label="Pattern Fixes" value={fixCount} icon={Zap} accentColor="#f59e0b" iconBg="bg-amber-500/10" iconColor="text-amber-400" />
           <StatCard label="Unresolved" value={unresolvedReports.length} icon={AlertTriangle} accentColor={unresolvedReports.length > 0 ? "#ef4444" : "#10b981"} iconBg={unresolvedReports.length > 0 ? "bg-red-500/10" : "bg-emerald-500/10"} iconColor={unresolvedReports.length > 0 ? "text-red-400" : "text-emerald-400"} />
           <StatCard label="Activations" value={activationCount} icon={Target} iconBg="bg-white/[0.05]" iconColor="text-white/40" subtitle={`${deviceCount} devices, ${pushCount} push`} />
         </div>
       </div>
+
+      {/* ─── AI Pipeline Health + Pattern Coverage ─── */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <PipelineHealthRing data={aiStatusBreakdown} successRate={aiSuccessRate} />
+        <PatternCoverageGrid domains={domainCoverage} onDomainClick={handleDomainClick} />
+      </div>
+
+      {/* ─── Operations Panel ─── */}
+      <OperationsPanel
+        onRefresh={loadData}
+        candidateCount={candidateCount}
+        permanentlyFailedCount={permanentlyFailedCount}
+      />
 
       {/* ─── Subscriber Stats ─── */}
       <div>
@@ -223,7 +313,7 @@ export default function CYDashboard() {
             <AlertTriangle className="h-4 w-4 text-amber-400" />
             <div>
               <h3 className="text-[15px] font-semibold text-white">Missed Banner Queue</h3>
-              <p className="text-xs text-white/30 mt-0.5">Unresolved reports sorted by urgency.</p>
+              <p className="text-xs text-white/30 mt-0.5">Unresolved reports sorted by urgency. Click a domain for details.</p>
             </div>
           </div>
           <Link to="/admin/cookie-yeti/community">
@@ -247,9 +337,9 @@ export default function CYDashboard() {
             {unresolvedReports.map((r) => {
               const p = getPriority(r.report_count);
               return (
-                <TableRow key={r.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                <TableRow key={r.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] cursor-pointer" onClick={() => handleDomainClick(r.domain)}>
                   <TableCell><Badge variant={p.color} className="text-[10px] uppercase">{p.label}</Badge></TableCell>
-                  <TableCell className="text-sm text-white font-medium">{r.domain}</TableCell>
+                  <TableCell className="text-sm text-white font-medium hover:text-cyan-400 transition-colors">{r.domain}</TableCell>
                   <TableCell className="text-sm text-white/60 tabular-nums">{r.report_count}</TableCell>
                   <TableCell className="text-sm text-white/60 tabular-nums">{r.ai_attempts ?? 0}</TableCell>
                   <TableCell className="text-xs text-white/40">{r.cmp_fingerprint ?? "unknown"}</TableCell>
@@ -272,7 +362,7 @@ export default function CYDashboard() {
       <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
         <div className="px-5 py-4">
           <h3 className="text-[15px] font-semibold text-white">Top Patterns</h3>
-          <p className="text-xs text-white/30 mt-0.5">Most-used cookie banner patterns by report count.</p>
+          <p className="text-xs text-white/30 mt-0.5">Most-used cookie banner patterns by report count. Click a domain for details.</p>
         </div>
         <Table>
           <TableHeader>
@@ -287,8 +377,8 @@ export default function CYDashboard() {
           </TableHeader>
           <TableBody>
             {topPatterns.map((p) => (
-              <TableRow key={p.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
-                <TableCell className="text-sm text-white font-medium">{p.domain}</TableCell>
+              <TableRow key={p.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] cursor-pointer" onClick={() => handleDomainClick(p.domain)}>
+                <TableCell className="text-sm text-white font-medium hover:text-cyan-400 transition-colors">{p.domain}</TableCell>
                 <TableCell>
                   <code className="text-[11px] text-cyan-400 bg-cyan-400/10 px-1.5 py-0.5 rounded max-w-[200px] truncate block">{p.selector}</code>
                 </TableCell>
@@ -389,6 +479,14 @@ export default function CYDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ─── Domain Deep Dive Drawer ─── */}
+      <DomainDeepDive
+        domain={selectedDomain}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onRefresh={loadData}
+      />
     </div>
   );
 }
