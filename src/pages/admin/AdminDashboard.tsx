@@ -19,6 +19,8 @@ import { DateRangeFilter, filterByDateRange, type DateRange } from "@/components
 import { ActivityFeed } from "@/components/admin/ActivityFeed";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
 import { SystemPulse } from "@/components/admin/SystemPulse";
+import { ActionInbox } from "@/components/admin/ActionInbox";
+import { QuickActions } from "@/components/admin/QuickActions";
 
 const statusColor: Record<string, string> = {
   Draft: "text-white/40",
@@ -166,8 +168,14 @@ export default function AdminDashboard() {
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
+      {/* What needs you right now */}
+      <ActionInbox />
+
       {/* Live System Pulse */}
       <SystemPulse />
+
+      {/* Quick jumps to common admin destinations */}
+      <QuickActions />
 
       {/* ─── CookieYeti Overview ─── */}
       <div>
