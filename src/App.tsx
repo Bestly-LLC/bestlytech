@@ -25,6 +25,7 @@ const CookieYetiSuccess = lazy(() => import("./pages/CookieYetiSuccess"));
 const CookieYetiCancel = lazy(() => import("./pages/CookieYetiCancel"));
 const InventoryProof = lazy(() => import("./pages/InventoryProof"));
 const Hoku = lazy(() => import("./pages/Hoku"));
+const InHouseCloud = lazy(() => import("./pages/InHouseCloud"));
 const NeckPilot = lazy(() => import("./pages/NeckPilot"));
 const PressKit = lazy(() => import("./pages/PressKit"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
@@ -96,6 +97,8 @@ const App = () => (
                   <Route path="/confesh/support" element={<ConfeshSupport />} />
                   <Route path="/inventory-proof" element={<InventoryProof />} />
                   <Route path="/hoku" element={<Hoku />} />
+                  <Route path="/cloud" element={<InHouseCloud />} />
+                  <Route path="/in-house-cloud" element={<InHouseCloud />} />
                   <Route path="/neckpilot" element={<NeckPilot />} />
                   <Route path="/press" element={<PressKit />} />
                   <Route path="/privacy-policy" element={<PrivacyPolicy />} />
