@@ -160,11 +160,9 @@ const COOKIE_KEYWORDS = [
 function detectKnownCMP(html: string): typeof KNOWN_CMPS[number] | null {
   const lower = html.toLowerCase();
   for (const cmp of KNOWN_CMPS) {
-    // Check banner element signatures (class names, IDs, text)
     if (cmp.signatures.some((sig) => lower.includes(sig.toLowerCase()))) {
       return cmp;
     }
-    // Check script/CDN URL signatures in raw HTML
     if (cmp.scriptSignatures.some((sig) => lower.includes(sig.toLowerCase()))) {
       return cmp;
     }
@@ -173,7 +171,6 @@ function detectKnownCMP(html: string): typeof KNOWN_CMPS[number] | null {
 }
 
 function extractCookieElements(html: string): string {
-  // Simple regex-based extraction of elements with cookie-related class/id attributes
   const elements: string[] = [];
   const pattern = /<[^>]+(class|id)\s*=\s*["'][^"']*(?:cookie|consent|gdpr|ccpa|privacy|banner|notice|cmp|onetrust|cookiebot|didomi|quantcast|truste|complianz)[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/gi;
   let match;
@@ -198,7 +195,6 @@ async function fetchPageHtml(domain: string, pageUrl?: string): Promise<string |
     });
     if (!res.ok) return null;
     const text = await res.text();
-    // Limit to first 50KB to avoid memory issues
     return text.substring(0, 50000);
   } catch (e) {
     console.error(`Failed to fetch ${url}:`, e);
@@ -206,13 +202,11 @@ async function fetchPageHtml(domain: string, pageUrl?: string): Promise<string |
   }
 }
 
-const AI_MODEL = "google/gemini-2.5-pro";
-const AI_MODEL_LABEL = "gemini-2.5-pro";
+const AI_MODEL = "gpt-4o";
+const AI_MODEL_LABEL = "gpt-4o";
 
-// Banned selectors that would match entire page structures
 const BANNED_SELECTORS = ['body', 'html', 'head', 'body *', 'html *', '*'];
 
-// Domains that should never get cookie patterns (major web apps without standard banners)
 const EXCLUDED_DOMAINS = [
   'icloud.com', 'mail.google.com', 'drive.google.com', 'docs.google.com',
   'outlook.live.com', 'outlook.office.com', 'teams.microsoft.com',
@@ -233,7 +227,6 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Auth: require maintenance secret OR valid admin Bearer token OR service role
   const maintenanceSecret = req.headers.get("x-maintenance-secret");
   const authHeader = req.headers.get("Authorization");
   let authorized = false;
@@ -265,24 +258,21 @@ Deno.serve(async (req) => {
   }
 
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
   const svcClient = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
 
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) {
     return new Response(
-      JSON.stringify({ error: "LOVABLE_API_KEY not configured" }),
+      JSON.stringify({ error: "OPENAI_API_KEY not configured" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
   const supabase = svcClient;
-
   const results: any[] = [];
   let processed = 0, generated = 0, skipped = 0, failed = 0;
 
   try {
-    // Check for optional single-domain mode
     let requestBody: any = {};
     try {
       requestBody = await req.json();
@@ -293,7 +283,6 @@ Deno.serve(async (req) => {
     let items: any[] = [];
 
     if (requestBody.domain) {
-      // Single-domain mode: fetch that domain directly
       const { data: singleDomain, error: singleErr } = await supabase
         .from("missed_banner_reports")
         .select("*")
@@ -303,7 +292,6 @@ Deno.serve(async (req) => {
       if (singleErr) throw singleErr;
       items = singleDomain ?? [];
     } else {
-      // Batch mode: use RPC
       const { data: candidates, error: fetchErr } = await supabase.rpc(
         "get_ai_generation_candidates",
         { _limit: 5 }
@@ -312,10 +300,27 @@ Deno.serve(async (req) => {
       items = (candidates as any[]) ?? [];
     }
 
+    // Heartbeat: when there is no work to do, write a sentinel row so
+    // monitoring doesn't mistake "idle pipeline" for "broken pipeline".
+    // Without this, ai_generation_log goes silent during idle periods
+    // and the health check fires a false alarm. Cron-driven (no domain)
+    // calls only — explicit single-domain invocations don't heartbeat.
+    if (items.length === 0 && !requestBody.domain) {
+      try {
+        await supabase.from("ai_generation_log").insert({
+          domain: "_system",
+          status: "no_candidates",
+          ai_model: "heartbeat",
+          error_message: "Generator ran; no unresolved candidates pending.",
+        });
+      } catch (hbErr) {
+        console.warn("Failed to write no_candidates heartbeat:", hbErr);
+      }
+    }
+
     for (const candidate of items) {
       processed++;
 
-      // ========== GUARD: Excluded domains ==========
       if (isDomainExcluded(candidate.domain)) {
         console.log(`[${candidate.domain}] Skipping — excluded domain`);
         skipped++;
@@ -330,8 +335,6 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // ========== LAYER 0: cmp_fingerprint field check ==========
-      // If the extension already identified the CMP, use known selectors immediately
       if (candidate.cmp_fingerprint && candidate.cmp_fingerprint !== "unknown" && candidate.cmp_fingerprint !== "generic") {
         const knownCMP = KNOWN_CMPS.find(
           (cmp) => cmp.cmp_fingerprint === candidate.cmp_fingerprint.toLowerCase() ||
@@ -340,7 +343,6 @@ Deno.serve(async (req) => {
         if (knownCMP) {
           console.log(`[${candidate.domain}] CMP identified via cmp_fingerprint field: ${knownCMP.name} — using known selectors`);
           await insertCMPPattern(supabase, candidate, knownCMP);
-          // Override confidence to 9 and set strategy for fingerprint-matched patterns
           await supabase
             .from("cookie_patterns")
             .update({ confidence: 9, strategy: knownCMP.cmp_fingerprint } as any)
@@ -361,12 +363,10 @@ Deno.serve(async (req) => {
       }
 
       if (!candidate.banner_html) {
-        // Instead of skipping, try server-side fetch + CMP detection
         console.log(`[${candidate.domain}] No extension HTML — attempting server-side fetch for CMP detection`);
         const serverHtml = await fetchPageHtml(candidate.domain, candidate.page_url);
 
         if (serverHtml) {
-          // Check for known CMP via script tags / elements
           const serverCMP = detectKnownCMP(serverHtml);
           if (serverCMP) {
             console.log(`[${candidate.domain}] Known CMP detected via server fetch (no extension HTML): ${serverCMP.name}`);
@@ -384,12 +384,11 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // No CMP found — try extracting cookie elements and running AI
           const extractedHtml = extractCookieElements(serverHtml);
           if (extractedHtml && extractedHtml.length >= 50) {
             console.log(`[${candidate.domain}] No CMP match, trying AI on ${extractedHtml.length} chars of server-extracted elements`);
             try {
-              const aiResult = await callAI(LOVABLE_API_KEY, extractedHtml, candidate.domain, candidate.cmp_fingerprint);
+              const aiResult = await callAI(OPENAI_API_KEY, extractedHtml, candidate.domain, candidate.cmp_fingerprint);
               if (aiResult.is_cookie_banner && aiResult.selector) {
                 await insertPattern(supabase, candidate, aiResult, "success", extractedHtml);
                 generated++;
@@ -409,7 +408,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        // All server-side attempts failed — now skip
         skipped++;
         const currentAttempts = candidate.ai_attempts ?? 0;
         const skipStatus = currentAttempts >= 4 ? "permanently_failed" : "skipped_no_html";
@@ -430,7 +428,6 @@ Deno.serve(async (req) => {
       }
 
       try {
-        // ========== LAYER 1: CMP check on extension HTML FIRST ==========
         const extensionCMP = detectKnownCMP(candidate.banner_html);
         if (extensionCMP) {
           console.log(`[${candidate.domain}] Known CMP detected in extension HTML: ${extensionCMP.name}`);
@@ -448,8 +445,7 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // ========== LAYER 2: AI analysis on extension HTML (Gemini 2.5 Pro) ==========
-        const aiResult = await callAI(LOVABLE_API_KEY, candidate.banner_html, candidate.domain, candidate.cmp_fingerprint);
+        const aiResult = await callAI(OPENAI_API_KEY, candidate.banner_html, candidate.domain, candidate.cmp_fingerprint);
 
         if (aiResult.is_cookie_banner && aiResult.selector) {
           await insertPattern(supabase, candidate, aiResult, "success");
@@ -464,7 +460,6 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // ========== LAYER 3: Server-side fallback ==========
         const reason = aiResult.rejection_reason || "not a cookie banner";
         console.log(`[${candidate.domain}] Extension HTML rejected: ${reason}. Attempting server-side fallback...`);
 
@@ -472,7 +467,6 @@ Deno.serve(async (req) => {
         const serverFetchSuccess = !!serverHtml;
 
         if (serverHtml) {
-          // 3a: CMP check on server HTML
           const serverCMP = detectKnownCMP(serverHtml);
           if (serverCMP) {
             console.log(`[${candidate.domain}] Known CMP detected in server HTML: ${serverCMP.name}`);
@@ -490,12 +484,11 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // 3b: Extract cookie elements → 2nd AI attempt
           const extractedHtml = extractCookieElements(serverHtml);
 
           if (extractedHtml && extractedHtml.length >= 50) {
             console.log(`[${candidate.domain}] Attempting second AI analysis with ${extractedHtml.length} chars of extracted elements`);
-            const aiResult2 = await callAI(LOVABLE_API_KEY, extractedHtml, candidate.domain, candidate.cmp_fingerprint);
+            const aiResult2 = await callAI(OPENAI_API_KEY, extractedHtml, candidate.domain, candidate.cmp_fingerprint);
 
             if (aiResult2.is_cookie_banner && aiResult2.selector) {
               await insertPattern(supabase, candidate, aiResult2, "success", extractedHtml);
@@ -513,50 +506,47 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ========== LAYER 4: Gemini Flash failsafe — different model, different prompt ==========
-        const fullHtmlForGemini = serverHtml || candidate.banner_html || "";
-        if (fullHtmlForGemini.length > 100) {
-          console.log(`[${candidate.domain}] All layers failed, trying Gemini Flash failsafe...`);
-          const geminiResult = await geminiFailsafe(LOVABLE_API_KEY, candidate.domain, fullHtmlForGemini);
-          if (geminiResult) {
+        const fullHtmlForFailsafe = serverHtml || candidate.banner_html || "";
+        if (fullHtmlForFailsafe.length > 100) {
+          console.log(`[${candidate.domain}] All layers failed, trying GPT-4o-mini failsafe...`);
+          const failsafeResult = await gptFailsafe(OPENAI_API_KEY, candidate.domain, fullHtmlForFailsafe);
+          if (failsafeResult) {
             await insertPattern(supabase, candidate, {
               is_cookie_banner: true,
-              selector: geminiResult.selector,
-              action_type: geminiResult.action,
-              confidence: geminiResult.confidence,
-            }, "success_gemini_failsafe", fullHtmlForGemini.substring(0, 500));
+              selector: failsafeResult.selector,
+              action_type: failsafeResult.action,
+              confidence: failsafeResult.confidence,
+            }, "success_failsafe", fullHtmlForFailsafe.substring(0, 500));
 
-            if (geminiResult.strategy) {
+            if (failsafeResult.strategy) {
               await supabase
                 .from("cookie_patterns")
-                .update({ strategy: geminiResult.strategy.toLowerCase() } as any)
+                .update({ strategy: failsafeResult.strategy.toLowerCase() } as any)
                 .eq("domain", candidate.domain)
-                .eq("selector", geminiResult.selector);
+                .eq("selector", failsafeResult.selector);
             }
 
             generated++;
             results.push({
               domain: candidate.domain,
-              status: "success_gemini_failsafe",
-              selector: geminiResult.selector,
-              action: geminiResult.action,
-              confidence: geminiResult.confidence,
-              note: `Gemini failsafe${geminiResult.strategy ? ` (strategy: ${geminiResult.strategy})` : ""}`,
+              status: "success_failsafe",
+              selector: failsafeResult.selector,
+              action: failsafeResult.action,
+              confidence: failsafeResult.confidence,
+              note: `GPT-4o-mini failsafe${failsafeResult.strategy ? ` (strategy: ${failsafeResult.strategy})` : ""}`,
             });
             continue;
           }
         }
 
-        // ========== ALL PATHS FAILED → check retry limit ==========
         const diagnostics = [
           `Extension HTML: AI rejected (${reason})`,
           `Server fetch: ${serverFetchSuccess ? "OK" : "FAILED"}`,
           serverFetchSuccess ? `Server CMP check: no match` : null,
           serverFetchSuccess ? `Server AI: ${serverHtml ? "no cookie elements or AI rejected" : "N/A"}` : null,
-          `Gemini failsafe: no result`,
+          `GPT-4o-mini failsafe: no result`,
         ].filter(Boolean).join("; ");
 
-        // After 5 attempts total, mark as permanently_failed (auto-retry will stop)
         const currentAttempts = candidate.ai_attempts ?? 0;
         const failStatus = currentAttempts >= 4 ? "permanently_failed" : "needs_manual_review";
 
@@ -597,7 +587,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ========== HEALTH ALERT: Email if batch has issues ==========
     const failureRate = processed > 0 ? failed / processed : 0;
     const shouldAlert = (failureRate > 0.5 && processed >= 2) || (processed >= 3 && generated === 0);
 
@@ -647,7 +636,6 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {
-    // Critical error — send alert for unexpected failures
     try {
       const smtpEmail = Deno.env.get("PRIVATEMAIL_EMAIL");
       const smtpPassword = Deno.env.get("PRIVATEMAIL_PASSWORD");
@@ -693,7 +681,6 @@ interface AIResult {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
-// Validate that selector text and action_type are not contradictory
 function validateSelectorAction(selector: string, actionType: string): { valid: boolean; corrected?: string; reason?: string } {
   const lower = selector.toLowerCase();
   const acceptPatterns = /accept|agree|allow|got-it|gotit|ok-button/i;
@@ -716,7 +703,6 @@ function validateSelectorAction(selector: string, actionType: string): { valid: 
   return { valid: true };
 }
 
-// Check if domain already has a high-confidence active pattern
 async function hasExistingHighConfidencePattern(supabase: any, domain: string): Promise<boolean> {
   const { data, error } = await supabase
     .from("cookie_patterns")
@@ -774,7 +760,7 @@ HTML to analyze:
 ${html}`;
 
   const aiRes = await fetch(
-    "https://ai.gateway.lovable.dev/v1/chat/completions",
+    "https://api.openai.com/v1/chat/completions",
     {
       method: "POST",
       headers: {
@@ -831,20 +817,18 @@ ${html}`;
 
   if (!aiRes.ok) {
     const errText = await aiRes.text();
-    throw new Error(`AI gateway error ${aiRes.status}: ${errText}`);
+    throw new Error(`AI API error ${aiRes.status}: ${errText}`);
   }
 
   const aiData = await aiRes.json();
   const usage = aiData.usage ?? {};
 
-  // Parse tool call response
   const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
   let parsed: any;
 
   if (toolCall?.function?.arguments) {
     parsed = JSON.parse(toolCall.function.arguments);
   } else {
-    // Fallback: try parsing content as JSON
     const content = aiData.choices?.[0]?.message?.content;
     if (!content) throw new Error("No content or tool call in AI response");
     let jsonStr = content.trim();
@@ -853,7 +837,6 @@ ${html}`;
     parsed = JSON.parse(jsonStr);
   }
 
-  // Support both old "action" field and new "action_type" field
   const actionType = parsed.action_type || (parsed.action === "hide" ? "close" : "reject");
 
   return {
@@ -868,7 +851,6 @@ ${html}`;
 }
 
 async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN_CMPS[number]) {
-  // Check for existing high-confidence pattern
   if (await hasExistingHighConfidencePattern(supabase, candidate.domain)) {
     console.log(`[${candidate.domain}] Skipping CMP insert — existing high-confidence pattern found`);
     await supabase.from("ai_generation_log").insert({
@@ -893,7 +875,6 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
   });
   if (upsertErr) throw upsertErr;
 
-  // CMP-detected patterns start at confidence 7 + set strategy for built-in handler routing
   await supabase
     .from("cookie_patterns")
     .update({ confidence: 7, strategy: cmp.cmp_fingerprint } as any)
@@ -919,7 +900,6 @@ async function insertCMPPattern(supabase: any, candidate: any, cmp: typeof KNOWN
 async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, status: string, htmlOverride?: string) {
   const selector = aiResult.selector!;
 
-  // Reject banned selectors
   if (isSelectorBanned(selector)) {
     console.warn(`[${candidate.domain}] Rejected dangerous selector "${selector}"`);
     await supabase.from("ai_generation_log").insert({
@@ -935,7 +915,6 @@ async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, 
 
   let actionType = aiResult.action_type || (aiResult.action === "hide" ? "close" : "reject");
 
-  // Validate selector/action_type for contradictions
   const validation = validateSelectorAction(selector, actionType);
   if (!validation.valid && validation.corrected) {
     console.log(`[${candidate.domain}] Selector/action contradiction: ${validation.reason}. Auto-correcting to "${validation.corrected}"`);
@@ -943,7 +922,6 @@ async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, 
     status = status + "_autocorrected";
   }
 
-  // Check for existing high-confidence pattern
   if (await hasExistingHighConfidencePattern(supabase, candidate.domain)) {
     console.log(`[${candidate.domain}] Skipping AI insert — existing high-confidence pattern found`);
     await supabase.from("ai_generation_log").insert({
@@ -962,7 +940,6 @@ async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, 
   }
 
   const rawConfidence = Number(aiResult.confidence) || 5;
-  // AI patterns cap at 6, let success tracking promote them
   const confidence = Math.min(Math.round(rawConfidence), 6);
 
   const { error: upsertErr } = await supabase.rpc("upsert_pattern", {
@@ -974,7 +951,6 @@ async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, 
   });
   if (upsertErr) throw upsertErr;
 
-  // Update confidence to capped value
   await supabase
     .from("cookie_patterns")
     .update({ confidence })
@@ -1015,10 +991,10 @@ async function logFailure(supabase: any, candidate: any, reason: string, usage?:
   });
 }
 
-// ---------- Gemini Flash Failsafe ----------
-const GEMINI_FAILSAFE_MODEL = "google/gemini-2.5-flash";
+// ---------- GPT-4o-mini Failsafe ----------
+const FAILSAFE_MODEL = "gpt-4o-mini";
 
-async function geminiFailsafe(apiKey: string, domain: string, html: string): Promise<{ selector: string; action: string; confidence: number; strategy?: string } | null> {
+async function gptFailsafe(apiKey: string, domain: string, html: string): Promise<{ selector: string; action: string; confidence: number; strategy?: string } | null> {
   const prompt = `You are analyzing the HTML of ${domain} to find how to dismiss its cookie consent banner.
 
 The HTML may not contain the actual banner elements (they might be injected by JavaScript), but it WILL contain clues:
@@ -1040,14 +1016,14 @@ HTML (first 15000 chars):
 ${html.substring(0, 15000)}`;
 
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: GEMINI_FAILSAFE_MODEL,
+        model: FAILSAFE_MODEL,
         messages: [
           { role: "system", content: "You analyze web pages to identify cookie consent management platforms and how to dismiss them. Return only valid JSON." },
           { role: "user", content: prompt },
@@ -1079,7 +1055,7 @@ ${html.substring(0, 15000)}`;
     });
 
     if (!response.ok) {
-      console.log(`Gemini failsafe HTTP error for ${domain}: ${response.status}`);
+      console.log(`GPT failsafe HTTP error for ${domain}: ${response.status}`);
       return null;
     }
 
@@ -1114,7 +1090,7 @@ ${html.substring(0, 15000)}`;
       };
     }
   } catch (e) {
-    console.log(`Gemini failsafe error for ${domain}: ${e}`);
+    console.log(`GPT failsafe error for ${domain}: ${e}`);
   }
   return null;
 }
