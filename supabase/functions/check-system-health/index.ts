@@ -3,25 +3,25 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 /**
  * Cookie Yeti system health check + SMS alerting.
  *
- * v8 (2026-04-28) — issue-only alerting, plus pipeline-stall awareness.
+ * v9 (2026-04-28) — monitor only what's machine-driven.
  *
  * Rules from the operator:
  *  - SMS ONLY when something newly fails. No recovery pings, no all-clear.
  *  - Quiet hours 23:00–07:00 PT. Suppress SMS but keep state up to date.
  *  - 2-check hysteresis. No flapping.
  *
- * Thresholds tightened from the original 72h red:
- *  - ai_generator      red 12h (cron runs every 6h)
- *  - pattern_learning  red 24h (writes when AI succeeds for new domains)
- *  - report_ingestion  red 24h (extension reports are user-driven)
- *  - cron_jobs         red  6h (cron writes a heartbeat every 3h)
+ * Removed Pattern Learning and Report Ingestion from staleness alerting —
+ * they are event-driven (write only when AI succeeds / users report), not
+ * pulsed, so silence ≠ failure when product usage is low. Future work:
+ * synthetic write-path probes that test the endpoints regardless of organic
+ * input. Until that exists the dashboard can still show "silent N days" as
+ * informational; no SMS will fire.
  *
- * Report Ingestion now uses GREATEST(MAX(created_at), MAX(last_reported)) so
- * brand-new domain reports register as activity — not just duplicate-domain
- * pings (the old MAX(last_reported) signal looked dead for 11 days while
- * legitimate new reports were arriving).
+ * Active staleness checks (machine-driven only):
+ *  - ai_generator   red 12h (cron every 6h, heartbeat row when no candidates)
+ *  - cron_jobs      red  6h (run_maintenance_cron writes a heartbeat every 3h)
  *
- * Already deployed to Supabase as check-system-health v8. Mirrored here.
+ * Already deployed to Supabase as check-system-health v9. Mirrored here.
  */
 
 const corsHeaders = {
@@ -40,10 +40,8 @@ const QUIET_START_HOUR_PT = 23;
 const QUIET_END_HOUR_PT = 7;
 
 const THRESHOLDS = {
-  ai_generator:     { red: 12 },
-  report_ingestion: { red: 24 },
-  pattern_learning: { red: 24 },
-  cron_jobs:        { red: 6  },
+  ai_generator: { red: 12 },
+  cron_jobs:    { red: 6  },
 } as const;
 
 type SystemKey = keyof typeof THRESHOLDS;
@@ -63,12 +61,6 @@ function formatHours(h: number): string {
   if (h < 1) return `${Math.round(h * 60)}m`;
   if (h < 24) return `${Math.round(h)}h`;
   return `${Math.round(h / 24)}d`;
-}
-
-function maxDate(a: string | null, b: string | null): string | null {
-  if (!a) return b;
-  if (!b) return a;
-  return new Date(a).getTime() >= new Date(b).getTime() ? a : b;
 }
 
 function inQuietHoursPT(now: Date = new Date()): boolean {
@@ -117,27 +109,17 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const [aiGenRes, reportCreatedRes, reportLastRes, patternRes, maintenanceRes] = await Promise.all([
+    const [aiGenRes, maintenanceRes] = await Promise.all([
       supabase.from("ai_generation_log").select("created_at").order("created_at", { ascending: false }).limit(1),
-      supabase.from("missed_banner_reports").select("created_at").order("created_at", { ascending: false }).limit(1),
-      supabase.from("missed_banner_reports").select("last_reported").order("last_reported", { ascending: false }).limit(1),
-      supabase.from("cookie_patterns").select("created_at").order("created_at", { ascending: false }).limit(1),
       supabase.from("pattern_fix_log").select("created_at").order("created_at", { ascending: false }).limit(1),
     ]);
 
-    const lastAiGen   = aiGenRes.data?.[0]?.created_at ?? null;
-    const lastReport  = maxDate(
-      reportCreatedRes.data?.[0]?.created_at ?? null,
-      reportLastRes.data?.[0]?.last_reported ?? null,
-    );
-    const lastPattern = patternRes.data?.[0]?.created_at ?? null;
-    const lastCron    = maintenanceRes.data?.[0]?.created_at ?? null;
+    const lastAiGen = aiGenRes.data?.[0]?.created_at ?? null;
+    const lastCron  = maintenanceRes.data?.[0]?.created_at ?? null;
 
     const systems: SystemDefinition[] = [
-      { name: "AI Generator",     key: "ai_generator",     lastRun: lastAiGen   },
-      { name: "Report Ingestion", key: "report_ingestion", lastRun: lastReport  },
-      { name: "Pattern Learning", key: "pattern_learning", lastRun: lastPattern },
-      { name: "Cron Jobs",        key: "cron_jobs",        lastRun: lastCron    },
+      { name: "AI Generator", key: "ai_generator", lastRun: lastAiGen },
+      { name: "Cron Jobs",    key: "cron_jobs",    lastRun: lastCron  },
     ];
 
     const currentDownNames: string[] = [];
