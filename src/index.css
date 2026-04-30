@@ -48,10 +48,11 @@
 
     --radius: 0.75rem;
 
-    /* Premium accent gradients */
-    --gradient-start: 230 80% 55%;
-    --gradient-end: 280 70% 50%;
-    --glow-color: 230 80% 55%;
+    /* WOW v7 — retargeted to indigo so legacy GradientText / GlowCard /
+     * bg-mesh / gradient-bg automatically inherit the new palette site-wide */
+    --gradient-start: 230 45% 42%;
+    --gradient-end:   230 64% 68%;
+    --glow-color:     230 64% 68%;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -94,10 +95,10 @@
     --input: 225 20% 15%;
     --ring: 220 70% 70%;
 
-    /* Dark mode gradients with glow */
-    --gradient-start: 230 85% 65%;
-    --gradient-end: 280 75% 60%;
-    --glow-color: 230 85% 65%;
+    /* WOW v7 — dark mode indigo */
+    --gradient-start: 230 64% 68%;
+    --gradient-end:   230 45% 42%;
+    --glow-color:     230 64% 68%;
 
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;

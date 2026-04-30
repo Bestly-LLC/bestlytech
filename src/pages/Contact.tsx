@@ -15,6 +15,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Mail, MapPin, Loader2, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { OrbitsBackground } from "@/components/wow/backgrounds/OrbitsBackground";
 
 export default function Contact() {
   const { toast } = useToast();
@@ -81,8 +82,11 @@ export default function Contact() {
         path="/contact"
       />
 
-      <div className="relative">
-        <div className="absolute inset-0 bg-mesh opacity-30" />
+      <div className="relative overflow-hidden">
+        {/* WOW v7 — slow orbiting rings, calm contact-page feel */}
+        <div className="absolute inset-0 pointer-events-none opacity-70">
+          <OrbitsBackground />
+        </div>
         <div className="relative mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-24">
         {/* Page Header */}
         <AnimatedSection className="mb-16 max-w-2xl">

@@ -9,6 +9,7 @@ import {
   ArrowRight, Fingerprint, Server, UserX, Trash2,
   MapPin, Heart,
 } from "lucide-react";
+import { OrbitsBackground } from "@/components/wow/backgrounds/OrbitsBackground";
 
 const verticals = [
   { icon: Smartphone, label: "Mobile Apps", desc: "iOS & Android" },

@@ -50,7 +50,7 @@ export function Header() {
               alt="Bestly LLC" 
               className="h-9 w-auto transition-transform group-hover:scale-105" 
             />
-            <span className="text-xl font-semibold tracking-tight text-foreground">
+            <span className="font-display text-2xl font-normal tracking-[-0.02em] text-foreground">
               Bestly
             </span>
           </Link>

@@ -8,6 +8,7 @@ import {
   Rocket, Store, ShoppingCart, Cpu, ArrowRight, Handshake,
   ClipboardCheck, PhoneCall, FileText, Zap, Smartphone,
 } from "lucide-react";
+import { ScanlinesBackground } from "@/components/wow/backgrounds/ScanlinesBackground";
 
 const services = [
   {
@@ -79,7 +80,10 @@ export default function Services() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-mesh opacity-50" />
+        {/* WOW v7 — vertical scanlines, "infrastructure" feel */}
+        <div className="absolute inset-0 pointer-events-none">
+          <ScanlinesBackground />
+        </div>
         <div className="relative mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <AnimatedSection animation="fade-in" className="text-center max-w-3xl mx-auto">
             <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">

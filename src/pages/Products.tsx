@@ -8,6 +8,7 @@ import { GradientText } from "@/components/ui/GradientText";
 import { ExternalLink, ArrowRight, Box, Check, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { products, categories, type ProductCategory, type ProductStatus } from "@/config/products";
+import { NoiseFieldBackground } from "@/components/wow/backgrounds/NoiseFieldBackground";
 
 const statusColors: Record<ProductStatus, string> = {
   Live: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
@@ -30,8 +31,11 @@ export default function Products() {
         description="Explore the full Bestly LLC product suite: Cookie Yeti, InventoryProof, SchoolPilot, HOA Cure, Confesh, and more. Download on the App Store or try on the web."
       />
 
-      <div className="relative">
-        <div className="absolute inset-0 bg-mesh opacity-30 pointer-events-none" />
+      <div className="relative overflow-hidden">
+        {/* WOW v7 — atmospheric noise field */}
+        <div className="absolute inset-0 pointer-events-none opacity-60">
+          <NoiseFieldBackground />
+        </div>
 
         <div className="relative mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-24">
           {/* Hero */}
