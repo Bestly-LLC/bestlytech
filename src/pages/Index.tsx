@@ -7,6 +7,7 @@ import { MagneticButton } from "@/components/wow/MagneticButton";
 import { TiltCard } from "@/components/wow/TiltCard";
 import { RevealText, RevealOnScroll } from "@/components/wow/RevealText";
 import { Marquee } from "@/components/wow/Marquee";
+import { BottomWordmark } from "@/components/wow/BottomWordmark";
 
 import glossyApps from "@/assets/glossy-apps.png";
 import glossyAi from "@/assets/glossy-ai.png";
@@ -416,6 +417,9 @@ export default function Index() {
           </RevealOnScroll>
         </div>
       </section>
+
+      {/* ---------- Bottom Wordmark ---------- */}
+      <BottomWordmark />
     </>
   );
 }
