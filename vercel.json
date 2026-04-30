@@ -5,8 +5,8 @@
   "redirects": [
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "bestly.tech" }],
-      "destination": "https://www.bestly.tech/:path*",
+      "has": [{ "type": "host", "value": "www.bestly.tech" }],
+      "destination": "https://bestly.tech/:path*",
       "permanent": true
     }
   ],
