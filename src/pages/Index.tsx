@@ -2,7 +2,7 @@ import { SEOHead } from "@/components/SEOHead";
 import { Link } from "react-router-dom";
 import { ArrowRight, Shield, Database, Lock, Globe } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
-import { InteractiveMeshBackground } from "@/components/InteractiveMeshBackground";
+import { InteractiveDotGrid } from "@/components/InteractiveDotGrid";
 import { MagneticButton } from "@/components/wow/MagneticButton";
 import { TiltCard } from "@/components/wow/TiltCard";
 import { RevealText, RevealOnScroll } from "@/components/wow/RevealText";
@@ -78,7 +78,7 @@ export default function Index() {
 
       {/* ---------- Hero ---------- */}
       <section className="relative overflow-hidden min-h-[92vh] flex items-center wow-bg-ink wow-text-paper">
-        <InteractiveMeshBackground />
+        <InteractiveDotGrid />
 
         <div className="relative mx-auto max-w-7xl w-full px-6 py-32 lg:px-8 lg:py-40">
           <div className="mx-auto max-w-5xl">
