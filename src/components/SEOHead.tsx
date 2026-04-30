@@ -8,7 +8,7 @@ interface SEOHeadProps {
   type?: "website" | "article" | "product";
 }
 
-const BASE_URL = "https://bestly.tech";
+const BASE_URL = "https://www.bestly.tech";
 const DEFAULT_IMAGE = "/og-image.png";
 
 export function SEOHead({

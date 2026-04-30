@@ -6,4 +6,4 @@ Disallow: /marketplace-setup
 Disallow: /unsubscribe
 Disallow: /links
 
-Sitemap: https://bestly.tech/sitemap.xml
+Sitemap: https://www.bestly.tech/sitemap.xml
