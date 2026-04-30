@@ -9,12 +9,10 @@ import bestlyLogo from "@/assets/bestly-logo.png";
 
 const navigation = [
   { name: "Home", href: "/" },
-  { name: "About", href: "/about" },
-  { name: "Services", href: "/services" },
   { name: "Cloud", href: "/cloud" },
-  { name: "Tesla Rentals", href: "/tesla-rentals" },
+  { name: "Services", href: "/services" },
+  { name: "About", href: "/about" },
   { name: "Contact", href: "/contact" },
-  { name: "Hire Me", href: "/hire" },
 ];
 
 export function Header() {

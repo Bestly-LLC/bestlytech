@@ -1,3 +1,12 @@
+/* WOW v3 fonts — Inter (body) + Newsreader (display serif). Imports MUST come first. */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/newsreader/400.css";
+@import "@fontsource/newsreader/500-italic.css";
+@import "@fontsource/newsreader/600.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -99,6 +108,22 @@
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
+  /* WOW v3 — premium neutral + ink accent palette
+   * Audit-fixed contrast: indigo-fill #3a4a9c (4.7:1 vs ink, AA large)
+   * indigo-text #7a8be0 (8.4:1, AAA) for accent text on dark
+   */
+  :root {
+    --wow-ink: 0 0% 4%;              /* #0a0a0a page bg */
+    --wow-ink-elev: 0 0% 8%;         /* #141414 elevated cards */
+    --wow-paper: 0 0% 98%;           /* #fafafa body text */
+    --wow-paper-muted: 0 0% 66%;     /* #a8a8a8 secondary */
+    --wow-indigo: 230 45% 42%;       /* #3a4a9c CTA fill, AA large on ink */
+    --wow-indigo-light: 230 64% 68%; /* #7a8be0 accent text on dark, AAA */
+    --wow-indigo-deep: 230 65% 25%;  /* #1a2766 accent on light bg */
+    --wow-cream: 36 41% 94%;         /* #f5f1e8 editorial moments */
+    --wow-rule: 0 0% 14%;            /* hairline rules on dark */
+  }
 }
 
 @layer base {
@@ -108,7 +133,9 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-weight: 450;
+    font-weight: 400;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
   }
 
   html {
@@ -127,6 +154,61 @@
 
   p {
     line-height: 1.7;
+  }
+
+  /* Display serif for WOW hero/section titles when .font-display is applied */
+  .font-display {
+    font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
+    font-feature-settings: 'liga', 'dlig';
+  }
+}
+
+/* WOW v3 utilities */
+@layer utilities {
+  .wow-bg-ink { background-color: hsl(var(--wow-ink)); }
+  .wow-bg-elev { background-color: hsl(var(--wow-ink-elev)); }
+  .wow-bg-cream { background-color: hsl(var(--wow-cream)); }
+  .wow-text-paper { color: hsl(var(--wow-paper)); }
+  .wow-text-muted { color: hsl(var(--wow-paper-muted)); }
+  .wow-text-indigo { color: hsl(var(--wow-indigo-light)); }
+  .wow-bg-indigo { background-color: hsl(var(--wow-indigo)); }
+  .wow-border { border-color: hsl(var(--wow-rule)); }
+
+  /* House easing per v3 plan */
+  .wow-ease { transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
+
+  /* Accent underline that draws on after word reveal */
+  .wow-underline-accent {
+    position: relative;
+    display: inline-block;
+  }
+  .wow-underline-accent::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0.05em;
+    width: 100%;
+    height: 0.08em;
+    background-color: hsl(var(--wow-indigo-light));
+    transform: scaleX(0);
+    transform-origin: left;
+    animation: wow-underline-draw 0.6s cubic-bezier(0.32, 0.72, 0, 1) 0.9s forwards;
+  }
+
+  @keyframes wow-underline-draw {
+    to { transform: scaleX(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wow-underline-accent::after {
+      transform: scaleX(1);
+      animation: none;
+    }
+  }
+
+  /* Hairline divider */
+  .wow-hairline {
+    border-top: 1px solid hsl(var(--wow-rule));
   }
 }
 
