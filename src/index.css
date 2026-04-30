@@ -210,6 +210,24 @@
   .wow-hairline {
     border-top: 1px solid hsl(var(--wow-rule));
   }
+
+  /* Marquee keyframes — paired with the <Marquee> component */
+  @keyframes wow-marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  /* Hide system cursor on devices with the custom one — only on lg+ + non-touch */
+  @media (min-width: 1024px) and (pointer: fine) {
+    body[data-wow-cursor="on"] { cursor: none; }
+    body[data-wow-cursor="on"] a,
+    body[data-wow-cursor="on"] button,
+    body[data-wow-cursor="on"] [role="button"],
+    body[data-wow-cursor="on"] [data-cursor="link"] { cursor: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body[data-wow-cursor="on"] { cursor: auto; }
+  }
 }
 
 /* Premium utility classes */

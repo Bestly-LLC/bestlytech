@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { ScrollProgress } from "@/components/ScrollProgress";
+import { CursorFollower } from "@/components/wow/CursorFollower";
 import { Layout } from "@/components/layout/Layout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RouteFallback } from "@/components/RouteFallback";
@@ -80,6 +81,7 @@ const App = () => (
         <BrowserRouter>
           <ScrollToTop />
           <ScrollProgress />
+          <CursorFollower />
           <ErrorBoundary>
             <Suspense fallback={<RouteFallback />}>
               <Routes>

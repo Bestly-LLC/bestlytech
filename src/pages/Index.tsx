@@ -1,9 +1,12 @@
 import { SEOHead } from "@/components/SEOHead";
-import { AnimatedSection } from "@/components/AnimatedSection";
 import { Link } from "react-router-dom";
 import { ArrowRight, Shield, Database, Lock, Globe } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { InteractiveMeshBackground } from "@/components/InteractiveMeshBackground";
+import { MagneticButton } from "@/components/wow/MagneticButton";
+import { TiltCard } from "@/components/wow/TiltCard";
+import { RevealText, RevealOnScroll } from "@/components/wow/RevealText";
+import { Marquee } from "@/components/wow/Marquee";
 
 import glossyApps from "@/assets/glossy-apps.png";
 import glossyAi from "@/assets/glossy-ai.png";
@@ -15,14 +18,14 @@ import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import inventoryproofIcon from "@/assets/inventoryproof-icon.png";
 import hokuBottle from "@/assets/hoku-bottle.png";
 
-/* WOW v4 — company-first homepage per /docs/homepage-wow-plan-v3.md
- *  + correction: lead with Bestly the company, not the cloud offering.
- *  Cloud + Apple Modernization demoted to a Services callout band that
- *  links to /services. Multi-product positioning matches the actual brand.
- *
- *  Visual language unchanged from v3: Newsreader display × Inter body,
- *  ink + indigo palette, kinetic word-by-word reveal, house easing,
- *  prefers-reduced-motion respected throughout.
+/* WOW v5 — interactivity-everywhere
+ *  Reusable building blocks under /components/wow/:
+ *  - CursorFollower (mounted in App.tsx)
+ *  - MagneticButton — CTA pulls toward cursor
+ *  - TiltCard — 3D rotateX/Y based on cursor position
+ *  - RevealText / RevealOnScroll — section headings + lists animate in on scroll
+ *  - Marquee — slow scrolling text band
+ *  All respect prefers-reduced-motion + degrade on touch.
  */
 
 const HOUSE_EASE = [0.32, 0.72, 0, 1] as const;
@@ -48,24 +51,9 @@ const focusAreas = [
 ];
 
 const featuredProducts = [
-  {
-    name: "Cookie Yeti",
-    pitch: "Privacy-first browser extension. Dismisses cookie banners instantly, blocks 200K+ malicious banner domains.",
-    href: "/cookie-yeti",
-    image: cookieYetiIcon,
-  },
-  {
-    name: "InventoryProof",
-    pitch: "AI-powered home inventory walkthrough that produces an insurance-ready PDF report in minutes.",
-    href: "https://inventoryproof.com",
-    image: inventoryproofIcon,
-  },
-  {
-    name: "HOKU",
-    pitch: "Pharmaceutical-grade skincare, simplified. A daily facial mist backed by science.",
-    href: "https://hoku-clean.com",
-    image: hokuBottle,
-  },
+  { name: "Cookie Yeti", pitch: "Privacy-first browser extension. Dismisses cookie banners instantly, blocks 200K+ malicious banner domains.", href: "/cookie-yeti", image: cookieYetiIcon },
+  { name: "InventoryProof", pitch: "AI-powered home inventory walkthrough that produces an insurance-ready PDF report in minutes.", href: "https://inventoryproof.com", image: inventoryproofIcon },
+  { name: "HOKU", pitch: "Pharmaceutical-grade skincare, simplified. A daily facial mist backed by science.", href: "https://hoku-clean.com", image: hokuBottle },
 ];
 
 const trustPrinciples = [
@@ -74,6 +62,8 @@ const trustPrinciples = [
   { name: "Zero Data Sales", body: "Your information is never for sale. Period.", icon: Lock },
   { name: "Global Standards", body: "GDPR, CCPA, and beyond. Your rights, worldwide.", icon: Globe },
 ];
+
+const marqueeWords = ["Apps", "AI", "Extensions", "Hardware", "Cloud", "Privacy", "On-prem", "Built in LA"];
 
 export default function Index() {
   const reduce = useReducedMotion();
@@ -88,7 +78,6 @@ export default function Index() {
 
       {/* ---------- Hero ---------- */}
       <section className="relative overflow-hidden min-h-[92vh] flex items-center wow-bg-ink wow-text-paper">
-        {/* Original interactive mesh background — see InteractiveMeshBackground.tsx */}
         <InteractiveMeshBackground />
 
         <div className="relative mx-auto max-w-7xl w-full px-6 py-32 lg:px-8 lg:py-40">
@@ -110,11 +99,7 @@ export default function Index() {
                     className="inline-block mr-[0.22em]"
                     initial={reduce ? false : { opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      duration: 0.55,
-                      delay: reduce ? 0 : 0.08 * i,
-                      ease: HOUSE_EASE,
-                    }}
+                    transition={{ duration: 0.55, delay: reduce ? 0 : 0.08 * i, ease: HOUSE_EASE }}
                   >
                     {word}
                   </motion.span>
@@ -127,11 +112,7 @@ export default function Index() {
                     className="inline-block mr-[0.22em]"
                     initial={reduce ? false : { opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      duration: 0.55,
-                      delay: reduce ? 0 : 0.08 * (i + heroLine1.length),
-                      ease: HOUSE_EASE,
-                    }}
+                    transition={{ duration: 0.55, delay: reduce ? 0 : 0.08 * (i + heroLine1.length), ease: HOUSE_EASE }}
                   >
                     {word}
                   </motion.span>
@@ -140,11 +121,7 @@ export default function Index() {
                   className="inline-block wow-underline-accent wow-text-paper"
                   initial={reduce ? false : { opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{
-                    duration: 0.55,
-                    delay: reduce ? 0 : 0.08 * (heroLine1.length + heroLine2.length),
-                    ease: HOUSE_EASE,
-                  }}
+                  transition={{ duration: 0.55, delay: reduce ? 0 : 0.08 * (heroLine1.length + heroLine2.length), ease: HOUSE_EASE }}
                 >
                   {accentWord}
                 </motion.span>
@@ -169,19 +146,23 @@ export default function Index() {
               transition={{ duration: 0.6, delay: 1.05, ease: HOUSE_EASE }}
               className="mt-12 flex flex-col sm:flex-row gap-4"
             >
-              <Link
-                to="/products"
-                className="group inline-flex items-center justify-center rounded-md wow-bg-indigo px-8 py-4 text-base font-medium wow-text-paper transition-transform duration-200 wow-ease hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--wow-ink))]"
-              >
-                See what we&rsquo;ve built
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 wow-ease group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                to="/services"
-                className="inline-flex items-center justify-center rounded-md border wow-border bg-transparent px-8 py-4 text-base font-medium wow-text-paper transition-colors duration-200 wow-ease hover:wow-bg-elev focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))]"
-              >
-                Work with us
-              </Link>
+              <MagneticButton>
+                <Link
+                  to="/products"
+                  className="group inline-flex items-center justify-center rounded-md wow-bg-indigo px-8 py-4 text-base font-medium wow-text-paper transition-transform duration-200 wow-ease hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--wow-ink))]"
+                >
+                  See what we&rsquo;ve built
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 wow-ease group-hover:translate-x-0.5" />
+                </Link>
+              </MagneticButton>
+              <MagneticButton>
+                <Link
+                  to="/services"
+                  className="inline-flex items-center justify-center rounded-md border wow-border bg-transparent px-8 py-4 text-base font-medium wow-text-paper transition-colors duration-200 wow-ease hover:wow-bg-elev focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))]"
+                >
+                  Work with us
+                </Link>
+              </MagneticButton>
             </motion.div>
 
             <motion.div
@@ -201,23 +182,43 @@ export default function Index() {
         </div>
       </section>
 
+      {/* ---------- Marquee separator ---------- */}
+      <div className="wow-bg-ink wow-text-paper wow-hairline">
+        <Marquee speed={50} className="py-8">
+          {marqueeWords.flatMap((w, i) => [
+            <span
+              key={`${w}-${i}`}
+              className="font-display tracking-[-0.02em] text-3xl sm:text-4xl wow-text-paper"
+            >
+              {w}
+            </span>,
+            <span key={`dot-${i}`} aria-hidden="true" className="text-2xl wow-text-indigo">
+              ◆
+            </span>,
+          ])}
+        </Marquee>
+      </div>
+
       {/* ---------- What we build ---------- */}
       <section className="wow-bg-ink wow-text-paper wow-hairline">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <AnimatedSection className="max-w-2xl mb-20">
+          <RevealOnScroll className="max-w-2xl mb-20">
             <p className="text-xs font-medium uppercase tracking-[0.2em] wow-text-indigo mb-5">
               What we build
             </p>
-            <h2 className="font-display font-normal tracking-[-0.03em] leading-[1.05] text-[clamp(2rem,4.5vw,3.75rem)] wow-text-paper">
-              Six surfaces. <span className="wow-text-muted">One thesis: privacy-first by default.</span>
-            </h2>
-          </AnimatedSection>
+            <RevealText
+              as="h2"
+              className="font-display font-normal tracking-[-0.03em] leading-[1.05] text-[clamp(2rem,4.5vw,3.75rem)] block"
+            >
+              Six surfaces. One thesis: privacy-first by default.
+            </RevealText>
+          </RevealOnScroll>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
             {focusAreas.map((area, i) => (
-              <AnimatedSection key={area.name} delay={i * 80}>
-                <div className="border-t wow-border pt-8">
-                  <div className="h-24 mb-5 flex items-center">
+              <RevealOnScroll key={area.name} delay={i * 0.06}>
+                <TiltCard className="border-t wow-border pt-8" max={4}>
+                  <div className="h-24 mb-5 flex items-center" style={{ transform: "translateZ(40px)" }}>
                     <img
                       src={area.image}
                       alt=""
@@ -231,8 +232,8 @@ export default function Index() {
                     {area.name}
                   </h3>
                   <p className="mt-4 text-base leading-relaxed wow-text-muted">{area.body}</p>
-                </div>
-              </AnimatedSection>
+                </TiltCard>
+              </RevealOnScroll>
             ))}
           </div>
         </div>
@@ -241,76 +242,86 @@ export default function Index() {
       {/* ---------- Featured products ---------- */}
       <section className="wow-bg-elev wow-text-paper">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <AnimatedSection className="max-w-2xl mb-16">
+          <RevealOnScroll className="max-w-2xl mb-16">
             <p className="text-xs font-medium uppercase tracking-[0.2em] wow-text-indigo mb-5">
               In the wild
             </p>
-            <h2 className="font-display font-normal tracking-[-0.03em] leading-[1.05] text-[clamp(2rem,4.5vw,3.75rem)] wow-text-paper">
+            <RevealText
+              as="h2"
+              className="font-display font-normal tracking-[-0.03em] leading-[1.05] text-[clamp(2rem,4.5vw,3.75rem)] block"
+            >
               Three you can use today.
-            </h2>
-          </AnimatedSection>
+            </RevealText>
+          </RevealOnScroll>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-10 gap-y-14">
             {featuredProducts.map((p, i) => (
-              <AnimatedSection key={p.name} delay={i * 100}>
-                <Link
-                  to={p.href}
-                  className="block group border-t wow-border pt-8 transition-transform duration-200 wow-ease hover:-translate-y-1"
-                  {...(p.href.startsWith("http") ? { target: "_blank", rel: "noopener" } : {})}
-                >
-                  <div className="h-20 mb-5 flex items-center">
-                    <img
-                      src={p.image}
-                      alt={p.name}
-                      loading="lazy"
-                      width={64}
-                      height={64}
-                      className="h-16 w-auto object-contain drop-shadow-xl"
-                    />
-                  </div>
-                  <h3 className="font-display text-2xl sm:text-3xl tracking-[-0.02em] wow-text-paper">
-                    {p.name}
-                  </h3>
-                  <p className="mt-5 text-base leading-relaxed wow-text-muted">{p.pitch}</p>
-                  <div className="mt-7 inline-flex items-center gap-2 text-sm uppercase tracking-[0.18em] wow-text-paper">
-                    Read more
-                    <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 wow-ease group-hover:translate-x-0.5" />
-                  </div>
-                </Link>
-              </AnimatedSection>
+              <RevealOnScroll key={p.name} delay={i * 0.08}>
+                <TiltCard max={5}>
+                  <Link
+                    to={p.href}
+                    className="block group border-t wow-border pt-8 transition-transform duration-200 wow-ease"
+                    {...(p.href.startsWith("http") ? { target: "_blank", rel: "noopener" } : {})}
+                  >
+                    <div className="h-20 mb-5 flex items-center" style={{ transform: "translateZ(50px)" }}>
+                      <img
+                        src={p.image}
+                        alt={p.name}
+                        loading="lazy"
+                        width={64}
+                        height={64}
+                        className="h-16 w-auto object-contain drop-shadow-xl"
+                      />
+                    </div>
+                    <h3 className="font-display text-2xl sm:text-3xl tracking-[-0.02em] wow-text-paper">
+                      {p.name}
+                    </h3>
+                    <p className="mt-5 text-base leading-relaxed wow-text-muted">{p.pitch}</p>
+                    <div className="mt-7 inline-flex items-center gap-2 text-sm uppercase tracking-[0.18em] wow-text-paper">
+                      Read more
+                      <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 wow-ease group-hover:translate-x-1" />
+                    </div>
+                  </Link>
+                </TiltCard>
+              </RevealOnScroll>
             ))}
           </div>
 
-          <AnimatedSection className="mt-16">
-            <Link
-              to="/products"
-              className="inline-flex items-center gap-3 text-base wow-text-paper group"
-            >
-              <span className="border-b border-current pb-1">All products</span>
-              <ArrowRight className="h-4 w-4 transition-transform duration-200 wow-ease group-hover:translate-x-1" />
-            </Link>
-          </AnimatedSection>
+          <RevealOnScroll className="mt-16">
+            <MagneticButton>
+              <Link
+                to="/products"
+                className="inline-flex items-center gap-3 text-base wow-text-paper group"
+              >
+                <span className="border-b border-current pb-1">All products</span>
+                <ArrowRight className="h-4 w-4 transition-transform duration-200 wow-ease group-hover:translate-x-1" />
+              </Link>
+            </MagneticButton>
+          </RevealOnScroll>
         </div>
       </section>
 
       {/* ---------- Trust principles ---------- */}
       <section className="wow-bg-ink wow-text-paper wow-hairline">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <AnimatedSection className="max-w-2xl mb-16">
+          <RevealOnScroll className="max-w-2xl mb-16">
             <p className="text-xs font-medium uppercase tracking-[0.2em] wow-text-indigo mb-5">
               How we operate
             </p>
-            <h2 className="font-display font-normal tracking-[-0.03em] leading-[1.05] text-[clamp(2rem,4.5vw,3.75rem)] wow-text-paper">
-              Not policies. <span className="wow-text-muted">Promises.</span>
-            </h2>
-          </AnimatedSection>
+            <RevealText
+              as="h2"
+              className="font-display font-normal tracking-[-0.03em] leading-[1.05] text-[clamp(2rem,4.5vw,3.75rem)] block"
+            >
+              Not policies. Promises.
+            </RevealText>
+          </RevealOnScroll>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-12 max-w-5xl">
             {trustPrinciples.map((p, i) => (
-              <AnimatedSection key={p.name} delay={i * 80}>
-                <div className="flex gap-6">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border wow-border">
-                    <p.icon className="h-5 w-5 wow-text-indigo" />
+              <RevealOnScroll key={p.name} delay={i * 0.07}>
+                <TiltCard className="flex gap-6 group" max={3}>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border wow-border transition-colors duration-300 wow-ease group-hover:bg-[hsl(var(--wow-indigo)/0.15)]">
+                    <p.icon className="h-5 w-5 wow-text-indigo transition-transform duration-300 wow-ease group-hover:rotate-[12deg]" />
                   </div>
                   <div>
                     <h3 className="font-display text-xl sm:text-2xl tracking-[-0.02em] wow-text-paper">
@@ -318,8 +329,8 @@ export default function Index() {
                     </h3>
                     <p className="mt-3 text-base leading-relaxed wow-text-muted">{p.body}</p>
                   </div>
-                </div>
-              </AnimatedSection>
+                </TiltCard>
+              </RevealOnScroll>
             ))}
           </div>
         </div>
@@ -328,16 +339,18 @@ export default function Index() {
       {/* ---------- Services callout ---------- */}
       <section className="wow-bg-ink wow-text-paper wow-hairline">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <AnimatedSection>
+          <RevealOnScroll>
             <Link to="/services" className="block group">
               <div className="border-t wow-border pt-12 lg:pt-16">
                 <p className="text-xs font-medium uppercase tracking-[0.2em] wow-text-indigo mb-6">
                   Services
                 </p>
-                <h2 className="font-display font-normal tracking-[-0.03em] leading-[1.02] text-[clamp(2.25rem,5.5vw,4.5rem)] wow-text-paper max-w-4xl">
-                  We also build for other companies.{" "}
-                  <span className="wow-text-muted">Including the cloud underneath.</span>
-                </h2>
+                <RevealText
+                  as="h2"
+                  className="font-display font-normal tracking-[-0.03em] leading-[1.02] text-[clamp(2.25rem,5.5vw,4.5rem)] max-w-4xl block"
+                >
+                  We also build for other companies. Including the cloud underneath.
+                </RevealText>
                 <p className="mt-8 max-w-2xl text-lg leading-relaxed wow-text-muted">
                   Web &amp; app development, AI integration, compliance engineering, marketplace
                   onboarding, Apple-native modernization, and our flagship In-House Cloud &mdash;
@@ -349,15 +362,14 @@ export default function Index() {
                 </div>
               </div>
             </Link>
-          </AnimatedSection>
+          </RevealOnScroll>
         </div>
       </section>
 
       {/* ---------- Founder note + final CTA ---------- */}
-      {/* Note: founder copy is a v3 placeholder. Replace with Jared's longhand 2 paragraphs per Phase 0.4. */}
       <section className="wow-bg-cream text-[hsl(0_0%_8%)]">
         <div className="mx-auto max-w-3xl px-6 py-28 lg:px-8 lg:py-36">
-          <AnimatedSection>
+          <RevealOnScroll>
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-[hsl(0_0%_30%)] mb-8">
               From the founder
             </p>
@@ -383,21 +395,25 @@ export default function Index() {
               </div>
             </div>
             <div className="mt-14 flex flex-col sm:flex-row gap-4">
-              <Link
-                to="/contact"
-                className="group inline-flex items-center justify-center rounded-md bg-[hsl(var(--wow-indigo-deep))] px-8 py-4 text-base font-medium text-[hsl(var(--wow-paper))] transition-transform duration-200 wow-ease hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-deep))] focus-visible:ring-offset-2"
-              >
-                Get in touch
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 wow-ease group-hover:translate-x-0.5" />
-              </Link>
-              <a
-                href="mailto:jared@bestly.tech?subject=Bestly%20%E2%80%94%20Hello"
-                className="inline-flex items-center justify-center rounded-md border border-[hsl(0_0%_15%)] bg-transparent px-8 py-4 text-base font-medium text-[hsl(0_0%_8%)] transition-colors duration-200 wow-ease hover:bg-[hsl(0_0%_8%/0.05)]"
-              >
-                jared@bestly.tech
-              </a>
+              <MagneticButton>
+                <Link
+                  to="/contact"
+                  className="group inline-flex items-center justify-center rounded-md bg-[hsl(var(--wow-indigo-deep))] px-8 py-4 text-base font-medium text-[hsl(var(--wow-paper))] transition-transform duration-200 wow-ease hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-deep))] focus-visible:ring-offset-2"
+                >
+                  Get in touch
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 wow-ease group-hover:translate-x-0.5" />
+                </Link>
+              </MagneticButton>
+              <MagneticButton>
+                <a
+                  href="mailto:jared@bestly.tech?subject=Bestly%20%E2%80%94%20Hello"
+                  className="inline-flex items-center justify-center rounded-md border border-[hsl(0_0%_15%)] bg-transparent px-8 py-4 text-base font-medium text-[hsl(0_0%_8%)] transition-colors duration-200 wow-ease hover:bg-[hsl(0_0%_8%/0.05)]"
+                >
+                  jared@bestly.tech
+                </a>
+              </MagneticButton>
             </div>
-          </AnimatedSection>
+          </RevealOnScroll>
         </div>
       </section>
     </>
