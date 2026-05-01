@@ -182,23 +182,53 @@ function extractCookieElements(html: string): string {
   return elements.join("\n");
 }
 
-async function fetchPageHtml(domain: string, pageUrl?: string): Promise<string | null> {
+/**
+ * Result of a server-side HTML fetch attempt.
+ * Carries the failure reason all the way up to ai_generation_log so that future
+ * "why didn't pattern X get generated" debugging is one query, not a log dive.
+ */
+interface FetchResult {
+  html: string | null;
+  reason: string | null;   // null on success; "HTTP 403" / "Timeout 8s" / "DNS fail" / etc.
+}
+
+async function fetchPageHtml(domain: string, pageUrl?: string): Promise<FetchResult> {
   const url = pageUrl || `https://${domain}`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 10_000);
   try {
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        // More complete fingerprint; some Akamai/Cloudflare rules trip on
+        // missing Sec-CH-UA / Sec-Fetch headers more than the UA itself.
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not.A/Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"macOS"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
       },
       redirect: "follow",
+      signal: ac.signal,
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return { html: null, reason: `HTTP ${res.status} ${res.statusText}` };
+    }
     const text = await res.text();
-    return text.substring(0, 50000);
-  } catch (e) {
-    console.error(`Failed to fetch ${url}:`, e);
-    return null;
+    return { html: text.substring(0, 50000), reason: null };
+  } catch (e: any) {
+    const isTimeout = e.name === "AbortError" || e.name === "TimeoutError";
+    const reason = isTimeout ? "Timeout 10s" : (e.message || "network error");
+    console.error(`Failed to fetch ${url}: ${reason}`);
+    return { html: null, reason };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -364,7 +394,8 @@ Deno.serve(async (req) => {
 
       if (!candidate.banner_html) {
         console.log(`[${candidate.domain}] No extension HTML — attempting server-side fetch for CMP detection`);
-        const serverHtml = await fetchPageHtml(candidate.domain, candidate.page_url);
+        const fetched = await fetchPageHtml(candidate.domain, candidate.page_url);
+        const serverHtml = fetched.html;
 
         if (serverHtml) {
           const serverCMP = detectKnownCMP(serverHtml);
@@ -411,12 +442,17 @@ Deno.serve(async (req) => {
         skipped++;
         const currentAttempts = candidate.ai_attempts ?? 0;
         const skipStatus = currentAttempts >= 4 ? "permanently_failed" : "skipped_no_html";
+        // 2026-04-30: surface the actual fetch failure reason so the operator
+        // can tell at a glance whether it was 403 (bot-protected), timeout
+        // (slow site), DNS (dead domain), or no-CMP (HTML retrieved but the
+        // page renders the banner from JS and we got the pre-render HTML).
+        const skipReason = serverHtml
+          ? "Server fetched but no CMP detected and no usable cookie elements"
+          : `No extension HTML; server fetch failed: ${fetched.reason ?? "unknown"}`;
         await supabase.from("ai_generation_log").insert({
           domain: candidate.domain,
           status: skipStatus,
-          error_message: serverHtml
-            ? "Server fetched but no CMP detected and no usable cookie elements"
-            : "No extension HTML and server fetch failed",
+          error_message: skipReason,
           ai_model: AI_MODEL_LABEL,
         });
         await supabase.rpc("mark_ai_processed", {
@@ -463,7 +499,8 @@ Deno.serve(async (req) => {
         const reason = aiResult.rejection_reason || "not a cookie banner";
         console.log(`[${candidate.domain}] Extension HTML rejected: ${reason}. Attempting server-side fallback...`);
 
-        const serverHtml = await fetchPageHtml(candidate.domain, candidate.page_url);
+        const fetched2 = await fetchPageHtml(candidate.domain, candidate.page_url);
+        const serverHtml = fetched2.html;
         const serverFetchSuccess = !!serverHtml;
 
         if (serverHtml) {

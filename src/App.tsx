@@ -46,6 +46,7 @@ const ConfeshPrivacy = lazy(() => import("./pages/ConfeshPrivacy"));
 const ConfeshSupport = lazy(() => import("./pages/ConfeshSupport"));
 const Links = lazy(() => import("./pages/Links"));
 const EmailUnsubscribe = lazy(() => import("./pages/EmailUnsubscribe"));
+const Status = lazy(() => import("./pages/Status"));
 
 // Lazy admin pages. AdminRoute/AdminLayout stay eager (they're tiny wrappers
 // and keeping them eager avoids a double-load chain on /admin). The big win
@@ -122,6 +123,7 @@ const App = () => (
                 {/* Standalone pages (no Header/Footer) */}
                 <Route path="/links" element={<Links />} />
                 <Route path="/unsubscribe" element={<EmailUnsubscribe />} />
+                <Route path="/status" element={<Status />} />
 
                 {/* Admin Routes */}
                 <Route path="/admin/login" element={<AdminLogin />} />

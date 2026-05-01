@@ -33,9 +33,10 @@ export function AdminLayout() {
     <TooltipProvider>
       <SidebarProvider>
         <div className="admin-shell min-h-screen flex w-full bg-black">
-          {/* Subtle radial glow */}
+          {/* Indigo radial glow — matches the marketing site's v7/v8 theming */}
           <div className="fixed inset-0 pointer-events-none z-0">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-white/[0.02] rounded-full blur-[120px]" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[hsl(var(--wow-indigo)/0.12)] rounded-full blur-[120px]" />
+            <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-[hsl(var(--wow-indigo-deep)/0.08)] rounded-full blur-[100px]" />
           </div>
 
           <AdminSidebar />
