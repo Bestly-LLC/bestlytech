@@ -107,10 +107,10 @@ export function ActionInbox() {
             .limit(20),
           supabase
             .from("email_send_log")
-            .select("id, recipient, error, sent_at")
+            .select("id, recipient_email, error_message, created_at")
             .eq("status", "failed")
-            .gte("sent_at", recentFailCutoff)
-            .order("sent_at", { ascending: false })
+            .gte("created_at", recentFailCutoff)
+            .order("created_at", { ascending: false })
             .limit(20),
         ]);
 
@@ -183,13 +183,13 @@ export function ActionInbox() {
       });
 
       (failedEmailsRes.data ?? []).slice(0, 3).forEach((e: any) => {
-        const ageMs = e.sent_at ? now - new Date(e.sent_at).getTime() : 0;
+        const ageMs = e.created_at ? now - new Date(e.created_at).getTime() : 0;
         out.push({
           id: `email-${e.id}`,
           severity: "urgent",
           icon: MailX,
-          title: `Email failed to ${e.recipient || "?"}`,
-          detail: (e.error || "").slice(0, 80),
+          title: `Email failed to ${e.recipient_email || "?"}`,
+          detail: (e.error_message || "").slice(0, 80),
           ageMs,
           href: "/admin",
         });

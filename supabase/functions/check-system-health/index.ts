@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 /**
  * Cookie Yeti system health check + SMS alerting.
  *
- * v9 (2026-04-28) — monitor only what's machine-driven.
+ * v10 (2026-04-30) — AI generator heartbeat counts SUCCESS only.
+ * v9  (2026-04-28) — monitor only what's machine-driven.
  *
  * Rules from the operator:
  *  - SMS ONLY when something newly fails. No recovery pings, no all-clear.
@@ -18,7 +19,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
  * informational; no SMS will fire.
  *
  * Active staleness checks (machine-driven only):
- *  - ai_generator   red 12h (cron every 6h, heartbeat row when no candidates)
+ *  - ai_generator   red 72h, after we widened it because successful runs are
+ *                   bursty (only when there are candidates AND fetcher works)
  *  - cron_jobs      red  6h (run_maintenance_cron writes a heartbeat every 3h)
  *
  * Already deployed to Supabase as check-system-health v9. Mirrored here.
@@ -40,7 +42,7 @@ const QUIET_START_HOUR_PT = 23;
 const QUIET_END_HOUR_PT = 7;
 
 const THRESHOLDS = {
-  ai_generator: { red: 12 },
+  ai_generator: { red: 72 }, // success-based; SMS only after 3d of no successful generations
   cron_jobs:    { red: 6  },
 } as const;
 
@@ -109,8 +111,17 @@ Deno.serve(async (req) => {
   );
 
   try {
+    // 2026-04-30: AI generator heartbeat now counts ONLY successful generations,
+    // not "any insert". The previous version flipped green on every cron run
+    // even when 100% of attempts produced status='skipped_no_html' or 'no_candidates'.
+    // That's how we ended up with 7 days of "healthy" + zero useful output.
     const [aiGenRes, maintenanceRes] = await Promise.all([
-      supabase.from("ai_generation_log").select("created_at").order("created_at", { ascending: false }).limit(1),
+      supabase
+        .from("ai_generation_log")
+        .select("created_at")
+        .eq("status", "success")
+        .order("created_at", { ascending: false })
+        .limit(1),
       supabase.from("pattern_fix_log").select("created_at").order("created_at", { ascending: false }).limit(1),
     ]);
 

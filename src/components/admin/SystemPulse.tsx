@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -6,204 +6,309 @@ interface SystemPulseProps {
   className?: string;
 }
 
-interface SystemAlertState {
-  id: number;
-  is_down: boolean;
-  down_systems: string[];
-  last_checked: string;
-  ai_pipeline_ok: boolean;
-  reports_ok: boolean;
-  patterns_ok: boolean;
-  maintenance_ok: boolean;
+/**
+ * SystemPulse — top-of-dashboard health banner.
+ *
+ * v2 (2026-04-30) — rebuilt to read real schema.
+ *
+ * The previous version read four boolean columns (`ai_pipeline_ok`, `reports_ok`,
+ * `patterns_ok`, `maintenance_ok`) that don't exist in `system_alert_state` and
+ * never have. Banner stayed green because `is_down=false`, which the v9 health
+ * check only flips when its own narrow heartbeat goes stale.
+ *
+ * Now we compute live health on the client from data the schema actually has:
+ *   - AI Generator         last `ai_generation_log` row WHERE status='success'
+ *   - Cron Heartbeat       last `pattern_fix_log` row
+ *   - Email Pipeline       failure count last 24h vs sent count
+ *   - External Services    aggregate of `external_health` (from probe-external fn)
+ *
+ * Each indicator is independently red / amber / green, and the headline is the
+ * worst of them. We also still render the v9 `is_down` and `down_systems` from
+ * system_alert_state — that's the SMS-firing source of truth for the operator.
+ */
+
+type Status = "ok" | "warn" | "down" | "unknown";
+
+interface SubsystemState {
+  key: string;
+  label: string;
+  status: Status;
+  detail: string;
 }
 
-const SUBSYSTEMS = [
-  { key: "ai_pipeline_ok" as const, label: "AI Pipeline" },
-  { key: "reports_ok" as const, label: "Reports" },
-  { key: "patterns_ok" as const, label: "Patterns" },
-  { key: "maintenance_ok" as const, label: "Maintenance" },
-];
+const STATUS_DOT: Record<Status, string> = {
+  ok: "bg-emerald-400",
+  warn: "bg-amber-400",
+  down: "bg-red-400",
+  unknown: "bg-white/20",
+};
+
+const HEADLINE_BG: Record<Status, string> = {
+  ok: "bg-emerald-500/5 border-emerald-500/20",
+  warn: "bg-amber-500/5 border-amber-500/20",
+  down: "bg-red-500/5 border-red-500/20",
+  unknown: "bg-white/[0.03] border-white/[0.06]",
+};
+
+function hoursAgo(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  return (Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60);
+}
+
+function formatAge(iso: string | null | undefined): string {
+  const h = hoursAgo(iso);
+  if (h === null) return "never";
+  if (h < 1) return `${Math.round(h * 60)}m ago`;
+  if (h < 24) return `${Math.round(h)}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
 
 function formatRelativeTime(dateString: string): string {
-  const now = Date.now();
-  const then = new Date(dateString).getTime();
-  const diffMs = now - then;
-  const diffSec = Math.floor(diffMs / 1000);
-
+  const diffSec = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
   if (diffSec < 10) return "just now";
   if (diffSec < 60) return `${diffSec}s ago`;
-
   const diffMin = Math.floor(diffSec / 60);
   if (diffMin < 60) return `${diffMin}m ago`;
-
   const diffHr = Math.floor(diffMin / 60);
   if (diffHr < 24) return `${diffHr}h ago`;
-
-  const diffDays = Math.floor(diffHr / 24);
-  return `${diffDays}d ago`;
+  return `${Math.floor(diffHr / 24)}d ago`;
 }
 
 export function SystemPulse({ className }: SystemPulseProps) {
-  const [state, setState] = useState<SystemAlertState | null>(null);
+  const [subsystems, setSubsystems] = useState<SubsystemState[]>([]);
+  const [downSystems, setDownSystems] = useState<string[]>([]);
+  const [lastChecked, setLastChecked] = useState<string | null>(null);
   const [relativeTime, setRelativeTime] = useState("");
 
-  const updateRelativeTime = useCallback((lastChecked: string | undefined) => {
-    if (lastChecked) {
-      setRelativeTime(formatRelativeTime(lastChecked));
-    }
+  const updateRelativeTime = useCallback((iso: string | null) => {
+    if (iso) setRelativeTime(formatRelativeTime(iso));
   }, []);
 
-  // Fetch initial state
-  useEffect(() => {
-    async function fetchState() {
-      const { data, error } = await supabase
+  const loadHealth = useCallback(async () => {
+    // Run all probes in parallel — every panel is non-blocking.
+    const [
+      aiGenSuccessRes,
+      aiGenAttemptsRes,
+      cronRes,
+      emailSentRes,
+      emailFailedRes,
+      externalRes,
+      alertStateRes,
+    ] = await Promise.all([
+      supabase
+        .from("ai_generation_log")
+        .select("created_at")
+        .eq("status", "success")
+        .order("created_at", { ascending: false })
+        .limit(1),
+      supabase
+        .from("ai_generation_log")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", new Date(Date.now() - 7 * 86400_000).toISOString()),
+      supabase
+        .from("pattern_fix_log")
+        .select("created_at")
+        .order("created_at", { ascending: false })
+        .limit(1),
+      supabase
+        .from("email_send_log")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "sent")
+        .gte("created_at", new Date(Date.now() - 24 * 3600_000).toISOString()),
+      supabase
+        .from("email_send_log")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "failed")
+        .gte("created_at", new Date(Date.now() - 24 * 3600_000).toISOString()),
+      // external_health created by P0-5 migration; soft-fail if not deployed yet
+      (supabase
+        .from("external_health" as any)
+        .select("service, status, last_checked, latency_ms") as any),
+      supabase
         .from("system_alert_state")
         .select("*")
         .eq("id", 1)
-        .single();
+        .maybeSingle(),
+    ]);
 
-      if (!error && data) {
-        setState(data as unknown as SystemAlertState);
-        updateRelativeTime(data.last_checked);
-      }
+    const next: SubsystemState[] = [];
+
+    // 1. AI Generator — success-based, not just "any insert"
+    const lastAiSuccess = aiGenSuccessRes.data?.[0]?.created_at ?? null;
+    const aiAttempts7d = aiGenAttemptsRes.count ?? 0;
+    const aiSuccessHours = hoursAgo(lastAiSuccess);
+    let aiStatus: Status;
+    let aiDetail: string;
+    if (aiAttempts7d === 0) {
+      aiStatus = "warn";
+      aiDetail = "no candidates 7d";
+    } else if (aiSuccessHours === null) {
+      aiStatus = "down";
+      aiDetail = "0 successes ever";
+    } else if (aiSuccessHours > 72) {
+      aiStatus = "down";
+      aiDetail = `${formatAge(lastAiSuccess)} (${aiAttempts7d} tried, 0 ok)`;
+    } else if (aiSuccessHours > 24) {
+      aiStatus = "warn";
+      aiDetail = formatAge(lastAiSuccess);
+    } else {
+      aiStatus = "ok";
+      aiDetail = formatAge(lastAiSuccess);
+    }
+    next.push({ key: "ai", label: "AI Generator", status: aiStatus, detail: aiDetail });
+
+    // 2. Cron Heartbeat — pattern_fix_log writes a heartbeat every 3h
+    const lastCron = cronRes.data?.[0]?.created_at ?? null;
+    const cronHours = hoursAgo(lastCron);
+    const cronStatus: Status = cronHours === null ? "down" : cronHours > 6 ? "down" : cronHours > 4 ? "warn" : "ok";
+    next.push({ key: "cron", label: "Cron", status: cronStatus, detail: formatAge(lastCron) });
+
+    // 3. Email Pipeline — failures vs sent in 24h
+    const sent24 = emailSentRes.count ?? 0;
+    const failed24 = emailFailedRes.count ?? 0;
+    let emailStatus: Status = "ok";
+    let emailDetail: string;
+    if (failed24 === 0 && sent24 === 0) {
+      emailStatus = "unknown";
+      emailDetail = "idle 24h";
+    } else if (failed24 > sent24) {
+      emailStatus = "down";
+      emailDetail = `${failed24} fail / ${sent24} ok`;
+    } else if (failed24 > 0) {
+      emailStatus = "warn";
+      emailDetail = `${failed24} fail / ${sent24} ok`;
+    } else {
+      emailStatus = "ok";
+      emailDetail = `${sent24} ok`;
+    }
+    next.push({ key: "email", label: "Email", status: emailStatus, detail: emailDetail });
+
+    // 4. External Services — aggregate from probe-external
+    const ext = (externalRes as any).data as Array<{ service: string; status: string; last_checked: string }> | null;
+    if (ext && ext.length > 0) {
+      const downCount = ext.filter((s) => s.status === "down").length;
+      const warnCount = ext.filter((s) => s.status === "warn").length;
+      const extStatus: Status = downCount > 0 ? "down" : warnCount > 0 ? "warn" : "ok";
+      const extDetail =
+        downCount > 0
+          ? `${downCount} down`
+          : warnCount > 0
+            ? `${warnCount} degraded`
+            : `${ext.length} ok`;
+      next.push({ key: "external", label: "External", status: extStatus, detail: extDetail });
+    } else {
+      next.push({ key: "external", label: "External", status: "unknown", detail: "probe pending" });
     }
 
-    fetchState();
+    setSubsystems(next);
+
+    const alertState = alertStateRes.data as { down_systems?: string[]; last_checked?: string } | null;
+    setDownSystems(alertState?.down_systems ?? []);
+    setLastChecked(alertState?.last_checked ?? null);
+    updateRelativeTime(alertState?.last_checked ?? null);
   }, [updateRelativeTime]);
 
-  // Subscribe to realtime changes
+  useEffect(() => {
+    loadHealth();
+    const interval = setInterval(loadHealth, 60_000);
+    return () => clearInterval(interval);
+  }, [loadHealth]);
+
+  // Subscribe to alert_state realtime so SMS-fired downs surface instantly
   useEffect(() => {
     const channel = supabase
       .channel("system-pulse")
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "system_alert_state",
-          filter: "id=eq.1",
-        },
-        (payload) => {
-          const newState = payload.new as unknown as SystemAlertState;
-          setState(newState);
-          updateRelativeTime(newState.last_checked);
-        }
+        { event: "*", schema: "public", table: "system_alert_state", filter: "id=eq.1" },
+        () => loadHealth()
       )
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [updateRelativeTime]);
+  }, [loadHealth]);
 
-  // Update relative time every 30 seconds
+  // Tick relative time every 30s
   useEffect(() => {
-    if (!state?.last_checked) return;
+    if (!lastChecked) return;
+    const i = setInterval(() => updateRelativeTime(lastChecked), 30_000);
+    return () => clearInterval(i);
+  }, [lastChecked, updateRelativeTime]);
 
-    updateRelativeTime(state.last_checked);
-    const interval = setInterval(() => {
-      updateRelativeTime(state.last_checked);
-    }, 30_000);
+  const headlineStatus: Status = useMemo(() => {
+    if (subsystems.some((s) => s.status === "down")) return "down";
+    if (subsystems.some((s) => s.status === "warn")) return "warn";
+    if (subsystems.length === 0) return "unknown";
+    return "ok";
+  }, [subsystems]);
 
-    return () => clearInterval(interval);
-  }, [state?.last_checked, updateRelativeTime]);
+  const headlineText = useMemo(() => {
+    if (downSystems.length > 0) return `System Alert — ${downSystems.join(", ")}`;
+    if (headlineStatus === "down") {
+      const down = subsystems.filter((s) => s.status === "down").map((s) => s.label);
+      return `System Alert — ${down.join(", ")}`;
+    }
+    if (headlineStatus === "warn") {
+      const warn = subsystems.filter((s) => s.status === "warn").map((s) => s.label);
+      return `Degraded — ${warn.join(", ")}`;
+    }
+    if (headlineStatus === "unknown") return "Loading status…";
+    return "All Systems Operational";
+  }, [headlineStatus, subsystems, downSystems]);
 
-  if (!state) {
+  if (subsystems.length === 0) {
     return (
-      <div
-        className={cn(
-          "rounded-2xl border px-4 py-3 bg-white/[0.03] border-white/[0.06] animate-pulse",
-          className
-        )}
-      >
+      <div className={cn("rounded-2xl border px-4 py-3 bg-white/[0.03] border-white/[0.06] animate-pulse", className)}>
         <div className="h-5" />
       </div>
     );
   }
 
-  const allOk = !state.is_down;
-
   return (
     <div
       className={cn(
         "rounded-2xl border px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2 transition-colors duration-500",
-        allOk
-          ? "bg-emerald-500/5 border-emerald-500/20"
-          : "bg-red-500/5 border-red-500/20",
+        HEADLINE_BG[headlineStatus],
         className
       )}
     >
-      {/* Left: pulse dot + status text */}
+      {/* Headline pulse + text */}
       <div className="flex items-center gap-2.5 min-w-0">
         <span className="relative flex h-2.5 w-2.5 shrink-0">
           <span
             className={cn(
               "absolute inline-flex h-full w-full rounded-full opacity-75 animate-[pulse-dot_1.5s_ease-in-out_infinite]",
-              allOk ? "bg-emerald-400" : "bg-red-400"
+              STATUS_DOT[headlineStatus]
             )}
           />
-          <span
-            className={cn(
-              "relative inline-flex h-2.5 w-2.5 rounded-full",
-              allOk ? "bg-emerald-400" : "bg-red-400"
-            )}
-          />
+          <span className={cn("relative inline-flex h-2.5 w-2.5 rounded-full", STATUS_DOT[headlineStatus])} />
         </span>
-
-        <span className="text-sm font-medium text-white truncate">
-          {allOk ? (
-            "All Systems Operational"
-          ) : (
-            <>
-              System Alert
-              {state.down_systems?.length > 0 && (
-                <span className="text-white/40 font-normal">
-                  {" "}&mdash; {state.down_systems.join(", ")}
-                </span>
-              )}
-            </>
-          )}
-        </span>
+        <span className="text-sm font-medium text-white truncate">{headlineText}</span>
       </div>
 
-      {/* Center: last checked */}
+      {/* Last-checked from alert_state */}
       {relativeTime && (
-        <span className="text-xs text-white/25 tabular-nums whitespace-nowrap">
-          Checked {relativeTime}
-        </span>
+        <span className="text-xs text-white/25 tabular-nums whitespace-nowrap">Checked {relativeTime}</span>
       )}
 
-      {/* Right: mini status indicators */}
-      <div className="flex items-center gap-3 ml-auto">
-        {SUBSYSTEMS.map(({ key, label }) => {
-          const ok = state[key];
-          return (
-            <div key={key} className="flex items-center gap-1.5">
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 rounded-full transition-colors duration-500",
-                  ok ? "bg-emerald-400" : "bg-red-400"
-                )}
-              />
-              <span className="text-[11px] text-white/40 whitespace-nowrap">
-                {label}
-              </span>
-            </div>
-          );
-        })}
+      {/* Subsystem indicators */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ml-auto">
+        {subsystems.map((s) => (
+          <div key={s.key} className="flex items-center gap-1.5" title={s.detail}>
+            <span className={cn("h-1.5 w-1.5 rounded-full transition-colors duration-500", STATUS_DOT[s.status])} />
+            <span className="text-[11px] text-white/40 whitespace-nowrap">
+              {s.label}
+              <span className="text-white/25 ml-1">{s.detail}</span>
+            </span>
+          </div>
+        ))}
       </div>
 
-      {/* Pulse keyframes injected via style tag */}
       <style>{`
         @keyframes pulse-dot {
-          0%, 100% {
-            transform: scale(1);
-            opacity: 0.75;
-          }
-          50% {
-            transform: scale(2);
-            opacity: 0;
-          }
+          0%, 100% { transform: scale(1); opacity: 0.75; }
+          50% { transform: scale(2); opacity: 0; }
         }
       `}</style>
     </div>

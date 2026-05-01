@@ -90,8 +90,17 @@ export function SmartAlerts({
       });
     }
 
-    // 3. AI success rate below 50%
-    if (aiSuccessRate < 50) {
+    // 3. AI success rate
+    //    - 0% with any attempts → CRITICAL: pipeline alive but inert
+    //    - <50% with attempts → WARNING: degraded
+    //    - 0% with no attempts → no insight (nothing to report)
+    if (aiSuccessRate === 0 && unresolvedReports.length > 0) {
+      result.push({
+        severity: "critical",
+        title: "AI pipeline producing zero successful patterns",
+        description: `${unresolvedReports.length} domain${unresolvedReports.length === 1 ? "" : "s"} reported, AI has not generated a single working pattern. Likely cause: bot-protected domains blocking the headless fetch, or candidate-selection RPC stale.`,
+      });
+    } else if (aiSuccessRate < 50 && aiSuccessRate > 0) {
       result.push({
         severity: "warning",
         title: "AI pipeline performance degraded",

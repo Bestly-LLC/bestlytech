@@ -53,7 +53,6 @@ export default function AdminDashboard() {
   const [systemDown, setSystemDown] = useState(false);
   const [downSystems, setDownSystems] = useState<string[]>([]);
   const [pihole, setPihole] = useState<any>(null);
-  const [userCount, setUserCount] = useState(0);
   const [passKeyCount, setPassKeyCount] = useState(0);
 
   useAdminRealtime({
@@ -100,7 +99,7 @@ export default function AdminDashboard() {
     setAiGenCount(aiGenRes.count ?? 0);
 
     // Devices, email, system
-    const [devicesRes, pushRes, sentRes, failedRes, sysRes, piholeRes, usersRes, passkeysRes] = await Promise.all([
+    const [devicesRes, pushRes, sentRes, failedRes, sysRes, piholeRes, passkeysRes] = await Promise.all([
       supabase.from("device_registrations").select("id", { count: "exact", head: true }),
       supabase.from("device_tokens").select("id", { count: "exact", head: true }),
       supabase.from("email_send_log").select("id", { count: "exact", head: true }).eq("status", "sent"),
@@ -108,10 +107,9 @@ export default function AdminDashboard() {
       (supabase.from("system_alert_state" as any).select("*").eq("id", 1).single() as any),
       (supabase.from("home_hub_pihole_stats" as any).select("*").order("captured_at", { ascending: false }).limit(1).single() as any),
       supabase.from("passkey_credentials" as any).select("id", { count: "exact", head: true }),
-      supabase.from("passkey_credentials" as any).select("id", { count: "exact", head: true }),
     ]);
     // Log any ops query errors for debugging
-    [devicesRes, pushRes, sentRes, failedRes, sysRes, piholeRes, usersRes, passkeysRes].forEach((r, i) => {
+    [devicesRes, pushRes, sentRes, failedRes, sysRes, piholeRes, passkeysRes].forEach((r, i) => {
       if (r.error) console.error(`[Ops Query ${i}]`, r.error.message);
     });
     setDeviceCount(devicesRes.count ?? 0);
@@ -123,7 +121,6 @@ export default function AdminDashboard() {
       setDownSystems(sysRes.data.down_systems ?? []);
     }
     if (piholeRes.data) setPihole(piholeRes.data);
-    setUserCount(usersRes.count ?? 0);
     setPassKeyCount(passkeysRes.count ?? 0);
 
     setLoading(false);
