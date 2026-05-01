@@ -7,9 +7,9 @@ interface SystemPulseProps {
 }
 
 /**
- * SystemPulse — top-of-dashboard health banner.
+ * SystemPulse â top-of-dashboard health banner.
  *
- * v2 (2026-04-30) — rebuilt to read real schema.
+ * v2 (2026-04-30) â rebuilt to read real schema.
  *
  * The previous version read four boolean columns (`ai_pipeline_ok`, `reports_ok`,
  * `patterns_ok`, `maintenance_ok`) that don't exist in `system_alert_state` and
@@ -24,7 +24,7 @@ interface SystemPulseProps {
  *
  * Each indicator is independently red / amber / green, and the headline is the
  * worst of them. We also still render the v9 `is_down` and `down_systems` from
- * system_alert_state — that's the SMS-firing source of truth for the operator.
+ * system_alert_state â that's the SMS-firing source of truth for the operator.
  */
 
 type Status = "ok" | "warn" | "down" | "unknown";
@@ -79,13 +79,14 @@ export function SystemPulse({ className }: SystemPulseProps) {
   const [downSystems, setDownSystems] = useState<string[]>([]);
   const [lastChecked, setLastChecked] = useState<string | null>(null);
   const [relativeTime, setRelativeTime] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const updateRelativeTime = useCallback((iso: string | null) => {
     if (iso) setRelativeTime(formatRelativeTime(iso));
   }, []);
 
   const loadHealth = useCallback(async () => {
-    // Run all probes in parallel — every panel is non-blocking.
+    // Run all probes in parallel â every panel is non-blocking.
     const [
       aiGenSuccessRes,
       aiGenAttemptsRes,
@@ -133,7 +134,7 @@ export function SystemPulse({ className }: SystemPulseProps) {
 
     const next: SubsystemState[] = [];
 
-    // 1. AI Generator — success-based, not just "any insert"
+    // 1. AI Generator â success-based, not just "any insert"
     const lastAiSuccess = aiGenSuccessRes.data?.[0]?.created_at ?? null;
     const aiAttempts7d = aiGenAttemptsRes.count ?? 0;
     const aiSuccessHours = hoursAgo(lastAiSuccess);
@@ -157,13 +158,13 @@ export function SystemPulse({ className }: SystemPulseProps) {
     }
     next.push({ key: "ai", label: "AI Generator", status: aiStatus, detail: aiDetail });
 
-    // 2. Cron Heartbeat — pattern_fix_log writes a heartbeat every 3h
+    // 2. Cron Heartbeat â pattern_fix_log writes a heartbeat every 3h
     const lastCron = cronRes.data?.[0]?.created_at ?? null;
     const cronHours = hoursAgo(lastCron);
     const cronStatus: Status = cronHours === null ? "down" : cronHours > 6 ? "down" : cronHours > 4 ? "warn" : "ok";
     next.push({ key: "cron", label: "Cron", status: cronStatus, detail: formatAge(lastCron) });
 
-    // 3. Email Pipeline — failures vs sent in 24h
+    // 3. Email Pipeline â failures vs sent in 24h
     const sent24 = emailSentRes.count ?? 0;
     const failed24 = emailFailedRes.count ?? 0;
     let emailStatus: Status = "ok";
@@ -183,7 +184,7 @@ export function SystemPulse({ className }: SystemPulseProps) {
     }
     next.push({ key: "email", label: "Email", status: emailStatus, detail: emailDetail });
 
-    // 4. External Services — aggregate from probe-external
+    // 4. External Services â aggregate from probe-external
     const ext = (externalRes as any).data as Array<{ service: string; status: string; last_checked: string }> | null;
     if (ext && ext.length > 0) {
       const downCount = ext.filter((s) => s.status === "down").length;
@@ -207,6 +208,29 @@ export function SystemPulse({ className }: SystemPulseProps) {
     setLastChecked(alertState?.last_checked ?? null);
     updateRelativeTime(alertState?.last_checked ?? null);
   }, [updateRelativeTime]);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) {
+        await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-system-health`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        ).catch(() => {});
+      }
+      await loadHealth();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [loadHealth]);
 
   useEffect(() => {
     loadHealth();
@@ -244,16 +268,16 @@ export function SystemPulse({ className }: SystemPulseProps) {
   }, [subsystems]);
 
   const headlineText = useMemo(() => {
-    if (downSystems.length > 0) return `System Alert — ${downSystems.join(", ")}`;
+    if (downSystems.length > 0) return `System Alert â ${downSystems.join(", ")}`;
     if (headlineStatus === "down") {
       const down = subsystems.filter((s) => s.status === "down").map((s) => s.label);
-      return `System Alert — ${down.join(", ")}`;
+      return `System Alert â ${down.join(", ")}`;
     }
     if (headlineStatus === "warn") {
       const warn = subsystems.filter((s) => s.status === "warn").map((s) => s.label);
-      return `Degraded — ${warn.join(", ")}`;
+      return `Degraded â ${warn.join(", ")}`;
     }
-    if (headlineStatus === "unknown") return "Loading status…";
+    if (headlineStatus === "unknown") return "Loading statusâ¦";
     return "All Systems Operational";
   }, [headlineStatus, subsystems, downSystems]);
 
@@ -291,6 +315,31 @@ export function SystemPulse({ className }: SystemPulseProps) {
       {relativeTime && (
         <span className="text-xs text-white/25 tabular-nums whitespace-nowrap">Checked {relativeTime}</span>
       )}
+
+      {/* Refresh button */}
+      <button
+        onClick={handleRefresh}
+        disabled={isRefreshing}
+        className="shrink-0 p-1 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.05] transition-colors disabled:opacity-40"
+        title="Refresh system health"
+        aria-label="Refresh system health"
+      >
+        <svg
+          className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+          <path d="M16 21h5v-5" />
+        </svg>
+      </button>
 
       {/* Subsystem indicators */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ml-auto">
