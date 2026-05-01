@@ -1,3 +1,10 @@
+> ⚠️ **RETIRED 2026-05-01.** This project has been superseded by Supabase project
+> `rcqfqhguwpmaarseifqg`, managed via the `bestlytech` repo and a Cowork agent.
+> Do not deploy changes here. See `docs/agent-runbook.pdf` in the new repo for the
+> current operating model. All edge functions in this project respond with a
+> kill-switch stub; all scheduled jobs have been unscheduled. Data remains
+> queryable for historical reference.
+
 # Welcome to your Lovable project
 
 ## Project info
