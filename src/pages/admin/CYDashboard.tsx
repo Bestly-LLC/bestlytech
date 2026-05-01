@@ -70,12 +70,12 @@ export default function CYDashboard() {
   }, []);
 
   useAdminRealtime({
-    tables: ["subscriptions", "granted_access", "cookie_patterns", "missed_banner_reports"],
+    tables: ["subscriptions", "granted_access", "cookie_patterns", "missed_banner_reports"] as any,
     onNewRecord: (table, record) => {
       if (table === "subscriptions") setSubs((p) => [record, ...p]);
       if (table === "granted_access") setGrants((p) => [record, ...p]);
       // Refresh data when CY tables change
-      if (table === "cookie_patterns" || table === "missed_banner_reports") loadData();
+      if ((table as string) === "cookie_patterns" || (table as string) === "missed_banner_reports") loadData();
     },
   });
 
