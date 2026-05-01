@@ -17,7 +17,7 @@ interface SystemPulseProps {
  * check only flips when its own narrow heartbeat goes stale.
  *
  * Now we compute live health on the client from data the schema actually has:
- *   - AI Generator         last `ai_generation_log` row WHERE status='success'
+ *   - AI Generator         last `ai_generation_log` row (any status = alive; success = healthy)
  *   - Cron Heartbeat       last `pattern_fix_log` row
  *   - Email Pipeline       failure count last 24h vs sent count
  *   - External Services    aggregate of `external_health` (from probe-external fn)
@@ -90,6 +90,7 @@ export function SystemPulse({ className }: SystemPulseProps) {
     const [
       aiGenSuccessRes,
       aiGenAttemptsRes,
+      aiGenLatestRes,
       cronRes,
       emailSentRes,
       emailFailedRes,
@@ -106,6 +107,11 @@ export function SystemPulse({ className }: SystemPulseProps) {
         .from("ai_generation_log")
         .select("id", { count: "exact", head: true })
         .gte("created_at", new Date(Date.now() - 7 * 86400_000).toISOString()),
+      supabase
+        .from("ai_generation_log")
+        .select("created_at")
+        .order("created_at", { ascending: false })
+        .limit(1),
       supabase
         .from("pattern_fix_log")
         .select("created_at")
@@ -134,27 +140,30 @@ export function SystemPulse({ className }: SystemPulseProps) {
 
     const next: SubsystemState[] = [];
 
-    // 1. AI Generator — success-based, not just "any insert"
+    // 1. AI Generator — uses latest activity (heartbeat or success) for liveness
     const lastAiSuccess = aiGenSuccessRes.data?.[0]?.created_at ?? null;
+    const lastAiActivity = aiGenLatestRes.data?.[0]?.created_at ?? null;
     const aiAttempts7d = aiGenAttemptsRes.count ?? 0;
     const aiSuccessHours = hoursAgo(lastAiSuccess);
+    const aiActivityHours = hoursAgo(lastAiActivity);
     let aiStatus: Status;
     let aiDetail: string;
-    if (aiAttempts7d === 0) {
-      aiStatus = "warn";
-      aiDetail = "no candidates 7d";
-    } else if (aiSuccessHours === null) {
+    if (aiActivityHours === null) {
       aiStatus = "down";
-      aiDetail = "0 successes ever";
-    } else if (aiSuccessHours > 72) {
+      aiDetail = "no activity ever";
+    } else if (aiActivityHours > 24) {
       aiStatus = "down";
-      aiDetail = `${formatAge(lastAiSuccess)} (${aiAttempts7d} tried, 0 ok)`;
-    } else if (aiSuccessHours > 24) {
+      aiDetail = `silent ${formatAge(lastAiActivity)}`;
+    } else if (aiSuccessHours !== null && aiSuccessHours <= 24) {
+      aiStatus = "ok";
+      aiDetail = formatAge(lastAiSuccess);
+    } else if (aiSuccessHours !== null && aiSuccessHours <= 72) {
       aiStatus = "warn";
       aiDetail = formatAge(lastAiSuccess);
     } else {
+      // Generator is alive (ran within 24h) but no recent successes — idle is ok
       aiStatus = "ok";
-      aiDetail = formatAge(lastAiSuccess);
+      aiDetail = `idle — ${formatAge(lastAiActivity)}`;
     }
     next.push({ key: "ai", label: "AI Generator", status: aiStatus, detail: aiDetail });
 
