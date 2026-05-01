@@ -1,72 +1,130 @@
+# Cookie Yeti Retirement & Handoff Plan
 
+Goal: stop all outbound activity (SMS, AI calls, scheduled jobs) from this Lovable/Supabase project (`keowunrxpxlbgebujbao`) while keeping data queryable. Hand off operational ownership to the new project `rcqfqhguwpmaarseifqg`.
 
-# Home Hub Dashboard for Admin Panel
+---
 
-## Overview
+## 1. Cron jobs — kill list
 
-Add a 4-page "Home Hub" section to the existing admin panel that monitors Pi-hole, Home Assistant, and Homebridge services running on a Raspberry Pi 5. Uses the same dark aesthetic, StatCard pattern, PageHeader, ExportButton, and table styling already in use.
+Currently scheduled in `cron.job`:
 
-## New Files
+| jobid | jobname | schedule | action |
+|---|---|---|---|
+| 31 | ai-generate-patterns-batch | */15 * * * * | **UNSCHEDULE** |
+| 29 | auto-retry-failed-patterns | 0 3 * * * | **UNSCHEDULE** |
+| 32 | check-system-health | */15 * * * * | **UNSCHEDULE** (this is the SMS source) |
+| 30 | process-dismissal-consensus | 0 4 * * * | **UNSCHEDULE** |
+| 33 | reset-failed-patterns-monthly | 0 5 1 * * | **UNSCHEDULE** |
+| 28 | run-pattern-maintenance-every-6h | 0 */6 * * * | **UNSCHEDULE** |
+| 10 | process-email-queue | 5 seconds | **UNSCHEDULE** (drains transactional/auth email queue — no longer needed since app is retired) |
 
-### 1. Mock API Service — `src/services/homeHubApi.ts`
-A single file exporting async functions that return mock data for all three services. Each function simulates a fetch with realistic data structures. When ready to connect real APIs, only this file changes.
+Migration will use a `DO` block with `cron.unschedule(jobname)` wrapped in `BEGIN/EXCEPTION WHEN OTHERS` per job so missing jobs don't fail.
 
-Functions: `fetchPiholeStats()`, `fetchHomeAssistantStats()`, `fetchHomebridgeStats()`, `fetchOverviewStats()`, `piholeEnable()`, `piholeDisable()`, `piholeUpdateGravity()`, `homebridgeRestart()`, `toggleAutomation(id, enabled)`
+After migration I'll re-query `cron.job` and show the before/after diff.
 
-### 2. Overview Page — `src/pages/admin/HomeHubOverview.tsx`
-- PageHeader: "Home Hub" + "Last Updated" timestamp + refresh button
-- 3 status cards in a row (grid-cols-1 sm:grid-cols-3) using the existing StatCard pattern plus a colored status dot (green/yellow/red span with ping animation)
-  - Pi-hole: queries blocked today, % blocked
-  - Home Assistant: devices online, active automations
-  - Homebridge: accessories, plugins active
-- Below: "Recent Activity" feed card (same pattern as ActivityFeed.tsx) with timestamped events from all services
-- Auto-refresh every 30s via `useEffect` interval
+---
 
-### 3. Pi-hole Page — `src/pages/admin/HomeHubPihole.tsx`
-- PageHeader with Enable/Disable toggle button + Update Gravity button
-- 4 StatCards: Total Queries, Queries Blocked, Percent Blocked, Domains on Blocklist
-- Line chart (recharts, already installed): 24h queries — two lines (blocked vs allowed)
-- Two tables with search bars and ExportButton: Top Blocked Domains, Top Permitted Domains
+## 2. Edge functions — neutralize to kill-switch stubs
 
-### 4. Home Assistant Page — `src/pages/admin/HomeHubHomeAssistant.tsx`
-- 4 StatCards: Entities, Automations, Active Sensors, Last Automation Triggered
-- Sensor card grid (grid-cols-1 sm:grid-cols-3): EcoFlow Delta 2 (battery icon + charge %), Earthquake sensor, Weather alert — each with status dot
-- Automation list: rows with name, toggle switch, last-triggered timestamp
-- Recent activity log card
-
-### 5. Homebridge Page — `src/pages/admin/HomeHubHomebridge.tsx`
-- 3 StatCards: Accessories, Plugins, Uptime
-- Accessory list with status indicators (SmartRent lock: locked/unlocked, Dyson: on/off)
-- Plugin list with version + update-available badge
-- Restart Homebridge button with confirmation dialog
-
-## Modified Files
-
-### `src/components/admin/AdminSidebar.tsx`
-Add a new "Home Hub" sidebar group after Cookie Yeti with 4 items:
-- Overview → `/admin/home-hub`
-- Pi-hole → `/admin/home-hub/pihole`
-- Home Assistant → `/admin/home-hub/ha`
-- Homebridge → `/admin/home-hub/homebridge`
-
-Icons: `Server`, `Shield`, `House`, `Plug`
-
-### `src/App.tsx`
-Add 4 new routes under the admin layout:
-```
-<Route path="home-hub" element={<HomeHubOverview />} />
-<Route path="home-hub/pihole" element={<HomeHubPihole />} />
-<Route path="home-hub/ha" element={<HomeHubHomeAssistant />} />
-<Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
+Replace the body of these with a 200 stub returning:
+```json
+{"status":"retired","forwarded_to":"rcqfqhguwpmaarseifqg","retired_on":"2026-05-01"}
 ```
 
-### `src/components/admin/AdminLayout.tsx`
-Add breadcrumb labels for the 4 new routes to `BREADCRUMB_MAP`.
+Functions to neutralize (keep slugs deployed, just stub the code):
 
-## Design Details
-- All pages use the existing admin dark theme (bg-black, white/[0.03] cards, white/[0.06] borders)
-- Status dots: `relative flex h-2.5 w-2.5` with inner ping animation span (green-500, yellow-500, red-500)
-- Charts use dark theme colors: grid lines at white/[0.06], text at white/40
-- Tables follow the existing pattern with search input + ExportButton in a header row
-- Responsive: all grids collapse to single column on mobile
+- `check-system-health` — primary SMS culprit
+- `notify-sms` — direct Twilio caller
+- `auto-retry-failed-patterns`
+- `run-pattern-maintenance`
+- `ai-generate-pattern`
+- `report-missed-banner` — triggers ai-generate-pattern + email alerts
+- `process-dismissal-consensus`
+- `reset-failed-patterns`
+- `probe-external`, `probe-report` — outbound probes
+- `process-email-queue`, `send-transactional-email`, `auth-email-hook` — email sending
+- `report-site`, `submit-contact`, `submit-hire-request` — these send notification emails/SMS to admin
 
+Stub keeps CORS headers and responds 200 to OPTIONS + any method. Each will be redeployed via `supabase--deploy_edge_functions`.
+
+**Left alone (read/write only, no outbound):**
+- `create-checkout`, `stripe-webhook` — payment functions; safe to leave (Stripe still flows to historical data). I'll flag these for you to disable on Stripe side if desired.
+- `upsert-device-token`, `validate-activation-code`, `send-activation-code`, `webauthn-*`, `validate-intake`, `report-dismissal`, `handle-email-unsubscribe`, `handle-email-suppression`, `preview-transactional-email`, `ingest-pihole-stats` — non-alerting; harmless. Will list in inventory but not stub.
+
+If you'd rather stub *every* function, say so and I'll expand the list.
+
+---
+
+## 3. Inventory deliverable
+
+After kill-switch is applied, I'll print one consolidated report:
+
+- **Edge functions**: name, retired/active, purpose, callers
+- **Cron jobs**: before/after listing
+- **Tables** (28 total): row counts already gathered — `cookie_patterns:86`, `missed_banner_reports:61`, `subscriptions:5`, `granted_access:5`, `device_registrations:3`, `dismissal_reports:9`, `ai_generation_log:148`, `admin_activity_log:6`, `system_alert_state:1`, `email_send_log:83`, plus 18 others. I'll include all with writers/readers.
+- **Storage buckets**: `email-assets` (public), `intake-documents` (private)
+- **Auth hooks/triggers**: `auth-email-hook` function (will be stubbed); DB triggers list
+- **Secrets** (names only): SUPABASE_*, TWILIO_API_KEY, SMTP_*, PRIVATEMAIL_*, STRIPE_*, EMAIL_TO, LOVABLE_API_KEY, MAINTENANCE_SECRET, PIHOLE_INGEST_KEY
+- **External integrations**: Stripe, Twilio (connector), PrivateMail SMTP, Lovable AI Gateway
+
+---
+
+## 4. Credential export confirmation
+
+I'll print a checklist showing which of these are SET (✓) or MISSING (✗) on this project, no values:
+- LOVABLE_API_KEY ✓
+- TWILIO_API_KEY ✓ (connector-managed)
+- TWILIO_TO — not present as named secret (hardcoded `816-500-7236` in functions)
+- TWILIO_FROM — not present as named secret
+- PRIVATEMAIL_EMAIL ✓, PRIVATEMAIL_PASSWORD ✓
+- SMTP_HOST/PORT/USER/PASS ✓
+- EMAIL_TO ✓
+
+Note: `TWILIO_TO` and `TWILIO_FROM` aren't separate secrets here — the destination number is inline in `notify-sms`/`check-system-health`, and the From number comes from the Twilio connector config. You'll want to set these explicitly on the new project.
+
+---
+
+## 5. Handoff banner
+
+Add to `README.md` (top) and `index.html` `<title>`/meta:
+
+```
+> ⚠️ RETIRED 2026-05-01. This project has been superseded by
+> rcqfqhguwpmaarseifqg, managed via the bestlytech repo and a
+> Cowork agent. Do not deploy changes here. See
+> docs/agent-runbook.pdf in the new repo for the current
+> operating model.
+```
+
+Also add a `RETIRED.md` at repo root with the same notice and a pointer to the new project ref.
+
+---
+
+## 6. Execution order (once approved)
+
+1. Migration: unschedule the 7 cron jobs (DO block, idempotent)
+2. Rewrite ~13 edge function `index.ts` files to kill-switch stubs
+3. Deploy all neutralized functions
+4. Add retirement banner to README.md + create RETIRED.md
+5. Re-query `cron.job` and confirm empty (or only safe SQL-only jobs remain — there are none in this project)
+6. Print final confirmation report with before/after cron diff, stubbed function list, full inventory, and secret-name checklist
+
+**Not doing**: deleting any functions, dropping any tables, pausing the project, removing secrets, or touching Stripe webhooks at the provider level. All data remains queryable.
+
+---
+
+## Technical notes
+
+- `cron.unschedule(text)` raises if the job doesn't exist → wrapped per-job in `BEGIN ... EXCEPTION WHEN OTHERS THEN NULL; END;`.
+- Stub template (per function):
+  ```ts
+  const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-maintenance-secret" };
+  Deno.serve((req) => req.method === "OPTIONS"
+    ? new Response(null, { headers: cors })
+    : new Response(JSON.stringify({ status: "retired", forwarded_to: "rcqfqhguwpmaarseifqg", retired_on: "2026-05-01" }),
+        { status: 200, headers: { ...cors, "Content-Type": "application/json" } }));
+  ```
+- `supabase/config.toml` left as-is (function configs harmless once bodies are stubs).
+- `process-email-queue` cron uses Vault secret + 5-second interval — unscheduling it is the only way to silence it without touching Vault.
+
+Approve and I'll execute in one pass.
