@@ -24,7 +24,6 @@ const CookieYeti = lazy(() => import("./pages/CookieYeti"));
 const CookieYetiPrivacy = lazy(() => import("./pages/CookieYetiPrivacy"));
 const CookieYetiSuccess = lazy(() => import("./pages/CookieYetiSuccess"));
 const CookieYetiCancel = lazy(() => import("./pages/CookieYetiCancel"));
-const CookieYetiActivate = lazy(() => import("./pages/CookieYetiActivate"));
 const InventoryProof = lazy(() => import("./pages/InventoryProof"));
 const Hoku = lazy(() => import("./pages/Hoku"));
 const InHouseCloud = lazy(() => import("./pages/InHouseCloud"));
@@ -97,7 +96,6 @@ const App = () => (
                   <Route path="/cookie-yeti/privacy" element={<CookieYetiPrivacy />} />
                   <Route path="/cookie-yeti/success" element={<CookieYetiSuccess />} />
                   <Route path="/cookie-yeti/cancel" element={<CookieYetiCancel />} />
-              <Route path="/cookie-yeti/activate" element={<CookieYetiActivate />} />
                   <Route path="/confesh/privacy" element={<ConfeshPrivacy />} />
                   <Route path="/confesh/support" element={<ConfeshSupport />} />
                   <Route path="/inventory-proof" element={<InventoryProof />} />
