@@ -70,7 +70,7 @@ const replaces = [
     icon: ListChecks,
     title: "Projects",
     subtitle: "Asana · Trello · Monday",
-    outcome: "Boards, tasks, and deadlines — owned, on-prem, with full audit history.",
+    outcome: "Boards, tasks, and deadlines — owned, on premises, with full audit history.",
   },
   {
     icon: FormInput,
@@ -153,7 +153,7 @@ const objections = [
 const pillars = [
   {
     icon: Server,
-    title: "On-premise, on-brand",
+    title: "On premises, on brand",
     body: "Employees log in at cloud.yourcompany.com with your logo and colors. File-share links carry your domain. Mobile apps sync your branding automatically. No mention of Bestly anywhere.",
   },
   {
@@ -192,7 +192,7 @@ export default function InHouseCloud() {
             </p>
             <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
               The cloud owns your data.{" "}
-              <GradientText as="span">We think you should.</GradientText>
+              <GradientText as="span" className="whitespace-nowrap inline-block">We think you should.</GradientText>
             </h1>
             <p className="mt-6 text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto">
               A private cloud that lives in your office, wears your logo, and ends per-seat licensing for good. For teams of 5 to 200+.
@@ -219,7 +219,7 @@ export default function InHouseCloud() {
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>On-prem &amp; on-brand</span>
+                <span>On premises &amp; on brand</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-primary" />

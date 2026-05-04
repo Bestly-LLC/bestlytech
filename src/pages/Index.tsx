@@ -38,7 +38,7 @@ const accentWord = "you.";
 const heroPills = [
   "Privacy-first",
   "Software · Hardware · Cloud",
-  "On-prem & on-brand",
+  "On premises & on brand",
   "Los Angeles",
 ];
 
@@ -64,7 +64,7 @@ const trustPrinciples = [
   { name: "Global Standards", body: "GDPR, CCPA, and beyond. Your rights, worldwide.", icon: Globe },
 ];
 
-const marqueeWords = ["Apps", "AI", "Extensions", "Hardware", "Cloud", "Privacy", "On-prem", "Built in LA"];
+const marqueeWords = ["Apps", "AI", "Extensions", "Hardware", "Cloud", "Privacy", "On premises", "Built in LA"];
 
 export default function Index() {
   const reduce = useReducedMotion();
@@ -137,7 +137,7 @@ export default function Index() {
             >
               Bestly is a Los Angeles product studio shipping privacy-first software, hardware,
               and the cloud underneath. Apps, AI tools, browser extensions, consumer tech,
-              physical goods &mdash; and the on-prem infrastructure for teams that want their
+              physical goods &mdash; and the on-premises infrastructure for teams that want their
               data home.
             </motion.p>
 

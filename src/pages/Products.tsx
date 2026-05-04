@@ -145,7 +145,7 @@ export default function Products() {
                           </Button>
                         ) : (
                           <Button asChild size="sm" variant="ghost" className="gap-1 ml-auto">
-                            <Link to={product.href}>
+                            <Link to={product.href} target="_blank" rel="noopener noreferrer">
                               Learn More
                               <ArrowRight className="h-3.5 w-3.5" />
                             </Link>

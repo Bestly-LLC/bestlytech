@@ -12,7 +12,7 @@ import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <App />
     </ThemeProvider>
   </ErrorBoundary>
