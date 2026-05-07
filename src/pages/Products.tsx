@@ -28,7 +28,7 @@ export default function Products() {
     <>
       <SEOHead
         title="The Bestly Suite — Apps That Simplify Your Life"
-        description="Explore the full Bestly LLC product suite: Cookie Yeti, InventoryProof, SchoolPilot, HOA Cure, Confesh, and more. Download on the App Store or try on the web."
+        description="Explore the full Bestly LLC product suite: Cookie Yeti, InventoryProof, SchoolPilot, HOAscope, Confesh, and more. Download on the App Store or try on the web."
       />
 
       <div className="relative overflow-hidden">

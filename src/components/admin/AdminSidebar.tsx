@@ -13,6 +13,7 @@ import {
   Shield,
   House,
   Plug,
+  Cloud,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -30,7 +31,13 @@ import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-type CountKeys = "submissions" | "contacts" | "hires" | "cySubscribers";
+type CountKeys =
+  | "submissions"
+  | "contacts"
+  | "hires"
+  | "cySubscribers"
+  | "cloudLeads"
+  | "shieldReports";
 
 const dashboardItem = { title: "Command Center", url: "/admin", icon: LayoutDashboard };
 
@@ -55,8 +62,13 @@ const cookieYetiItems = [
 const homeHubItems = [
   { title: "Overview", url: "/admin/home-hub", icon: Server },
   { title: "Pi-hole", url: "/admin/home-hub/pihole", icon: Shield },
+  { title: "Shield reports", url: "/admin/shield-reports", icon: Shield, countKey: "shieldReports" as CountKeys },
   { title: "Home Assistant", url: "/admin/home-hub/ha", icon: House },
   { title: "Homebridge", url: "/admin/home-hub/homebridge", icon: Plug },
+];
+
+const cloudItems = [
+  { title: "Cloud Deals", url: "/admin/cloud", icon: Cloud, countKey: "cloudLeads" as CountKeys },
 ];
 
 export function AdminSidebar() {
@@ -64,7 +76,7 @@ export function AdminSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const currentPath = location.pathname;
-  const [counts, setCounts] = useState<Record<CountKeys, number>>({ submissions: 0, contacts: 0, hires: 0, cySubscribers: 0 });
+  const [counts, setCounts] = useState<Record<CountKeys, number>>({ submissions: 0, contacts: 0, hires: 0, cySubscribers: 0, cloudLeads: 0, shieldReports: 0 });
 
   useEffect(() => {
     Promise.all([
@@ -72,12 +84,16 @@ export function AdminSidebar() {
       supabase.from("contact_submissions").select("id", { count: "exact", head: true }).eq("status", "new"),
       supabase.from("hire_requests").select("id", { count: "exact", head: true }).eq("status", "new"),
       supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "active"),
-    ]).then(([subs, contacts, hires, cySubs]) => {
+      supabase.from("cloud_leads").select("id", { count: "exact", head: true }).eq("status", "new"),
+      supabase.from("shield_url_reports").select("id", { count: "exact", head: true }).eq("status", "new"),
+    ]).then(([subs, contacts, hires, cySubs, cloudLeads, shieldReports]) => {
       setCounts({
         submissions: subs.count ?? 0,
         contacts: contacts.count ?? 0,
         hires: hires.count ?? 0,
         cySubscribers: cySubs.count ?? 0,
+        cloudLeads: cloudLeads.count ?? 0,
+        shieldReports: shieldReports.count ?? 0,
       });
     });
   }, []);
@@ -169,6 +185,17 @@ export function AdminSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{homeHubItems.map(renderItem)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
+            In-House Cloud
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{cloudItems.map(renderItem)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

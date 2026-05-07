@@ -57,3 +57,21 @@ project_id = "keowunrxpxlbgebujbao"
     verify_jwt = false
   [functions.ingest-pihole-stats]
     verify_jwt = false
+  [functions.submit-cloud-lead]
+    verify_jwt = false
+  [functions.cloud-brief]
+    verify_jwt = false
+  [functions.cloud-deal-payment-link]
+    verify_jwt = true
+  [functions.cloud-intake]
+    verify_jwt = false
+  [functions.cloud-brand-upload]
+    verify_jwt = false
+  [functions.shield-report-url]
+    verify_jwt = false
+  [functions.cloud-deal-sign]
+    verify_jwt = true
+  [functions.cloud-deal-sign-webhook]
+    verify_jwt = false
+  [functions.cloud-shield-request]
+    verify_jwt = false

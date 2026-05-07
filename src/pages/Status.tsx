@@ -62,22 +62,15 @@ const SERVICE_DISPLAY: Record<string, { label: string; description: string }> = 
     label: "Cookie Yeti Site",
     description: "Marketing / install page",
   },
-  "hoascope.com": {
-    label: "HOAscope Site",
-    description: "Marketing / signup",
-  },
-  "app.hoascope.com": {
-    label: "HOAscope App",
-    description: "Member portal",
-  },
 };
 
+// Order matches the dashboard. HOAscope (and other in-development products)
+// intentionally omitted until their public surface ships — see
+// docs/onboarding-audit-2026-05.md action item 6. Add a service here only
+// after a row exists in public.external_health.
 const SERVICE_ORDER = [
   "bestly.tech",
   "cloud.bestly.tech",
-  "cookieyeti.com",
-  "hoascope.com",
-  "app.hoascope.com",
 ];
 
 function pickHeadlineStatus(rows: ServiceStatus[]): ServiceStatus["current_status"] {

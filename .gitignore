@@ -36,3 +36,7 @@ vite.config.ts.timestamp-*
 # Pi cron script secrets
 scripts/.env
 scripts/pihole_push.log
+.secrets/
+
+# LibreOffice/Collabora lock files
+.~lock.*#

@@ -138,6 +138,109 @@ serve(async (req) => {
         const subscriptionId = session.subscription;
         const mode = session.mode;
 
+        // ─── Cloud deal payment short-circuit ─────────────────
+        // Payment links created by cloud-deal-payment-link include a
+        // metadata.deal_id. If present, this is a B2B cloud deployment
+        // payment (deposit, final, etc.) — handle separately and bail out
+        // before the Cookie Yeti subscription path runs.
+        const dealIdMeta = session.metadata?.deal_id as string | undefined;
+        if (dealIdMeta) {
+          const { data: deal } = await supabase
+            .from("cloud_deals")
+            .select("id, lead_id, current_stage, deposit_paid_at, company_name, primary_contact_name")
+            .eq("id", dealIdMeta)
+            .maybeSingle();
+
+          if (!deal) {
+            console.error("cloud deal payment but deal not found", dealIdMeta);
+            break;
+          }
+
+          const updates: Record<string, any> = {};
+          if (!deal.deposit_paid_at) updates.deposit_paid_at = new Date().toISOString();
+          // Auto-advance to Stage 5 (Tech intake) only if currently <= 4
+          if ((deal.current_stage ?? 0) <= 4) updates.current_stage = 5;
+          if (customerId && typeof customerId === "string") {
+            updates.stripe_customer_id = customerId;
+          }
+
+          if (Object.keys(updates).length > 0) {
+            const { error: updErr } = await supabase
+              .from("cloud_deals")
+              .update(updates)
+              .eq("id", deal.id);
+            if (updErr) {
+              console.error("cloud_deal payment update error", updErr);
+              break;
+            }
+          }
+
+          await supabase.from("cloud_deal_events").insert({
+            deal_id: deal.id,
+            lead_id: deal.lead_id,
+            event_type: "deposit_paid",
+            event_payload: {
+              amount_total: session.amount_total,
+              currency: session.currency,
+              session_id: session.id,
+              payment_intent: session.payment_intent,
+            },
+            triggered_by: "stripe-webhook",
+          });
+
+          // ntfy push to operator
+          try {
+            const NTFY_BASE = "https://ntfy.sh";
+            const NTFY_TOPIC = "bestly-sysalert-7q2k9mx4";
+            const ntfyToken = Deno.env.get("NTFY_TOKEN");
+            const headers: Record<string, string> = {
+              Title: `Deposit paid: ${deal.company_name} ($${((session.amount_total ?? 0) / 100).toFixed(2)})`,
+              Tags: "money-bag",
+              Priority: "5",
+              Click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
+            };
+            if (ntfyToken) headers["Authorization"] = `Bearer ${ntfyToken}`;
+            await fetch(`${NTFY_BASE}/${NTFY_TOPIC}`, {
+              method: "POST",
+              headers,
+              body: `${deal.primary_contact_name ?? "Client"} just paid the deposit. Auto-advanced to Stage 5: Tech intake.`,
+            });
+          } catch (ntfyErr) {
+            console.error("ntfy push failed (cloud deal)", ntfyErr);
+          }
+
+          // Customer-facing receipt + intake invitation
+          const { data: dealFull } = await supabase
+            .from("cloud_deals")
+            .select("primary_contact_email, primary_contact_name, company_name, intake_token")
+            .eq("id", deal.id)
+            .single();
+          if (dealFull?.primary_contact_email) {
+            const intakeUrl = dealFull.intake_token
+              ? `https://bestly.tech/intake/${dealFull.intake_token}`
+              : null;
+            const amount = session.amount_total
+              ? `$${((session.amount_total as number) / 100).toFixed(2)}`
+              : null;
+            await sendEmail(
+              supabase,
+              "cloud-deposit-paid",
+              dealFull.primary_contact_email,
+              `cloud-deposit-paid-${deal.id}-${event.id}`,
+              {
+                contact_name: dealFull.primary_contact_name,
+                company_name: dealFull.company_name,
+                amount,
+                intake_url: intakeUrl,
+              }
+            );
+          }
+
+          console.log("Cloud deal payment processed for", deal.id);
+          break;
+        }
+        // ─── End cloud deal handler ───────────────────────────
+
         if (!email) {
           console.error("No email found in session");
           break;

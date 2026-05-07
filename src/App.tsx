@@ -37,6 +37,11 @@ const Contact = lazy(() => import("./pages/Contact"));
 const ProductLegal = lazy(() => import("./pages/ProductLegal"));
 const ReportSite = lazy(() => import("./pages/ReportSite"));
 const Hire = lazy(() => import("./pages/Hire"));
+const GetStarted = lazy(() => import("./pages/GetStarted"));
+const Brief = lazy(() => import("./pages/Brief"));
+const Intake = lazy(() => import("./pages/Intake"));
+const ShieldReport = lazy(() => import("./pages/ShieldReport"));
+const ShieldRequest = lazy(() => import("./pages/ShieldRequest"));
 const Services = lazy(() => import("./pages/Services"));
 const AppleModernization = lazy(() => import("./pages/AppleModernization"));
 const MarketplaceSetup = lazy(() => import("./pages/MarketplaceSetup"));
@@ -66,6 +71,10 @@ const CommunityLearning = lazy(() => import("./pages/admin/CommunityLearning"));
 const AdminContacts = lazy(() => import("./pages/admin/AdminContacts"));
 const AdminHireRequests = lazy(() => import("./pages/admin/AdminHireRequests"));
 const AdminWaitlist = lazy(() => import("./pages/admin/AdminWaitlist"));
+const CloudDeals = lazy(() => import("./pages/admin/CloudDeals"));
+const CloudDealDetail = lazy(() => import("./pages/admin/CloudDealDetail"));
+const CloudDiscoveryBrief = lazy(() => import("./pages/admin/CloudDiscoveryBrief"));
+const AdminShieldReports = lazy(() => import("./pages/admin/AdminShieldReports"));
 const HomeHubOverview = lazy(() => import("./pages/admin/HomeHubOverview"));
 const HomeHubPihole = lazy(() => import("./pages/admin/HomeHubPihole"));
 const HomeHubHomeAssistant = lazy(() => import("./pages/admin/HomeHubHomeAssistant"));
@@ -113,6 +122,11 @@ const App = () => (
                   <Route path="/product/:productId/legal" element={<ProductLegal />} />
                   <Route path="/report-site" element={<ReportSite />} />
                   <Route path="/hire" element={<Hire />} />
+                  <Route path="/get-started" element={<GetStarted />} />
+                  <Route path="/brief/:token" element={<Brief />} />
+                  <Route path="/intake/:token" element={<Intake />} />
+                  <Route path="/shield/report" element={<ShieldReport />} />
+                  <Route path="/shield/request/:token" element={<ShieldRequest />} />
                   <Route path="/services" element={<Services />} />
                   <Route path="/apple-modernization" element={<AppleModernization />} />
                   <Route path="/marketplace-setup" element={<MarketplaceSetup />} />
@@ -135,6 +149,10 @@ const App = () => (
                   <Route path="contacts" element={<AdminContacts />} />
                   <Route path="hires" element={<AdminHireRequests />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
+                  <Route path="cloud" element={<CloudDeals />} />
+                  <Route path="cloud/:id" element={<CloudDealDetail />} />
+                  <Route path="cloud/:id/brief-pdf" element={<CloudDiscoveryBrief />} />
+                  <Route path="shield-reports" element={<AdminShieldReports />} />
                   <Route path="cookie-yeti" element={<CYDashboard />} />
                   <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
                   <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />

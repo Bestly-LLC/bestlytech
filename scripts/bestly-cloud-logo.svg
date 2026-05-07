@@ -1,0 +1,14 @@
+<svg width="406.012" height="177.619" viewBox="0 0 107.424 46.995" xmlns="http://www.w3.org/2000/svg">
+  <!-- Bestly Cloud signing mark — drop-in replacement for Libresign's logo-gray.svg
+       Same viewBox so it renders 1:1 in the validation page slot. -->
+  <g transform="translate(53.712 23.498)">
+    <path d="M-39.5 -9 a6 6 0 0 1 6 -6 a8 8 0 0 1 14 -2 a7 7 0 0 1 13 4 a5 5 0 0 1 -1 9 h-30 a6 6 0 0 1 -2 -5 z"
+          fill="#c84d2b" opacity="0.92"/>
+    <path d="M-38 -2 l4 4 l8 -8" stroke="#fff" stroke-width="2.4" fill="none"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="-9" y="-2" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+          font-size="13" font-weight="700" letter-spacing="0.5" fill="#0a0a0a">BESTLY</text>
+    <text x="-9" y="14" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+          font-size="6.6" font-weight="500" letter-spacing="3.4" fill="#475569">CLOUD SIGNING</text>
+  </g>
+</svg>
