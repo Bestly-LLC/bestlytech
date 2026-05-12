@@ -202,7 +202,7 @@ export default function InHouseCloud() {
                 to="/get-started"
                 className="group inline-flex items-center justify-center rounded-xl gradient-bg px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/20 btn-lift"
               >
-                Book a Discovery Call
+                Get Started
                 <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Link>
               <a
@@ -450,7 +450,7 @@ export default function InHouseCloud() {
                 to="/get-started"
                 className="group inline-flex items-center justify-center rounded-xl gradient-bg px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/20 btn-lift"
               >
-                Book a Discovery Call
+                Get Started
                 <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Link>
               <a

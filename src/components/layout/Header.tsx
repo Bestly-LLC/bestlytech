@@ -91,6 +91,12 @@ export function Header() {
 
         <div className="hidden lg:flex lg:flex-1 lg:justify-end lg:items-center lg:gap-2">
           <Link
+            to="/get-started"
+            className="inline-flex items-center justify-center rounded-lg gradient-bg px-4 py-2 text-sm font-medium text-white shadow-sm shadow-primary/20 btn-lift"
+          >
+            Get Started
+          </Link>
+          <Link
             to="/privacy-policy"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-4 py-2 rounded-lg hover:bg-accent/50"
           >
@@ -188,6 +194,13 @@ export function Header() {
                   </div>
                 </div>
                 <div className="py-6 space-y-1">
+                  <Link
+                    to="/get-started"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block rounded-xl gradient-bg px-4 py-3 text-base font-medium text-white text-center shadow-sm"
+                  >
+                    Get Started
+                  </Link>
                   <Link
                     to="/privacy-policy"
                     onClick={() => setMobileMenuOpen(false)}
