@@ -274,7 +274,8 @@ export default function GetStarted() {
                 In-House Cloud — Discovery
               </Badge>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">
-                Your data. Your brand.{" "}
+                Your data. Your brand.
+                <br />
                 <GradientText>Your cloud.</GradientText>
               </h1>
               <p className="mt-5 text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
