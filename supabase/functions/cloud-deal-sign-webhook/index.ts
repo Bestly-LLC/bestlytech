@@ -87,15 +87,39 @@ Deno.serve(async (req) => {
     }
   }
 
-  let body: any;
-  try {
-    body = await req.json();
-  } catch {
-    return bad("invalid json");
+  // Libresign 13 posts the callback as multipart/form-data with three fields:
+  //   uuid    — request UUID (matches cloud_deals.signing_request_id)
+  //   status  — file status code (fires only when the whole envelope is signed)
+  //   file    — the signed PDF binary (we don't store; Nextcloud has it)
+  // We also tolerate a JSON shape for forward-compat / Workflow Engine path.
+  let reqUuid: string | null = null;
+  let body: any = null;
+  let eventType: "signed" | "declined" | "viewed" | "other" = "other";
+  const ct = (req.headers.get("content-type") || "").toLowerCase();
+
+  if (ct.startsWith("multipart/form-data")) {
+    try {
+      const form = await req.formData();
+      const u = form.get("uuid");
+      const s = form.get("status");
+      reqUuid = typeof u === "string" ? u : null;
+      body = { uuid: reqUuid, status: typeof s === "string" ? s : null, source: "multipart" };
+      // notifyCallback only fires on full-sign completion in Libresign 13
+      eventType = "signed";
+    } catch (e) {
+      console.error("multipart parse failed", e);
+      return bad("invalid multipart");
+    }
+  } else {
+    try {
+      body = await req.json();
+    } catch {
+      return bad("invalid json");
+    }
+    reqUuid = pickRequestUuid(body);
+    eventType = pickEventType(body);
   }
 
-  const reqUuid = pickRequestUuid(body);
-  const eventType = pickEventType(body);
   if (!reqUuid) {
     console.warn("webhook with no request uuid", JSON.stringify(body).slice(0, 400));
     return ok({ ok: true, ignored: true });
