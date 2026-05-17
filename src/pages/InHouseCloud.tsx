@@ -4,6 +4,7 @@ import { AnimatedSection } from "@/components/AnimatedSection";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { GradientText } from "@/components/ui/GradientText";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
+import { InteractivePricingCalculator } from "@/components/InteractivePricingCalculator";
 import {
   Folder, MessageSquare, Mail, ScrollText, CalendarDays, Brain,
   ShieldAlert, Globe, ServerCog, ListChecks, FormInput, KeyRound,
@@ -99,12 +100,6 @@ const stats = [
   { value: 0, suffix: "", label: "per-seat licensing fees, ever" },
 ];
 
-const savings = [
-  { users: "25 users", saved: "$200K+", vs: "vs. $219,600 cloud" },
-  { users: "50 users", saved: "$380K+", vs: "vs. $438,300 cloud" },
-  { users: "100 users", saved: "$761K+", vs: "vs. $876,600 cloud" },
-  { users: "200 users", saved: "$1.6M+", vs: "vs. $1,753,200 cloud" },
-];
 const process = [
   {
     step: "01",
@@ -345,39 +340,8 @@ export default function InHouseCloud() {
         </div>
       </section>
 
-      {/* Savings */}
-      <section className="border-t border-border">
-        <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <AnimatedSection animation="fade-in" className="text-center mb-16">
-            <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">
-              The math
-            </p>
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Three-year savings, by team size.
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Hardware + setup + optional support — compared to Google Workspace, Zoom, Slack, Asana, DocuSign, 1Password, and a typical AI seat for every employee.
-            </p>
-          </AnimatedSection>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {savings.map((tier, index) => (
-              <AnimatedSection key={tier.users} animation="fade-in" delay={index * 80}>
-                <GlowCard className="h-full text-center">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{tier.users}</p>
-                  <p className="mt-4 text-3xl sm:text-4xl font-semibold tracking-tight text-foreground">
-                    <GradientText as="span">{tier.saved}</GradientText>
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">saved over 3 years</p>
-                  <p className="mt-4 text-xs text-muted-foreground/80 border-t border-border pt-4">{tier.vs}</p>
-                </GlowCard>
-              </AnimatedSection>
-            ))}
-          </div>
-          <p className="mt-10 text-center text-xs text-muted-foreground max-w-3xl mx-auto">
-            Cloud-stack baseline assumes 2026 list pricing for Google Workspace Business Standard, Zoom Pro, Slack Business+, Asana Business, DocuSign Business Pro, 1Password Business, and ChatGPT Team — billed annually, per seat. Your actual bill is probably higher.
-          </p>
-        </div>
-      </section>
+      {/* Savings — interactive */}
+      <InteractivePricingCalculator />
 
       {/* Process */}
       <section className="border-t border-border bg-secondary/20">
