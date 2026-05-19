@@ -130,6 +130,7 @@ See the TodoList for current state. Major decisions still open:
 - **No new emojis on existing pages** unless explicitly asked.
 - **Migrations are append-only.** Never edit a previously-committed migration; write a new one.
 - **One Supabase project.** Old Lovable project `keowunrxpxlbgebujbao` is retired — its functions return 410 stubs. New project is `rcqfqhguwpmaarseifqg`.
+- **Always commit + push without asking.** When finishing meaningful work on this repo, run `git add` → `git commit` (logical, scoped commits) → `git pull --rebase origin main` → `git push origin main`. Vercel auto-deploys from main. Don't ask Jared for permission first — just do it. If there's a conflict, rebase and proceed.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
