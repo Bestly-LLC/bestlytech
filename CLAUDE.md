@@ -130,3 +130,8 @@ See the TodoList for current state. Major decisions still open:
 - **No new emojis on existing pages** unless explicitly asked.
 - **Migrations are append-only.** Never edit a previously-committed migration; write a new one.
 - **One Supabase project.** Old Lovable project `keowunrxpxlbgebujbao` is retired — its functions return 410 stubs. New project is `rcqfqhguwpmaarseifqg`.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
