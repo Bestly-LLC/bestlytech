@@ -10,40 +10,10 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
-      activation_code_attempts: {
-        Row: {
-          action: string
-          count: number
-          email: string
-          id: number
-          locked_until: string | null
-          updated_at: string
-          window_start: string
-        }
-        Insert: {
-          action: string
-          count?: number
-          email: string
-          id?: never
-          locked_until?: string | null
-          updated_at?: string
-          window_start?: string
-        }
-        Update: {
-          action?: string
-          count?: number
-          email?: string
-          id?: never
-          locked_until?: string | null
-          updated_at?: string
-          window_start?: string
-        }
-        Relationships: []
-      }
       activation_codes: {
         Row: {
           activated_at: string | null
@@ -151,404 +121,6 @@ export type Database = {
           status?: string
         }
         Relationships: []
-      }
-      cloud_briefs: {
-        Row: {
-          access_token: string
-          annual_saas_spend_band: string | null
-          biggest_unknown: string | null
-          compliance_frameworks: Json
-          created_at: string
-          current_apps: Json
-          domain_owned: string | null
-          has_it_lead: string | null
-          has_static_ip: string | null
-          id: string
-          lead_id: string
-          office_city: string | null
-          office_country: string | null
-          office_state: string | null
-          preferred_subdomain: string | null
-          submitted_at: string | null
-          updated_at: string
-        }
-        Insert: {
-          access_token?: string
-          annual_saas_spend_band?: string | null
-          biggest_unknown?: string | null
-          compliance_frameworks?: Json
-          created_at?: string
-          current_apps?: Json
-          domain_owned?: string | null
-          has_it_lead?: string | null
-          has_static_ip?: string | null
-          id?: string
-          lead_id: string
-          office_city?: string | null
-          office_country?: string | null
-          office_state?: string | null
-          preferred_subdomain?: string | null
-          submitted_at?: string | null
-          updated_at?: string
-        }
-        Update: {
-          access_token?: string
-          annual_saas_spend_band?: string | null
-          biggest_unknown?: string | null
-          compliance_frameworks?: Json
-          created_at?: string
-          current_apps?: Json
-          domain_owned?: string | null
-          has_it_lead?: string | null
-          has_static_ip?: string | null
-          id?: string
-          lead_id?: string
-          office_city?: string | null
-          office_country?: string | null
-          office_state?: string | null
-          preferred_subdomain?: string | null
-          submitted_at?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cloud_briefs_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: true
-            referencedRelation: "cloud_leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cloud_briefs_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: true
-            referencedRelation: "v_cloud_lead_funnel"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cloud_deal_events: {
-        Row: {
-          created_at: string
-          deal_id: string | null
-          event_payload: Json | null
-          event_type: string
-          id: string
-          lead_id: string | null
-          triggered_by: string | null
-        }
-        Insert: {
-          created_at?: string
-          deal_id?: string | null
-          event_payload?: Json | null
-          event_type: string
-          id?: string
-          lead_id?: string | null
-          triggered_by?: string | null
-        }
-        Update: {
-          created_at?: string
-          deal_id?: string | null
-          event_payload?: Json | null
-          event_type?: string
-          id?: string
-          lead_id?: string | null
-          triggered_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cloud_deal_events_deal_id_fkey"
-            columns: ["deal_id"]
-            isOneToOne: false
-            referencedRelation: "cloud_deals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cloud_deal_events_deal_id_fkey"
-            columns: ["deal_id"]
-            isOneToOne: false
-            referencedRelation: "v_cloud_lead_funnel"
-            referencedColumns: ["deal_id"]
-          },
-          {
-            foreignKeyName: "cloud_deal_events_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "cloud_leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cloud_deal_events_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "v_cloud_lead_funnel"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cloud_deals: {
-        Row: {
-          assigned_to: string | null
-          cal_event_uuid: string | null
-          company_name: string
-          created_at: string
-          current_stage: number
-          deployment_fee_cents: number | null
-          deposit_paid_at: string | null
-          discovery_call_at: string | null
-          docusign_envelope_id: string | null
-          go_live_at: string | null
-          id: string
-          install_data: Json
-          install_scheduled_at: string | null
-          intake_data: Json
-          intake_submitted_at: string | null
-          intake_token: string | null
-          lead_id: string
-          live_data: Json
-          monthly_support_fee_cents: number | null
-          notes: string | null
-          primary_contact_email: string
-          primary_contact_name: string
-          provisioning_data: Json
-          shield_request_token: string | null
-          signing_document_url: string | null
-          signing_provider: string
-          signing_request_id: string | null
-          sow_sent_at: string | null
-          sow_signed_at: string | null
-          stage_changed_at: string
-          stripe_customer_id: string | null
-          support_tier: string | null
-          target_user_count: number | null
-          updated_at: string
-        }
-        Insert: {
-          assigned_to?: string | null
-          cal_event_uuid?: string | null
-          company_name: string
-          created_at?: string
-          current_stage?: number
-          deployment_fee_cents?: number | null
-          deposit_paid_at?: string | null
-          discovery_call_at?: string | null
-          docusign_envelope_id?: string | null
-          go_live_at?: string | null
-          id?: string
-          install_data?: Json
-          install_scheduled_at?: string | null
-          intake_data?: Json
-          intake_submitted_at?: string | null
-          intake_token?: string | null
-          lead_id: string
-          live_data?: Json
-          monthly_support_fee_cents?: number | null
-          notes?: string | null
-          primary_contact_email: string
-          primary_contact_name: string
-          provisioning_data?: Json
-          shield_request_token?: string | null
-          signing_document_url?: string | null
-          signing_provider?: string
-          signing_request_id?: string | null
-          sow_sent_at?: string | null
-          sow_signed_at?: string | null
-          stage_changed_at?: string
-          stripe_customer_id?: string | null
-          support_tier?: string | null
-          target_user_count?: number | null
-          updated_at?: string
-        }
-        Update: {
-          assigned_to?: string | null
-          cal_event_uuid?: string | null
-          company_name?: string
-          created_at?: string
-          current_stage?: number
-          deployment_fee_cents?: number | null
-          deposit_paid_at?: string | null
-          discovery_call_at?: string | null
-          docusign_envelope_id?: string | null
-          go_live_at?: string | null
-          id?: string
-          install_data?: Json
-          install_scheduled_at?: string | null
-          intake_data?: Json
-          intake_submitted_at?: string | null
-          intake_token?: string | null
-          lead_id?: string
-          live_data?: Json
-          monthly_support_fee_cents?: number | null
-          notes?: string | null
-          primary_contact_email?: string
-          primary_contact_name?: string
-          provisioning_data?: Json
-          shield_request_token?: string | null
-          signing_document_url?: string | null
-          signing_provider?: string
-          signing_request_id?: string | null
-          sow_sent_at?: string | null
-          sow_signed_at?: string | null
-          stage_changed_at?: string
-          stripe_customer_id?: string | null
-          support_tier?: string | null
-          target_user_count?: number | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cloud_deals_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "cloud_leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cloud_deals_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "v_cloud_lead_funnel"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cloud_leads: {
-        Row: {
-          company_name: string
-          company_website: string | null
-          contact_email: string
-          contact_name: string
-          contact_phone: string | null
-          created_at: string
-          id: string
-          ip_address: unknown
-          notes: string | null
-          primary_pain: string | null
-          primary_pain_detail: string | null
-          referrer: string | null
-          source: string | null
-          status: string
-          updated_at: string
-          urgency: string | null
-          user_agent: string | null
-          user_count_band: string
-          utm_campaign: string | null
-          utm_medium: string | null
-          utm_source: string | null
-        }
-        Insert: {
-          company_name: string
-          company_website?: string | null
-          contact_email: string
-          contact_name: string
-          contact_phone?: string | null
-          created_at?: string
-          id?: string
-          ip_address?: unknown
-          notes?: string | null
-          primary_pain?: string | null
-          primary_pain_detail?: string | null
-          referrer?: string | null
-          source?: string | null
-          status?: string
-          updated_at?: string
-          urgency?: string | null
-          user_agent?: string | null
-          user_count_band: string
-          utm_campaign?: string | null
-          utm_medium?: string | null
-          utm_source?: string | null
-        }
-        Update: {
-          company_name?: string
-          company_website?: string | null
-          contact_email?: string
-          contact_name?: string
-          contact_phone?: string | null
-          created_at?: string
-          id?: string
-          ip_address?: unknown
-          notes?: string | null
-          primary_pain?: string | null
-          primary_pain_detail?: string | null
-          referrer?: string | null
-          source?: string | null
-          status?: string
-          updated_at?: string
-          urgency?: string | null
-          user_agent?: string | null
-          user_count_band?: string
-          utm_campaign?: string | null
-          utm_medium?: string | null
-          utm_source?: string | null
-        }
-        Relationships: []
-      }
-      cloud_shield_requests: {
-        Row: {
-          created_at: string
-          deal_id: string
-          decision_notes: string | null
-          id: string
-          ip_address: unknown
-          reason: string | null
-          requested_url: string
-          requester_email: string | null
-          requester_name: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          status: string
-          updated_at: string
-          user_agent: string | null
-        }
-        Insert: {
-          created_at?: string
-          deal_id: string
-          decision_notes?: string | null
-          id?: string
-          ip_address?: unknown
-          reason?: string | null
-          requested_url: string
-          requester_email?: string | null
-          requester_name?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-          updated_at?: string
-          user_agent?: string | null
-        }
-        Update: {
-          created_at?: string
-          deal_id?: string
-          decision_notes?: string | null
-          id?: string
-          ip_address?: unknown
-          reason?: string | null
-          requested_url?: string
-          requester_email?: string | null
-          requester_name?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-          updated_at?: string
-          user_agent?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cloud_shield_requests_deal_id_fkey"
-            columns: ["deal_id"]
-            isOneToOne: false
-            referencedRelation: "cloud_deals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cloud_shield_requests_deal_id_fkey"
-            columns: ["deal_id"]
-            isOneToOne: false
-            referencedRelation: "v_cloud_lead_funnel"
-            referencedColumns: ["deal_id"]
-          },
-        ]
       }
       contact_submissions: {
         Row: {
@@ -805,72 +377,6 @@ export type Database = {
         }
         Relationships: []
       }
-      external_health: {
-        Row: {
-          consecutive_failures: number
-          created_at: string
-          error_message: string | null
-          http_code: number | null
-          last_checked: string
-          last_ok: string | null
-          latency_ms: number | null
-          service: string
-          status: string
-          url: string
-        }
-        Insert: {
-          consecutive_failures?: number
-          created_at?: string
-          error_message?: string | null
-          http_code?: number | null
-          last_checked?: string
-          last_ok?: string | null
-          latency_ms?: number | null
-          service: string
-          status: string
-          url: string
-        }
-        Update: {
-          consecutive_failures?: number
-          created_at?: string
-          error_message?: string | null
-          http_code?: number | null
-          last_checked?: string
-          last_ok?: string | null
-          latency_ms?: number | null
-          service?: string
-          status?: string
-          url?: string
-        }
-        Relationships: []
-      }
-      external_health_history: {
-        Row: {
-          http_code: number | null
-          id: number
-          latency_ms: number | null
-          recorded_at: string
-          service: string
-          status: string
-        }
-        Insert: {
-          http_code?: number | null
-          id?: number
-          latency_ms?: number | null
-          recorded_at?: string
-          service: string
-          status: string
-        }
-        Update: {
-          http_code?: number | null
-          id?: number
-          latency_ms?: number | null
-          recorded_at?: string
-          service?: string
-          status?: string
-        }
-        Relationships: []
-      }
       granted_access: {
         Row: {
           created_at: string | null
@@ -1021,13 +527,6 @@ export type Database = {
             referencedRelation: "seller_intakes"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "intake_documents_intake_id_fkey"
-            columns: ["intake_id"]
-            isOneToOne: false
-            referencedRelation: "v_ops_intakes"
-            referencedColumns: ["id"]
-          },
         ]
       }
       intake_validations: {
@@ -1067,13 +566,6 @@ export type Database = {
             columns: ["intake_id"]
             isOneToOne: false
             referencedRelation: "seller_intakes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "intake_validations_intake_id_fkey"
-            columns: ["intake_id"]
-            isOneToOne: false
-            referencedRelation: "v_ops_intakes"
             referencedColumns: ["id"]
           },
         ]
@@ -1274,7 +766,6 @@ export type Database = {
           registered_agent_zip: string | null
           rep_name: string | null
           rep_relationship: string | null
-          requires_session_token: boolean
           residential_address: string | null
           residential_city: string | null
           residential_state: string | null
@@ -1408,7 +899,6 @@ export type Database = {
           registered_agent_zip?: string | null
           rep_name?: string | null
           rep_relationship?: string | null
-          requires_session_token?: boolean
           residential_address?: string | null
           residential_city?: string | null
           residential_state?: string | null
@@ -1542,7 +1032,6 @@ export type Database = {
           registered_agent_zip?: string | null
           rep_name?: string | null
           rep_relationship?: string | null
-          requires_session_token?: boolean
           residential_address?: string | null
           residential_city?: string | null
           residential_state?: string | null
@@ -1636,75 +1125,6 @@ export type Database = {
         }
         Relationships: []
       }
-      shield_url_reports: {
-        Row: {
-          created_at: string
-          deal_id: string | null
-          decision_note: string | null
-          id: string
-          ip_address: unknown
-          reason: string | null
-          reported_domain: string | null
-          reported_url: string
-          reporter_email: string | null
-          reporter_org: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          status: string
-          updated_at: string
-          user_agent: string | null
-        }
-        Insert: {
-          created_at?: string
-          deal_id?: string | null
-          decision_note?: string | null
-          id?: string
-          ip_address?: unknown
-          reason?: string | null
-          reported_domain?: string | null
-          reported_url: string
-          reporter_email?: string | null
-          reporter_org?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-          updated_at?: string
-          user_agent?: string | null
-        }
-        Update: {
-          created_at?: string
-          deal_id?: string | null
-          decision_note?: string | null
-          id?: string
-          ip_address?: unknown
-          reason?: string | null
-          reported_domain?: string | null
-          reported_url?: string
-          reporter_email?: string | null
-          reporter_org?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-          updated_at?: string
-          user_agent?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shield_url_reports_deal_id_fkey"
-            columns: ["deal_id"]
-            isOneToOne: false
-            referencedRelation: "cloud_deals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shield_url_reports_deal_id_fkey"
-            columns: ["deal_id"]
-            isOneToOne: false
-            referencedRelation: "v_cloud_lead_funnel"
-            referencedColumns: ["deal_id"]
-          },
-        ]
-      }
       subscriptions: {
         Row: {
           created_at: string | null
@@ -1770,36 +1190,24 @@ export type Database = {
           down_systems: string[]
           id: number
           is_down: boolean
-          last_alert_at: string | null
           last_alert_sent: string | null
-          last_alerted_systems: string[]
           last_checked: string | null
-          pending_match_count: number
-          pending_systems: string[]
           updated_at: string
         }
         Insert: {
           down_systems?: string[]
           id?: number
           is_down?: boolean
-          last_alert_at?: string | null
           last_alert_sent?: string | null
-          last_alerted_systems?: string[]
           last_checked?: string | null
-          pending_match_count?: number
-          pending_systems?: string[]
           updated_at?: string
         }
         Update: {
           down_systems?: string[]
           id?: number
           is_down?: boolean
-          last_alert_at?: string | null
           last_alert_sent?: string | null
-          last_alerted_systems?: string[]
           last_checked?: string | null
-          pending_match_count?: number
-          pending_systems?: string[]
           updated_at?: string
         }
         Relationships: []
@@ -1911,464 +1319,10 @@ export type Database = {
       }
     }
     Views: {
-      v_cloud_lead_funnel: {
-        Row: {
-          brief_submitted_at: string | null
-          company_name: string | null
-          contact_email: string | null
-          contact_name: string | null
-          created_at: string | null
-          deal_id: string | null
-          deal_stage: number | null
-          funnel_state: string | null
-          id: string | null
-          primary_pain: string | null
-          stage_changed_at: string | null
-          status: string | null
-          urgency: string | null
-          user_count_band: string | null
-        }
-        Relationships: []
-      }
-      v_cloud_pipeline: {
-        Row: {
-          current_stage: number | null
-          deal_count: number | null
-          total_deployment_value_cents: number | null
-          total_monthly_value_cents: number | null
-        }
-        Relationships: []
-      }
-      v_cloud_shield_pending: {
-        Row: {
-          company_name: string | null
-          created_at: string | null
-          deal_id: string | null
-          id: string | null
-          lead_id: string | null
-          reason: string | null
-          requested_url: string | null
-          requester_email: string | null
-          requester_name: string | null
-          status: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cloud_deals_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "cloud_leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cloud_deals_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "v_cloud_lead_funnel"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cloud_shield_requests_deal_id_fkey"
-            columns: ["deal_id"]
-            isOneToOne: false
-            referencedRelation: "cloud_deals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cloud_shield_requests_deal_id_fkey"
-            columns: ["deal_id"]
-            isOneToOne: false
-            referencedRelation: "v_cloud_lead_funnel"
-            referencedColumns: ["deal_id"]
-          },
-        ]
-      }
-      v_cookieyeti_ai_stats: {
-        Row: {
-          failures: number | null
-          success_rate: number | null
-          successes: number | null
-          total_completion_tokens: number | null
-          total_generations: number | null
-          total_prompt_tokens: number | null
-          unique_domains_processed: number | null
-        }
-        Relationships: []
-      }
-      v_cookieyeti_missed_queue: {
-        Row: {
-          ai_attempts: number | null
-          ai_processed_at: string | null
-          cmp_fingerprint: string | null
-          domain: string | null
-          has_working_pattern: boolean | null
-          id: number | null
-          last_reported: string | null
-          page_url: string | null
-          priority: string | null
-          report_count: number | null
-          resolved: boolean | null
-        }
-        Insert: {
-          ai_attempts?: number | null
-          ai_processed_at?: string | null
-          cmp_fingerprint?: string | null
-          domain?: string | null
-          has_working_pattern?: boolean | null
-          id?: number | null
-          last_reported?: string | null
-          page_url?: string | null
-          priority?: never
-          report_count?: number | null
-          resolved?: boolean | null
-        }
-        Update: {
-          ai_attempts?: number | null
-          ai_processed_at?: string | null
-          cmp_fingerprint?: string | null
-          domain?: string | null
-          has_working_pattern?: boolean | null
-          id?: number | null
-          last_reported?: string | null
-          page_url?: string | null
-          priority?: never
-          report_count?: number | null
-          resolved?: boolean | null
-        }
-        Relationships: []
-      }
-      v_cookieyeti_pattern_stats: {
-        Row: {
-          action_type: string | null
-          cmp_fingerprint: string | null
-          confidence: number | null
-          created_at: string | null
-          domain: string | null
-          id: string | null
-          is_active: boolean | null
-          last_seen: string | null
-          report_count: number | null
-          selector: string | null
-          source: string | null
-          strategy: string | null
-          success_count: number | null
-          success_rate: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          action_type?: string | null
-          cmp_fingerprint?: string | null
-          confidence?: number | null
-          created_at?: string | null
-          domain?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          last_seen?: string | null
-          report_count?: number | null
-          selector?: string | null
-          source?: string | null
-          strategy?: string | null
-          success_count?: number | null
-          success_rate?: never
-          updated_at?: string | null
-        }
-        Update: {
-          action_type?: string | null
-          cmp_fingerprint?: string | null
-          confidence?: number | null
-          created_at?: string | null
-          domain?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          last_seen?: string | null
-          report_count?: number | null
-          selector?: string | null
-          source?: string | null
-          strategy?: string | null
-          success_count?: number | null
-          success_rate?: never
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      v_cookieyeti_platform_stats: {
-        Row: {
-          device_count: number | null
-          platform: string | null
-          source: string | null
-        }
-        Relationships: []
-      }
-      v_dashboard_overview: {
-        Row: {
-          active_activations: number | null
-          active_patterns: number | null
-          active_subscriptions: number | null
-          confirmed_waitlist: number | null
-          down_systems: string[] | null
-          draft_intakes: number | null
-          emails_failed: number | null
-          emails_sent: number | null
-          generated_at: string | null
-          new_contacts: number | null
-          new_hire_requests: number | null
-          successful_ai_generations: number | null
-          successful_fixes: number | null
-          suppressed_emails: number | null
-          system_is_down: boolean | null
-          total_activation_codes: number | null
-          total_ai_generations: number | null
-          total_contacts: number | null
-          total_device_registrations: number | null
-          total_dismissals: number | null
-          total_hire_requests: number | null
-          total_intakes: number | null
-          total_missed_reports: number | null
-          total_passkeys: number | null
-          total_patterns: number | null
-          total_push_devices: number | null
-          total_subscriptions: number | null
-          total_users: number | null
-          total_waitlist: number | null
-          total_webhooks: number | null
-          unresolved_reports: number | null
-        }
-        Relationships: []
-      }
-      v_growth_product_interest: {
-        Row: {
-          interest_count: number | null
-          product_name: string | null
-        }
-        Relationships: []
-      }
-      v_growth_waitlist: {
-        Row: {
-          confirmation_rate: number | null
-          confirmed: number | null
-          total_signups: number | null
-          unconfirmed: number | null
-          unique_products_interest: number | null
-        }
-        Relationships: []
-      }
-      v_ops_activity_feed: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          event_type: string | null
-          id: string | null
-          metadata: Json | null
-        }
-        Relationships: []
-      }
-      v_ops_contacts: {
-        Row: {
-          category: string | null
-          created_at: string | null
-          effective_status: string | null
-          email: string | null
-          id: string | null
-          message: string | null
-          name: string | null
-          status: string | null
-          subject: string | null
-        }
-        Insert: {
-          category?: string | null
-          created_at?: string | null
-          effective_status?: never
-          email?: string | null
-          id?: string | null
-          message?: string | null
-          name?: string | null
-          status?: string | null
-          subject?: string | null
-        }
-        Update: {
-          category?: string | null
-          created_at?: string | null
-          effective_status?: never
-          email?: string | null
-          id?: string | null
-          message?: string | null
-          name?: string | null
-          status?: string | null
-          subject?: string | null
-        }
-        Relationships: []
-      }
-      v_ops_email_health: {
-        Row: {
-          bounce_suppressions: number | null
-          complaint_suppressions: number | null
-          current_batch_size: number | null
-          current_send_delay_ms: number | null
-          suppressed_addresses: number | null
-          total_bounced: number | null
-          total_complained: number | null
-          total_dlq: number | null
-          total_failed: number | null
-          total_sent: number | null
-          total_suppressed: number | null
-          unsubscribe_suppressions: number | null
-        }
-        Relationships: []
-      }
-      v_ops_hire_pipeline: {
-        Row: {
-          budget_range: string | null
-          company: string | null
-          created_at: string | null
-          description: string | null
-          effective_status: string | null
-          email: string | null
-          id: string | null
-          name: string | null
-          project_type: string | null
-          referral_source: string | null
-          status: string | null
-          timeline: string | null
-        }
-        Insert: {
-          budget_range?: string | null
-          company?: string | null
-          created_at?: string | null
-          description?: string | null
-          effective_status?: never
-          email?: string | null
-          id?: string | null
-          name?: string | null
-          project_type?: string | null
-          referral_source?: string | null
-          status?: string | null
-          timeline?: string | null
-        }
-        Update: {
-          budget_range?: string | null
-          company?: string | null
-          created_at?: string | null
-          description?: string | null
-          effective_status?: never
-          email?: string | null
-          id?: string | null
-          name?: string | null
-          project_type?: string | null
-          referral_source?: string | null
-          status?: string | null
-          timeline?: string | null
-        }
-        Relationships: []
-      }
-      v_ops_intakes: {
-        Row: {
-          admin_notes: string | null
-          business_legal_name: string | null
-          client_email: string | null
-          client_name: string | null
-          created_at: string | null
-          id: string | null
-          platform: string | null
-          selected_platforms: string[] | null
-          status: string | null
-          steps_completed: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          admin_notes?: string | null
-          business_legal_name?: string | null
-          client_email?: string | null
-          client_name?: string | null
-          created_at?: string | null
-          id?: string | null
-          platform?: string | null
-          selected_platforms?: string[] | null
-          status?: string | null
-          steps_completed?: never
-          updated_at?: string | null
-        }
-        Update: {
-          admin_notes?: string | null
-          business_legal_name?: string | null
-          client_email?: string | null
-          client_name?: string | null
-          created_at?: string | null
-          id?: string | null
-          platform?: string | null
-          selected_platforms?: string[] | null
-          status?: string | null
-          steps_completed?: never
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      v_ops_pihole_latest: {
-        Row: {
-          active_clients: number | null
-          captured_at: string | null
-          domains_on_blocklist: number | null
-          hourly_chart: Json | null
-          id: string | null
-          percent_blocked: number | null
-          queries_blocked: number | null
-          query_types: Json | null
-          status: string | null
-          top_blocked: Json | null
-          top_permitted: Json | null
-          total_queries: number | null
-        }
-        Relationships: []
-      }
-      v_revenue_subscriptions: {
-        Row: {
-          active: number | null
-          canceled: number | null
-          expired: number | null
-          lifetime_plans: number | null
-          monthly_plans: number | null
-          past_due: number | null
-          total: number | null
-          yearly_plans: number | null
-        }
-        Relationships: []
-      }
-      v_revenue_webhook_log: {
-        Row: {
-          created_at: string | null
-          email: string | null
-          event_type: string | null
-          id: string | null
-          stripe_event_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          email?: string | null
-          event_type?: string | null
-          id?: string | null
-          stripe_event_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          email?: string | null
-          event_type?: string | null
-          id?: string | null
-          stripe_event_id?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       auto_fix_pattern_issues: { Args: never; Returns: Json }
-      check_activation_rate_limit: {
-        Args: { p_action: string; p_email: string }
-        Returns: Json
-      }
-      check_system_health_sql: { Args: never; Returns: Json }
-      cleanup_activation_rate_limits: { Args: never; Returns: undefined }
-      cleanup_expired_activation_codes: { Args: never; Returns: undefined }
-      cleanup_expired_challenges: { Args: never; Returns: undefined }
-      cleanup_old_pihole_stats: { Args: never; Returns: undefined }
-      current_intake_token: { Args: never; Returns: string }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -2379,29 +1333,26 @@ export type Database = {
       }
       find_dismissal_consensus: { Args: never; Returns: Json }
       get_action_type_stats: { Args: never; Returns: Json }
-      get_ai_generation_candidates: { Args: { _limit: number }; Returns: Json }
+      get_ai_generation_candidates: {
+        Args: { _limit?: number }
+        Returns: {
+          ai_attempts: number
+          banner_html: string
+          cmp_fingerprint: string
+          domain: string
+          id: number
+          last_reported: string
+          page_url: string
+          report_count: number
+        }[]
+      }
       get_cmp_distribution: { Args: never; Returns: Json }
       get_community_overview: { Args: never; Returns: Json }
       get_confidence_distribution: { Args: never; Returns: Json }
-      get_cookieyeti_timeline: { Args: { days_back?: number }; Returns: Json }
       get_daily_pattern_activity: { Args: { p_days?: number }; Returns: Json }
-      get_dashboard_overview: { Args: never; Returns: Json }
       get_pattern_issues: { Args: { p_limit?: number }; Returns: Json }
-      get_public_status: {
-        Args: never
-        Returns: {
-          current_status: string
-          daily_uptime: Json
-          last_checked: string
-          service: string
-          uptime_24h_pct: number
-          uptime_30d_pct: number
-        }[]
-      }
       get_recently_learned: { Args: { p_limit?: number }; Returns: Json }
-      get_sms_config: { Args: never; Returns: Json }
       get_source_breakdown: { Args: never; Returns: Json }
-      get_stripe_config: { Args: never; Returns: Json }
       get_top_domains: { Args: { p_limit?: number }; Returns: Json }
       get_unresolved_reports: { Args: { p_limit?: number }; Returns: Json }
       has_role: {
@@ -2410,14 +1361,6 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
-      }
-      invoke_edge_function: {
-        Args: { function_slug: string; payload?: Json }
-        Returns: number
-      }
-      log_admin_activity: {
-        Args: { p_description: string; p_event_type: string; p_metadata?: Json }
-        Returns: string
       }
       mark_ai_processed: {
         Args: { _domain: string; _resolved?: boolean }
@@ -2454,12 +1397,11 @@ export type Database = {
         }
         Returns: undefined
       }
-      reset_failed_domains_cron: { Args: never; Returns: Json }
-      run_maintenance_cron: { Args: never; Returns: Json }
       upsert_pattern: {
         Args: {
           _action_type: string
           _cmp_fingerprint?: string
+          _confidence?: number
           _domain: string
           _selector: string
           _source?: string
