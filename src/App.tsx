@@ -45,7 +45,6 @@ const ShieldRequest = lazy(() => import("./pages/ShieldRequest"));
 const Services = lazy(() => import("./pages/Services"));
 const AppleModernization = lazy(() => import("./pages/AppleModernization"));
 const MarketplaceSetup = lazy(() => import("./pages/MarketplaceSetup"));
-const TeslaRentals = lazy(() => import("./pages/TeslaRentals"));
 const CookieYetiSupport = lazy(() => import("./pages/CookieYetiSupport"));
 const ConfeshPrivacy = lazy(() => import("./pages/ConfeshPrivacy"));
 const ConfeshSupport = lazy(() => import("./pages/ConfeshSupport"));
@@ -130,7 +129,6 @@ const App = () => (
                   <Route path="/services" element={<Services />} />
                   <Route path="/apple-modernization" element={<AppleModernization />} />
                   <Route path="/marketplace-setup" element={<MarketplaceSetup />} />
-                  <Route path="/tesla-rentals" element={<TeslaRentals />} />
                   <Route path="/support" element={<CookieYetiSupport />} />
                 </Route>
 
