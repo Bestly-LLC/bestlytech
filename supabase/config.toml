@@ -75,3 +75,5 @@ project_id = "keowunrxpxlbgebujbao"
     verify_jwt = false
   [functions.cloud-shield-request]
     verify_jwt = false
+  [functions.voice-to-claude]
+    verify_jwt = false
