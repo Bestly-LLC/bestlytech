@@ -172,6 +172,19 @@ something we can't fix in 30 min, restore + reboot.
 
 ## Phase 2 — Cross-LAN reliable *(2-3 days, parallelizable with Phase 1)*
 
+**Status 2026-05-21: backend done.** Router port-forwards were already in
+place (TURN-3478 → 192.168.0.211:3478 Both; TURN-Relay → 49160-49200 UDP).
+Actual root cause of cross-LAN failures was **coturn's `external-ip` was
+stale** (75.223.189.112 — Verizon had rotated the WAN). Updated to
+97.134.114.154 and added a self-healing hourly cron at
+`/usr/local/sbin/coturn-wan-watch.sh` (script source in this repo at
+`scripts/coturn-wan-watch.sh`). Also added `cloud.bestly.tech:3478` to
+`spreed.turn_servers` alongside the existing LAN entry so remote callers
+can actually resolve it.
+
+**Remaining for Phase 2:** real-world testing from cellular + difficult
+wifi (tasks 2.5, 2.6).
+
 **Goal:** Anyone joining a Bestly Talk call from any network, behind any
 NAT, gets media flowing in under 3 seconds.
 
