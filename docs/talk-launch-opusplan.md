@@ -76,7 +76,9 @@ and add the alerting we'd need to know about future regressions.
 - **0.1** ✅ DONE today — TURN repointed to LAN IP (192.168.0.211:3478) so
   same-LAN calls connect fast. (Audit P1.1 partial fix.)
 - **0.2** ✅ DONE today — `signaling_mode` set to `external`. (Audit P1.4.)
-- **0.3** Set the Apache `ServerName` to silence the FQDN warning. 5 min.
+- **0.3** ✅ DONE 2026-05-21 — Apache `ServerName cloud.bestly.tech` appended
+  to /etc/apache2/apache2.conf inside nextcloud-app + `apachectl -k graceful`.
+  FQDN warning silenced.
   ```bash
   docker exec nextcloud-app bash -c 'echo "ServerName cloud.bestly.tech" >> /etc/apache2/apache2.conf'
   docker exec nextcloud-app apachectl -k graceful
@@ -90,9 +92,21 @@ and add the alerting we'd need to know about future regressions.
     *that's the point*)
   - HTTPS `cloud.bestly.tech/status.php` → expects `installed:true,maintenance:false`
   Wire all to the existing ntfy topic.
-- **0.5** Stop the recording container's restart loop temporarily so it
-  doesn't spam logs and burn CPU. Mark it disabled in docker-compose with a
-  note pointing at this opusplan + the 64-bit migration runbook.
+- **0.5** ✅ DONE 2026-05-21 — Set `restart: "no"` on the `recording`
+  service in `/mnt/ssd/apps/talk-hpb/compose.yaml` (line 29, with a comment
+  pointing at docs/talk-launch-opusplan.md Phase 1). Container is now
+  Exited, no longer restart-looping. The neighbouring `nats` and
+  `signaling` services kept their `unless-stopped` restart policy. Backup
+  of original compose is at `compose.yaml.bak-20260521-161157`.
+
+**Phase 0 status: 0.3 + 0.5 DONE. 0.4 (Uptime Kuma monitors) still pending —
+needs human in UK UI to wire ntfy topic.** Set up these 5 monitors:
+  - HTTPS `cloud.bestly.tech/standalone-signaling/api/v1/welcome` → 200
+  - TCP `192.168.0.211:3478` (coturn)
+  - Docker container health: `talk-hpb-signaling-1`, `talk-hpb-nats-1`,
+    `talk-hpb-recording-1` (the last will alert until Phase 1 lands —
+    intentional)
+  - HTTPS `cloud.bestly.tech/status.php` → `installed:true,maintenance:false`
 
 **Acceptance**
 - Uptime Kuma shows 5 new monitors, 4 green, 1 (recording) intentionally red

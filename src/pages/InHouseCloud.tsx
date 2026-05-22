@@ -47,7 +47,7 @@ const replaces = [
     icon: Brain,
     title: "Intelligence",
     subtitle: "ChatGPT · Copilot",
-    outcome: "Local AI (1B–8B models) for drafts, summaries, and transcripts. $0 per query, zero data leaves the office.",
+    outcome: "Privacy-aware AI routing: local models (1B–8B) handle anything containing secrets, code, or personal data automatically. Long, non-sensitive prompts route to hosted models for top quality. You pick the policy, your team gets the speed.",
   },
   {
     icon: ShieldAlert,
