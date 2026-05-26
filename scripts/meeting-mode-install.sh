@@ -53,8 +53,15 @@ if [ ! -f "$CONFIG_FILE" ]; then
   cat > "$CONFIG_FILE" <<EOF
 # Meeting Mode audio devices. Match by substring — exact case-sensitive contains.
 # Run \`SwitchAudioSource -a\` in a terminal to see exact device names.
+#
+# MEETING mode  = casual call. Mic + speaker, no BlackHole loopback.
+# RECORD mode   = recorded call. Output routes to BlackHole loopback so Minutes
+#                 can capture both sides via MINUTES_INPUT aggregate.
 MEETING_INPUT="OBSBOT"
-MEETING_OUTPUT="MacBook Pro Speakers"
+MEETING_OUTPUT="Mac mini Speakers"
+RECORD_INPUT="OBSBOT"
+RECORD_OUTPUT="Speakers + BlackHole"
+MINUTES_INPUT="Mic + BlackHole"
 EOF
   echo "✓ Wrote default config → $CONFIG_FILE"
 else
