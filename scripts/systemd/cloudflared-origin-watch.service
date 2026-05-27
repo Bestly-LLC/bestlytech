@@ -1,0 +1,16 @@
+[Unit]
+Description=Watch local Nextcloud origin and restart cloudflared on stale-pool failures
+After=cloudflared.service docker.service
+Wants=cloudflared.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cloudflared-origin-watch.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=-/etc/default/cloudflared-origin-watch
+
+[Install]
+WantedBy=multi-user.target
