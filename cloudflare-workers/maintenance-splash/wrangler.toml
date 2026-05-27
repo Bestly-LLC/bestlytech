@@ -1,0 +1,20 @@
+name = "bestly-cloud-maintenance-splash"
+main = "src/index.js"
+compatibility_date = "2025-04-01"
+account_id = "f25f950fd0d3b2a67f8fad8b69b14c40"
+
+# Catch every request to cloud.bestly.tech. The Worker passes 2xx/3xx/4xx through
+# unchanged and only intercepts when origin returns 5xx, serving the splash page
+# instead of Cloudflare's raw "Bad Gateway" page.
+[[routes]]
+pattern = "cloud.bestly.tech/*"
+zone_name = "bestly.tech"
+
+[observability]
+enabled = true
+
+[vars]
+# Override at deploy time with `wrangler deploy --var ACCENT_COLOR:#c84d2b` etc.
+# if you want to tweak without editing the source.
+BRAND_NAME = "Bestly Cloud"
+SUPPORT_LINK = "https://bestly.tech/contact"
