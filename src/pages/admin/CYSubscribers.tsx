@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Copy, ChevronLeft, ChevronRight, Search, Users, Plus, Loader2, Webhook, ShieldCheck, Trash2, RefreshCw } from "lucide-react";
+import { Copy, ChevronLeft, ChevronRight, Search, Users, Plus, Loader2, Webhook, ShieldCheck, Trash2, RefreshCw, KeyRound, Globe } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,11 +45,24 @@ export default function CYSubscribers() {
   const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
   const [webhookLoading, setWebhookLoading] = useState(false);
 
+  // Activation codes state (CookieYeti extension activations — the real "users" surface
+  // when subscriptions/granted_access are empty in bootstrap phase).
+  const [activationCodes, setActivationCodes] = useState<any[]>([]);
+
   const fetchSubscriptions = useCallback(async () => {
     const { data, error } = await supabase.from("subscriptions").select("*").order("created_at", { ascending: false });
     if (error) console.error("Failed to load subscribers", error);
     setData(data || []);
     setLoading(false);
+  }, []);
+
+  const fetchActivationCodes = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("activation_codes")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) console.error("Failed to load activation codes", error);
+    setActivationCodes(data || []);
   }, []);
 
   const fetchGrantedAccess = useCallback(async () => {
@@ -70,7 +83,8 @@ export default function CYSubscribers() {
     fetchSubscriptions();
     fetchGrantedAccess();
     fetchWebhookEvents();
-  }, [fetchSubscriptions, fetchGrantedAccess, fetchWebhookEvents]);
+    fetchActivationCodes();
+  }, [fetchSubscriptions, fetchGrantedAccess, fetchWebhookEvents, fetchActivationCodes]);
 
   const handleGrantAccess = async () => {
     if (!grantEmail.trim()) { toast.error("Email is required"); return; }
@@ -201,6 +215,74 @@ export default function CYSubscribers() {
           <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} aria-label="Next page"><ChevronRight className="h-4 w-4" /></Button>
         </div>
       )}
+
+      {/* Activation Codes Section — extension installs that activated with a code */}
+      <Card className="border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-amber-400" />
+            <CardTitle className="text-base">Activation Codes</CardTitle>
+            <Badge variant="outline" className="text-xs ml-1">{activationCodes.length}</Badge>
+          </div>
+          <CardDescription>
+            CookieYeti extension activations — emails that redeemed a code in Chrome / Firefox / Safari.
+            These are your real "users" until Stripe subscriptions land in <code className="text-xs">subscriptions</code>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {activationCodes.length === 0 ? (
+            <div className="p-6"><p className="text-sm text-muted-foreground">No activation codes yet.</p></div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs">Email</TableHead>
+                  <TableHead className="text-xs">Code</TableHead>
+                  <TableHead className="text-xs">Platform</TableHead>
+                  <TableHead className="text-xs">Active</TableHead>
+                  <TableHead className="text-xs">Activated</TableHead>
+                  <TableHead className="text-xs">Last Verified</TableHead>
+                  <TableHead className="text-xs">Expires</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {activationCodes.map((c) => (
+                  <TableRow key={c.id} className="even:bg-muted/30">
+                    <TableCell className="font-medium text-sm">{c.email}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <code>{c.code}</code>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(c.code); toast.success("Code copied"); }}
+                          className="hover:text-foreground transition-colors"
+                          aria-label={`Copy code ${c.code}`}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </button>
+                      </span>
+                    </TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs capitalize"><Globe className="h-3 w-3 mr-1 inline" />{c.platform || "—"}</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant={c.active ? "default" : "secondary"} className="text-xs">
+                        {c.active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {c.activated_at ? new Date(c.activated_at).toLocaleDateString() : <span className="italic text-muted-foreground/60">never</span>}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {c.last_verified ? new Date(c.last_verified).toLocaleDateString() : "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Granted Access Section */}
       <Card className="border-border/50">
