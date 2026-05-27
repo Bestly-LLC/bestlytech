@@ -39,6 +39,7 @@ export default function AdminDashboard() {
   const [hireCount, setHireCount] = useState(0);
   const [waitlistCount, setWaitlistCount] = useState(0);
   const [cySubCount, setCySubCount] = useState(0);
+  const [activationCount, setActivationCount] = useState(0);
 
   // New super dashboard state
   const [patternCount, setPatternCount] = useState(0);
@@ -66,12 +67,13 @@ export default function AdminDashboard() {
 
   const loadData = async () => {
     // Original queries
-    const [intakesRes, contactsRes, hiresRes, waitlistRes, cySubsRes] = await Promise.all([
+    const [intakesRes, contactsRes, hiresRes, waitlistRes, cySubsRes, activationsRes] = await Promise.all([
       supabase.from("seller_intakes").select("*").order("created_at", { ascending: false }),
       supabase.from("contact_submissions").select("id", { count: "exact", head: true }).eq("status", "new"),
       supabase.from("hire_requests").select("id", { count: "exact", head: true }).eq("status", "new"),
       supabase.from("waitlist_subscribers").select("id", { count: "exact", head: true }),
       supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "active"),
+      supabase.from("activation_codes").select("id", { count: "exact", head: true }).eq("active", true),
     ]);
     if (intakesRes.error) toast({ title: "Failed to load", description: intakesRes.error.message, variant: "destructive" });
     setIntakes(intakesRes.data || []);
@@ -79,6 +81,7 @@ export default function AdminDashboard() {
     setHireCount(hiresRes.count ?? 0);
     setWaitlistCount(waitlistRes.count ?? 0);
     setCySubCount(cySubsRes.count ?? 0);
+    setActivationCount(activationsRes.count ?? 0);
 
     // Super dashboard queries - CookieYeti
     const [patternsAll, patternsActive, unresolvedRes, dismissalsRes, aiGenRes] = await Promise.all([
@@ -190,7 +193,7 @@ export default function AdminDashboard() {
           <StatCard label="Dismissals" value={dismissalCount} icon={CheckCircle2} accentColor="#10b981" iconBg="bg-emerald-500/10" iconColor="text-emerald-400" />
           <StatCard label="AI Generations" value={aiGenCount} icon={Cpu} accentColor="#06b6d4" iconBg="bg-cyan-500/10" iconColor="text-cyan-400" />
           <StatCard label="Unresolved" value={unresolvedCount} icon={AlertTriangle} accentColor={unresolvedCount > 0 ? "#f59e0b" : "#10b981"} iconBg={unresolvedCount > 0 ? "bg-amber-500/10" : "bg-emerald-500/10"} iconColor={unresolvedCount > 0 ? "text-amber-400" : "text-emerald-400"} />
-          <StatCard label="CY Subscribers" value={cySubCount} icon={Snowflake} accentColor="#38bdf8" iconBg="bg-sky-500/10" iconColor="text-sky-400" />
+          <StatCard label="Active Users" value={activationCount + cySubCount} icon={Snowflake} accentColor="#38bdf8" iconBg="bg-sky-500/10" iconColor="text-sky-400" subtitle={cySubCount > 0 ? `${activationCount} activated, ${cySubCount} paid` : `${activationCount} activated`} />
           <StatCard label="Devices" value={deviceCount} icon={Globe} iconBg="bg-white/[0.05]" iconColor="text-white/40" subtitle={`${pushCount} push-enabled`} />
         </div>
       </div>
@@ -202,7 +205,7 @@ export default function AdminDashboard() {
           <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Revenue & Growth</h3>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <StatCard label="Active Subs" value={cySubCount} icon={Snowflake} accentColor="#38bdf8" iconBg="bg-sky-500/10" iconColor="text-sky-400" />
+          <StatCard label="Active Users" value={activationCount + cySubCount} icon={Snowflake} accentColor="#38bdf8" iconBg="bg-sky-500/10" iconColor="text-sky-400" subtitle={cySubCount > 0 ? `${activationCount} activated, ${cySubCount} paid` : "pre-Stripe (activation codes only)"} />
           <StatCard label="Waitlist" value={waitlistCount} icon={Users} accentColor="#8b5cf6" iconBg="bg-violet-500/10" iconColor="text-violet-400" />
           <StatCard label="Emails Sent" value={emailsSent} icon={Mail} accentColor="#10b981" iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle={emailsFailed > 0 ? `${emailsFailed} failed` : undefined} />
           <StatCard label="Passkeys" value={passKeyCount} icon={Shield} iconBg="bg-white/[0.05]" iconColor="text-white/40" />

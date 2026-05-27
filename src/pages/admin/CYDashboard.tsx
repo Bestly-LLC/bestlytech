@@ -295,14 +295,19 @@ export default function CYDashboard() {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Crown className="h-4 w-4 text-yellow-400" />
-          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Subscribers</h3>
+          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Active Users</h3>
+          <Link to="/admin/cookie-yeti/subscribers" className="ml-auto">
+            <Button variant="ghost" size="sm" className="text-xs text-white/20 hover:text-white hover:bg-white/5 h-6 px-2">
+              Manage <ArrowRight className="h-3 w-3 ml-1" />
+            </Button>
+          </Link>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatCard label="Total Premium" value={activeSubs.length + filteredGrants.length} icon={Crown} iconColor="text-yellow-500" iconBg="bg-yellow-500/10" accentColor="#eab308" />
-          <StatCard label="Paid" value={activeSubs.length} icon={Users} iconColor="text-primary" iconBg="bg-primary/10" accentColor="#3b82f6" />
-          <StatCard label="Granted" value={filteredGrants.length} icon={ShieldCheck} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="#22c55e" />
-          <StatCard label="Monthly" value={monthly} icon={Calendar} iconColor="text-blue-500" iconBg="bg-blue-500/10" />
-          <StatCard label="Yearly / Lifetime" value={`${yearly} / ${lifetime}`} icon={Calendar} iconColor="text-purple-500" iconBg="bg-purple-500/10" />
+          <StatCard label="Total Active" value={activationCount + activeSubs.length + filteredGrants.length} icon={Crown} iconColor="text-yellow-500" iconBg="bg-yellow-500/10" accentColor="#eab308" subtitle="activations + paid + granted" />
+          <StatCard label="Activated" value={activationCount} icon={Target} iconColor="text-white" iconBg="bg-white/[0.05]" accentColor="#ffffff" subtitle="extension codes" />
+          <StatCard label="Paid" value={activeSubs.length} icon={Users} iconColor="text-primary" iconBg="bg-primary/10" accentColor="#3b82f6" subtitle={activeSubs.length === 0 ? "pre-Stripe" : `${monthly}m / ${yearly}y / ${lifetime}∞`} />
+          <StatCard label="Granted" value={filteredGrants.length} icon={ShieldCheck} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="#22c55e" subtitle="comp / testing" />
+          <StatCard label="Devices" value={deviceCount} icon={Globe} iconColor="text-cyan-400" iconBg="bg-cyan-500/10" subtitle={`${pushCount} push-enabled`} />
         </div>
       </div>
 
