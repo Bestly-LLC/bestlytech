@@ -40,3 +40,7 @@ scripts/pihole_push.log
 
 # LibreOffice/Collabora lock files
 .~lock.*#
+
+# Sibling repo with its own git remote (lives inside this folder
+# for sandbox-path convenience; not part of the bestlytech site).
+/nextcloud-talk-transcripts/
