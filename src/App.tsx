@@ -52,6 +52,7 @@ const Links = lazy(() => import("./pages/Links"));
 const EmailUnsubscribe = lazy(() => import("./pages/EmailUnsubscribe"));
 const Status = lazy(() => import("./pages/Status"));
 const VoiceToClaude = lazy(() => import("./pages/VoiceToClaude"));
+const CookieYetiDashboard = lazy(() => import("./pages/CookieYetiDashboard"));
 
 // Lazy admin pages. AdminRoute/AdminLayout stay eager (they're tiny wrappers
 // and keeping them eager avoids a double-load chain on /admin). The big win
@@ -138,6 +139,7 @@ const App = () => (
                 <Route path="/unsubscribe" element={<EmailUnsubscribe />} />
                 <Route path="/status" element={<Status />} />
                 <Route path="/voice-to-claude" element={<VoiceToClaude />} />
+                <Route path="/cookie-yeti/dashboard" element={<CookieYetiDashboard />} />
 
                 {/* Admin Routes */}
                 <Route path="/admin/login" element={<AdminLogin />} />
