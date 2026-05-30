@@ -172,8 +172,8 @@ export default function InHouseCloud() {
   return (
     <>
       <SEOHead
-        title="In-House Cloud — Your data, your brand, your control | Bestly"
-        description="A private cloud that lives in your office, wears your logo, and ends per-seat licensing for good. Replaces Google Workspace, Zoom, Slack, Asana, DocuSign, 1Password, and the AI tools you've been quietly feeding your data to. For teams of 5 to 200+."
+        title="In-House Cloud — Stop overpaying for enterprise tools | Bestly"
+        description="Built for small and medium businesses. One server in your office replaces Google Workspace, Zoom, Slack, Dropbox, DocuSign, 1Password, and your AI tool. No per-seat fees, no IT department. See what your business would save."
         path="/cloud"
       />
 
@@ -244,10 +244,10 @@ export default function InHouseCloud() {
               <div className="h-full">
                 <p className="text-xs font-semibold uppercase tracking-widest text-primary">Agitate</p>
                 <h3 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-                  And every quarter, the math gets worse.
+                  And every renewal, the price goes up.
                 </h3>
                 <p className="mt-3 text-muted-foreground leading-relaxed">
-                  Google Workspace raised prices 20% in 2024. Microsoft 365 is up 15–25% since 2022. A 50-person team pays $146,100/year across the full stack. A 100-person team: $292,200.
+                  Google Workspace raised prices 20% in 2024. Microsoft 365 is up 15 to 25% since 2022. A 15-person business can spend $20,000 a year on subscriptions; a 30-person business, well over $40,000. You never stop paying, and you never own a thing.
                 </p>
               </div>
             </AnimatedSection>
@@ -258,7 +258,7 @@ export default function InHouseCloud() {
                   One server in your office, branded to your company.
                 </h3>
                 <p className="mt-3 text-muted-foreground leading-relaxed">
-                  File storage, email, video, chat, docs, calendar, e-sign, passwords, projects, local AI — on a device that draws as little as 10 watts and fits on a shelf.
+                  File storage, email, video, chat, docs, calendar, e-sign, passwords, projects, and local AI on a device that draws as little as 10 watts and fits on a shelf. Buy it once, run it for years.
                 </p>
               </div>
             </AnimatedSection>

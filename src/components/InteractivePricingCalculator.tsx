@@ -6,72 +6,66 @@ import { AnimatedSection } from "@/components/AnimatedSection";
 /**
  * InteractivePricingCalculator
  *
- * Replaces the static $X/$Y/$Z savings grid on /cloud. Customer picks the
- * SaaS services they actually use today + slides their headcount, and sees a
- * live, transparent comparison against Bestly Cloud's one-time hardware cost
- * + optional managed support.
+ * SMB-focused. A small-business owner checks the subscriptions they actually
+ * pay for today (Google Workspace, Zoom, Slack, the website, the AI tool),
+ * slides their headcount (1-50), and sees a live, transparent comparison
+ * against Bestly Cloud's real model: a one-time server purchase plus an
+ * optional managed-support plan. No per-seat fees, ever.
  *
- * Prices are 2026 list, annual-billing per-seat unless noted. Sourced from
- * each vendor's public pricing page; defensible — if a vendor changes
- * pricing we update SERVICES below.
+ * Prices are 2026 list, per-seat-month at annual billing unless flagged flat.
+ * Sourced from each vendor's public pricing page; defensible. Month-to-month
+ * billing on most of these runs ~20% higher, which the Annual/Monthly toggle
+ * reflects.
  */
 
-// ── Service catalog ────────────────────────────────────────────────────────
+// ── Service catalog (curated for SMBs) ──────────────────────────────────────
 type Service = {
   id: string;
   name: string;
   category: string;
-  pricePerSeatMonth: number;
-  note?: string;
+  /** per-seat monthly (scales with headcount) */
+  pricePerSeatMonth?: number;
+  /** flat monthly (does not scale with headcount, e.g. the company website) */
+  flatMonth?: number;
   defaultChecked?: boolean;
 };
 
 const SERVICES: Service[] = [
-  // Productivity
-  { id: "gws",   name: "Google Workspace Business Standard", category: "Productivity", pricePerSeatMonth: 14,    defaultChecked: true },
-  { id: "m365",  name: "Microsoft 365 Business Standard",    category: "Productivity", pricePerSeatMonth: 12.50 },
-  // Communication
-  { id: "zoom",  name: "Zoom Pro",                           category: "Communication", pricePerSeatMonth: 14.99, defaultChecked: true },
-  { id: "slack", name: "Slack Business+",                    category: "Communication", pricePerSeatMonth: 15,    defaultChecked: true },
-  { id: "loom",  name: "Loom Business",                      category: "Communication", pricePerSeatMonth: 15 },
-  // Project & docs
-  { id: "asana", name: "Asana Business",                     category: "Projects", pricePerSeatMonth: 24.99, defaultChecked: true },
-  { id: "linear",name: "Linear",                             category: "Projects", pricePerSeatMonth: 14 },
-  { id: "notion",name: "Notion Plus",                        category: "Projects", pricePerSeatMonth: 10 },
-  // Files
-  { id: "drop",  name: "Dropbox Business Standard",          category: "Files", pricePerSeatMonth: 15 },
-  // Security & identity
-  { id: "1pw",   name: "1Password Business",                 category: "Security", pricePerSeatMonth: 7.99, defaultChecked: true },
-  { id: "okta",  name: "Okta SSO",                           category: "Security", pricePerSeatMonth: 8 },
-  // Sales / signing
-  { id: "docusign", name: "DocuSign Business Pro",           category: "Signing", pricePerSeatMonth: 40, defaultChecked: true },
+  // Email & productivity
+  { id: "gws",   name: "Google Workspace Business Standard", category: "Email & productivity", pricePerSeatMonth: 14,    defaultChecked: true },
+  { id: "m365",  name: "Microsoft 365 Business Standard",    category: "Email & productivity", pricePerSeatMonth: 12.50 },
+  // Chat & video
+  { id: "zoom",  name: "Zoom Pro",                           category: "Chat & video", pricePerSeatMonth: 15,   defaultChecked: true },
+  { id: "slack", name: "Slack Pro",                          category: "Chat & video", pricePerSeatMonth: 8.75, defaultChecked: true },
+  // Files & storage
+  { id: "drop",  name: "Dropbox Business",                   category: "Files & storage", pricePerSeatMonth: 18 },
+  // Passwords
+  { id: "1pw",   name: "1Password Business",                 category: "Passwords", pricePerSeatMonth: 7.99, defaultChecked: true },
+  // E-signature
+  { id: "docusign", name: "DocuSign Standard",               category: "E-signature", pricePerSeatMonth: 25 },
   // Scheduling
   { id: "calendly", name: "Calendly Standard",               category: "Scheduling", pricePerSeatMonth: 10 },
   // AI
-  { id: "gpt",   name: "ChatGPT Team",                       category: "AI",   pricePerSeatMonth: 25, defaultChecked: true },
-  { id: "claude",name: "Claude Team",                        category: "AI",   pricePerSeatMonth: 25 },
-  // Design / dev (often per-seat too)
-  { id: "figma", name: "Figma Pro",                          category: "Design", pricePerSeatMonth: 15 },
-  { id: "adobe", name: "Adobe Creative Cloud Teams",         category: "Design", pricePerSeatMonth: 80 },
-  { id: "gh",    name: "GitHub Team",                        category: "Dev",  pricePerSeatMonth: 4 },
+  { id: "gpt",   name: "ChatGPT Team",                       category: "AI", pricePerSeatMonth: 25, defaultChecked: true },
+  // Website & domain (flat, not per-seat)
+  { id: "site",  name: "Website + hosting (Squarespace/Wix)", category: "Website & domain", flatMonth: 23, defaultChecked: true },
+  { id: "domain",name: "Domain + business DNS",             category: "Website & domain", flatMonth: 2,  defaultChecked: true },
 ];
 
-// ── Bestly Cloud price model ───────────────────────────────────────────────
-// Hardware one-time + optional managed support monthly. Hardware doesn't
-// scale per-user up to ~50 users (one Pi-class server handles it); larger
-// teams scale to a second box at ~100, third at ~200.
-function bestlyHardwareCost(users: number): number {
-  if (users <= 50)  return 6500;
-  if (users <= 100) return 11500; // primary + replication
-  if (users <= 200) return 17500; // primary + 2 secondaries
-  return 17500 + Math.ceil((users - 200) / 100) * 5500;
-}
-const BESTLY_SUPPORT_MONTH = 500; // optional managed; if self-managed = 0
-const BESTLY_AI_MONTH      = 0;   // local Ollama default; BYOK via OpenRouter adds ~$30-100 depending on use
+// ── Bestly Cloud price model (the real one) ─────────────────────────────────
+// One server handles a 1-50 person team. One-time hardware, then either
+// self-manage for $0/mo with full docs, or let Bestly run it for $500/mo.
+const BESTLY_HARDWARE   = 6500; // one-time, covers up to 50 users
+const BESTLY_SUPPORT    = 500;  // optional managed support, monthly
+const AMORTIZE_MONTHS   = 36;   // spread hardware across 3 years for an apples-to-apples monthly
+
+// Month-to-month billing on typical SaaS runs ~20% over the annual-prepaid rate.
+const MONTHLY_BILLING_UPLIFT = 1.2;
 
 // ── Component ──────────────────────────────────────────────────────────────
 export function InteractivePricingCalculator() {
-  const [users, setUsers] = useState(50);
+  const [users, setUsers] = useState(12);
+  const [billing, setBilling] = useState<"annual" | "monthly">("annual");
   const [selected, setSelected] = useState<Set<string>>(
     new Set(SERVICES.filter(s => s.defaultChecked).map(s => s.id))
   );
@@ -85,77 +79,123 @@ export function InteractivePricingCalculator() {
     });
 
   const calc = useMemo(() => {
-    const stackPerSeatMonth = SERVICES
-      .filter(s => selected.has(s.id))
-      .reduce((sum, s) => sum + s.pricePerSeatMonth, 0);
+    const chosen = SERVICES.filter(s => selected.has(s.id));
+    const seatPerMonth = chosen.reduce((sum, s) => sum + (s.pricePerSeatMonth ?? 0), 0);
+    const flatPerMonth = chosen.reduce((sum, s) => sum + (s.flatMonth ?? 0), 0);
 
-    const stackMonthly  = stackPerSeatMonth * users;
-    const stackAnnual   = stackMonthly * 12;
+    const uplift = billing === "monthly" ? MONTHLY_BILLING_UPLIFT : 1;
+    const stackMonthly   = (seatPerMonth * users + flatPerMonth) * uplift;
+    const stackPerSeatMonth = seatPerMonth * uplift;
+    const stackAnnual    = stackMonthly * 12;
     const stackThreeYear = stackAnnual * 3;
 
-    const bestlyOneTime = bestlyHardwareCost(users);
-    const bestlyMonthly = managedSupport ? BESTLY_SUPPORT_MONTH + BESTLY_AI_MONTH : BESTLY_AI_MONTH;
-    const bestlyThreeYear = bestlyOneTime + (bestlyMonthly * 36);
+    const bestlyOneTime   = BESTLY_HARDWARE;
+    const bestlyMonthly   = managedSupport ? BESTLY_SUPPORT : 0;
+    const bestlyThreeYear = bestlyOneTime + bestlyMonthly * 36;
+    // What Bestly works out to per month if you spread the hardware over 3 years.
+    const bestlyMonthlyEquiv = bestlyOneTime / AMORTIZE_MONTHS + bestlyMonthly;
 
     const savings = stackThreeYear - bestlyThreeYear;
     const savingsPct = stackThreeYear > 0 ? Math.round((savings / stackThreeYear) * 100) : 0;
+    const monthlySaved = stackMonthly - bestlyMonthlyEquiv;
 
     return {
       stackPerSeatMonth, stackMonthly, stackAnnual, stackThreeYear,
-      bestlyOneTime, bestlyMonthly, bestlyThreeYear,
-      savings, savingsPct,
+      bestlyOneTime, bestlyMonthly, bestlyThreeYear, bestlyMonthlyEquiv,
+      savings, savingsPct, monthlySaved,
     };
-  }, [selected, users, managedSupport]);
+  }, [selected, users, billing, managedSupport]);
 
   const fmt = (n: number) =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
-  // Group services for the UI
   const grouped = SERVICES.reduce((acc, s) => {
     (acc[s.category] ||= []).push(s);
     return acc;
   }, {} as Record<string, Service[]>);
+
+  const priceLabel = (s: Service) =>
+    s.flatMonth != null ? `$${s.flatMonth}/mo` : `$${s.pricePerSeatMonth}/seat`;
 
   return (
     <section className="border-t border-border">
       <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
         <AnimatedSection animation="fade-in" className="text-center mb-12">
           <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">
-            The math, on your stack
+            The math, on your business
           </p>
           <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Tell us what you pay for. <GradientText as="span">See your number.</GradientText>
+            Add up what you rent today. <GradientText as="span">See what you'd save.</GradientText>
           </h2>
           <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            Check the services your team actually uses today. Slide the headcount. The savings update live.
+            Check the subscriptions your business actually pays for. Slide your team size. The savings update live, no sales call required.
           </p>
+        </AnimatedSection>
+
+        {/* SMB selling-point strip */}
+        <AnimatedSection animation="fade-in" className="mb-10">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              "One bill instead of a dozen renewals",
+              "No IT department needed",
+              "Email, files, chat, video, AI in one place",
+            ].map(point => (
+              <div
+                key={point}
+                className="rounded-xl border border-border bg-secondary/30 px-4 py-3 text-center text-sm font-medium text-foreground"
+              >
+                {point}
+              </div>
+            ))}
+          </div>
         </AnimatedSection>
 
         <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr]">
           {/* Left: inputs */}
           <GlowCard className="!p-6 lg:!p-8">
-            {/* User count slider */}
-            <div className="mb-8">
+            {/* Team size slider */}
+            <div className="mb-6">
               <div className="flex items-end justify-between mb-3">
                 <label htmlFor="userCount" className="text-sm font-semibold text-foreground">
-                  Team size
+                  How many people on your team?
                 </label>
                 <span className="text-2xl font-semibold tracking-tight text-foreground">
-                  {users} <span className="text-sm font-normal text-muted-foreground">users</span>
+                  {users} <span className="text-sm font-normal text-muted-foreground">{users === 1 ? "person" : "people"}</span>
                 </span>
               </div>
               <input
                 id="userCount"
                 type="range"
-                min={5}
-                max={500}
-                step={5}
+                min={1}
+                max={50}
+                step={1}
                 value={users}
                 onChange={e => setUsers(Number(e.target.value))}
                 className="w-full accent-[hsl(var(--gradient-end))]"
               />
               <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                <span>5</span><span>100</span><span>250</span><span>500</span>
+                <span>1</span><span>15</span><span>30</span><span>50</span>
+              </div>
+            </div>
+
+            {/* Billing toggle */}
+            <div className="mb-8 flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2.5">
+              <span className="text-sm text-foreground">How are you billed today?</span>
+              <div className="inline-flex rounded-lg border border-border bg-secondary/40 p-0.5">
+                {(["annual", "monthly"] as const).map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setBilling(opt)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors ${
+                      billing === opt
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -185,12 +225,10 @@ export function InteractivePricingCalculator() {
                               onChange={() => toggle(s.id)}
                               className="h-4 w-4 accent-[hsl(var(--gradient-end))]"
                             />
-                            <span className={isOn ? "text-foreground font-medium" : "text-foreground"}>
-                              {s.name}
-                            </span>
+                            <span className="text-foreground">{s.name}</span>
                           </span>
-                          <span className="text-xs text-muted-foreground tabular-nums">
-                            ${s.pricePerSeatMonth}/seat
+                          <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                            {priceLabel(s)}
                           </span>
                         </label>
                       );
@@ -208,11 +246,11 @@ export function InteractivePricingCalculator() {
                     className="h-4 w-4 accent-[hsl(var(--gradient-end))]"
                   />
                   <span className="text-foreground">
-                    Bestly managed support ($500/mo, optional)
+                    Let Bestly run it for you ($500/mo)
                   </span>
                 </label>
                 <p className="mt-1 text-xs text-muted-foreground pl-6">
-                  Or self-manage with full docs — included free.
+                  Or self-manage with full docs for $0/mo. Either way, no per-seat fees.
                 </p>
               </div>
             </div>
@@ -231,21 +269,26 @@ export function InteractivePricingCalculator() {
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
                 {calc.savings >= 0
-                  ? `${calc.savingsPct}% less than your current cloud stack`
-                  : "Add a few more services to see your savings"}
+                  ? `${calc.savingsPct}% less than what you pay for Google Workspace and the rest of your stack`
+                  : "Subscriptions are still cheaper at this size. Add the tools you actually pay for, or check back as you grow."}
               </p>
+              {calc.savings >= 0 && calc.monthlySaved > 0 && (
+                <p className="mt-3 inline-block rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs font-medium text-foreground">
+                  About {fmt(calc.monthlySaved)}/mo back in your pocket
+                </p>
+              )}
             </GlowCard>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <GlowCard className="!p-5">
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Your current cloud stack
+                  What you pay now
                 </p>
                 <p className="mt-3 text-xl font-semibold text-foreground tabular-nums">
                   {fmt(calc.stackMonthly)}/mo
                 </p>
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  ${calc.stackPerSeatMonth.toFixed(2)}/seat · {fmt(calc.stackAnnual)}/yr
+                  {fmt(calc.stackAnnual)}/yr · billed {billing}
                 </p>
                 <p className="mt-3 text-sm font-medium text-foreground tabular-nums">
                   {fmt(calc.stackThreeYear)} <span className="text-xs text-muted-foreground font-normal">over 3 years</span>
@@ -257,10 +300,10 @@ export function InteractivePricingCalculator() {
                   Bestly Cloud
                 </p>
                 <p className="mt-3 text-xl font-semibold text-foreground tabular-nums">
-                  {fmt(calc.bestlyOneTime)} <span className="text-xs text-muted-foreground font-normal">hardware</span>
+                  {fmt(calc.bestlyOneTime)} <span className="text-xs text-muted-foreground font-normal">one-time server</span>
                 </p>
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {calc.bestlyMonthly > 0 ? `+ ${fmt(calc.bestlyMonthly)}/mo support` : "self-managed"}
+                  {calc.bestlyMonthly > 0 ? `+ ${fmt(calc.bestlyMonthly)}/mo managed` : "self-managed, $0/mo"} · ≈ {fmt(calc.bestlyMonthlyEquiv)}/mo all-in
                 </p>
                 <p className="mt-3 text-sm font-medium text-foreground tabular-nums">
                   {fmt(calc.bestlyThreeYear)} <span className="text-xs text-muted-foreground font-normal">over 3 years</span>
@@ -269,10 +312,11 @@ export function InteractivePricingCalculator() {
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Prices are 2026 list, annual-billing per-seat. AI on Bestly Cloud uses local Ollama
-              by default ($0); add a BYOK key for Claude / GPT / Gemini if you want hosted models
-              (~$30–100/mo at typical usage). Hardware scales: one server up to 50 users, primary +
-              replica to 100, primary + 2 replicas to 200.
+              Subscription prices are 2026 list at annual billing; the Monthly toggle reflects the
+              ~20% premium most vendors charge month-to-month. Bestly's monthly figure spreads the
+              one-time server cost across 3 years so you can compare like for like. AI runs locally
+              for $0; add your own key for Claude, GPT, or Gemini only if you want hosted models.
+              One server covers a team of up to 50.
             </p>
           </div>
         </div>
