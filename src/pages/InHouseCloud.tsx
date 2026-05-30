@@ -186,7 +186,7 @@ export default function InHouseCloud() {
               Flagship Program · Bestly In-House Cloud
             </p>
             <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              The cloud owns your data.{" "}
+              Big tech owns your data.{" "}
               <GradientText as="span" className="whitespace-nowrap inline-block">We think you should.</GradientText>
             </h1>
             <p className="mt-6 text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto">
