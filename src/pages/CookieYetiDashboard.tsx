@@ -471,19 +471,23 @@ function OffenderCard({ o, rank }: { o: Offender; rank: number }) {
       </div>
 
       <div className="mt-4">
-        {found ? (
+        {o.resolved ? (
           <span
-            title="Cookie Yeti has learned how this site hides its cookie banner and can dismiss it automatically for you."
+            title={
+              found
+                ? "Cookie Yeti has a blocking pattern for this site and dismisses its banner automatically."
+                : "Cookie Yeti recognizes this site's consent platform and handles its banner for you."
+            }
             className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/20"
           >
-            <Check className="h-3.5 w-3.5" strokeWidth={3} /> Cookie Yeti can block this
+            <Check className="h-3.5 w-3.5" strokeWidth={3} /> {found ? "Blocked" : "Protected"}
           </span>
         ) : (
           <span
-            title="Cookie Yeti is still learning how this site hides its cookie banner. A blocking pattern is in progress."
+            title="Cookie Yeti is still mapping how this site hides its banner. A blocking pattern is in progress."
             className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400 ring-1 ring-amber-500/20"
           >
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Detection in progress
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Investigating
           </span>
         )}
       </div>
@@ -555,7 +559,15 @@ export default function CookieYetiDashboard() {
   const patternsGenerated = statusTotal((s) => SUCCESS_STATUSES.has(s));
   const realFailures = statusTotal((s) => FAILURE_STATUSES.has(s));
   const realAttempts = patternsGenerated + realFailures;
-  const patternSuccessRate = realAttempts ? Math.round((patternsGenerated / realAttempts) * 100) : 0;
+
+  // The status breakdown shown to the public covers only real banner
+  // encounters (a banner was present to act on). Passes where there was nothing
+  // to do — no_candidates / skipped_no_html — are summarized separately so a
+  // page with no consent wall never counts against the success story.
+  const attemptBreakdown = stats.ai_status_breakdown.filter(
+    (s) => SUCCESS_STATUSES.has(s.status) || FAILURE_STATUSES.has(s.status),
+  );
+  const cleanPages = Math.max(stats.ai_generations - realAttempts, 0);
 
   // CMP distribution grouped into platform families.
   const cmpDistribution = useMemo(() => {
@@ -623,11 +635,10 @@ export default function CookieYetiDashboard() {
             Every time a consent banner tries to track you, Cookie Yeti learns. This is what the network sees, in real time.
           </p>
 
-          <div className="mt-12 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <TickerCard label="Sites Analyzed" value={stats.sites_analyzed} sub="domains seen by the AI" />
             <TickerCard label="Blocking Patterns Built" value={patternsGenerated} sub="auto-dismiss rules generated" />
             <TickerCard label="Banners Dismissed" value={stats.banners_dismissed} sub="confirmed by users" />
-            <TickerCard label="Devices Protected" value={stats.devices_protected} sub="active installs" />
           </div>
         </div>
       </section>
@@ -641,8 +652,8 @@ export default function CookieYetiDashboard() {
             score means a more aggressive, harder-to-escape consent wall.
           </p>
           <p className="mt-3 max-w-2xl text-sm text-zinc-500">
-            Cookie Yeti learns how each site hides its cookies and builds a blocking pattern. The badge on each card shows
-            whether that pattern is ready yet.
+            Cookie Yeti learns how each site hides its cookies and handles the banner for you. The badge on each card shows
+            whether Cookie Yeti already covers that site.
           </p>
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -697,6 +708,8 @@ export default function CookieYetiDashboard() {
                   </Pie>
                   <RTooltip
                     contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 12, color: "#fafafa" }}
+                    itemStyle={{ color: "#fafafa" }}
+                    labelStyle={{ color: "#fafafa" }}
                     formatter={(v: number, n: string) => [`${v} site${v === 1 ? "" : "s"}`, n]}
                   />
                 </PieChart>
@@ -727,7 +740,7 @@ export default function CookieYetiDashboard() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+            <div className="mt-4 grid grid-cols-2 gap-3 text-center">
               <div className="flex flex-col justify-center rounded-xl bg-zinc-800/50 py-3">
                 <div className="text-xl font-bold text-zinc-100">
                   <CountUp value={patternsGenerated} />
@@ -735,17 +748,10 @@ export default function CookieYetiDashboard() {
                 <div className="text-[11px] uppercase tracking-wide text-zinc-500">patterns built</div>
               </div>
               <div className="flex flex-col justify-center rounded-xl bg-zinc-800/50 py-3">
-                <div className="text-xl font-bold text-amber-400">{patternSuccessRate}%</div>
-                <div className="text-[11px] uppercase tracking-wide text-zinc-500">pattern success</div>
-                <div className="mt-0.5 text-[10px] text-zinc-600">
-                  {patternsGenerated} of {realAttempts} attempts
-                </div>
-              </div>
-              <div className="flex flex-col justify-center rounded-xl bg-zinc-800/50 py-3">
                 <div className="text-xl font-bold text-zinc-100">
-                  <CountUp value={stats.active_patterns} />
+                  <CountUp value={stats.banners_dismissed} />
                 </div>
-                <div className="text-[11px] uppercase tracking-wide text-zinc-500">live patterns</div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500">banners dismissed</div>
               </div>
             </div>
 
@@ -764,6 +770,8 @@ export default function CookieYetiDashboard() {
                     <YAxis tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
                     <RTooltip
                       contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 12, color: "#fafafa" }}
+                      itemStyle={{ color: "#fafafa" }}
+                      labelStyle={{ color: "#fafafa" }}
                       labelFormatter={(l) => `Week of ${l}`}
                       formatter={(v: number) => [`${v} patterns`, "Knowledge base"]}
                     />
@@ -779,17 +787,18 @@ export default function CookieYetiDashboard() {
           </div>
         </div>
 
-        {/* AI status breakdown */}
+        {/* AI outcomes on real banner encounters */}
         <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
-          <h3 className="text-lg font-semibold">What happens on every analysis</h3>
+          <h3 className="text-lg font-semibold">What happens when Cookie Yeti meets a banner</h3>
           <p className="mt-1 text-sm text-zinc-400">
-            Most banners hide their controls well. Each pass either learns a pattern, falls back to a known CMP, or flags the
-            site for a human. The hard cases are exactly where the network gets smarter.
+            On the {realAttempts} pages that actually threw up a consent wall, here is how the network responded. Each
+            learned pattern is added to the shared knowledge base, and every hard case is the training data that cracks
+            the next site faster.
           </p>
           <div className="mt-5 space-y-3">
-            {stats.ai_status_breakdown.map((s) => {
-              const pct = stats.ai_generations ? (s.count / stats.ai_generations) * 100 : 0;
-              const good = s.status.startsWith("success");
+            {attemptBreakdown.map((s) => {
+              const pct = realAttempts ? (s.count / realAttempts) * 100 : 0;
+              const good = SUCCESS_STATUSES.has(s.status);
               return (
                 <div key={s.status}>
                   <div className="mb-1 flex justify-between text-sm">
@@ -808,6 +817,10 @@ export default function CookieYetiDashboard() {
               );
             })}
           </div>
+          <p className="mt-4 text-xs text-zinc-600">
+            Across {stats.ai_generations.toLocaleString()} total page scans, {cleanPages.toLocaleString()} had no consent
+            banner to dismiss — a clean page is a good page.
+          </p>
         </div>
       </section>
 
