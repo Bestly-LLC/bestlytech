@@ -5,11 +5,12 @@ import { GlowCard } from "@/components/ui/GlowCard";
 import { GradientText } from "@/components/ui/GradientText";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { InteractivePricingCalculator } from "@/components/InteractivePricingCalculator";
+import { CloudHeroSpectacle } from "@/components/cloud/CloudHeroSpectacle";
 import {
   Folder, MessageSquare, Mail, ScrollText, CalendarDays, Brain,
   ShieldAlert, Globe, ServerCog, ListChecks, FormInput, KeyRound,
   FileSignature, Server, Lock, Building2, Cpu, Wrench,
-  Compass, Workflow, GraduationCap, ArrowRight, CheckCircle2,
+  Compass, Workflow, GraduationCap, ArrowRight,
 } from "lucide-react";
 
 const replaces = [
@@ -177,53 +178,8 @@ export default function InHouseCloud() {
         path="/cloud"
       />
 
-      {/* Hero */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-mesh opacity-50" />
-        <div className="relative mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <AnimatedSection animation="fade-in" className="text-center max-w-4xl mx-auto">
-            <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-4">
-              Flagship Program · Bestly In-House Cloud
-            </p>
-            <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              Big tech owns your data.{" "}
-              <GradientText as="span" className="whitespace-nowrap inline-block">We think you should.</GradientText>
-            </h1>
-            <p className="mt-6 text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              A private cloud that lives in your office, wears your logo, and ends per-seat licensing for good. For teams of 5 to 200+.
-            </p>
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link
-                to="/get-started"
-                className="group inline-flex items-center justify-center rounded-xl gradient-bg px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/20 btn-lift"
-              >
-                Get Started
-                <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </Link>
-              <a
-                href="mailto:jared@bestly.tech?subject=In-House%20Cloud%20Discovery%20Call"
-                className="inline-flex items-center justify-center rounded-xl border border-border bg-background/80 backdrop-blur-sm px-8 py-4 text-base font-medium text-foreground shadow-sm transition-all hover:bg-accent"
-              >
-                Email jared@bestly.tech
-              </a>
-            </div>
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>$0 per-seat fees</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>On premises &amp; on brand</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>5–200+ user teams</span>
-              </div>
-            </div>
-          </AnimatedSection>
-        </div>
-      </section>
+      {/* Hero — animated spectacle */}
+      <CloudHeroSpectacle />
 
       {/* Problem · Agitate · Solve */}
       <section className="border-t border-border bg-secondary/20">
@@ -399,7 +355,14 @@ export default function InHouseCloud() {
 
       {/* Final CTA */}
       <section className="relative border-t border-border overflow-hidden">
-        <div className="absolute inset-0 bg-mesh opacity-50" />
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          <div className="absolute inset-0 bg-mesh opacity-50" />
+          <div className="absolute -left-20 top-0 h-80 w-80 rounded-full bg-[radial-gradient(circle,hsl(var(--gradient-start)/0.22),transparent_70%)] blur-2xl cloud-aurora-a" />
+          <div className="absolute -right-16 bottom-0 h-80 w-80 rounded-full bg-[radial-gradient(circle,hsl(var(--gradient-end)/0.22),transparent_70%)] blur-2xl cloud-aurora-b" />
+          <div className="absolute inset-x-0 top-0 h-px overflow-hidden">
+            <div className="cloud-beam h-px w-1/3 bg-gradient-to-r from-transparent via-[hsl(var(--glow-color))] to-transparent" />
+          </div>
+        </div>
         <div className="relative mx-auto max-w-4xl px-6 py-24 lg:px-8 lg:py-32 text-center">
           <AnimatedSection animation="fade-in">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
