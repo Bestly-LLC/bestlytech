@@ -12,6 +12,7 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
+import { Check, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SEOHead } from "@/components/SEOHead";
 import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
@@ -397,10 +398,13 @@ function OffenderCard({ o, rank }: { o: Offender; rank: number }) {
   const found = o.has_working_pattern;
   return (
     <div className="relative flex flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-      <div className="pointer-events-none absolute -right-1 top-1 select-none text-6xl font-black text-zinc-800/70">
-        {rank}
-      </div>
-      <div className="relative z-10 flex items-center gap-3 pr-8">
+      <div className="flex items-center gap-3">
+        <span
+          aria-label={`Rank ${rank}`}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-base font-black tabular-nums text-amber-400 ring-1 ring-amber-500/25"
+        >
+          {rank}
+        </span>
         <img
           src={favicon(o.domain)}
           alt=""
@@ -418,7 +422,7 @@ function OffenderCard({ o, rank }: { o: Offender; rank: number }) {
         </div>
       </div>
 
-      <div className="relative z-10 mt-5 flex items-end justify-between">
+      <div className="mt-5 flex items-end justify-between">
         <div>
           <div className="text-xs uppercase tracking-wide text-zinc-500">Exposure score</div>
           <div className="text-3xl font-bold" style={{ color }}>
@@ -438,12 +442,18 @@ function OffenderCard({ o, rank }: { o: Offender; rank: number }) {
 
       <div className="mt-4">
         {found ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/20">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Pattern found
+          <span
+            title="Cookie Yeti has learned how this site hides its cookie banner and can dismiss it automatically for you."
+            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/20"
+          >
+            <Check className="h-3.5 w-3.5" strokeWidth={3} /> Cookie Yeti can block this
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400 ring-1 ring-red-500/20">
-            <span className="h-1.5 w-1.5 rounded-full bg-red-400" /> Still evading
+          <span
+            title="Cookie Yeti is still learning how this site hides its cookie banner. A blocking pattern is in progress."
+            className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400 ring-1 ring-amber-500/20"
+          >
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Detection in progress
           </span>
         )}
       </div>
@@ -585,6 +595,10 @@ export default function CookieYetiDashboard() {
           <p className="mt-2 max-w-2xl text-zinc-400">
             Ranked by how often users had to manually dismiss a banner Cookie Yeti could not yet auto-handle. Higher exposure
             score means a more aggressive, harder-to-escape consent wall.
+          </p>
+          <p className="mt-3 max-w-2xl text-sm text-zinc-500">
+            Cookie Yeti learns how each site hides its cookies and builds a blocking pattern. The badge on each card shows
+            whether that pattern is ready yet.
           </p>
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
