@@ -18,7 +18,7 @@ import { SEOHead } from "@/components/SEOHead";
 import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 
 /**
- * Public Cookie Yeti intelligence dashboard — bestly.tech/cookie-yeti/dashboard.
+ * Public Cookie Yeti intelligence dashboard — bestly.tech/cookie-yeti/transparency.
  *
  * No login. Aimed at users and investors. Renders live, anonymized telemetry
  * from the Cookie Yeti backend: how many sites the AI has analyzed, which

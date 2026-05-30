@@ -139,7 +139,7 @@ const App = () => (
                 <Route path="/unsubscribe" element={<EmailUnsubscribe />} />
                 <Route path="/status" element={<Status />} />
                 <Route path="/voice-to-claude" element={<VoiceToClaude />} />
-                <Route path="/cookie-yeti/dashboard" element={<CookieYetiDashboard />} />
+                <Route path="/cookie-yeti/transparency" element={<CookieYetiDashboard />} />
 
                 {/* Admin Routes */}
                 <Route path="/admin/login" element={<AdminLogin />} />
