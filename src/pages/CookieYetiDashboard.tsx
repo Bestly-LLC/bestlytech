@@ -98,6 +98,29 @@ const FALLBACK: Stats = {
 };
 
 // ---------------------------------------------------------------------------
+// AI attempt classification. A "real" attempt is a pass where there was an
+// actual banner to learn from. no_candidates (nothing on the page looked like a
+// banner) and skipped_no_html (we never got the page markup) are NOT attempts —
+// there was nothing to succeed or fail at — so they're excluded from the
+// success-rate denominator. Counting them is what made the old "6%" so wrong.
+// ---------------------------------------------------------------------------
+
+const SUCCESS_STATUSES = new Set([
+  "success",
+  "success_cmp_fallback",
+  "success_failsafe",
+  "success_cmp_fingerprint",
+]);
+
+const FAILURE_STATUSES = new Set([
+  "failed",
+  "permanently_failed",
+  "needs_manual_review",
+]);
+
+const isSuccessStatus = (s: string) => SUCCESS_STATUSES.has(s);
+
+// ---------------------------------------------------------------------------
 // CMP knowledge base. Plain-spoken, privacy-first descriptions of how each
 // consent platform actually handles your data. Keyed by cmp_fingerprint.
 // ---------------------------------------------------------------------------
@@ -182,6 +205,13 @@ const CMP_INFO: Record<string, CmpInfo> = {
     sharing: "Usually a handful of standard analytics and advertising tags such as Google Analytics and ad pixels.",
   },
 };
+
+// Fingerprint aliases — the backend emits a few different keys for the same
+// consent platform. Map them onto the canonical entry so live data resolves to
+// the right CMP instead of falling through to "Generic / unknown".
+CMP_INFO.piano = CMP_INFO.piano_consent;
+CMP_INFO.pianoconsent = CMP_INFO.piano_consent;
+CMP_INFO.piano_software = CMP_INFO.piano_consent;
 
 function cmpFor(fp: string): CmpInfo {
   return CMP_INFO[fp] ?? CMP_INFO.generic;
@@ -297,7 +327,7 @@ function useDashboardData() {
           const key = monday.toISOString().slice(0, 10);
           const bucket = weekly.get(key) ?? { total: 0, success: 0 };
           bucket.total += 1;
-          if (r.status === "success" || r.status === "success_cmp_fallback") bucket.success += 1;
+          if (isSuccessStatus(r.status)) bucket.success += 1;
           weekly.set(key, bucket);
         }
 
@@ -309,7 +339,7 @@ function useDashboardData() {
         return {
           sites_analyzed: new Set(aiRows.map((r) => r.domain)).size || FALLBACK.sites_analyzed,
           ai_generations: aiRows.length || FALLBACK.ai_generations,
-          ai_success: aiRows.filter((r) => r.status === "success").length,
+          ai_success: aiRows.filter((r) => isSuccessStatus(r.status)).length,
           banners_dismissed: dismissed > 0 ? dismissed : FALLBACK.banners_dismissed,
           devices_protected: devicesRes.count ?? FALLBACK.devices_protected,
           active_patterns: patternsRes.count ?? FALLBACK.active_patterns,
@@ -500,6 +530,9 @@ function DataUseCard({ o }: { o: Offender }) {
 const STATUS_LABEL: Record<string, string> = {
   success: "Pattern learned",
   success_cmp_fallback: "Solved via CMP fallback",
+  success_failsafe: "Solved via failsafe",
+  success_cmp_fingerprint: "Solved via CMP fingerprint",
+  needs_manual_review: "Flagged for human review",
   no_candidates: "No banner element found",
   skipped_no_html: "Skipped (no page HTML)",
   failed: "Generation failed",
@@ -509,9 +542,20 @@ const STATUS_LABEL: Record<string, string> = {
 export default function CookieYetiDashboard() {
   const { stats, loaded, live } = useDashboardData();
 
-  const successRate = stats.ai_generations
-    ? ((stats.ai_success / stats.ai_generations) * 100).toFixed(0)
-    : "0";
+  // Headline metric: of the sites users reported, how many has Cookie Yeti
+  // actually handled. This is the number worth leading with.
+  const reportedSites = stats.offenders.length;
+  const resolvedSites = stats.offenders.filter((o) => o.resolved).length;
+  const resolutionRate = reportedSites ? Math.round((resolvedSites / reportedSites) * 100) : 0;
+
+  // Pattern success rate, computed only over real attempts (passes where there
+  // was a banner to learn from). Excludes no_candidates / skipped_no_html.
+  const statusTotal = (predicate: (s: string) => boolean) =>
+    stats.ai_status_breakdown.reduce((n, s) => (predicate(s.status) ? n + s.count : n), 0);
+  const patternsGenerated = statusTotal((s) => SUCCESS_STATUSES.has(s));
+  const realFailures = statusTotal((s) => FAILURE_STATUSES.has(s));
+  const realAttempts = patternsGenerated + realFailures;
+  const patternSuccessRate = realAttempts ? Math.round((patternsGenerated / realAttempts) * 100) : 0;
 
   // CMP distribution grouped into platform families.
   const cmpDistribution = useMemo(() => {
@@ -581,7 +625,7 @@ export default function CookieYetiDashboard() {
 
           <div className="mt-12 grid grid-cols-2 gap-4 lg:grid-cols-4">
             <TickerCard label="Sites Analyzed" value={stats.sites_analyzed} sub="domains seen by the AI" />
-            <TickerCard label="Cookie Patterns Detected" value={stats.ai_generations} sub="AI analyses run" />
+            <TickerCard label="Blocking Patterns Built" value={patternsGenerated} sub="auto-dismiss rules generated" />
             <TickerCard label="Banners Dismissed" value={stats.banners_dismissed} sub="confirmed by users" />
             <TickerCard label="Devices Protected" value={stats.devices_protected} sub="active installs" />
           </div>
@@ -670,31 +714,34 @@ export default function CookieYetiDashboard() {
 
           {/* AI learning */}
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold">The AI is learning</h3>
-                <p className="mt-1 text-sm text-zinc-400">Confirmed patterns added to the knowledge base over time.</p>
+                <h3 className="text-lg font-semibold">Cookie Yeti is learning</h3>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Cookie Yeti resolves {resolvedSites} out of {reportedSites} reported sites.
+                </p>
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-amber-400">{successRate}%</div>
-                <div className="text-xs text-zinc-500">solve rate</div>
+              <div className="shrink-0 text-right">
+                <div className="text-3xl font-bold text-emerald-400">{resolutionRate}%</div>
+                <div className="text-xs text-zinc-500">sites resolved</div>
               </div>
             </div>
 
             <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-              <div className="rounded-xl bg-zinc-800/50 py-3">
+              <div className="flex flex-col justify-center rounded-xl bg-zinc-800/50 py-3">
                 <div className="text-xl font-bold text-zinc-100">
-                  <CountUp value={stats.ai_generations} />
+                  <CountUp value={patternsGenerated} />
                 </div>
-                <div className="text-[11px] uppercase tracking-wide text-zinc-500">analyses</div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500">patterns built</div>
               </div>
-              <div className="rounded-xl bg-zinc-800/50 py-3">
-                <div className="text-xl font-bold text-zinc-100">
-                  <CountUp value={stats.sites_analyzed} />
+              <div className="flex flex-col justify-center rounded-xl bg-zinc-800/50 py-3">
+                <div className="text-xl font-bold text-amber-400">{patternSuccessRate}%</div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500">pattern success</div>
+                <div className="mt-0.5 text-[10px] text-zinc-600">
+                  {patternsGenerated} of {realAttempts} attempts
                 </div>
-                <div className="text-[11px] uppercase tracking-wide text-zinc-500">sites</div>
               </div>
-              <div className="rounded-xl bg-zinc-800/50 py-3">
+              <div className="flex flex-col justify-center rounded-xl bg-zinc-800/50 py-3">
                 <div className="text-xl font-bold text-zinc-100">
                   <CountUp value={stats.active_patterns} />
                 </div>
