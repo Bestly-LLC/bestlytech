@@ -57,6 +57,7 @@ interface WeeklyPoint {
 
 interface Stats {
   sites_analyzed: number;
+  cmp_platforms_recognized: number;
   ai_generations: number;
   ai_success: number;
   banners_dismissed: number;
@@ -67,8 +68,19 @@ interface Stats {
   ai_weekly: WeeklyPoint[];
 }
 
+// Consent-management platforms the extension can fingerprint and auto-dismiss.
+// A product capability, not telemetry — sourced from the extension's CMP
+// detector, kept in sync here. Each platform is used by thousands of sites, so
+// this conveys reach far better than a raw site count.
+const CMP_PLATFORMS_RECOGNIZED = 17;
+
 const FALLBACK: Stats = {
-  sites_analyzed: 17,
+  // Unique domains across every Cookie Yeti table (patterns, dismissals, missed
+  // reports, AI analyses), not just the AI log. The live value comes from the
+  // get_cookie_yeti_public_stats RPC, which can also see admin-only
+  // dismissal_reports; this is the last-known-good union.
+  sites_analyzed: 28,
+  cmp_platforms_recognized: CMP_PLATFORMS_RECOGNIZED,
   ai_generations: 151,
   ai_success: 9,
   banners_dismissed: 15,
@@ -308,14 +320,28 @@ function useDashboardData() {
             .order("report_count", { ascending: false })
             .limit(10),
           supabase.from("ai_generation_log").select("domain, status, created_at"),
-          supabase.from("cookie_patterns").select("id", { count: "exact", head: true }),
+          supabase.from("cookie_patterns").select("domain"),
           supabase.from("device_registrations").select("id", { count: "exact", head: true }),
           // Admin-read-only under RLS; will usually 0 for anon. Fall back below.
           supabase.from("dismissal_reports").select("id", { count: "exact", head: true }),
         ]);
 
         const aiRows = (aiRes.data ?? []) as { domain: string; status: string; created_at: string }[];
+        const patternRows = (patternsRes.data ?? []) as { domain: string | null }[];
         if (!aiRows.length && !offendersRes.data?.length) return null;
+
+        // Unique domains across every table anon can read (cookie_patterns,
+        // missed_banner_reports, ai_generation_log), excluding the internal
+        // '_system' sentinel. dismissal_reports is RLS-blocked for anon, so this
+        // path can't reach those ~10 domains — the RPC is the source of the full
+        // union. This is still a truer reach than the AI log alone.
+        const siteSet = new Set<string>();
+        const addDomain = (d?: string | null) => {
+          if (d && d !== "_system") siteSet.add(d.toLowerCase());
+        };
+        for (const r of aiRows) addDomain(r.domain);
+        for (const r of (offendersRes.data ?? []) as Offender[]) addDomain(r.domain);
+        for (const r of patternRows) addDomain(r.domain);
 
         // Weekly buckets (Mon-anchored), success = success + cmp fallback.
         const weekly = new Map<string, { total: number; success: number }>();
@@ -337,12 +363,13 @@ function useDashboardData() {
         const dismissed = dismissalsRes.count ?? 0;
 
         return {
-          sites_analyzed: new Set(aiRows.map((r) => r.domain)).size || FALLBACK.sites_analyzed,
+          sites_analyzed: siteSet.size || FALLBACK.sites_analyzed,
+          cmp_platforms_recognized: CMP_PLATFORMS_RECOGNIZED,
           ai_generations: aiRows.length || FALLBACK.ai_generations,
           ai_success: aiRows.filter((r) => isSuccessStatus(r.status)).length,
           banners_dismissed: dismissed > 0 ? dismissed : FALLBACK.banners_dismissed,
           devices_protected: devicesRes.count ?? FALLBACK.devices_protected,
-          active_patterns: patternsRes.count ?? FALLBACK.active_patterns,
+          active_patterns: patternRows.length || FALLBACK.active_patterns,
           offenders: (offendersRes.data as Offender[]) ?? FALLBACK.offenders,
           ai_status_breakdown: [...statusCounts.entries()]
             .map(([status, count]) => ({ status, count }))
@@ -635,8 +662,13 @@ export default function CookieYetiDashboard() {
             Every time a consent banner tries to track you, Cookie Yeti learns. This is what the network sees, in real time.
           </p>
 
-          <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <TickerCard label="Sites Analyzed" value={stats.sites_analyzed} sub="domains seen by the AI" />
+          <div className="mt-12 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <TickerCard label="Sites Analyzed" value={stats.sites_analyzed} sub="unique domains tracked" />
+            <TickerCard
+              label="CMP Platforms Recognized"
+              value={stats.cmp_platforms_recognized}
+              sub="consent systems detected"
+            />
             <TickerCard label="Blocking Patterns Built" value={patternsGenerated} sub="auto-dismiss rules generated" />
             <TickerCard label="Banners Dismissed" value={stats.banners_dismissed} sub="confirmed by users" />
           </div>
