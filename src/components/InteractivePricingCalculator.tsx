@@ -103,24 +103,35 @@ export function InteractivePricingCalculator() {
     const stackThreeYear = stackAnnual * 3;
 
     const bestlyOneTime   = BESTLY_HARDWARE;
-    const bestlyMonthly   = SUPPORT_TIERS.find(t => t.id === supportTier)!.price;
-    const bestlyThreeYear = bestlyOneTime + bestlyMonthly * 36;
-    // What Bestly works out to per month if you spread the hardware over 3 years.
-    const bestlyMonthlyEquiv = bestlyOneTime / AMORTIZE_MONTHS + bestlyMonthly;
+    const supportMonthly  = SUPPORT_TIERS.find(t => t.id === supportTier)!.price;
+    // Apples-to-apples: your subscriptions vs. OWNING the server (self-managed).
+    // Optional managed support is an add-on the subscription side doesn't include,
+    // so it is never subtracted from the headline savings — it's shown separately
+    // and folded only into the all-in monthly + payback.
+    const ownThreeYear    = bestlyOneTime;                        // the tools, you own them
+    const allInThreeYear  = bestlyOneTime + supportMonthly * 36;  // with chosen support
+    const ownMonthlyEquiv = bestlyOneTime / AMORTIZE_MONTHS;      // hardware spread over 3 yrs
+    const bestlyMonthlyEquiv = ownMonthlyEquiv + supportMonthly;
 
-    const savings = stackThreeYear - bestlyThreeYear;
+    const savings = stackThreeYear - ownThreeYear;
     const savingsPct = stackThreeYear > 0 ? Math.round((savings / stackThreeYear) * 100) : 0;
-    const monthlySaved = stackMonthly - bestlyMonthlyEquiv;
+    const monthlySaved = stackMonthly - ownMonthlyEquiv;
 
-    // ROI: the one-time server pays for itself out of the SaaS you stop paying,
-    // net of any monthly support fee.
-    const netMonthlySaved = stackMonthly - bestlyMonthly;
+    // ROI: the one-time server pays for itself out of the subscriptions you stop
+    // paying, net of any monthly support fee.
+    const netMonthlySaved = stackMonthly - supportMonthly;
     const paybackMonths = netMonthlySaved > 0 ? Math.ceil(bestlyOneTime / netMonthlySaved) : null;
+
+    // Team size at which owning beats renting (used for the small-team message).
+    const monthlyToolsPerUser = seatPerMonth * uplift;
+    const breakevenUsers = monthlyToolsPerUser > 0
+      ? Math.max(1, Math.ceil((ownMonthlyEquiv - flatPerMonth * uplift) / monthlyToolsPerUser))
+      : null;
 
     return {
       stackPerSeatMonth, stackMonthly, stackAnnual, stackThreeYear,
-      bestlyOneTime, bestlyMonthly, bestlyThreeYear, bestlyMonthlyEquiv,
-      savings, savingsPct, monthlySaved, paybackMonths,
+      bestlyOneTime, supportMonthly, ownThreeYear, allInThreeYear, bestlyMonthlyEquiv,
+      savings, savingsPct, monthlySaved, paybackMonths, breakevenUsers,
     };
   }, [selected, users, billing, supportTier]);
 
@@ -302,29 +313,43 @@ export function InteractivePricingCalculator() {
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Your 3-year savings
               </p>
-              <p className="mt-3 text-5xl sm:text-6xl font-semibold tracking-tight">
-                <GradientText as="span">
-                  <AnimatedNumber value={calc.savings} format={fmt} />
-                </GradientText>
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {calc.savings >= 0
-                  ? `${calc.savingsPct}% less than what you pay for Google Workspace and the rest of your stack`
-                  : "Subscriptions are still cheaper at this size. Add the tools you actually pay for, or check back as you grow."}
-              </p>
-              {calc.savings >= 0 && calc.monthlySaved > 0 && (
-                <p className="mt-3 inline-block rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs font-medium text-foreground">
-                  About {fmt(calc.monthlySaved)}/mo back in your pocket
-                </p>
-              )}
-              {calc.paybackMonths != null && (
-                <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                  The server pays for itself in about{" "}
-                  <span className="font-semibold text-foreground">
-                    {calc.paybackMonths} month{calc.paybackMonths === 1 ? "" : "s"}
-                  </span>{" "}
-                  from what you stop renting. After that, you own it — and run it for next to nothing.
-                </p>
+              {calc.savings >= 0 ? (
+                <>
+                  <p className="mt-3 text-5xl sm:text-6xl font-semibold tracking-tight">
+                    <GradientText as="span">
+                      <AnimatedNumber value={calc.savings} format={fmt} />
+                    </GradientText>
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {calc.savingsPct}% less over 3 years than renting Google Workspace and the rest of your stack — and you own the server.
+                  </p>
+                  {calc.monthlySaved > 0 && (
+                    <p className="mt-3 inline-block rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs font-medium text-foreground">
+                      About {fmt(calc.monthlySaved)}/mo back in your pocket
+                    </p>
+                  )}
+                  {calc.paybackMonths != null && calc.paybackMonths <= 36 && (
+                    <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                      The server pays for itself in about{" "}
+                      <span className="font-semibold text-foreground">
+                        {calc.paybackMonths} month{calc.paybackMonths === 1 ? "" : "s"}
+                      </span>{" "}
+                      from what you stop renting. After that, you own it — and run it for next to nothing.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+                    A bit small to save — yet
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    At {users} {users === 1 ? "person" : "people"}, your subscriptions total less than the one-time server.
+                    {calc.breakevenUsers != null && calc.breakevenUsers <= 50
+                      ? <> Most teams come out ahead around {calc.breakevenUsers}+ people — add the tools you really pay for, or check back as you grow.</>
+                      : <> Add the tools you actually pay for to see your real number.</>}
+                  </p>
+                </>
               )}
             </GlowCard>
 
@@ -349,23 +374,28 @@ export function InteractivePricingCalculator() {
                   Bestly Cloud
                 </p>
                 <p className="mt-3 text-xl font-semibold text-foreground tabular-nums">
-                  {fmt(calc.bestlyOneTime)} <span className="text-xs text-muted-foreground font-normal">one-time server</span>
+                  {fmt(calc.bestlyOneTime)} <span className="text-xs text-muted-foreground font-normal">one-time · you own it</span>
                 </p>
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {calc.bestlyMonthly > 0 ? `+ ${fmt(calc.bestlyMonthly)}/mo ${activeTier.label}` : "self-managed · $0/mo"} · ≈ {fmt(calc.bestlyMonthlyEquiv)}/mo all-in
+                  {calc.supportMonthly > 0
+                    ? `+ ${fmt(calc.supportMonthly)}/mo ${activeTier.label} support (optional)`
+                    : "Self-managed · $0/mo, no per-seat fees"}
                 </p>
                 <p className="mt-3 text-sm font-medium text-foreground tabular-nums">
-                  {fmt(calc.bestlyThreeYear)} <span className="text-xs text-muted-foreground font-normal">over 3 years</span>
+                  {fmt(calc.ownThreeYear)}{" "}
+                  <span className="text-xs text-muted-foreground font-normal">
+                    over 3 years{calc.supportMonthly > 0 ? ` · ${fmt(calc.allInThreeYear)} with support` : ""}
+                  </span>
                 </p>
               </GlowCard>
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed">
               Subscription prices are 2026 list at annual billing; the Monthly toggle reflects the
-              ~20% premium most vendors charge month-to-month. Bestly's monthly figure spreads the
-              one-time server cost across 3 years so you can compare like for like. AI runs locally
-              for $0; add your own key for Claude, GPT, or Gemini only if you want hosted models.
-              One server covers a team of up to 50.
+              ~20% premium most vendors charge month-to-month. Savings compare your subscriptions to
+              owning the server outright; managed support is an optional add-on shown separately, not
+              subtracted from your savings. AI runs locally for $0; add your own key for Claude, GPT,
+              or Gemini only if you want hosted models. One server covers a team of up to 50.
             </p>
           </div>
         </div>
