@@ -61,6 +61,7 @@ export default {
       fontFamily: {
         sans: ['Inter', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
         display: ['Newsreader', 'Georgia', 'Times New Roman', 'serif'],
+        heading: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         '7xl': ['4.5rem', { lineHeight: '1.1', letterSpacing: '-0.02em' }],

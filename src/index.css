@@ -6,6 +6,11 @@
 @import "@fontsource/newsreader/400.css";
 @import "@fontsource/newsreader/500-italic.css";
 @import "@fontsource/newsreader/600.css";
+/* WOW v8 — Plus Jakarta Sans for modern display headings (cloud surfaces). */
+@import "@fontsource/plus-jakarta-sans/500.css";
+@import "@fontsource/plus-jakarta-sans/600.css";
+@import "@fontsource/plus-jakarta-sans/700.css";
+@import "@fontsource/plus-jakarta-sans/800.css";
 
 @tailwind base;
 @tailwind components;
@@ -161,6 +166,13 @@
   .font-display {
     font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
     font-feature-settings: 'liga', 'dlig';
+  }
+
+  /* Modern display sans for cloud headings — crisper + more contemporary
+   * than Inter alone. Opt-in via .font-modern (or tailwind font-heading). */
+  .font-modern {
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.035em;
   }
 }
 
