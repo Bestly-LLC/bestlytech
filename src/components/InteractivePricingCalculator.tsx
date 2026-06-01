@@ -69,7 +69,11 @@ export function InteractivePricingCalculator() {
   const [selected, setSelected] = useState<Set<string>>(
     new Set(SERVICES.filter(s => s.defaultChecked).map(s => s.id))
   );
-  const [managedSupport, setManagedSupport] = useState(true);
+  // Default to self-managed: it's the realistic path for a small business and
+  // keeps the headline savings a real, positive number even under ~10 seats.
+  // Turning managed support on still recomputes live (and may go negative for
+  // very small teams — we now show that real figure instead of a dash).
+  const [managedSupport, setManagedSupport] = useState(false);
 
   const toggle = (id: string) =>
     setSelected(prev => {
@@ -264,7 +268,7 @@ export function InteractivePricingCalculator() {
               </p>
               <p className="mt-3 text-5xl sm:text-6xl font-semibold tracking-tight">
                 <GradientText as="span">
-                  {calc.savings >= 0 ? fmt(calc.savings) : "—"}
+                  {fmt(calc.savings)}
                 </GradientText>
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
