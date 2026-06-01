@@ -82,7 +82,7 @@ export function CloudHeroSpectacle() {
               initial={{ opacity: 0, y: 18, filter: "blur(6px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               transition={{ duration: 0.7, ease, delay: 0.08 }}
-              className="mt-6 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl"
+              className="font-modern mt-6 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl"
             >
               Big tech owns your data.{" "}
               <GradientText as="span" className="animate-gradient-flow whitespace-nowrap inline-block">

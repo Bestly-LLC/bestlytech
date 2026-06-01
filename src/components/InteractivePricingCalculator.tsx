@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { GradientText } from "@/components/ui/GradientText";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { AnimatedSection } from "@/components/AnimatedSection";
+import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
 
 /**
  * InteractivePricingCalculator
@@ -268,7 +269,7 @@ export function InteractivePricingCalculator() {
               </p>
               <p className="mt-3 text-5xl sm:text-6xl font-semibold tracking-tight">
                 <GradientText as="span">
-                  {fmt(calc.savings)}
+                  <AnimatedNumber value={calc.savings} format={fmt} />
                 </GradientText>
               </p>
               <p className="mt-2 text-sm text-muted-foreground">

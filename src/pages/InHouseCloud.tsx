@@ -6,6 +6,7 @@ import { GradientText } from "@/components/ui/GradientText";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { InteractivePricingCalculator } from "@/components/InteractivePricingCalculator";
 import { CloudHeroSpectacle } from "@/components/cloud/CloudHeroSpectacle";
+import { ScrollProgress } from "@/components/motion/ScrollProgress";
 import {
   Folder, MessageSquare, Mail, ScrollText, CalendarDays, Brain,
   ShieldAlert, Globe, ServerCog, ListChecks, FormInput, KeyRound,
@@ -172,6 +173,7 @@ const pillars = [
 export default function InHouseCloud() {
   return (
     <>
+      <ScrollProgress />
       <SEOHead
         title="In-House Cloud — Stop overpaying for enterprise tools | Bestly"
         description="Built for small and medium businesses. One server in your office replaces Google Workspace, Zoom, Slack, Dropbox, DocuSign, 1Password, and your AI tool. No per-seat fees, no IT department. See what your business would save."
@@ -244,7 +246,7 @@ export default function InHouseCloud() {
       <section className="border-t border-border">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <AnimatedSection animation="fade-in" className="text-center mb-16">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               Thirteen services. <GradientText as="span">One server.</GradientText>
             </h2>
             <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
@@ -276,7 +278,7 @@ export default function InHouseCloud() {
             <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">
               Why this works
             </p>
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               Four things <GradientText as="span">make this different</GradientText>.
             </h2>
           </AnimatedSection>
@@ -306,7 +308,7 @@ export default function InHouseCloud() {
             <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">
               How we get there
             </p>
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               Four steps. <GradientText as="span">No long contracts.</GradientText>
             </h2>
           </AnimatedSection>
@@ -336,7 +338,7 @@ export default function InHouseCloud() {
             <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">
               Reasonable concerns
             </p>
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               The four questions <GradientText as="span">everybody asks</GradientText>.
             </h2>
           </AnimatedSection>
@@ -365,7 +367,7 @@ export default function InHouseCloud() {
         </div>
         <div className="relative mx-auto max-w-4xl px-6 py-24 lg:px-8 lg:py-32 text-center">
           <AnimatedSection animation="fade-in">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               Stop renting.{" "}
               <GradientText as="span">Start owning.</GradientText>
             </h2>
