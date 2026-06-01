@@ -138,7 +138,7 @@ export function InteractivePricingCalculator() {
     s.flatMonth != null ? `$${s.flatMonth}/mo` : `$${s.pricePerSeatMonth}/seat`;
 
   return (
-    <section className="border-t border-border">
+    <section id="savings" className="scroll-mt-20 border-t border-border">
       <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
         <AnimatedSection animation="fade-in" className="text-center mb-12">
           <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">

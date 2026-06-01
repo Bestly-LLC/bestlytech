@@ -114,10 +114,10 @@ export function CloudHeroSpectacle() {
                 <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Link>
               <a
-                href="mailto:jared@bestly.tech?subject=In-House%20Cloud%20Discovery%20Call"
+                href="#savings"
                 className="inline-flex items-center justify-center rounded-xl border border-border bg-background/80 px-8 py-4 text-base font-medium text-foreground shadow-sm backdrop-blur-sm transition-all hover:bg-accent"
               >
-                Email jared@bestly.tech
+                See how much you'll save
               </a>
             </motion.div>
 
