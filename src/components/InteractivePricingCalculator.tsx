@@ -395,7 +395,8 @@ export function InteractivePricingCalculator() {
               ~20% premium most vendors charge month-to-month. Savings compare your subscriptions to
               owning the server outright; managed support is an optional add-on shown separately, not
               subtracted from your savings. AI runs locally for $0; add your own key for Claude, GPT,
-              or Gemini only if you want hosted models. One server covers a team of up to 50.
+              or Gemini only if you want hosted models. One server covers a team of up to 50. Your data
+              stays on your hardware — Bestly never sells, shares, or retains it.
             </p>
           </div>
         </div>

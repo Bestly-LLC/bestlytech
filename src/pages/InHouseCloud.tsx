@@ -182,6 +182,21 @@ export default function InHouseCloud() {
       {/* Hero — animated spectacle */}
       <CloudHeroSpectacle />
 
+      {/* Privacy promise band */}
+      <section className="border-t border-border bg-secondary/10">
+        <div className="mx-auto max-w-4xl px-6 py-8 lg:px-8">
+          <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:justify-center sm:text-left">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--gradient-start)/0.12)] to-[hsl(var(--gradient-end)/0.12)]">
+              <Lock className="h-4 w-4 text-primary" />
+            </div>
+            <p className="text-sm text-foreground sm:text-base">
+              <span className="font-semibold">We never sell, share, or retain your data.</span>{" "}
+              <span className="text-muted-foreground">It lives on hardware in your office — Bestly can't see it, and there's nothing for us to monetize.</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Problem · Agitate · Solve */}
       <section className="border-t border-border bg-secondary/20">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
@@ -345,7 +360,7 @@ export default function InHouseCloud() {
               <GradientText as="span">Start owning.</GradientText>
             </h2>
             <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Thirty minutes on a call, a side-by-side cost comparison, and zero pressure. Find out what your stack actually looks like when you bring it home.
+              Thirty minutes on a call, a side-by-side cost comparison, and zero pressure. Find out what your stack actually looks like when you bring it home — on hardware you own, with data we never sell or retain.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
