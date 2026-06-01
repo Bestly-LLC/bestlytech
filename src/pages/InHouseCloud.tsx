@@ -6,7 +6,6 @@ import { GradientText } from "@/components/ui/GradientText";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { InteractivePricingCalculator } from "@/components/InteractivePricingCalculator";
 import { CloudHeroSpectacle } from "@/components/cloud/CloudHeroSpectacle";
-import { ScrollProgress } from "@/components/motion/ScrollProgress";
 import {
   Folder, MessageSquare, Mail, ScrollText, CalendarDays, Brain,
   ShieldAlert, Globe, ServerCog, ListChecks, FormInput, KeyRound,
@@ -173,7 +172,6 @@ const pillars = [
 export default function InHouseCloud() {
   return (
     <>
-      <ScrollProgress />
       <SEOHead
         title="In-House Cloud — Stop overpaying for enterprise tools | Bestly"
         description="Built for small and medium businesses. One server in your office replaces Google Workspace, Zoom, Slack, Dropbox, DocuSign, 1Password, and your AI tool. No per-seat fees, no IT department. See what your business would save."
