@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   motion, useMotionValue, useSpring, useTransform, useReducedMotion,
 } from "framer-motion";
@@ -97,10 +97,16 @@ export function LivingServer({
   const rotateY = useTransform(sx, [-0.5, 0.5], [14, -14]);
   const rotateX = useTransform(sy, [-0.5, 0.5], [-14, 14]);
 
-  const finePointer =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(pointer: fine)").matches;
-  const enableParallax = parallax && !reduce && !!finePointer;
+  const [finePointer, setFinePointer] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(pointer: fine)");
+    const update = () => setFinePointer(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
+  const enableParallax = parallax && !reduce && finePointer;
 
   const onMove = (e: React.MouseEvent) => {
     if (!enableParallax || !ref.current) return;

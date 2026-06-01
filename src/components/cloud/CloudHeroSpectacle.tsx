@@ -72,7 +72,7 @@ export function CloudHeroSpectacle() {
               className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-primary backdrop-blur-sm"
             >
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60 motion-reduce:animate-none" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
               </span>
               Flagship Program · Bestly In-House Cloud

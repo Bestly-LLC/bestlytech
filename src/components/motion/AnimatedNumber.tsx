@@ -33,5 +33,12 @@ export function AnimatedNumber({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, reduce]);
 
-  return <>{format(display)}</>;
+  // The animating value is decorative for assistive tech (it would otherwise
+  // announce ~60 times/sec); expose only the settled value to screen readers.
+  return (
+    <>
+      <span aria-hidden="true">{format(display)}</span>
+      <span className="sr-only">{format(value)}</span>
+    </>
+  );
 }
