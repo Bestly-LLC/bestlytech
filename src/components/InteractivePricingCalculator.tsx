@@ -43,7 +43,7 @@ const SERVICES: Service[] = [
   // Passwords
   { id: "1pw",   name: "1Password Business",                 category: "Passwords", pricePerSeatMonth: 7.99, defaultChecked: true },
   // E-signature
-  { id: "docusign", name: "DocuSign Standard",               category: "E-signature", pricePerSeatMonth: 25 },
+  { id: "docusign", name: "DocuSign Standard",               category: "E-signature", pricePerSeatMonth: 25, defaultChecked: true },
   // Scheduling
   { id: "calendly", name: "Calendly Standard",               category: "Scheduling", pricePerSeatMonth: 10 },
   // AI
@@ -58,7 +58,7 @@ const SERVICES: Service[] = [
   // Remote access
   { id: "nordlayer", name: "NordLayer VPN (Lite)",           category: "Remote access", pricePerSeatMonth: 8 },
   // Web security
-  { id: "dnsfilter", name: "DNSFilter (Pro)",                category: "Web security", pricePerSeatMonth: 2.5 },
+  { id: "dnsfilter", name: "DNSFilter (Pro)",                category: "Web security", pricePerSeatMonth: 2.5, defaultChecked: true },
   // Website & domain (flat, not per-seat)
   { id: "site",  name: "Website + hosting (Squarespace/Wix)", category: "Website & domain", flatMonth: 23, defaultChecked: true },
   { id: "domain",name: "Domain + business DNS",             category: "Website & domain", flatMonth: 2,  defaultChecked: true },
