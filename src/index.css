@@ -429,13 +429,22 @@
   }
   .cloud-packet { animation: cloud-packet 3.2s ease-in infinite; }
 
+  /* One-shot celebration burst for the "you're live" moment. Particles set
+   * --bx/--by for their travel vector. Plays once (forwards), never loops. */
+  @keyframes cloud-burst {
+    0%   { transform: translate(0, 0) scale(0.4); opacity: 0; }
+    15%  { opacity: 1; }
+    100% { transform: translate(var(--bx, 0), var(--by, 0)) scale(1); opacity: 0; }
+  }
+  .cloud-burst { animation: cloud-burst 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
   @media (prefers-reduced-motion: reduce) {
     .cloud-aurora-a, .cloud-aurora-b, .cloud-aurora-c,
     .cloud-grid, .cloud-mote,
     .cloud-orbit-slow, .cloud-orbit-mid, .cloud-orbit-fast,
     .cloud-orbit-rev-slow, .cloud-orbit-rev-mid, .cloud-orbit-rev-fast,
     .cloud-ping-ring, .cloud-core-glow, .animate-gradient-flow, .cloud-beam,
-    .cloud-packet {
+    .cloud-packet, .cloud-burst {
       animation: none !important;
     }
   }

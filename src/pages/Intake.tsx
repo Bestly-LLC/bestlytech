@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { GradientText } from "@/components/ui/GradientText";
+import { LiveCelebration } from "@/components/cloud/LiveCelebration";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowRight,
@@ -1832,6 +1833,8 @@ function CustomerStatusView({ deal }: { deal: Deal }) {
 
   const stepsDone = PUBLIC_PROVISIONING_STEPS.filter((s) => provisioning[s.key]?.done).length;
   const provisioningPct = Math.round((stepsDone / PUBLIC_PROVISIONING_STEPS.length) * 100);
+  // First not-yet-done step = what we're actively working on right now.
+  const nextStepIdx = PUBLIC_PROVISIONING_STEPS.findIndex((s) => !provisioning[s.key]?.done);
 
   // Auto-refresh every 60s so the status stays current without a reload
   const [, setTick] = useState(0);
@@ -1847,6 +1850,7 @@ function CustomerStatusView({ deal }: { deal: Deal }) {
         description="Live status of your Bestly Cloud build."
       />
       <div className="relative">
+        {stage >= 8 && <LiveCelebration dealId={deal.company_name} />}
         <div className="mx-auto max-w-3xl px-6 py-10 lg:py-14">
           <AnimatedSection>
             <Badge variant="outline" className="mb-3 border-primary/30 text-primary">
@@ -1919,18 +1923,27 @@ function CustomerStatusView({ deal }: { deal: Deal }) {
                   />
                 </div>
                 <ul className="space-y-1.5">
-                  {PUBLIC_PROVISIONING_STEPS.map((s) => {
+                  {PUBLIC_PROVISIONING_STEPS.map((s, i) => {
                     const done = !!provisioning[s.key]?.done;
+                    const current = i === nextStepIdx;
                     return (
                       <li key={s.key} className="flex items-center gap-2.5 py-1">
                         <div
                           className={`w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center ${
-                            done ? "border-emerald-500 bg-emerald-500" : "border-border"
+                            done
+                              ? "border-emerald-500 bg-emerald-500"
+                              : current
+                              ? "border-primary animate-pulse-glow"
+                              : "border-border"
                           }`}
                         >
                           {done && <Check className="h-2.5 w-2.5 text-white" />}
                         </div>
-                        <span className={`text-sm ${done ? "text-foreground" : "text-muted-foreground"}`}>
+                        <span
+                          className={`text-sm ${
+                            done ? "text-foreground" : current ? "text-foreground font-medium" : "text-muted-foreground"
+                          }`}
+                        >
                           {s.label}
                         </span>
                       </li>
