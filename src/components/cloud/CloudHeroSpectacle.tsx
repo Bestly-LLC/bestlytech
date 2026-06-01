@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { GradientText } from "@/components/ui/GradientText";
-import { ServiceOrbit } from "@/components/cloud/ServiceOrbit";
+import { LivingServer } from "@/components/cloud/LivingServer";
 
 /* Deterministic light-motes so the field is stable across renders. */
 const MOTES = [
@@ -144,7 +144,7 @@ export function CloudHeroSpectacle() {
             transition={{ duration: 0.9, ease, delay: 0.2 }}
             className="relative"
           >
-            <ServiceOrbit />
+            <LivingServer />
             <p className="mt-10 text-center text-sm font-medium text-muted-foreground lg:mt-6">
               Thirteen services. <span className="text-foreground">One server on your shelf.</span>
             </p>

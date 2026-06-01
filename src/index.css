@@ -419,12 +419,23 @@
   }
   .cloud-beam { animation: cloud-beam 6s ease-in-out infinite; }
 
+  /* Data packets traveling along a spoke from the orbit toward the core
+   * (sells "everything flows into your box"). --cloud-spoke-h = spoke length. */
+  @keyframes cloud-packet {
+    0%   { transform: translateY(var(--cloud-spoke-h, 150px)); opacity: 0; }
+    12%  { opacity: 1; }
+    88%  { opacity: 1; }
+    100% { transform: translateY(0); opacity: 0; }
+  }
+  .cloud-packet { animation: cloud-packet 3.2s ease-in infinite; }
+
   @media (prefers-reduced-motion: reduce) {
     .cloud-aurora-a, .cloud-aurora-b, .cloud-aurora-c,
     .cloud-grid, .cloud-mote,
     .cloud-orbit-slow, .cloud-orbit-mid, .cloud-orbit-fast,
     .cloud-orbit-rev-slow, .cloud-orbit-rev-mid, .cloud-orbit-rev-fast,
-    .cloud-ping-ring, .cloud-core-glow, .animate-gradient-flow, .cloud-beam {
+    .cloud-ping-ring, .cloud-core-glow, .animate-gradient-flow, .cloud-beam,
+    .cloud-packet {
       animation: none !important;
     }
   }
