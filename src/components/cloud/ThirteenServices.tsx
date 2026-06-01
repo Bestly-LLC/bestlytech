@@ -20,19 +20,19 @@ import { GradientText } from "@/components/ui/GradientText";
 type Service = { icon: LucideIcon; title: string; subtitle: string; outcome: string };
 
 const SERVICES: Service[] = [
-  { icon: Folder, title: "Drive", subtitle: "Google Drive · Dropbox", outcome: "Files sync across the team and share via your domain." },
-  { icon: MessageSquare, title: "Video & Chat", subtitle: "Zoom · Slack · Teams", outcome: "Encrypted calls, screen share, and persistent rooms — Nextcloud Talk on your TURN server." },
-  { icon: Mail, title: "Mail", subtitle: "Gmail · Outlook", outcome: "Branded mailboxes at your domain — IMAP/SMTP plus a full webmail client." },
-  { icon: ScrollText, title: "Docs", subtitle: "Google Docs · Office 365", outcome: "Real-time collaborative editing of documents, sheets, and slides via Collabora Online." },
-  { icon: CalendarDays, title: "Calendar", subtitle: "Google Cal · Outlook", outcome: "CalDAV-synced calendars across Mac, iPhone, and Android — with shared team availability." },
-  { icon: Brain, title: "Intelligence", subtitle: "ChatGPT · Copilot", outcome: "Privacy-aware AI routing: local models handle anything with secrets, code, or personal data automatically; long non-sensitive prompts route to hosted models for top quality." },
-  { icon: ShieldAlert, title: "Shield", subtitle: "DNS Security · Filtering", outcome: "Network-wide threat blocking — 200K+ malicious domains stopped before they reach a device." },
-  { icon: Globe, title: "Access", subtitle: "Corporate VPN", outcome: "Encrypted remote access from any laptop or phone, anywhere in the world." },
-  { icon: ServerCog, title: "Backup", subtitle: "Backblaze · Veeam", outcome: "Automated daily encrypted backups plus a tested disaster-recovery procedure." },
-  { icon: ListChecks, title: "Projects", subtitle: "Asana · Trello · Monday", outcome: "Boards, tasks, and deadlines — owned, on premises, with full audit history." },
-  { icon: FormInput, title: "Forms", subtitle: "Google Forms · Typeform", outcome: "Internal surveys and public-facing intake forms hosted on your own domain." },
-  { icon: KeyRound, title: "Passwords", subtitle: "1Password · LastPass", outcome: "End-to-end encrypted vaults shared across your team — keys you control." },
-  { icon: FileSignature, title: "Sign", subtitle: "DocuSign · Adobe Sign", outcome: "Legally-binding e-signatures hosted on your server, no per-envelope fees." },
+  { icon: Folder, title: "Files", subtitle: "Google Drive · Dropbox", outcome: "All your files in one place, synced to every computer and easy to share with a link." },
+  { icon: MessageSquare, title: "Video & Chat", subtitle: "Zoom · Slack · Teams", outcome: "Private video calls, screen sharing, and team messaging — built right in." },
+  { icon: Mail, title: "Email", subtitle: "Gmail · Outlook", outcome: "Professional email at your own name, like you@yourpractice.com." },
+  { icon: ScrollText, title: "Documents", subtitle: "Google Docs · Office 365", outcome: "Write and edit documents and spreadsheets together, at the same time." },
+  { icon: CalendarDays, title: "Calendar", subtitle: "Google Cal · Outlook", outcome: "Shared calendars that stay in sync on everyone's phone and computer." },
+  { icon: Brain, title: "AI Assistant", subtitle: "ChatGPT · Copilot", outcome: "Help with writing and answering questions — and your information never leaves the office." },
+  { icon: ShieldAlert, title: "Security", subtitle: "DNS filtering", outcome: "Blocks scam and virus websites before they ever reach a device." },
+  { icon: Globe, title: "Remote Access", subtitle: "Corporate VPN", outcome: "Safely reach your office files from home or anywhere you travel." },
+  { icon: ServerCog, title: "Backup", subtitle: "Backblaze · Veeam", outcome: "Automatic daily backups, so you never lose an important file." },
+  { icon: ListChecks, title: "Tasks", subtitle: "Asana · Trello · Monday", outcome: "Simple boards to track who's doing what, and by when." },
+  { icon: FormInput, title: "Forms", subtitle: "Google Forms · Typeform", outcome: "Create patient or customer forms and surveys on your own website." },
+  { icon: KeyRound, title: "Passwords", subtitle: "1Password · LastPass", outcome: "One secure place for your team's logins and passwords." },
+  { icon: FileSignature, title: "E-Signatures", subtitle: "DocuSign · Adobe Sign", outcome: "Send documents for legal signature online — with no per-document fees." },
 ];
 
 const STAGE = 560;
