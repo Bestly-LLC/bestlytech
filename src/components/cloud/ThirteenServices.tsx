@@ -118,15 +118,20 @@ export function ThirteenServices() {
         <Stagger className="grid gap-[18px] md:grid-cols-2 lg:grid-cols-3">
           {SERVICES.map((s) => (
             <StaggerItem key={s.title}>
-              <div className="group relative h-full overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-sm transition-all duration-500 hover:-translate-y-1.5 hover:shadow-premium gradient-border">
-                <span className="cloud-sheen pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-[hsl(var(--glow-color)/0.14)] to-transparent" />
+              <div className="group relative h-full overflow-hidden rounded-[18px] border border-border bg-card p-6 transition-all duration-500 gradient-border shadow-[0_4px_20px_rgba(58,74,156,0.10)] hover:-translate-y-1.5 hover:scale-[1.015] hover:shadow-[0_20px_48px_rgba(58,74,156,0.22)]">
+                {/* gradient top accent */}
+                <span className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-[hsl(var(--gradient-start))] to-[hsl(var(--gradient-end))] opacity-50 transition-opacity duration-500 group-hover:opacity-100" />
+                {/* hover sheen */}
+                <span className="cloud-sheen pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-[hsl(var(--glow-color)/0.16)] to-transparent" />
                 <div className="relative z-10">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.1)] to-[hsl(var(--gradient-end)/0.1)]">
-                    <s.icon className="h-6 w-6 text-primary" />
+                  <div className="relative flex h-[54px] w-[54px] items-center justify-center rounded-[15px] gradient-bg shadow-[0_6px_18px_rgba(58,74,156,0.28)] transition-all duration-300 group-hover:-translate-y-0.5 group-hover:scale-105 group-hover:shadow-[0_0_0_4px_rgba(122,139,224,0.16),0_10px_26px_rgba(58,74,156,0.36)]">
+                    <s.icon className="h-[25px] w-[25px] text-white" strokeWidth={2} />
                   </div>
-                  <h3 className="mt-5 text-lg font-semibold text-foreground">{s.title}</h3>
-                  <p className="mt-1 text-xs font-medium uppercase tracking-widest text-muted-foreground">{s.subtitle}</p>
-                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{s.outcome}</p>
+                  <h3 className="font-modern mt-[18px] text-xl font-bold tracking-tight text-foreground">{s.title}</h3>
+                  <span className="mt-2.5 inline-flex items-center rounded-full bg-[hsl(var(--gradient-start)/0.08)] px-[11px] py-1 text-[11px] font-semibold tracking-wide text-[hsl(var(--gradient-start))]">
+                    Replaces {s.subtitle}
+                  </span>
+                  <p className="mt-3.5 text-sm leading-relaxed text-muted-foreground">{s.outcome}</p>
                 </div>
               </div>
             </StaggerItem>
