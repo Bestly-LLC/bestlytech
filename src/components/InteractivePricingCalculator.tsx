@@ -57,8 +57,17 @@ const SERVICES: Service[] = [
 // One server handles a 1-50 person team. One-time hardware, then either
 // self-manage for $0/mo with full docs, or let Bestly run it for $500/mo.
 const BESTLY_HARDWARE   = 6500; // one-time, covers up to 50 users
-const BESTLY_SUPPORT    = 500;  // optional managed support, monthly
 const AMORTIZE_MONTHS   = 36;   // spread hardware across 3 years for an apples-to-apples monthly
+
+// Optional support plans. Most small offices self-manage or take Essentials;
+// Full service is for teams that want us to run everything.
+const SUPPORT_TIERS = [
+  { id: "self",       label: "Self-managed", price: 0,   blurb: "You run it, with full step-by-step guides. No monthly fee." },
+  { id: "essentials", label: "Essentials",   price: 199, blurb: "We monitor it, check your backups, and keep it updated and secure. Email support." },
+  { id: "full",       label: "Full service", price: 500, blurb: "We run everything — updates, AI upgrades, and priority support whenever you need us." },
+] as const;
+
+type SupportTierId = (typeof SUPPORT_TIERS)[number]["id"];
 
 // Month-to-month billing on typical SaaS runs ~20% over the annual-prepaid rate.
 const MONTHLY_BILLING_UPLIFT = 1.2;
@@ -70,11 +79,10 @@ export function InteractivePricingCalculator() {
   const [selected, setSelected] = useState<Set<string>>(
     new Set(SERVICES.filter(s => s.defaultChecked).map(s => s.id))
   );
-  // Default to self-managed: it's the realistic path for a small business and
-  // keeps the headline savings a real, positive number even under ~10 seats.
-  // Turning managed support on still recomputes live (and may go negative for
-  // very small teams — we now show that real figure instead of a dash).
-  const [managedSupport, setManagedSupport] = useState(false);
+  // Default to self-managed: the realistic path for a small office, and it keeps
+  // the headline savings positive even under ~10 seats. Picking a paid support
+  // tier recomputes live (and may go negative for very small teams).
+  const [supportTier, setSupportTier] = useState<SupportTierId>("self");
 
   const toggle = (id: string) =>
     setSelected(prev => {
@@ -95,7 +103,7 @@ export function InteractivePricingCalculator() {
     const stackThreeYear = stackAnnual * 3;
 
     const bestlyOneTime   = BESTLY_HARDWARE;
-    const bestlyMonthly   = managedSupport ? BESTLY_SUPPORT : 0;
+    const bestlyMonthly   = SUPPORT_TIERS.find(t => t.id === supportTier)!.price;
     const bestlyThreeYear = bestlyOneTime + bestlyMonthly * 36;
     // What Bestly works out to per month if you spread the hardware over 3 years.
     const bestlyMonthlyEquiv = bestlyOneTime / AMORTIZE_MONTHS + bestlyMonthly;
@@ -104,12 +112,19 @@ export function InteractivePricingCalculator() {
     const savingsPct = stackThreeYear > 0 ? Math.round((savings / stackThreeYear) * 100) : 0;
     const monthlySaved = stackMonthly - bestlyMonthlyEquiv;
 
+    // ROI: the one-time server pays for itself out of the SaaS you stop paying,
+    // net of any monthly support fee.
+    const netMonthlySaved = stackMonthly - bestlyMonthly;
+    const paybackMonths = netMonthlySaved > 0 ? Math.ceil(bestlyOneTime / netMonthlySaved) : null;
+
     return {
       stackPerSeatMonth, stackMonthly, stackAnnual, stackThreeYear,
       bestlyOneTime, bestlyMonthly, bestlyThreeYear, bestlyMonthlyEquiv,
-      savings, savingsPct, monthlySaved,
+      savings, savingsPct, monthlySaved, paybackMonths,
     };
-  }, [selected, users, billing, managedSupport]);
+  }, [selected, users, billing, supportTier]);
+
+  const activeTier = SUPPORT_TIERS.find(t => t.id === supportTier)!;
 
   const fmt = (n: number) =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -242,20 +257,40 @@ export function InteractivePricingCalculator() {
                 </div>
               ))}
 
-              <div className="pt-2 border-t border-border">
-                <label className="flex items-center gap-2.5 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={managedSupport}
-                    onChange={e => setManagedSupport(e.target.checked)}
-                    className="h-4 w-4 accent-[hsl(var(--gradient-end))]"
-                  />
-                  <span className="text-foreground">
-                    Let Bestly run it for you ($500/mo)
-                  </span>
-                </label>
-                <p className="mt-1 text-xs text-muted-foreground pl-6">
-                  Or self-manage with full docs for $0/mo. Either way, no per-seat fees.
+              <div className="pt-3 border-t border-border">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                  Support — pick what fits
+                </p>
+                <div className="grid gap-2">
+                  {SUPPORT_TIERS.map(t => {
+                    const on = t.id === supportTier;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setSupportTier(t.id)}
+                        className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                          on ? "border-primary/50 bg-primary/5" : "border-border bg-background hover:border-primary/20"
+                        }`}
+                      >
+                        <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${on ? "border-primary" : "border-muted-foreground/40"}`}>
+                          {on && <span className="h-2 w-2 rounded-full bg-primary" />}
+                        </span>
+                        <span className="flex-1">
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-medium text-foreground">{t.label}</span>
+                            <span className="text-sm font-semibold tabular-nums text-foreground">
+                              {t.price === 0 ? "$0/mo" : `$${t.price}/mo`}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground leading-relaxed">{t.blurb}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  No per-seat fees on any plan. Cancel or switch anytime.
                 </p>
               </div>
             </div>
@@ -280,6 +315,15 @@ export function InteractivePricingCalculator() {
               {calc.savings >= 0 && calc.monthlySaved > 0 && (
                 <p className="mt-3 inline-block rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs font-medium text-foreground">
                   About {fmt(calc.monthlySaved)}/mo back in your pocket
+                </p>
+              )}
+              {calc.paybackMonths != null && (
+                <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                  The server pays for itself in about{" "}
+                  <span className="font-semibold text-foreground">
+                    {calc.paybackMonths} month{calc.paybackMonths === 1 ? "" : "s"}
+                  </span>{" "}
+                  from what you stop renting. After that, you own it — and run it for next to nothing.
                 </p>
               )}
             </GlowCard>
@@ -308,7 +352,7 @@ export function InteractivePricingCalculator() {
                   {fmt(calc.bestlyOneTime)} <span className="text-xs text-muted-foreground font-normal">one-time server</span>
                 </p>
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {calc.bestlyMonthly > 0 ? `+ ${fmt(calc.bestlyMonthly)}/mo managed` : "self-managed, $0/mo"} · ≈ {fmt(calc.bestlyMonthlyEquiv)}/mo all-in
+                  {calc.bestlyMonthly > 0 ? `+ ${fmt(calc.bestlyMonthly)}/mo ${activeTier.label}` : "self-managed · $0/mo"} · ≈ {fmt(calc.bestlyMonthlyEquiv)}/mo all-in
                 </p>
                 <p className="mt-3 text-sm font-medium text-foreground tabular-nums">
                   {fmt(calc.bestlyThreeYear)} <span className="text-xs text-muted-foreground font-normal">over 3 years</span>
