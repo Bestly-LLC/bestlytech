@@ -48,6 +48,17 @@ const SERVICES: Service[] = [
   { id: "calendly", name: "Calendly Standard",               category: "Scheduling", pricePerSeatMonth: 10 },
   // AI
   { id: "gpt",   name: "ChatGPT Team",                       category: "AI", pricePerSeatMonth: 25, defaultChecked: true },
+  // Project management (2026 list, annual billing)
+  { id: "asana",  name: "Asana Starter",                     category: "Project management", pricePerSeatMonth: 10.99 },
+  { id: "monday", name: "monday.com Basic",                  category: "Project management", pricePerSeatMonth: 9 },
+  // Notes & wiki
+  { id: "notion", name: "Notion Plus",                       category: "Notes & wiki", pricePerSeatMonth: 10 },
+  // Backup
+  { id: "backblaze", name: "Backblaze Business Backup",      category: "Backup", pricePerSeatMonth: 8, defaultChecked: true },
+  // Remote access
+  { id: "nordlayer", name: "NordLayer VPN (Lite)",           category: "Remote access", pricePerSeatMonth: 8 },
+  // Web security
+  { id: "dnsfilter", name: "DNSFilter (Pro)",                category: "Web security", pricePerSeatMonth: 2.5 },
   // Website & domain (flat, not per-seat)
   { id: "site",  name: "Website + hosting (Squarespace/Wix)", category: "Website & domain", flatMonth: 23, defaultChecked: true },
   { id: "domain",name: "Domain + business DNS",             category: "Website & domain", flatMonth: 2,  defaultChecked: true },
