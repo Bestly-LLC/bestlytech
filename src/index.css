@@ -438,13 +438,22 @@
   }
   .cloud-burst { animation: cloud-burst 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
+  /* Convergence beams (Thirteen services hub): flowing dashes toward the core */
+  @keyframes cloud-flowdash { to { stroke-dashoffset: -32; } }
+  .cloud-beam { stroke-dasharray: 6 10; animation: cloud-flowdash 1.4s linear infinite; }
+
+  /* Card hover light-sheen */
+  @keyframes cloud-sheen { to { transform: translateX(360%) skewX(-18deg); } }
+  .cloud-sheen { transform: translateX(-160%) skewX(-18deg); }
+  .group:hover .cloud-sheen { animation: cloud-sheen 0.9s ease forwards; }
+
   @media (prefers-reduced-motion: reduce) {
     .cloud-aurora-a, .cloud-aurora-b, .cloud-aurora-c,
     .cloud-grid, .cloud-mote,
     .cloud-orbit-slow, .cloud-orbit-mid, .cloud-orbit-fast,
     .cloud-orbit-rev-slow, .cloud-orbit-rev-mid, .cloud-orbit-rev-fast,
     .cloud-ping-ring, .cloud-core-glow, .animate-gradient-flow, .cloud-beam,
-    .cloud-packet, .cloud-burst {
+    .cloud-packet, .cloud-burst, .cloud-sheen {
       animation: none !important;
     }
   }

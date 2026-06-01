@@ -6,6 +6,7 @@ import { GradientText } from "@/components/ui/GradientText";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { InteractivePricingCalculator } from "@/components/InteractivePricingCalculator";
 import { CloudHeroSpectacle } from "@/components/cloud/CloudHeroSpectacle";
+import { ThirteenServices } from "@/components/cloud/ThirteenServices";
 import {
   Folder, MessageSquare, Mail, ScrollText, CalendarDays, Brain,
   ShieldAlert, Globe, ServerCog, ListChecks, FormInput, KeyRound,
@@ -240,34 +241,8 @@ export default function InHouseCloud() {
         </div>
       </section>
 
-      {/* What it replaces */}
-      <section className="border-t border-border">
-        <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <AnimatedSection animation="fade-in" className="text-center mb-16">
-            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Thirteen services. <GradientText as="span">One server.</GradientText>
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Every tool your team uses — replaced by one private platform, branded to your company.
-            </p>
-          </AnimatedSection>
-
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {replaces.map((r, index) => (
-              <AnimatedSection key={r.title} animation="fade-in" delay={index * 40}>
-                <GlowCard className="h-full">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.1)] to-[hsl(var(--gradient-end)/0.1)]">
-                    <r.icon className="h-6 w-6 text-primary" />
-                  </div>
-                  <h3 className="mt-5 text-lg font-semibold text-foreground">{r.title}</h3>
-                  <p className="mt-1 text-xs font-medium uppercase tracking-widest text-muted-foreground">{r.subtitle}</p>
-                  <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{r.outcome}</p>
-                </GlowCard>
-              </AnimatedSection>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* What it replaces — animated convergence hub + card grid */}
+      <ThirteenServices />
 
       {/* Pillars */}
       <section className="border-t border-border bg-secondary/20">
