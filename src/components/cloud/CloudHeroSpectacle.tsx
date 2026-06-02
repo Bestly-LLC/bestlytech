@@ -146,7 +146,7 @@ export function CloudHeroSpectacle() {
           >
             <LivingServer />
             <p className="mt-10 text-center text-sm font-medium text-muted-foreground lg:mt-6">
-              Thirteen services. <span className="text-foreground">One server on your shelf.</span>
+              Thirteen services. <span className="text-foreground">One small device on your shelf.</span>
             </p>
           </motion.div>
         </div>

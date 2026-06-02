@@ -46,7 +46,7 @@ export function ThirteenServices() {
         <Reveal className="mx-auto mb-12 max-w-2xl text-center">
           <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
             Thirteen services.{" "}
-            <GradientText as="span" className="animate-gradient-flow">One server.</GradientText>
+            <GradientText as="span" className="animate-gradient-flow">One small device.</GradientText>
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
             Every tool your team uses — replaced by one private platform that lives in your office and wears your brand.
