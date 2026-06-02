@@ -65,20 +65,12 @@ const SERVICES: Service[] = [
 ];
 
 // ── Bestly Cloud price model (the real one) ─────────────────────────────────
-// One server handles a 1-50 person team. One-time hardware, then either
-// self-manage for $0/mo with full docs, or let Bestly run it for $500/mo.
+// One server handles a 1-50 person team. Self-hosted: you own and run it for
+// $0/mo, no per-seat fees. Help is pay-as-you-go — on-demand support per call,
+// only when you use it.
 const BESTLY_HARDWARE   = 6500; // one-time, covers up to 50 users
 const AMORTIZE_MONTHS   = 36;   // spread hardware across 3 years for an apples-to-apples monthly
-
-// Optional support plans. Most small offices self-manage or take Essentials;
-// Full service is for teams that want us to run everything.
-const SUPPORT_TIERS = [
-  { id: "self",       label: "Self-managed", price: 0,   blurb: "You run it, with full step-by-step guides. No monthly fee." },
-  { id: "essentials", label: "Essentials",   price: 199, blurb: "We monitor it, check your backups, and keep it updated and secure. Email support." },
-  { id: "full",       label: "Full service", price: 500, blurb: "We run everything — updates, AI upgrades, and priority support whenever you need us." },
-] as const;
-
-type SupportTierId = (typeof SUPPORT_TIERS)[number]["id"];
+const ON_DEMAND_CALL    = 149;  // optional pay-per-call support; charged only when used
 
 // Month-to-month billing on typical SaaS runs ~20% over the annual-prepaid rate.
 const MONTHLY_BILLING_UPLIFT = 1.2;
@@ -90,11 +82,6 @@ export function InteractivePricingCalculator() {
   const [selected, setSelected] = useState<Set<string>>(
     new Set(SERVICES.filter(s => s.defaultChecked).map(s => s.id))
   );
-  // Default to self-managed: the realistic path for a small office, and it keeps
-  // the headline savings positive even under ~10 seats. Picking a paid support
-  // tier recomputes live (and may go negative for very small teams).
-  const [supportTier, setSupportTier] = useState<SupportTierId>("self");
-
   const toggle = (id: string) =>
     setSelected(prev => {
       const next = new Set(prev);
@@ -114,24 +101,19 @@ export function InteractivePricingCalculator() {
     const stackThreeYear = stackAnnual * 3;
 
     const bestlyOneTime   = BESTLY_HARDWARE;
-    const supportMonthly  = SUPPORT_TIERS.find(t => t.id === supportTier)!.price;
-    // Apples-to-apples: your subscriptions vs. OWNING the server (self-managed).
-    // Optional managed support is an add-on the subscription side doesn't include,
-    // so it is never subtracted from the headline savings — it's shown separately
-    // and folded only into the all-in monthly + payback.
-    const ownThreeYear    = bestlyOneTime;                        // the tools, you own them
-    const allInThreeYear  = bestlyOneTime + supportMonthly * 36;  // with chosen support
+    // Self-hosted: you own the server outright, $0/mo. The comparison is your
+    // subscriptions vs. owning the tools. On-demand support ($/call) is occasional
+    // and pay-as-you-go, so it's shown separately, never in the monthly math.
+    const ownThreeYear    = bestlyOneTime;
     const ownMonthlyEquiv = bestlyOneTime / AMORTIZE_MONTHS;      // hardware spread over 3 yrs
-    const bestlyMonthlyEquiv = ownMonthlyEquiv + supportMonthly;
+    const bestlyMonthlyEquiv = ownMonthlyEquiv;
 
     const savings = stackThreeYear - ownThreeYear;
     const savingsPct = stackThreeYear > 0 ? Math.round((savings / stackThreeYear) * 100) : 0;
     const monthlySaved = stackMonthly - ownMonthlyEquiv;
 
-    // ROI: the one-time server pays for itself out of the subscriptions you stop
-    // paying, net of any monthly support fee.
-    const netMonthlySaved = stackMonthly - supportMonthly;
-    const paybackMonths = netMonthlySaved > 0 ? Math.ceil(bestlyOneTime / netMonthlySaved) : null;
+    // ROI: the one-time server pays for itself out of the subscriptions you stop paying.
+    const paybackMonths = stackMonthly > 0 ? Math.ceil(bestlyOneTime / stackMonthly) : null;
 
     // Team size at which owning beats renting (used for the small-team message).
     const monthlyToolsPerUser = seatPerMonth * uplift;
@@ -141,12 +123,10 @@ export function InteractivePricingCalculator() {
 
     return {
       stackPerSeatMonth, stackMonthly, stackAnnual, stackThreeYear,
-      bestlyOneTime, supportMonthly, ownThreeYear, allInThreeYear, bestlyMonthlyEquiv,
+      bestlyOneTime, ownThreeYear, bestlyMonthlyEquiv,
       savings, savingsPct, monthlySaved, paybackMonths, breakevenUsers,
     };
-  }, [selected, users, billing, supportTier]);
-
-  const activeTier = SUPPORT_TIERS.find(t => t.id === supportTier)!;
+  }, [selected, users, billing]);
 
   const fmt = (n: number) =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -281,39 +261,18 @@ export function InteractivePricingCalculator() {
 
               <div className="pt-3 border-t border-border">
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                  Support — pick what fits
+                  Support
                 </p>
-                <div className="grid gap-2">
-                  {SUPPORT_TIERS.map(t => {
-                    const on = t.id === supportTier;
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setSupportTier(t.id)}
-                        className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                          on ? "border-primary/50 bg-primary/5" : "border-border bg-background hover:border-primary/20"
-                        }`}
-                      >
-                        <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${on ? "border-primary" : "border-muted-foreground/40"}`}>
-                          {on && <span className="h-2 w-2 rounded-full bg-primary" />}
-                        </span>
-                        <span className="flex-1">
-                          <span className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-medium text-foreground">{t.label}</span>
-                            <span className="text-sm font-semibold tabular-nums text-foreground">
-                              {t.price === 0 ? "$0/mo" : `$${t.price}/mo`}
-                            </span>
-                          </span>
-                          <span className="mt-0.5 block text-xs text-muted-foreground leading-relaxed">{t.blurb}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
+                <div className="rounded-lg border border-primary/40 bg-primary/5 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-foreground">Self-hosted — you own and run it</span>
+                    <span className="text-sm font-semibold tabular-nums text-foreground">$0/mo</span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                    No monthly fee, no per-seat fees. Need a hand? On-demand support is{" "}
+                    <span className="font-semibold text-foreground">{fmt(ON_DEMAND_CALL)} per call</span> — pay only when you use it.
+                  </p>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  No per-seat fees on any plan. Cancel or switch anytime.
-                </p>
               </div>
             </div>
           </GlowCard>
@@ -388,14 +347,12 @@ export function InteractivePricingCalculator() {
                   {fmt(calc.bestlyOneTime)} <span className="text-xs text-muted-foreground font-normal">one-time · you own it</span>
                 </p>
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {calc.supportMonthly > 0
-                    ? `+ ${fmt(calc.supportMonthly)}/mo ${activeTier.label} support (optional)`
-                    : "Self-managed · $0/mo, no per-seat fees"}
+                  Self-hosted · $0/mo, no per-seat fees
                 </p>
                 <p className="mt-3 text-sm font-medium text-foreground tabular-nums">
                   {fmt(calc.ownThreeYear)}{" "}
                   <span className="text-xs text-muted-foreground font-normal">
-                    over 3 years{calc.supportMonthly > 0 ? ` · ${fmt(calc.allInThreeYear)} with support` : ""}
+                    over 3 years · {fmt(ON_DEMAND_CALL)}/call only if you need help
                   </span>
                 </p>
               </GlowCard>
@@ -404,8 +361,8 @@ export function InteractivePricingCalculator() {
             <p className="text-xs text-muted-foreground leading-relaxed">
               Subscription prices are 2026 list at annual billing; the Monthly toggle reflects the
               ~20% premium most vendors charge month-to-month. Savings compare your subscriptions to
-              owning the server outright; managed support is an optional add-on shown separately, not
-              subtracted from your savings. AI runs locally for $0; add your own key for Claude, GPT,
+              owning the server outright; it's self-hosted with no monthly fee, and on-demand support
+              ({fmt(ON_DEMAND_CALL)}/call) is pay-as-you-go, never part of the monthly math. AI runs locally for $0; add your own key for Claude, GPT,
               or Gemini only if you want hosted models. One server covers a team of up to 50. Your data
               stays on your hardware — Bestly never sells, shares, or retains it.
             </p>
