@@ -5,7 +5,7 @@ import { GlowCard } from "@/components/ui/GlowCard";
 import { GradientText } from "@/components/ui/GradientText";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { InteractivePricingCalculator } from "@/components/InteractivePricingCalculator";
-import { CloudHeroSpectacle } from "@/components/cloud/CloudHeroSpectacle";
+import { CloudScrollHero } from "@/components/cloud/CloudScrollHero";
 import { ThirteenServices } from "@/components/cloud/ThirteenServices";
 import {
   Folder, MessageSquare, Mail, ScrollText, CalendarDays, Brain,
@@ -179,8 +179,8 @@ export default function InHouseCloud() {
         path="/cloud"
       />
 
-      {/* Hero — animated spectacle */}
-      <CloudHeroSpectacle />
+      {/* Hero — scroll-scrubbed 3D device */}
+      <CloudScrollHero />
 
       {/* Privacy promise band */}
       <section className="border-t border-border bg-secondary/10">
