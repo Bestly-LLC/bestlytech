@@ -11,12 +11,14 @@ import {
 } from "@/components/ui/accordion";
 import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import settingsScreenshot from "@/assets/cookieyeti-settings-iphone.png";
+import safariMenuShot from "@/assets/cy-safari-menu.png";
+import safariBannerShot from "@/assets/cy-safari-banner.png";
+import panelReportShot from "@/assets/cy-panel-report.png";
 import {
   Puzzle,
   Cookie,
   CheckCircle2,
   Flag,
-  ArrowRight,
   ArrowLeft,
   Globe,
   Lock,
@@ -33,60 +35,6 @@ import {
 type DemoStage = "banner" | "panel" | "reported";
 
 const TEAL = "#2DB3A6";
-
-function SafariToolbarMock() {
-  return (
-    <div
-      className="mx-auto max-w-[320px] rounded-[2rem] border-2 border-border bg-card shadow-sm overflow-hidden"
-      role="img"
-      aria-label="Illustration of Safari on iPhone. The extensions puzzle icon sits on the left side of the address bar at the bottom of the screen. Tapping it reveals Cookie Yeti."
-    >
-      {/* Mock page content (phone screen) */}
-      <div className="px-5 pt-6 pb-3 space-y-2.5 opacity-50" aria-hidden="true">
-        <div className="h-3.5 w-2/3 rounded bg-muted" />
-        <div className="h-2.5 w-full rounded bg-muted" />
-        <div className="h-2.5 w-11/12 rounded bg-muted" />
-        <div className="h-16 w-full rounded-lg bg-muted mt-3" />
-      </div>
-
-      {/* Extension sheet (appears above the address bar) */}
-      <div className="px-4 pb-2">
-        <div className="rounded-xl border border-border bg-background shadow-md p-2 motion-safe:animate-in motion-safe:slide-in-from-bottom-2 motion-safe:fade-in">
-          <div className="flex items-center gap-3 rounded-lg bg-[#2DB3A6]/10 px-3 py-2.5">
-            <img src={cookieYetiIcon} alt="" className="h-6 w-6 rounded" aria-hidden="true" />
-            <span className="text-sm font-semibold text-foreground">Cookie Yeti</span>
-            <ArrowRight className="h-4 w-4 ml-auto text-[#2DB3A6]" aria-hidden="true" />
-          </div>
-          <p className="px-3 pt-2 pb-1 text-[11px] text-muted-foreground">
-            Tap the puzzle icon below, then Cookie Yeti, to open your panel on any site.
-          </p>
-        </div>
-      </div>
-
-      {/* iOS Safari bottom address bar — the star of the show */}
-      <div className="flex items-center gap-2.5 px-3 pb-4 pt-2 bg-muted/60 border-t border-border">
-        <div className="relative shrink-0">
-          <span
-            className="absolute inset-0 rounded-lg motion-safe:animate-ping bg-[#2DB3A6]/30"
-            aria-hidden="true"
-          />
-          <span className="relative flex h-10 w-10 items-center justify-center rounded-lg border-2 border-[#2DB3A6] bg-[#2DB3A6]/10">
-            <Puzzle className="h-5 w-5 text-[#2DB3A6]" aria-hidden="true" />
-          </span>
-        </div>
-        <div className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-background border border-border px-3 py-2.5 text-sm text-muted-foreground min-w-0">
-          <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span className="truncate">demo-site.example</span>
-        </div>
-        <RotateCcw className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </div>
-      {/* Home indicator */}
-      <div className="pb-2 bg-muted/60">
-        <div className="mx-auto h-1 w-24 rounded-full bg-foreground/20" aria-hidden="true" />
-      </div>
-    </div>
-  );
-}
 
 function FakeBannerDemo({
   stage,
@@ -275,16 +223,22 @@ export default function CookieYetiGetStarted() {
             </h2>
           </div>
           <p className="mt-3 text-muted-foreground leading-relaxed">
-            On your iPhone, Cookie Yeti lives behind the puzzle-piece extensions icon in
-            Safari's address bar — at the bottom of your screen. Tap it on any site, then
-            tap <strong className="text-foreground">Cookie Yeti</strong> to open your panel —
-            your privacy mode, stats, and the report button are all in there.
+            On your iPhone, tap the menu button in Safari's address bar — at the bottom of
+            your screen — then tap <strong className="text-foreground">Cookie Yeti</strong> to
+            open your panel. Your privacy mode, stats, and the report button are all in there.
           </p>
           <div className="mt-5 grid gap-6 sm:grid-cols-2 sm:items-start">
             <div>
-              <SafariToolbarMock />
+              <img
+                src={safariMenuShot}
+                alt="Real screenshot of Safari on iPhone with the page menu open, showing the Cookie Yeti entry alongside Manage Extensions."
+                className="mx-auto max-w-[320px] w-full rounded-[2rem] border-2 border-border shadow-sm"
+                width={414}
+                height={900}
+                loading="lazy"
+              />
               <p className="mt-2 text-center text-xs text-muted-foreground">
-                In Safari: the puzzle icon, bottom address bar
+                In Safari: address bar menu → <span className="text-[#2DB3A6] font-semibold">Cookie Yeti</span>
               </p>
             </div>
             <div>
@@ -313,8 +267,19 @@ export default function CookieYetiGetStarted() {
           </div>
           <p className="mt-3 text-muted-foreground leading-relaxed">
             Cookie Yeti handles almost every consent pop-up before you notice it. But
-            once in a while a site uses a banner the yeti hasn't learned yet. Below is a
-            safe, fake example — this is what slipping through looks like.
+            once in a while a site uses a banner the yeti hasn't learned yet. Here's a
+            real one in the wild — and below, a safe fake example you can practice on.
+          </p>
+          <img
+            src={safariBannerShot}
+            alt="Real screenshot of Safari on iPhone showing a website with a cookie consent banner at the bottom of the page, above the address bar."
+            className="mt-5 mx-auto max-w-[320px] w-full rounded-[2rem] border-2 border-border shadow-sm"
+            width={414}
+            height={900}
+            loading="lazy"
+          />
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            A real cookie banner, doing its best to interrupt you
           </p>
         </AnimatedSection>
 
@@ -327,17 +292,35 @@ export default function CookieYetiGetStarted() {
             </h2>
           </div>
           <p className="mt-3 text-muted-foreground leading-relaxed">
-            One tap teaches the yeti. Practice the real flow on this demo: open the
-            Cookie Yeti panel, then hit <strong className="text-foreground">Report missed banner</strong>.
-            Nothing is actually sent — it's just for practice.
+            One tap teaches the yeti. This is the real panel — see the{" "}
+            <strong className="text-foreground">Report a missed banner</strong> button?
+            Try the flow on the practice demo next to it. Nothing is actually sent.
           </p>
-          <div className="mt-5">
-            <FakeBannerDemo
-              stage={stage}
-              onOpenPanel={() => setStage("panel")}
-              onReport={() => setStage("reported")}
-              onReset={() => setStage("banner")}
-            />
+          <div className="mt-5 grid gap-6 sm:grid-cols-2 sm:items-start">
+            <div>
+              <img
+                src={panelReportShot}
+                alt="Real screenshot of the Cookie Yeti panel open in Safari on iPhone, showing the Active status, the Report a missed banner button, and the banners-handled counter."
+                className="mx-auto max-w-[320px] w-full rounded-[2rem] border-2 border-border shadow-sm"
+                width={414}
+                height={900}
+                loading="lazy"
+              />
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                The real panel — <span className="text-[#2DB3A6] font-semibold">Report a missed banner</span> is one tap
+              </p>
+            </div>
+            <div>
+              <FakeBannerDemo
+                stage={stage}
+                onOpenPanel={() => setStage("panel")}
+                onReport={() => setStage("reported")}
+                onReset={() => setStage("banner")}
+              />
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                Practice here — it's just a demo
+              </p>
+            </div>
           </div>
           <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
             <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />
