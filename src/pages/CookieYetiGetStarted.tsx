@@ -10,6 +10,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
+import settingsScreenshot from "@/assets/cookieyeti-settings-iphone.png";
 import {
   Puzzle,
   Cookie,
@@ -36,44 +37,52 @@ const TEAL = "#2DB3A6";
 function SafariToolbarMock() {
   return (
     <div
-      className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden"
+      className="mx-auto max-w-[320px] rounded-[2rem] border-2 border-border bg-card shadow-sm overflow-hidden"
       role="img"
-      aria-label="Illustration of the Safari toolbar. The extensions puzzle icon sits to the left of the address bar. Tapping it reveals Cookie Yeti."
+      aria-label="Illustration of Safari on iPhone. The extensions puzzle icon sits on the left side of the address bar at the bottom of the screen. Tapping it reveals Cookie Yeti."
     >
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-muted/60 border-b border-border">
-        <div className="hidden sm:flex items-center gap-1.5" aria-hidden="true">
-          <span className="h-3 w-3 rounded-full bg-red-400/80" />
-          <span className="h-3 w-3 rounded-full bg-yellow-400/80" />
-          <span className="h-3 w-3 rounded-full bg-green-400/80" />
-        </div>
-        {/* The star of the show: the puzzle icon */}
-        <div className="relative shrink-0">
-          <span
-            className="absolute inset-0 rounded-lg motion-safe:animate-ping bg-[#2DB3A6]/30"
-            aria-hidden="true"
-          />
-          <span className="relative flex h-9 w-9 items-center justify-center rounded-lg border-2 border-[#2DB3A6] bg-[#2DB3A6]/10">
-            <Puzzle className="h-5 w-5 text-[#2DB3A6]" aria-hidden="true" />
-          </span>
-        </div>
-        <div className="flex-1 flex items-center gap-2 rounded-lg bg-background border border-border px-3 py-1.5 text-sm text-muted-foreground min-w-0">
-          <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span className="truncate">demo-site.example</span>
-        </div>
+      {/* Mock page content (phone screen) */}
+      <div className="px-5 pt-6 pb-3 space-y-2.5 opacity-50" aria-hidden="true">
+        <div className="h-3.5 w-2/3 rounded bg-muted" />
+        <div className="h-2.5 w-full rounded bg-muted" />
+        <div className="h-2.5 w-11/12 rounded bg-muted" />
+        <div className="h-16 w-full rounded-lg bg-muted mt-3" />
       </div>
-      {/* Dropdown hint */}
-      <div className="px-4 py-4 sm:px-6">
-        <div className="max-w-xs rounded-xl border border-border bg-background shadow-md p-2">
+
+      {/* Extension sheet (appears above the address bar) */}
+      <div className="px-4 pb-2">
+        <div className="rounded-xl border border-border bg-background shadow-md p-2 motion-safe:animate-in motion-safe:slide-in-from-bottom-2 motion-safe:fade-in">
           <div className="flex items-center gap-3 rounded-lg bg-[#2DB3A6]/10 px-3 py-2.5">
             <img src={cookieYetiIcon} alt="" className="h-6 w-6 rounded" aria-hidden="true" />
             <span className="text-sm font-semibold text-foreground">Cookie Yeti</span>
             <ArrowRight className="h-4 w-4 ml-auto text-[#2DB3A6]" aria-hidden="true" />
           </div>
-          <p className="px-3 pt-2 pb-1 text-xs text-muted-foreground">
-            Tap the puzzle icon, then Cookie Yeti, to open your panel on any site.
+          <p className="px-3 pt-2 pb-1 text-[11px] text-muted-foreground">
+            Tap the puzzle icon below, then Cookie Yeti, to open your panel on any site.
           </p>
         </div>
+      </div>
+
+      {/* iOS Safari bottom address bar — the star of the show */}
+      <div className="flex items-center gap-2.5 px-3 pb-4 pt-2 bg-muted/60 border-t border-border">
+        <div className="relative shrink-0">
+          <span
+            className="absolute inset-0 rounded-lg motion-safe:animate-ping bg-[#2DB3A6]/30"
+            aria-hidden="true"
+          />
+          <span className="relative flex h-10 w-10 items-center justify-center rounded-lg border-2 border-[#2DB3A6] bg-[#2DB3A6]/10">
+            <Puzzle className="h-5 w-5 text-[#2DB3A6]" aria-hidden="true" />
+          </span>
+        </div>
+        <div className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-background border border-border px-3 py-2.5 text-sm text-muted-foreground min-w-0">
+          <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">demo-site.example</span>
+        </div>
+        <RotateCcw className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </div>
+      {/* Home indicator */}
+      <div className="pb-2 bg-muted/60">
+        <div className="mx-auto h-1 w-24 rounded-full bg-foreground/20" aria-hidden="true" />
       </div>
     </div>
   );
@@ -209,8 +218,8 @@ const FAQ = [
     a: "No — Cookie Yeti handles the vast majority automatically. Reporting is just for the rare stragglers. One report per site is plenty; our system takes it from there.",
   },
   {
-    q: "Where is the panel on iPhone vs Mac?",
-    a: "Same place on both: the puzzle-piece extensions icon in Safari's toolbar (in the address bar on iPhone, top toolbar on Mac). Tap it, then tap Cookie Yeti.",
+    q: "I don't see the puzzle icon — where is it?",
+    a: "In Safari on iPhone, the puzzle-piece icon sits on the left side of the address bar at the bottom of your screen. If it's not there, make sure the extension is enabled: Settings → Apps → Safari → Extensions → Cookie Yeti → Allow Extension.",
   },
 ];
 
@@ -266,12 +275,31 @@ export default function CookieYetiGetStarted() {
             </h2>
           </div>
           <p className="mt-3 text-muted-foreground leading-relaxed">
-            Cookie Yeti lives behind Safari's puzzle-piece extensions icon, right next
-            to the address bar. Tap it on any site, then tap <strong className="text-foreground">Cookie Yeti</strong> to
-            open your panel — your privacy mode, stats, and the report button are all in there.
+            On your iPhone, Cookie Yeti lives behind the puzzle-piece extensions icon in
+            Safari's address bar — at the bottom of your screen. Tap it on any site, then
+            tap <strong className="text-foreground">Cookie Yeti</strong> to open your panel —
+            your privacy mode, stats, and the report button are all in there.
           </p>
-          <div className="mt-5">
-            <SafariToolbarMock />
+          <div className="mt-5 grid gap-6 sm:grid-cols-2 sm:items-start">
+            <div>
+              <SafariToolbarMock />
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                In Safari: the puzzle icon, bottom address bar
+              </p>
+            </div>
+            <div>
+              <img
+                src={settingsScreenshot}
+                alt="Real screenshot of the Cookie Yeti app's Settings tab on iPhone, showing Extension Status as Active in Safari and the three privacy modes."
+                className="mx-auto max-w-[320px] w-full rounded-[2rem] border-2 border-border shadow-sm"
+                width={415}
+                height={900}
+                loading="lazy"
+              />
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                In the app: confirm you're <span className="text-[#2DB3A6] font-semibold">Active in Safari</span>
+              </p>
+            </div>
           </div>
         </AnimatedSection>
 
