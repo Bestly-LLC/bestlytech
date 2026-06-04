@@ -205,8 +205,8 @@ export default function CookieYetiGetStarted() {
               You're protected.
             </h1>
             <p className="mt-3 text-lg text-muted-foreground max-w-xl mx-auto">
-              Here's the 60-second tour — where Cookie Yeti lives in Safari, and the
-              one tap that makes it smarter.
+              Setup's done — this page is your practice run. In fact, Cookie Yeti
+              probably just handled this site's cookie banner before you noticed.
             </p>
           </AnimatedSection>
         </div>
@@ -219,13 +219,14 @@ export default function CookieYetiGetStarted() {
           <div className="flex items-center gap-3">
             <StepBadge n={1} />
             <h2 className="text-2xl font-bold tracking-tight text-foreground">
-              Find your panel — the puzzle icon
+              Open your panel — right now
             </h2>
           </div>
           <p className="mt-3 text-muted-foreground leading-relaxed">
-            On your iPhone, tap the menu button in Safari's address bar — at the bottom of
-            your screen — then tap <strong className="text-foreground">Cookie Yeti</strong> to
-            open your panel. Your privacy mode, stats, and the report button are all in there.
+            You're already in Safari, so try it on this very page: tap the menu button in
+            the address bar at the bottom of your screen, then tap{" "}
+            <strong className="text-foreground">Cookie Yeti</strong>. Your panel opens with
+            live stats — banners handled, your privacy mode, and the report button.
           </p>
           <div className="mt-5 grid gap-6 sm:grid-cols-2 sm:items-start">
             <div>
@@ -238,20 +239,20 @@ export default function CookieYetiGetStarted() {
                 loading="lazy"
               />
               <p className="mt-2 text-center text-xs text-muted-foreground">
-                In Safari: address bar menu → <span className="text-[#2DB3A6] font-semibold">Cookie Yeti</span>
+                1. Address bar menu → <span className="text-[#2DB3A6] font-semibold">Cookie Yeti</span>
               </p>
             </div>
             <div>
               <img
-                src={settingsScreenshot}
-                alt="Real screenshot of the Cookie Yeti app's Settings tab on iPhone, showing Extension Status as Active in Safari and the three privacy modes."
+                src={panelReportShot}
+                alt="Real screenshot of the Cookie Yeti panel open in Safari on iPhone, showing the Active status, live stats, and the Report a missed banner button."
                 className="mx-auto max-w-[320px] w-full rounded-[2rem] border-2 border-border shadow-sm"
-                width={415}
+                width={414}
                 height={900}
                 loading="lazy"
               />
               <p className="mt-2 text-center text-xs text-muted-foreground">
-                In the app: confirm you're <span className="text-[#2DB3A6] font-semibold">Active in Safari</span>
+                2. Your panel: stats, mode, and <span className="text-[#2DB3A6] font-semibold">Report a missed banner</span>
               </p>
             </div>
           </div>
@@ -292,40 +293,52 @@ export default function CookieYetiGetStarted() {
             </h2>
           </div>
           <p className="mt-3 text-muted-foreground leading-relaxed">
-            One tap teaches the yeti. This is the real panel — see the{" "}
-            <strong className="text-foreground">Report a missed banner</strong> button?
-            Try the flow on the practice demo next to it. Nothing is actually sent.
+            One tap teaches the yeti. You saw the{" "}
+            <strong className="text-foreground">Report a missed banner</strong> button in
+            your panel in step 1 — practice the whole flow safely on the demo below.
+            Nothing is actually sent.
           </p>
-          <div className="mt-5 grid gap-6 sm:grid-cols-2 sm:items-start">
-            <div>
-              <img
-                src={panelReportShot}
-                alt="Real screenshot of the Cookie Yeti panel open in Safari on iPhone, showing the Active status, the Report a missed banner button, and the banners-handled counter."
-                className="mx-auto max-w-[320px] w-full rounded-[2rem] border-2 border-border shadow-sm"
-                width={414}
-                height={900}
-                loading="lazy"
-              />
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                The real panel — <span className="text-[#2DB3A6] font-semibold">Report a missed banner</span> is one tap
-              </p>
-            </div>
-            <div>
-              <FakeBannerDemo
-                stage={stage}
-                onOpenPanel={() => setStage("panel")}
-                onReport={() => setStage("reported")}
-                onReset={() => setStage("banner")}
-              />
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                Practice here — it's just a demo
-              </p>
-            </div>
+          <div className="mt-5 max-w-xl mx-auto">
+            <FakeBannerDemo
+              stage={stage}
+              onOpenPanel={() => setStage("panel")}
+              onReport={() => setStage("reported")}
+              onReset={() => setStage("banner")}
+            />
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              Practice here — it's just a demo
+            </p>
           </div>
           <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
             <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />
             Real reports send only the banner's pattern and the site's domain — never your personal data.
           </p>
+        </AnimatedSection>
+
+        {/* Troubleshooting */}
+        <AnimatedSection delay={180}>
+          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+            <h2 className="text-xl font-bold tracking-tight text-foreground">
+              Don't see Cookie Yeti in the menu?
+            </h2>
+            <div className="mt-4 grid gap-6 sm:grid-cols-2 sm:items-center">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Open the Cookie Yeti app and check the Settings tab — Extension Status
+                should read <strong className="text-foreground">Active in Safari</strong>.
+                If it doesn't, tap{" "}
+                <strong className="text-foreground">Open Safari Extension Settings</strong>{" "}
+                and flip the toggle on, then come back to this page and try again.
+              </p>
+              <img
+                src={settingsScreenshot}
+                alt="Real screenshot of the Cookie Yeti app's Settings tab on iPhone, showing Extension Status as Active in Safari and the three privacy modes."
+                className="mx-auto max-w-[240px] w-full rounded-[1.5rem] border-2 border-border shadow-sm"
+                width={415}
+                height={900}
+                loading="lazy"
+              />
+            </div>
+          </div>
         </AnimatedSection>
 
         {/* FAQ */}
