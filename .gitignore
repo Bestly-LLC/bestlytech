@@ -44,3 +44,10 @@ scripts/pihole_push.log
 # Sibling repo with its own git remote (lives inside this folder
 # for sandbox-path convenience; not part of the bestlytech site).
 /nextcloud-talk-transcripts/
+
+# Test/build artifacts (project-mover housekeeping 2026-06-04)
+playwright-report/
+test-results/
+supabase/.temp/
+.render/
+.sweep-stage/
