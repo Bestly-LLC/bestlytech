@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { cyProd } from "@/integrations/supabase/cyProdClient";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ export default function CYGrantedAccess() {
   }, []);
 
   const loadData = async () => {
-    const { data, error } = await supabase.from("granted_access").select("*").order("created_at", { ascending: false });
+    const { data, error } = await cyProd.from("granted_access").select("*").order("created_at", { ascending: false });
     if (error) toast({ title: "Failed to load data", description: error.message, variant: "destructive" });
     setData(data || []);
     setLoading(false);
@@ -45,7 +46,7 @@ export default function CYGrantedAccess() {
 
   const handleGrant = async () => {
     if (!email.trim()) return;
-    const { error } = await supabase.from("granted_access").insert({
+    const { error } = await cyProd.from("granted_access").insert({
       email: email.trim().toLowerCase(),
       granted_by: "admin",
       reason: reason || null,
@@ -61,14 +62,14 @@ export default function CYGrantedAccess() {
   };
 
   const revoke = async (id: string) => {
-    await supabase.from("granted_access").delete().eq("id", id);
+    await cyProd.from("granted_access").delete().eq("id", id);
     toast({ title: "Access Revoked" });
     loadData();
   };
 
   const bulkRevoke = async () => {
     const ids = Array.from(selected);
-    const { error } = await supabase.from("granted_access").delete().in("id", ids);
+    const { error } = await cyProd.from("granted_access").delete().in("id", ids);
     if (error) {
       toast({ title: "Bulk revoke failed", description: error.message, variant: "destructive" });
       return;
@@ -109,6 +110,11 @@ export default function CYGrantedAccess() {
       <Card className="border-border/50">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold">Grant Premium Access</CardTitle>
+          <CardDescription className="text-xs text-amber-600">
+            Now writing to the Cookie Yeti production database. Writes are currently blocked by
+            RLS until the production service-role path is configured — reads are live, but
+            grant/revoke will error. (CY-ADMIN-01)
+          </CardDescription>
           <CardDescription className="text-xs">Add an email to give immediate premium access.</CardDescription>
         </CardHeader>
         <CardContent>

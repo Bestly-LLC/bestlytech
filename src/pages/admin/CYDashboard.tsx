@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { cyProd } from "@/integrations/supabase/cyProdClient";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -86,8 +87,8 @@ export default function CYDashboard() {
   const loadData = async () => {
     // Original data
     const [{ data: s }, { data: g }] = await Promise.all([
-      supabase.from("subscriptions").select("*").order("created_at", { ascending: false }),
-      supabase.from("granted_access").select("*").order("created_at", { ascending: false }),
+      cyProd.from("subscriptions").select("*").order("created_at", { ascending: false }),
+      cyProd.from("granted_access").select("*").order("created_at", { ascending: false }),
     ]);
     setSubs(s || []);
     setGrants(g || []);
@@ -98,27 +99,27 @@ export default function CYDashboard() {
       missed, patterns, devices, push, activations,
       aiLogs, topDomains, allActivePatterns, permFailed, genCandidates,
     ] = await Promise.all([
-      supabase.from("cookie_patterns").select("id", { count: "exact", head: true }),
-      supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("is_active", true),
-      supabase.from("dismissal_reports").select("id", { count: "exact", head: true }),
+      cyProd.from("cookie_patterns").select("id", { count: "exact", head: true }),
+      cyProd.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("is_active", true),
+      cyProd.from("dismissal_reports").select("id", { count: "exact", head: true }),
       supabase.from("ai_generation_log").select("id", { count: "exact", head: true }),
       supabase.from("ai_generation_log").select("id", { count: "exact", head: true }).eq("status", "success"),
       supabase.from("pattern_fix_log").select("id", { count: "exact", head: true }).eq("success", true),
-      supabase.from("missed_banner_reports").select("*").eq("resolved", false).order("report_count", { ascending: false }).limit(10) as any,
-      supabase.from("cookie_patterns").select("*").eq("is_active", true).order("report_count", { ascending: false }).limit(10) as any,
-      supabase.from("device_registrations").select("id", { count: "exact", head: true }),
-      supabase.from("device_tokens").select("id", { count: "exact", head: true }),
-      supabase.from("activation_codes").select("id", { count: "exact", head: true }).eq("active", true),
+      cyProd.from("missed_banner_reports").select("*").eq("resolved", false).order("report_count", { ascending: false }).limit(10) as any,
+      cyProd.from("cookie_patterns").select("*").eq("is_active", true).order("report_count", { ascending: false }).limit(10) as any,
+      cyProd.from("device_registrations").select("id", { count: "exact", head: true }),
+      cyProd.from("device_tokens").select("id", { count: "exact", head: true }),
+      cyProd.from("activation_codes").select("id", { count: "exact", head: true }).eq("active", true),
       // New: AI status breakdown for PipelineHealthRing
       supabase.from("ai_generation_log").select("status"),
       // New: Domain coverage for PatternCoverageGrid
-      supabase.rpc("get_top_domains" as any, { p_limit: 50 }),
+      cyProd.rpc("get_top_domains" as any, { p_limit: 50 }),
       // New: All active patterns for SmartAlerts
-      supabase.from("cookie_patterns").select("domain, confidence, is_active, success_count, report_count").eq("is_active", true),
+      cyProd.from("cookie_patterns").select("domain, confidence, is_active, success_count, report_count").eq("is_active", true),
       // New: Permanently failed count
       supabase.from("ai_generation_log").select("id", { count: "exact", head: true }).eq("status", "permanently_failed"),
       // New: Candidate count for operations panel
-      supabase.from("missed_banner_reports").select("id", { count: "exact", head: true }).eq("resolved", false),
+      cyProd.from("missed_banner_reports").select("id", { count: "exact", head: true }).eq("resolved", false),
     ]);
 
     // Log any query errors for debugging
@@ -165,7 +166,7 @@ export default function CYDashboard() {
 
   const handleGrant = async () => {
     if (!grantEmail) return;
-    const { error } = await supabase.from("granted_access").insert({
+    const { error } = await cyProd.from("granted_access").insert({
       email: grantEmail.trim().toLowerCase(),
       granted_by: "admin",
       reason: grantReason || null,

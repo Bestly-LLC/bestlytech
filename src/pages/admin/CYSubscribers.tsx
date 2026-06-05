@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { cyProd } from "@/integrations/supabase/cyProdClient";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -50,14 +51,14 @@ export default function CYSubscribers() {
   const [activationCodes, setActivationCodes] = useState<any[]>([]);
 
   const fetchSubscriptions = useCallback(async () => {
-    const { data, error } = await supabase.from("subscriptions").select("*").order("created_at", { ascending: false });
+    const { data, error } = await cyProd.from("subscriptions").select("*").order("created_at", { ascending: false });
     if (error) console.error("Failed to load subscribers", error);
     setData(data || []);
     setLoading(false);
   }, []);
 
   const fetchActivationCodes = useCallback(async () => {
-    const { data, error } = await supabase
+    const { data, error } = await cyProd
       .from("activation_codes")
       .select("*")
       .order("created_at", { ascending: false });
@@ -66,14 +67,14 @@ export default function CYSubscribers() {
   }, []);
 
   const fetchGrantedAccess = useCallback(async () => {
-    const { data, error } = await supabase.from("granted_access").select("*").order("created_at", { ascending: false });
+    const { data, error } = await cyProd.from("granted_access").select("*").order("created_at", { ascending: false });
     if (error) console.error("Failed to load granted access", error);
     setGrantedAccess(data || []);
   }, []);
 
   const fetchWebhookEvents = useCallback(async () => {
     setWebhookLoading(true);
-    const { data, error } = await supabase.from("webhook_events" as any).select("*").order("created_at", { ascending: false }).limit(20);
+    const { data, error } = await cyProd.from("webhook_events" as any).select("*").order("created_at", { ascending: false }).limit(20);
     if (error) console.error("Failed to load webhook events", error);
     setWebhookEvents((data as any[]) || []);
     setWebhookLoading(false);
@@ -90,7 +91,7 @@ export default function CYSubscribers() {
     if (!grantEmail.trim()) { toast.error("Email is required"); return; }
     setGranting(true);
     try {
-      const { error } = await supabase.from("granted_access").insert({
+      const { error } = await cyProd.from("granted_access").insert({
         email: grantEmail.toLowerCase().trim(),
         reason: grantReason.trim() || "Manual grant",
         granted_by: "admin",
@@ -108,7 +109,7 @@ export default function CYSubscribers() {
   };
 
   const handleRevokeAccess = async (id: string, email: string) => {
-    const { error } = await supabase.from("granted_access").delete().eq("id", id);
+    const { error } = await cyProd.from("granted_access").delete().eq("id", id);
     if (error) { toast.error(`Failed to revoke: ${error.message}`); return; }
     toast.success(`Access revoked for ${email}`);
     fetchGrantedAccess();
