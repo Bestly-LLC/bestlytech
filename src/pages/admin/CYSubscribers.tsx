@@ -57,19 +57,22 @@ export default function CYSubscribers() {
     setLoading(false);
   }, []);
 
+  // CY-ADMIN-02: activation_codes + granted_access are RLS-restricted on
+  // production; read them through the admin-gated cy-admin proxy.
   const fetchActivationCodes = useCallback(async () => {
-    const { data, error } = await cyProd
-      .from("activation_codes")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) console.error("Failed to load activation codes", error);
-    setActivationCodes(data || []);
+    const { data: res, error } = await supabase.functions.invoke("cy-admin", {
+      body: { action: "list_activation_codes" },
+    });
+    if (error || res?.error) console.error("Failed to load activation codes", error || res);
+    setActivationCodes(res?.data || []);
   }, []);
 
   const fetchGrantedAccess = useCallback(async () => {
-    const { data, error } = await cyProd.from("granted_access").select("*").order("created_at", { ascending: false });
-    if (error) console.error("Failed to load granted access", error);
-    setGrantedAccess(data || []);
+    const { data: res, error } = await supabase.functions.invoke("cy-admin", {
+      body: { action: "list_granted" },
+    });
+    if (error || res?.error) console.error("Failed to load granted access", error || res);
+    setGrantedAccess(res?.data || []);
   }, []);
 
   const fetchWebhookEvents = useCallback(async () => {
@@ -91,12 +94,10 @@ export default function CYSubscribers() {
     if (!grantEmail.trim()) { toast.error("Email is required"); return; }
     setGranting(true);
     try {
-      const { error } = await cyProd.from("granted_access").insert({
-        email: grantEmail.toLowerCase().trim(),
-        reason: grantReason.trim() || "Manual grant",
-        granted_by: "admin",
+      const { data: res, error } = await supabase.functions.invoke("cy-admin", {
+        body: { action: "grant", email: grantEmail.toLowerCase().trim(), reason: grantReason.trim() || "Manual grant" },
       });
-      if (error) throw error;
+      if (error || res?.error) throw new Error(error?.message || res?.message || res?.error);
       toast.success(`Access granted to ${grantEmail}`);
       setGrantEmail("");
       setGrantReason("");
@@ -108,9 +109,11 @@ export default function CYSubscribers() {
     }
   };
 
-  const handleRevokeAccess = async (id: string, email: string) => {
-    const { error } = await cyProd.from("granted_access").delete().eq("id", id);
-    if (error) { toast.error(`Failed to revoke: ${error.message}`); return; }
+  const handleRevokeAccess = async (_id: string, email: string) => {
+    const { data: res, error } = await supabase.functions.invoke("cy-admin", {
+      body: { action: "revoke", email },
+    });
+    if (error || res?.error) { toast.error(`Failed to revoke: ${error?.message || res?.message || res?.error}`); return; }
     toast.success(`Access revoked for ${email}`);
     fetchGrantedAccess();
   };
