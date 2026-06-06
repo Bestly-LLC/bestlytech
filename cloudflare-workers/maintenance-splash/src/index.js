@@ -11,6 +11,27 @@
 
 export default {
   async fetch(request, env, ctx) {
+    // CRITICAL: WebSocket upgrades must pass through untouched. Wrapping them
+    // in `await fetch(request)` then inspecting `response.status` consumes the
+    // upgrade handshake and the client gets 400. This breaks Nextcloud Talk's
+    // /standalone-signaling/spreed WebSocket — i.e. "Connection failed" in Talk.
+    //
+    // Same applies to any other Upgrade: header (h2c, etc.). Short-circuit.
+    const upgrade = request.headers.get('Upgrade');
+    if (upgrade) {
+      const resp = await fetch(request);
+      // Add diagnostic header so we can confirm this branch ran.
+      // Browsers can see this in DevTools. Safe to remove later.
+      const newHeaders = new Headers(resp.headers);
+      newHeaders.set('x-bestly-worker', 'ws-passthrough-v2');
+      return new Response(resp.body, {
+        status: resp.status,
+        statusText: resp.statusText,
+        headers: newHeaders,
+        webSocket: resp.webSocket,
+      });
+    }
+
     let response;
     try {
       response = await fetch(request);

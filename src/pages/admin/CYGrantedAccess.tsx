@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { cyProd } from "@/integrations/supabase/cyProdClient";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,26 +36,22 @@ export default function CYGrantedAccess() {
     loadData();
   }, []);
 
-  // CY-ADMIN-02: granted_access lives on production behind RLS. Reads/writes
-  // go through the admin-gated cy-admin edge function (service-role proxy).
   const loadData = async () => {
-    const { data: res, error } = await supabase.functions.invoke("cy-admin", {
-      body: { action: "list_granted" },
-    });
-    if (error || res?.error) {
-      toast({ title: "Failed to load data", description: error?.message || res?.message || res?.error, variant: "destructive" });
-    }
-    setData(res?.data || []);
+    const { data, error } = await supabase.from("granted_access").select("*").order("created_at", { ascending: false });
+    if (error) toast({ title: "Failed to load data", description: error.message, variant: "destructive" });
+    setData(data || []);
     setLoading(false);
   };
 
   const handleGrant = async () => {
     if (!email.trim()) return;
-    const { data: res, error } = await supabase.functions.invoke("cy-admin", {
-      body: { action: "grant", email: email.trim().toLowerCase(), reason: reason || "admin grant" },
+    const { error } = await supabase.from("granted_access").insert({
+      email: email.trim().toLowerCase(),
+      granted_by: "admin",
+      reason: reason || null,
     });
-    if (error || res?.error) {
-      toast({ title: "Error", description: error?.message || res?.message || res?.error, variant: "destructive" });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Access Granted" });
       setEmail("");
@@ -65,25 +60,21 @@ export default function CYGrantedAccess() {
     }
   };
 
-  const revoke = async (_id: string, rowEmail?: string) => {
-    const { data: res, error } = await supabase.functions.invoke("cy-admin", {
-      body: { action: "revoke", email: rowEmail },
-    });
-    if (error || res?.error) {
-      toast({ title: "Revoke failed", description: error?.message || res?.message || res?.error, variant: "destructive" });
-      return;
-    }
+  const revoke = async (id: string) => {
+    await supabase.from("granted_access").delete().eq("id", id);
     toast({ title: "Access Revoked" });
     loadData();
   };
 
   const bulkRevoke = async () => {
-    const emails = data.filter((r) => selected.has(r.id)).map((r) => r.email);
-    for (const em of emails) {
-      await supabase.functions.invoke("cy-admin", { body: { action: "revoke", email: em } });
+    const ids = Array.from(selected);
+    const { error } = await supabase.from("granted_access").delete().in("id", ids);
+    if (error) {
+      toast({ title: "Bulk revoke failed", description: error.message, variant: "destructive" });
+      return;
     }
     setSelected(new Set());
-    toast({ title: `Revoked ${emails.length} entries` });
+    toast({ title: `Revoked ${ids.length} entries` });
     loadData();
   };
 
@@ -118,10 +109,6 @@ export default function CYGrantedAccess() {
       <Card className="border-border/50">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold">Grant Premium Access</CardTitle>
-          <CardDescription className="text-xs text-muted-foreground">
-            Grants comp access on the Cookie Yeti production database via the secure
-            admin proxy. The extension checks this list before requiring an activation code.
-          </CardDescription>
           <CardDescription className="text-xs">Add an email to give immediate premium access.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -208,7 +195,7 @@ export default function CYGrantedAccess() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => revoke(d.id, d.email)}>Revoke</AlertDialogAction>
+                          <AlertDialogAction onClick={() => revoke(d.id)}>Revoke</AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
