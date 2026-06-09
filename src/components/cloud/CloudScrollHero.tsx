@@ -167,9 +167,15 @@ export function CloudScrollHero() {
       resize();
       const p = reduce ? 0.18 : progress.current;
 
-      // Throughout: slow turntable + power-on glow
-      device.rotation.y = -0.5 + p * Math.PI * 2;
-      device.rotation.x = 0.05 + Math.sin(p * Math.PI) * 0.04;
+      // Throughout: slow turntable + power-on glow.
+      // As the bird's-eye arrives, the spin settles so the device ends
+      // perfectly parallel with the page (portrait, fins up).
+      const straighten = easeInOut(clamp01((p - 0.55) / 0.4));
+      const spin = -0.5 + p * Math.PI * 2;
+      const target = -Math.PI / 2;
+      const goal = target + Math.round((spin - target) / (Math.PI * 2)) * Math.PI * 2;
+      device.rotation.y = spin + (goal - spin) * straighten;
+      device.rotation.x = (0.05 + Math.sin(p * Math.PI) * 0.04) * (1 - straighten);
       device.position.y = Math.sin(p * Math.PI) * 0.04;
       const glow = Math.min(1, p * 1.6);
       rim.intensity = glow * 3.4;
@@ -193,7 +199,7 @@ export function CloudScrollHero() {
       }
       const polar = 1.4 - arc * 1.25; // ~80° → ~9° from vertical
       const radius = 6.3 - arc * 1.1; // dolly in as we rise
-      const azim = arc * 0.3; // slight sideways drift for spatial continuity
+      const azim = Math.sin(arc * Math.PI) * 0.25; // drifts out, returns to straight-on
       camera.position.set(
         radius * Math.sin(polar) * Math.sin(azim),
         radius * Math.cos(polar),
