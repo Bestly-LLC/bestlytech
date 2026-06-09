@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronDown } from "lucide-react";
 import { useReducedMotion } from "framer-motion";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -24,6 +24,7 @@ export function CloudScrollHero() {
   const subRef = useRef<HTMLParagraphElement>(null);
   const ebRef = useRef<HTMLParagraphElement>(null);
   const capRef = useRef<HTMLParagraphElement>(null);
+  const hintRef = useRef<HTMLDivElement>(null);
   const progress = useRef(0);
 
   useEffect(() => {
@@ -84,23 +85,29 @@ export function CloudScrollHero() {
     device.rotation.set(0.05, -0.5, 0);
     scene.add(device);
 
-    // Real device model (Tripo export → draco + webp, 96.7k tris, ~626 KB).
+    // Real device model, split into named "lid" + "base" nodes
+    // (Tripo export → Blender loose-part split → draco + webp, ~387k tris, ~1.8 MB).
     let cancelled = false;
+    let lid: THREE.Object3D | null = null;
+    // Lid travel in model-local units (model is ~1 unit wide pre-scale):
+    // starts almost seated on the base, floats up as you scroll.
+    const LID_CLOSED_Y = -0.115;
+    const LID_OPEN_Y = 0.32;
     const draco = new DRACOLoader();
     draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
     const loader = new GLTFLoader();
     loader.setDRACOLoader(draco);
-    loader.load("/models/device-web-hq.glb", (gltf) => {
+    loader.load("/models/device-web-split.glb", (gltf) => {
       if (cancelled) return;
       const model = gltf.scene;
-      // Normalize: fit largest dimension to ~2.1 world units, center on origin,
+      // Normalize: fit largest dimension to ~1.75 world units, center on origin,
       // then sit slightly low so the headline/CTA stay clear.
       const box = new THREE.Box3().setFromObject(model);
       const size = box.getSize(new THREE.Vector3());
       model.scale.setScalar(1.75 / Math.max(size.x, size.y, size.z));
       box.setFromObject(model);
       model.position.sub(box.getCenter(new THREE.Vector3()));
-      model.position.y -= 0.25;
+      model.position.y -= 0.2;
       // Keep the model above the shadow ground plane.
       box.setFromObject(model);
       if (box.min.y < -0.88) model.position.y += -0.88 - box.min.y;
@@ -113,6 +120,8 @@ export function CloudScrollHero() {
           mats.forEach((m) => m && disposables.push(m));
         }
       });
+      lid = model.getObjectByName("lid") ?? null;
+      if (lid) lid.position.y = LID_CLOSED_Y;
       device.add(model);
     });
     disposables.push(draco);
@@ -132,19 +141,40 @@ export function CloudScrollHero() {
     };
 
     let raf = 0;
+    const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
+    const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
     const render = () => {
       resize();
-      const p = reduce ? 0.32 : progress.current;
+      const p = reduce ? 0.18 : progress.current;
+
+      // Throughout: slow turntable + power-on glow
       device.rotation.y = -0.5 + p * Math.PI * 2;
-      device.rotation.x = 0.05 + Math.sin(p * Math.PI) * 0.06;
-      device.position.y = Math.sin(p * Math.PI) * 0.05;
+      device.rotation.x = 0.05 + Math.sin(p * Math.PI) * 0.04;
+      device.position.y = Math.sin(p * Math.PI) * 0.04;
       const glow = Math.min(1, p * 1.6);
       rim.intensity = glow * 3.4;
-      camera.position.z = 6.2 - p * 0.8;
+
+      // 35% → 85%: the lid floats upward off the base
+      const lift = easeInOut(clamp01((p - 0.35) / 0.5));
+      if (lid) lid.position.y = LID_CLOSED_Y + lift * (LID_OPEN_Y - LID_CLOSED_Y);
+
+      // 40% → 100%: camera arcs overhead to a bird's-eye view of the internals
+      const arc = easeInOut(clamp01((p - 0.4) / 0.6));
+      const polar = 1.4 - arc * 1.25; // ~80° → ~9° from vertical
+      const radius = 6.3 - arc * 1.5; // dolly in as we rise
+      const azim = arc * 0.3; // slight sideways drift for spatial continuity
+      camera.position.set(
+        radius * Math.sin(polar) * Math.sin(azim),
+        radius * Math.cos(polar),
+        radius * Math.sin(polar) * Math.cos(azim)
+      );
+      camera.lookAt(0, -0.1, 0);
+
       if (!reduce) {
-        if (subRef.current) subRef.current.style.opacity = String(Math.max(0, 1 - p * 1.8));
-        if (ebRef.current) ebRef.current.style.opacity = String(Math.max(0, 1 - p * 2.5));
-        if (capRef.current) capRef.current.style.opacity = String(Math.min(1, Math.max(0, (p - 0.45) * 3)));
+        if (subRef.current) subRef.current.style.opacity = String(Math.max(0, 1 - p * 2.5));
+        if (ebRef.current) ebRef.current.style.opacity = String(Math.max(0, 1 - p * 3));
+        if (capRef.current) capRef.current.style.opacity = String(Math.min(1, Math.max(0, (p - 0.6) * 3.2)));
+        if (hintRef.current) hintRef.current.style.opacity = String(Math.max(0, 1 - p * 10));
       }
       renderer.render(scene, camera);
       raf = requestAnimationFrame(render);
@@ -175,7 +205,7 @@ export function CloudScrollHero() {
         <canvas
           ref={canvasRef}
           className="absolute inset-0 h-full w-full"
-          aria-label="A small Bestly server that powers on and rotates as you scroll"
+          aria-label="A small Bestly server that powers on, rotates, and opens its lid to reveal the internals from above as you scroll"
           role="img"
         />
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center px-6 pt-[7vh] text-center">
@@ -213,8 +243,18 @@ export function CloudScrollHero() {
             ))}
           </div>
           <p ref={capRef} className="absolute bottom-[8vh] left-1/2 -translate-x-1/2 text-sm text-muted-foreground" style={{ opacity: 0 }}>
-            Thirteen services. <span className="font-medium text-foreground">One small device.</span>
+            Look inside. <span className="font-medium text-foreground">Thirteen services, one small device.</span>
           </p>
+          {!reduce && (
+            <div
+              ref={hintRef}
+              className="absolute bottom-[3vh] left-1/2 flex -translate-x-1/2 flex-col items-center gap-1 text-xs font-medium uppercase tracking-widest text-muted-foreground"
+              aria-hidden="true"
+            >
+              Scroll
+              <ChevronDown className="h-4 w-4 animate-bounce motion-reduce:animate-none" />
+            </div>
+          )}
         </div>
         {/* fade into next section */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-background" aria-hidden="true" />
