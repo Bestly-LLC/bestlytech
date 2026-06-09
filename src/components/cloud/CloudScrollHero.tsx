@@ -3,19 +3,19 @@ import { Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { useReducedMotion } from "framer-motion";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { GradientText } from "@/components/ui/GradientText";
 
 /**
  * CloudScrollHero — Apple-style scroll-scrubbed product hero (Phase 1).
  *
- * A live WebGL render of the Bestly "small device" that powers on (indigo
- * accent + rim glow) and turns a full rotation as you scroll through a pinned
- * section. No render pipeline, no image sequence — the rotation maps 1:1 to
- * scroll. Under prefers-reduced-motion it collapses to a single static frame.
- *
- * Production note: the live model can later be swapped for a photoreal Blender
- * turntable + AR per docs/cloud-apple-grade-opusplan.md without touching the
- * surrounding copy/CTA layout.
+ * A live WebGL render of the Bestly device — the real photoreal GLB
+ * (public/models/device-web.glb, Tripo export → draco + webp, 96.7k tris,
+ * ~626 KB) — that powers on (rim glow) and turns a full rotation as you
+ * scroll through a pinned section. The rotation maps 1:1 to scroll. Under
+ * prefers-reduced-motion it collapses to a single static frame.
  */
 export function CloudScrollHero() {
   const reduce = useReducedMotion();
@@ -73,47 +73,47 @@ export function CloudScrollHero() {
     scene.add(ground);
 
     const disposables: Array<{ dispose: () => void }> = [];
-    const roundedBox = (w: number, h: number, d: number, r: number) => {
-      const s = new THREE.Shape();
-      const x = -w / 2, y = -h / 2;
-      s.moveTo(x + r, y);
-      s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
-      s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-      s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
-      s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
-      const g = new THREE.ExtrudeGeometry(s, {
-        depth: d, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 6, steps: 1,
-      });
-      g.center();
-      disposables.push(g);
-      return g;
-    };
+
+    // Soft studio environment so the model's PBR metals read correctly.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = envTex;
+    disposables.push(envTex, pmrem);
 
     const device = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x14161c, roughness: 0.42, metalness: 0.35 });
-    const topMat = new THREE.MeshStandardMaterial({ color: 0x222530, roughness: 0.28, metalness: 0.65 });
-    const accentMat = new THREE.MeshStandardMaterial({ color: 0x7a8be0, emissive: 0x7a8be0, emissiveIntensity: 0.2, roughness: 0.4 });
-    const dotMat = new THREE.MeshStandardMaterial({ color: 0x9fb0ff, emissive: 0x9fb0ff, emissiveIntensity: 0.3 });
-    disposables.push(bodyMat, topMat, accentMat, dotMat);
-
-    const body = new THREE.Mesh(roundedBox(2.7, 1.35, 1.5, 0.2), bodyMat);
-    body.castShadow = true;
-    device.add(body);
-    const top = new THREE.Mesh(roundedBox(2.3, 0.06, 1.18, 0.1), topMat);
-    top.position.y = 0.7;
-    device.add(top);
-    const accentGeo = new THREE.BoxGeometry(1.8, 0.07, 0.05);
-    disposables.push(accentGeo);
-    const accent = new THREE.Mesh(accentGeo, accentMat);
-    accent.position.set(0, -0.28, 0.79);
-    device.add(accent);
-    const dotGeo = new THREE.CircleGeometry(0.045, 24);
-    disposables.push(dotGeo);
-    const dot = new THREE.Mesh(dotGeo, dotMat);
-    dot.position.set(1.02, 0.24, 0.79);
-    device.add(dot);
     device.rotation.set(0.05, -0.5, 0);
     scene.add(device);
+
+    // Real device model (Tripo export → draco + webp, 96.7k tris, ~626 KB).
+    let cancelled = false;
+    const draco = new DRACOLoader();
+    draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(draco);
+    loader.load("/models/device-web.glb", (gltf) => {
+      if (cancelled) return;
+      const model = gltf.scene;
+      // Normalize: fit largest dimension to ~3.1 world units, center on origin.
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      model.scale.setScalar(3.1 / Math.max(size.x, size.y, size.z));
+      box.setFromObject(model);
+      model.position.sub(box.getCenter(new THREE.Vector3()));
+      // Keep the model above the shadow ground plane.
+      box.setFromObject(model);
+      if (box.min.y < -0.85) model.position.y += -0.85 - box.min.y;
+      model.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (mesh.isMesh) {
+          mesh.castShadow = true;
+          if (mesh.geometry) disposables.push(mesh.geometry);
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mats.forEach((m) => m && disposables.push(m));
+        }
+      });
+      device.add(model);
+    });
+    disposables.push(draco);
 
     const resize = () => {
       const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -137,8 +137,6 @@ export function CloudScrollHero() {
       device.rotation.x = 0.05 + Math.sin(p * Math.PI) * 0.06;
       device.position.y = Math.sin(p * Math.PI) * 0.05;
       const glow = Math.min(1, p * 1.6);
-      accentMat.emissiveIntensity = 0.2 + glow * 2.4;
-      dotMat.emissiveIntensity = 0.3 + glow * 1.6;
       rim.intensity = glow * 3.4;
       camera.position.z = 6.2 - p * 0.8;
       if (!reduce) {
@@ -157,9 +155,11 @@ export function CloudScrollHero() {
     render();
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", resize);
+      scene.environment = null;
       disposables.forEach((d) => d.dispose());
       renderer.dispose();
     };
