@@ -93,15 +93,17 @@ export function CloudScrollHero() {
     loader.load("/models/device-web.glb", (gltf) => {
       if (cancelled) return;
       const model = gltf.scene;
-      // Normalize: fit largest dimension to ~3.1 world units, center on origin.
+      // Normalize: fit largest dimension to ~2.1 world units, center on origin,
+      // then sit slightly low so the headline/CTA stay clear.
       const box = new THREE.Box3().setFromObject(model);
       const size = box.getSize(new THREE.Vector3());
-      model.scale.setScalar(3.1 / Math.max(size.x, size.y, size.z));
+      model.scale.setScalar(2.1 / Math.max(size.x, size.y, size.z));
       box.setFromObject(model);
       model.position.sub(box.getCenter(new THREE.Vector3()));
+      model.position.y -= 0.25;
       // Keep the model above the shadow ground plane.
       box.setFromObject(model);
-      if (box.min.y < -0.85) model.position.y += -0.85 - box.min.y;
+      if (box.min.y < -0.88) model.position.y += -0.88 - box.min.y;
       model.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (mesh.isMesh) {
