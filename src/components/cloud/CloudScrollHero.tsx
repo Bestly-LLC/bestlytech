@@ -93,8 +93,9 @@ export function CloudScrollHero() {
     // Lid travel in model-local units (model is ~1 unit wide pre-scale):
     // starts almost seated on the base, floats up as you scroll.
     const LID_CLOSED_Y = -0.125;
-    const LID_OPEN_Y = 0.5;
-    const LID_DRIFT_Z = -0.5; // slides back as it lifts so the bird's-eye shows the internals
+    const LID_OPEN_Y = 0.55;
+    const LID_DRIFT_Z = -1.9; // slides far back as the camera rises — fully out of frame
+    let lidMats: THREE.Material[] = [];
     const draco = new DRACOLoader();
     draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
     const loader = new GLTFLoader();
@@ -123,7 +124,24 @@ export function CloudScrollHero() {
         }
       });
       lid = model.getObjectByName("lid") ?? null;
-      if (lid) lid.position.y = LID_CLOSED_Y;
+      if (lid) {
+        lid.position.y = LID_CLOSED_Y;
+        // Clone materials: the lid shares the body material with the base,
+        // and we fade the lid out independently at the top of the arc.
+        lid.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (mesh.isMesh) {
+            if (Array.isArray(mesh.material)) {
+              mesh.material = mesh.material.map((m) => m.clone());
+              mesh.material.forEach((m) => { lidMats.push(m); disposables.push(m); });
+            } else if (mesh.material) {
+              mesh.material = mesh.material.clone();
+              lidMats.push(mesh.material);
+              disposables.push(mesh.material);
+            }
+          }
+        });
+      }
       device.add(model);
     });
     disposables.push(draco);
@@ -156,16 +174,23 @@ export function CloudScrollHero() {
       const glow = Math.min(1, p * 1.6);
       rim.intensity = glow * 3.4;
 
-      // 35% → 85%: the lid floats upward off the base, drifting aside
+      // 40% → 100%: camera arcs overhead to a bird's-eye view of the internals
+      const arc = easeInOut(clamp01((p - 0.4) / 0.6));
+
+      // 35% → 85%: the lid floats upward off the base, then exits the frame
       const lift = easeInOut(clamp01((p - 0.35) / 0.5));
       if (lid) {
         lid.position.y = LID_CLOSED_Y + lift * (LID_OPEN_Y - LID_CLOSED_Y);
-        lid.position.z = lift * LID_DRIFT_Z;
+        lid.position.z = arc * LID_DRIFT_Z;
         lid.rotation.x = lift * -0.12; // gentle tilt, like it's being lifted off
+        // fade out near the top of the arc so the bird's-eye is internals only
+        const fade = clamp01((arc - 0.55) / 0.3);
+        lid.visible = fade < 1;
+        lidMats.forEach((m) => {
+          m.transparent = fade > 0;
+          m.opacity = 1 - fade;
+        });
       }
-
-      // 40% → 100%: camera arcs overhead to a bird's-eye view of the internals
-      const arc = easeInOut(clamp01((p - 0.4) / 0.6));
       const polar = 1.4 - arc * 1.25; // ~80° → ~9° from vertical
       const radius = 6.3 - arc * 1.1; // dolly in as we rise
       const azim = arc * 0.3; // slight sideways drift for spatial continuity
