@@ -90,14 +90,14 @@ export function CloudScrollHero() {
     draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
     const loader = new GLTFLoader();
     loader.setDRACOLoader(draco);
-    loader.load("/models/device-web.glb", (gltf) => {
+    loader.load("/models/device-web-hq.glb", (gltf) => {
       if (cancelled) return;
       const model = gltf.scene;
       // Normalize: fit largest dimension to ~2.1 world units, center on origin,
       // then sit slightly low so the headline/CTA stay clear.
       const box = new THREE.Box3().setFromObject(model);
       const size = box.getSize(new THREE.Vector3());
-      model.scale.setScalar(2.1 / Math.max(size.x, size.y, size.z));
+      model.scale.setScalar(1.75 / Math.max(size.x, size.y, size.z));
       box.setFromObject(model);
       model.position.sub(box.getCenter(new THREE.Vector3()));
       model.position.y -= 0.25;
