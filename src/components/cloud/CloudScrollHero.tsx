@@ -25,6 +25,7 @@ export function CloudScrollHero() {
   const ebRef = useRef<HTMLParagraphElement>(null);
   const capRef = useRef<HTMLParagraphElement>(null);
   const hintRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLHeadingElement>(null);
   const progress = useRef(0);
 
   useEffect(() => {
@@ -91,8 +92,9 @@ export function CloudScrollHero() {
     let lid: THREE.Object3D | null = null;
     // Lid travel in model-local units (model is ~1 unit wide pre-scale):
     // starts almost seated on the base, floats up as you scroll.
-    const LID_CLOSED_Y = -0.115;
-    const LID_OPEN_Y = 0.32;
+    const LID_CLOSED_Y = -0.125;
+    const LID_OPEN_Y = 0.5;
+    const LID_DRIFT_Z = -0.5; // slides back as it lifts so the bird's-eye shows the internals
     const draco = new DRACOLoader();
     draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
     const loader = new GLTFLoader();
@@ -154,14 +156,18 @@ export function CloudScrollHero() {
       const glow = Math.min(1, p * 1.6);
       rim.intensity = glow * 3.4;
 
-      // 35% → 85%: the lid floats upward off the base
+      // 35% → 85%: the lid floats upward off the base, drifting aside
       const lift = easeInOut(clamp01((p - 0.35) / 0.5));
-      if (lid) lid.position.y = LID_CLOSED_Y + lift * (LID_OPEN_Y - LID_CLOSED_Y);
+      if (lid) {
+        lid.position.y = LID_CLOSED_Y + lift * (LID_OPEN_Y - LID_CLOSED_Y);
+        lid.position.z = lift * LID_DRIFT_Z;
+        lid.rotation.x = lift * -0.12; // gentle tilt, like it's being lifted off
+      }
 
       // 40% → 100%: camera arcs overhead to a bird's-eye view of the internals
       const arc = easeInOut(clamp01((p - 0.4) / 0.6));
       const polar = 1.4 - arc * 1.25; // ~80° → ~9° from vertical
-      const radius = 6.3 - arc * 1.5; // dolly in as we rise
+      const radius = 6.3 - arc * 1.1; // dolly in as we rise
       const azim = arc * 0.3; // slight sideways drift for spatial continuity
       camera.position.set(
         radius * Math.sin(polar) * Math.sin(azim),
@@ -171,6 +177,7 @@ export function CloudScrollHero() {
       camera.lookAt(0, -0.1, 0);
 
       if (!reduce) {
+        if (headRef.current) headRef.current.style.opacity = String(Math.max(0, 1 - arc * 1.4));
         if (subRef.current) subRef.current.style.opacity = String(Math.max(0, 1 - p * 2.5));
         if (ebRef.current) ebRef.current.style.opacity = String(Math.max(0, 1 - p * 3));
         if (capRef.current) capRef.current.style.opacity = String(Math.min(1, Math.max(0, (p - 0.6) * 3.2)));
@@ -212,7 +219,7 @@ export function CloudScrollHero() {
           <p ref={ebRef} className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-primary backdrop-blur-sm">
             Bestly In-House Cloud
           </p>
-          <h1 className="font-modern mt-5 max-w-[16ch] text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+          <h1 ref={headRef} className="font-modern mt-5 max-w-[16ch] text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
             Big tech owns your data.{" "}
             <GradientText as="span" className="animate-gradient-flow">We think you should.</GradientText>
           </h1>
