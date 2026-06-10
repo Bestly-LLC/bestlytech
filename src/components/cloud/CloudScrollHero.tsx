@@ -176,12 +176,17 @@ export function CloudScrollHero() {
       const goal = target + Math.round((spin - target) / (Math.PI * 2)) * Math.PI * 2;
       device.rotation.y = spin + (goal - spin) * straighten;
       device.rotation.x = (0.05 + Math.sin(p * Math.PI) * 0.04) * (1 - straighten);
-      device.position.y = Math.sin(p * Math.PI) * 0.04;
+      // On narrow screens the device would span the full width — pull it back.
+      device.scale.setScalar(camera.aspect < 0.75 ? 0.78 : camera.aspect < 1.1 ? 0.9 : 1);
       const glow = Math.min(1, p * 1.6);
       rim.intensity = glow * 3.4;
 
       // 40% → 100%: camera arcs overhead to a bird's-eye view of the internals
       const arc = easeInOut(clamp01((p - 0.4) / 0.6));
+
+      // Sit lower at rest so the device never crowds the sub-headline;
+      // returns to center as the camera rises.
+      device.position.y = -0.16 * (1 - arc) + Math.sin(p * Math.PI) * 0.04;
 
       // 35% → 85%: the lid floats upward off the base, then exits the frame
       const lift = easeInOut(clamp01((p - 0.35) / 0.5));
@@ -209,8 +214,8 @@ export function CloudScrollHero() {
 
       if (!reduce) {
         if (headRef.current) headRef.current.style.opacity = String(Math.max(0, 1 - arc * 1.4));
-        if (subRef.current) subRef.current.style.opacity = String(Math.max(0, 1 - p * 2.5));
-        if (ebRef.current) ebRef.current.style.opacity = String(Math.max(0, 1 - p * 3));
+        if (subRef.current) subRef.current.style.opacity = String(Math.max(0, 1 - p * 6));
+        if (ebRef.current) ebRef.current.style.opacity = String(Math.max(0, 1 - p * 6));
         if (capRef.current) capRef.current.style.opacity = String(Math.min(1, Math.max(0, (p - 0.6) * 3.2)));
         if (hintRef.current) hintRef.current.style.opacity = String(Math.max(0, 1 - p * 10));
       }
