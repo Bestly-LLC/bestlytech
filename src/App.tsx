@@ -120,6 +120,8 @@ const App = () => (
                   <Route path="/privacy" element={<CookieYetiPrivacy />} />
                   <Route path="/terms-of-service" element={<TermsOfService />} />
                   <Route path="/terms-of-use" element={<TermsOfUse />} />
+                  {/* Alias: the apps link to /terms (Cookie Yeti paywall "Terms of Use"). */}
+                  <Route path="/terms" element={<TermsOfUse />} />
                   <Route path="/developer-compliance" element={<DeveloperCompliance />} />
                   <Route path="/contact" element={<Contact />} />
                   <Route path="/product/:productId/legal" element={<ProductLegal />} />
