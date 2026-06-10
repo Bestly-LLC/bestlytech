@@ -156,15 +156,17 @@ export function CloudDockCTA() {
   return (
     <section
       ref={sectionRef}
-      className={`relative overflow-hidden border-t border-border ${reduce ? "" : "h-[160vh]"}`}
+      className={`relative border-t border-border ${reduce ? "" : "h-[160vh]"}`}
       aria-label="The device docks on your shelf — get started"
     >
-      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-        <div className="absolute inset-0 bg-mesh opacity-50" />
-        <div className="absolute -left-20 top-0 h-80 w-80 rounded-full bg-[radial-gradient(circle,hsl(var(--gradient-start)/0.22),transparent_70%)] blur-2xl cloud-aurora-a" />
-        <div className="absolute -right-16 bottom-0 h-80 w-80 rounded-full bg-[radial-gradient(circle,hsl(var(--gradient-end)/0.22),transparent_70%)] blur-2xl cloud-aurora-b" />
-      </div>
+      {/* NOTE: overflow-hidden must live on the sticky child, never on this
+          section — overflow on the sticky ancestor disables position:sticky */}
       <div className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden px-6">
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          <div className="absolute inset-0 bg-mesh opacity-50" />
+          <div className="absolute -left-20 top-0 h-80 w-80 rounded-full bg-[radial-gradient(circle,hsl(var(--gradient-start)/0.22),transparent_70%)] blur-2xl cloud-aurora-a" />
+          <div className="absolute -right-16 bottom-0 h-80 w-80 rounded-full bg-[radial-gradient(circle,hsl(var(--gradient-end)/0.22),transparent_70%)] blur-2xl cloud-aurora-b" />
+        </div>
         <div className="relative mt-10 aspect-[4/3] w-full" style={{ maxWidth: "min(86vw, 560px, 38vh)" }}>
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
           {/* the shelf: a real surface to land on, not empty space */}
