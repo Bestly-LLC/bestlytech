@@ -1,7 +1,7 @@
 import {
   Folder, MessageSquare, Mail, ScrollText, CalendarDays, Brain,
   ShieldAlert, Globe, ServerCog, ListChecks, FormInput, KeyRound,
-  FileSignature, Server, type LucideIcon,
+  FileSignature, type LucideIcon,
 } from "lucide-react";
 import { Reveal } from "@/components/motion/Reveal";
 import { Stagger, StaggerItem } from "@/components/motion/Stagger";
@@ -17,9 +17,9 @@ import { GradientText } from "@/components/ui/GradientText";
  * and disabled under prefers-reduced-motion (see index.css cloud-* guards).
  */
 
-type Service = { icon: LucideIcon; title: string; subtitle: string; outcome: string };
+export type Service = { icon: LucideIcon; title: string; subtitle: string; outcome: string };
 
-const SERVICES: Service[] = [
+export const SERVICES: Service[] = [
   { icon: Folder, title: "Files", subtitle: "Google Drive · Dropbox", outcome: "All your files in one place, synced to every computer and easy to share with a link." },
   { icon: MessageSquare, title: "Video & Chat", subtitle: "Zoom · Slack · Teams", outcome: "Private video calls, screen sharing, and team messaging — built right in." },
   { icon: Mail, title: "Email", subtitle: "Gmail · Outlook", outcome: "Professional email at your own name, like you@yourpractice.com." },
@@ -35,10 +35,6 @@ const SERVICES: Service[] = [
   { icon: FileSignature, title: "E-Signatures", subtitle: "DocuSign · Adobe Sign", outcome: "Send documents for legal signature online — with no per-document fees." },
 ];
 
-const STAGE = 560;
-const HUB_C = STAGE / 2;
-const HUB_R = 210;
-
 export function ThirteenServices() {
   return (
     <section className="border-t border-border">
@@ -53,68 +49,8 @@ export function ThirteenServices() {
           </p>
         </Reveal>
 
-        {/* Convergence hub */}
-        <Reveal className="relative mx-auto mb-20 aspect-square w-full max-w-[560px] scale-[0.82] sm:scale-100" amount={0.1}>
-          <div className="relative h-full w-full">
-            <svg viewBox={`0 0 ${STAGE} ${STAGE}`} className="absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
-              <defs>
-                <linearGradient id="bestlyBeam" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0" stopColor="hsl(var(--gradient-end))" stopOpacity="0" />
-                  <stop offset="1" stopColor="hsl(var(--gradient-start))" stopOpacity="0.9" />
-                </linearGradient>
-              </defs>
-              {SERVICES.map((s, i) => {
-                const ang = (2 * Math.PI / SERVICES.length) * i - Math.PI / 2;
-                const x = HUB_C + HUB_R * Math.cos(ang);
-                const y = HUB_C + HUB_R * Math.sin(ang);
-                return (
-                  <line
-                    key={s.title}
-                    x1={x} y1={y} x2={HUB_C} y2={HUB_C}
-                    stroke="url(#bestlyBeam)" strokeWidth={1.4}
-                    className="cloud-beam opacity-50"
-                    style={{ animationDelay: `${i * 0.08}s` }}
-                  />
-                );
-              })}
-            </svg>
-
-            {SERVICES.map((s, i) => {
-              const ang = (2 * Math.PI / SERVICES.length) * i - Math.PI / 2;
-              const x = HUB_C + HUB_R * Math.cos(ang);
-              const y = HUB_C + HUB_R * Math.sin(ang);
-              return (
-                <div
-                  key={s.title}
-                  className="group absolute flex w-[78px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5 text-center"
-                  style={{ left: `${(x / STAGE) * 100}%`, top: `${(y / STAGE) * 100}%` }}
-                >
-                  <div className="flex h-[46px] w-[46px] items-center justify-center rounded-[14px] border border-border bg-card shadow-premium transition-all duration-300 group-hover:-translate-y-1 group-hover:scale-110 group-hover:shadow-glow">
-                    <s.icon className="h-5 w-5 text-primary" />
-                  </div>
-                  <span className="text-[10.5px] font-semibold leading-tight text-foreground">{s.title}</span>
-                </div>
-              );
-            })}
-
-            {/* Pulse rings + core */}
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
-              <div className="absolute h-[150px] w-[150px] rounded-full border border-[hsl(var(--glow-color)/0.4)] cloud-ping-ring" />
-              <div className="absolute h-[150px] w-[150px] rounded-full border border-[hsl(var(--glow-color)/0.4)] cloud-ping-ring" style={{ animationDelay: "1.3s" }} />
-              <div className="absolute h-[150px] w-[150px] rounded-full border border-[hsl(var(--glow-color)/0.4)] cloud-ping-ring" style={{ animationDelay: "2.6s" }} />
-            </div>
-
-            <div className="absolute left-1/2 top-1/2 -ml-[60px] -mt-[60px] flex h-[120px] w-[120px] items-center justify-center rounded-[30px] gradient-bg cloud-core-glow">
-              <div className="absolute inset-[3px] rounded-[27px] bg-card/90 backdrop-blur-sm" />
-              <Server className="relative h-11 w-11 text-primary" strokeWidth={1.75} />
-              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-border bg-card px-3 py-1 text-[10.5px] font-bold uppercase tracking-widest text-foreground shadow-sm">
-                Your server
-              </span>
-            </div>
-          </div>
-        </Reveal>
-
-        {/* Detailed card grid */}
+        {/* Detailed card grid (the convergence hub was replaced by the
+            CloudServicesReveal 3D scene that precedes this section) */}
         <Stagger className="grid gap-[18px] md:grid-cols-2 lg:grid-cols-3">
           {SERVICES.map((s) => (
             <StaggerItem key={s.title}>

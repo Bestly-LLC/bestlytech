@@ -7,6 +7,7 @@ import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { InteractivePricingCalculator } from "@/components/InteractivePricingCalculator";
 import { CloudScrollHero } from "@/components/cloud/CloudScrollHero";
 import { ThirteenServices } from "@/components/cloud/ThirteenServices";
+import { CloudServicesReveal } from "@/components/cloud/CloudServicesReveal";
 import {
   Folder, MessageSquare, Mail, ScrollText, CalendarDays, Brain,
   ShieldAlert, Globe, ServerCog, ListChecks, FormInput, KeyRound,
@@ -256,7 +257,10 @@ export default function InHouseCloud() {
         </div>
       </section>
 
-      {/* What it replaces — animated convergence hub + card grid */}
+      {/* Scene 2: the thirteen services launch out of the open device */}
+      <CloudServicesReveal />
+
+      {/* What it replaces — card grid */}
       <ThirteenServices />
 
       {/* Pillars */}
