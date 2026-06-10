@@ -2,6 +2,34 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 
+// ── Stale-chunk self-heal (shared with main.tsx) ────────────────────────────
+// After a deploy, tabs holding the old index.html request chunk hashes that
+// no longer exist. Reload pulls the fresh index.html. The guard is
+// time-based (not once-per-session) so the tab heals after EVERY deploy,
+// while still preventing refresh loops when the failure is real.
+const CHUNK_ERROR_RE =
+  /Failed to fetch dynamically imported module|error loading dynamically imported module|Loading chunk \S+ failed|ChunkLoadError|Importing a module script failed/i;
+const RELOAD_AT_KEY = 'bestly:chunk-reloaded-at';
+const MIN_RELOAD_INTERVAL_MS = 15_000;
+
+export function isStaleChunkError(reason: unknown): boolean {
+  const msg = String((reason as Error | undefined)?.message ?? reason ?? '');
+  return CHUNK_ERROR_RE.test(msg);
+}
+
+/** Reload the tab (at most once per 15s). Returns true if a reload was started. */
+export function reloadForStaleChunk(): boolean {
+  try {
+    const last = Number(sessionStorage.getItem(RELOAD_AT_KEY) || 0);
+    if (Date.now() - last < MIN_RELOAD_INTERVAL_MS) return false;
+    sessionStorage.setItem(RELOAD_AT_KEY, String(Date.now()));
+  } catch {
+    // sessionStorage unavailable — still reload once.
+  }
+  window.location.reload();
+  return true;
+}
+
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
@@ -26,6 +54,9 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     // eslint-disable-next-line no-console
     console.error('ErrorBoundary caught:', error, info);
+    // Stale chunk after a deploy: reload for the new bundle instead of
+    // showing the error screen.
+    if (isStaleChunkError(error)) reloadForStaleChunk();
   }
 
   handleReload = () => {
