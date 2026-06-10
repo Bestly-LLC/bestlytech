@@ -98,20 +98,20 @@ export function CloudDockCTA() {
     let raf = 0;
     let running = false;
     const apply = (p: number) => {
-      // descend 0→62%, with a soft settle
-      const drop = easeOutCubic(clamp01(p / 0.62));
-      device.position.y = (1 - drop) * 0.85 - 0.22;
-      device.rotation.y = -0.5 + drop * 0.28;
-      device.rotation.x = 0.05 + (1 - drop) * 0.16; // nose-up while airborne, settles flat
+      // short, grounded descent — lands by 45%, no long float
+      const drop = easeOutCubic(clamp01(p / 0.45));
+      device.position.y = (1 - drop) * 0.38 - 0.22;
+      device.rotation.y = -0.5 + drop * 0.24;
+      device.rotation.x = 0.05 + (1 - drop) * 0.06;
       // glow ignites on touchdown
-      const ignite = clamp01((p - 0.6) / 0.2);
+      const ignite = clamp01((p - 0.42) / 0.18);
       rim.intensity = ignite * 3.2;
       if (shadowRef.current) {
-        shadowRef.current.style.opacity = String(0.12 + drop * 0.38);
-        shadowRef.current.style.transform = `translateX(-50%) scaleX(${0.45 + drop * 0.55})`;
+        shadowRef.current.style.opacity = String(0.3 + drop * 0.4);
+        shadowRef.current.style.transform = `translateX(-50%) scaleX(${0.7 + drop * 0.3})`;
       }
       if (copyRef.current) {
-        const reveal = clamp01((p - 0.66) / 0.24);
+        const reveal = clamp01((p - 0.32) / 0.3);
         copyRef.current.style.opacity = String(reveal);
         copyRef.current.style.transform = `translateY(${(1 - reveal) * 26}px)`;
       }
@@ -156,7 +156,7 @@ export function CloudDockCTA() {
   return (
     <section
       ref={sectionRef}
-      className={`relative overflow-hidden border-t border-border ${reduce ? "" : "h-[220vh]"}`}
+      className={`relative overflow-hidden border-t border-border ${reduce ? "" : "h-[160vh]"}`}
       aria-label="The device docks on your shelf — get started"
     >
       <div className="pointer-events-none absolute inset-0" aria-hidden="true">
@@ -167,10 +167,15 @@ export function CloudDockCTA() {
       <div className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden px-6">
         <div className="relative aspect-[4/3] w-full" style={{ maxWidth: "min(86vw, 560px, 52vh)" }}>
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
+          {/* the shelf: a real surface to land on, not empty space */}
+          <div
+            className="pointer-events-none absolute bottom-[8%] left-1/2 h-px w-[92%] -translate-x-1/2 bg-gradient-to-r from-transparent via-border to-transparent"
+            aria-hidden="true"
+          />
           <div
             ref={shadowRef}
             className="pointer-events-none absolute bottom-[6%] left-1/2 h-[5%] w-[64%] rounded-[50%] bg-[radial-gradient(ellipse,hsl(222_20%_20%/0.5),transparent_70%)]"
-            style={{ opacity: 0.12, transform: "translateX(-50%) scaleX(0.45)" }}
+            style={{ opacity: 0.3, transform: "translateX(-50%) scaleX(0.7)" }}
             aria-hidden="true"
           />
         </div>
