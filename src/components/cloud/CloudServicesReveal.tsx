@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useReducedMotion } from "framer-motion";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -35,7 +35,7 @@ export function CloudServicesReveal() {
   const headRef = useRef<HTMLDivElement>(null);
   const chipRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const section = sectionRef.current;
     const stage = stageRef.current;
     const canvas = canvasRef.current;
@@ -183,6 +183,10 @@ export function CloudServicesReveal() {
   }, [reduce]);
 
   return (
+    // Stable wrapper: ScrollTrigger's pin-spacer lives inside this div, so on
+    // unmount React removes the wrapper (never reparented) instead of the pinned
+    // section — avoids NotFoundError ("The object can not be found here.") crashes.
+    <div>
     <section ref={sectionRef} className="relative overflow-hidden border-t border-border" aria-label="Thirteen services come out of one device">
       <div className="flex h-screen flex-col items-center justify-center">
         <div ref={stageRef} className="relative aspect-square w-full max-w-[640px] scale-[0.85] sm:scale-100">
@@ -216,5 +220,6 @@ export function CloudServicesReveal() {
         </div>
       </div>
     </section>
+    </div>
   );
 }
