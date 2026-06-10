@@ -257,7 +257,9 @@ export function CloudScrollHero() {
           <p ref={subRef} className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
             One small device in your office replaces thirteen subscriptions — and your data never leaves the building.
           </p>
-          <div className="pointer-events-auto mt-8 flex flex-col items-center gap-4 sm:flex-row">
+          {/* CTAs: centered on mobile, pinned to the left side on desktop so the
+              device never sits behind them */}
+          <div className="pointer-events-auto mt-8 flex flex-col items-center gap-4 sm:flex-row lg:absolute lg:left-[6vw] lg:top-1/2 lg:mt-0 lg:-translate-y-1/2 lg:flex-col lg:items-stretch">
             <Link
               to="/get-started"
               className="group inline-flex items-center justify-center rounded-xl gradient-bg px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/20 btn-lift glow"
@@ -272,9 +274,14 @@ export function CloudScrollHero() {
               See how much you'll save
             </a>
           </div>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+          {/* Trust chips: centered on mobile, pinned right on desktop; pill
+              backgrounds keep them readable over the device */}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm text-muted-foreground lg:absolute lg:right-[6vw] lg:top-1/2 lg:mt-0 lg:-translate-y-1/2 lg:flex-col lg:items-end lg:gap-3">
             {["$0 per-seat fees", "Never sold, never retained", "On premises & on brand"].map((t) => (
-              <span key={t} className="flex items-center gap-2">
+              <span
+                key={t}
+                className="flex items-center gap-2 rounded-full border border-border bg-background/75 px-4 py-2 text-foreground shadow-sm backdrop-blur-sm"
+              >
                 <CheckCircle2 className="h-4 w-4 text-primary" />
                 {t}
               </span>
