@@ -39,27 +39,37 @@ const SERVICES: Service[] = [
   // Chat & video
   { id: "zoom",  name: "Zoom Pro",                           category: "Chat & video", pricePerSeatMonth: 15,   defaultChecked: true },
   { id: "slack", name: "Slack Pro",                          category: "Chat & video", pricePerSeatMonth: 8.75, defaultChecked: true },
+  { id: "teams", name: "Microsoft Teams Essentials",         category: "Chat & video", pricePerSeatMonth: 4 },
   // Files & storage
   { id: "drop",  name: "Dropbox Business",                   category: "Files & storage", pricePerSeatMonth: 18 },
+  { id: "box",   name: "Box Business",                       category: "Files & storage", pricePerSeatMonth: 20 },
   // Passwords
   { id: "1pw",   name: "1Password Business",                 category: "Passwords", pricePerSeatMonth: 7.99, defaultChecked: true },
+  { id: "lastpass", name: "LastPass Business",               category: "Passwords", pricePerSeatMonth: 7 },
   // E-signature
   { id: "docusign", name: "DocuSign Standard",               category: "E-signature", pricePerSeatMonth: 25, defaultChecked: true },
+  { id: "adobesign", name: "Adobe Acrobat Sign",             category: "E-signature", pricePerSeatMonth: 17 },
   // Scheduling
   { id: "calendly", name: "Calendly Standard",               category: "Scheduling", pricePerSeatMonth: 10 },
+  { id: "acuity",   name: "Acuity Scheduling",               category: "Scheduling", pricePerSeatMonth: 20 },
   // AI
-  { id: "gpt",   name: "ChatGPT Team",                       category: "AI", pricePerSeatMonth: 25, defaultChecked: true },
+  { id: "gpt",    name: "ChatGPT Team",                      category: "AI", pricePerSeatMonth: 25, defaultChecked: true },
+  { id: "claude", name: "Claude Team",                       category: "AI", pricePerSeatMonth: 25 },
   // Project management (2026 list, annual billing)
   { id: "asana",  name: "Asana Starter",                     category: "Project management", pricePerSeatMonth: 10.99 },
   { id: "monday", name: "monday.com Basic",                  category: "Project management", pricePerSeatMonth: 9 },
   // Notes & wiki
   { id: "notion", name: "Notion Plus",                       category: "Notes & wiki", pricePerSeatMonth: 10 },
+  { id: "confluence", name: "Confluence Standard",           category: "Notes & wiki", pricePerSeatMonth: 6 },
   // Backup
   { id: "backblaze", name: "Backblaze Business Backup",      category: "Backup", pricePerSeatMonth: 8, defaultChecked: true },
+  { id: "acronis",   name: "Acronis Cyber Protect",          category: "Backup", pricePerSeatMonth: 9 },
   // Remote access
   { id: "nordlayer", name: "NordLayer VPN (Lite)",           category: "Remote access", pricePerSeatMonth: 8 },
+  { id: "tailscale", name: "Tailscale Starter",              category: "Remote access", pricePerSeatMonth: 6 },
   // Web security
   { id: "dnsfilter", name: "DNSFilter (Pro)",                category: "Web security", pricePerSeatMonth: 2.5, defaultChecked: true },
+  { id: "cfzt",      name: "Cloudflare Zero Trust",          category: "Web security", pricePerSeatMonth: 7 },
   // Website & domain (flat, not per-seat)
   { id: "site",  name: "Website + hosting (Squarespace/Wix)", category: "Website & domain", flatMonth: 23, defaultChecked: true },
   { id: "domain",name: "Domain + business DNS",             category: "Website & domain", flatMonth: 2,  defaultChecked: true },
