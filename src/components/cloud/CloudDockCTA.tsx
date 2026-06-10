@@ -35,8 +35,8 @@ export function CloudDockCTA() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(33, 1, 0.1, 100);
-    camera.position.set(0, 0.65, 5.4);
-    camera.lookAt(0, -0.1, 0);
+    camera.position.set(0, 1.7, 4.9);
+    camera.lookAt(0, -0.15, 0);
 
     const pmrem = new THREE.PMREMGenerator(renderer);
     const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -60,7 +60,7 @@ export function CloudDockCTA() {
       const model = gltf.scene.clone(true);
       const box = new THREE.Box3().setFromObject(model);
       const size = box.getSize(new THREE.Vector3());
-      model.scale.setScalar(1.8 / Math.max(size.x, size.y, size.z));
+      model.scale.setScalar(2.15 / Math.max(size.x, size.y, size.z));
       box.setFromObject(model);
       model.position.sub(box.getCenter(new THREE.Vector3()));
       const lid = model.getObjectByName("lid");
@@ -100,8 +100,9 @@ export function CloudDockCTA() {
     const apply = (p: number) => {
       // descend 0→62%, with a soft settle
       const drop = easeOutCubic(clamp01(p / 0.62));
-      device.position.y = (1 - drop) * 1.55 - 0.18;
+      device.position.y = (1 - drop) * 0.85 - 0.22;
       device.rotation.y = -0.5 + drop * 0.28;
+      device.rotation.x = 0.05 + (1 - drop) * 0.16; // nose-up while airborne, settles flat
       // glow ignites on touchdown
       const ignite = clamp01((p - 0.6) / 0.2);
       rim.intensity = ignite * 3.2;

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { ChevronDown } from "lucide-react";
 import { GradientText } from "@/components/ui/GradientText";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { AnimatedSection } from "@/components/AnimatedSection";
@@ -36,6 +37,7 @@ const SERVICES: Service[] = [
   // Email & productivity
   { id: "gws",   name: "Google Workspace Business Standard", category: "Email & productivity", pricePerSeatMonth: 14,    defaultChecked: true },
   { id: "m365",  name: "Microsoft 365 Business Standard",    category: "Email & productivity", pricePerSeatMonth: 12.50 },
+  { id: "zoho",  name: "Zoho Workplace Professional",        category: "Email & productivity", pricePerSeatMonth: 7 },
   // Chat & video
   { id: "zoom",  name: "Zoom Pro",                           category: "Chat & video", pricePerSeatMonth: 15,   defaultChecked: true },
   { id: "slack", name: "Slack Pro",                          category: "Chat & video", pricePerSeatMonth: 8.75, defaultChecked: true },
@@ -72,6 +74,7 @@ const SERVICES: Service[] = [
   { id: "cfzt",      name: "Cloudflare Zero Trust",          category: "Web security", pricePerSeatMonth: 7 },
   // Website & domain (flat, not per-seat)
   { id: "site",  name: "Website + hosting (Squarespace/Wix)", category: "Website & domain", flatMonth: 23, defaultChecked: true },
+  { id: "webflow", name: "Webflow CMS site",                 category: "Website & domain", flatMonth: 29 },
   { id: "domain",name: "Domain + business DNS",             category: "Website & domain", flatMonth: 2,  defaultChecked: true },
 ];
 
@@ -92,6 +95,7 @@ export function InteractivePricingCalculator() {
   const [users, setUsers] = useState(12);
   const [billing, setBilling] = useState<"annual" | "monthly">("annual");
   const [plan, setPlan] = useState<"managed" | "selfhosted">("managed");
+  const [showMorePlans, setShowMorePlans] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(
     new Set(SERVICES.filter(s => s.defaultChecked).map(s => s.id))
   );
@@ -306,29 +310,40 @@ export function InteractivePricingCalculator() {
                       Flat — never per-seat. Plus the {fmt(BESTLY_HARDWARE)} startup cost.
                     </p>
                   </label>
-                  <label
-                    className={`block cursor-pointer rounded-lg border px-3 py-2.5 transition-colors ${
-                      plan === "selfhosted" ? "border-primary/60 bg-primary/5" : "border-border bg-background hover:border-primary/30"
-                    }`}
+                  <button
+                    type="button"
+                    onClick={() => setShowMorePlans((v) => !v)}
+                    className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                    aria-expanded={showMorePlans || plan === "selfhosted"}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-2.5 text-sm font-medium text-foreground">
-                        <input
-                          type="radio"
-                          name="bestlyPlan"
-                          checked={plan === "selfhosted"}
-                          onChange={() => setPlan("selfhosted")}
-                          className="h-4 w-4 accent-[hsl(var(--gradient-end))]"
-                        />
-                        Self-hosted
-                      </span>
-                      <span className="text-sm font-semibold tabular-nums text-foreground">$0/mo</span>
-                    </div>
-                    <p className="mt-1 pl-6 text-xs text-muted-foreground leading-relaxed">
-                      You own and run it after the {fmt(BESTLY_HARDWARE)} startup cost. Need a hand? On-demand
-                      support is <span className="font-semibold text-foreground">{fmt(ON_DEMAND_CALL)} per call</span> — pay only when you use it.
-                    </p>
-                  </label>
+                    <span>More plans</span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${showMorePlans || plan === "selfhosted" ? "rotate-180" : ""}`} />
+                  </button>
+                  {(showMorePlans || plan === "selfhosted") && (
+                    <label
+                      className={`block cursor-pointer rounded-lg border px-3 py-2.5 transition-colors ${
+                        plan === "selfhosted" ? "border-primary/60 bg-primary/5" : "border-border bg-background hover:border-primary/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2.5 text-sm font-medium text-foreground">
+                          <input
+                            type="radio"
+                            name="bestlyPlan"
+                            checked={plan === "selfhosted"}
+                            onChange={() => setPlan("selfhosted")}
+                            className="h-4 w-4 accent-[hsl(var(--gradient-end))]"
+                          />
+                          Self-hosted
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">$0/mo</span>
+                      </div>
+                      <p className="mt-1 pl-6 text-xs text-muted-foreground leading-relaxed">
+                        You own and run it after the {fmt(BESTLY_HARDWARE)} startup cost. Need a hand? On-demand
+                        support is <span className="font-semibold text-foreground">{fmt(ON_DEMAND_CALL)} per call</span> — pay only when you use it.
+                      </p>
+                    </label>
+                  )}
                 </div>
               </div>
             </div>
