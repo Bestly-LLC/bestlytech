@@ -165,7 +165,7 @@ export function CloudDockCTA() {
         <div className="absolute -right-16 bottom-0 h-80 w-80 rounded-full bg-[radial-gradient(circle,hsl(var(--gradient-end)/0.22),transparent_70%)] blur-2xl cloud-aurora-b" />
       </div>
       <div className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden px-6">
-        <div className="relative aspect-[4/3] w-full" style={{ maxWidth: "min(86vw, 560px, 52vh)" }}>
+        <div className="relative mt-10 aspect-[4/3] w-full" style={{ maxWidth: "min(86vw, 560px, 38vh)" }}>
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
           {/* the shelf: a real surface to land on, not empty space */}
           <div
@@ -183,12 +183,12 @@ export function CloudDockCTA() {
           <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
             Stop renting. <GradientText as="span">Start owning.</GradientText>
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
+          <p className="mx-auto mt-3 max-w-2xl text-base text-muted-foreground sm:text-lg">
             Thirty minutes on a call, a side-by-side cost comparison, and zero
             pressure. Bring your stack home — on hardware you own, with data we
             never sell or retain.
           </p>
-          <div className="pointer-events-auto mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <div className="pointer-events-auto mt-6 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
               to="/get-started"
               className="group inline-flex items-center justify-center rounded-xl gradient-bg px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/20 btn-lift"
