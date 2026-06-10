@@ -1,15 +1,12 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useReducedMotion } from "framer-motion";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { gsap } from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { GradientText } from "@/components/ui/GradientText";
 import { SERVICES } from "./ThirteenServices";
-
-gsap.registerPlugin(ScrollTrigger);
 
 /**
  * CloudServicesReveal — Scene 2 of the /cloud 3D story.
@@ -25,7 +22,7 @@ gsap.registerPlugin(ScrollTrigger);
  * (no pin, chips in their final ring).
  */
 
-const RING_RADIUS_PCT = 38; // ring radius as % of stage size
+const RING_RADIUS_PCT = 42; // ring radius as % of stage size
 
 export function CloudServicesReveal() {
   const reduce = useReducedMotion();
@@ -35,7 +32,7 @@ export function CloudServicesReveal() {
   const headRef = useRef<HTMLDivElement>(null);
   const chipRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const section = sectionRef.current;
     const stage = stageRef.current;
     const canvas = canvasRef.current;
@@ -74,7 +71,7 @@ export function CloudServicesReveal() {
       if (lid) lid.visible = false; // open box — internals only, like the hero's last frame
       const box = new THREE.Box3().setFromObject(model);
       const size = box.getSize(new THREE.Vector3());
-      model.scale.setScalar(1.9 / Math.max(size.x, size.y, size.z));
+      model.scale.setScalar(1.5 / Math.max(size.x, size.y, size.z));
       box.setFromObject(model);
       model.position.sub(box.getCenter(new THREE.Vector3()));
       model.traverse((o) => {
@@ -105,10 +102,25 @@ export function CloudServicesReveal() {
       }
     };
 
+    // Manual scrub: GSAP timeline progress driven by our own scroll math
+    // (ScrollTrigger's pin/measure breaks under the page-transition
+    // wrapper's CSS transform, so we never rely on it here).
+    let tlRef: gsap.core.Timeline | null = null;
+    let scrubTarget = 0;
+    let scrubSmooth = 0;
+    const onScroll = () => {
+      const total = section.offsetHeight - window.innerHeight;
+      scrubTarget = total > 0 ? Math.min(1, Math.max(0, -section.getBoundingClientRect().top / total)) : 0;
+    };
+
     let raf = 0;
     let running = false;
     const frame = () => {
       resize();
+      if (tlRef) {
+        scrubSmooth += (scrubTarget - scrubSmooth) * 0.14;
+        tlRef.progress(scrubSmooth);
+      }
       const p = progress.value;
       device.rotation.y = -Math.PI / 2 + p * 0.35;
       device.scale.setScalar(0.92 + p * 0.08);
@@ -128,17 +140,7 @@ export function CloudServicesReveal() {
         renderOnce();
         return; // static composition: chips already sit in their ring
       }
-      const tl = gsap.timeline({
-        scrollTrigger: {
-          trigger: section,
-          start: "top top",
-          end: "+=170%",
-          scrub: 0.6,
-          pin: true,
-          invalidateOnRefresh: true,
-          onToggle: (self) => (self.isActive ? start() : stop()),
-        },
-      });
+      const tl = gsap.timeline({ paused: true });
 
       // WebGL turntable follows the same scrub
       tl.to(progress, { value: 1, duration: 1.1, ease: "none" }, 0);
@@ -160,6 +162,7 @@ export function CloudServicesReveal() {
             },
             scale: 0.18,
             opacity: 0,
+            rotation: i % 2 ? 10 : -10,
             ease: "back.out(1.5)",
             duration: 0.42,
           },
@@ -169,11 +172,39 @@ export function CloudServicesReveal() {
 
       // Headline lands once the box is empty
       tl.from(headRef.current, { opacity: 0, y: 28, duration: 0.3, ease: "power2.out" }, 0.82);
+
+      tl.progress(0);
+      tlRef = tl;
     }, section);
+
+    // Run the scrub + renderer only while the scene is on screen
+    const io = new IntersectionObserver(
+      ([entry]) => (entry.isIntersecting ? start() : stop()),
+      { threshold: 0 }
+    );
+    io.observe(section);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    scrubSmooth = scrubTarget; // no catch-up lurch on first paint
+
+    if (import.meta.env.DEV) {
+      // Deterministic frame hook for visual auditing (dev only)
+      (window as unknown as Record<string, unknown>).__sceneSetP = (v: number) => {
+        scrubTarget = v;
+        scrubSmooth = v;
+        if (tlRef) tlRef.progress(v);
+        const wasRunning = running;
+        running = false;
+        frame();
+        running = wasRunning;
+      };
+    }
 
     return () => {
       cancelled = true;
       stop();
+      io.disconnect();
+      window.removeEventListener("scroll", onScroll);
       ctx.revert();
       window.removeEventListener("resize", resize);
       scene.environment = null;
@@ -183,13 +214,21 @@ export function CloudServicesReveal() {
   }, [reduce]);
 
   return (
-    // Stable wrapper: ScrollTrigger's pin-spacer lives inside this div, so on
-    // unmount React removes the wrapper (never reparented) instead of the pinned
-    // section — avoids NotFoundError ("The object can not be found here.") crashes.
-    <div>
-    <section ref={sectionRef} className="relative overflow-hidden border-t border-border" aria-label="Thirteen services come out of one device">
-      <div className="flex h-screen flex-col items-center justify-center">
-        <div ref={stageRef} className="relative aspect-square w-full max-w-[640px] scale-[0.85] sm:scale-100">
+    <section
+      ref={sectionRef}
+      className={`relative border-t border-border ${reduce ? "" : "h-[270vh]"}`}
+      aria-label="Thirteen services come out of one device"
+    >
+      <div className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden">
+        {/* soft stage glow so the device isn't floating in a void */}
+        <div
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[70vmin] w-[70vmin] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,hsl(var(--gradient-end)/0.10),transparent_65%)]"
+          aria-hidden="true"
+        />
+        <p className="mb-1 text-sm font-semibold uppercase tracking-widest text-primary">
+          What's inside
+        </p>
+        <div ref={stageRef} className="relative aspect-square" style={{ width: "min(88vw, 640px, 64vh)" }}>
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
           {SERVICES.map((s, i) => {
             const ang = (2 * Math.PI / SERVICES.length) * i - Math.PI / 2;
@@ -212,7 +251,7 @@ export function CloudServicesReveal() {
             );
           })}
         </div>
-        <div ref={headRef} className="pointer-events-none relative z-10 -mt-4 px-6 text-center">
+        <div ref={headRef} className="pointer-events-none relative z-10 mt-3 px-6 text-center">
           <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
             Thirteen services.{" "}
             <GradientText as="span" className="animate-gradient-flow">Out of one small box.</GradientText>
@@ -220,6 +259,5 @@ export function CloudServicesReveal() {
         </div>
       </div>
     </section>
-    </div>
   );
 }

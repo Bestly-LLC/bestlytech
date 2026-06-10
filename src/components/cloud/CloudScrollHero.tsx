@@ -184,9 +184,13 @@ export function CloudScrollHero() {
       // 40% → 100%: camera arcs overhead to a bird's-eye view of the internals
       const arc = easeInOut(clamp01((p - 0.4) / 0.6));
 
-      // Sit lower at rest so the device never crowds the sub-headline;
-      // returns to center as the camera rises.
-      device.position.y = -0.16 * (1 - arc) + Math.sin(p * Math.PI) * 0.04;
+      // Sit lower and smaller at rest so the device never crowds the
+      // sub-headline (short viewports shrink it further); returns to
+      // center/full size as the camera rises.
+      device.position.y = -0.34 * (1 - arc) + Math.sin(p * Math.PI) * 0.04;
+      const shortness = Math.min(1, canvas.clientHeight / 950);
+      const restScale = (1 - 0.08 * (1 - arc)) * (shortness + (1 - shortness) * arc);
+      device.scale.multiplyScalar(restScale);
 
       // 35% → 85%: the lid floats upward off the base, then exits the frame
       const lift = easeInOut(clamp01((p - 0.35) / 0.5));
@@ -228,6 +232,13 @@ export function CloudScrollHero() {
     onScroll();
     resize();
     render();
+
+    if (import.meta.env.DEV) {
+      // Deterministic frame hook for visual auditing (dev only)
+      (window as unknown as Record<string, unknown>).__heroSetP = (v: number) => {
+        progress.current = v;
+      };
+    }
 
     return () => {
       cancelled = true;

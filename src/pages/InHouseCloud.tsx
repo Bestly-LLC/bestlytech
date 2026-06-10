@@ -8,6 +8,8 @@ import { InteractivePricingCalculator } from "@/components/InteractivePricingCal
 import { CloudScrollHero } from "@/components/cloud/CloudScrollHero";
 import { ThirteenServices } from "@/components/cloud/ThirteenServices";
 import { CloudServicesReveal } from "@/components/cloud/CloudServicesReveal";
+import { CloudPrivacySeal } from "@/components/cloud/CloudPrivacySeal";
+import { CloudDockCTA } from "@/components/cloud/CloudDockCTA";
 import {
   Folder, MessageSquare, Mail, ScrollText, CalendarDays, Brain,
   ShieldAlert, Globe, ServerCog, ListChecks, FormInput, KeyRound,
@@ -183,20 +185,8 @@ export default function InHouseCloud() {
       {/* Hero — scroll-scrubbed 3D device */}
       <CloudScrollHero />
 
-      {/* Privacy promise band */}
-      <section className="border-t border-border bg-secondary/10">
-        <div className="mx-auto max-w-4xl px-6 py-8 lg:px-8">
-          <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:justify-center sm:text-left">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--gradient-start)/0.12)] to-[hsl(var(--gradient-end)/0.12)]">
-              <Lock className="h-4 w-4 text-primary" />
-            </div>
-            <p className="text-sm text-foreground sm:text-base">
-              <span className="font-semibold">We never sell, share, or retain your data.</span>{" "}
-              <span className="text-muted-foreground">It lives on hardware in your office — Bestly can't see it, and there's nothing for us to monetize.</span>
-            </p>
-          </div>
-        </div>
-      </section>
+      {/* Scene: the lid seals shut — privacy promise */}
+      <CloudPrivacySeal />
 
       {/* Problem · Agitate · Solve */}
       <section className="border-t border-border bg-secondary/20">
@@ -347,43 +337,8 @@ export default function InHouseCloud() {
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section className="relative border-t border-border overflow-hidden">
-        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-          <div className="absolute inset-0 bg-mesh opacity-50" />
-          <div className="absolute -left-20 top-0 h-80 w-80 rounded-full bg-[radial-gradient(circle,hsl(var(--gradient-start)/0.22),transparent_70%)] blur-2xl cloud-aurora-a" />
-          <div className="absolute -right-16 bottom-0 h-80 w-80 rounded-full bg-[radial-gradient(circle,hsl(var(--gradient-end)/0.22),transparent_70%)] blur-2xl cloud-aurora-b" />
-          <div className="absolute inset-x-0 top-0 h-px overflow-hidden">
-            <div className="cloud-beam h-px w-1/3 bg-gradient-to-r from-transparent via-[hsl(var(--glow-color))] to-transparent" />
-          </div>
-        </div>
-        <div className="relative mx-auto max-w-4xl px-6 py-24 lg:px-8 lg:py-32 text-center">
-          <AnimatedSection animation="fade-in">
-            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Stop renting.{" "}
-              <GradientText as="span">Start owning.</GradientText>
-            </h2>
-            <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Thirty minutes on a call, a side-by-side cost comparison, and zero pressure. Find out what your stack actually looks like when you bring it home — on hardware you own, with data we never sell or retain.
-            </p>
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link
-                to="/get-started"
-                className="group inline-flex items-center justify-center rounded-xl gradient-bg px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/20 btn-lift"
-              >
-                Get Started
-                <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </Link>
-              <a
-                href="mailto:jared@bestly.tech?subject=In-House%20Cloud%20Discovery%20Call"
-                className="inline-flex items-center justify-center rounded-xl border border-border bg-background/80 backdrop-blur-sm px-8 py-4 text-base font-medium text-foreground shadow-sm transition-all hover:bg-accent"
-              >
-                Email jared@bestly.tech
-              </a>
-            </div>
-          </AnimatedSection>
-        </div>
-      </section>
+      {/* Final scene: the device docks on your shelf + CTA */}
+      <CloudDockCTA />
     </>
   );
 }

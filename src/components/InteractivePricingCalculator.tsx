@@ -3,6 +3,7 @@ import { GradientText } from "@/components/ui/GradientText";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
+import { DeviceSavingsMini } from "@/components/cloud/DeviceSavingsMini";
 
 /**
  * InteractivePricingCalculator
@@ -326,6 +327,10 @@ export function InteractivePricingCalculator() {
           {/* Right: live output */}
           <div className="space-y-4">
             <GlowCard className="!p-6 lg:!p-8 text-center">
+              {/* The device's glow brightens with your savings */}
+              <div className="mx-auto -mt-2 mb-1 h-32 w-44" aria-hidden="true">
+                <DeviceSavingsMini intensity={Math.min(1, Math.max(0, calc.savingsPct / 90))} />
+              </div>
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Your 3-year savings
               </p>
