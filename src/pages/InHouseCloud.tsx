@@ -182,78 +182,16 @@ export default function InHouseCloud() {
         path="/cloud"
       />
 
-      {/* Hero — scroll-scrubbed 3D device */}
+      {/* A. Hero — scroll-scrubbed 3D device */}
       <CloudScrollHero />
 
-      {/* Scene: the lid seals shut — privacy promise */}
-      <CloudPrivacySeal />
-
-      {/* Problem · Agitate · Solve */}
-      <section className="border-t border-border bg-secondary/20">
-        <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <div className="grid gap-8 md:grid-cols-3">
-            <AnimatedSection animation="fade-in">
-              <div className="h-full">
-                <p className="text-xs font-semibold uppercase tracking-widest text-primary">Problem</p>
-                <h3 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-                  You pay thousands a month for software you don't own.
-                </h3>
-                <p className="mt-3 text-muted-foreground leading-relaxed">
-                  Files, email, client conversations, and strategy docs all live on servers somewhere else — on terms someone else sets.
-                </p>
-              </div>
-            </AnimatedSection>
-            <AnimatedSection animation="fade-in" delay={80}>
-              <div className="h-full">
-                <p className="text-xs font-semibold uppercase tracking-widest text-primary">Agitate</p>
-                <h3 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-                  And every renewal, the price goes up.
-                </h3>
-                <p className="mt-3 text-muted-foreground leading-relaxed">
-                  Google Workspace raised prices 20% in 2024. Microsoft 365 is up 15 to 25% since 2022. A 15-person business can spend $20,000 a year on subscriptions; a 30-person business, well over $40,000. You never stop paying, and you never own a thing.
-                </p>
-              </div>
-            </AnimatedSection>
-            <AnimatedSection animation="fade-in" delay={160}>
-              <div className="h-full">
-                <p className="text-xs font-semibold uppercase tracking-widest text-primary">Solve</p>
-                <h3 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-                  One server in your office, branded to your company.
-                </h3>
-                <p className="mt-3 text-muted-foreground leading-relaxed">
-                  File storage, email, video, chat, docs, calendar, e-sign, passwords, projects, and local AI on a device that draws as little as 10 watts and fits on a shelf. Buy it once, run it for years.
-                </p>
-              </div>
-            </AnimatedSection>
-          </div>
-        </div>
-      </section>
-
-      {/* Headline metrics */}
-      <section className="relative border-t border-border bg-secondary/30">
-        <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-            {stats.map((s, index) => (
-              <AnimatedSection key={s.label} delay={index * 80} className="text-center">
-                <div className="text-4xl sm:text-5xl font-semibold tracking-tight text-foreground">
-                  <AnimatedCounter end={s.value} suffix={s.suffix} />
-                </div>
-                <div className="mt-2 text-xs sm:text-sm text-muted-foreground font-medium">
-                  {s.label}
-                </div>
-              </AnimatedSection>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Scene 2: the thirteen services launch out of the open device */}
+      {/* B. What's inside — the thirteen services launch out of the open device */}
       <CloudServicesReveal />
 
-      {/* What it replaces — card grid */}
+      {/* C/D. The thirteen services — card grid */}
       <ThirteenServices />
 
-      {/* Pillars */}
+      {/* E. Pillars — why this works */}
       <section className="border-t border-border bg-secondary/20">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <AnimatedSection animation="fade-in" className="text-center mb-16">
@@ -316,6 +254,68 @@ export default function InHouseCloud() {
               </Link>
             </p>
           </AnimatedSection>
+        </div>
+      </section>
+
+      {/* G. Remaining — privacy seal, story, metrics */}
+      <CloudPrivacySeal />
+
+      {/* Problem · Agitate · Solve */}
+      <section className="border-t border-border bg-secondary/20">
+        <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
+          <div className="grid gap-8 md:grid-cols-3">
+            <AnimatedSection animation="fade-in">
+              <div className="h-full">
+                <p className="text-xs font-semibold uppercase tracking-widest text-primary">Problem</p>
+                <h3 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+                  You pay thousands a month for software you don't own.
+                </h3>
+                <p className="mt-3 text-muted-foreground leading-relaxed">
+                  Files, email, client conversations, and strategy docs all live on servers somewhere else — on terms someone else sets.
+                </p>
+              </div>
+            </AnimatedSection>
+            <AnimatedSection animation="fade-in" delay={80}>
+              <div className="h-full">
+                <p className="text-xs font-semibold uppercase tracking-widest text-primary">Agitate</p>
+                <h3 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+                  And every renewal, the price goes up.
+                </h3>
+                <p className="mt-3 text-muted-foreground leading-relaxed">
+                  Google Workspace raised prices 20% in 2024. Microsoft 365 is up 15 to 25% since 2022. A 15-person business can spend $20,000 a year on subscriptions; a 30-person business, well over $40,000. You never stop paying, and you never own a thing.
+                </p>
+              </div>
+            </AnimatedSection>
+            <AnimatedSection animation="fade-in" delay={160}>
+              <div className="h-full">
+                <p className="text-xs font-semibold uppercase tracking-widest text-primary">Solve</p>
+                <h3 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+                  One server in your office, branded to your company.
+                </h3>
+                <p className="mt-3 text-muted-foreground leading-relaxed">
+                  File storage, email, video, chat, docs, calendar, e-sign, passwords, projects, and local AI on a device that draws as little as 10 watts and fits on a shelf. Buy it once, run it for years.
+                </p>
+              </div>
+            </AnimatedSection>
+          </div>
+        </div>
+      </section>
+
+      {/* Headline metrics */}
+      <section className="relative border-t border-border bg-secondary/30">
+        <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+            {stats.map((s, index) => (
+              <AnimatedSection key={s.label} delay={index * 80} className="text-center">
+                <div className="text-4xl sm:text-5xl font-semibold tracking-tight text-foreground">
+                  <AnimatedCounter end={s.value} suffix={s.suffix} />
+                </div>
+                <div className="mt-2 text-xs sm:text-sm text-muted-foreground font-medium">
+                  {s.label}
+                </div>
+              </AnimatedSection>
+            ))}
+          </div>
         </div>
       </section>
 

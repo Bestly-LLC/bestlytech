@@ -39,15 +39,8 @@ export function ThirteenServices() {
   return (
     <section className="border-t border-border">
       <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-        <Reveal className="mx-auto mb-12 max-w-2xl text-center">
-          <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Thirteen services.{" "}
-            <GradientText as="span" className="animate-gradient-flow">One small device.</GradientText>
-          </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-            Every tool your team uses — replaced by one private platform that lives in your office and wears your brand.
-          </p>
-        </Reveal>
+        {/* Headline intentionally omitted — the CloudServicesReveal scene
+            directly above ends on "Thirteen services. Out of one small box." */}
 
         {/* Detailed card grid (the convergence hub was replaced by the
             CloudServicesReveal 3D scene that precedes this section) */}
