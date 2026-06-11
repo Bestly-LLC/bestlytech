@@ -73,10 +73,8 @@ export function CloudScrollHero() {
     rim.position.set(-3, 2, -4);
     scene.add(rim);
 
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(40, 40),
-      new THREE.ShadowMaterial({ opacity: 0.16 })
-    );
+    const groundMat = new THREE.ShadowMaterial({ opacity: 0.16 });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.92;
     ground.receiveShadow = true;
@@ -203,9 +201,12 @@ export function CloudScrollHero() {
       device.position.y = -0.34 * (1 - arc) + Math.sin(p * Math.PI) * 0.04;
       const shortness = Math.min(1, canvas.clientHeight / 950);
       const restScale = (1 - 0.08 * (1 - arc)) * (shortness + (1 - shortness) * arc);
-      // What's Inside: the same device steps back a touch to make room for
-      // the service chips launching out of it.
-      device.scale.multiplyScalar(restScale * (1 - 0.28 * inEntry));
+      // What's Inside: the same device steps well back so the chip ring has
+      // clear air around it (matches the pre-merge scene's proportions).
+      device.scale.multiplyScalar(restScale * (1 - 0.45 * inEntry));
+      // The ground shadow reads as a detached smear from straight above —
+      // fade it out as the chips take the stage.
+      groundMat.opacity = 0.16 * (1 - inEntry);
 
       // 35% → 85%: the lid floats upward off the base, then exits the frame
       const lift = easeInOut(clamp01((p - 0.35) / 0.5));
@@ -383,7 +384,7 @@ export function CloudScrollHero() {
           </p>
           <div
             ref={stageRef}
-            className="pointer-events-none absolute left-1/2 top-1/2 aspect-square w-full -translate-x-1/2 -translate-y-1/2"
+            className="pointer-events-none absolute left-1/2 top-[53%] aspect-square w-full -translate-x-1/2 -translate-y-1/2"
             style={{ maxWidth: "min(88vw, 640px, 74vh)" }}
             aria-hidden="true"
           >
