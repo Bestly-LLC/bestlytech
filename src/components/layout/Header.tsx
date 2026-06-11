@@ -9,7 +9,7 @@ import bestlyLogo from "@/assets/bestly-logo.png";
 
 const navigation = [
   { name: "Home", href: "/" },
-  { name: "Cloud", href: "/cloud" },
+  { name: "In-House Cloud", href: "/cloud" },
   { name: "Services", href: "/services" },
   { name: "About", href: "/about" },
   { name: "Contact", href: "/contact" },
