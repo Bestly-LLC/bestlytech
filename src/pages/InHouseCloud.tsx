@@ -7,7 +7,6 @@ import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { InteractivePricingCalculator } from "@/components/InteractivePricingCalculator";
 import { CloudScrollHero } from "@/components/cloud/CloudScrollHero";
 import { ThirteenServices } from "@/components/cloud/ThirteenServices";
-import { CloudServicesReveal } from "@/components/cloud/CloudServicesReveal";
 import { CloudPrivacySeal } from "@/components/cloud/CloudPrivacySeal";
 import { CloudDockCTA } from "@/components/cloud/CloudDockCTA";
 import {
@@ -182,11 +181,8 @@ export default function InHouseCloud() {
         path="/cloud"
       />
 
-      {/* A. Hero — scroll-scrubbed 3D device */}
+      {/* A+B. Hero + What's Inside — one continuous scroll-scrubbed 3D shot */}
       <CloudScrollHero />
-
-      {/* B. What's inside — the thirteen services launch out of the open device */}
-      <CloudServicesReveal />
 
       {/* C/D. The thirteen services — card grid */}
       <ThirteenServices />

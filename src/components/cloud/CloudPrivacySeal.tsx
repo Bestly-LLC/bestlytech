@@ -16,7 +16,9 @@ import { loadDeviceGLTF } from "./deviceModel";
  */
 
 const LID_OPEN_Y = 0.26;
-const LID_CLOSED_Y = -0.125;
+// Past the baked seam — the lid skirt drops over the side vent band so the
+// case reads fully shut.
+const LID_CLOSED_Y = -0.3;
 
 export function CloudPrivacySeal() {
   const reduce = useReducedMotion();
@@ -37,7 +39,7 @@ export function CloudPrivacySeal() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
-    camera.position.set(0, 1.0, 5.2);
+    camera.position.set(0, 1.5, 5.0);
     camera.lookAt(0, -0.05, 0);
 
     const pmrem = new THREE.PMREMGenerator(renderer);

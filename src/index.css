@@ -487,3 +487,27 @@
   --sidebar-border: 0 0% 10%;
   --sidebar-ring: 0 0% 30%;
 }
+
+/* Animated gradient underline for the hero's "We think you should." */
+.cloud-underline::after {
+  content: "";
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  bottom: 0.06em;
+  height: 0.09em;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, hsl(var(--gradient-start)), hsl(var(--gradient-end)));
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: cloud-underline-draw 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.7s forwards;
+}
+@keyframes cloud-underline-draw {
+  to { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cloud-underline::after {
+    animation: none;
+    transform: scaleX(1);
+  }
+}

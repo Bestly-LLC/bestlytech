@@ -6,7 +6,9 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { gsap } from "gsap";
 import { GradientText } from "@/components/ui/GradientText";
+import { SERVICES } from "./ThirteenServices";
 
 /**
  * CloudScrollHero — Apple-style scroll-scrubbed product hero (Phase 1).
@@ -26,6 +28,12 @@ export function CloudScrollHero() {
   const capRef = useRef<HTMLParagraphElement>(null);
   const hintRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLHeadingElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const eyebrowRef = useRef<HTMLParagraphElement>(null);
+  const inHeadRef = useRef<HTMLDivElement>(null);
+  const chipRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const ctaGroupRef = useRef<HTMLDivElement>(null);
+  const pillsRef = useRef<HTMLDivElement>(null);
   const progress = useRef(0);
 
   useEffect(() => {
@@ -165,7 +173,12 @@ export function CloudScrollHero() {
     const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
     const render = () => {
       resize();
-      const p = reduce ? 0.18 : progress.current;
+      // One continuous scroll: 0–55% is the hero choreography, 55–100% is
+      // "What's inside" — same canvas, same device, no handoff.
+      const P = reduce ? 0.18 : progress.current;
+      const p = clamp01(P / 0.55);
+      const inP = reduce ? 0 : clamp01((P - 0.55) / 0.45);
+      const inEntry = easeInOut(clamp01(inP / 0.18));
 
       // Throughout: slow turntable + power-on glow.
       // As the bird's-eye arrives, the spin settles so the device ends
@@ -174,7 +187,7 @@ export function CloudScrollHero() {
       const spin = -0.5 + p * Math.PI * 2;
       const target = -Math.PI / 2;
       const goal = target + Math.round((spin - target) / (Math.PI * 2)) * Math.PI * 2;
-      device.rotation.y = spin + (goal - spin) * straighten;
+      device.rotation.y = spin + (goal - spin) * straighten + inP * 0.35;
       device.rotation.x = (0.05 + Math.sin(p * Math.PI) * 0.04) * (1 - straighten);
       // On narrow screens the device would span the full width — pull it back.
       device.scale.setScalar(camera.aspect < 0.75 ? 0.78 : camera.aspect < 1.1 ? 0.9 : 1);
@@ -188,13 +201,11 @@ export function CloudScrollHero() {
       // sub-headline (short viewports shrink it further); returns to
       // center/full size as the camera rises.
       device.position.y = -0.34 * (1 - arc) + Math.sin(p * Math.PI) * 0.04;
-      // Final beat: the device exits through the top of the frame, handing
-      // off to the What's Inside scene where it flips back down into view.
-      const exitT = easeInOut(clamp01((p - 0.93) / 0.07));
-      device.position.z = -exitT * 2.6;
       const shortness = Math.min(1, canvas.clientHeight / 950);
       const restScale = (1 - 0.08 * (1 - arc)) * (shortness + (1 - shortness) * arc);
-      device.scale.multiplyScalar(restScale);
+      // What's Inside: the same device steps back a touch to make room for
+      // the service chips launching out of it.
+      device.scale.multiplyScalar(restScale * (1 - 0.28 * inEntry));
 
       // 35% → 85%: the lid floats upward off the base, then exits the frame
       const lift = easeInOut(clamp01((p - 0.35) / 0.5));
@@ -224,12 +235,61 @@ export function CloudScrollHero() {
         if (headRef.current) headRef.current.style.opacity = String(Math.max(0, 1 - arc * 1.4));
         if (subRef.current) subRef.current.style.opacity = String(Math.max(0, 1 - p * 6));
         if (ebRef.current) ebRef.current.style.opacity = String(Math.max(0, 1 - p * 6));
-        if (capRef.current) capRef.current.style.opacity = String(Math.min(1, Math.max(0, (p - 0.6) * 3.2)) * (1 - exitT));
+        if (capRef.current) capRef.current.style.opacity = String(Math.min(1, Math.max(0, (p - 0.6) * 3.2)) * (1 - inEntry));
         if (hintRef.current) hintRef.current.style.opacity = String(Math.max(0, 1 - p * 10));
+        if (eyebrowRef.current) eyebrowRef.current.style.opacity = String(inEntry);
+        // Hero CTAs/pills step aside once the chips take the stage
+        if (ctaGroupRef.current) {
+          ctaGroupRef.current.style.opacity = String(1 - inEntry);
+          ctaGroupRef.current.style.pointerEvents = inEntry > 0.4 ? "none" : "";
+        }
+        if (pillsRef.current) pillsRef.current.style.opacity = String(1 - inEntry);
+        // Chips launch out of the open chassis (GSAP timeline, scrubbed)
+        if (tlRef) {
+          tlSmooth += (inP - tlSmooth) * 0.14;
+          tlRef.progress(tlSmooth);
+        }
       }
       renderer.render(scene, camera);
       raf = requestAnimationFrame(render);
     };
+
+    // "What's inside" chip timeline — same pattern as before, now living in
+    // the hero's own scroll so the device never changes canvases.
+    let tlRef: gsap.core.Timeline | null = null;
+    let tlSmooth = 0;
+    const stage = stageRef.current;
+    const chips = chipRefs.current.filter(Boolean) as HTMLDivElement[];
+    const ctx = gsap.context(() => {
+      if (reduce || !stage) return;
+      const tl = gsap.timeline({ paused: true });
+      chips.forEach((chip, i) => {
+        tl.from(
+          chip,
+          {
+            x: () => {
+              const s = stage.getBoundingClientRect();
+              const c = chip.getBoundingClientRect();
+              return s.left + s.width / 2 - (c.left + c.width / 2);
+            },
+            y: () => {
+              const s = stage.getBoundingClientRect();
+              const c = chip.getBoundingClientRect();
+              return s.top + s.height * 0.52 - (c.top + c.height / 2);
+            },
+            scale: 0.18,
+            opacity: 0,
+            rotation: i % 2 ? 10 : -10,
+            ease: "back.out(1.5)",
+            duration: 0.42,
+          },
+          0.12 + i * 0.05
+        );
+      });
+      tl.from(inHeadRef.current, { opacity: 0, y: 26, duration: 0.25, ease: "power2.out" }, 0.92);
+      tl.progress(0);
+      tlRef = tl;
+    }, section);
 
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", resize);
@@ -247,6 +307,7 @@ export function CloudScrollHero() {
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
+      ctx.revert();
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", resize);
       scene.environment = null;
@@ -256,7 +317,7 @@ export function CloudScrollHero() {
   }, [reduce]);
 
   return (
-    <section ref={sectionRef} className={reduce ? "relative" : "relative h-[300vh]"}>
+    <section ref={sectionRef} className={reduce ? "relative" : "relative h-[520vh]"}>
       <div className="sticky top-0 h-screen overflow-hidden">
         {/* ambient wash */}
         <div className="pointer-events-none absolute inset-0 -z-10 bg-mesh opacity-50" aria-hidden="true" />
@@ -270,16 +331,18 @@ export function CloudScrollHero() {
           <p ref={ebRef} className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-primary backdrop-blur-sm">
             Bestly In-House Cloud
           </p>
-          <h1 ref={headRef} className="font-modern mt-5 max-w-[16ch] text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-            Big tech owns your data.{" "}
-            <GradientText as="span" className="animate-gradient-flow">We think you should.</GradientText>
+          <h1 ref={headRef} className="font-modern mt-5 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+            <span className="block">Big tech owns your data.</span>
+            <GradientText as="span" className="cloud-underline relative mt-1 inline-block animate-gradient-flow pb-2">
+              We think you should.
+            </GradientText>
           </h1>
           <p ref={subRef} className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
             One small device in your office replaces thirteen subscriptions — and your data never leaves the building.
           </p>
           {/* CTAs: centered on mobile, pinned to the left side on desktop so the
               device never sits behind them */}
-          <div className="pointer-events-auto mt-8 flex flex-col items-center gap-4 sm:flex-row lg:absolute lg:left-[6vw] lg:top-1/2 lg:mt-0 lg:-translate-y-1/2 lg:flex-col lg:items-stretch">
+          <div ref={ctaGroupRef} className="pointer-events-auto mt-8 flex flex-col items-center gap-4 sm:flex-row lg:absolute lg:left-[6vw] lg:top-1/2 lg:mt-0 lg:-translate-y-1/2 lg:flex-col lg:items-stretch">
             <Link
               to="/get-started"
               className="group inline-flex items-center justify-center rounded-xl gradient-bg px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/20 btn-lift glow"
@@ -296,7 +359,7 @@ export function CloudScrollHero() {
           </div>
           {/* Trust chips: centered on mobile, pinned right on desktop; pill
               backgrounds keep them readable over the device */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm text-muted-foreground lg:absolute lg:right-[6vw] lg:top-1/2 lg:mt-0 lg:-translate-y-1/2 lg:flex-col lg:items-end lg:gap-3">
+          <div ref={pillsRef} className="mt-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm text-muted-foreground lg:absolute lg:right-[6vw] lg:top-1/2 lg:mt-0 lg:-translate-y-1/2 lg:flex-col lg:items-end lg:gap-3">
             {["$0 per-seat fees", "Never sold, never retained", "On premises & on brand"].map((t) => (
               <span
                 key={t}
@@ -310,6 +373,47 @@ export function CloudScrollHero() {
           <p ref={capRef} className="absolute bottom-[8vh] left-1/2 -translate-x-1/2 text-sm text-muted-foreground" style={{ opacity: 0 }}>
             Look inside. <span className="font-medium text-foreground">Thirteen services, one small device.</span>
           </p>
+          {/* ── What's Inside (phase 2 of the same continuous scroll) ── */}
+          <p
+            ref={eyebrowRef}
+            className="absolute top-[7vh] left-1/2 -translate-x-1/2 text-sm font-semibold uppercase tracking-widest text-primary"
+            style={{ opacity: 0 }}
+          >
+            What's inside
+          </p>
+          <div
+            ref={stageRef}
+            className="pointer-events-none absolute left-1/2 top-1/2 aspect-square w-full -translate-x-1/2 -translate-y-1/2"
+            style={{ maxWidth: "min(88vw, 640px, 74vh)" }}
+            aria-hidden="true"
+          >
+            {SERVICES.map((s, i) => {
+              const ang = (2 * Math.PI / SERVICES.length) * i - Math.PI / 2;
+              const x = 50 + 42 * Math.cos(ang);
+              const y = 50 + 42 * Math.sin(ang);
+              return (
+                <div
+                  key={s.title}
+                  ref={(el) => (chipRefs.current[i] = el)}
+                  className="absolute flex w-[84px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5 text-center will-change-transform"
+                  style={{ left: `${x}%`, top: `${y}%` }}
+                >
+                  <div className="flex h-[46px] w-[46px] items-center justify-center rounded-[14px] border border-border bg-card/90 shadow-premium backdrop-blur-sm">
+                    <s.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <span className="rounded-full bg-background/70 px-2 py-0.5 text-[10.5px] font-semibold leading-tight text-foreground backdrop-blur-sm">
+                    {s.title}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div ref={inHeadRef} className="absolute bottom-[7vh] left-1/2 w-full -translate-x-1/2 px-6 text-center">
+            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              Thirteen services.{" "}
+              <GradientText as="span" className="animate-gradient-flow">Out of one small box.</GradientText>
+            </h2>
+          </div>
           {!reduce && (
             <div
               ref={hintRef}
