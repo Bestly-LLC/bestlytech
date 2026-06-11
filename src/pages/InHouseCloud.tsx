@@ -191,6 +191,9 @@ export default function InHouseCloud() {
       {/* C/D. The thirteen services — card grid */}
       <ThirteenServices />
 
+      {/* Scene: close the lid — privacy promise */}
+      <CloudPrivacySeal />
+
       {/* E. Pillars — why this works */}
       <section className="border-t border-border bg-secondary/20">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
@@ -257,9 +260,7 @@ export default function InHouseCloud() {
         </div>
       </section>
 
-      {/* G. Remaining — privacy seal, story, metrics */}
-      <CloudPrivacySeal />
-
+      {/* G. Remaining — story, metrics */}
       {/* Problem · Agitate · Solve */}
       <section className="border-t border-border bg-secondary/20">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">

@@ -188,6 +188,10 @@ export function CloudScrollHero() {
       // sub-headline (short viewports shrink it further); returns to
       // center/full size as the camera rises.
       device.position.y = -0.34 * (1 - arc) + Math.sin(p * Math.PI) * 0.04;
+      // Final beat: the device exits through the top of the frame, handing
+      // off to the What's Inside scene where it flips back down into view.
+      const exitT = easeInOut(clamp01((p - 0.93) / 0.07));
+      device.position.z = -exitT * 2.6;
       const shortness = Math.min(1, canvas.clientHeight / 950);
       const restScale = (1 - 0.08 * (1 - arc)) * (shortness + (1 - shortness) * arc);
       device.scale.multiplyScalar(restScale);
@@ -220,7 +224,7 @@ export function CloudScrollHero() {
         if (headRef.current) headRef.current.style.opacity = String(Math.max(0, 1 - arc * 1.4));
         if (subRef.current) subRef.current.style.opacity = String(Math.max(0, 1 - p * 6));
         if (ebRef.current) ebRef.current.style.opacity = String(Math.max(0, 1 - p * 6));
-        if (capRef.current) capRef.current.style.opacity = String(Math.min(1, Math.max(0, (p - 0.6) * 3.2)));
+        if (capRef.current) capRef.current.style.opacity = String(Math.min(1, Math.max(0, (p - 0.6) * 3.2)) * (1 - exitT));
         if (hintRef.current) hintRef.current.style.opacity = String(Math.max(0, 1 - p * 10));
       }
       renderer.render(scene, camera);

@@ -30,6 +30,7 @@ export function CloudServicesReveal() {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
+  const eyebrowRef = useRef<HTMLParagraphElement>(null);
   const chipRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
@@ -113,6 +114,9 @@ export function CloudServicesReveal() {
       scrubTarget = total > 0 ? Math.min(1, Math.max(0, -section.getBoundingClientRect().top / total)) : 0;
     };
 
+    const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
+    const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+
     let raf = 0;
     let running = false;
     const frame = () => {
@@ -122,8 +126,14 @@ export function CloudServicesReveal() {
         tlRef.progress(scrubSmooth);
       }
       const p = progress.value;
+      // Entry: continuous handoff from the hero — the device comes in from
+      // the top of the frame and flips down into place before chips launch.
+      const entry = reduce ? 1 : easeOut(clamp01(scrubSmooth / 0.18));
+      device.position.z = -(1 - entry) * 3.0;
+      device.rotation.x = -(1 - entry) * 1.05;
       device.rotation.y = -Math.PI / 2 + p * 0.35;
       device.scale.setScalar(0.92 + p * 0.08);
+      if (eyebrowRef.current) eyebrowRef.current.style.opacity = String(entry);
       renderer.render(scene, camera);
       if (running) raf = requestAnimationFrame(frame);
     };
@@ -166,12 +176,12 @@ export function CloudServicesReveal() {
             ease: "back.out(1.5)",
             duration: 0.42,
           },
-          0.06 + i * 0.052
+          0.24 + i * 0.046
         );
       });
 
       // Headline lands once the box is empty
-      tl.from(headRef.current, { opacity: 0, y: 28, duration: 0.3, ease: "power2.out" }, 0.82);
+      tl.from(headRef.current, { opacity: 0, y: 28, duration: 0.3, ease: "power2.out" }, 0.9);
 
       tl.progress(0);
       tlRef = tl;
@@ -216,7 +226,7 @@ export function CloudServicesReveal() {
   return (
     <section
       ref={sectionRef}
-      className={`relative border-t border-border ${reduce ? "" : "h-[270vh]"}`}
+      className={`relative ${reduce ? "" : "h-[270vh]"}`}
       aria-label="Thirteen services come out of one device"
     >
       <div className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden">
@@ -225,7 +235,7 @@ export function CloudServicesReveal() {
           className="pointer-events-none absolute left-1/2 top-1/2 h-[70vmin] w-[70vmin] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,hsl(var(--gradient-end)/0.10),transparent_65%)]"
           aria-hidden="true"
         />
-        <p className="mb-1 text-sm font-semibold uppercase tracking-widest text-primary">
+        <p ref={eyebrowRef} className="mb-1 text-sm font-semibold uppercase tracking-widest text-primary" style={{ opacity: 0 }}>
           What's inside
         </p>
         <div ref={stageRef} className="relative aspect-square" style={{ width: "min(88vw, 640px, 64vh)" }}>
