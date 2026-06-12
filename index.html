@@ -15,6 +15,9 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
     <link rel="preconnect" href="https://rcqfqhguwpmaarseifqg.supabase.co" crossorigin />
+    <!-- 3D hero: start the model download during HTML parse + warm the draco decoder host -->
+    <link rel="preload" href="/models/device-web-split.glb" as="fetch" type="model/gltf-binary" crossorigin />
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />

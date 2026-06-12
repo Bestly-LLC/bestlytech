@@ -3,12 +3,11 @@ import { Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2, ChevronDown } from "lucide-react";
 import { useReducedMotion } from "framer-motion";
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { gsap } from "gsap";
 import { GradientText } from "@/components/ui/GradientText";
 import { SERVICES } from "./ThirteenServices";
+import { loadDeviceGLTF } from "./deviceModel";
 
 /**
  * CloudScrollHero — Apple-style scroll-scrubbed product hero (Phase 1).
@@ -34,6 +33,7 @@ export function CloudScrollHero() {
   const chipRefs = useRef<(HTMLDivElement | null)[]>([]);
   const ctaGroupRef = useRef<HTMLDivElement>(null);
   const pillsRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef<HTMLDivElement>(null);
   const progress = useRef(0);
 
   useEffect(() => {
@@ -102,13 +102,11 @@ export function CloudScrollHero() {
     const LID_OPEN_Y = 0.55;
     const LID_DRIFT_Z = -1.9; // slides far back as the camera rises — fully out of frame
     let lidMats: THREE.Material[] = [];
-    const draco = new DRACOLoader();
-    draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
-    const loader = new GLTFLoader();
-    loader.setDRACOLoader(draco);
-    loader.load("/models/device-web-split.glb", (gltf) => {
+    // Shared cached loader: one fetch + one draco decode for the whole page
+    // (the seal/dock/mini scenes clone from the same parse).
+    loadDeviceGLTF().then((gltf) => {
       if (cancelled) return;
-      const model = gltf.scene;
+      const model = gltf.scene.clone(true);
       // Normalize: fit largest dimension to ~1.75 world units, center on origin,
       // then sit slightly low so the headline/CTA stay clear.
       const box = new THREE.Box3().setFromObject(model);
@@ -120,15 +118,14 @@ export function CloudScrollHero() {
       // Keep the model above the shadow ground plane.
       box.setFromObject(model);
       if (box.min.y < -0.88) model.position.y += -0.88 - box.min.y;
+      // NOTE: geometries/materials are SHARED with the cached parse used by
+      // the seal/dock/mini scenes — never dispose them here. Only hero-owned
+      // clones (lid materials below) go into disposables.
       model.traverse((o) => {
         const mesh = o as THREE.Mesh;
-        if (mesh.isMesh) {
-          mesh.castShadow = true;
-          if (mesh.geometry) disposables.push(mesh.geometry);
-          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          mats.forEach((m) => m && disposables.push(m));
-        }
+        if (mesh.isMesh) mesh.castShadow = true;
       });
+      if (loadingRef.current) loadingRef.current.style.opacity = "0";
       lid = model.getObjectByName("lid") ?? null;
       if (lid) {
         lid.position.y = LID_CLOSED_Y;
@@ -150,7 +147,6 @@ export function CloudScrollHero() {
       }
       device.add(model);
     });
-    disposables.push(draco);
 
     const resize = () => {
       const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -322,6 +318,14 @@ export function CloudScrollHero() {
       <div className="sticky top-0 h-screen overflow-hidden">
         {/* ambient wash */}
         <div className="pointer-events-none absolute inset-0 -z-10 bg-mesh opacity-50" aria-hidden="true" />
+        {/* loading shimmer where the device will appear — fades out on model load */}
+        <div
+          ref={loadingRef}
+          className="pointer-events-none absolute left-1/2 top-[62%] -translate-x-1/2 -translate-y-1/2 transition-opacity duration-700"
+          aria-hidden="true"
+        >
+          <div className="h-[34vmin] w-[52vmin] animate-pulse rounded-[2.5rem] bg-[radial-gradient(ellipse,hsl(var(--gradient-end)/0.14),hsl(var(--gradient-start)/0.05)_60%,transparent_75%)]" />
+        </div>
         <canvas
           ref={canvasRef}
           className="absolute inset-0 h-full w-full"
