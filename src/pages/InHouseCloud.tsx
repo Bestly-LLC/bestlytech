@@ -217,46 +217,6 @@ export default function InHouseCloud() {
         </div>
       </section>
 
-      {/* Savings — interactive */}
-      <InteractivePricingCalculator />
-
-      {/* Proof: deployment #001 is Bestly itself */}
-      <section className="border-t border-border bg-secondary/10">
-        <div className="mx-auto max-w-5xl px-6 py-24 lg:px-8 lg:py-28">
-          <AnimatedSection animation="fade-in" className="text-center">
-            <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">
-              Real deployment
-            </p>
-            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Deployment #001: <GradientText as="span">us.</GradientText>
-            </h2>
-            <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-              Bestly runs on Bestly. The files, documents, calendars, and team
-              calls behind this company live on the exact device on this page —
-              sitting on a shelf in our office, not in anyone else's data
-              center. We don't sell anything we don't run our own business on.
-            </p>
-            <div className="mx-auto mt-8 flex max-w-2xl flex-wrap items-center justify-center gap-2.5">
-              {["Files & backups", "Documents", "Calendars", "Team calls & chat", "Local AI"].map((t) => (
-                <span
-                  key={t}
-                  className="rounded-full border border-border bg-background/80 px-4 py-1.5 text-sm font-medium text-foreground"
-                >
-                  {t}
-                </span>
-              ))}
-            </div>
-            <p className="mt-8 text-sm text-muted-foreground">
-              Your business could be deployment #002.{" "}
-              <Link to="/get-started" className="font-semibold text-primary underline-offset-4 hover:underline">
-                Start the conversation
-              </Link>
-            </p>
-          </AnimatedSection>
-        </div>
-      </section>
-
-      {/* G. Remaining — story, metrics */}
       {/* Problem · Agitate · Solve */}
       <section className="border-t border-border bg-secondary/20">
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
@@ -313,6 +273,45 @@ export default function InHouseCloud() {
               </AnimatedSection>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Savings — interactive */}
+      <InteractivePricingCalculator />
+
+      {/* Proof: deployment #001 is Bestly itself */}
+      <section className="border-t border-border bg-secondary/10">
+        <div className="mx-auto max-w-5xl px-6 py-24 lg:px-8 lg:py-28">
+          <AnimatedSection animation="fade-in" className="text-center">
+            <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">
+              Real deployment
+            </p>
+            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              Deployment #001: <GradientText as="span">us.</GradientText>
+            </h2>
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+              Bestly runs on Bestly. The files, documents, calendars, and team
+              calls behind this company live on the exact device on this page —
+              sitting on a shelf in our office, not in anyone else's data
+              center. We don't sell anything we don't run our own business on.
+            </p>
+            <div className="mx-auto mt-8 flex max-w-2xl flex-wrap items-center justify-center gap-2.5">
+              {["Files & backups", "Documents", "Calendars", "Team calls & chat", "Local AI"].map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full border border-border bg-background/80 px-4 py-1.5 text-sm font-medium text-foreground"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+            <p className="mt-8 text-sm text-muted-foreground">
+              Your business could be deployment #002.{" "}
+              <Link to="/get-started" className="font-semibold text-primary underline-offset-4 hover:underline">
+                Start the conversation
+              </Link>
+            </p>
+          </AnimatedSection>
         </div>
       </section>
 

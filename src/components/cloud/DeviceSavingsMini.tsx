@@ -56,7 +56,7 @@ export function DeviceSavingsMini({ intensity }: { intensity: number }) {
       box.setFromObject(model);
       model.position.sub(box.getCenter(new THREE.Vector3()));
       const lid = model.getObjectByName("lid");
-      if (lid) lid.position.y = -0.125;
+      if (lid) lid.position.y = -0.3; // fully closed — skirt covers the vent band
       device.add(model);
     });
 

@@ -388,8 +388,8 @@ export function CloudScrollHero() {
           </p>
           <div
             ref={stageRef}
-            className="pointer-events-none absolute left-1/2 top-[53%] aspect-square w-full -translate-x-1/2 -translate-y-1/2"
-            style={{ maxWidth: "min(94vw, 780px, 82vh)" }}
+            className="pointer-events-none absolute left-1/2 top-[50%] aspect-square w-full -translate-x-1/2 -translate-y-1/2"
+            style={{ maxWidth: "min(94vw, 720px, 66vh)" }}
             aria-hidden="true"
           >
             {SERVICES.map((s, i) => {
@@ -413,7 +413,7 @@ export function CloudScrollHero() {
               );
             })}
           </div>
-          <div ref={inHeadRef} className="absolute bottom-[7vh] left-1/2 w-full -translate-x-1/2 px-6 text-center">
+          <div ref={inHeadRef} className="absolute bottom-[3.5vh] left-1/2 w-full -translate-x-1/2 px-6 text-center">
             <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               Thirteen services.{" "}
               <GradientText as="span" className="animate-gradient-flow">Out of one small box.</GradientText>

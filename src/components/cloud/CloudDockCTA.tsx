@@ -64,7 +64,7 @@ export function CloudDockCTA() {
       box.setFromObject(model);
       model.position.sub(box.getCenter(new THREE.Vector3()));
       const lid = model.getObjectByName("lid");
-      if (lid) lid.position.y = -0.125; // sealed
+      if (lid) lid.position.y = -0.3; // fully closed — skirt covers the vent band
       if (import.meta.env.DEV) {
         (window as unknown as Record<string, unknown>).__dockInfo = {
           lidFound: !!lid,
