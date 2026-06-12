@@ -198,7 +198,7 @@ export function CloudScrollHero() {
       // Sit lower and smaller at rest so the device never crowds the
       // sub-headline (short viewports shrink it further); returns to
       // center/full size as the camera rises.
-      device.position.y = -0.34 * (1 - arc) + Math.sin(p * Math.PI) * 0.04;
+      device.position.y = -0.24 * (1 - arc) + Math.sin(p * Math.PI) * 0.04;
       const shortness = Math.min(1, canvas.clientHeight / 950);
       const restScale = (1 - 0.08 * (1 - arc)) * (shortness + (1 - shortness) * arc);
       // What's Inside: the same device steps well back so the chip ring has
@@ -385,24 +385,24 @@ export function CloudScrollHero() {
           <div
             ref={stageRef}
             className="pointer-events-none absolute left-1/2 top-[53%] aspect-square w-full -translate-x-1/2 -translate-y-1/2"
-            style={{ maxWidth: "min(88vw, 640px, 74vh)" }}
+            style={{ maxWidth: "min(94vw, 780px, 82vh)" }}
             aria-hidden="true"
           >
             {SERVICES.map((s, i) => {
               const ang = (2 * Math.PI / SERVICES.length) * i - Math.PI / 2;
-              const x = 50 + 42 * Math.cos(ang);
-              const y = 50 + 42 * Math.sin(ang);
+              const x = 50 + 45 * Math.cos(ang);
+              const y = 50 + 45 * Math.sin(ang);
               return (
                 <div
                   key={s.title}
                   ref={(el) => (chipRefs.current[i] = el)}
-                  className="absolute flex w-[84px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5 text-center will-change-transform"
+                  className="absolute flex w-[108px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5 text-center will-change-transform"
                   style={{ left: `${x}%`, top: `${y}%` }}
                 >
-                  <div className="flex h-[46px] w-[46px] items-center justify-center rounded-[14px] border border-border bg-card/90 shadow-premium backdrop-blur-sm">
-                    <s.icon className="h-5 w-5 text-primary" />
+                  <div className="flex h-[58px] w-[58px] items-center justify-center rounded-[16px] border border-border bg-card/90 shadow-premium backdrop-blur-sm">
+                    <s.icon className="h-[26px] w-[26px] text-primary" />
                   </div>
-                  <span className="rounded-full bg-background/70 px-2 py-0.5 text-[10.5px] font-semibold leading-tight text-foreground backdrop-blur-sm">
+                  <span className="rounded-full bg-background/70 px-2.5 py-0.5 text-xs font-semibold leading-tight text-foreground backdrop-blur-sm">
                     {s.title}
                   </span>
                 </div>
