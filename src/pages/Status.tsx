@@ -56,7 +56,7 @@ const SERVICE_DISPLAY: Record<string, { label: string; description: string }> = 
   },
   "cloud.bestly.tech": {
     label: "Bestly Cloud",
-    description: "In-house Nextcloud + Proxmox surface",
+    description: "In-house cloud + Proxmox surface",
   },
   "cookieyeti.com": {
     label: "Cookie Yeti Site",

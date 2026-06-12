@@ -27,7 +27,7 @@ const replaces = [
     icon: MessageSquare,
     title: "Video & Chat",
     subtitle: "Zoom · Slack · Teams",
-    outcome: "Encrypted calls, screen share, and persistent rooms — Nextcloud Talk on your TURN server.",
+    outcome: "Encrypted calls, screen share, and persistent rooms — on your own TURN server.",
   },
   {
     icon: Mail,
@@ -367,6 +367,39 @@ export default function InHouseCloud() {
               </AnimatedSection>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Open-source & licensing */}
+      <section className="border-t border-border">
+        <div className="mx-auto max-w-3xl px-6 py-12 lg:px-8 text-center">
+          <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">
+            Open-source &amp; licensing
+          </p>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Your In-House Cloud is a white-labeled, self-hosted platform built on
+            open-source software, including components licensed under the{" "}
+            <a
+              href="https://www.gnu.org/licenses/agpl-3.0.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground transition-colors"
+            >
+              GNU AGPL v3
+            </a>
+            . It runs on your hardware under your brand. Bestly LLC operates a
+            modified deployment and is an independent provider — not affiliated with,
+            sponsored by, or endorsed by Nextcloud GmbH. Corresponding source code for
+            the AGPL-licensed components we run, including our modifications, is
+            available to users of the service on request at{" "}
+            <a
+              href="mailto:support@bestly.tech?subject=Open-source%20source%20code%20request"
+              className="underline hover:text-foreground transition-colors"
+            >
+              support@bestly.tech
+            </a>
+            .
+          </p>
         </div>
       </section>
 

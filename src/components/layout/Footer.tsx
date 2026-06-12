@@ -110,7 +110,34 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-16 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* Open-source / AGPL compliance notice */}
+        <div className="mt-16 pt-8 border-t border-border">
+          <p className="text-xs text-muted-foreground/80 leading-relaxed max-w-3xl">
+            Bestly In-House Cloud is a self-hosted deployment built on open-source
+            software, including components licensed under the{" "}
+            <a
+              href="https://www.gnu.org/licenses/agpl-3.0.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground transition-colors"
+            >
+              GNU AGPL v3
+            </a>
+            . Bestly LLC operates a modified, independently-branded deployment and is
+            not affiliated with, sponsored by, or endorsed by Nextcloud GmbH. Source
+            code for the AGPL-licensed components we run, including our modifications,
+            is available to users of the service on request at{" "}
+            <a
+              href="mailto:support@bestly.tech?subject=Open-source%20source%20code%20request"
+              className="underline hover:text-foreground transition-colors"
+            >
+              support@bestly.tech
+            </a>
+            .
+          </p>
+        </div>
+
+        <div className="mt-8 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
             © {new Date().getFullYear()} Bestly LLC. All rights reserved.
           </p>
