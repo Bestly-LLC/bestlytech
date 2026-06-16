@@ -618,10 +618,10 @@ export default function CookieYeti() {
           <AnimatedSection>
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Coming Soon
+                Get Cookie Yeti
               </h2>
               <p className="mt-4 text-lg text-muted-foreground">
-                Cookie Yeti will be available on your favorite platforms
+                Available now on iPhone, iPad &amp; Mac. Chrome coming soon.
               </p>
             </div>
           </AnimatedSection>
@@ -635,21 +635,28 @@ export default function CookieYeti() {
                 >
                   <platform.icon className="h-5 w-5 text-muted-foreground" />
                   <span className="font-medium text-foreground">{platform.name}</span>
-                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
-                    Coming Soon
-                  </Badge>
+                  {platform.available ? (
+                    <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs">
+                      Available Now
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
+                      Coming Soon
+                    </Badge>
+                  )}
                 </div>
               ))}
             </div>
           </AnimatedSection>
           
           <AnimatedSection delay={200}>
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
-              <img
-                src={comingSoonAppstore}
-                alt="Coming Soon to App Store and Android"
-                className="h-auto w-64 rounded-xl shadow-md"
-              />
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button asChild size="lg" className="gap-2 text-base px-8 py-6">
+                <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
+                  <Download className="h-5 w-5" />
+                  Download on the App Store
+                </a>
+              </Button>
               <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
                 <Chrome className="h-8 w-8 text-muted-foreground" />
                 <div className="text-left">
