@@ -31,40 +31,40 @@ import hokuBottle from "@/assets/hoku-bottle.png";
 
 const HOUSE_EASE = [0.32, 0.72, 0, 1] as const;
 
-const heroLine1 = ["We", "build", "products"];
-const heroLine2 = ["that", "respect"];
-const accentWord = "you.";
+const heroLine1 = ["Stop", "renting", "your"];
+const heroLine2 = ["business", "from"];
+const accentWord = "big tech.";
 
 const heroPills = [
-  "Privacy-first",
-  "Software · Hardware · Cloud",
-  "On premises & on brand",
-  "Los Angeles",
+  "Private cloud for your office",
+  "Apps that don't sell your data",
+  "Extensions that block surveillance",
+  "Built in Los Angeles",
 ];
 
 const focusAreas = [
-  { name: "Apps & Platforms", body: "Mobile and web products designed to work for you, not against you.", image: glossyApps },
-  { name: "AI & Automation", body: "Smart tools that are transparent about how they think.", image: glossyAi },
-  { name: "Browser Extensions", body: "Productivity without the surveillance.", image: glossyExtension },
-  { name: "Consumer Tech", body: "Everyday tools, built to last.", image: glossyConsumer },
-  { name: "Physical Products", body: "Real things you can hold. No data strings attached.", image: glossyPhysical },
-  { name: "Connected Ecosystems", body: "Software and hardware that work as one.", image: glossyEcosystem },
+  { name: "In-House Cloud", body: "One server in your office replaces Google Workspace, Slack, Zoom, Dropbox, DocuSign, 1Password, and your AI tool. Wears your logo. Stays in your building.", image: glossyEcosystem },
+  { name: "Browser extensions", body: "Cookie Yeti dismisses cookie banners instantly and blocks 200,000+ malicious banner domains. More extensions on the way.", image: glossyExtension },
+  { name: "Consumer apps", body: "InventoryProof builds an insurance-ready home inventory in minutes. NeckPilot fixes your posture using AirPods. Apps that solve real problems without harvesting your data.", image: glossyApps },
+  { name: "AI tools", body: "AI that runs on your hardware. No prompts shipped to OpenAI. No training on your data. Same models, your machine.", image: glossyAi },
+  { name: "Physical products", body: "HOKU skincare. Real things you can hold and own. No subscriptions, no telemetry phoning home.", image: glossyPhysical },
+  { name: "Connected hardware", body: "Software and hardware designed to work together — at your office, in your home, on your wrist.", image: glossyConsumer },
 ];
 
 const featuredProducts = [
-  { name: "Cookie Yeti", pitch: "Privacy-first browser extension. Dismisses cookie banners instantly, blocks 200K+ malicious banner domains.", href: "/cookie-yeti", image: cookieYetiIcon },
-  { name: "InventoryProof", pitch: "AI-powered home inventory walkthrough that produces an insurance-ready PDF report in minutes.", href: "https://inventoryproof.com", image: inventoryproofIcon },
-  { name: "HOKU", pitch: "Pharmaceutical-grade skincare, simplified. A daily facial mist backed by science.", href: "https://hoku-clean.com", image: hokuBottle },
+  { name: "Cookie Yeti", pitch: "Browser extension that dismisses cookie banners instantly and blocks 200,000+ malicious banner domains. Browse cleaner, faster, more private.", href: "/cookie-yeti", image: cookieYetiIcon },
+  { name: "InventoryProof", pitch: "Walk through your home with your phone. Get an insurance-ready PDF inventory in minutes. The thing you should do before something burns down.", href: "https://inventoryproof.com", image: inventoryproofIcon },
+  { name: "HOKU", pitch: "Pharmaceutical-grade skincare, simplified. One daily facial mist. No subscriptions, no upsells.", href: "https://hoku-clean.com", image: hokuBottle },
 ];
 
 const trustPrinciples = [
-  { name: "Privacy by Design", body: "Built in from day one. Not bolted on after.", icon: Shield },
-  { name: "Less Data, More Trust", body: "We collect only what's needed. Nothing more.", icon: Database },
-  { name: "Zero Data Sales", body: "Your information is never for sale. Period.", icon: Lock },
-  { name: "Global Standards", body: "GDPR, CCPA, and beyond. Your rights, worldwide.", icon: Globe },
+  { name: "Collect less", body: "We only ask for what's strictly needed to make the product work. Then we stop.", icon: Database },
+  { name: "Ask first", body: "No silent data collection. No background telemetry. If we want it, we ask, and 'no' is a real answer.", icon: Shield },
+  { name: "Never sell", body: "Your data is not a product. We don't sell it, broker it, or hand it to ad networks. Ever.", icon: Lock },
+  { name: "Open about it", body: "GDPR and CCPA compliant. Source code available on request for the open parts. Plain-English policies, no dark patterns.", icon: Globe },
 ];
 
-const marqueeWords = ["Apps", "AI", "Extensions", "Hardware", "Cloud", "Privacy", "On premises", "Built in LA"];
+const marqueeWords = ["Private cloud", "AI", "Extensions", "Hardware", "Apps", "Privacy", "No data sales", "Built in LA"];
 
 export default function Index() {
   const reduce = useReducedMotion();
@@ -72,8 +72,8 @@ export default function Index() {
   return (
     <>
       <SEOHead
-        title="Bestly — Privacy-first product studio"
-        description="Bestly is a Los Angeles product studio shipping privacy-first software, hardware, and the cloud underneath. We build apps, AI tools, browser extensions, consumer tech, and physical products — and we run private cloud infrastructure for teams that need it."
+        title="Bestly — Stop renting your business from big tech"
+        description="Bestly builds private cloud servers for businesses, plus privacy-first apps, browser extensions, and consumer hardware. One server in your office replaces Google Workspace, Slack, Zoom, Dropbox, DocuSign, 1Password, and your AI tool. Built in Los Angeles."
         path="/"
       />
 
@@ -89,7 +89,7 @@ export default function Index() {
               transition={{ duration: 0.5, ease: HOUSE_EASE }}
               className="text-xs font-medium uppercase tracking-[0.2em] wow-text-muted mb-10"
             >
-              Bestly · Privacy-first product studio · Los Angeles
+              Bestly · Privacy-first tech, built in Los Angeles
             </motion.p>
 
             <h1 className="font-display font-normal tracking-[-0.04em] leading-[0.95] text-[clamp(2.5rem,7vw,6rem)]">
@@ -135,10 +135,11 @@ export default function Index() {
               transition={{ duration: 0.6, delay: 0.9, ease: HOUSE_EASE }}
               className="mt-10 max-w-2xl text-lg sm:text-xl leading-relaxed wow-text-muted"
             >
-              Bestly is a Los Angeles product studio shipping privacy-first software, hardware,
-              and the cloud underneath. Apps, AI tools, browser extensions, consumer tech,
-              physical goods &mdash; and the on-premises infrastructure for teams that want their
-              data home.
+              Google, Microsoft, Adobe, Zoom, Slack &mdash; they charge per seat, harvest your
+              data, and raise prices every year. Bestly builds the alternatives: a private
+              cloud for your office, browser extensions that block surveillance, and apps
+              that don&rsquo;t sell your data. One company, one promise: collect less, ask first,
+              never sell.
             </motion.p>
 
             <motion.div
@@ -152,7 +153,7 @@ export default function Index() {
                   to="/products"
                   className="group inline-flex items-center justify-center rounded-md wow-bg-indigo px-8 py-4 text-base font-medium wow-text-paper transition-transform duration-200 wow-ease hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--wow-ink))]"
                 >
-                  See what we&rsquo;ve built
+                  See the products
                   <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 wow-ease group-hover:translate-x-0.5" />
                 </Link>
               </MagneticButton>
@@ -161,7 +162,7 @@ export default function Index() {
                   to="/services"
                   className="inline-flex items-center justify-center rounded-md border wow-border bg-transparent px-8 py-4 text-base font-medium wow-text-paper transition-colors duration-200 wow-ease hover:wow-bg-elev focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))]"
                 >
-                  Work with us
+                  Talk to Jared
                 </Link>
               </MagneticButton>
             </motion.div>
@@ -211,7 +212,7 @@ export default function Index() {
               as="h2"
               className="font-display font-normal tracking-[-0.03em] leading-[1.05] text-[clamp(2rem,4.5vw,3.75rem)] block"
             >
-              Six surfaces. One thesis: privacy-first by default.
+              Six product lines. None of them sell your data.
             </RevealText>
           </RevealOnScroll>
 
@@ -251,7 +252,7 @@ export default function Index() {
               as="h2"
               className="font-display font-normal tracking-[-0.03em] leading-[1.05] text-[clamp(2rem,4.5vw,3.75rem)] block"
             >
-              Three you can use today.
+              Three live right now. Pick one.
             </RevealText>
           </RevealOnScroll>
 
@@ -350,12 +351,13 @@ export default function Index() {
                   as="h2"
                   className="font-display font-normal tracking-[-0.03em] leading-[1.02] text-[clamp(2.25rem,5.5vw,4.5rem)] max-w-4xl block"
                 >
-                  We also build for other companies. Including the cloud underneath.
+                  Need software built? We do that, too.
                 </RevealText>
                 <p className="mt-8 max-w-2xl text-lg leading-relaxed wow-text-muted">
-                  Web &amp; app development, AI integration, compliance engineering, marketplace
-                  onboarding, Apple-native modernization, and our flagship In-House Cloud &mdash;
-                  thirteen services on one server in your office, wearing your brand.
+                  Custom app development, AI integration, compliance engineering, old Mac apps
+                  modernized for Apple Silicon, App Store and marketplace launches, and our
+                  flagship In-House Cloud installed in your office. Thirteen services, fixed-fee
+                  pricing, no per-hour billing games.
                 </p>
                 <div className="mt-10 inline-flex items-center gap-3 text-base wow-text-paper">
                   <span className="border-b border-current pb-1">See all services</span>

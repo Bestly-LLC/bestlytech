@@ -27,8 +27,8 @@ export default function Products() {
   return (
     <>
       <SEOHead
-        title="The Bestly Suite — Apps That Simplify Your Life"
-        description="Explore the full Bestly LLC product suite: Cookie Yeti, InventoryProof, SchoolPilot, HOAscope, Confesh, and more. Download on the App Store or try on the web."
+        title="Products — Bestly"
+        description="Every product Bestly ships. Cookie Yeti, InventoryProof, HOKU, NeckPilot, SchoolPilot, HOAscope, Confesh — plus In-House Cloud for businesses. Privacy-first, no data sales, built in Los Angeles."
       />
 
       <div className="relative overflow-hidden">
@@ -41,13 +41,13 @@ export default function Products() {
           {/* Hero */}
           <AnimatedSection className="mb-16 max-w-3xl text-center mx-auto">
             <Badge variant="outline" className="mb-4 border-primary/30 text-primary">
-              Our Apps
+              Everything we ship
             </Badge>
             <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              The Bestly <GradientText>Suite</GradientText>
+              The <GradientText>products.</GradientText>
             </h1>
             <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              Apps that simplify your life — built with privacy at the core, designed with care, and crafted to just work.
+              Apps, extensions, a skincare bottle, and a server you can put in a closet. None of them sell your data. Click anything to see what it does.
             </p>
           </AnimatedSection>
 

@@ -36,8 +36,8 @@ export default function About() {
   return (
     <>
       <SEOHead
-        title="About Jared Best | Founder of Bestly LLC"
-        description="Founder-led technology studio based in Los Angeles. We build privacy-first software, consumer products, and business tools — without the trade-offs."
+        title="About Jared Best — Founder of Bestly"
+        description="Bestly is a one-person studio in Los Angeles that builds private cloud servers for businesses, plus privacy-first apps, browser extensions, and consumer hardware. No investors. No data sales."
         path="/about"
       />
 
@@ -67,7 +67,10 @@ export default function About() {
                   Hey, I'm Jared.
                 </h1>
                 <p className="mt-6 text-xl text-muted-foreground leading-relaxed max-w-2xl">
-                  I run Bestly — a technology studio based in Los Angeles. We build software, consumer products, and business tools that respect the people who use them.
+                  I run Bestly out of Los Angeles. We build private cloud servers for businesses
+                  (In-House Cloud), privacy-first apps and browser extensions, and a few
+                  physical products. Everything ships with the same default: collect less,
+                  ask first, never sell.
                 </p>
                 <div className="mt-4 inline-flex items-center gap-2 text-sm text-muted-foreground">
                   <MapPin className="h-4 w-4 text-primary" />
@@ -117,7 +120,7 @@ export default function About() {
               What We Build
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Different industries, same conviction.
+              Six product lines, one promise: collect less, ask first, never sell.
             </p>
           </AnimatedSection>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
@@ -201,10 +204,11 @@ export default function About() {
               <Heart className="h-7 w-7 text-primary" />
             </div>
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Let's Build Something Together
+              Want something built?
             </h2>
             <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Whether you need a product built, a business scaled, or a partnership that goes deeper — I'd love to hear from you.
+              Custom app, In-House Cloud for your office, AI integration, an old Mac app
+              that needs modernizing &mdash; if it&rsquo;s software-ish and privacy matters, talk to me.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
               <Link

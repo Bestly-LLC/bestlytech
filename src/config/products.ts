@@ -82,7 +82,7 @@ export const products: Product[] = [
   {
     id: "schoolpilot",
     name: "SchoolPilot",
-    description: "A unified school companion for parents, students, and districts — sits next to your existing SIS, not over it.",
+    description: "One app for parents and students that pulls everything from your school's existing system into a single place. Grades, attendance, lunch balance, assignments.",
     href: "/products",
     image: schoolpilotIcon,
     category: "Education",

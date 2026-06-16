@@ -54,7 +54,8 @@ export function Footer() {
               </span>
             </div>
             <p className="mt-4 text-sm text-muted-foreground leading-relaxed max-w-xs">
-              Products that respect people. Software, hardware, and everything in between.
+              Private cloud for your office. Apps that don&rsquo;t sell your data. Built in
+              Los Angeles.
             </p>
             <p className="mt-4 text-sm text-muted-foreground">
               Los Angeles, CA, United States

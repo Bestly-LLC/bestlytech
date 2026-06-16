@@ -52,7 +52,7 @@ import {
 // EDITABLE CONFIGURATION
 // ============================================
 const CONFIG = {
-  version: "1.0.1",
+  version: "1.0.9",
   pricing: {
     free: "Free",
     monthly: "$0.99",
@@ -61,11 +61,11 @@ const CONFIG = {
   },
   platforms: [
     { name: "Chrome", available: false, icon: Chrome },
-    { name: "Safari (iOS + macOS)", available: false, icon: Globe },
+    { name: "Safari (iOS + macOS)", available: true, icon: Globe },
   ],
   links: {
     chrome: "#",
-    safari: "#",
+    safari: "https://apps.apple.com/us/app/cookie-yeti/id6759732250",
   },
   features: [
     {
@@ -265,18 +265,13 @@ export default function CookieYeti() {
             </AnimatedSection>
             
             <AnimatedSection delay={240}>
-              <div className="mt-8">
-                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-sm px-4 py-1">
-                  Coming Soon
-                </Badge>
-              </div>
-              
-              <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
-                <img
-                  src={comingSoonAppstore}
-                  alt="Coming Soon to App Store and Android"
-                  className="h-auto w-64 rounded-xl shadow-md"
-                />
+              <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <Button asChild size="lg" className="gap-2 text-base px-8 py-6">
+                  <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
+                    <Download className="h-5 w-5" />
+                    Download on the App Store
+                  </a>
+                </Button>
                 <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
                   <Chrome className="h-8 w-8 text-muted-foreground" />
                   <div className="text-left">
@@ -287,7 +282,7 @@ export default function CookieYeti() {
               </div>
               
               <p className="mt-6 text-sm text-muted-foreground">
-                Coming soon to Chrome and App Store
+                Free on iPhone, iPad &amp; Mac (Safari) · Chrome coming soon
               </p>
             </AnimatedSection>
             
