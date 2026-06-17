@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
-import comingSoonAppstore from "@/assets/coming-soon-appstore.jpg";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -845,20 +844,21 @@ export default function CookieYeti() {
           <div className="text-center max-w-2xl mx-auto">
             <AnimatedSection>
               <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Cookie Yeti Is Coming Soon
+                Cookie Yeti Is Here
               </h2>
               <p className="mt-4 text-lg text-muted-foreground">
-                We're putting the finishing touches on Cookie Yeti. Stay tuned for launch on Chrome and the App Store.
+                Available now on iPhone, iPad &amp; Mac. Download free from the App Store — Chrome coming soon.
               </p>
             </AnimatedSection>
             
             <AnimatedSection delay={100}>
               <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
-                <img
-                  src={comingSoonAppstore}
-                  alt="Coming Soon to App Store and Android"
-                  className="h-auto w-56 rounded-xl shadow-md"
-                />
+                <Button asChild size="lg" className="gap-2 text-base px-8 py-6">
+                  <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
+                    <Download className="h-5 w-5" />
+                    Download on the App Store
+                  </a>
+                </Button>
                 <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
                   <Chrome className="h-8 w-8 text-muted-foreground" />
                   <div className="text-left">
