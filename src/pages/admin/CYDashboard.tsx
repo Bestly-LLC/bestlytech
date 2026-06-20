@@ -366,7 +366,12 @@ export default function CYDashboard() {
       {/* ─── Top Patterns ─── */}
       <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
         <div className="px-5 py-4">
-          <h3 className="text-[15px] font-semibold text-white">Top Patterns</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-[15px] font-semibold text-white">Top Patterns</h3>
+            <Link to="/admin/cookie-yeti/domains" className="text-xs font-medium text-cyan-400 hover:text-cyan-300 transition-colors">
+              View all domains →
+            </Link>
+          </div>
           <p className="text-xs text-white/30 mt-0.5">Most-used cookie banner patterns by report count. Click a domain for details.</p>
         </div>
         <Table>

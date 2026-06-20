@@ -6,6 +6,7 @@ import {
   Users,
   ShieldCheck,
   Brain,
+  Globe,
   Mail,
   Briefcase,
   ListChecks,
@@ -57,6 +58,7 @@ const cookieYetiItems = [
   { title: "Subscribers", url: "/admin/cookie-yeti/subscribers", icon: Users, countKey: "cySubscribers" as CountKeys },
   { title: "Granted Access", url: "/admin/cookie-yeti/granted", icon: ShieldCheck },
   { title: "Community", url: "/admin/cookie-yeti/community", icon: Brain },
+  { title: "All Domains", url: "/admin/cookie-yeti/domains", icon: Globe },
 ];
 
 const homeHubItems = [

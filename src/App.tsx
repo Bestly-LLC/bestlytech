@@ -69,6 +69,7 @@ const AdminSetupGuide = lazy(() => import("./pages/admin/AdminSetupGuide"));
 const CYDashboard = lazy(() => import("./pages/admin/CYDashboard"));
 const CYSubscribers = lazy(() => import("./pages/admin/CYSubscribers"));
 const CYGrantedAccess = lazy(() => import("./pages/admin/CYGrantedAccess"));
+const CYDomains = lazy(() => import("./pages/admin/CYDomains"));
 const CommunityLearning = lazy(() => import("./pages/admin/CommunityLearning"));
 const AdminContacts = lazy(() => import("./pages/admin/AdminContacts"));
 const AdminHireRequests = lazy(() => import("./pages/admin/AdminHireRequests"));
@@ -163,6 +164,7 @@ const App = () => (
                   <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
                   <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />
                   <Route path="cookie-yeti/community" element={<CommunityLearning />} />
+                  <Route path="cookie-yeti/domains" element={<CYDomains />} />
                   <Route path="home-hub" element={<HomeHubOverview />} />
                   <Route path="home-hub/pihole" element={<HomeHubPihole />} />
                   <Route path="home-hub/ha" element={<HomeHubHomeAssistant />} />
