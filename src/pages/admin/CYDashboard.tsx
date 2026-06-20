@@ -102,7 +102,7 @@ export default function CYDashboard() {
       supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("is_active", true),
       supabase.from("dismissal_reports").select("id", { count: "exact", head: true }),
       supabase.from("ai_generation_log").select("id", { count: "exact", head: true }),
-      supabase.from("ai_generation_log").select("id", { count: "exact", head: true }).eq("status", "success"),
+      supabase.from("ai_generation_log").select("id", { count: "exact", head: true }).like("status", "success%"),
       supabase.from("pattern_fix_log").select("id", { count: "exact", head: true }).eq("success", true),
       supabase.from("missed_banner_reports").select("*").eq("resolved", false).order("report_count", { ascending: false }).limit(10) as any,
       supabase.from("cookie_patterns").select("*").eq("is_active", true).order("report_count", { ascending: false }).limit(10) as any,

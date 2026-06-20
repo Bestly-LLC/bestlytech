@@ -812,16 +812,6 @@ export default function CommunityLearning() {
               <p className="text-xs text-muted-foreground">These domains exhausted all retry attempts. Consider adding patterns manually.</p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <TooltipProvider delayDuration={300}>
-                <UITooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="sm" className="flex-1 sm:flex-initial shrink-0 gap-1.5 border-amber-500/30 text-amber-500 hover:bg-amber-500/10" onClick={handleResetFailed} disabled={runningReset}>
-                      {runningReset ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Resetting...</> : <><RotateCcw className="h-3.5 w-3.5" /> Reset Failed</>}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-[240px] text-center">Re-queues permanently failed domains for fresh AI analysis (older than 30 days)</TooltipContent>
-                </UITooltip>
-              </TooltipProvider>
               <Button variant="outline" size="sm" className="flex-1 sm:flex-initial shrink-0 gap-1.5 border-red-500/30 text-red-500 hover:bg-red-500/10" onClick={() => setActiveTab("ai-generator")}>
                 <Flag className="h-3.5 w-3.5" /> View
               </Button>
@@ -1016,46 +1006,13 @@ export default function CommunityLearning() {
                     </span>
                   </CardDescription>
                 </div>
-                <TooltipProvider delayDuration={300}>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <UITooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="outline" size="sm" onClick={handleRunMaintenance} disabled={runningMaintenance} className="gap-1.5 text-xs sm:text-sm">
-                          {runningMaintenance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
-                          Maintenance
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-[240px] text-center">Runs auto-fix on broken patterns and processes unresolved user reports</TooltipContent>
-                    </UITooltip>
-                    <UITooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="outline" size="sm" onClick={handleRunRetry} disabled={runningRetry} className="gap-1.5 text-xs sm:text-sm">
-                          {runningRetry ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                          Retry
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-[240px] text-center">Re-attempts pattern generation on domains that previously failed (up to 5 tries)</TooltipContent>
-                    </UITooltip>
-                    <UITooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="outline" size="sm" onClick={handleRunGenerator} disabled={runningGenerator} className="gap-1.5 text-xs sm:text-sm">
-                          {runningGenerator ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                          Run AI
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-[240px] text-center">Triggers AI analysis on all pending missed-banner reports to generate new CSS selectors</TooltipContent>
-                    </UITooltip>
-                    <UITooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="outline" size="sm" onClick={handleResetFailed} disabled={runningReset} className="gap-1.5 text-xs sm:text-sm">
-                          {runningReset ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                          Reset
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-[240px] text-center">Resets permanently failed domains so they can be re-evaluated by the AI</TooltipContent>
-                    </UITooltip>
-                  </div>
-                </TooltipProvider>
+                {/* CY-AIFIX-02: generation, retries, maintenance and reset all run
+                    automatically on a schedule now — the manual trigger buttons were
+                    removed to keep this view monitoring-only. */}
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  Fully automated — generation, retries &amp; maintenance run on a schedule
+                </span>
               </CardHeader>
             </Card>
 
