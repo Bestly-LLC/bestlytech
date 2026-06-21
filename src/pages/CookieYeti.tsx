@@ -56,7 +56,7 @@ const CONFIG = {
     free: "Free",
     monthly: "$0.99",
     yearly: "$7.99",
-    lifetime: "$149.99",
+    lifetime: "$99.99",
   },
   platforms: [
     { name: "Chrome", available: false, icon: Chrome },
@@ -117,7 +117,7 @@ const CONFIG = {
     },
     {
       question: "How much does Cookie Yeti cost?",
-      answer: "Cookie Yeti offers a free tier (5 banner handles/day), Monthly at $0.99/mo, Yearly at $7.99/yr (save 33%), and Lifetime at $149.99 one-time. Prices may vary by platform and region.",
+      answer: "Cookie Yeti offers a free tier (5 banner handles/day), Monthly at $0.99/mo, Yearly at $7.99/yr (save 33%), and Lifetime at $99.99 one-time. Prices may vary by platform and region.",
     },
     {
       question: "What cookie preferences can I set?",
