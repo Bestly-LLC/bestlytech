@@ -25,6 +25,9 @@ const CookieYetiPrivacy = lazy(() => import("./pages/CookieYetiPrivacy"));
 const CookieYetiSuccess = lazy(() => import("./pages/CookieYetiSuccess"));
 const CookieYetiCancel = lazy(() => import("./pages/CookieYetiCancel"));
 const CookieYetiGetStarted = lazy(() => import("./pages/CookieYetiGetStarted"));
+const CookieYetiGetStartedMac = lazy(() => import("./pages/CookieYetiGetStartedMac"));
+const CookieYetiGetStartedChrome = lazy(() => import("./pages/CookieYetiGetStartedChrome"));
+const CookieYetiGetStartedRouter = lazy(() => import("./pages/CookieYetiGetStartedRouter"));
 const InventoryProof = lazy(() => import("./pages/InventoryProof"));
 const Hoku = lazy(() => import("./pages/Hoku"));
 const InHouseCloud = lazy(() => import("./pages/InHouseCloud"));
@@ -108,7 +111,10 @@ const App = () => (
                   <Route path="/cookie-yeti/privacy" element={<CookieYetiPrivacy />} />
                   <Route path="/cookie-yeti/success" element={<CookieYetiSuccess />} />
                   <Route path="/cookie-yeti/cancel" element={<CookieYetiCancel />} />
-                  <Route path="/cookie-yeti/get-started" element={<CookieYetiGetStarted />} />
+                  <Route path="/cookie-yeti/get-started" element={<CookieYetiGetStartedRouter />} />
+                  <Route path="/cookie-yeti/get-started/ios" element={<CookieYetiGetStarted />} />
+                  <Route path="/cookie-yeti/get-started/mac" element={<CookieYetiGetStartedMac />} />
+                  <Route path="/cookie-yeti/get-started/chrome" element={<CookieYetiGetStartedChrome />} />
                   <Route path="/confesh/privacy" element={<ConfeshPrivacy />} />
                   <Route path="/confesh/support" element={<ConfeshSupport />} />
                   <Route path="/inventory-proof" element={<InventoryProof />} />
