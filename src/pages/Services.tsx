@@ -7,6 +7,7 @@ import {
   Code, TrendingUp, Bot, Palette, Package, Shield,
   Rocket, Store, ShoppingCart, Cpu, ArrowRight, Handshake,
   ClipboardCheck, PhoneCall, FileText, Zap, Smartphone,
+  Leaf, ExternalLink,
 } from "lucide-react";
 import { ScanlinesBackground } from "@/components/wow/backgrounds/ScanlinesBackground";
 
@@ -67,6 +68,18 @@ const audiences = [
   { icon: Store, title: "Local Businesses", description: "Establish and grow online" },
   { icon: ShoppingCart, title: "E-commerce", description: "Sell more, operate smarter" },
   { icon: Cpu, title: "Tech Companies", description: "Scale with confidence" },
+];
+
+const selectedWork = [
+  {
+    icon: Leaf,
+    eyebrow: "Client · Web Design & Development",
+    title: "Golden Hour Garden Design",
+    description:
+      "Designed and built the website for a high-end landscape design studio — a polished portfolio gallery, a multi-step booking form with photo uploads, and email on their own domain. Shipped and live.",
+    href: "https://goldenhourgardendesign.com",
+    linkLabel: "goldenhourgardendesign.com",
+  },
 ];
 
 export default function Services() {
@@ -178,6 +191,45 @@ export default function Services() {
               </div>
             </Link>
           </AnimatedSection>
+        </div>
+      </section>
+
+      {/* Selected Work */}
+      <section className="border-t border-border">
+        <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
+          <AnimatedSection animation="fade-in" className="text-center mb-16">
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              Selected Work
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Real businesses, shipped and live.
+            </p>
+          </AnimatedSection>
+
+          <div className="max-w-4xl mx-auto space-y-4">
+            {selectedWork.map((work, index) => (
+              <AnimatedSection key={work.title} animation="fade-in" delay={index * 80}>
+                <a href={work.href} target="_blank" rel="noopener noreferrer" className="block">
+                  <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-[hsl(var(--gradient-start)/0.05)] to-[hsl(var(--gradient-end)/0.05)] p-8 transition-all hover:shadow-premium hover:-translate-y-1">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(var(--gradient-start)/0.15)] to-[hsl(var(--gradient-end)/0.15)]">
+                        <work.icon className="h-7 w-7 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-1">{work.eyebrow}</p>
+                        <h3 className="text-xl font-semibold text-foreground">{work.title}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">{work.description}</p>
+                        <span className="mt-3 inline-flex items-center text-sm font-medium text-primary">
+                          {work.linkLabel}
+                          <ExternalLink className="ml-1.5 h-4 w-4" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </a>
+              </AnimatedSection>
+            ))}
+          </div>
         </div>
       </section>
 
