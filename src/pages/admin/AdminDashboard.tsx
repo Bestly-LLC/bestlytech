@@ -188,12 +188,11 @@ export default function AdminDashboard() {
             </Button>
           </Link>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard label="Active Patterns" value={activePatternCount} icon={Cookie} accentColor="#8b5cf6" iconBg="bg-violet-500/10" iconColor="text-violet-400" subtitle={`${patternCount} total`} />
           <StatCard label="Dismissals" value={dismissalCount} icon={CheckCircle2} accentColor="#10b981" iconBg="bg-emerald-500/10" iconColor="text-emerald-400" />
           <StatCard label="AI Generations" value={aiGenCount} icon={Cpu} accentColor="#06b6d4" iconBg="bg-cyan-500/10" iconColor="text-cyan-400" />
           <StatCard label="Unresolved" value={unresolvedCount} icon={AlertTriangle} accentColor={unresolvedCount > 0 ? "#f59e0b" : "#10b981"} iconBg={unresolvedCount > 0 ? "bg-amber-500/10" : "bg-emerald-500/10"} iconColor={unresolvedCount > 0 ? "text-amber-400" : "text-emerald-400"} />
-          <StatCard label="Active Users" value={activationCount + cySubCount} icon={Snowflake} accentColor="#38bdf8" iconBg="bg-sky-500/10" iconColor="text-sky-400" subtitle={cySubCount > 0 ? `${activationCount} activated, ${cySubCount} paid` : `${activationCount} activated`} />
           <StatCard label="Devices" value={deviceCount} icon={Globe} iconBg="bg-white/[0.05]" iconColor="text-white/40" subtitle={`${pushCount} push-enabled`} />
         </div>
       </div>
