@@ -651,7 +651,7 @@ export function DomainDeepDive({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="justify-start gap-2 border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06]"
+                  className="justify-start gap-2 bg-transparent border-white/[0.12] text-white/80 hover:text-white hover:bg-white/[0.08] disabled:opacity-100 disabled:bg-white/[0.02] disabled:text-white/35 disabled:border-white/[0.06] disabled:cursor-not-allowed"
                   disabled={actionLoading === "ai"}
                   onClick={handleRerunAI}
                 >
@@ -666,7 +666,7 @@ export function DomainDeepDive({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="justify-start gap-2 border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06]"
+                  className="justify-start gap-2 bg-transparent border-white/[0.12] text-white/80 hover:text-white hover:bg-white/[0.08] disabled:opacity-100 disabled:bg-white/[0.02] disabled:text-white/35 disabled:border-white/[0.06] disabled:cursor-not-allowed"
                   disabled={
                     actionLoading === "resolve" ||
                     !missedReport ||
