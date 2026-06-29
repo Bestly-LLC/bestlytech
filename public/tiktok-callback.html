@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Cookie Yeti — TikTok connected</title>
+<style>
+  body{font-family:-apple-system,Inter,system-ui,sans-serif;background:#0B1322;color:#fff;
+       display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px}
+  .card{max-width:560px;text-align:center}
+  h1{font-size:22px;margin:0 0 8px}
+  p{color:#9AA6B6;margin:0 0 20px}
+  .code{background:#111a2e;border:1px solid #25304a;border-radius:12px;padding:16px;
+        font-family:ui-monospace,Menlo,monospace;font-size:15px;word-break:break-all;color:#34DADA}
+  button{margin-top:16px;background:#34DADA;color:#06222a;border:0;border-radius:10px;
+         padding:12px 20px;font-size:15px;font-weight:700;cursor:pointer}
+  .ok{color:#46E5A0;margin-top:12px;min-height:20px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>TikTok authorization received ✅</h1>
+  <p>Copy this code and paste it back to Claude to finish connecting Cookie Yeti.</p>
+  <div class="code" id="code">(no code in URL)</div>
+  <button onclick="copyCode()">Copy code</button>
+  <div class="ok" id="ok"></div>
+</div>
+<script>
+  var p = new URLSearchParams(location.search);
+  var code = p.get('code') || '';
+  var err = p.get('error_description') || p.get('error') || '';
+  var el = document.getElementById('code');
+  if (err) { el.textContent = 'Error: ' + err; el.style.color = '#FF6FB5'; }
+  else if (code) { el.textContent = code; }
+  function copyCode(){ navigator.clipboard.writeText(code).then(function(){
+    document.getElementById('ok').textContent = 'Copied! Paste it to Claude.'; }); }
+</script>
+</body>
+</html>
