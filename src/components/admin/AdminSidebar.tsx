@@ -16,6 +16,7 @@ import {
   Plug,
   Cloud,
   Activity,
+  Sparkles,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -60,6 +61,7 @@ const cookieYetiItems = [
   { title: "Subscribers", url: "/admin/cookie-yeti/subscribers", icon: Users, countKey: "cySubscribers" as CountKeys },
   { title: "Granted Access", url: "/admin/cookie-yeti/granted", icon: ShieldCheck },
   { title: "Operations", url: "/admin/cookie-yeti/ops", icon: Activity },
+  { title: "Auto-Fix", url: "/admin/cookie-yeti/autofix", icon: Sparkles },
   { title: "Community", url: "/admin/cookie-yeti/community", icon: Brain },
 ];
 
