@@ -56,7 +56,6 @@ const CONFIG = {
     free: "Free",
     monthly: "$0.99",
     yearly: "$7.99",
-    lifetime: "$99.99",
   },
   platforms: [
     { name: "Chrome", available: false, icon: Chrome },
@@ -117,7 +116,7 @@ const CONFIG = {
     },
     {
       question: "How much does Cookie Yeti cost?",
-      answer: "Cookie Yeti offers a free tier (5 banner handles/day), Monthly at $0.99/mo, Yearly at $7.99/yr (save 33%), and Lifetime at $99.99 one-time. Prices may vary by platform and region.",
+      answer: "Cookie Yeti offers a free tier (5 banner handles/day), Monthly at $0.99/mo, and Yearly at $7.99/yr (save 33%). Prices may vary by platform and region.",
     },
     {
       question: "What cookie preferences can I set?",
@@ -131,7 +130,7 @@ const CONFIG = {
   },
 };
 
-type CheckoutPlan = "monthly" | "yearly" | "lifetime";
+type CheckoutPlan = "monthly" | "yearly";
 
 export default function CookieYeti() {
   const { toast } = useToast();
@@ -157,7 +156,6 @@ export default function CookieYeti() {
   const planLabels: Record<CheckoutPlan, { title: string; price: string; cadence: string }> = {
     monthly: { title: "Monthly", price: CONFIG.pricing.monthly, cadence: "/month" },
     yearly: { title: "Yearly", price: CONFIG.pricing.yearly, cadence: "/year" },
-    lifetime: { title: "Lifetime", price: CONFIG.pricing.lifetime, cadence: " one-time" },
   };
 
   const openCheckout = (plan: CheckoutPlan) => {
@@ -534,33 +532,6 @@ export default function CookieYeti() {
                   ))}
                 </ul>
                 <Button className="w-full mt-8" onClick={() => openCheckout("yearly")}>Subscribe Yearly</Button>
-              </div>
-            </AnimatedSection>
-            
-            {/* Lifetime Tier */}
-            <AnimatedSection delay={300} className="md:col-span-3 max-w-md mx-auto w-full">
-              <div className="rounded-xl border border-border bg-card p-8">
-                <div className="text-center">
-                  <h3 className="text-xl font-semibold text-foreground">Lifetime</h3>
-                  <div className="mt-4">
-                    <span className="text-4xl font-bold text-foreground">{CONFIG.pricing.lifetime}</span>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">One-time payment, forever access</p>
-                </div>
-                <ul className="mt-8 space-y-4">
-                  {[
-                    { icon: Infinity, text: "Unlimited everything, forever" },
-                    { icon: Shield, text: "Tracking cookie cleaning" },
-                    { icon: Headphones, text: "Priority support" },
-                    { icon: CheckCircle2, text: "All future updates included" },
-                  ].map((item) => (
-                    <li key={item.text} className="flex items-center gap-3">
-                      <item.icon className="h-5 w-5 text-primary shrink-0" />
-                      <span className="text-sm text-foreground">{item.text}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button variant="outline" className="w-full mt-8" onClick={() => openCheckout("lifetime")}>Buy Lifetime</Button>
               </div>
             </AnimatedSection>
           </div>
