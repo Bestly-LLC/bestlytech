@@ -511,3 +511,13 @@
     transform: scaleX(1);
   }
 }
+
+/* Cookie Yeti get-started step carousel (UX-Pro-Max: 300ms slide+fade, reduced-motion aware) */
+@keyframes cyCarouselInR { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+@keyframes cyCarouselInL { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
+@keyframes cyCarouselFade { from { opacity: 0; } to { opacity: 1; } }
+.cy-carousel-slide[data-dir="1"] { animation: cyCarouselInR 0.3s ease-out both; }
+.cy-carousel-slide[data-dir="-1"] { animation: cyCarouselInL 0.3s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .cy-carousel-slide { animation: cyCarouselFade 0.2s ease-out both !important; }
+}

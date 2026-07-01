@@ -11,6 +11,7 @@ import {
   type DemoStage,
 } from "@/components/cookieyeti/getStartedShared";
 import { Sparkles } from "lucide-react";
+import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
 
 // CY-GS-02 (Chrome): plain-English onboarding. Pin from the puzzle menu, open
 // the panel, pick a mode, report a miss. Mobile = swipeable carousel; desktop =
@@ -176,34 +177,25 @@ export default function CookieYetiGetStartedChrome() {
 
       {/* Steps — swipeable carousel on mobile, stacked on desktop */}
       <section className="mx-auto max-w-3xl px-6 pb-20">
-        <div
-          className="
-            flex gap-5 overflow-x-auto snap-x snap-mandatory -mx-6 px-6 pb-4
-            md:block md:gap-0 md:space-y-16 md:overflow-visible md:mx-0 md:px-0 md:pb-0
-            [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden
-          "
-        >
-          {steps.map((s, i) => (
-            <AnimatedSection key={s.n} delay={i * 60}>
-              <div className="snap-center shrink-0 w-[86%] sm:w-[70%] md:w-auto md:shrink">
-                <div className="flex items-center gap-3">
-                  <StepBadge n={s.n} />
-                  <h2 className="text-2xl font-bold tracking-tight text-foreground">{s.title}</h2>
-                </div>
-                <p className="mt-3 text-muted-foreground leading-relaxed">{s.body}</p>
-                {s.showcase}
-                {s.n === 4 && (
-                  <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                    <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />
-                    Real reports send only the pop-up's pattern and the site's name — never your personal data.
-                  </p>
-                )}
+        <StepCarousel
+          accent="#2DB3A6"
+          steps={steps.map((s) => (
+            <div key={s.n}>
+              <div className="flex items-center gap-3">
+                <StepBadge n={s.n} />
+                <h2 className="text-2xl font-bold tracking-tight text-foreground">{s.title}</h2>
               </div>
-            </AnimatedSection>
+              <p className="mt-3 text-muted-foreground leading-relaxed">{s.body}</p>
+              {s.showcase}
+              {s.n === 4 && (
+                <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                  <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />
+                  Real reports send only the pop-up's pattern and the site's name — never your personal data.
+                </p>
+              )}
+            </div>
           ))}
-        </div>
-
-        <p className="mt-3 text-center text-xs text-muted-foreground md:hidden">Swipe to see all 4 steps →</p>
+        />
 
         {/* FAQ */}
         <AnimatedSection delay={200}>

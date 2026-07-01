@@ -14,6 +14,7 @@ import settingsScreenshot from "@/assets/cookieyeti-settings-iphone.png";
 import safariMenuShot from "@/assets/cy-safari-menu.png";
 import safariBannerShot from "@/assets/cy-safari-banner.png";
 import panelReportShot from "@/assets/cy-panel-report.png";
+import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
 import {
   Puzzle,
   Cookie,
@@ -214,8 +215,10 @@ export default function CookieYetiGetStarted() {
 
       {/* Steps */}
       <section className="mx-auto max-w-3xl px-6 pb-20 space-y-16">
-        {/* Step 1 */}
-        <AnimatedSection>
+        <StepCarousel
+          accent="#2DB3A6"
+          steps={[
+            <div key="s1">
           <div className="flex items-center gap-3">
             <StepBadge n={1} />
             <h2 className="text-2xl font-bold tracking-tight text-foreground">
@@ -256,10 +259,8 @@ export default function CookieYetiGetStarted() {
               </p>
             </div>
           </div>
-        </AnimatedSection>
-
-        {/* Step 2 */}
-        <AnimatedSection delay={100}>
+            </div>,
+            <div key="s2">
           <div className="flex items-center gap-3">
             <StepBadge n={2} />
             <h2 className="text-2xl font-bold tracking-tight text-foreground">
@@ -282,10 +283,8 @@ export default function CookieYetiGetStarted() {
           <p className="mt-2 text-center text-xs text-muted-foreground">
             A real cookie banner, doing its best to interrupt you
           </p>
-        </AnimatedSection>
-
-        {/* Step 3 + interactive demo */}
-        <AnimatedSection delay={150}>
+            </div>,
+            <div key="s3">
           <div className="flex items-center gap-3">
             <StepBadge n={3} />
             <h2 className="text-2xl font-bold tracking-tight text-foreground">
@@ -313,7 +312,9 @@ export default function CookieYetiGetStarted() {
             <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />
             Real reports send only the banner's pattern and the site's domain — never your personal data.
           </p>
-        </AnimatedSection>
+            </div>,
+          ]}
+        />
 
         {/* Troubleshooting */}
         <AnimatedSection delay={180}>
