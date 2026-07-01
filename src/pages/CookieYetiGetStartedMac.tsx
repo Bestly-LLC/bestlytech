@@ -11,6 +11,8 @@ import {
   type DemoStage,
 } from "@/components/cookieyeti/getStartedShared";
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
+import cyPanelInsights from "@/assets/cy-panel-insights.png";
+import cyPanelControl from "@/assets/cy-panel-control.png";
 import { Sparkles } from "lucide-react";
 
 // CY-GS-02 (macOS): plain-English Safari-on-Mac onboarding as an animated step
@@ -111,8 +113,8 @@ export default function CookieYetiGetStartedMac() {
           url="bestly.tech"
           eyebrow="Your panel"
           caption="Live stats and one-click reporting, right in your toolbar."
-          placeholderLabel="Cookie Yeti panel open from the toolbar"
-          placeholderHint="Insights tab: status, stats, and the Report button."
+          image={cyPanelInsights}
+          imageAlt="Cookie Yeti panel — Insights tab: Active status, live stats, and the amber Report a missed banner button."
         />
       ),
     },
@@ -132,8 +134,8 @@ export default function CookieYetiGetStartedMac() {
           url="bestly.tech"
           eyebrow="Your call"
           caption="Strict, Balanced, or Permissive — set it once."
-          placeholderLabel="Control tab with the privacy modes"
-          placeholderHint="The panel's Control tab: Strict / Balanced / Permissive."
+          image={cyPanelControl}
+          imageAlt="Cookie Yeti panel — Control tab: Strict, Balanced, and Permissive privacy modes."
         />
       ),
     },

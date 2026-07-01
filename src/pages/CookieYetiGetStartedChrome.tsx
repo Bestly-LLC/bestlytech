@@ -12,6 +12,8 @@ import {
 } from "@/components/cookieyeti/getStartedShared";
 import { Sparkles } from "lucide-react";
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
+import cyPanelInsights from "@/assets/cy-panel-insights.png";
+import cyPanelControl from "@/assets/cy-panel-control.png";
 
 // CY-GS-02 (Chrome): plain-English onboarding. Pin from the puzzle menu, open
 // the panel, pick a mode, report a miss. Mobile = swipeable carousel; desktop =
@@ -90,8 +92,8 @@ export default function CookieYetiGetStartedChrome() {
           url="bestly.tech"
           eyebrow="Your panel"
           caption="Live stats and one-tap reporting, right in your toolbar."
-          placeholderLabel="Cookie Yeti panel open from the toolbar"
-          placeholderHint="Insights tab: status, stats, and the Report button."
+          image={cyPanelInsights}
+          imageAlt="Cookie Yeti panel — Insights tab: Active status, live stats, and the amber Report a missed banner button."
         />
       ),
     },
@@ -111,8 +113,8 @@ export default function CookieYetiGetStartedChrome() {
           url="bestly.tech"
           eyebrow="Your call"
           caption="Strict, Balanced, or Permissive — set it once."
-          placeholderLabel="Control tab with the privacy modes"
-          placeholderHint="The panel's Control tab: Strict / Balanced / Permissive."
+          image={cyPanelControl}
+          imageAlt="Cookie Yeti panel — Control tab: Strict, Balanced, and Permissive privacy modes."
         />
       ),
     },
