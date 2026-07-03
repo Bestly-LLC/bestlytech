@@ -62,7 +62,7 @@ export function StepCarousel({
       aria-label={`Step ${i + 1} of ${n}`}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
-      className="relative rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+      className="relative rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
       style={{ ["--cy-accent" as string]: accent, touchAction: "pan-y" }}
     >
       {/* Progress header */}

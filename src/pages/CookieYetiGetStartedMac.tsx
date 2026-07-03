@@ -38,10 +38,13 @@ const FAQ = [
   },
 ];
 
-// Hovering arrow pointing up to the Safari toolbar (top-right) where the Yeti lives.
+// Hovering arrow pointing up to the Safari toolbar (top-left, left of the address
+// bar) where Safari puts extension icons. Lives inside the relatively-positioned
+// hero section so it scrolls away with the page instead of staying pinned to
+// the viewport.
 function ToolbarArrow() {
   return (
-    <div className="pointer-events-none fixed top-2 right-4 z-50 hidden md:flex flex-col items-center animate-bounce">
+    <div className="pointer-events-none absolute top-2 left-1/4 z-20 hidden md:flex flex-col items-center animate-bounce">
       <svg width="30" height="34" viewBox="0 0 30 34" fill="none" aria-hidden="true">
         <path d="M15 2v26M15 2 7 11M15 2l8 9" stroke="#2DB3A6" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -83,7 +86,7 @@ export default function CookieYetiGetStartedMac() {
       title: "Let it work on every site",
       body: (
         <>
-          Click the <strong className="text-foreground">Yeti icon</strong> in your Safari toolbar (top-right — see
+          Click the <strong className="text-foreground">Yeti icon</strong> in your Safari toolbar (top-left, just left of the address bar — see
           the arrow). The first time, Safari asks for permission — choose{" "}
           <strong className="text-foreground">Always Allow on Every Website</strong> so it can close banners
           everywhere. It only looks for cookie banners, nothing else.
@@ -171,10 +174,9 @@ export default function CookieYetiGetStartedMac() {
         path="/cookie-yeti/get-started/mac"
       />
 
-      <ToolbarArrow />
-
       {/* Hero */}
-      <section className="bg-[#F7F9FB] dark:bg-background">
+      <section className="relative bg-[#F7F9FB] dark:bg-background">
+        <ToolbarArrow />
         <div className="mx-auto max-w-3xl px-6 pt-16 pb-12 text-center">
           <AnimatedSection>
             <img

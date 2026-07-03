@@ -39,9 +39,11 @@ const FAQ = [
 ];
 
 // Hovering arrow that points up toward the real Chrome puzzle/extensions icon.
+// Lives inside the relatively-positioned hero section so it scrolls away with
+// the page instead of staying pinned to the viewport.
 function PuzzleArrow() {
   return (
-    <div className="pointer-events-none fixed top-2 right-3 z-50 hidden md:flex flex-col items-center animate-bounce">
+    <div className="pointer-events-none absolute top-2 right-3 z-20 hidden md:flex flex-col items-center animate-bounce">
       <svg width="30" height="34" viewBox="0 0 30 34" fill="none" aria-hidden="true">
         <path d="M15 2v26M15 2 7 11M15 2l8 9" stroke="#2DB3A6" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -150,10 +152,9 @@ export default function CookieYetiGetStartedChrome() {
         path="/cookie-yeti/get-started/chrome"
       />
 
-      <PuzzleArrow />
-
       {/* Hero */}
-      <section className="bg-[#F7F9FB] dark:bg-background">
+      <section className="relative bg-[#F7F9FB] dark:bg-background">
+        <PuzzleArrow />
         <div className="mx-auto max-w-3xl px-6 pt-16 pb-12 text-center">
           <AnimatedSection>
             <img
