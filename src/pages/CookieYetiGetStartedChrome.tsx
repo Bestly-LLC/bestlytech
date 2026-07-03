@@ -14,6 +14,7 @@ import { Sparkles } from "lucide-react";
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
 import cyPanelInsights from "@/assets/cy-panel-insights.png";
 import cyPanelControl from "@/assets/cy-panel-control.png";
+import cyPinPuzzle from "@/assets/cy-pin-puzzle.png";
 
 // CY-GS-02 (Chrome): plain-English onboarding. Pin from the puzzle menu, open
 // the panel, pick a mode, report a miss. Mobile = swipeable carousel; desktop =
@@ -74,8 +75,8 @@ export default function CookieYetiGetStartedChrome() {
         <DeviceShowcase
           eyebrow="Pin it"
           caption="Keep Cookie Yeti one click away in your toolbar."
-          placeholderLabel="Puzzle (Extensions) menu — pin Cookie Yeti"
-          placeholderHint="The Extensions dropdown with the pin next to Cookie Yeti."
+          image={cyPinPuzzle}
+          imageAlt="Chrome Extensions puzzle menu with Cookie Yeti pinned to the toolbar."
         />
       ),
     },
