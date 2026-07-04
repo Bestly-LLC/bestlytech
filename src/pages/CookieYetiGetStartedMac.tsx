@@ -13,6 +13,8 @@ import {
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
 import cyPanelInsights from "@/assets/cy-panel-insights.png";
 import cyPanelControl from "@/assets/cy-panel-control.png";
+import cySafariExtensions from "@/assets/cy-safari-extensions.png";
+import cySafariAllow from "@/assets/cy-safari-allow.png";
 import { Sparkles } from "lucide-react";
 
 // CY-GS-02 (macOS): plain-English Safari-on-Mac onboarding as an animated step
@@ -76,8 +78,8 @@ export default function CookieYetiGetStartedMac() {
         <DeviceShowcase
           eyebrow="Switch it on"
           caption="One checkbox in Safari Settings turns Cookie Yeti on."
-          placeholderLabel="Safari ▸ Settings ▸ Extensions"
-          placeholderHint="The Extensions pane with Cookie Yeti ticked."
+          image={cySafariExtensions}
+          imageAlt="Safari Settings ▸ Extensions with Cookie Yeti ticked on."
         />
       ),
     },
@@ -96,8 +98,8 @@ export default function CookieYetiGetStartedMac() {
         <DeviceShowcase
           eyebrow="Allow everywhere"
           caption="Allow once, and the Yeti works on every site."
-          placeholderLabel="Toolbar icon + “Always Allow on Every Website”"
-          placeholderHint="The Yeti in the toolbar and Safari's permission prompt."
+          image={cySafariAllow}
+          imageAlt="Safari toolbar with Cookie Yeti and the ‘Always Allow on Every Website’ prompt."
         />
       ),
     },
