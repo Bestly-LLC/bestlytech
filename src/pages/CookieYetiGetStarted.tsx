@@ -15,147 +15,15 @@ import safariMenuShot from "@/assets/cy-safari-menu.png";
 import safariBannerShot from "@/assets/cy-safari-banner.png";
 import panelReportShot from "@/assets/cy-panel-report.png";
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
-import {
-  Puzzle,
-  Cookie,
-  CheckCircle2,
-  Flag,
-  ArrowLeft,
-  Globe,
-  Lock,
-  RotateCcw,
-  Sparkles,
-} from "lucide-react";
+import { LiveReportDemo } from "@/components/cookieyeti/getStartedShared";
+import { ArrowLeft, Lock, Sparkles } from "lucide-react";
 
-// CY-GS-01: Post-download onboarding guide. Teaches three things:
-// 1) Where the Cookie Yeti panel lives in Safari (the puzzle icon)
-// 2) What a missed cookie banner looks like (interactive fake demo)
-// 3) How to report it (practice run on the fake banner — purely client-side,
-//    nothing is sent to the real missed-banner API)
-
-type DemoStage = "banner" | "panel" | "reported";
-
-const TEAL = "#2DB3A6";
-
-function FakeBannerDemo({
-  stage,
-  onOpenPanel,
-  onReport,
-  onReset,
-}: {
-  stage: DemoStage;
-  onOpenPanel: () => void;
-  onReport: () => void;
-  onReset: () => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-      {/* Mock page chrome */}
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/60 border-b border-border text-xs text-muted-foreground">
-        <Globe className="h-3.5 w-3.5" aria-hidden="true" />
-        <span>demo-site.example</span>
-        <span className="ml-auto rounded-full bg-[#2DB3A6]/10 text-[#2DB3A6] px-2 py-0.5 font-semibold uppercase tracking-wide text-[10px]">
-          Demo
-        </span>
-      </div>
-
-      {/* Mock page content */}
-      <div className="relative px-4 sm:px-6 pt-4 sm:pt-5 pb-4 min-h-[172px] sm:min-h-[290px]">
-        <div className="space-y-2.5 opacity-50" aria-hidden="true">
-          <div className="h-4 w-2/3 rounded bg-muted" />
-          <div className="h-3 w-full rounded bg-muted" />
-          <div className="h-3 w-11/12 rounded bg-muted" />
-          <div className="h-3 w-4/5 rounded bg-muted" />
-          <div className="h-24 w-full rounded-lg bg-muted mt-4" />
-        </div>
-
-        {/* Stage: the missed banner */}
-        {stage === "banner" && (
-          <div
-            className="absolute inset-x-3 bottom-3 rounded-xl border border-border bg-background shadow-lg p-4 motion-safe:animate-in motion-safe:slide-in-from-bottom-4 motion-safe:fade-in motion-safe:duration-300"
-            role="group"
-            aria-label="Example cookie consent banner that Cookie Yeti missed"
-          >
-            <div className="flex items-start gap-3">
-              <Cookie className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" aria-hidden="true" />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground">We value your privacy</p>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                  This demo site uses cookies to personalize content and analyze traffic
-                  — and Cookie Yeti didn't catch this one. That's your cue to report it.
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="inline-flex h-9 items-center rounded-lg bg-muted px-3 text-xs font-medium text-muted-foreground select-none">
-                Accept all
-              </span>
-              <span className="inline-flex h-9 items-center rounded-lg bg-muted px-3 text-xs font-medium text-muted-foreground select-none">
-                Manage settings
-              </span>
-              <Button
-                size="sm"
-                onClick={onOpenPanel}
-                className="ml-auto h-11 sm:h-9 bg-[#2DB3A6] hover:bg-[#249b90] text-white"
-              >
-                <Puzzle className="h-4 w-4 mr-1.5" aria-hidden="true" />
-                Open Cookie Yeti
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Stage: the Cookie Yeti panel */}
-        {stage === "panel" && (
-          <div
-            className="absolute inset-x-3 bottom-3 rounded-xl border border-border bg-background shadow-lg p-4 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
-            role="group"
-            aria-label="Mock Cookie Yeti panel"
-          >
-            <div className="flex items-center gap-2.5 pb-3 border-b border-border">
-              <img src={cookieYetiIcon} alt="" className="h-6 w-6 rounded" aria-hidden="true" />
-              <span className="text-sm font-semibold text-foreground">Cookie Yeti</span>
-              <span className="ml-auto text-xs text-muted-foreground">demo-site.example</span>
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              See a banner Cookie Yeti didn't handle? One tap teaches the yeti.
-            </p>
-            <Button
-              onClick={onReport}
-              className="mt-3 w-full h-11 bg-[#2DB3A6] hover:bg-[#249b90] text-white font-semibold"
-            >
-              <Flag className="h-4 w-4 mr-2" aria-hidden="true" />
-              Report missed banner
-            </Button>
-          </div>
-        )}
-
-        {/* Stage: success */}
-        {stage === "reported" && (
-          <div
-            className="absolute inset-x-3 bottom-3 rounded-xl border border-[#2DB3A6]/40 bg-[#2DB3A6]/5 shadow-lg p-5 text-center motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:fade-in motion-safe:duration-300"
-            role="status"
-          >
-            <CheckCircle2 className="h-8 w-8 text-[#2DB3A6] mx-auto" aria-hidden="true" />
-            <p className="mt-2 text-sm font-semibold text-foreground">Report sent — your yeti is learning</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              In the real app, our system analyzes the banner so it's handled automatically next time — for you and everyone else.
-            </p>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onReset}
-              className="mt-3 h-11 sm:h-9 text-[#2DB3A6] hover:text-[#249b90] hover:bg-[#2DB3A6]/10"
-            >
-              <RotateCcw className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
-              Try the demo again
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+// CY-GS-01: Post-download onboarding guide (Safari on iPhone). Teaches three
+// things:
+// 1) Where the Cookie Yeti panel lives in Safari (the address-bar menu)
+// 2) What a missed cookie banner looks like (a real screenshot)
+// 3) How to report it — on the last step the user fires a REAL report through
+//    their actually-installed Cookie Yeti (see LiveReportDemo).
 
 const FAQ = [
   {
@@ -181,7 +49,6 @@ function StepBadge({ n }: { n: number }) {
 }
 
 export default function CookieYetiGetStarted() {
-  const [stage, setStage] = useState<DemoStage>("banner");
   // CY-GS: reveal troubleshooting + FAQ + end CTA only once the tour reaches
   // its final step, so the core tour stays within one mobile viewport (no scroll).
   const [atLast, setAtLast] = useState(false);
@@ -275,7 +142,7 @@ export default function CookieYetiGetStarted() {
           <p className="mt-3 text-muted-foreground leading-relaxed">
             Cookie Yeti handles almost every consent pop-up before you notice it. But
             once in a while a site uses a banner the yeti hasn't learned yet. Here's a
-            real one in the wild — and below, a safe fake example you can practice on.
+            real one in the wild — and on the next step, a real page you can report from.
           </p>
           <img
             src={safariBannerShot}
@@ -293,25 +160,17 @@ export default function CookieYetiGetStarted() {
           <div className="flex items-center gap-3">
             <StepBadge n={3} />
             <h2 className="text-2xl font-bold tracking-tight text-foreground">
-              Report it — try it right here
+              Report it — for real, right here
             </h2>
           </div>
           <p className="mt-3 text-muted-foreground leading-relaxed">
-            One tap teaches the yeti. You saw the{" "}
-            <strong className="text-foreground">Report a missed banner</strong> button in
-            your panel in step 1 — practice the whole flow safely on the demo below.
-            Nothing is actually sent.
+            One tap teaches the yeti. The demo below is a real page with a real cookie banner —
+            open <strong className="text-foreground">Cookie Yeti</strong> from your address-bar
+            menu and tap <strong className="text-foreground">Report a missed banner</strong> to
+            send a real report.
           </p>
           <div className="mt-5 max-w-xl mx-auto">
-            <FakeBannerDemo
-              stage={stage}
-              onOpenPanel={() => setStage("panel")}
-              onReport={() => setStage("reported")}
-              onReset={() => setStage("banner")}
-            />
-            <p className="mt-2 hidden text-center text-xs text-muted-foreground sm:block">
-              Practice here — it's just a demo
-            </p>
+            <LiveReportDemo platform="ios" />
           </div>
           <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground sm:mt-3">
             <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />

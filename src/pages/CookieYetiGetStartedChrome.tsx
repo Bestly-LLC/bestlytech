@@ -5,10 +5,9 @@ import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import {
   StepBadge,
   DeviceShowcase,
-  FakeBannerDemo,
+  LiveReportDemo,
   GetStartedFAQ,
   GetStartedFooterCTA,
-  type DemoStage,
 } from "@/components/cookieyeti/getStartedShared";
 import { Sparkles } from "lucide-react";
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
@@ -58,7 +57,6 @@ function PuzzleArrow() {
 type Step = { n: number; title: string; body: ReactNode; showcase: ReactNode };
 
 export default function CookieYetiGetStartedChrome() {
-  const [stage, setStage] = useState<DemoStage>("banner");
   // CY-GS: reveal FAQ + end CTA only once the tour reaches its final step, so
   // the core tour stays within one mobile viewport with no scroll.
   const [atLast, setAtLast] = useState(false);
@@ -129,20 +127,14 @@ export default function CookieYetiGetStartedChrome() {
       title: "See one it missed? Tap Report — try it here",
       body: (
         <>
-          Cookie Yeti closes almost every pop-up before you notice. If one slips through, open the panel and
-          tap <strong className="text-foreground">Report a missed banner</strong> — one tap teaches it. Try the
-          whole thing safely below. Nothing is actually sent.
+          Cookie Yeti closes almost every pop-up before you notice. If one slips through, open your panel and
+          tap <strong className="text-foreground">Report a missed banner</strong>. The demo below is a real
+          page with a real banner — reporting it sends a real report through your Cookie Yeti.
         </>
       ),
       showcase: (
         <div className="mt-5 max-w-xl mx-auto">
-          <FakeBannerDemo
-            stage={stage}
-            onOpenPanel={() => setStage("panel")}
-            onReport={() => setStage("reported")}
-            onReset={() => setStage("banner")}
-          />
-          <p className="mt-2 hidden text-center text-xs text-muted-foreground sm:block">Practice here — it's just a demo</p>
+          <LiveReportDemo platform="chrome" />
         </div>
       ),
     },
