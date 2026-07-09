@@ -7,6 +7,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import {
   Cookie,
@@ -17,6 +24,7 @@ import {
   ShieldAlert,
   Flag,
   X,
+  HelpCircle,
 } from "lucide-react";
 
 // CY-GS-02: Shared building blocks for the platform-specific Get Started
@@ -162,7 +170,7 @@ export function LiveReportDemo({ platform }: { platform: DemoPlatform }) {
         </div>
 
         {/* Article */}
-        <div className="relative min-h-[150px] bg-white dark:bg-neutral-950 sm:min-h-[290px]">
+        <div className="relative min-h-[150px] bg-white dark:bg-neutral-950 sm:min-h-[210px]">
           {/* Masthead */}
           <div className="flex items-center gap-2 border-b border-black/5 px-3 py-1 dark:border-white/10">
             <span className="font-serif text-[12px] font-bold tracking-tight text-foreground">
@@ -369,6 +377,47 @@ export function GetStartedFooterCTA() {
   );
 }
 
+// CY-GS-05: Questions modal. The FAQ + end-of-tour CTA used to live below the
+// tour and were the main reason the page could scroll. They now live behind an
+// explicit "Questions?" control surfaced on the final step, so there is zero
+// content below the fold and the tour stays exactly one viewport tall. The
+// modal is an overlay (Radix Dialog) — it scrolls internally if needed, never
+// the page. `extra` lets a platform inject its own troubleshooting note.
+export function QuestionsSheet({
+  items,
+  extra,
+  triggerClassName,
+}: {
+  items: { q: string; a: string }[];
+  extra?: ReactNode;
+  triggerClassName?: string;
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className={
+            triggerClassName ??
+            "inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+          }
+        >
+          <HelpCircle className="h-4 w-4 text-[#2DB3A6]" aria-hidden="true" />
+          Questions?
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85dvh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Quick questions</DialogTitle>
+        </DialogHeader>
+        {extra}
+        <GetStartedFAQ items={items} />
+        <GetStartedFooterCTA />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // CY-GS-03: MacBook device mockup. Wraps a screenshot (or a labeled
 // placeholder) in a CSS-drawn laptop so the tutorials look like polished,
 // app-themed marketing rather than bare screen grabs. An optional browser
@@ -381,7 +430,7 @@ export function MacBookFrame({
   url?: string;
 }) {
   return (
-    <div className="mx-auto w-full max-w-[300px] sm:max-w-[600px]">
+    <div className="mx-auto w-full max-w-[240px] sm:max-w-[420px] md:max-w-[460px]">
       {/* Lid + bezel */}
       <div className="relative rounded-t-[16px] rounded-b-[6px] bg-gradient-to-b from-neutral-800 to-neutral-900 p-[12px] shadow-2xl ring-1 ring-black/10">
         {/* Camera */}

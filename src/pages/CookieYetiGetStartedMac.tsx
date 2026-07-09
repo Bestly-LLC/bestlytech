@@ -1,13 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { SEOHead } from "@/components/SEOHead";
-import { AnimatedSection } from "@/components/AnimatedSection";
 import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import {
   StepBadge,
   DeviceShowcase,
   LiveReportDemo,
-  GetStartedFAQ,
-  GetStartedFooterCTA,
+  QuestionsSheet,
 } from "@/components/cookieyeti/getStartedShared";
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
 import cyPanelInsights from "@/assets/cy-panel-insights.png";
@@ -18,7 +16,14 @@ import { Sparkles } from "lucide-react";
 
 // CY-GS-02 (macOS): plain-English Safari-on-Mac onboarding as an animated step
 // carousel. Turn it on in Safari Settings, allow on every site, open the panel,
-// pick a mode, report a miss. Arrow points up to the Safari toolbar.
+// pick a mode, report a miss.
+//
+// CY-GS-05 layout (viewed on a desktop browser window): the page is exactly one
+// viewport tall (100dvh minus the slim header) with overflow hidden, so it
+// NEVER scrolls. On desktop it's a two-column split — a demoted hero on the
+// LEFT (icon, "You're almost set.", one short line) and the StepCarousel pane
+// centered on the RIGHT, both vertically centered and adapting to the window
+// height. FAQ + end CTA live behind a "Questions?" control on the final step.
 
 const FAQ = [
   {
@@ -39,13 +44,11 @@ const FAQ = [
   },
 ];
 
-// Hovering arrow pointing up to the Safari toolbar (top-left, left of the address
-// bar) where Safari puts extension icons. Lives inside the relatively-positioned
-// hero section so it scrolls away with the page instead of staying pinned to
-// the viewport.
+// Hovering arrow pointing up to the Safari toolbar (top-left, where Safari puts
+// extension icons). Desktop-only — hidden on mobile per spec.
 function ToolbarArrow() {
   return (
-    <div className="pointer-events-none absolute top-2 left-1/4 z-20 hidden md:flex flex-col items-center animate-bounce">
+    <div className="pointer-events-none absolute top-1 left-8 z-20 hidden md:flex flex-col items-center animate-bounce">
       <svg width="30" height="34" viewBox="0 0 30 34" fill="none" aria-hidden="true">
         <path d="M15 2v26M15 2 7 11M15 2l8 9" stroke="#2DB3A6" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -59,10 +62,6 @@ function ToolbarArrow() {
 type Step = { n: number; title: string; body: ReactNode; showcase: ReactNode };
 
 export default function CookieYetiGetStartedMac() {
-  // CY-GS: reveal FAQ + end CTA only once the tour reaches its final step, so
-  // the core tour stays within one mobile viewport with no scroll.
-  const [atLast, setAtLast] = useState(false);
-
   const steps: Step[] = [
     {
       n: 1,
@@ -156,7 +155,7 @@ export default function CookieYetiGetStartedMac() {
         </>
       ),
       showcase: (
-        <div className="mt-5 max-w-xl mx-auto">
+        <div className="mt-3 min-h-0 flex-1 overflow-hidden">
           <LiveReportDemo platform="mac" />
         </div>
       ),
@@ -171,72 +170,62 @@ export default function CookieYetiGetStartedMac() {
         path="/cookie-yeti/get-started/mac"
       />
 
-      {/* CY-GS: single-viewport tour shell. On mobile the compact hero + step
-          carousel fill exactly one screen (100dvh minus the 52px compact
-          header) with no scroll. Desktop keeps the fuller stacked layout. */}
-      <div className="mx-auto flex min-h-[calc(100dvh_-_var(--cy-hdr,52px))] max-w-3xl flex-col justify-center px-4 pb-4 sm:px-6 md:min-h-0 md:justify-start md:pb-20">
-        {/* Hero (compact on mobile, fuller on sm+) */}
-        <section className="relative pt-3 pb-3 text-center sm:pt-8 sm:pb-6">
-          <ToolbarArrow />
-          <AnimatedSection>
+      {/* CY-GS-05: single-viewport, no-scroll tour shell. Desktop = two columns
+          (demoted hero left, centered pane right); mobile = a minimal top strip
+          with the pane dead-center. Overflow hidden makes scrolling impossible. */}
+      <div className="relative h-[calc(100dvh_-_var(--cy-hdr,52px))] overflow-hidden">
+        <ToolbarArrow />
+        <div className="mx-auto flex h-full max-w-6xl flex-col px-4 md:flex-row md:items-center md:justify-center md:gap-10 md:px-10">
+          {/* Demoted hero — top strip on mobile, left column (vertically
+              centered) on desktop. Never pushes the pane down. */}
+          <div className="flex shrink-0 items-center justify-center gap-2.5 py-2.5 text-center md:w-[38%] md:flex-col md:items-start md:justify-center md:py-0 md:text-left">
             <img
               src={cookieYetiIcon}
               alt="Cookie Yeti app icon"
-              className="mx-auto h-12 w-12 rounded-2xl shadow-md sm:h-20 sm:w-20"
-              width={80}
-              height={80}
+              className="h-8 w-8 rounded-xl shadow-sm md:h-16 md:w-16 md:rounded-2xl md:shadow-md"
+              width={64}
+              height={64}
             />
-            <span className="mt-2 hidden rounded-full bg-[#2DB3A6]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#2DB3A6] sm:mt-5 sm:inline-block">
-              Safari on Mac
-            </span>
-            <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-foreground sm:mt-4 sm:text-5xl">
-              You're almost set.
-            </h1>
-            <p className="mx-auto mt-3 hidden max-w-xl text-lg text-muted-foreground sm:block">
-              Two quick clicks to switch Cookie Yeti on in Safari, then it closes those "Accept Cookies?" pop-ups
-              for you while you browse. Here's the 30-second tour.
-            </p>
-          </AnimatedSection>
-        </section>
-
-        {/* Steps carousel */}
-        <StepCarousel
-          accent="#2DB3A6"
-          onIndexChange={(idx, total) => setAtLast(idx === total - 1)}
-          steps={steps.map((s) => (
-            <div key={s.n}>
-              <div className="flex items-center gap-3">
-                <StepBadge n={s.n} />
-                <h2 className="text-2xl font-bold tracking-tight text-foreground">{s.title}</h2>
-              </div>
-              <p className="mt-3 text-muted-foreground leading-relaxed">{s.body}</p>
-              {s.showcase}
-              {s.n === 5 && (
-                <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground sm:mt-3">
-                  <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />
-                  Real reports send only the pop-up's pattern and the site's name — never your personal data.
-                </p>
-              )}
+            <div>
+              <span className="mb-3 hidden rounded-full bg-[#2DB3A6]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#2DB3A6] md:inline-block">
+                Safari on Mac
+              </span>
+              <h1 className="text-base font-extrabold tracking-tight text-foreground md:text-4xl">
+                You're almost set.
+              </h1>
+              <p className="mt-3 hidden max-w-sm text-base text-muted-foreground md:block">
+                Two quick clicks switch Cookie Yeti on in Safari — then it quietly closes those
+                “Accept Cookies?” pop-ups while you browse.
+              </p>
             </div>
-          ))}
-        />
+          </div>
 
-        {/* Secondary content — hidden on mobile until the tour's last step
-            (display:none contributes no height, so the tour never scrolls),
-            always shown on desktop. */}
-        <div className={atLast ? "block" : "hidden md:block"}>
-          {/* FAQ */}
-          <AnimatedSection delay={200}>
-            <h2 className="mt-12 text-2xl font-bold tracking-tight text-foreground sm:mt-16">Quick questions</h2>
-            <GetStartedFAQ items={FAQ} />
-          </AnimatedSection>
-
-          {/* Footer CTA */}
-          <AnimatedSection delay={250}>
-            <div className="mt-12 sm:mt-16">
-              <GetStartedFooterCTA />
-            </div>
-          </AnimatedSection>
+          {/* Pane, centered in the remaining space (both axes). */}
+          <div className="flex min-h-0 flex-1 items-center justify-center pb-3 md:h-full md:pb-0">
+            <StepCarousel
+              className="h-full w-full md:max-w-xl"
+              accent="#2DB3A6"
+              steps={steps.map((s) => (
+                <div key={s.n} className="flex h-full flex-col">
+                  <div className="flex items-center gap-3">
+                    <StepBadge n={s.n} />
+                    <h2 className="text-lg font-bold tracking-tight text-foreground md:text-2xl">{s.title}</h2>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground leading-relaxed md:text-base">{s.body}</p>
+                  {s.showcase}
+                  {s.n === 5 && (
+                    <div className="mt-2.5 flex shrink-0 items-center justify-between gap-3">
+                      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />
+                        Sends only the pattern &amp; site name.
+                      </p>
+                      <QuestionsSheet items={FAQ} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            />
+          </div>
         </div>
       </div>
     </>

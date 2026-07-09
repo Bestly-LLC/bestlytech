@@ -24,7 +24,12 @@ export function Layout() {
         </PageTransition>
       </main>
       {!isCyGetStarted && <Footer />}
-      <CookieConsent />
+      {/* CY-GS-05: the get-started tours are a single-viewport, no-scroll pane
+          experience. The global cookie-consent bar is fixed to the bottom and
+          would cover the carousel's Back/Next controls, so we suppress it on
+          these routes (as we do the footer). Consent is still gathered on every
+          other page of the site. */}
+      {!isCyGetStarted && <CookieConsent />}
     </div>
   );
 }

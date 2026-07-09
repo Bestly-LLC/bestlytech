@@ -74,7 +74,7 @@ export function StepCarousel({
       aria-label={`Step ${i + 1} of ${n}`}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
-      className={`relative flex flex-col rounded-2xl border border-border bg-card p-4 sm:p-8 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${className ?? ""}`}
+      className={`relative flex min-h-0 flex-col rounded-2xl border border-border bg-card p-4 sm:p-6 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${className ?? ""}`}
       style={{ ["--cy-accent" as string]: accent, touchAction: "pan-y" }}
     >
       {/* Progress header */}
@@ -101,9 +101,11 @@ export function StepCarousel({
         </div>
       </div>
 
-      {/* Slide viewport */}
-      <div className="overflow-hidden">
-        <div key={i} className="cy-carousel-slide" data-dir={dir}>
+      {/* Slide viewport — flex-1 + min-h-0 so it absorbs the available height and
+          clips internally; the progress header and Back/Next controls (shrink-0
+          siblings) therefore stay visible at every window size, no scroll. */}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <div key={i} className="cy-carousel-slide h-full overflow-hidden" data-dir={dir}>
           {steps[i]}
         </div>
       </div>
