@@ -60,7 +60,7 @@ function FakeBannerDemo({
       </div>
 
       {/* Mock page content */}
-      <div className="relative px-4 sm:px-6 pt-5 pb-4 min-h-[290px]">
+      <div className="relative px-4 sm:px-6 pt-4 sm:pt-5 pb-4 min-h-[172px] sm:min-h-[290px]">
         <div className="space-y-2.5 opacity-50" aria-hidden="true">
           <div className="h-4 w-2/3 rounded bg-muted" />
           <div className="h-3 w-full rounded bg-muted" />
@@ -182,6 +182,9 @@ function StepBadge({ n }: { n: number }) {
 
 export default function CookieYetiGetStarted() {
   const [stage, setStage] = useState<DemoStage>("banner");
+  // CY-GS: reveal troubleshooting + FAQ + end CTA only once the tour reaches
+  // its final step, so the core tour stays within one mobile viewport (no scroll).
+  const [atLast, setAtLast] = useState(false);
 
   return (
     <>
@@ -191,32 +194,34 @@ export default function CookieYetiGetStarted() {
         path="/cookie-yeti/get-started"
       />
 
-      {/* Hero */}
-      <section className="bg-[#F7F9FB] dark:bg-background">
-        <div className="mx-auto max-w-3xl px-6 pt-16 pb-12 text-center">
+      {/* CY-GS: single-viewport tour shell — compact hero + carousel fill one
+          mobile screen (100dvh minus the 52px compact header), no scroll.
+          Desktop keeps the fuller stacked layout. */}
+      <div className="mx-auto flex min-h-[calc(100dvh_-_var(--cy-hdr,52px))] max-w-3xl flex-col justify-center px-4 pb-4 sm:px-6 md:min-h-0 md:justify-start md:pb-20">
+        {/* Hero (compact on mobile, fuller on sm+) */}
+        <section className="pt-3 pb-3 text-center sm:pt-8 sm:pb-6">
           <AnimatedSection>
             <img
               src={cookieYetiIcon}
               alt="Cookie Yeti app icon"
-              className="h-20 w-20 rounded-2xl mx-auto shadow-md"
+              className="mx-auto h-12 w-12 rounded-2xl shadow-md sm:h-20 sm:w-20"
               width={80}
               height={80}
             />
-            <h1 className="mt-6 text-4xl sm:text-5xl font-extrabold tracking-tight text-foreground">
+            <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-foreground sm:mt-6 sm:text-5xl">
               You're protected.
             </h1>
-            <p className="mt-3 text-lg text-muted-foreground max-w-xl mx-auto">
+            <p className="mx-auto mt-3 hidden max-w-xl text-lg text-muted-foreground sm:block">
               Setup's done — this page is your practice run. In fact, Cookie Yeti
               probably just handled this site's cookie banner before you noticed.
             </p>
           </AnimatedSection>
-        </div>
-      </section>
+        </section>
 
-      {/* Steps */}
-      <section className="mx-auto max-w-3xl px-6 pb-20 space-y-16">
+        {/* Steps */}
         <StepCarousel
           accent="#2DB3A6"
+          onIndexChange={(idx, total) => setAtLast(idx === total - 1)}
           steps={[
             <div key="s1">
           <div className="flex items-center gap-3">
@@ -231,12 +236,12 @@ export default function CookieYetiGetStarted() {
             <strong className="text-foreground">Cookie Yeti</strong>. Your panel opens with
             live stats — banners handled, your privacy mode, and the report button.
           </p>
-          <div className="mt-5 grid gap-6 sm:grid-cols-2 sm:items-start">
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-5 sm:gap-6 sm:items-start">
             <div>
               <img
                 src={safariMenuShot}
                 alt="Real screenshot of Safari on iPhone with the page menu open, showing the Cookie Yeti entry alongside Manage Extensions."
-                className="mx-auto max-w-[320px] w-full rounded-[2rem] border-2 border-border shadow-sm"
+                className="mx-auto max-h-[26dvh] w-auto max-w-[320px] rounded-[1.25rem] border-2 border-border object-contain shadow-sm sm:max-h-none sm:w-full sm:rounded-[2rem]"
                 width={414}
                 height={900}
                 loading="lazy"
@@ -249,7 +254,7 @@ export default function CookieYetiGetStarted() {
               <img
                 src={panelReportShot}
                 alt="Real screenshot of the Cookie Yeti panel open in Safari on iPhone, showing the Active status, live stats, and the Report a missed banner button."
-                className="mx-auto max-w-[320px] w-full rounded-[2rem] border-2 border-border shadow-sm"
+                className="mx-auto max-h-[26dvh] w-auto max-w-[320px] rounded-[1.25rem] border-2 border-border object-contain shadow-sm sm:max-h-none sm:w-full sm:rounded-[2rem]"
                 width={414}
                 height={900}
                 loading="lazy"
@@ -275,7 +280,7 @@ export default function CookieYetiGetStarted() {
           <img
             src={safariBannerShot}
             alt="Real screenshot of Safari on iPhone showing a website with a cookie consent banner at the bottom of the page, above the address bar."
-            className="mt-5 mx-auto max-w-[320px] w-full rounded-[2rem] border-2 border-border shadow-sm"
+            className="mx-auto mt-3 max-h-[32dvh] w-auto max-w-[320px] rounded-[1.25rem] border-2 border-border object-contain shadow-sm sm:mt-5 sm:max-h-none sm:w-full sm:rounded-[2rem]"
             width={414}
             height={900}
             loading="lazy"
@@ -304,11 +309,11 @@ export default function CookieYetiGetStarted() {
               onReport={() => setStage("reported")}
               onReset={() => setStage("banner")}
             />
-            <p className="mt-2 text-center text-xs text-muted-foreground">
+            <p className="mt-2 hidden text-center text-xs text-muted-foreground sm:block">
               Practice here — it's just a demo
             </p>
           </div>
-          <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground sm:mt-3">
             <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />
             Real reports send only the banner's pattern and the site's domain — never your personal data.
           </p>
@@ -316,6 +321,10 @@ export default function CookieYetiGetStarted() {
           ]}
         />
 
+        {/* Secondary content — hidden on mobile until the tour's last step
+            (display:none contributes no height, so the tour never scrolls),
+            always shown on desktop. */}
+        <div className={`mt-12 space-y-16 sm:mt-16 ${atLast ? "block" : "hidden md:block"}`}>
         {/* Troubleshooting */}
         <AnimatedSection delay={180}>
           <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
@@ -381,7 +390,8 @@ export default function CookieYetiGetStarted() {
             </div>
           </div>
         </AnimatedSection>
-      </section>
+        </div>
+      </div>
     </>
   );
 }

@@ -85,7 +85,7 @@ export function FakeBannerDemo({
         </span>
       </div>
 
-      <div className="relative px-4 sm:px-6 pt-5 pb-4 min-h-[290px]">
+      <div className="relative px-4 sm:px-6 pt-4 sm:pt-5 pb-4 min-h-[172px] sm:min-h-[290px]">
         <div className="space-y-2.5 opacity-50" aria-hidden="true">
           <div className="h-4 w-2/3 rounded bg-muted" />
           <div className="h-3 w-full rounded bg-muted" />
@@ -233,7 +233,7 @@ export function MacBookFrame({
   url?: string;
 }) {
   return (
-    <div className="mx-auto w-full max-w-[600px]">
+    <div className="mx-auto w-full max-w-[300px] sm:max-w-[600px]">
       {/* Lid + bezel */}
       <div className="relative rounded-t-[16px] rounded-b-[6px] bg-gradient-to-b from-neutral-800 to-neutral-900 p-[12px] shadow-2xl ring-1 ring-black/10">
         {/* Camera */}
@@ -286,7 +286,7 @@ export function DeviceShowcase({
   placeholderHint?: string;
 }) {
   return (
-    <figure className="mt-5">
+    <figure className="mt-2 sm:mt-5">
       <MacBookFrame url={url}>
         {image ? (
           <img
@@ -307,9 +307,9 @@ export function DeviceShowcase({
           </div>
         )}
       </MacBookFrame>
-      <figcaption className="mt-5 text-center">
+      <figcaption className="mt-2 sm:mt-5 text-center">
         <p className="text-xs font-semibold uppercase tracking-wide text-[#2DB3A6]">{eyebrow}</p>
-        <p className="mt-1 text-base font-semibold text-foreground">{caption}</p>
+        <p className="mt-1 text-sm sm:text-base font-semibold text-foreground">{caption}</p>
       </figcaption>
     </figure>
   );

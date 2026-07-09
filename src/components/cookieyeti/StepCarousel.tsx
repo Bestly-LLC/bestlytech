@@ -1,6 +1,10 @@
 import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
+// CY-GS: onIndexChange lets the host page reveal secondary content (FAQ / end
+// CTA) only once the tour reaches its last step, keeping the default tour view
+// within one mobile viewport (no scroll).
+
 // Animated step carousel for the get-started tours. One step at a time with a
 // direction-aware slide+fade (transform/opacity only, ~300ms, reduced-motion
 // aware), skip-ahead dots, Back/Next, keyboard arrows, and swipe. UX-Pro-Max:
@@ -9,14 +13,22 @@ export function StepCarousel({
   steps,
   accent = "#2DB3A6",
   doneLabel = "You're all set ✓",
+  className,
+  onIndexChange,
 }: {
   steps: ReactNode[];
   accent?: string;
   doneLabel?: string;
+  className?: string;
+  onIndexChange?: (index: number, total: number) => void;
 }) {
   const n = steps.length;
   const [i, setI] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);
+
+  useEffect(() => {
+    onIndexChange?.(i, n);
+  }, [i, n, onIndexChange]);
 
   const go = useCallback(
     (target: number) => {
@@ -62,11 +74,11 @@ export function StepCarousel({
       aria-label={`Step ${i + 1} of ${n}`}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
-      className="relative rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+      className={`relative flex flex-col rounded-2xl border border-border bg-card p-4 sm:p-8 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${className ?? ""}`}
       style={{ ["--cy-accent" as string]: accent, touchAction: "pan-y" }}
     >
       {/* Progress header */}
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-3 sm:mb-5 flex items-center justify-between">
         <span className="text-sm font-semibold text-muted-foreground tabular-nums">
           Step {i + 1} of {n}
         </span>
@@ -97,7 +109,7 @@ export function StepCarousel({
       </div>
 
       {/* Controls */}
-      <div className="mt-7 flex items-center justify-between">
+      <div className="mt-3 sm:mt-7 flex items-center justify-between">
         <button
           type="button"
           onClick={prev}

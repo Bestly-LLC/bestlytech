@@ -15,7 +15,7 @@ const navigation = [
   { name: "Contact", href: "/contact" },
 ];
 
-export function Header() {
+export function Header({ compact = false }: { compact?: boolean } = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
@@ -32,6 +32,30 @@ export function Header() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // CY-GS: slim, fixed-height (52px) bar for the Cookie Yeti get-started tours.
+  // Reclaims vertical space so the onboarding tour fits one mobile viewport
+  // (100dvh) with no scroll. Height is mirrored by --cy-hdr in Layout so the
+  // tour shell can size itself to calc(100dvh - var(--cy-hdr)).
+  if (compact) {
+    return (
+      <header className="sticky top-0 z-50 h-[52px] w-full border-b border-border/50 bg-background/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 sm:px-6">
+          <Link to="/cookie-yeti" className="flex items-center gap-2 group" aria-label="Cookie Yeti home">
+            <img
+              src={bestlyLogo}
+              alt="Bestly LLC"
+              className="h-6 w-auto transition-transform group-hover:scale-105"
+            />
+            <span className="font-display text-lg font-normal tracking-[-0.02em] text-foreground">
+              Bestly
+            </span>
+          </Link>
+          <ThemeToggle />
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header 

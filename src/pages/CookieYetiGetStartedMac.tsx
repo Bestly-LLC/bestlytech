@@ -61,6 +61,9 @@ type Step = { n: number; title: string; body: ReactNode; showcase: ReactNode };
 
 export default function CookieYetiGetStartedMac() {
   const [stage, setStage] = useState<DemoStage>("banner");
+  // CY-GS: reveal FAQ + end CTA only once the tour reaches its final step, so
+  // the core tour stays within one mobile viewport with no scroll.
+  const [atLast, setAtLast] = useState(false);
 
   const steps: Step[] = [
     {
@@ -162,7 +165,7 @@ export default function CookieYetiGetStartedMac() {
             onReport={() => setStage("reported")}
             onReset={() => setStage("banner")}
           />
-          <p className="mt-2 text-center text-xs text-muted-foreground">Practice here — it's just a demo</p>
+          <p className="mt-2 hidden text-center text-xs text-muted-foreground sm:block">Practice here — it's just a demo</p>
         </div>
       ),
     },
@@ -176,36 +179,38 @@ export default function CookieYetiGetStartedMac() {
         path="/cookie-yeti/get-started/mac"
       />
 
-      {/* Hero */}
-      <section className="relative bg-[#F7F9FB] dark:bg-background">
-        <ToolbarArrow />
-        <div className="mx-auto max-w-3xl px-6 pt-16 pb-12 text-center">
+      {/* CY-GS: single-viewport tour shell. On mobile the compact hero + step
+          carousel fill exactly one screen (100dvh minus the 52px compact
+          header) with no scroll. Desktop keeps the fuller stacked layout. */}
+      <div className="mx-auto flex min-h-[calc(100dvh_-_var(--cy-hdr,52px))] max-w-3xl flex-col justify-center px-4 pb-4 sm:px-6 md:min-h-0 md:justify-start md:pb-20">
+        {/* Hero (compact on mobile, fuller on sm+) */}
+        <section className="relative pt-3 pb-3 text-center sm:pt-8 sm:pb-6">
+          <ToolbarArrow />
           <AnimatedSection>
             <img
               src={cookieYetiIcon}
               alt="Cookie Yeti app icon"
-              className="h-20 w-20 rounded-2xl mx-auto shadow-md"
+              className="mx-auto h-12 w-12 rounded-2xl shadow-md sm:h-20 sm:w-20"
               width={80}
               height={80}
             />
-            <span className="mt-5 inline-block rounded-full bg-[#2DB3A6]/10 text-[#2DB3A6] px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+            <span className="mt-2 hidden rounded-full bg-[#2DB3A6]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#2DB3A6] sm:mt-5 sm:inline-block">
               Safari on Mac
             </span>
-            <h1 className="mt-4 text-4xl sm:text-5xl font-extrabold tracking-tight text-foreground">
+            <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-foreground sm:mt-4 sm:text-5xl">
               You're almost set.
             </h1>
-            <p className="mt-3 text-lg text-muted-foreground max-w-xl mx-auto">
+            <p className="mx-auto mt-3 hidden max-w-xl text-lg text-muted-foreground sm:block">
               Two quick clicks to switch Cookie Yeti on in Safari, then it closes those "Accept Cookies?" pop-ups
               for you while you browse. Here's the 30-second tour.
             </p>
           </AnimatedSection>
-        </div>
-      </section>
+        </section>
 
-      {/* Steps carousel */}
-      <section className="mx-auto max-w-3xl px-6 pb-20">
+        {/* Steps carousel */}
         <StepCarousel
           accent="#2DB3A6"
+          onIndexChange={(idx, total) => setAtLast(idx === total - 1)}
           steps={steps.map((s) => (
             <div key={s.n}>
               <div className="flex items-center gap-3">
@@ -215,7 +220,7 @@ export default function CookieYetiGetStartedMac() {
               <p className="mt-3 text-muted-foreground leading-relaxed">{s.body}</p>
               {s.showcase}
               {s.n === 5 && (
-                <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground sm:mt-3">
                   <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />
                   Real reports send only the pop-up's pattern and the site's name — never your personal data.
                 </p>
@@ -224,17 +229,24 @@ export default function CookieYetiGetStartedMac() {
           ))}
         />
 
-        {/* FAQ */}
-        <AnimatedSection delay={200}>
-          <h2 className="mt-16 text-2xl font-bold tracking-tight text-foreground">Quick questions</h2>
-          <GetStartedFAQ items={FAQ} />
-        </AnimatedSection>
+        {/* Secondary content — hidden on mobile until the tour's last step
+            (display:none contributes no height, so the tour never scrolls),
+            always shown on desktop. */}
+        <div className={atLast ? "block" : "hidden md:block"}>
+          {/* FAQ */}
+          <AnimatedSection delay={200}>
+            <h2 className="mt-12 text-2xl font-bold tracking-tight text-foreground sm:mt-16">Quick questions</h2>
+            <GetStartedFAQ items={FAQ} />
+          </AnimatedSection>
 
-        {/* Footer CTA */}
-        <AnimatedSection delay={250}>
-          <GetStartedFooterCTA />
-        </AnimatedSection>
-      </section>
+          {/* Footer CTA */}
+          <AnimatedSection delay={250}>
+            <div className="mt-12 sm:mt-16">
+              <GetStartedFooterCTA />
+            </div>
+          </AnimatedSection>
+        </div>
+      </div>
     </>
   );
 }
