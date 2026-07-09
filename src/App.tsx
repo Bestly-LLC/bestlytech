@@ -72,6 +72,7 @@ const AdminSetupGuide = lazy(() => import("./pages/admin/AdminSetupGuide"));
 const CYDashboard = lazy(() => import("./pages/admin/CYDashboard"));
 const CYCommandCenter = lazy(() => import("./pages/admin/CYCommandCenter"));
 const CYAutoFixMonitor = lazy(() => import("./pages/admin/CYAutoFixMonitor"));
+const CYProductAnalytics = lazy(() => import("./pages/admin/CYProductAnalytics"));
 const CYSubscribers = lazy(() => import("./pages/admin/CYSubscribers"));
 const CYGrantedAccess = lazy(() => import("./pages/admin/CYGrantedAccess"));
 const CYDomains = lazy(() => import("./pages/admin/CYDomains"));
@@ -170,6 +171,7 @@ const App = () => (
                   <Route path="shield-reports" element={<AdminShieldReports />} />
                   <Route path="cookie-yeti" element={<CYCommandCenter />} />
                   <Route path="cookie-yeti/autofix" element={<CYAutoFixMonitor />} />
+                  <Route path="cookie-yeti/analytics" element={<CYProductAnalytics />} />
                   <Route path="cookie-yeti/ops" element={<CYDashboard />} />
                   <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
                   <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />

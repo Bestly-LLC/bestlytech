@@ -572,6 +572,10 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function CookieYetiDashboard() {
   const { stats, loaded, live } = useDashboardData();
+  // Both the RPC and the direct-query fallback failed: we could NOT load live
+  // data. The numbers on screen are an illustrative last-known sample, not live —
+  // say so explicitly rather than passing them off as real.
+  const failed = loaded && !live;
 
   // Headline metric: of the sites users reported, how many has Cookie Yeti
   // actually handled. This is the number worth leading with.
@@ -635,8 +639,8 @@ export default function CookieYetiDashboard() {
           </Link>
           <div className="flex items-center gap-2 text-xs">
             <span className="hidden items-center gap-1.5 sm:inline-flex">
-              <span className={`h-2 w-2 rounded-full ${live ? "bg-emerald-400" : "bg-amber-400"} ${loaded ? "" : "animate-pulse"}`} />
-              <span className="text-zinc-400">{live ? "Live data" : "Loading"}</span>
+              <span className={`h-2 w-2 rounded-full ${live ? "bg-emerald-400" : failed ? "bg-red-400" : "bg-amber-400"} ${loaded ? "" : "animate-pulse"}`} />
+              <span className="text-zinc-400">{live ? "Live data" : failed ? "Temporarily unavailable" : "Loading"}</span>
             </span>
             <Link
               to="/cookie-yeti"
@@ -647,6 +651,20 @@ export default function CookieYetiDashboard() {
           </div>
         </div>
       </header>
+
+      {/* Live-data failure notice — the figures below are an illustrative sample,
+          not live telemetry. Be explicit instead of faking a live dashboard. */}
+      {failed && (
+        <div className="mx-auto max-w-7xl px-6 pt-4">
+          <div className="flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.08] px-4 py-3">
+            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-400" />
+            <p className="text-sm text-amber-200/90">
+              <span className="font-semibold">Live stats are temporarily unavailable.</span>{" "}
+              The numbers below are an illustrative last-known sample, not live telemetry. Please check back shortly.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Hero + ticker */}
       <section className="relative overflow-hidden">

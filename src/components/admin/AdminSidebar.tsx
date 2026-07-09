@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   FileText,
   BookOpen,
+  BarChart3,
   Snowflake,
   Users,
   ShieldCheck,
@@ -62,6 +63,7 @@ const cookieYetiItems = [
   { title: "Granted Access", url: "/admin/cookie-yeti/granted", icon: ShieldCheck },
   { title: "Operations", url: "/admin/cookie-yeti/ops", icon: Activity },
   { title: "Auto-Fix", url: "/admin/cookie-yeti/autofix", icon: Sparkles },
+  { title: "Product Analytics", url: "/admin/cookie-yeti/analytics", icon: BarChart3 },
   { title: "Community", url: "/admin/cookie-yeti/community", icon: Brain },
 ];
 

@@ -14,6 +14,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/guide": "Setup Guide",
   "/admin/cookie-yeti": "CY Command Center",
   "/admin/cookie-yeti/ops": "CY Operations",
+  "/admin/cookie-yeti/analytics": "Product Analytics",
   "/admin/cookie-yeti/subscribers": "Subscribers",
   "/admin/cookie-yeti/granted": "Granted Access",
   "/admin/cookie-yeti/community": "Community Learning",

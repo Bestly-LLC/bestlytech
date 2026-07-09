@@ -61,7 +61,11 @@ export default function CYGrantedAccess() {
   };
 
   const revoke = async (id: string) => {
-    await supabase.from("granted_access").delete().eq("id", id);
+    const { error } = await supabase.from("granted_access").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Revoke failed", description: error.message, variant: "destructive" });
+      return;
+    }
     toast({ title: "Access Revoked" });
     loadData();
   };

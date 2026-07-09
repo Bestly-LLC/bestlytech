@@ -54,20 +54,26 @@ export default function CYAutoFixMonitor() {
   const [refreshing, setRefreshing] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
   const [stuck, setStuck] = useState<Stuck[]>([]);
-  const [tokenActive, setTokenActive] = useState<boolean>(true);
+  // A failed health query must read as UNKNOWN, never as a healthy all-zero pipeline.
+  const [healthError, setHealthError] = useState(false);
+  // null = probe failed (unknown); true/false = REAL BROWSERLESS_TOKEN config state.
+  const [renderConfigured, setRenderConfigured] = useState<boolean | null>(null);
 
   const loadData = useCallback(async () => {
-    const [h, s, rendered] = await Promise.all([
+    const [h, s, render] = await Promise.all([
       supabase.from("v_cookieyeti_pipeline_health" as any).select("*").maybeSingle(),
       supabase.from("v_cookieyeti_needs_attention" as any).select("*").order("report_count", { ascending: false }).limit(50),
-      supabase.from("missed_banner_reports" as any).select("id", { count: "exact", head: true }).gt("render_attempts", 0),
+      // REAL render-engine config check (BROWSERLESS_TOKEN), not a render_attempts heuristic.
+      supabase.functions.invoke("cy-render-health"),
     ]);
     if (h.error) console.error("[CYAutoFixMonitor] health", h.error.message);
     if (s.error) console.error("[CYAutoFixMonitor] stuck", s.error.message);
-    setHealth((h.data as unknown as Health) || null);
+    // Surface a health-view failure explicitly instead of masking it as zeros.
+    setHealthError(!!h.error);
+    setHealth(h.error ? null : ((h.data as unknown as Health) || null));
     setStuck((s.data as unknown as Stuck[]) || []);
-    // Render engine is "live" once it has rendered at least one report.
-    setTokenActive((rendered.count ?? 0) > 0);
+    if (render.error || !render.data) setRenderConfigured(null);
+    else setRenderConfigured(!!(render.data as any).configured);
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -109,22 +115,44 @@ export default function CYAutoFixMonitor() {
         }
       />
 
-      {/* Render-engine setup notice */}
-      {!tokenActive && (
+      {/* Render-engine status — based on a REAL config probe (BROWSERLESS_TOKEN),
+          not "render_attempts > 0". null = probe failed → unknown. */}
+      {renderConfigured === false && (
         <div className="flex items-start gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] px-4 py-3.5">
-          <ShieldCheck className="h-5 w-5 text-sky-300 flex-none mt-0.5" />
+          <ShieldX className="h-5 w-5 text-sky-300 flex-none mt-0.5" />
           <div className="text-sm">
             <p className="font-medium text-sky-200">Render engine offline</p>
             <p className="text-sky-200/70 text-[12.5px] mt-0.5">
-              Set <code className="px-1 rounded bg-white/10">BROWSERLESS_TOKEN</code> in Supabase &rarr; Edge Functions &rarr; Secrets to enable hands-off
-              auto-fixing of JavaScript-rendered sites. Until then, render + validation are safe no-ops.
+              <code className="px-1 rounded bg-white/10">BROWSERLESS_TOKEN</code> is not set on this Supabase project (verified live).
+              Render + validation of JavaScript-rendered sites are safe no-ops until the secret is added.
+            </p>
+          </div>
+        </div>
+      )}
+      {renderConfigured === null && (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3.5">
+          <AlertTriangle className="h-5 w-5 text-amber-300 flex-none mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-amber-200">Render engine status unknown</p>
+            <p className="text-amber-200/70 text-[12.5px] mt-0.5">
+              The render-health probe did not respond. Treat render coverage as unverified rather than assuming it is live.
             </p>
           </div>
         </div>
       )}
 
-      {/* Top-line status */}
-      {needs === 0 ? (
+      {/* Top-line status — a failed health query is UNKNOWN, not green. */}
+      {healthError ? (
+        <div className="flex items-center gap-3 rounded-2xl border border-red-500/25 bg-red-500/[0.06] px-4 py-3.5">
+          <AlertTriangle className="h-5 w-5 text-red-300 flex-none" />
+          <div className="text-sm">
+            <p className="font-medium text-red-200">Pipeline status unavailable</p>
+            <p className="text-red-200/70 text-[12.5px] mt-0.5">
+              The health view didn't return, so we can't confirm the pipeline is healthy. This is an error state — not "all clear."
+            </p>
+          </div>
+        </div>
+      ) : needs === 0 ? (
         <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3.5">
           <CheckCircle2 className="h-5 w-5 text-emerald-300 flex-none" />
           <div className="text-sm">
@@ -146,7 +174,8 @@ export default function CYAutoFixMonitor() {
         </div>
       )}
 
-      {/* KPIs */}
+      {/* KPIs — hidden when health is unknown so zeros aren't shown as facts. */}
+      {!healthError && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Needs attention" value={needs} icon={AlertTriangle}
           iconBg={needs === 0 ? "bg-emerald-500/10" : "bg-amber-500/10"}
@@ -166,6 +195,7 @@ export default function CYAutoFixMonitor() {
           iconBg={(h.patterns_pulled ?? 0) > 0 ? "bg-amber-500/10" : undefined}
           iconColor={(h.patterns_pulled ?? 0) > 0 ? "text-amber-300" : undefined} />
       </div>
+      )}
 
       {/* Needs-attention list — the only thing to act on */}
       <div className="rounded-2xl border border-white/10 bg-white/[0.02]">

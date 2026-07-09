@@ -52,6 +52,8 @@ export default function CYDashboard() {
   const [deviceCount, setDeviceCount] = useState(0);
   const [pushCount, setPushCount] = useState(0);
   const [activationCount, setActivationCount] = useState(0);
+  // Real Active Users = today's DAU from product_events. null => unavailable.
+  const [dau, setDau] = useState<number | null>(null);
 
   // New state for upgraded components
   const [aiStatusBreakdown, setAiStatusBreakdown] = useState<Array<{ status: string; count: number }>>([]);
@@ -159,6 +161,15 @@ export default function CYDashboard() {
 
     // Candidate count
     setCandidateCount(genCandidates.count ?? 0);
+
+    // Active Users = today's DAU (anonymous analytics), not a summed aggregate.
+    const dauRes = await supabase.rpc("cy_dau" as any, { days: 1 });
+    if (dauRes.error || !Array.isArray(dauRes.data)) {
+      setDau(null);
+    } else {
+      const rows = dauRes.data as any[];
+      setDau(rows.length ? Number(rows[rows.length - 1].dau ?? 0) : 0);
+    }
 
     setLoading(false);
   };
@@ -303,7 +314,7 @@ export default function CYDashboard() {
           </Link>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatCard label="Total Active" value={activationCount + activeSubs.length + filteredGrants.length} icon={Crown} iconColor="text-yellow-500" iconBg="bg-yellow-500/10" accentColor="#eab308" subtitle="activations + paid + granted" />
+          <StatCard label="Active Today (DAU)" value={dau === null ? "—" : dau} icon={Crown} iconColor="text-yellow-500" iconBg="bg-yellow-500/10" accentColor="#eab308" subtitle={dau === null ? "analytics unavailable" : `${activationCount + activeSubs.length + filteredGrants.length} lifetime (act+paid+grant)`} />
           <StatCard label="Activated" value={activationCount} icon={Target} iconColor="text-white" iconBg="bg-white/[0.05]" accentColor="#ffffff" subtitle="extension codes" />
           <StatCard label="Paid" value={activeSubs.length} icon={Users} iconColor="text-primary" iconBg="bg-primary/10" accentColor="#3b82f6" subtitle={activeSubs.length === 0 ? "pre-Stripe" : `${monthly}m / ${yearly}y / ${lifetime}∞`} />
           <StatCard label="Granted" value={filteredGrants.length} icon={ShieldCheck} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="#22c55e" subtitle="comp / testing" />

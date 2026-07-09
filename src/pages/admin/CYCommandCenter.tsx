@@ -256,6 +256,7 @@ export default function CYCommandCenter() {
       <div className="flex flex-wrap items-center gap-2 pt-2">
         <span className="text-[11px] uppercase tracking-widest text-white/25 font-semibold mr-1">Advanced</span>
         {[
+          { to: "/admin/cookie-yeti/analytics", label: "Product analytics" },
           { to: "/admin/cookie-yeti/ops", label: "Operations & pipeline" },
           { to: "/admin/cookie-yeti/community", label: "Community analytics" },
           { to: "/admin/cookie-yeti/domains", label: "All domains" },

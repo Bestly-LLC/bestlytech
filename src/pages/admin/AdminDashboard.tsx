@@ -55,6 +55,10 @@ export default function AdminDashboard() {
   const [downSystems, setDownSystems] = useState<string[]>([]);
   const [pihole, setPihole] = useState<any>(null);
   const [passKeyCount, setPassKeyCount] = useState(0);
+  // Real Active Users = today's DAU from product_events. null => unknown/unavailable.
+  const [dau, setDau] = useState<number | null>(null);
+  // system_alert_state read failure must read as UNKNOWN, not healthy.
+  const [sysUnknown, setSysUnknown] = useState(false);
 
   useAdminRealtime({
     tables: ["seller_intakes"],
@@ -119,12 +123,26 @@ export default function AdminDashboard() {
     setPushCount(pushRes.count ?? 0);
     setEmailsSent(sentRes.count ?? 0);
     setEmailsFailed(failedRes.count ?? 0);
-    if (sysRes.data) {
+    if (sysRes.error) {
+      // A failed .single() previously left systemDown=false → looked healthy.
+      setSysUnknown(true);
+    } else if (sysRes.data) {
+      setSysUnknown(false);
       setSystemDown(sysRes.data.is_down ?? false);
       setDownSystems(sysRes.data.down_systems ?? []);
     }
     if (piholeRes.data) setPihole(piholeRes.data);
     setPassKeyCount(passkeysRes.count ?? 0);
+
+    // Active Users = today's DAU (anonymous product analytics), not a summed
+    // activations+subs aggregate. null => unavailable (shown as "—").
+    const dauRes = await supabase.rpc("cy_dau" as any, { days: 1 });
+    if (dauRes.error || !Array.isArray(dauRes.data)) {
+      setDau(null);
+    } else {
+      const rows = dauRes.data as any[];
+      setDau(rows.length ? Number(rows[rows.length - 1].dau ?? 0) : 0);
+    }
 
     setLoading(false);
   };
@@ -168,6 +186,23 @@ export default function AdminDashboard() {
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
+      {/* System health — unknown/error must not read as healthy. */}
+      {(sysUnknown || systemDown) && (
+        <div className={`flex items-start gap-3 rounded-2xl border px-4 py-3 ${sysUnknown ? "border-amber-500/25 bg-amber-500/[0.06]" : "border-red-500/25 bg-red-500/[0.06]"}`}>
+          {sysUnknown ? <WifiOff className="h-5 w-5 text-amber-300 mt-0.5" /> : <AlertTriangle className="h-5 w-5 text-red-300 mt-0.5" />}
+          <div className="text-sm">
+            <p className={`font-medium ${sysUnknown ? "text-amber-200" : "text-red-200"}`}>
+              {sysUnknown ? "System health unknown" : "Systems reporting down"}
+            </p>
+            <p className={`text-[12.5px] mt-0.5 ${sysUnknown ? "text-amber-200/70" : "text-red-200/70"}`}>
+              {sysUnknown
+                ? "Couldn't read system_alert_state — treat health as unverified, not healthy."
+                : (downSystems.length ? downSystems.join(", ") : "One or more systems are marked down.")}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* What needs you right now */}
       <ActionInbox />
 
@@ -204,7 +239,7 @@ export default function AdminDashboard() {
           <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Revenue & Growth</h3>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <StatCard label="Active Users" value={activationCount + cySubCount} icon={Snowflake} accentColor="#38bdf8" iconBg="bg-sky-500/10" iconColor="text-sky-400" subtitle={cySubCount > 0 ? `${activationCount} activated, ${cySubCount} paid` : "pre-Stripe (activation codes only)"} />
+          <StatCard label="Active Users" value={dau === null ? "—" : dau} icon={Snowflake} accentColor="#38bdf8" iconBg="bg-sky-500/10" iconColor="text-sky-400" subtitle={dau === null ? "DAU unavailable" : `daily active · ${activationCount} activated, ${cySubCount} paid`} />
           <StatCard label="Waitlist" value={waitlistCount} icon={Users} accentColor="#8b5cf6" iconBg="bg-violet-500/10" iconColor="text-violet-400" />
           <StatCard label="Emails Sent" value={emailsSent} icon={Mail} accentColor="#10b981" iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle={emailsFailed > 0 ? `${emailsFailed} failed` : undefined} />
           <StatCard label="Passkeys" value={passKeyCount} icon={Shield} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
