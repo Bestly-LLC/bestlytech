@@ -7,11 +7,12 @@ import {
   PanelShowcase,
   LiveReportDemo,
   QuestionsSheet,
+  ReportSubSteps,
+  PrivateBrowsingCallout,
 } from "@/components/cookieyeti/getStartedShared";
 import { Sparkles } from "lucide-react";
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
 import cyPanelInsights from "@/assets/cy-panel-insights-real.png";
-import cyPanelControl from "@/assets/cy-panel-control-real.png";
 import cyPinPuzzle from "@/assets/cy-pin-puzzle.png";
 
 // CY-GS-02 (Chrome): plain-English onboarding. Pin from the puzzle menu, open
@@ -64,31 +65,40 @@ export default function CookieYetiGetStartedChrome() {
   const steps: Step[] = [
     {
       n: 1,
-      title: "Pin the Yeti so you can find it",
+      title: "Pin the Yeti",
       body: (
         <>
-          Click the <strong className="text-foreground">puzzle piece</strong> at the very top-right of
-          Chrome (see the arrow). Find <strong className="text-foreground">Cookie Yeti</strong> and click
-          the <strong className="text-foreground">pin</strong> — now the Yeti sits in your toolbar, one click away.
+          Cookie Yeti closes those “Accept cookies?” pop-ups for you. Pin it so it's one click
+          away: click the <strong className="text-foreground">puzzle piece</strong> (top-right of
+          Chrome, see the arrow), find <strong className="text-foreground">Cookie Yeti</strong>, and
+          click the <strong className="text-foreground">pin</strong>.
         </>
       ),
       showcase: (
-        <DeviceShowcase
-          eyebrow="Pin it"
-          caption="Keep Cookie Yeti one click away in your toolbar."
-          image={cyPinPuzzle}
-          imageAlt="Chrome Extensions puzzle menu with Cookie Yeti pinned to the toolbar."
-        />
+        <>
+          <DeviceShowcase
+            eyebrow="Pin it"
+            caption="Keep Cookie Yeti one click away in your toolbar."
+            image={cyPinPuzzle}
+            imageAlt="Chrome Extensions puzzle menu with Cookie Yeti pinned to the toolbar."
+          />
+          <PrivateBrowsingCallout title="Want it in Incognito too?">
+            Open <strong className="text-foreground">chrome://extensions</strong> →{" "}
+            <strong className="text-foreground">Cookie Yeti</strong> →{" "}
+            <strong className="text-foreground">Details</strong> → turn on{" "}
+            <strong className="text-foreground">Allow in Incognito</strong>.
+          </PrivateBrowsingCallout>
+        </>
       ),
     },
     {
       n: 2,
-      title: "Click the Yeti to open your panel",
+      title: "That's it — it runs on its own",
       body: (
         <>
-          Tap the <strong className="text-foreground">Yeti icon</strong> in your toolbar. You'll see how many
-          pop-ups it's closed for you — plus a big button to{" "}
-          <strong className="text-foreground">report one it missed</strong>.
+          Nothing else to do. Click the <strong className="text-foreground">Yeti</strong> any time to
+          see pop-ups closed and cookies cleaned. Want it stricter or lighter? Pick a mode in{" "}
+          <strong className="text-foreground">Control</strong> — Balanced suits most.
         </>
       ),
       showcase: (
@@ -102,38 +112,15 @@ export default function CookieYetiGetStartedChrome() {
     },
     {
       n: 3,
-      title: "Choose how strict to be",
-      body: (
-        <>
-          Open the <strong className="text-foreground">Control</strong> tab and pick{" "}
-          <strong className="text-foreground">Strict</strong>,{" "}
-          <strong className="text-foreground">Balanced</strong> (best for most), or{" "}
-          <strong className="text-foreground">Permissive</strong>. Set it once — it works on every site.
-        </>
-      ),
+      title: "See one it missed? Report it",
+      body: "Cookie Yeti catches almost every pop-up. If one slips through, three taps fix it — try it on the real banner below:",
       showcase: (
-        <PanelShowcase
-          eyebrow="Your call"
-          caption="Strict, Balanced, or Permissive — set it once."
-          image={cyPanelControl}
-          imageAlt="The real Cookie Yeti panel — Control tab: Cookie Policy modes and toggles."
-        />
-      ),
-    },
-    {
-      n: 4,
-      title: "See one it missed? Tap Report — try it here",
-      body: (
         <>
-          Cookie Yeti closes almost every pop-up before you notice. If one slips through, open your panel and
-          tap <strong className="text-foreground">Report a missed banner</strong>. The demo below is a real
-          page with a real banner — reporting it sends a real report through your Cookie Yeti.
+          <ReportSubSteps openLabel="Open Cookie Yeti in your toolbar" />
+          <div className="mt-3 min-h-0 flex-1 overflow-hidden">
+            <LiveReportDemo platform="chrome" />
+          </div>
         </>
-      ),
-      showcase: (
-        <div className="mt-3 min-h-0 flex-1 overflow-hidden">
-          <LiveReportDemo platform="chrome" />
-        </div>
       ),
     },
   ];
@@ -189,7 +176,7 @@ export default function CookieYetiGetStartedChrome() {
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground leading-relaxed md:text-base">{s.body}</p>
                   {s.showcase}
-                  {s.n === 4 && (
+                  {s.n === 3 && (
                     <div className="mt-2.5 flex shrink-0 items-center justify-between gap-3">
                       <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                         <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />

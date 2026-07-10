@@ -25,6 +25,10 @@ import {
   Flag,
   X,
   HelpCircle,
+  Users,
+  MousePointerClick,
+  EyeOff,
+  ChevronDown,
 } from "lucide-react";
 
 // CY-GS-02: Shared building blocks for the platform-specific Get Started
@@ -42,6 +46,76 @@ export function StepBadge({ n }: { n: number }) {
     <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2DB3A6] text-white text-sm font-bold">
       {n}
     </span>
+  );
+}
+
+// CY-GS-07: The "report a missed banner" step used to be a paragraph of text.
+// It's now three tiny, scannable sub-steps — each an icon + a few words — so
+// the one job (open panel → tap Report → we handle it) reads at a glance. The
+// `openLabel` differs per platform (toolbar Yeti vs. address-bar menu).
+export function ReportSubSteps({ openLabel }: { openLabel: ReactNode }) {
+  const items: { icon: typeof Flag; label: ReactNode }[] = [
+    { icon: MousePointerClick, label: openLabel },
+    {
+      icon: Flag,
+      label: (
+        <>
+          Tap <strong className="text-foreground">Report a missed banner</strong>
+        </>
+      ),
+    },
+    { icon: Users, label: "We fix it for everyone" },
+  ];
+  return (
+    <ol className="mt-2 flex shrink-0 flex-col gap-1.5">
+      {items.map((item, i) => (
+        <li key={i} className="flex items-center gap-2.5">
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#2DB3A6]/12 text-[11px] font-bold text-[#2DB3A6]">
+            {i + 1}
+          </span>
+          <item.icon className="h-4 w-4 shrink-0 text-[#2DB3A6]" aria-hidden="true" />
+          <span className="text-sm leading-snug text-muted-foreground">{item.label}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// CY-GS-08: Optional, clearly-secondary callout for enabling Cookie Yeti in
+// private / incognito windows — the one extra opt-in users don't know about.
+// Collapsed by default so it never adds visual weight or breaks the no-scroll
+// layout; expands in place to a couple of short lines. Each platform passes its
+// own dead-simple instructions as children.
+export function PrivateBrowsingCallout({
+  title = "Use private windows? One extra toggle",
+  children,
+}: {
+  title?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-2 shrink-0 rounded-xl border border-border bg-muted/30 px-3 py-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 text-left"
+      >
+        <EyeOff className="h-4 w-4 shrink-0 text-[#2DB3A6]" aria-hidden="true" />
+        <span className="text-[13px] font-semibold text-foreground">{title}</span>
+        <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Optional
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        />
+      </button>
+      {open && (
+        <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">{children}</p>
+      )}
+    </div>
   );
 }
 

@@ -2,10 +2,14 @@ import { SEOHead } from "@/components/SEOHead";
 import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import settingsScreenshot from "@/assets/cookieyeti-settings-iphone.png";
 import safariMenuShot from "@/assets/cy-safari-menu.png";
-import safariBannerShot from "@/assets/cy-safari-banner.png";
 import panelInsightsReal from "@/assets/cy-panel-insights-real.png";
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
-import { LiveReportDemo, QuestionsSheet } from "@/components/cookieyeti/getStartedShared";
+import {
+  LiveReportDemo,
+  QuestionsSheet,
+  ReportSubSteps,
+  PrivateBrowsingCallout,
+} from "@/components/cookieyeti/getStartedShared";
 import { Sparkles } from "lucide-react";
 
 // CY-GS-01: Post-download onboarding guide (Safari on iPhone) — a MOBILE-ONLY
@@ -108,14 +112,13 @@ export default function CookieYetiGetStarted() {
                   <div className="flex items-center gap-3">
                     <StepBadge n={1} />
                     <h2 className="text-xl font-bold tracking-tight text-foreground">
-                      Open your panel — right now
+                      It's on — here's your panel
                     </h2>
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                    You're already in Safari, so try it on this page: tap the menu button in
-                    the address bar at the bottom of your screen, then tap{" "}
-                    <strong className="text-foreground">Cookie Yeti</strong>. Your panel opens
-                    with live stats and the report button.
+                    Cookie Yeti is already closing cookie pop-ups for you. To peek at it, tap the
+                    menu in the address bar, then <strong className="text-foreground">Cookie Yeti</strong>{" "}
+                    — live stats and the report button.
                   </p>
                   <div className="mt-3 grid min-h-0 flex-1 grid-cols-2 gap-3">
                     <div className="flex min-h-0 flex-col">
@@ -145,44 +148,24 @@ export default function CookieYetiGetStarted() {
                       </p>
                     </div>
                   </div>
+                  <PrivateBrowsingCallout title="Use Private tabs?">
+                    Go to <strong className="text-foreground">Settings ▸ Safari ▸ Extensions ▸ Cookie Yeti</strong>{" "}
+                    and turn on <strong className="text-foreground">Private Browsing</strong> (tap{" "}
+                    <strong className="text-foreground">Allow</strong> when it asks).
+                  </PrivateBrowsingCallout>
                 </div>,
                 <div key="s2" className="flex h-full flex-col">
                   <div className="flex items-center gap-3">
                     <StepBadge n={2} />
                     <h2 className="text-xl font-bold tracking-tight text-foreground">
-                      Meet a missed banner
+                      See one it missed? Report it
                     </h2>
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                    Cookie Yeti handles almost every consent pop-up before you notice it. Once
-                    in a while a site uses a banner the yeti hasn't learned yet. Here's a real
-                    one in the wild — next step, a real page you can report from.
+                    Cookie Yeti catches almost every pop-up. If one slips through, three taps fix
+                    it — try it on the real banner below:
                   </p>
-                  <img
-                    src={safariBannerShot}
-                    alt="Real screenshot of Safari on iPhone showing a website with a cookie consent banner at the bottom of the page, above the address bar."
-                    className="mx-auto mt-3 min-h-0 w-auto max-w-full flex-1 rounded-[1.25rem] border-2 border-border object-contain shadow-sm"
-                    width={414}
-                    height={900}
-                    loading="lazy"
-                  />
-                  <p className="mt-1.5 shrink-0 text-center text-[11px] text-muted-foreground">
-                    A real cookie banner, doing its best to interrupt you
-                  </p>
-                </div>,
-                <div key="s3" className="flex h-full flex-col">
-                  <div className="flex items-center gap-3">
-                    <StepBadge n={3} />
-                    <h2 className="text-xl font-bold tracking-tight text-foreground">
-                      Report it — for real, right here
-                    </h2>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                    One tap teaches the yeti. The demo below is a real page with a real banner —
-                    open <strong className="text-foreground">Cookie Yeti</strong> from your
-                    address-bar menu and tap{" "}
-                    <strong className="text-foreground">Report a missed banner</strong>.
-                  </p>
+                  <ReportSubSteps openLabel="Open Cookie Yeti from the address-bar menu" />
                   <div className="mt-3 min-h-0 flex-1 overflow-hidden">
                     <LiveReportDemo platform="ios" />
                   </div>

@@ -7,12 +7,12 @@ import {
   PanelShowcase,
   LiveReportDemo,
   QuestionsSheet,
+  ReportSubSteps,
+  PrivateBrowsingCallout,
 } from "@/components/cookieyeti/getStartedShared";
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
 import cyPanelInsights from "@/assets/cy-panel-insights-real.png";
-import cyPanelControl from "@/assets/cy-panel-control-real.png";
 import cySafariExtensions from "@/assets/cy-safari-extensions.png";
-import cySafariAllow from "@/assets/cy-safari-allow.png";
 import { Sparkles } from "lucide-react";
 
 // CY-GS-02 (macOS): plain-English Safari-on-Mac onboarding as an animated step
@@ -66,52 +66,38 @@ export default function CookieYetiGetStartedMac() {
   const steps: Step[] = [
     {
       n: 1,
-      title: "Switch it on in Safari",
+      title: "Turn it on in Safari",
       body: (
         <>
-          Open <strong className="text-foreground">Safari ▸ Settings</strong> (or press{" "}
-          <kbd className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">⌘ ,</kbd>), click{" "}
-          <strong className="text-foreground">Extensions</strong>, and tick the box next to{" "}
-          <strong className="text-foreground">Cookie Yeti</strong>. That's it — the Yeti is now on.
+          Open <strong className="text-foreground">Safari ▸ Settings ▸ Extensions</strong> and tick{" "}
+          <strong className="text-foreground">Cookie Yeti</strong>. Then click the{" "}
+          <strong className="text-foreground">Yeti</strong> in your toolbar (top-left, see the arrow)
+          and choose <strong className="text-foreground">Always Allow on Every Website</strong>.
         </>
       ),
       showcase: (
-        <DeviceShowcase
-          eyebrow="Switch it on"
-          caption="One checkbox in Safari Settings turns Cookie Yeti on."
-          image={cySafariExtensions}
-          imageAlt="Safari Settings ▸ Extensions with Cookie Yeti ticked on."
-        />
+        <>
+          <DeviceShowcase
+            eyebrow="Switch it on"
+            caption="Tick Cookie Yeti in Safari Settings, then allow it everywhere."
+            image={cySafariExtensions}
+            imageAlt="Safari Settings ▸ Extensions with Cookie Yeti ticked on."
+          />
+          <PrivateBrowsingCallout title="Use Private Browsing?">
+            Open <strong className="text-foreground">Safari ▸ Settings ▸ Extensions ▸ Cookie Yeti</strong>{" "}
+            and turn on <strong className="text-foreground">Allow in Private Browsing</strong>.
+          </PrivateBrowsingCallout>
+        </>
       ),
     },
     {
       n: 2,
-      title: "Let it work on every site",
+      title: "That's it — it runs on its own",
       body: (
         <>
-          Click the <strong className="text-foreground">Yeti icon</strong> in your Safari toolbar (top-left, just left of the address bar — see
-          the arrow). The first time, Safari asks for permission — choose{" "}
-          <strong className="text-foreground">Always Allow on Every Website</strong> so it can close banners
-          everywhere. It only looks for cookie banners, nothing else.
-        </>
-      ),
-      showcase: (
-        <DeviceShowcase
-          eyebrow="Allow everywhere"
-          caption="Allow once, and the Yeti works on every site."
-          image={cySafariAllow}
-          imageAlt="Safari toolbar with Cookie Yeti and the ‘Always Allow on Every Website’ prompt."
-        />
-      ),
-    },
-    {
-      n: 3,
-      title: "Click the Yeti to open your panel",
-      body: (
-        <>
-          Click the <strong className="text-foreground">Yeti icon</strong> any time to open your panel — how many
-          pop-ups it's closed, cookies cleaned, and a big{" "}
-          <strong className="text-foreground">Report a missed banner</strong> button.
+          Nothing else to do. Click the <strong className="text-foreground">Yeti</strong> any time to see
+          pop-ups closed and cookies cleaned. Want it stricter or lighter? Pick a mode in{" "}
+          <strong className="text-foreground">Control</strong> — Balanced suits most.
         </>
       ),
       showcase: (
@@ -124,39 +110,16 @@ export default function CookieYetiGetStartedMac() {
       ),
     },
     {
-      n: 4,
-      title: "Choose how strict to be",
-      body: (
-        <>
-          Open the <strong className="text-foreground">Control</strong> tab and pick{" "}
-          <strong className="text-foreground">Strict</strong>,{" "}
-          <strong className="text-foreground">Balanced</strong> (best for most), or{" "}
-          <strong className="text-foreground">Permissive</strong>. Set it once — it works on every site.
-        </>
-      ),
+      n: 3,
+      title: "See one it missed? Report it",
+      body: "Cookie Yeti catches almost every pop-up. If one slips through, three taps fix it — try it on the real banner below:",
       showcase: (
-        <PanelShowcase
-          eyebrow="Your call"
-          caption="Strict, Balanced, or Permissive — set it once."
-          image={cyPanelControl}
-          imageAlt="The real Cookie Yeti panel — Control tab: Cookie Policy modes and toggles."
-        />
-      ),
-    },
-    {
-      n: 5,
-      title: "See one it missed? Tap Report — try it here",
-      body: (
         <>
-          Cookie Yeti closes almost every pop-up before you notice. If one slips through, open your panel and tap{" "}
-          <strong className="text-foreground">Report a missed banner</strong>. The demo below is a real page
-          with a real banner — reporting it sends a real report through your Cookie Yeti.
+          <ReportSubSteps openLabel="Click the Yeti in your toolbar" />
+          <div className="mt-3 min-h-0 flex-1 overflow-hidden">
+            <LiveReportDemo platform="mac" />
+          </div>
         </>
-      ),
-      showcase: (
-        <div className="mt-3 min-h-0 flex-1 overflow-hidden">
-          <LiveReportDemo platform="mac" />
-        </div>
       ),
     },
   ];
@@ -212,7 +175,7 @@ export default function CookieYetiGetStartedMac() {
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground leading-relaxed md:text-base">{s.body}</p>
                   {s.showcase}
-                  {s.n === 5 && (
+                  {s.n === 3 && (
                     <div className="mt-2.5 flex shrink-0 items-center justify-between gap-3">
                       <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                         <Sparkles className="h-3.5 w-3.5 text-[#2DB3A6]" aria-hidden="true" />
