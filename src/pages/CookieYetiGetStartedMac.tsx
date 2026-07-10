@@ -48,7 +48,7 @@ const FAQ = [
 // extension icons). Desktop-only — hidden on mobile per spec.
 function ToolbarArrow() {
   return (
-    <div className="pointer-events-none absolute top-1 left-8 z-20 hidden md:flex flex-col items-center animate-bounce">
+    <div className="pointer-events-none absolute top-2 left-8 z-20 hidden md:flex flex-col items-center motion-safe:animate-arrow-nudge">
       <svg width="30" height="34" viewBox="0 0 30 34" fill="none" aria-hidden="true">
         <path d="M15 2v26M15 2 7 11M15 2l8 9" stroke="#2DB3A6" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
       </svg>

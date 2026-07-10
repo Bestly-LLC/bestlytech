@@ -146,6 +146,13 @@ export default {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
         },
+        // Small-amplitude bob for the get-started toolbar arrows. Kept to a few
+        // px (vs animate-bounce's 25%) so the arrow never leaves the no-scroll,
+        // overflow-hidden tour frame.
+        "arrow-nudge": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-5px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -163,6 +170,7 @@ export default {
         "shimmer": "shimmer 2s linear infinite",
         "counter": "counter 0.5s ease-out forwards",
         "page-enter": "page-enter 0.15s ease-out forwards",
+        "arrow-nudge": "arrow-nudge 1.4s ease-in-out infinite",
       },
     },
   },
