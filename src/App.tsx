@@ -112,6 +112,8 @@ const App = () => (
                   <Route path="/apps" element={<Products />} />
                   <Route path="/cookie-yeti" element={<CookieYeti />} />
                   <Route path="/cookie-yeti/privacy" element={<CookieYetiPrivacy />} />
+                  {/* Scoped Terms alias to match /cookie-yeti/privacy; renders the same page as /terms. */}
+                  <Route path="/cookie-yeti/terms" element={<TermsOfUse />} />
                   <Route path="/cookie-yeti/success" element={<CookieYetiSuccess />} />
                   <Route path="/cookie-yeti/cancel" element={<CookieYetiCancel />} />
                   <Route path="/cookie-yeti/get-started" element={<CookieYetiGetStartedRouter />} />
