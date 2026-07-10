@@ -4,13 +4,14 @@ import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import {
   StepBadge,
   DeviceShowcase,
+  PanelShowcase,
   LiveReportDemo,
   QuestionsSheet,
 } from "@/components/cookieyeti/getStartedShared";
 import { Sparkles } from "lucide-react";
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
-import cyPanelInsights from "@/assets/cy-panel-insights.png";
-import cyPanelControl from "@/assets/cy-panel-control.png";
+import cyPanelInsights from "@/assets/cy-panel-insights-real.png";
+import cyPanelControl from "@/assets/cy-panel-control-real.png";
 import cyPinPuzzle from "@/assets/cy-pin-puzzle.png";
 
 // CY-GS-02 (Chrome): plain-English onboarding. Pin from the puzzle menu, open
@@ -91,12 +92,11 @@ export default function CookieYetiGetStartedChrome() {
         </>
       ),
       showcase: (
-        <DeviceShowcase
-          url="bestly.tech"
+        <PanelShowcase
           eyebrow="Your panel"
           caption="Live stats and one-tap reporting, right in your toolbar."
           image={cyPanelInsights}
-          imageAlt="Cookie Yeti panel — Insights tab: Active status, live stats, and the amber Report a missed banner button."
+          imageAlt="The real Cookie Yeti panel — Insights tab: Active status, 1,284 handled, time saved and cookies cleaned, plus the Report a missed banner button and recent sites."
         />
       ),
     },
@@ -112,12 +112,11 @@ export default function CookieYetiGetStartedChrome() {
         </>
       ),
       showcase: (
-        <DeviceShowcase
-          url="bestly.tech"
+        <PanelShowcase
           eyebrow="Your call"
           caption="Strict, Balanced, or Permissive — set it once."
           image={cyPanelControl}
-          imageAlt="Cookie Yeti panel — Control tab: Strict, Balanced, and Permissive privacy modes."
+          imageAlt="The real Cookie Yeti panel — Control tab: Cookie Policy modes and toggles."
         />
       ),
     },

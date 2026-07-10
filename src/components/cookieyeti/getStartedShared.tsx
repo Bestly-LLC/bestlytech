@@ -511,3 +511,43 @@ export function DeviceShowcase({
     </figure>
   );
 }
+
+
+// CY-GS-06: Showcase for the REAL Cookie Yeti panel screenshots (v1.1.7 liquid-
+// glass pane). The panel is a tall PORTRAIT image, so it can't sit in the
+// landscape MacBook frame above — object-cover would crop it to a thin top
+// slice. Instead it's presented as a centered, self-contained pane that fills
+// the step's remaining vertical space (flex-1 + min-h-0 + object-contain) — the
+// exact no-scroll-safe pattern the iOS tour already uses for its portrait phone
+// screenshots. object-contain + the flex height cap guarantee the pane never
+// exceeds the step height, so the single-viewport (100dvh) tour still cannot
+// scroll on mobile (390x844) or desktop. The pane already carries its own
+// rounded corners + soft background, so only a light border + shadow are added.
+export function PanelShowcase({
+  eyebrow,
+  caption,
+  image,
+  imageAlt,
+}: {
+  eyebrow: string;
+  caption: string;
+  image: string;
+  imageAlt?: string;
+}) {
+  return (
+    <figure className="mt-2 flex min-h-0 flex-1 flex-col sm:mt-3">
+      <img
+        src={image}
+        alt={imageAlt || caption}
+        className="mx-auto min-h-0 w-auto max-w-full flex-1 rounded-[1.75rem] border border-border object-contain shadow-xl"
+        width={840}
+        height={1320}
+        loading="lazy"
+      />
+      <figcaption className="mt-2 shrink-0 text-center sm:mt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[#2DB3A6]">{eyebrow}</p>
+        <p className="mt-1 text-sm font-semibold text-foreground sm:text-base">{caption}</p>
+      </figcaption>
+    </figure>
+  );
+}

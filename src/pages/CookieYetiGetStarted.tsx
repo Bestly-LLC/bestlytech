@@ -3,7 +3,7 @@ import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import settingsScreenshot from "@/assets/cookieyeti-settings-iphone.png";
 import safariMenuShot from "@/assets/cy-safari-menu.png";
 import safariBannerShot from "@/assets/cy-safari-banner.png";
-import panelReportShot from "@/assets/cy-panel-report.png";
+import panelInsightsReal from "@/assets/cy-panel-insights-real.png";
 import { StepCarousel } from "@/components/cookieyeti/StepCarousel";
 import { LiveReportDemo, QuestionsSheet } from "@/components/cookieyeti/getStartedShared";
 import { Sparkles } from "lucide-react";
@@ -133,11 +133,11 @@ export default function CookieYetiGetStarted() {
                     </div>
                     <div className="flex min-h-0 flex-col">
                       <img
-                        src={panelReportShot}
-                        alt="Real screenshot of the Cookie Yeti panel open in Safari on iPhone, showing the Active status, live stats, and the Report a missed banner button."
+                        src={panelInsightsReal}
+                        alt="The real Cookie Yeti panel open in Safari on iPhone, showing the Active status, live stats (handled, time saved, cookies cleaned), the Report a missed banner button, and recent sites."
                         className="mx-auto min-h-0 w-auto max-w-full flex-1 rounded-[1.25rem] border-2 border-border object-contain shadow-sm"
-                        width={414}
-                        height={900}
+                        width={840}
+                        height={1320}
                         loading="lazy"
                       />
                       <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
