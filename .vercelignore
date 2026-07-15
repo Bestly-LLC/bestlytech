@@ -1,0 +1,13 @@
+/dist
+/node_modules
+/.git
+/test-results
+/playwright-report
+/e2e
+/nextcloud-talk-transcripts
+/cloudflare-workers
+/docs
+/supabase
+/*.command
+/*.timestamp-*.mjs
+/.scratch
