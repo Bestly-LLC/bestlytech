@@ -161,28 +161,46 @@ function useCookieYetiPresence(): boolean | null {
       return;
     }
 
-    // The content script injects at document_idle, which can land after this
-    // component mounts — watch for the attribute appearing, with a timed
-    // fallback so we don't wait forever.
+    // The content script injects at document_idle, which can land well AFTER
+    // this component mounts — on a fresh install (the extension is still
+    // registering its content scripts), a cold cache, a slow page, or a private
+    // window where injection is deferred. The old code watched for only 1600ms
+    // and then DISCONNECTED the observer, so a late-arriving marker was missed
+    // forever and the tour stayed stuck on "Not detected" even with the
+    // extension installed. Fix: watch AND poll as a backstop, and never stop
+    // watching — after a short grace period we surface the install/enable hint,
+    // but a marker that appears later still upgrades the UI to "active".
+    const markPresent = () => {
+      setPresent(true);
+      observer.disconnect();
+      window.clearInterval(poll);
+      window.clearTimeout(graceTimer);
+    };
+
     const observer = new MutationObserver(() => {
-      if (read()) {
-        setPresent(true);
-        observer.disconnect();
-      }
+      if (read()) markPresent();
     });
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-cookie-yeti"],
     });
 
-    const timer = window.setTimeout(() => {
+    // Backstop poll — covers any edge the attribute observer could miss.
+    const poll = window.setInterval(() => {
+      if (read()) markPresent();
+    }, 400);
+
+    // After a grace period, if still undetected, surface the install/enable
+    // hint — but leave the observer + poll running so a late inject still flips
+    // us to "active" instead of a permanent false negative.
+    const graceTimer = window.setTimeout(() => {
       setPresent((prev) => (prev === null ? Boolean(read()) : prev));
-      observer.disconnect();
-    }, 1600);
+    }, 4000);
 
     return () => {
       observer.disconnect();
-      window.clearTimeout(timer);
+      window.clearInterval(poll);
+      window.clearTimeout(graceTimer);
     };
   }, []);
 
