@@ -100,7 +100,7 @@ const CONFIG = {
   faqs: [
     {
       question: "Does Cookie Yeti collect my data?",
-      answer: "No. Cookie Yeti does not collect, transmit, or store any of your personal data. All settings and statistics are stored locally on your device and never leave your browser.",
+      answer: "We never sell your data, show you ads, or build a profile about you, and we never share your browsing history or the pages you visit. The only things that ever leave your device are anonymous, non-personal usage stats tied to a random ID, and — when a cookie wall is especially tricky — just that site's domain (like example.com) so our AI can learn to handle it for everyone. Never the full URL, never your personal data, never the raw content of the pages you visit. Your settings stay on your device.",
     },
     {
       question: "Will this break websites?",
@@ -225,7 +225,7 @@ export default function CookieYeti() {
     <>
       <SEOHead
         title="Cookie Yeti – Automatic Cookie Consent Handler | Bestly LLC"
-        description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No tracking, no data collection. Coming soon to Chrome and App Store."
+        description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No ads, no profiles, and we never share the pages you visit. Coming soon to Chrome and App Store."
       />
       
       {/* Hero Section */}
@@ -257,7 +257,7 @@ export default function CookieYeti() {
             <AnimatedSection delay={160}>
               <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
                 Automatically handles cookie consent pop-ups and cleans tracking cookies from sites you visit. 
-                5 banner handles per day free, unlimited with Pro. No data collection. Just peaceful browsing.
+                5 banner handles per day free, unlimited with Pro. No ads, no profiles, no selling your data. Just peaceful browsing.
               </p>
             </AnimatedSection>
             
@@ -295,7 +295,7 @@ export default function CookieYeti() {
               
               <div className="mt-8 flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Shield className="h-4 w-4" />
-                <span>100% Privacy-First • No Data Collection • No Tracking</span>
+                <span>Privacy-First • No Ads • Never Sold or Shared</span>
               </div>
             </AnimatedSection>
           </div>
@@ -402,19 +402,19 @@ export default function CookieYeti() {
                 Built for Privacy
               </h2>
               <p className="mt-4 text-lg text-muted-foreground">
-                Cookie Yeti operates entirely on your device. Your privacy preferences never leave your browser.
+                We never sell your data, show ads, or build a profile about you — and we never share your browsing history or the pages you visit. Your settings stay on your device.
               </p>
             </AnimatedSection>
             
             <AnimatedSection delay={100}>
               <div className="mt-10 grid grid-cols-2 md:grid-cols-3 gap-4">
                 {[
-                  "No data collection",
-                  "No tracking",
+                  "No profile-building",
+                  "Anonymous stats only",
                   "No selling or sharing",
                   "No ads",
                   "Free tier available",
-                  "All settings stored locally",
+                  "Settings stay on your device",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-2 text-sm">
                     <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
@@ -576,7 +576,7 @@ export default function CookieYeti() {
           <AnimatedSection delay={300}>
             <p className="text-center text-sm text-muted-foreground mt-6 flex items-center justify-center gap-2">
               <Shield className="h-4 w-4" />
-              All stats stored locally on your device
+              Anonymous, non-personal stats — never tied to you or the pages you visit
             </p>
           </AnimatedSection>
         </div>
