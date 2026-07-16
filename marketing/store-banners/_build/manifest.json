@@ -1,0 +1,162 @@
+[
+ {
+  "plat": "chrome",
+  "name": "01-self-learning",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/chrome-01-self-learning.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/chrome/01-self-learning.png",
+  "W": 1280,
+  "H": 800
+ },
+ {
+  "plat": "iphone",
+  "name": "01-self-learning",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/iphone-01-self-learning.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/iphone/01-self-learning.png",
+  "W": 1290,
+  "H": 2796
+ },
+ {
+  "plat": "ipad",
+  "name": "01-self-learning",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/ipad-01-self-learning.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/ipad/01-self-learning.png",
+  "W": 2048,
+  "H": 2732
+ },
+ {
+  "plat": "mac",
+  "name": "01-self-learning",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/mac-01-self-learning.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/mac/01-self-learning.png",
+  "W": 2880,
+  "H": 1800
+ },
+ {
+  "plat": "chrome",
+  "name": "02-true-reject",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/chrome-02-true-reject.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/chrome/02-true-reject.png",
+  "W": 1280,
+  "H": 800
+ },
+ {
+  "plat": "iphone",
+  "name": "02-true-reject",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/iphone-02-true-reject.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/iphone/02-true-reject.png",
+  "W": 1290,
+  "H": 2796
+ },
+ {
+  "plat": "ipad",
+  "name": "02-true-reject",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/ipad-02-true-reject.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/ipad/02-true-reject.png",
+  "W": 2048,
+  "H": 2732
+ },
+ {
+  "plat": "mac",
+  "name": "02-true-reject",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/mac-02-true-reject.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/mac/02-true-reject.png",
+  "W": 2880,
+  "H": 1800
+ },
+ {
+  "plat": "chrome",
+  "name": "03-never-breaks",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/chrome-03-never-breaks.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/chrome/03-never-breaks.png",
+  "W": 1280,
+  "H": 800
+ },
+ {
+  "plat": "iphone",
+  "name": "03-never-breaks",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/iphone-03-never-breaks.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/iphone/03-never-breaks.png",
+  "W": 1290,
+  "H": 2796
+ },
+ {
+  "plat": "ipad",
+  "name": "03-never-breaks",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/ipad-03-never-breaks.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/ipad/03-never-breaks.png",
+  "W": 2048,
+  "H": 2732
+ },
+ {
+  "plat": "mac",
+  "name": "03-never-breaks",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/mac-03-never-breaks.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/mac/03-never-breaks.png",
+  "W": 2880,
+  "H": 1800
+ },
+ {
+  "plat": "chrome",
+  "name": "04-cross-platform",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/chrome-04-cross-platform.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/chrome/04-cross-platform.png",
+  "W": 1280,
+  "H": 800
+ },
+ {
+  "plat": "iphone",
+  "name": "04-cross-platform",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/iphone-04-cross-platform.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/iphone/04-cross-platform.png",
+  "W": 1290,
+  "H": 2796
+ },
+ {
+  "plat": "ipad",
+  "name": "04-cross-platform",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/ipad-04-cross-platform.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/ipad/04-cross-platform.png",
+  "W": 2048,
+  "H": 2732
+ },
+ {
+  "plat": "mac",
+  "name": "04-cross-platform",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/mac-04-cross-platform.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/mac/04-cross-platform.png",
+  "W": 2880,
+  "H": 1800
+ },
+ {
+  "plat": "chrome",
+  "name": "05-private-by-design",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/chrome-05-private-by-design.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/chrome/05-private-by-design.png",
+  "W": 1280,
+  "H": 800
+ },
+ {
+  "plat": "iphone",
+  "name": "05-private-by-design",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/iphone-05-private-by-design.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/iphone/05-private-by-design.png",
+  "W": 1290,
+  "H": 2796
+ },
+ {
+  "plat": "ipad",
+  "name": "05-private-by-design",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/ipad-05-private-by-design.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/ipad/05-private-by-design.png",
+  "W": 2048,
+  "H": 2732
+ },
+ {
+  "plat": "mac",
+  "name": "05-private-by-design",
+  "html": "/Users/jared/Developer/bestlytech/marketing/store-banners/_build/mac-05-private-by-design.html",
+  "png": "/Users/jared/Developer/bestlytech/marketing/store-banners/mac/05-private-by-design.png",
+  "W": 2880,
+  "H": 1800
+ }
+]
