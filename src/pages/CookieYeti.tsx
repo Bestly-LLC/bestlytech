@@ -45,6 +45,7 @@ import {
   Database,
   Wifi,
   WifiOff,
+  X,
 } from "lucide-react";
 
 // ============================================
@@ -70,17 +71,17 @@ const CONFIG = {
     {
       icon: Shield,
       title: "It actually says no",
-      description: "Most tools just hide the pop-up, and the tracking keeps happening underneath. Cookie Yeti clicks 'Reject' for real, so websites can't follow you around.",
+      description: "Most cookie blockers just hide the pop-up — some even click 'Accept all' to make it vanish, which is the opposite of privacy. Cookie Yeti clicks 'Reject' for real, so websites can't follow you around.",
     },
     {
       icon: Zap,
-      title: "It fixes itself",
-      description: "Websites change their pop-ups all the time. When one is tricky, our AI figures out how to close it — and that fix instantly reaches everyone using Cookie Yeti. It keeps getting smarter on its own. You never have to install an update.",
+      title: "It never goes stale",
+      description: "Other cookie blockers slowly stop working — the maker moves on and the tool quietly rots. Cookie Yeti keeps learning. When a pop-up is tricky, our AI figures out how to close it, and that fix instantly reaches everyone using Cookie Yeti. It keeps getting smarter on its own, with nothing for you to update.",
     },
     {
       icon: CheckCircle2,
       title: "It won't break your sites",
-      description: "If a website ever starts acting up, Cookie Yeti backs off right away instead of fighting it. Your favorite sites keep working like normal.",
+      description: "Broken pages are the number-one gripe about every cookie blocker — dead scrollbars, endless login loops. Cookie Yeti has a built-in safety brake: if a site starts acting up, it backs off before anything breaks. Your favorite sites keep working like normal.",
     },
     {
       icon: Eye,
@@ -391,6 +392,63 @@ export default function CookieYeti() {
               </AnimatedSection>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Why Cookie Yeti vs. other cookie blockers */}
+      <section className="py-20 lg:py-24 border-t border-border">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <AnimatedSection>
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Why Cookie Yeti vs. other cookie blockers
+              </h2>
+              <p className="mt-4 text-lg text-muted-foreground">
+                Same annoying pop-ups. A very different way of dealing with them.
+              </p>
+            </div>
+          </AnimatedSection>
+
+          <AnimatedSection delay={100}>
+            <div className="max-w-3xl mx-auto rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
+              {[
+                {
+                  them: "Other blockers just hide the banner — some even click “Accept all.”",
+                  us: "Cookie Yeti actually rejects the tracking.",
+                },
+                {
+                  them: "Other blockers go stale and quietly stop working.",
+                  us: "Cookie Yeti keeps learning, so it never goes stale.",
+                },
+                {
+                  them: "Other blockers are famous for breaking sites.",
+                  us: "Cookie Yeti backs off before it breaks anything.",
+                },
+                {
+                  them: "Most work in just one browser.",
+                  us: "Cookie Yeti works on Chrome, iPhone & iPad — Mac soon.",
+                },
+                {
+                  them: "Some got bought by ad and antivirus companies.",
+                  us: "We never sell your data or hand you to advertisers.",
+                },
+              ].map((row) => (
+                <div
+                  key={row.us}
+                  className="flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:gap-6"
+                >
+                  <div className="flex items-start gap-2 sm:flex-1">
+                    <X className="h-5 w-5 shrink-0 mt-0.5 text-muted-foreground/60" />
+                    <span className="text-sm text-muted-foreground">{row.them}</span>
+                  </div>
+                  <div className="flex items-start gap-2 sm:flex-1">
+                    <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5 text-primary" />
+                    <span className="text-sm font-medium text-foreground">{row.us}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </AnimatedSection>
         </div>
       </section>
 
