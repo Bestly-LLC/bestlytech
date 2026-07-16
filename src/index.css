@@ -622,5 +622,7 @@
     /* Show the satisfying resting state: banner rejected, stamp planted. */
     .cy-banner-anim { opacity: 1; transform: none; }
     .cy-stamp-anim  { animation: none !important; opacity: 1; transform: rotate(-11deg); }
+    /* No perpetual flash: the zap overlay rests fully hidden. */
+    .cy-zap-anim    { opacity: 0; }
   }
 }

@@ -62,7 +62,7 @@ import {
 // EDITABLE CONFIGURATION
 // ============================================
 const CONFIG = {
-  version: "1.0.9",
+  version: "1.2.0",
   pricing: {
     free: "Free",
     monthly: "$0.99",
@@ -294,16 +294,16 @@ export default function CookieYeti() {
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-6 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-8 lg:py-24">
           {/* Left — copy */}
           <div className="max-w-xl">
-            <AnimatedSection>
+            <AnimatedSection immediate>
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-2 rounded-full border border-[hsl(var(--cy-teal)/0.3)] bg-white/70 px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-[hsl(var(--cy-teal-deep))] backdrop-blur">
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  Privacy-first · v{CONFIG.version}
+                  Privacy-first
                 </span>
               </div>
             </AnimatedSection>
 
-            <AnimatedSection delay={60}>
+            <AnimatedSection delay={60} immediate>
               <h1 className="mt-6 text-[clamp(2.75rem,6vw,4.5rem)] font-semibold leading-[0.98] tracking-tight text-[hsl(var(--cy-ink))]">
                 Cookie pop-ups?{" "}
                 <span className="relative whitespace-nowrap text-[hsl(var(--cy-teal-deep))]">
@@ -323,13 +323,13 @@ export default function CookieYeti() {
               </p>
             </AnimatedSection>
 
-            <AnimatedSection delay={140}>
+            <AnimatedSection delay={140} immediate>
               <p className="mt-5 text-lg leading-relaxed text-[hsl(var(--cy-ink-2))]">
                 Every website hits you with an annoying &ldquo;We use cookies&rdquo; box. Cookie Yeti closes them for you &mdash; automatically &mdash; and always picks the private choice. You just browse.
               </p>
             </AnimatedSection>
 
-            <AnimatedSection delay={220}>
+            <AnimatedSection delay={220} immediate>
               <div className="mt-9">
                 <StoreCTAs />
               </div>
@@ -356,7 +356,7 @@ export default function CookieYeti() {
           </div>
 
           {/* Right — the live demo: a cookie banner getting rejected + swept away */}
-          <AnimatedSection delay={120} animation="scale-in">
+          <AnimatedSection delay={120} animation="scale-in" immediate>
             <div className="relative mx-auto w-full max-w-[520px]">
               {/* glow puddle */}
               <div className="pointer-events-none absolute -inset-6 rounded-[2.5rem] bg-[hsl(var(--cy-teal)/0.12)] blur-2xl" />

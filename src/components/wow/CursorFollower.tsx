@@ -1,19 +1,31 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Soft indigo dot that lerps toward the cursor across the whole site.
  * Expands into a ring when hovering an element marked `data-cursor="link"`.
  * Hidden on touch devices and under prefers-reduced-motion.
+ *
+ * IMPORTANT: the dot/ring are only rendered once the follower is actually
+ * active. On touch devices and under prefers-reduced-motion the component
+ * renders nothing — otherwise the un-animated dot would sit in the corner of
+ * the viewport as a stray speck floating over the page.
  */
 export function CursorFollower() {
   const dotRef = useRef<HTMLDivElement | null>(null);
   const ringRef = useRef<HTMLDivElement | null>(null);
+  const [active, setActive] = useState(false);
 
+  // Decide once, on mount, whether the follower should run at all.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const isTouch = window.matchMedia("(pointer: coarse)").matches;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (isTouch || reduce) return;
+    if (!isTouch && !reduce) setActive(true);
+  }, []);
+
+  // Run the follow animation only when active (the nodes now exist).
+  useEffect(() => {
+    if (!active) return;
 
     const dot = dotRef.current!;
     const ring = ringRef.current!;
@@ -65,7 +77,10 @@ export function CursorFollower() {
       dot.remove();
       ring.remove();
     };
-  }, []);
+  }, [active]);
+
+  // Nothing renders until the follower is active — no stray dot at rest.
+  if (!active) return null;
 
   return (
     <>
