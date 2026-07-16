@@ -521,3 +521,106 @@
 @media (prefers-reduced-motion: reduce) {
   .cy-carousel-slide { animation: cyCarouselFade 0.2s ease-out both !important; }
 }
+
+/* ============================================================================
+ * Cookie Yeti — premium marketing redesign
+ * Brand: the grumpy, protective Yeti. Teal/emerald is lifted straight from the
+ * product UI, the deep navy "ink" from the app icon, green is the
+ * "rejected / private" success signal, and cyan is the Yeti's eye-glow accent.
+ * Type: Fredoka (playful rounded display) + Nunito (warm, legible body).
+ * Every animation is transform/opacity only and is fully disabled under
+ * prefers-reduced-motion (final resting state is shown instead).
+ * ========================================================================== */
+@layer base {
+  .cy-page {
+    --cy-ink: 218 56% 10%;         /* #0b1526 deep navy — the app icon field */
+    --cy-ink-2: 217 33% 22%;       /* softer ink for body copy */
+    --cy-teal: 168 76% 36%;        /* #15a086 product teal */
+    --cy-teal-deep: 174 82% 26%;   /* #0c7a6e pressed / gradients */
+    --cy-emerald: 158 74% 40%;     /* #19b37e */
+    --cy-green: 145 63% 45%;       /* #2bb673 the "rejected"/private signal */
+    --cy-cyan: 187 90% 52%;        /* #1fcbe8 the Yeti's eye glow */
+    --cy-cream: 40 56% 96%;        /* #fbf6ec warm editorial surface */
+    --cy-mint: 162 52% 95%;        /* #edf9f4 mint surface */
+    --cy-line: 168 30% 88%;        /* hairline on light */
+    --cy-paper: 0 0% 100%;
+    font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+    color: hsl(var(--cy-ink));
+    background-color: hsl(var(--cy-cream));
+  }
+  .cy-page h1, .cy-page h2, .cy-page h3,
+  .cy-page h4, .cy-page .cy-display {
+    font-family: 'Fredoka', 'Nunito', system-ui, sans-serif;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+  .cy-page p { line-height: 1.65; }
+}
+
+@layer utilities {
+  /* Warm teal/mint gradient mesh — deliberately NOT a flat purple gradient */
+  .cy-mesh {
+    background-color: hsl(var(--cy-cream));
+    background-image:
+      radial-gradient(at 12% 8%,  hsl(var(--cy-teal) / 0.16) 0px, transparent 45%),
+      radial-gradient(at 88% 4%,  hsl(var(--cy-cyan) / 0.14) 0px, transparent 45%),
+      radial-gradient(at 78% 62%, hsl(var(--cy-green) / 0.12) 0px, transparent 50%),
+      radial-gradient(at 20% 78%, hsl(var(--cy-teal) / 0.10) 0px, transparent 50%);
+  }
+  .cy-ink-mesh {
+    background-color: hsl(var(--cy-ink));
+    background-image:
+      radial-gradient(at 15% 12%, hsl(var(--cy-teal) / 0.30) 0px, transparent 45%),
+      radial-gradient(at 85% 0%,  hsl(var(--cy-cyan) / 0.22) 0px, transparent 45%),
+      radial-gradient(at 80% 90%, hsl(var(--cy-green) / 0.18) 0px, transparent 50%);
+  }
+  .cy-card-shadow { box-shadow: 0 1px 2px hsl(var(--cy-ink) / 0.04), 0 12px 28px -12px hsl(var(--cy-ink) / 0.16); }
+  .cy-card-shadow-lg { box-shadow: 0 2px 6px hsl(var(--cy-ink) / 0.05), 0 30px 60px -22px hsl(var(--cy-ink) / 0.30); }
+  .cy-glow-teal { box-shadow: 0 18px 50px -18px hsl(var(--cy-teal) / 0.55); }
+
+  /* Signature hero demo — a cookie banner that gets a green REJECTED stamp
+   * and slides away, then quietly resets. One shared ~7s timeline. */
+  @keyframes cy-banner-cycle {
+    0%, 20%   { transform: translateY(0) scale(1); opacity: 1; }
+    28%       { transform: translateY(0) scale(0.985); opacity: 1; }
+    46%       { transform: translateY(0) scale(1); opacity: 1; }
+    60%, 80%  { transform: translateY(135%) scale(0.97); opacity: 0; }
+    81%       { transform: translateY(0) scale(0.97); opacity: 0; }
+    92%, 100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+  @keyframes cy-stamp-cycle {
+    0%, 26%   { opacity: 0; transform: scale(1.8) rotate(-16deg); }
+    33%       { opacity: 1; transform: scale(1) rotate(-11deg); }
+    52%       { opacity: 1; transform: scale(1) rotate(-11deg); }
+    60%, 100% { opacity: 0; transform: scale(1) rotate(-11deg); }
+  }
+  @keyframes cy-zap-cycle {
+    0%, 27%   { opacity: 0; }
+    30%       { opacity: 0.9; }
+    38%, 100% { opacity: 0; }
+  }
+  @keyframes cy-float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-12px) rotate(-2deg); } }
+  @keyframes cy-float-soft { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+  @keyframes cy-blink { 0%, 92%, 100% { opacity: 1; } 96% { opacity: 0.35; } }
+
+  .cy-banner-anim { animation: cy-banner-cycle 7s cubic-bezier(0.5, 0, 0.2, 1) infinite; }
+  .cy-stamp-anim  { animation: cy-stamp-cycle 7s cubic-bezier(0.34, 1.56, 0.64, 1) infinite; transform: rotate(-11deg); }
+  .cy-zap-anim    { animation: cy-zap-cycle 7s ease-in-out infinite; }
+  .cy-float       { animation: cy-float 6s ease-in-out infinite; }
+  .cy-float-soft  { animation: cy-float-soft 5s ease-in-out infinite; }
+  .cy-eye-glow    { animation: cy-blink 5s ease-in-out infinite; }
+
+  /* Marquee for the trust band */
+  @keyframes cy-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  .cy-marquee { animation: cy-marquee 26s linear infinite; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cy-banner-anim, .cy-zap-anim, .cy-float, .cy-float-soft,
+    .cy-eye-glow, .cy-marquee {
+      animation: none !important;
+    }
+    /* Show the satisfying resting state: banner rejected, stamp planted. */
+    .cy-banner-anim { opacity: 1; transform: none; }
+    .cy-stamp-anim  { animation: none !important; opacity: 1; transform: rotate(-11deg); }
+  }
+}
