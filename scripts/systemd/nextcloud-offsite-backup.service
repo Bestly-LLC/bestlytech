@@ -1,0 +1,20 @@
+[Unit]
+Description=Nextcloud offsite backup to Backblaze B2 (via restic)
+Documentation=file:///opt/bestly/repo/docs/nextcloud-backup-runbook.md
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+ExecStart=/usr/local/bin/nextcloud-offsite-backup.sh
+TimeoutStartSec=6h
+# Don't let systemd kill the maintenance-mode toggle mid-run
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=60
+StandardOutput=journal
+StandardError=journal

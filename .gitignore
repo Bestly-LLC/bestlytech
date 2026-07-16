@@ -61,7 +61,8 @@ supabase/.temp/
 .sweep-stage/
 
 # Bestly Cloud social growth engine — never commit secrets or built staging artifacts
-social/secrets/.env
+social/secrets/**
+!social/secrets/.gitkeep
 social/kit/staging/
 social/kit/videos/
 social/kit/thumbnails/

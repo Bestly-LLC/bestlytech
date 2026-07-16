@@ -1,0 +1,15 @@
+[Unit]
+Description=Nightly Nextcloud offsite backup
+Documentation=file:///opt/bestly/repo/docs/nextcloud-backup-runbook.md
+
+[Timer]
+# Nightly at 02:15 UTC — well after any user activity, before the daily post run at 08:00 local
+OnCalendar=*-*-* 02:15:00 UTC
+# If the machine was off at 02:15, run at boot (once caught up)
+Persistent=true
+# Add a small jitter so multiple nodes don't hit B2 at the same second
+RandomizedDelaySec=15m
+Unit=nextcloud-offsite-backup.service
+
+[Install]
+WantedBy=timers.target
