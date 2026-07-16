@@ -43,8 +43,9 @@ export const products: Product[] = [
     href: "/cookie-yeti",
     image: cookieYetiIcon,
     category: "Privacy",
-    status: "Coming Soon",
-    features: ["Auto-dismiss cookie popups", "Privacy-first preferences", "Works on Chrome & Safari", "Community-powered patterns"],
+    status: "Live",
+    appStoreUrl: "https://apps.apple.com/us/app/cookie-yeti/id6759732250",
+    features: ["Auto-dismiss cookie popups", "Privacy-first preferences", "Works on Chrome, iPhone & iPad", "Community-powered patterns"],
   },
   {
     id: "inventory-proof",

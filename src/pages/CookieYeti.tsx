@@ -58,43 +58,44 @@ const CONFIG = {
     yearly: "$7.99",
   },
   platforms: [
-    { name: "Chrome", available: false, icon: Chrome },
-    { name: "Safari (iOS + macOS)", available: true, icon: Globe },
+    { name: "Chrome", available: true, icon: Chrome },
+    { name: "iPhone & iPad", available: true, icon: Globe },
+    { name: "Mac", available: false, icon: Globe },
   ],
   links: {
-    chrome: "#",
+    chrome: "https://chromewebstore.google.com/detail/cookie-yeti/gjlefkpmampiooonpcfeibchdhemddfc",
     safari: "https://apps.apple.com/us/app/cookie-yeti/id6759732250",
   },
   features: [
     {
-      icon: Eye,
-      title: "Auto-Detect Banners",
-      description: "Automatically identifies cookie consent pop-ups across thousands of websites.",
-    },
-    {
       icon: Shield,
-      title: "Tracking Cookie Cleaning",
-      description: "Cleans tracking cookies after dismissing banners. Pro = unlimited, Free = 50 sites/day.",
-    },
-    {
-      icon: EyeOff,
-      title: "Background Operation",
-      description: "Runs silently without interrupting your browsing experience.",
-    },
-    {
-      icon: BarChart3,
-      title: "Activity Stats",
-      description: "See how many pop-ups Cookie Yeti has handled for you.",
+      title: "It actually says no",
+      description: "Most tools just hide the pop-up, and the tracking keeps happening underneath. Cookie Yeti clicks 'Reject' for real, so websites can't follow you around.",
     },
     {
       icon: Zap,
-      title: "Lightweight & Fast",
-      description: "Minimal resource usage. Won't slow down your browsing.",
+      title: "It fixes itself",
+      description: "Websites change their pop-ups all the time. When one is tricky, our AI figures out how to close it — and that fix instantly reaches everyone using Cookie Yeti. It keeps getting smarter on its own. You never have to install an update.",
     },
     {
-      icon: Globe,
-      title: "Cross-Platform Support",
-      description: "Available on Chrome and Safari for iOS and macOS. Browse privately on any device.",
+      icon: CheckCircle2,
+      title: "It won't break your sites",
+      description: "If a website ever starts acting up, Cookie Yeti backs off right away instead of fighting it. Your favorite sites keep working like normal.",
+    },
+    {
+      icon: Eye,
+      title: "Pop-ups vanish automatically",
+      description: "Cookie Yeti spots the 'We use cookies' box the moment a page loads and closes it for you. You don't click a thing.",
+    },
+    {
+      icon: EyeOff,
+      title: "It runs in the background",
+      description: "No pop-ups from us, either. Cookie Yeti works quietly while you browse and won't slow you down.",
+    },
+    {
+      icon: BarChart3,
+      title: "See what it's done",
+      description: "Watch how many cookie pop-ups Cookie Yeti has handled for you.",
     },
   ],
   faqs: [
@@ -225,7 +226,7 @@ export default function CookieYeti() {
     <>
       <SEOHead
         title="Cookie Yeti – Automatic Cookie Consent Handler | Bestly LLC"
-        description="Cookie Yeti automatically handles cookie consent pop-ups based on your privacy preferences. No ads, no profiles, and we never share the pages you visit. Coming soon to Chrome and App Store."
+        description="Cookie Yeti closes annoying cookie pop-ups for you — automatically — and always picks the private choice. Now on Chrome, iPhone & iPad. No ads, no profiles, and we never share the pages you visit."
       />
       
       {/* Hero Section */}
@@ -247,39 +248,44 @@ export default function CookieYeti() {
             
             <AnimatedSection delay={80}>
               <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
-                Cookie Yeti
+                Cookie pop-ups? Gone.
               </h1>
               <p className="mt-4 text-xl text-primary font-medium">
-                Distraction-Free Browsing, Automatically
+                Now on Chrome, iPhone &amp; iPad
               </p>
             </AnimatedSection>
 
             <AnimatedSection delay={160}>
               <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-                Automatically handles cookie consent pop-ups and cleans tracking cookies from sites you visit. 
-                5 banner handles per day free, unlimited with Pro. No ads, no profiles, no selling your data. Just peaceful browsing.
+                Every website hits you with an annoying &ldquo;We use cookies&rdquo; box. Cookie Yeti closes them for you &mdash; automatically &mdash; and always picks the private choice. You just browse.
               </p>
             </AnimatedSection>
             
             <AnimatedSection delay={240}>
               <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Button asChild size="lg" className="gap-2 text-base px-8 py-6">
+                  <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
+                    <Chrome className="h-5 w-5" />
+                    Add to Chrome
+                  </a>
+                </Button>
+                <Button asChild size="lg" variant="outline" className="gap-2 text-base px-8 py-6">
                   <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
                     <Download className="h-5 w-5" />
-                    Download on the App Store
+                    Get it on iPhone &amp; iPad
                   </a>
                 </Button>
                 <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
-                  <Chrome className="h-8 w-8 text-muted-foreground" />
+                  <Globe className="h-8 w-8 text-muted-foreground" />
                   <div className="text-left">
-                    <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
+                    <p className="text-sm font-semibold text-foreground">Mac</p>
                     <p className="text-xs text-muted-foreground">Coming Soon</p>
                   </div>
                 </div>
               </div>
               
               <p className="mt-6 text-sm text-muted-foreground">
-                Free on iPhone, iPad &amp; Mac (Safari) · Chrome coming soon
+                Free on Chrome, iPhone &amp; iPad · Mac coming soon
               </p>
             </AnimatedSection>
             
@@ -311,7 +317,7 @@ export default function CookieYeti() {
                 How It Works
               </h2>
               <p className="mt-4 text-lg text-muted-foreground">
-                Three simple steps to distraction-free browsing
+                You don&apos;t have to click &ldquo;Accept&rdquo; anymore. Cookie Yeti makes the pop-up disappear the second it shows up &mdash; and tells the website &ldquo;no thanks&rdquo; to tracking you.
               </p>
             </div>
           </AnimatedSection>
@@ -321,20 +327,20 @@ export default function CookieYeti() {
               {
                 step: 1,
                 icon: Download,
-                title: "Install Cookie Yeti",
-                description: "Add Cookie Yeti to your browser from the official store. Takes less than 10 seconds.",
+                title: "Add Cookie Yeti",
+                description: "Get it on Chrome, or on your iPhone and iPad. Takes about ten seconds.",
               },
               {
                 step: 2,
                 icon: Settings,
-                title: "Set Your Preferences",
-                description: "Choose how you want cookie consent handled: essential only, reject all, or accept all.",
+                title: "Browse like you always do",
+                description: "Keep doing your thing. Cookie Yeti runs quietly in the background.",
               },
               {
                 step: 3,
                 icon: Globe,
-                title: "Browse Freely",
-                description: "That's it! Cookie Yeti works silently in the background while you enjoy the web.",
+                title: "Pop-ups quietly disappear",
+                description: "Rejected, not accepted. That's it. No setup, no accounts to figure out, nothing to babysit.",
               },
             ].map((item, index) => (
               <AnimatedSection key={item.step} delay={index * 100}>
@@ -364,10 +370,10 @@ export default function CookieYeti() {
           <AnimatedSection>
             <div className="text-center mb-16">
               <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Key Features
+                Why Cookie Yeti?
               </h2>
               <p className="mt-4 text-lg text-muted-foreground">
-                Everything you need for a cleaner browsing experience
+                Simple on the surface. Smart underneath.
               </p>
             </div>
           </AnimatedSection>
@@ -399,10 +405,10 @@ export default function CookieYeti() {
                 </div>
               </div>
               <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Built for Privacy
+                Your business stays your business
               </h2>
               <p className="mt-4 text-lg text-muted-foreground">
-                We never sell your data, show ads, or build a profile about you — and we never share your browsing history or the pages you visit. Your settings stay on your device.
+                We never sell your data, show you ads, or build a profile about you. We never share your browsing history or the pages you visit. The only thing we ever share is the name of a website when its cookie pop-up is tricky &mdash; like example.com &mdash; so our AI can learn to handle it for everyone. Never you. Never what you were looking at.
               </p>
             </AnimatedSection>
             
@@ -591,7 +597,7 @@ export default function CookieYeti() {
                 Get Cookie Yeti
               </h2>
               <p className="mt-4 text-lg text-muted-foreground">
-                Available now on iPhone, iPad &amp; Mac. Chrome coming soon.
+                Now on Chrome, iPhone &amp; iPad. Mac coming soon.
               </p>
             </div>
           </AnimatedSection>
@@ -622,15 +628,21 @@ export default function CookieYeti() {
           <AnimatedSection delay={200}>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button asChild size="lg" className="gap-2 text-base px-8 py-6">
+                <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
+                  <Chrome className="h-5 w-5" />
+                  Add to Chrome
+                </a>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="gap-2 text-base px-8 py-6">
                 <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
                   <Download className="h-5 w-5" />
-                  Download on the App Store
+                  Get it on iPhone &amp; iPad
                 </a>
               </Button>
               <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
-                <Chrome className="h-8 w-8 text-muted-foreground" />
+                <Globe className="h-8 w-8 text-muted-foreground" />
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
+                  <p className="text-sm font-semibold text-foreground">Mac</p>
                   <p className="text-xs text-muted-foreground">Coming Soon</p>
                 </div>
               </div>
@@ -787,6 +799,9 @@ export default function CookieYeti() {
               <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
                 Frequently Asked Questions
               </h2>
+              <p className="mt-4 text-lg text-muted-foreground">
+                Short answers, no jargon.
+              </p>
             </div>
           </AnimatedSection>
           
@@ -818,22 +833,28 @@ export default function CookieYeti() {
                 Cookie Yeti Is Here
               </h2>
               <p className="mt-4 text-lg text-muted-foreground">
-                Available now on iPhone, iPad &amp; Mac. Download free from the App Store — Chrome coming soon.
+                Now on Chrome, iPhone &amp; iPad. Add it free &mdash; Mac coming soon.
               </p>
             </AnimatedSection>
             
             <AnimatedSection delay={100}>
               <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6">
                 <Button asChild size="lg" className="gap-2 text-base px-8 py-6">
+                  <a href={CONFIG.links.chrome} target="_blank" rel="noopener noreferrer">
+                    <Chrome className="h-5 w-5" />
+                    Add to Chrome
+                  </a>
+                </Button>
+                <Button asChild size="lg" variant="outline" className="gap-2 text-base px-8 py-6">
                   <a href={CONFIG.links.safari} target="_blank" rel="noopener noreferrer">
                     <Download className="h-5 w-5" />
-                    Download on the App Store
+                    Get it on iPhone &amp; iPad
                   </a>
                 </Button>
                 <div className="flex items-center gap-3 px-6 py-4 rounded-xl border border-border bg-card shadow-sm">
-                  <Chrome className="h-8 w-8 text-muted-foreground" />
+                  <Globe className="h-8 w-8 text-muted-foreground" />
                   <div className="text-left">
-                    <p className="text-sm font-semibold text-foreground">Chrome Desktop</p>
+                    <p className="text-sm font-semibold text-foreground">Mac</p>
                     <p className="text-xs text-muted-foreground">Coming Soon</p>
                   </div>
                 </div>
