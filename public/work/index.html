@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Jared Best — Selected Work</title>
+<meta name="description" content="Jared Best builds websites, storefronts, brands, apps, and the daily content that sells them. Selected work from Los Angeles."/>
+<meta property="og:title" content="Jared Best — Selected Work"/>
+<meta property="og:description" content="Websites, storefronts, brands, apps, and the daily content that sells them. Los Angeles."/>
+<meta property="og:image" content="https://www.bestly.tech/work/img/site-theshiftshop.jpg"/>
+<meta name="theme-color" content="#0a0b10"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&display=swap" rel="stylesheet">
+<style>
+:root{
+ --bg:#0a0b10; --bg2:#0e1017; --surf:#13161f; --surf2:#171b26;
+ --line:#20242f; --line2:#2b3140;
+ --fg:#f2f4f9; --mut:#9aa1b8; --dim:#6b7288;
+ --acc:#7a8be0; --acc2:#a3b0ec;
+ --gut:clamp(20px,4vw,64px);
+ --r:2px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{max-width:100vw;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,sans-serif;
+ font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img,video{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--acc2);outline-offset:3px;border-radius:2px}
+
+.wrap{max-width:1280px;margin:0 auto;padding-inline:var(--gut)}
+.serif{font-family:Newsreader,Georgia,serif}
+.rule{height:1px;background:var(--line);border:0}
+
+/* ─────────── reveal ─────────── */
+.rv{opacity:0;transform:translateY(18px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+.rv.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}
+ *{animation:none!important;transition-duration:.01ms!important}}
+
+/* ─────────── top bar ─────────── */
+.bar{position:fixed;inset:0 0 auto 0;z-index:50;backdrop-filter:blur(14px);
+ background:rgba(10,11,16,.72);border-bottom:1px solid transparent;transition:border-color .3s,background .3s}
+.bar.stuck{border-color:var(--line);background:rgba(10,11,16,.92)}
+.bar-in{max-width:1280px;margin:0 auto;padding:14px var(--gut);display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand{font-family:Newsreader,serif;font-size:19px;letter-spacing:-.01em}
+.brand span{color:var(--dim)}
+.bar nav{display:flex;gap:26px;font-size:13.5px;color:var(--mut)}
+.bar nav a{position:relative;padding-bottom:2px;transition:color .2s}
+.bar nav a::after{content:"";position:absolute;left:0;bottom:-1px;width:0;height:1px;background:var(--acc);transition:width .3s cubic-bezier(.16,1,.3,1)}
+.bar nav a:hover{color:var(--fg)}.bar nav a:hover::after{width:100%}
+.bar .mail{font-size:13.5px;color:var(--fg);border:1px solid var(--line2);padding:8px 15px;border-radius:100px;transition:border-color .25s,background .25s}
+.bar .mail:hover{border-color:var(--acc);background:rgba(122,139,224,.1)}
+@media(max-width:880px){.bar nav{display:none}}
+@media(max-width:760px){.bk{display:none}.hero{padding:142px 0 68px}h1{letter-spacing:-.026em;overflow-wrap:break-word}
+ .facts{gap:12px 0;flex-direction:column}.facts span{display:block}
+ section,.band{padding:68px 0}.end{padding:80px 0 68px}
+ .kicker::after{max-width:80px}.strip{padding:20px}.strip .set{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}}
+
+/* ─────────── hero ─────────── */
+.hero{padding:190px 0 92px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;top:-340px;right:-180px;width:900px;height:900px;
+ background:radial-gradient(circle,rgba(122,139,224,.17),transparent 62%);pointer-events:none}
+.kicker{display:flex;align-items:center;gap:14px;font-size:11.5px;letter-spacing:.22em;
+ text-transform:uppercase;color:var(--dim);margin-bottom:34px}
+.kicker::after{content:"";flex:1;max-width:200px;height:1px;background:var(--line2)}
+h1{font-family:Newsreader,Georgia,serif;font-weight:300;letter-spacing:-.035em;line-height:.98;
+ font-size:clamp(31px,7.4vw,104px)}
+h1 i{font-style:italic;font-weight:300}
+h1 .u{position:relative;white-space:nowrap}
+h1 .u::after{content:"";position:absolute;left:0;right:0;bottom:.1em;height:3px;
+ background:linear-gradient(90deg,var(--acc),var(--acc2));transform-origin:left;
+ transform:scaleX(0);animation:draw 1s cubic-bezier(.16,1,.3,1) .5s forwards}
+@keyframes draw{to{transform:scaleX(1)}}
+.hero p.lede{margin-top:38px;max-width:60ch;font-size:clamp(16.5px,1.5vw,19px);color:var(--mut);font-weight:300;line-height:1.65}
+.facts{margin-top:52px;display:flex;flex-wrap:wrap;gap:14px 46px;font-size:14px;color:var(--mut);
+ padding-top:26px;border-top:1px solid var(--line)}
+.facts b{font-family:Newsreader,serif;font-weight:400;font-size:27px;color:var(--fg);margin-right:9px;vertical-align:-2px}
+
+/* ─────────── section chrome ─────────── */
+section{padding:96px 0;position:relative}
+.shead{display:grid;grid-template-columns:88px 1fr;gap:0 30px;align-items:start;
+ padding-top:26px;border-top:1px solid var(--line);margin-bottom:52px}
+.snum{font-size:12px;letter-spacing:.16em;color:var(--acc);padding-top:9px;font-variant-numeric:tabular-nums}
+.shead h2{font-family:Newsreader,Georgia,serif;font-weight:300;letter-spacing:-.025em;
+ font-size:clamp(25px,4.2vw,52px);line-height:1.1;max-width:19ch}
+.shead p{grid-column:2;margin-top:16px;color:var(--mut);max-width:62ch;font-weight:300;font-size:16.5px}
+@media(max-width:680px){.shead{grid-template-columns:1fr;gap:10px}.shead p,.shead h2{grid-column:1}.snum{padding-top:0}}
+
+/* ─────────── work grid (bento) ─────────── */
+.bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
+.bento>*,.jgrid>*,.gset>*,.vids>*{min-width:0}
+.c{grid-column:span 4}
+.c-8{grid-column:span 8}.c-6{grid-column:span 6}.c-5{grid-column:span 5}
+.c-7{grid-column:span 7}.c-12{grid-column:span 12}
+@media(max-width:1000px){.c,.c-5,.c-7{grid-column:span 6}.c-8,.c-6{grid-column:span 12}}
+@media(max-width:660px){.c,.c-5,.c-6,.c-7,.c-8{grid-column:span 12}}
+
+.tile{display:block;background:var(--surf);border:1px solid var(--line);border-radius:var(--r);
+ overflow:hidden;position:relative;transition:border-color .35s,transform .35s cubic-bezier(.16,1,.3,1)}
+a.tile{cursor:pointer}
+a.tile:hover{border-color:var(--line2);transform:translateY(-3px)}
+.tile .m{overflow:hidden;background:#080910;position:relative}
+.tile .m.plate{background:linear-gradient(160deg,#141824,#0c0e16);display:grid;place-items:center;padding:26px}
+.tile .m.plate img{object-fit:contain;mix-blend-mode:normal}
+.tile .m img{width:100%;height:100%;object-fit:cover;object-position:top center;
+ transition:transform .8s cubic-bezier(.16,1,.3,1)}
+a.tile:hover .m img{transform:scale(1.035)}
+.ar-wide .m{aspect-ratio:16/9}
+.ar-tall .m{aspect-ratio:4/3}
+.ar-sq .m{aspect-ratio:1/1}
+.tile .t{padding:20px 22px 24px;display:flex;flex-direction:column;gap:7px}
+.tile h3{font-size:17px;font-weight:500;letter-spacing:-.012em}
+.tile .role{font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--acc);font-weight:500}
+.tile p{font-size:14.5px;color:var(--mut);font-weight:300;line-height:1.55}
+.tile .go{margin-top:5px;font-size:13px;color:var(--dim);display:inline-flex;align-items:center;gap:7px;transition:color .25s,gap .25s}
+a.tile:hover .go{color:var(--acc2);gap:11px}
+.tile .go svg{width:12px;height:12px;stroke:currentColor;stroke-width:1.8;fill:none}
+
+/* ─────────── el d'ora band ─────────── */
+.band{background:var(--bg2);border-block:1px solid var(--line);padding:96px 0;margin-block:0}
+.jgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media(max-width:900px){.jgrid{grid-template-columns:repeat(2,1fr)}}
+.jgrid figure{aspect-ratio:1/1;overflow:hidden;background:#0b0d14;border:1px solid var(--line);border-radius:var(--r)}
+.jgrid img{width:100%;height:100%;object-fit:cover;transition:transform .9s cubic-bezier(.16,1,.3,1)}
+.jgrid figure:hover img{transform:scale(1.06)}
+
+/* ─────────── illustration strip ─────────── */
+.strip{display:grid;grid-template-columns:minmax(0,220px) minmax(0,1fr);gap:34px;align-items:center;
+ margin-top:16px;padding:26px;background:var(--surf);border:1px solid var(--line);border-radius:var(--r)}
+.strip .lbl h4{font-family:Newsreader,serif;font-weight:400;font-size:23px;letter-spacing:-.02em;margin-bottom:8px}
+.strip .lbl p{font-size:14px;color:var(--mut);font-weight:300;line-height:1.55}
+.strip>*{min-width:0}
+.strip .set{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.strip .set img{width:100%;aspect-ratio:1/1;object-fit:contain;background:var(--surf2);
+ border:1px solid var(--line);border-radius:var(--r);padding:8px}
+@media(max-width:840px){.strip{grid-template-columns:1fr;gap:22px}}
+
+/* ─────────── video row ─────────── */
+.vids{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media(max-width:820px){.vids{grid-template-columns:1fr;max-width:380px;margin-inline:auto}}
+.vid{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.vid video{width:100%;aspect-ratio:9/16;object-fit:cover;background:#080910}
+.vid .t{padding:15px 18px 18px}
+.vid .t span{font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--acc)}
+.vid .t p{font-size:14px;color:var(--mut);font-weight:300;margin-top:5px}
+
+/* ─────────── graphic marquee ─────────── */
+.gset{margin-top:16px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media(max-width:900px){.gset{grid-template-columns:repeat(2,1fr)}}
+.gset figure{aspect-ratio:1/1;overflow:hidden;border:1px solid var(--line);border-radius:var(--r);background:#0b0d14}
+.gset img{width:100%;height:100%;object-fit:cover;transition:transform .9s cubic-bezier(.16,1,.3,1)}
+.gset figure:hover img{transform:scale(1.05)}
+
+/* ─────────── pull quote ─────────── */
+.pull{margin-top:44px;padding-left:26px;border-left:2px solid var(--acc);max-width:64ch}
+.pull p{font-family:Newsreader,serif;font-weight:300;font-size:clamp(19px,2.2vw,25px);
+ line-height:1.45;letter-spacing:-.015em;color:var(--fg)}
+
+/* ─────────── contact ─────────── */
+.end{padding:108px 0 92px;border-top:1px solid var(--line);position:relative;overflow:hidden}
+.end::before{content:"";position:absolute;bottom:-360px;left:-140px;width:820px;height:820px;
+ background:radial-gradient(circle,rgba(122,139,224,.14),transparent 62%);pointer-events:none}
+.end h2{font-family:Newsreader,serif;font-weight:300;letter-spacing:-.03em;line-height:1.05;
+ font-size:clamp(27px,5.2vw,68px)}
+.links{margin-top:44px;display:flex;flex-wrap:wrap;gap:12px}
+.links a{font-size:15px;padding:13px 22px;border:1px solid var(--line2);border-radius:100px;
+ transition:border-color .25s,background .25s,transform .25s;color:var(--fg)}
+.links a:hover{border-color:var(--acc);background:rgba(122,139,224,.11);transform:translateY(-2px)}
+.links a.pri{background:var(--fg);color:#0a0b10;border-color:var(--fg);font-weight:500}
+.links a.pri:hover{background:var(--acc2);border-color:var(--acc2);color:#0a0b10}
+.colo{margin-top:58px;padding-top:26px;border-top:1px solid var(--line);
+ display:flex;flex-wrap:wrap;gap:8px 26px;font-size:12.5px;color:var(--dim)}
+</style>
+</head>
+<body>
+
+<div class="bar" id="bar"><div class="bar-in">
+  <a class="brand" href="#top">Jared Best <span>— Selected Work</span></a>
+  <nav>
+    <a href="#work">Work</a><a href="#brand">Brand</a><a href="#product">Product</a>
+    <a href="#content">Content</a><a href="#cloud">Cloud</a>
+  </nav>
+  <a class="mail" href="mailto:jared@bestly.tech">Get in touch</a>
+</div></div>
+
+<a id="top"></a>
+<header class="hero"><div class="wrap">
+  <div class="kicker">Los Angeles &middot; Available for work</div>
+  <h1 class="rv">I build the whole thing &mdash; <br class="bk">site, brand, app, and the <br class="bk"><i class="u">content that sells it.</i></h1>
+  <p class="lede rv">Most people do one piece of this. I take a business from nothing to live: the storefront, the look, the software behind it, and the posts that keep going out every day after launch. Everything on this page shipped.</p>
+  <div class="facts rv">
+    <span><b>9</b>live sites and storefronts</span>
+    <span><b>6</b>apps designed and shipped</span>
+    <span><b>40+</b>video ads produced</span>
+    <span><b>Daily</b>content, running on its own</span>
+  </div>
+</div></header>
+
+<!-- 01 WORK -->
+<section id="work"><div class="wrap">
+  <div class="shead rv"><div class="snum">01</div>
+    <h2>Nine sites live right now</h2>
+    <p>Design, build, hosting, payments, and the migration off whatever platform they were stuck on. Every one of these is clickable &mdash; go look.</p>
+  </div>
+  <div class="bento">
+    <a class="tile ar-wide c-8 rv" href="https://theshift.shop" target="_blank" rel="noopener">
+      <div class="m"><img src="img/site-theshiftshop.jpg" alt="The Shift Shop storefront" loading="lazy"></div>
+      <div class="t"><span class="role">Migration &middot; Storefront &middot; Marketplaces</span>
+        <h3>The Shift Shop</h3>
+        <p>Moved an entire business onto a new store, then added an Amazon shop and TikTok Shop so the same catalog sells in three places.</p>
+        <span class="go">theshift.shop <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
+
+    <a class="tile ar-tall c rv" href="https://hoku-clean.com" target="_blank" rel="noopener">
+      <div class="m"><img src="img/site-hoku.jpg" alt="HOKU skincare storefront" loading="lazy"></div>
+      <div class="t"><span class="role">Brand &middot; Storefront</span>
+        <h3>HOKU</h3>
+        <p>Hypochlorous acid skincare. Brand, product pages, and checkout.</p>
+        <span class="go">hoku-clean.com <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
+
+    <a class="tile ar-tall c rv" href="https://purelyhunza.com" target="_blank" rel="noopener">
+      <div class="m"><img src="img/site-purelyhunza.jpg" alt="Purely Hunza storefront" loading="lazy"></div>
+      <div class="t"><span class="role">Brand &middot; Storefront</span>
+        <h3>Purely Hunza</h3>
+        <p>Food brand built and launched from a blank page.</p>
+        <span class="go">purelyhunza.com <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
+
+    <a class="tile ar-tall c rv" href="https://parentiq.io" target="_blank" rel="noopener">
+      <div class="m"><img src="img/site-parentiq.jpg" alt="ParentIQ product site" loading="lazy"></div>
+      <div class="t"><span class="role">Product site</span>
+        <h3>ParentIQ</h3>
+        <p>Co-parenting app &mdash; &ldquo;peace of mind between households.&rdquo;</p>
+        <span class="go">parentiq.io <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
+
+    <a class="tile ar-tall c rv" href="https://www.inventoryproof.com" target="_blank" rel="noopener">
+      <div class="m"><img src="img/site-inventoryproof.jpg" alt="InventoryProof site" loading="lazy"></div>
+      <div class="t"><span class="role">Product site</span>
+        <h3>InventoryProof</h3>
+        <p>Helps people prove what they own before they need to.</p>
+        <span class="go">inventoryproof.com <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
+
+    <a class="tile ar-wide c-12 rv" href="https://www.bestly.tech" target="_blank" rel="noopener">
+      <div class="m" style="aspect-ratio:21/7"><img src="img/site-bestly.jpg" alt="Bestly company site" loading="lazy"></div>
+      <div class="t"><span class="role">My own company &middot; Design, copy, 3D, build</span>
+        <h3>Bestly</h3>
+        <p>Where I test everything first. If it works here, I sell it to clients.</p>
+        <span class="go">bestly.tech <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
+  </div>
+</div></section>
+
+<!-- 02 BRAND -->
+<div class="band" id="brand"><div class="wrap">
+  <div class="shead rv" style="border-top-color:var(--line2)"><div class="snum">02</div>
+    <h2>El D&rsquo;Ora &mdash; an entire jewelry brand</h2>
+    <p>Lab-grown diamond jewelry. I set the look, directed the product imagery, and built the store. Over 190 pieces in the catalog; eight of them here.</p>
+  </div>
+  <div class="jgrid rv">
+    <figure><img src="img/eldora-1.jpg" alt="Emerald talon ring" loading="lazy"></figure>
+    <figure><img src="img/eldora-2.jpg" alt="Duality drop earring set" loading="lazy"></figure>
+    <figure><img src="img/eldora-3.jpg" alt="Baroque riot earrings" loading="lazy"></figure>
+    <figure><img src="img/eldora-4.jpg" alt="CTRL ring" loading="lazy"></figure>
+    <figure><img src="img/eldora-5.jpg" alt="Solitaire engagement ring" loading="lazy"></figure>
+    <figure><img src="img/eldora-6.jpg" alt="Regent chain" loading="lazy"></figure>
+    <figure><img src="img/eldora-7.jpg" alt="Marquise clutch" loading="lazy"></figure>
+    <figure><img src="img/eldora-8.jpg" alt="Starlight pearl earrings" loading="lazy"></figure>
+  </div>
+  <div class="pull rv"><p>Every brand gets the same treatment: one look, applied everywhere &mdash; site, product shots, store listings, ads, social. Nothing gets bolted on later.</p></div>
+</div></div>
+
+<!-- 03 PRODUCT -->
+<section id="product"><div class="wrap">
+  <div class="shead rv"><div class="snum">03</div>
+    <h2>Software that actually shipped</h2>
+    <p>Real apps on real devices &mdash; designed, built, and carried through Apple review. Two of them are running live right now.</p>
+  </div>
+  <div class="bento">
+    <a class="tile ar-wide c-7 rv" href="https://captainslog-command.higgsfield.app" target="_blank" rel="noopener">
+      <div class="m"><img src="img/site-coastguard.jpg" alt="Captain's Log command center with live vessel map" loading="lazy"></div>
+      <div class="t"><span class="role">iOS app &middot; Live web app</span>
+        <h3>Captain&rsquo;s Log</h3>
+        <p>A sailing app with real marine weather, plus a command center that plots actual ships on a live map. Open it &mdash; the boats are real and moving.</p>
+        <span class="go">See it live <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
+
+    <a class="tile ar-wide c-5 rv" href="https://www.bestly.tech/cookie-yeti/dashboard" target="_blank" rel="noopener">
+      <div class="m"><img src="img/cy-mac.jpg" alt="Cookie Yeti on macOS" loading="lazy"></div>
+      <div class="t"><span class="role">Mac &middot; iPad &middot; iPhone &middot; Chrome</span>
+        <h3>Cookie Yeti</h3>
+        <p>Kills cookie pop-ups in one click. One design system, four platforms, three themes &mdash; plus every store screenshot and banner.</p>
+        <span class="go">Open the dashboard <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
+  </div>
+
+  <div class="strip rv">
+    <div class="lbl"><h4>Proofy</h4>
+      <p>An original character built for InventoryProof, drawn for every screen in the app so the whole product feels like one thing.</p></div>
+    <div class="set">
+      <img src="img/proofy-1.jpg" alt="Proofy welcoming" loading="lazy">
+      <img src="img/proofy-2.jpg" alt="Proofy valuing an item" loading="lazy">
+      <img src="img/proofy-3.jpg" alt="Proofy detecting items with AI" loading="lazy">
+      <img src="img/proofy-4.jpg" alt="Proofy with insurance paperwork" loading="lazy">
+    </div>
+  </div>
+</div></section>
+
+<!-- 04 CONTENT -->
+<div class="band" id="content"><div class="wrap">
+  <div class="shead rv" style="border-top-color:var(--line2)"><div class="snum">04</div>
+    <h2>New ads and posts every single day</h2>
+    <p>This is the part most people can&rsquo;t do. I built a system that writes, designs, and publishes fresh content daily for each brand &mdash; video ads, graphics, captions &mdash; with nobody sitting down to make them. Press play.</p>
+  </div>
+  <div class="vids rv">
+    <div class="vid"><video src="img/reel-1.mp4" poster="img/reel-1.jpg" muted loop playsinline controls preload="metadata"></video>
+      <div class="t"><span>Video ad</span><p>Cookie Yeti &middot; July 11</p></div></div>
+    <div class="vid"><video src="img/reel-2.mp4" poster="img/reel-2.jpg" muted loop playsinline controls preload="metadata"></video>
+      <div class="t"><span>Video ad</span><p>Cookie Yeti &middot; July 17</p></div></div>
+    <div class="vid"><video src="img/reel-3.mp4" poster="img/reel-3.jpg" muted loop playsinline controls preload="metadata"></video>
+      <div class="t"><span>Video ad</span><p>InventoryProof &middot; July 31</p></div></div>
+  </div>
+  <div class="gset rv">
+    <figure><img src="img/social-1.jpg" alt="Daily social graphic" loading="lazy"></figure>
+    <figure><img src="img/social-2.jpg" alt="Daily social graphic" loading="lazy"></figure>
+    <figure><img src="img/social-3.jpg" alt="Daily social graphic" loading="lazy"></figure>
+    <figure><img src="img/social-4.jpg" alt="Daily social graphic" loading="lazy"></figure>
+    <figure><img src="img/social-5.jpg" alt="Daily social graphic" loading="lazy"></figure>
+    <figure><img src="img/social-6.jpg" alt="Daily social graphic" loading="lazy"></figure>
+    <figure><img src="img/social-7.jpg" alt="Daily social graphic" loading="lazy"></figure>
+    <figure><img src="img/social-8.jpg" alt="Daily social graphic" loading="lazy"></figure>
+  </div>
+  <div class="pull rv"><p>Hundreds of graphics and more than forty video ads made this way so far, across two brands, posting on schedule. If your business goes quiet on social because nobody has time &mdash; this is the fix.</p></div>
+</div></div>
+
+<!-- 05 CLOUD -->
+<section id="cloud"><div class="wrap">
+  <div class="shead rv"><div class="snum">05</div>
+    <h2>One computer in your office, instead of a stack of monthly bills</h2>
+    <p>A server that sits in your building and replaces the tools you rent every month &mdash; email and docs, chat, video calls, file storage, e-signatures, password manager, and AI. You own it. Your data stays with you.</p>
+  </div>
+  <div class="bento">
+    <a class="tile ar-wide c-6 rv" href="https://www.bestly.tech/cloud" target="_blank" rel="noopener">
+      <div class="m plate"><img src="img/bestly-3d.jpg" alt="Bestly Cloud device, 3D render" loading="lazy"></div>
+      <div class="t"><span class="role">Product design &middot; 3D &middot; Web</span>
+        <h3>The device</h3>
+        <p>Modeled in 3D and animated on the site so people can see exactly what they&rsquo;re buying before it arrives.</p>
+        <span class="go">bestly.tech/cloud <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
+    <div class="tile ar-wide c-6 rv">
+      <div class="m"><img src="img/bestly-og.jpg" alt="Bestly brand art: Stop renting your business from big tech" loading="lazy"></div>
+      <div class="t"><span class="role">Brand &middot; Copy</span>
+        <h3>The pitch, in one line</h3>
+        <p>&ldquo;Stop renting your business from big tech.&rdquo; Positioning, art, and every piece of collateral behind it.</p></div></div>
+  </div>
+</div></section>
+
+<!-- CONTACT -->
+<footer class="end"><div class="wrap">
+  <h2 class="rv">Need a site, a brand, an app, <br class="bk">or someone to keep your content going?</h2>
+  <div class="links rv">
+    <a class="pri" href="mailto:jared@bestly.tech">jared@bestly.tech</a>
+    <a href="tel:+18165007236">(816) 500-7236</a>
+    <a href="https://linkedin.com/in/bestjared" target="_blank" rel="noopener">LinkedIn</a>
+    <a href="https://www.bestly.tech" target="_blank" rel="noopener">bestly.tech</a>
+  </div>
+  <div class="colo"><span>Jared Best</span><span>Los Angeles, California</span><span>Everything shown was designed and built by me.</span></div>
+</div></footer>
+
+<script>
+(function(){
+  var bar=document.getElementById('bar');
+  var onScroll=function(){ bar.classList.toggle('stuck', window.scrollY>12); };
+  onScroll(); window.addEventListener('scroll',onScroll,{passive:true});
+
+  if(!window.IntersectionObserver||window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    document.querySelectorAll('.rv').forEach(function(n){n.classList.add('in');}); return;
+  }
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e,i){
+      if(e.isIntersecting){
+        var el=e.target;
+        setTimeout(function(){el.classList.add('in');}, Math.min(i,6)*55);
+        io.unobserve(el);
+      }
+    });
+  },{rootMargin:'0px 0px -8% 0px',threshold:.06});
+  document.querySelectorAll('.rv').forEach(function(n){io.observe(n);});
+})();
+</script>
+</body></html>
