@@ -1,48 +1,109 @@
-# Bestly Cloud Learnings (updated 2026-07-27)
+# Bestly Cloud Learnings (updated 2026-08-02)
 
 Rewritten weekly by `bestly-cloud-growth-loop` (Sun 5pm PT). Read every daily engine run.
 
-LinkedIn API still broken (`403 ACCESS_DENIED` on `GET /v2/organizations/{id}`; `400 ILLEGAL_ARGUMENT` on share-statistics — token lacks Community Management API scope). Re-tested via curl this run, same failure as every run since 07-16. Metrics below pulled via Chrome MCP from the live Page-posts admin view instead.
+LinkedIn API re-tested this run: `/v2/userinfo` -> 200 (token live), but `/rest/organizationAcls` and
+`/v2/organizationalEntityShareStatistics` both -> **403 ACCESS_DENIED**. Unchanged since 07-16 — the token
+lacks `r_organization_admin` / `w_organization_social`. Metrics below pulled via Chrome MCP from
+Page posts + Analytics > Content. **Saves are not exposed anywhere in Page analytics** — ranked by
+clicks / engagement rate / impressions instead.
 
-## REALITY CHECK (read this first — nothing below changes the priority order)
-- **The problem is distribution, not content.** The page has **1 follower** (Jared's own account). Every live post gets single-digit impressions and **zero** likes/comments/reposts/saves. No hook or theme tuning fixes a 1-follower page. Growing the audience (invite connections, cross-post from Jared's personal profile, get the page past ~50 followers) matters more than anything in the WINNING/LOSING sections.
-- **The manual-click step is still leaking most of the pipeline.** Of the ~9 posts staged 07-18 → 07-26, only the 07-24/25 homelab post ever actually went live. 07-18, 21, 22, 23, 26 are still `awaiting_click` and never published. Every daily run stages a post but stops at the human approval gate, and the gate isn't being cleared. **Flag to Jared: either commit to a daily one-click habit, or approve the LinkedIn Community Management API path (opusplan Phase 2) so posts auto-publish.**
-- **N is still tiny and every data point is zero-engagement.** All rankings below are LOW-CONFIDENCE / directional. We have no positive engagement signal to learn from yet — including no saves data (view shows impressions only, and engagement is 0 regardless).
+## THE HEADLINE: we finally have signal
+Last week every post was 3-4 impressions and 0 of everything. This week:
+- **38 impressions in 7 days, +533%.** Search appearances 32, +77.8%. Page visitors 2, +100%.
+- **The 7/27 post got 22 impressions and 2 clicks — 9.09% CTR, 9.09% engagement rate.**
+  That is the **first non-zero engagement this page has ever recorded.**
+- Still **1 follower. 0 new followers. 0 reactions, 0 comments, 0 reposts** all-time.
+  Distribution is coming from hashtag/search surfaces, not followers.
 
-## LIVE RIGHT NOW (Page posts > Published, this run)
-Exactly 3 posts are actually live:
-| Live date | Content | Media | Age | Impressions | Engagement |
-|-----------|---------|-------|-----|-------------|------------|
-| 7/25 | Homelab / "you can run your own office server… at 11pm" (IT-salary math) | device shot (side) | 1d | 3 | 0 |
-| 7/17 | SaaS math / "software bill up 39%" | hero.png | 1w | 4 | 0 |
-| 7/15 | Own-your-infrastructure / "you bought your desks…" | hero.png | 1w | 4 | 0 |
-
-Only the 7/25 post is inside the 7-day window. 07-18/21/22/23/26 never published.
-
-## WINNING (tentative — do more of this next week)
-- **Theme: rent-vs-buy / own-your-infrastructure.** The two oldest live posts (07-15 object-analogy, 07-17 SaaS-math) both hit 4 impressions vs. 3 for the newer homelab post — but the 3 vs 4 gap is noise at this N, and the older posts have simply had a week to accrue. No real winner. Keep the rent-vs-buy spine in rotation.
-- **Hook: concrete-object analogy** ("You bought your desks. You bought your printer.") — still the owner's most-approved shape and the plainest-spoken. Keep as the safe default.
-- **Post hour: still uninterpretable** — publish time is set by whenever the manual click happens, not the intended slot, so hour data is contaminated. No conclusion.
-- **Media type: static brand card vs. device shot — no signal.** Both are live; both at ~3-4 impressions. Keep rotating for variety per MEDIA.md, don't over-read.
+## WINNING (do more of this next week)
+- **Theme: `saas-math`, specifically the WASTE cut.** "Half your software seats are paid for and empty"
+  (53% of licenses unused) = 22 impressions + the only 2 clicks in account history. 5.5x the 4-impression
+  baseline. This is the strongest result we have. Run saas-math ~2x/week and keep the waste framing.
+- **Hook shape: flat declarative accusation, not a question.** The two best posts open by telling the
+  reader something true and uncomfortable about themselves — "Half your software seats are paid for and
+  empty" (22) and "You pay someone to do your books. You're still the IT guy." (12). The two question
+  hooks — "Who else is on the computer that holds your files?" (4) and "...whether you should be the one
+  doing it at 11pm" (3) — did 3-5x worse. Clean split, N=4. **Default to declarative.**
+- **Length: shorter wins.** Winner was **965 chars — the shortest post in the whole set.** 1211 -> 12 imp,
+  1338 (longest) -> 4 imp. Not monotonic (1084 -> 3), so tentative, but **target 950-1150, not 1300+.**
+- **Hashtag `#saas` — flagged, N=1, cheap to test.** Of the 6 live posts, the *only* one carrying `#saas`
+  is the only one with clicks and 5.5x impressions. Every other live post used `#productivity` in that
+  slot. Could easily be coincidence. See experiment 3.
+- **Media type: still no signal.** Winner used `hero.png` static brand card — but 7/15 and 7/17 used the
+  same card and got 4 each. Media is not driving this. Keep rotating per MEDIA.md.
 
 ## LOSING (retire or rework)
-- Nothing statistically losing. The **manual Chrome-MCP semi-auto publish path is the biggest functional loss** — it dropped ~5 of the last ~9 posts. This is the single highest-leverage fix and outranks any creative change.
-- Do NOT keep pouring effort into hook micro-optimization while at 1 follower — it's polishing a car with no road. Redirect ~1 post/week of effort toward an audience-growth action instead (see experiment 3).
+- **Question-opener hooks.** 4 and 3 impressions, zero clicks. Retire as the *opening line*. A question is
+  fine as the closing CTA (the winner ends with one).
+- **1300+ char posts.** The 1338-char post was the longest and among the worst-performing.
+- **The publish gate is still the biggest functional loss — but it is improving.** 3 posts went live this
+  week (7/27, 7/31, 8/1) vs 1 last week. Live count went 3 -> 6. Still **never published: 07-26, 07-27,
+  07-28, 07-29, 07-31**, plus 08-02 pending. Roughly half the pipeline still evaporates at the click.
+- **Follower growth is untouched and it is now the ceiling.** 0 new followers, still 1. The Page has
+  **50/50 unused "Invite connections" credits sitting in the admin sidebar.** That is the single
+  highest-leverage unused lever on the account and it costs Jared about two minutes.
 
 ## THIS WEEK'S EXPERIMENTS (2-3, budget 25% of posts)
-1. **Carousel format (targets SAVES directly).** Every post to date is single text+image. 2026 algorithm research is unambiguous: saves are now the most-weighted signal, and carousels force 60-90s dwell time → the format most likely to earn saves and extended distribution. Try one 4-5 slide carousel of the SaaS-math story (slide 1 = hook, slides 2-4 = the numbers, slide 5 = Bestly + CTA). Rationale: format is the biggest untested lever and it aims straight at the #1 ranked signal.
-2. **Fresh, bigger dollar number reframed as waste.** 2026 benchmark is now **$10,800 per employee per year** on SaaS (up from $9,643 in 2025), and **~25-30% of licenses go unused** (Zylo: avg org wastes $19.8M/yr; only 54% of licenses actually used). Try: "You're paying about $10,800 per employee per year for software — and roughly a third of it, nobody at your company opens." Rationale: bigger + fresher than the $156/mo and 39% framings; dollar-waste angle at this magnitude untested.
-3. **Story / authentic-voice hook (sounds like a thought, not a headline).** 2026 hook research favors first-person micro-stories over polished number-shocks. Try opening with a real moment: "A shop owner told me last week she just got a $1,900 renewal quote for software her team barely uses." Rationale: only tested question / object-analogy / number-shock / timeline / fear / unpopular-opinion / diy-crossover / transparency shapes — never a story hook, and it's the shape the algorithm is rewarding now.
+1. **Microsoft raised small-business prices roughly twice as much as enterprise prices.** Fresh (July 2026):
+   M365 Business Basic **+16.7%** (to $7), Business Standard **+12%** (to $14) — while enterprise
+   E3 rose **8.3%** ($36 -> $39) and E5 **5.3%** ($57 -> $60). Also: 41% of SMB owners report software costs
+   rose in the last 12 months. Rationale: doubles down on the two things that just won (saas-math theme +
+   declarative accusation hook), with a number that is weeks old and genuinely unfair-feeling. Draft hook:
+   "Microsoft just raised small business prices twice as hard as enterprise prices." Pair with flat-$199.
+2. **Carousel / multi-image format — carried forward, still never attempted.** 2026 algorithm research is
+   consistent: dwell time is the dominant signal (61s+ dwell -> ~15.6% engagement vs 1.2% at 0-3s), and
+   carousels force 30-60s of swiping with each swipe counted as a micro-engagement. Build the *winning*
+   saas-math waste story as a 4-5 slide carousel: slide 1 hook, 2-4 the numbers, 5 Bestly + CTA. Rationale:
+   format is still the largest untested lever, and now we know which story to put in it.
+3. **`#saas` as a controlled variable.** Put `#saas` on every post for the next 7 days, holding the other
+   three tags at `#smallbusiness #entrepreneur #startup`. If impressions stay elevated across mixed themes,
+   it is the tag; if only saas-math posts lift, it is the theme. Cheap, zero creative cost, disambiguates
+   the single biggest confound in this week's data.
+
+Held in reserve (fresh, unused): AWS/Azure/GCP forecasting 5-10% rate increases in H2 2026; Cloudflare SMB
+pricing +8.77% YoY vs enterprise +5.59%; $10,800 SaaS spend per employee per year (up from $9,643 in 2025);
+25-30% of licenses unused = ~$45B wasted globally. Nextcloud line for behind-the-box: Hub 26 Spring 34.0.2,
+July 2026 maintenance updates, next drop 08-13.
+
+## STATS SNAPSHOT (ranked, live posts, Jul 20 - Aug 3)
+| Live | Theme | Hook shape | Chars | Impr | Clicks | Eng % |
+|------|-------|-----------|-------|------|--------|-------|
+| 7/27 | saas-math (waste / empty seats) | declarative stat | 965 | **22** | **2** | **9.09%** |
+| 8/1  | homelab-vs-business (delegation) | declarative accusation | 1211 | 12 | 0 | 0% |
+| 7/31 | ask-a-boring-question | question | 1338 | 4 | 0 | 0% |
+| 7/25 | homelab-vs-business (diy crossover) | question | 1084 | 3 | 0 | 0% |
+| 7/17 | saas-math (39% / $156) | declarative stat | — | 4 | 0 | 0% |
+| 7/15 | own-your-infrastructure (object analogy) | declarative analogy | — | 4 | 0 | 0% |
+
+Account totals Jul 3 - Aug 1: **49 impressions, 0 reactions, 0 comments, 0 reposts, 2 clicks.**
+Confidence: LOW on everything except "the 7/27 waste post clearly outperformed" — that gap is 5.5x and
+carries the only clicks, which is too large to be noise at this scale.
 
 ## RESULT of LAST WEEK'S EXPERIMENTS (close the loop)
-- **Exp 1 — unused-license SaaS-waste angle:** Shipped as the 07-25 "waste-curiosity-gap" post (53% licenses unused / empty-seats framing) — but it stalled at `awaiting_click` and never published. **Unresolved** (blocked by the click bottleneck, not by content).
-- **Exp 2 — Nextcloud AIO v13.3.1 dogfood "behind the box":** Not run. The 07-26 behind-the-box post used data-loss stats instead of the deSEC/AIO detail. **Not attempted** — carry forward if a behind-the-box slot opens. (Current Nextcloud line: Hub 26 Spring / 34.0.2, maintenance updates shipped July 2026.)
-- **Exp 3 — contrarian/unpopular-opinion hook:** Shipped as the 07-23 compliance-adjacent post — also stalled at `awaiting_click`, never live. **Unresolved.**
-- Meta-lesson: **all three experiments are unresolved for the same reason — they were staged but never clicked live.** We cannot measure creative experiments until the publish gate is cleared. This is now the #1 blocker to the whole compounding loop.
+- **Exp 1 — carousel format:** **not run.** No carousel was ever built. Carried forward as experiment 2.
+- **Exp 2 — $10,800/employee waste number:** **not run.** The 08-02 post used renewal-price-increase data
+  (79% hit a price increase, 12.2% enterprise software inflation) instead, and is still awaiting click.
+  Number carried to reserve.
+- **Exp 3 — story / authentic-voice hook:** **staged, never published.** The 07-29 migration post used the
+  `first-person-story-nothing-broke` hook. It is one of the five posts still stuck at `awaiting_click`.
+  Unresolved.
+- **Correction to last week's log — the two-weeks-ago experiment actually WON.** The unused-license
+  SaaS-waste angle was recorded 07-27 as "stalled at awaiting_click, unresolved." It was not. Jared clicked
+  it and it went live **7/27**, and it is now the best-performing post in account history (22 impressions,
+  2 clicks, 9.09% engagement). **Lesson: do not mark an experiment dead on the strength of the
+  `published_status` field — posts publish days late. Always reconcile against the live feed.**
 
 ## Anti-patterns (apply preemptively)
-- Never write for insiders when the buyer is an outsider. "Marketing is for people that don't understand what you do."
-- Never use #selfhosted or #devops — those gather devs, not buyers. Use #smallbusiness #startup #entrepreneur.
+- Never write for insiders when the buyer is an outsider. "Marketing is for people that don't understand
+  what you do."
+- Never use #selfhosted or #devops — those gather devs, not buyers. Use #smallbusiness #entrepreneur
+  #startup (+ #saas, under test).
+- Never open with a question. Open with a flat statement about something the reader is already doing.
 - Never post two consecutive days with the same hook shape.
+- Never exceed ~1250 chars.
 - Never link to `cloud.bestly.tech` if it's 5xx — fall back to `bestly.tech/cloud`.
-- Never assume a staged post published — verify against the live "Page posts > Published" admin view, not just the `published_status` field in post_history.jsonl (`awaiting_click` silently stalls).
+- Never assume a staged post published — and never assume it *didn't*. Verify against the live
+  "Page posts > Published" view every run; `awaiting_click` stalls silently and clears silently.
+- LinkedIn composer gotchas: attach the image FIRST then type the body (typing first gets wiped when the
+  media editor opens); commit each hashtag with a trailing space, never press Escape (it deletes the token).

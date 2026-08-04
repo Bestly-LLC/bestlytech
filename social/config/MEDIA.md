@@ -16,6 +16,7 @@ history files) and a hard rotation rule in the scheduled task. See rule below.
 |---|---|---|
 | `kit/thumbnails/device-3d-renders/device3d_split_light_square.png` | **3D render, light bg, 1200x1200** — NEW 2026-07-28 | "The 3D device" theme, product posts, any post needing a genuinely different look from the dark assets |
 | `kit/thumbnails/device-3d-renders/device3d_split_light_wide.png` | **3D render, light bg, 1584x829 (1.91:1)** — NEW 2026-07-28 | same as above, when a landscape/link-card ratio reads better |
+| `kit/thumbnails/brand-cards/card_key_vs_permission.png` | **typographic brand card, matte black, 1200x1200** — NEW 2026-08-04, generated with PIL | own-your-infrastructure / ownership + control themes |
 | `kit/thumbnails/hero.png` | static brand card ("Stop renting your business from big tech") | rent-vs-buy / own-your-infrastructure themes |
 | `kit/thumbnails/device-shots/device_clean_v6.png` | static device photo/render | behind-the-box, product-focused themes |
 | `kit/thumbnails/device-shots/device_clean_v7.png` | static device photo/render | behind-the-box, product-focused themes |
@@ -125,3 +126,22 @@ style) via the image-gen tool available to Claude. Attempted 5 on 2026-07-17;
 blocked with "Out of credits in the selected workspace." Add credits to
 that workspace to unblock this path — it's the fastest way to get truly
 unique per-post graphics without depending on Blender or WebGL capture.
+
+## SOLVED 2026-08-04 — per-post unique brand cards, no credits required
+Pool exhaustion recurred (07-17, 07-26, 07-27, and again 08-04 when all five
+brand-safe assets landed inside a single rolling-5 window). Fixed properly this
+time: on-brand typographic cards can be rendered **deterministically with PIL in
+the run sandbox** — no image-gen credits, no WebGL, no Blender.
+
+Recipe (see `kit/thumbnails/brand-cards/` for output):
+- 1200x1200, background `#0a0a0a`, text `#f5f4f1`, accent dot `#c84d2b`.
+- Headline: `/usr/share/fonts/truetype/lato/Lato-Black.ttf` at ~118px, hand-broken
+  into short lines, left margin 110px, line-height 1.14.
+- Thin 3px rule under the headline + an 18px burnt-orange dot to its right.
+- Grey (`#969694`) one-line subhead in Lato-Regular 40px.
+- `bestly.tech/cloud` in Lato-Black 36px at the bottom-left.
+- No photos, no people, no icons — matches `hero.png`'s house style.
+
+**This means the engine should never again need to repeat a graphic.** When rule 3
+would force a repeat, generate a fresh card from that day's sharpest line instead,
+drop it in `kit/thumbnails/brand-cards/`, and add a row to the pool table above.
