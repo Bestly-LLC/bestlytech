@@ -171,6 +171,19 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
 .links a.pri:hover{background:var(--acc2);border-color:var(--acc2);color:#0a0b10}
 .colo{margin-top:58px;padding-top:26px;border-top:1px solid var(--line);
  display:flex;flex-wrap:wrap;gap:8px 26px;font-size:12.5px;color:var(--dim)}
+
+/* ─────────── career ─────────── */
+.cv{margin-top:4px}
+.cvrow{display:grid;grid-template-columns:230px 1fr;gap:0 34px;padding:30px 0;
+ border-top:1px solid var(--line);align-items:start}
+.cvrow:last-child{border-bottom:1px solid var(--line)}
+.cvco{font-family:Newsreader,Georgia,serif;font-weight:400;font-size:23px;
+ letter-spacing:-.015em;line-height:1.2}
+.cvmeta{display:block;font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;
+ color:var(--acc);margin-top:9px}
+.cvrow p{color:var(--mut);font-weight:300;font-size:16.5px;max-width:58ch;margin:0}
+@media(max-width:680px){.cvrow{grid-template-columns:1fr;gap:12px;padding:24px 0}
+ .cvco{font-size:21px}}
 </style>
 </head>
 <body>
@@ -179,7 +192,7 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
   <a class="brand" href="#top">Jared Best <span>— Selected Work</span></a>
   <nav>
     <a href="#work">Work</a><a href="#brand">Brand</a><a href="#product">Product</a>
-    <a href="#content">Content</a><a href="#cloud">Cloud</a>
+    <a href="#content">Content</a><a href="#cloud">Cloud</a><a href="#background">Background</a>
   </nav>
   <a class="mail" href="mailto:jared@bestly.tech">Get in touch</a>
 </div></div>
@@ -353,6 +366,35 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
       <div class="t"><span class="role">Brand &middot; Copy</span>
         <h3>The pitch, in one line</h3>
         <p>&ldquo;Stop renting your business from big tech.&rdquo; Positioning, art, and every piece of collateral behind it.</p></div></div>
+  </div>
+</div></section>
+
+<!-- CAREER -->
+<section id="background"><div class="wrap">
+  <div class="shead rv" style="border-top-color:var(--line2)"><div class="snum">06</div>
+    <h2>Eleven years doing this inside companies you already know</h2>
+    <p>Before Bestly I ran operations at Disney, managed hotel partners at Expedia, and sold cars at Lucid Motors during launch. Same job every time: own the relationship, own the number, keep the thing running after the sale.</p>
+  </div>
+  <div class="cv">
+
+    <div class="cvrow rv">
+      <div><span class="cvco">Lucid Motors</span>
+        <span class="cvmeta">Senior Account Manager &middot; 2021&ndash;2024</span></div>
+      <p>Sold more than $10 million in cars during launch &mdash; most of it before anyone could take a test drive, because there were no demo cars yet. Ran the partnership with EmpireCLS, and took the 2023 Dream Ahead Tour to more than forty cities.</p>
+    </div>
+
+    <div class="cvrow rv">
+      <div><span class="cvco">Expedia Group</span>
+        <span class="cvmeta">Account Manager &middot; 2015&ndash;2020</span></div>
+      <p>Looked after a book of hotel partners. The top ones grew bookings more than 20% month over month. Moved 75% of my partners onto Expedia&rsquo;s priority program for 2020.</p>
+    </div>
+
+    <div class="cvrow rv">
+      <div><span class="cvco">Walt Disney World Resort</span>
+        <span class="cvmeta">Operations Facilitator &middot; 2013&ndash;2016</span></div>
+      <p>Ran daily operations to Disney&rsquo;s standard with teams of fifteen to thirty people. Cut the time it took to train a new hire by 25%.</p>
+    </div>
+
   </div>
 </div></section>
 
