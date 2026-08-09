@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1128 191" width="1128" height="191">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0c0e14"/>
+      <stop offset="55%" stop-color="#0c0e14"/>
+      <stop offset="100%" stop-color="#141830"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="90%" cy="110%" r="60%">
+      <stop offset="0%" stop-color="#7a8be0" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#7a8be0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ul" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7a8be0"/>
+      <stop offset="100%" stop-color="#a3b0ec"/>
+    </linearGradient>
+  </defs>
+  <rect width="1128" height="191" fill="url(#bg)"/>
+  <rect width="1128" height="191" fill="url(#glow)"/>
+
+  <!-- Top-right small-caps tagline -->
+  <text x="1100" y="34" text-anchor="end"
+        font-family="Inter" font-size="11" font-weight="500"
+        letter-spacing="1.98" fill="#9aa3c4">PRIVACY-FIRST TECH  ·  LOS ANGELES</text>
+
+  <!-- Main headline (single line to fit 191 tall) -->
+  <text x="260" y="105" font-family="Newsreader 16pt 16pt" font-size="44" font-weight="500" fill="#f8fafc" letter-spacing="-0.66">Stop renting your business from <tspan fill="#f8fafc">big tech.</tspan></text>
+
+  <!-- Underline under "big tech." — coords tuned to text metrics -->
+  <line x1="906" y1="114" x2="1063" y2="114" stroke="url(#ul)" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Bottom tagline -->
+  <text x="260" y="163" font-family="Inter" font-size="13" font-weight="400" fill="#c7cdea">Private cloud for your office. Apps that don't sell your data.</text>
+
+  <!-- Bottom-right URL + bullet -->
+  <g>
+    <circle cx="1004" cy="163" r="3" fill="#7a8be0"/>
+    <text x="1014" y="167" font-family="Inter" font-size="13" font-weight="500" fill="#e2e6f5">bestly.tech</text>
+  </g>
+</svg>

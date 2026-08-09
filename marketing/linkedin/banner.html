@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bestly LinkedIn banner 1128x191</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;background:#0c0e14;overflow:hidden}
+  .banner{
+    width:1128px;height:191px;
+    background:
+      radial-gradient(ellipse 700px 260px at 90% 110%, rgba(122,139,224,0.10) 0%, rgba(122,139,224,0) 60%),
+      linear-gradient(135deg, #0c0e14 0%, #0c0e14 55%, #141830 100%);
+    color:#f8fafc;
+    position:relative;
+    overflow:hidden;
+    font-family:'Inter',-apple-system,sans-serif;
+  }
+  .tagline-top{
+    position:absolute;top:20px;right:28px;
+    font-size:11px;font-weight:500;letter-spacing:0.18em;
+    color:#9aa3c4;text-transform:uppercase;
+  }
+  .headline{
+    position:absolute;left:260px;top:52px;
+    font-family:'Newsreader','Georgia',serif;
+    font-size:44px;font-weight:500;letter-spacing:-0.015em;
+    line-height:1;color:#f8fafc;white-space:nowrap;
+  }
+  .headline .underlined{
+    position:relative;
+    background-image:linear-gradient(90deg,#7a8be0,#a3b0ec);
+    background-repeat:no-repeat;
+    background-size:100% 3px;
+    background-position:0 100%;
+    padding-bottom:2px;
+  }
+  .tagline-bottom{
+    position:absolute;left:260px;bottom:22px;
+    font-family:'Inter',sans-serif;
+    font-size:13px;font-weight:400;color:#c7cdea;
+  }
+  .url{
+    position:absolute;right:28px;bottom:20px;
+    font-family:'Inter',sans-serif;
+    font-size:13px;font-weight:500;color:#e2e6f5;
+    display:flex;align-items:center;gap:8px;
+  }
+  .url::before{
+    content:"";display:block;width:6px;height:6px;border-radius:50%;background:#7a8be0;
+  }
+</style>
+</head>
+<body>
+  <div class="banner">
+    <div class="tagline-top">PRIVACY-FIRST TECH  ·  LOS ANGELES</div>
+    <div class="headline">Stop renting your business from <span class="underlined">big tech.</span></div>
+    <div class="tagline-bottom">Private cloud for your office. Apps that don't sell your data.</div>
+    <div class="url">bestly.tech</div>
+  </div>
+</body>
+</html>

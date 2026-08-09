@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Bestly LinkedIn Company Page cover — v2, on-brand
+  Dimensions: 1128 x 191 (LinkedIn Company Page banner spec)
+  Safe zone: bottom-left ~240x191 kept empty for logo circle overlay
+  Brand: dark navy #0c0e14 bg, luminous indigo #7a8be0 accent, Newsreader serif
+  (matches https://www.bestly.tech/og-image.png visual language)
+
+  Convert to PNG:  open in Preview.app → File → Export → PNG → keep 1128x191.
+  Or:              rsvg-convert -w 1128 -h 191 bestly-linkedin-cover.svg > bestly-linkedin-cover.png
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1128 191" width="1128" height="191">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0c0e14"/>
+      <stop offset="60%" stop-color="#0c0e14"/>
+      <stop offset="100%" stop-color="#141830"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7a8be0"/>
+      <stop offset="100%" stop-color="#3a4a9c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1128" height="191" fill="url(#bg)"/>
+
+  <!-- Small-caps tagline top-right (mirrors og-image "PRIVACY-FIRST TECH · LOS ANGELES") -->
+  <text x="1104" y="34" text-anchor="end"
+        font-family="Inter, 'Plus Jakarta Sans', -apple-system, sans-serif"
+        font-size="11" font-weight="500" letter-spacing="0.18em" fill="#9aa3c4">
+    PRIVACY-FIRST TECH  ·  LOS ANGELES
+  </text>
+
+  <!-- Headline, two lines, Newsreader serif -->
+  <g font-family="Newsreader, Georgia, 'Times New Roman', serif" fill="#f8fafc">
+    <text x="288" y="88" font-size="40" font-weight="500" letter-spacing="-0.015em">Stop renting your business</text>
+    <text x="288" y="132" font-size="40" font-weight="500" letter-spacing="-0.015em">from big tech.</text>
+  </g>
+
+  <!-- Underline under "big tech" (lavender-indigo) -->
+  <line x1="472" y1="140" x2="623" y2="140" stroke="url(#accent)" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Tagline row (mirrors og-image's "Private cloud … don't sell your data.") -->
+  <text x="288" y="170" font-family="Inter, -apple-system, sans-serif"
+        font-size="14" font-weight="400" fill="#c7cdea">
+    Private cloud for your office. Apps that don't sell your data.
+  </text>
+
+  <!-- URL bottom-right with a small lavender dot (mirrors og-image bullet) -->
+  <g transform="translate(1010, 170)">
+    <circle cx="0" cy="-4" r="3" fill="#7a8be0"/>
+    <text x="10" y="0" font-family="Inter, -apple-system, sans-serif" font-size="13" font-weight="500" fill="#e2e6f5">bestly.tech</text>
+  </g>
+</svg>
