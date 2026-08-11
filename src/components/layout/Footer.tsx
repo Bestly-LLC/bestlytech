@@ -5,6 +5,8 @@ import bestlyLogo from "@/assets/bestly-logo.png";
 const footerNavigation = {
   company: [
     { name: "About", href: "/about" },
+    // static page in public/ — needs a real page load, not a router <Link>
+    { name: "Work", href: "/work", external: true },
     { name: "Products", href: "/products" },
     { name: "Press Kit", href: "/press" },
     { name: "Contact", href: "/contact" },
@@ -67,12 +69,21 @@ export function Footer() {
             <ul className="mt-4 space-y-3">
               {footerNavigation.company.map((item) => (
                 <li key={item.name}>
+                  {"external" in item && item.external ? (
+                    <a
+                      href={item.href}
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {item.name}
+                    </a>
+                  ) : (
                   <Link
                     to={item.href}
                     className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {item.name}
                   </Link>
+                  )}
                 </li>
               ))}
             </ul>

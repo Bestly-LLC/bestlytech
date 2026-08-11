@@ -7,9 +7,13 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 import bestlyLogo from "@/assets/bestly-logo.png";
 
-const navigation = [
+const navigation: { name: string; href: string; external?: boolean }[] = [
   { name: "Home", href: "/" },
   { name: "In-House Cloud", href: "/cloud" },
+  // /work is a static page in public/, outside the React router. It must be a
+  // plain <a> so the browser does a real page load; <Link> would hit the SPA
+  // catch-all rewrite in vercel.json and render the 404 route instead.
+  { name: "Work", href: "/work", external: true },
   { name: "Services", href: "/services" },
   { name: "About", href: "/about" },
   { name: "Contact", href: "/contact" },
@@ -94,6 +98,15 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
 
         <div className="hidden lg:flex lg:gap-x-1 lg:items-center">
           {navigation.map((item) => (
+            item.external ? (
+              <a
+                key={item.name}
+                href={item.href}
+                className="relative px-4 py-2 text-sm font-medium transition-colors rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50"
+              >
+                {item.name}
+              </a>
+            ) : (
             <Link
               key={item.name}
               to={item.href}
@@ -109,6 +122,7 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
                 <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
               )}
             </Link>
+            )
           ))}
           <ProductsDropdown isActive={isProductsActive} />
         </div>
@@ -166,6 +180,17 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
               <div className="-my-6 divide-y divide-border">
                 <div className="space-y-1 py-6">
                   {navigation.map((item, index) => (
+                    item.external ? (
+                      <a
+                        key={item.name}
+                        href={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="block rounded-xl px-4 py-3 text-base font-medium transition-all text-muted-foreground hover:bg-accent hover:text-foreground"
+                        style={{ animationDelay: `${index * 50}ms` }}
+                      >
+                        {item.name}
+                      </a>
+                    ) : (
                     <Link
                       key={item.name}
                       to={item.href}
@@ -180,6 +205,7 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
                     >
                       {item.name}
                     </Link>
+                    )
                   ))}
                   <Link
                     to="/products"
