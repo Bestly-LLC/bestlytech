@@ -13,7 +13,7 @@ const navigation: { name: string; href: string; external?: boolean }[] = [
   // /work is a static page in public/, outside the React router. It must be a
   // plain <a> so the browser does a real page load; <Link> would hit the SPA
   // catch-all rewrite in vercel.json and render the 404 route instead.
-  { name: "Work", href: "/work", external: true },
+  { name: "Work", href: "/work/", external: true },
   { name: "Services", href: "/services" },
   { name: "About", href: "/about" },
   { name: "Contact", href: "/contact" },

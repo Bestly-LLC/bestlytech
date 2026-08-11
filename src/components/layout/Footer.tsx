@@ -6,7 +6,7 @@ const footerNavigation = {
   company: [
     { name: "About", href: "/about" },
     // static page in public/ — needs a real page load, not a router <Link>
-    { name: "Work", href: "/work", external: true },
+    { name: "Work", href: "/work/", external: true },
     { name: "Products", href: "/products" },
     { name: "Press Kit", href: "/press" },
     { name: "Contact", href: "/contact" },
