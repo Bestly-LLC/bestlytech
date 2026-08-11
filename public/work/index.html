@@ -33,8 +33,9 @@ a{color:inherit;text-decoration:none}
 .rule{height:1px;background:var(--line);border:0}
 
 /* ─────────── reveal ─────────── */
-.rv{opacity:0;transform:translateY(18px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
-.rv.in{opacity:1;transform:none}
+.rv{opacity:1;transform:none}
+.js-reveal .rv{opacity:0;transform:translateY(18px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+.js-reveal .rv.in{opacity:1;transform:none}
 @media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}
  *{animation:none!important;transition-duration:.01ms!important}}
 
@@ -185,6 +186,7 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
 @media(max-width:680px){.cvrow{grid-template-columns:1fr;gap:12px;padding:24px 0}
  .cvco{font-size:21px}}
 </style>
+<script>if(window.IntersectionObserver&&!matchMedia("(prefers-reduced-motion: reduce)").matches){document.documentElement.className+=" js-reveal";}</script>
 </head>
 <body>
 
@@ -218,49 +220,49 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
   </div>
   <div class="bento">
     <a class="tile ar-wide c-8 rv" href="https://theshift.shop" target="_blank" rel="noopener">
-      <div class="m"><img src="/work/img/site-theshiftshop.jpg" alt="The Shift Shop storefront" loading="lazy"></div>
+      <div class="m"><img src="/work/img/site-theshiftshop.jpg" alt="The Shift Shop storefront" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">Migration &middot; Storefront &middot; Marketplaces</span>
         <h3>The Shift Shop</h3>
         <p>Moved an entire business onto a new store, then added an Amazon shop and TikTok Shop so the same catalog sells in three places.</p>
         <span class="go">theshift.shop <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
 
     <a class="tile ar-tall c rv" href="https://hoku-clean.com" target="_blank" rel="noopener">
-      <div class="m"><img src="/work/img/site-hoku.jpg" alt="HOKU skincare storefront" loading="lazy"></div>
+      <div class="m"><img src="/work/img/site-hoku.jpg" alt="HOKU skincare storefront" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">Brand &middot; Storefront</span>
         <h3>HOKU</h3>
         <p>Hypochlorous acid skincare. Brand, product pages, and checkout.</p>
         <span class="go">hoku-clean.com <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
 
     <a class="tile ar-tall c rv" href="https://purelyhunza.com" target="_blank" rel="noopener">
-      <div class="m"><img src="/work/img/site-purelyhunza.jpg" alt="Purely Hunza storefront" loading="lazy"></div>
+      <div class="m"><img src="/work/img/site-purelyhunza.jpg" alt="Purely Hunza storefront" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">Brand &middot; Storefront</span>
         <h3>Purely Hunza</h3>
         <p>Food brand built and launched from a blank page.</p>
         <span class="go">purelyhunza.com <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
 
     <a class="tile ar-tall c rv" href="https://goldenhourgardendesign.com" target="_blank" rel="noopener">
-      <div class="m"><img src="/work/img/site-goldenhour.jpg" alt="Golden Hour Garden Design site" loading="lazy"></div>
+      <div class="m"><img src="/work/img/site-goldenhour.jpg" alt="Golden Hour Garden Design site" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">Client &middot; Site &middot; Booking</span>
         <h3>Golden Hour Garden Design</h3>
         <p>High-end landscape studio in Florida. Portfolio gallery, a booking form that takes photo uploads, and email on their own domain.</p>
         <span class="go">goldenhourgardendesign.com <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
 
     <a class="tile ar-tall c rv" href="https://parentiq.io" target="_blank" rel="noopener">
-      <div class="m"><img src="/work/img/site-parentiq.jpg" alt="ParentIQ product site" loading="lazy"></div>
+      <div class="m"><img src="/work/img/site-parentiq.jpg" alt="ParentIQ product site" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">Product site</span>
         <h3>ParentIQ</h3>
         <p>Co-parenting app &mdash; &ldquo;peace of mind between households.&rdquo;</p>
         <span class="go">parentiq.io <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
 
     <a class="tile ar-tall c rv" href="https://www.inventoryproof.com" target="_blank" rel="noopener">
-      <div class="m"><img src="/work/img/site-inventoryproof.jpg" alt="InventoryProof site" loading="lazy"></div>
+      <div class="m"><img src="/work/img/site-inventoryproof.jpg" alt="InventoryProof site" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">Product site</span>
         <h3>InventoryProof</h3>
         <p>Helps people prove what they own before they need to.</p>
         <span class="go">inventoryproof.com <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
 
     <a class="tile ar-wide c-12 rv" href="https://www.bestly.tech" target="_blank" rel="noopener">
-      <div class="m" style="aspect-ratio:21/7"><img src="/work/img/site-bestly.jpg" alt="Bestly company site" loading="lazy"></div>
+      <div class="m" style="aspect-ratio:21/7"><img src="/work/img/site-bestly.jpg" alt="Bestly company site" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">My own company &middot; Design, copy, 3D, build</span>
         <h3>Bestly</h3>
         <p>Where I test everything first. If it works here, I sell it to clients.</p>
@@ -275,14 +277,14 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
     <p>Lab-grown diamond jewelry. I set the look, directed the product imagery, and built the store. Over 190 pieces in the catalog; eight of them here.</p>
   </div>
   <div class="jgrid rv">
-    <figure><img src="/work/img/eldora-1.jpg" alt="Emerald talon ring" loading="lazy"></figure>
-    <figure><img src="/work/img/eldora-2.jpg" alt="Duality drop earring set" loading="lazy"></figure>
-    <figure><img src="/work/img/eldora-3.jpg" alt="Baroque riot earrings" loading="lazy"></figure>
-    <figure><img src="/work/img/eldora-4.jpg" alt="CTRL ring" loading="lazy"></figure>
-    <figure><img src="/work/img/eldora-5.jpg" alt="Solitaire engagement ring" loading="lazy"></figure>
-    <figure><img src="/work/img/eldora-6.jpg" alt="Regent chain" loading="lazy"></figure>
-    <figure><img src="/work/img/eldora-7.jpg" alt="Marquise clutch" loading="lazy"></figure>
-    <figure><img src="/work/img/eldora-8.jpg" alt="Starlight pearl earrings" loading="lazy"></figure>
+    <figure><img src="/work/img/eldora-1.jpg" alt="Emerald talon ring" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/eldora-2.jpg" alt="Duality drop earring set" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/eldora-3.jpg" alt="Baroque riot earrings" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/eldora-4.jpg" alt="CTRL ring" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/eldora-5.jpg" alt="Solitaire engagement ring" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/eldora-6.jpg" alt="Regent chain" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/eldora-7.jpg" alt="Marquise clutch" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/eldora-8.jpg" alt="Starlight pearl earrings" loading="lazy" decoding="async"></figure>
   </div>
   <div class="pull rv"><p>Every brand gets the same treatment: one look, applied everywhere &mdash; site, product shots, store listings, ads, social. Nothing gets bolted on later.</p></div>
 </div></div>
@@ -295,14 +297,14 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
   </div>
   <div class="bento">
     <a class="tile ar-wide c-7 rv" href="https://captainslog-command.higgsfield.app" target="_blank" rel="noopener">
-      <div class="m"><img src="/work/img/site-coastguard.jpg" alt="Captain's Log command center with live vessel map" loading="lazy"></div>
+      <div class="m"><img src="/work/img/site-coastguard.jpg" alt="Captain's Log command center with live vessel map" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">iOS app &middot; Live web app</span>
         <h3>Captain&rsquo;s Log</h3>
         <p>A sailing app with real marine weather, plus a command center that plots actual ships on a live map. Open it &mdash; the boats are real and moving.</p>
         <span class="go">See it live <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
 
     <a class="tile ar-wide c-5 rv" href="https://www.bestly.tech/cookie-yeti/dashboard" target="_blank" rel="noopener">
-      <div class="m"><img src="/work/img/cy-mac.jpg" alt="Cookie Yeti on macOS" loading="lazy"></div>
+      <div class="m"><img src="/work/img/cy-mac.jpg" alt="Cookie Yeti on macOS" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">Mac &middot; iPad &middot; iPhone &middot; Chrome</span>
         <h3>Cookie Yeti</h3>
         <p>Kills cookie pop-ups in one click. One design system, four platforms, three themes &mdash; plus every store screenshot and banner.</p>
@@ -313,10 +315,10 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
     <div class="lbl"><h4>Proofy</h4>
       <p>An original character built for InventoryProof, drawn for every screen in the app so the whole product feels like one thing.</p></div>
     <div class="set">
-      <img src="/work/img/proofy-1.jpg" alt="Proofy welcoming" loading="lazy">
-      <img src="/work/img/proofy-2.jpg" alt="Proofy valuing an item" loading="lazy">
-      <img src="/work/img/proofy-3.jpg" alt="Proofy detecting items with AI" loading="lazy">
-      <img src="/work/img/proofy-4.jpg" alt="Proofy with insurance paperwork" loading="lazy">
+      <img src="/work/img/proofy-1.jpg" alt="Proofy welcoming" loading="lazy" decoding="async">
+      <img src="/work/img/proofy-2.jpg" alt="Proofy valuing an item" loading="lazy" decoding="async">
+      <img src="/work/img/proofy-3.jpg" alt="Proofy detecting items with AI" loading="lazy" decoding="async">
+      <img src="/work/img/proofy-4.jpg" alt="Proofy with insurance paperwork" loading="lazy" decoding="async">
     </div>
   </div>
 </div></section>
@@ -336,14 +338,14 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
       <div class="t"><span>Video ad</span><p>InventoryProof &middot; July 31</p></div></div>
   </div>
   <div class="gset rv">
-    <figure><img src="/work/img/social-1.jpg" alt="Daily social graphic" loading="lazy"></figure>
-    <figure><img src="/work/img/social-2.jpg" alt="Daily social graphic" loading="lazy"></figure>
-    <figure><img src="/work/img/social-3.jpg" alt="Daily social graphic" loading="lazy"></figure>
-    <figure><img src="/work/img/social-4.jpg" alt="Daily social graphic" loading="lazy"></figure>
-    <figure><img src="/work/img/social-5.jpg" alt="Daily social graphic" loading="lazy"></figure>
-    <figure><img src="/work/img/social-6.jpg" alt="Daily social graphic" loading="lazy"></figure>
-    <figure><img src="/work/img/social-7.jpg" alt="Daily social graphic" loading="lazy"></figure>
-    <figure><img src="/work/img/social-8.jpg" alt="Daily social graphic" loading="lazy"></figure>
+    <figure><img src="/work/img/social-1.jpg" alt="Daily social graphic" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/social-2.jpg" alt="Daily social graphic" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/social-3.jpg" alt="Daily social graphic" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/social-4.jpg" alt="Daily social graphic" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/social-5.jpg" alt="Daily social graphic" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/social-6.jpg" alt="Daily social graphic" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/social-7.jpg" alt="Daily social graphic" loading="lazy" decoding="async"></figure>
+    <figure><img src="/work/img/social-8.jpg" alt="Daily social graphic" loading="lazy" decoding="async"></figure>
   </div>
   <div class="pull rv"><p>Hundreds of graphics and more than forty video ads made this way so far, across two brands, posting on schedule. If your business goes quiet on social because nobody has time &mdash; this is the fix.</p></div>
 </div></div>
@@ -356,13 +358,13 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
   </div>
   <div class="bento">
     <a class="tile ar-wide c-6 rv" href="https://www.bestly.tech/cloud" target="_blank" rel="noopener">
-      <div class="m plate"><img src="/work/img/bestly-3d.jpg" alt="Bestly Cloud device, 3D render" loading="lazy"></div>
+      <div class="m plate"><img src="/work/img/bestly-3d.jpg" alt="Bestly Cloud device, 3D render" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">Product design &middot; 3D &middot; Web</span>
         <h3>The device</h3>
         <p>Modeled in 3D and animated on the site so people can see exactly what they&rsquo;re buying before it arrives.</p>
         <span class="go">bestly.tech/cloud <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
     <div class="tile ar-wide c-6 rv">
-      <div class="m"><img src="/work/img/bestly-og.jpg" alt="Bestly brand art: Stop renting your business from big tech" loading="lazy"></div>
+      <div class="m"><img src="/work/img/bestly-og.jpg" alt="Bestly brand art: Stop renting your business from big tech" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">Brand &middot; Copy</span>
         <h3>The pitch, in one line</h3>
         <p>&ldquo;Stop renting your business from big tech.&rdquo; Positioning, art, and every piece of collateral behind it.</p></div></div>
@@ -427,8 +429,15 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
         io.unobserve(el);
       }
     });
-  },{rootMargin:'0px 0px -8% 0px',threshold:.06});
+  },{rootMargin:'400px 0px 400px 0px',threshold:0});
   document.querySelectorAll('.rv').forEach(function(n){io.observe(n);});
+
+  // Safety net: never leave content permanently invisible. If the observer misses
+  // an element (fast scroll, anchor jump, End key, restored scroll position), or
+  // it simply never fires, reveal everything that is still hidden.
+  var revealAll=function(){ document.querySelectorAll('.rv:not(.in)').forEach(function(n){n.classList.add('in');}); };
+  setTimeout(revealAll, 2500);
+  window.addEventListener('load', function(){ setTimeout(revealAll, 1200); });
 })();
 </script>
 </body></html>
