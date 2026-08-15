@@ -16,6 +16,7 @@ history files) and a hard rotation rule in the scheduled task. See rule below.
 |---|---|---|
 | `kit/thumbnails/device-3d-renders/device3d_split_light_square.png` | **3D render, light bg, 1200x1200** — NEW 2026-07-28 | "The 3D device" theme, product posts, any post needing a genuinely different look from the dark assets |
 | `kit/thumbnails/device-3d-renders/device3d_split_light_wide.png` | **3D render, light bg, 1584x829 (1.91:1)** — NEW 2026-07-28 | same as above, when a landscape/link-card ratio reads better |
+| `kit/thumbnails/brand-cards/card_hours_until_back.png` | **typographic brand card, matte black, 1200x1200** — NEW 2026-08-15, generated with PIL | backups / recovery / downtime themes, ask-a-boring-question |
 | `kit/thumbnails/brand-cards/card_key_vs_permission.png` | **typographic brand card, matte black, 1200x1200** — NEW 2026-08-04, generated with PIL | own-your-infrastructure / ownership + control themes |
 | `kit/thumbnails/hero.png` | static brand card ("Stop renting your business from big tech") | rent-vs-buy / own-your-infrastructure themes |
 | `kit/thumbnails/device-shots/device_clean_v6.png` | static device photo/render | behind-the-box, product-focused themes |
