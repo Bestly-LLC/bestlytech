@@ -2,6 +2,20 @@
 
 One line per week from `bestly-cloud-growth-loop`. Full detail lives in `kit/learnings.md`.
 
+- 2026-08-16: FIRST WEEK-OVER-WEEK LIFT. 21 impressions in 7 days (+600%), search appearances 6 (+20%).
+  Four posts went live (08-10 to 08-13) and one carried the week: 08-13's cloud-repatriation post ("a fifth
+  of everything moved to the cloud is already being moved back out") took 17 of the 21 impressions -- 2nd
+  best in account history behind 7/27's 24. The #saas controlled-variable test finally RESOLVED after three
+  attempts, and resolved against it: three #saas posts averaged 2.3 impressions, the one post that swapped
+  in #privacy got 17. Retiring #saas. behind-the-box patch-day post hit 1 impression, the worst ever --
+  operational-diligence content is insider content, rework or retire. The refreshed $10,800/employee number
+  ran and failed as a hook (2 impr); demoted to supporting evidence. Text-only ran 4/4 by force of the
+  file_upload bug (now 11 consecutive occurrences) and did not hurt. Two structural findings outrank all
+  creative reads: the 50/50 invite credits are STILL unused (4 weeks), and post_history.jsonl had all four
+  live posts recorded as awaiting_click -- the engine never writes back publish status, so the loop has been
+  under-counting reality. Backfilled. New experiments: escalate to the 86%-of-CIOs repatriation stat,
+  #privacy as the replacement controlled variable, and a data-sovereignty angle (57% of IT leaders need
+  single-country infrastructure).
 - 2026-08-09: 52 impressions Jul10-Aug8, still 1 follower / 0 new followers / 50/50 invite credits
   unused (3 weeks running). 7/27 saas-math waste post still the best result ever (24 impr, 2 clicks,
   8.33%, updated from 22/9.09%); 8/1 declarative accusation post came in 2nd (13 impr, 0 clicks). New
