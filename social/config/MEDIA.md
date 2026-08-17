@@ -11,9 +11,10 @@ gating repeats. So the engine picked the same image every single day by default.
 Fixed by adding `kit/media_history.jsonl` (same pattern as the hook/theme
 history files) and a hard rotation rule in the scheduled task. See rule below.
 
-## Current asset pool (updated 2026-07-28)
+## Current asset pool (updated 2026-08-17)
 | File | Type | Best for |
 |---|---|---|
+| `kit/thumbnails/brand-cards/card_not_too_small.png` | **typographic brand card, matte black, 1200x1200** — NEW 2026-08-17, generated with PIL | compliance-adjacent, privacy-law/threshold themes, "you're not the exception anymore" angles |
 | `kit/thumbnails/device-3d-renders/device3d_split_light_square.png` | **3D render, light bg, 1200x1200** — NEW 2026-07-28 | "The 3D device" theme, product posts, any post needing a genuinely different look from the dark assets |
 | `kit/thumbnails/device-3d-renders/device3d_split_light_wide.png` | **3D render, light bg, 1584x829 (1.91:1)** — NEW 2026-07-28 | same as above, when a landscape/link-card ratio reads better |
 | `kit/thumbnails/brand-cards/card_hours_until_back.png` | **typographic brand card, matte black, 1200x1200** — NEW 2026-08-15, generated with PIL | backups / recovery / downtime themes, ask-a-boring-question |
