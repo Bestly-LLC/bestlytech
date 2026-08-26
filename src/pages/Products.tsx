@@ -7,7 +7,7 @@ import { GlowCard } from "@/components/ui/GlowCard";
 import { GradientText } from "@/components/ui/GradientText";
 import { ExternalLink, ArrowRight, Box, Check, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { products, categories, type ProductCategory, type ProductStatus } from "@/config/products";
+import { products, categories, isExternalHref, type ProductCategory, type ProductStatus } from "@/config/products";
 import { NoiseFieldBackground } from "@/components/wow/backgrounds/NoiseFieldBackground";
 
 const statusColors: Record<ProductStatus, string> = {
@@ -73,7 +73,12 @@ export default function Products() {
           {/* Products Grid */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filtered.map((product, index) => {
-              const hasDetailPage = ["/cookie-yeti", "/inventory-proof", "/hoku", "/neckpilot"].includes(product.href) || product.href.startsWith("https://");
+              // Anything with a real destination gets a "Learn More". `/products`
+              // is the page we are already on, so it is the only opt-out.
+              const hasDetailPage = product.href !== "/products";
+              // External sites and /work (a static page outside the SPA router)
+              // both need a plain <a> so the browser does a real navigation.
+              const needsAnchor = isExternalHref(product.href);
               return (
                 <AnimatedSection key={product.id} delay={index * 80}>
                   <GlowCard className="h-full flex flex-col">
@@ -136,9 +141,13 @@ export default function Products() {
                         </Button>
                       )}
                       {hasDetailPage && (
-                        product.href.startsWith("https://") ? (
+                        needsAnchor ? (
                           <Button asChild size="sm" variant="ghost" className="gap-1 ml-auto">
-                            <a href={product.href} target="_blank" rel="noopener noreferrer">
+                            <a
+                              href={product.href}
+                              target={product.href.startsWith("http") ? "_blank" : undefined}
+                              rel="noopener noreferrer"
+                            >
                               Learn More
                               <ArrowRight className="h-3.5 w-3.5" />
                             </a>

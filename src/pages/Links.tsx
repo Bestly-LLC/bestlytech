@@ -1,7 +1,7 @@
 import { ExternalLink, Globe, Briefcase, Phone, Newspaper, Wrench, Instagram, Twitter } from "lucide-react";
 import bestlyLogo from "@/assets/bestly-logo.png";
 import jaredHeadshot from "@/assets/jared-headshot.png";
-import { products as sharedProducts } from "@/config/products";
+import { products as sharedProducts, isExternalHref } from "@/config/products";
 
 interface LinkItem {
   label: string;
@@ -15,7 +15,7 @@ const productLinks: LinkItem[] = sharedProducts.map((p) => ({
   label: p.name,
   href: p.href,
   image: p.image,
-  external: p.href.startsWith("http"),
+  external: isExternalHref(p.href),
 }));
 
 const pages: LinkItem[] = [
