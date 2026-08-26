@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,7 @@ import { ProductsDropdown } from "@/components/ProductsDropdown";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 import bestlyLogo from "@/assets/bestly-logo.png";
+import { products, isExternalHref } from "@/config/products";
 
 const navigation: { name: string; href: string; external?: boolean }[] = [
   { name: "Home", href: "/" },
@@ -36,6 +38,27 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // The drawer is portalled onto <body>, so lock background scroll and wire up
+  // Escape while it is open.
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mobileMenuOpen]);
+
+  // Close the drawer on any route change.
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   // CY-GS: slim, fixed-height (52px) bar for the Cookie Yeti get-started tours.
   // Reclaims vertical space so the onboarding tour fits one mobile viewport
@@ -144,133 +167,150 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
         </div>
       </nav>
 
-      {/* Mobile menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50">
-          <div
-            className="fixed inset-0 bg-background/80 backdrop-blur-md animate-fade-in"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          <div className="fixed inset-y-0 right-0 z-50 w-full overflow-y-auto bg-background px-6 py-6 sm:max-w-sm sm:ring-1 sm:ring-border animate-slide-in-right">
-            <div className="flex items-center justify-between">
-              <Link
-                to="/"
-                className="-m-1.5 p-1.5 flex items-center gap-2.5"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <img
-                  src={bestlyLogo}
-                  alt="Bestly LLC"
-                  className="h-9 w-auto"
-                />
-                <span className="text-xl font-semibold tracking-tight text-foreground">
-                  Bestly LLC
-                </span>
-              </Link>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMobileMenuOpen(false)}
-                aria-label="Close menu"
-              >
-                <X className="h-6 w-6" />
-              </Button>
-            </div>
-            <div className="mt-8 flow-root">
-              <div className="-my-6 divide-y divide-border">
-                <div className="space-y-1 py-6">
-                  {navigation.map((item, index) => (
-                    item.external ? (
-                      <a
-                        key={item.name}
-                        href={item.href}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className="block rounded-xl px-4 py-3 text-base font-medium transition-all text-muted-foreground hover:bg-accent hover:text-foreground"
-                        style={{ animationDelay: `${index * 50}ms` }}
-                      >
-                        {item.name}
-                      </a>
-                    ) : (
+      {/* Mobile menu.
+          BUGFIX: this drawer used to be a `fixed inset-0` element rendered
+          INSIDE <header>. Once the page is scrolled past 20px the header picks
+          up `backdrop-blur-xl` (backdrop-filter), which makes the header the
+          containing block for its fixed-position descendants — so the drawer
+          was laid out inside the ~72px header box and was effectively
+          invisible. It only worked at the very top of the page, where no
+          backdrop-filter is applied. Rendering it through a portal on <body>
+          takes it out of the header's containing block entirely, so it opens
+          from any scroll position. */}
+      {mobileMenuOpen &&
+        createPortal(
+          <div className="lg:hidden fixed inset-0 z-[100]">
+            <div
+              className="fixed inset-0 bg-background/80 backdrop-blur-md animate-fade-in"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Site menu"
+              className="fixed inset-y-0 right-0 z-[101] w-full overflow-y-auto overscroll-contain bg-background px-6 py-6 sm:max-w-sm sm:ring-1 sm:ring-border animate-slide-in-right"
+            >
+              <div className="flex items-center justify-between">
+                <Link
+                  to="/"
+                  className="-m-1.5 p-1.5 flex items-center gap-2.5"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <img src={bestlyLogo} alt="Bestly LLC" className="h-9 w-auto" />
+                  <span className="text-xl font-semibold tracking-tight text-foreground">
+                    Bestly LLC
+                  </span>
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setMobileMenuOpen(false)}
+                  aria-label="Close menu"
+                >
+                  <X className="h-6 w-6" />
+                </Button>
+              </div>
+              <div className="mt-8 flow-root">
+                <div className="-my-6 divide-y divide-border">
+                  <div className="space-y-1 py-6">
+                    {navigation.map((item, index) =>
+                      item.external ? (
+                        <a
+                          key={item.name}
+                          href={item.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="block rounded-xl px-4 py-3 text-base font-medium transition-all text-muted-foreground hover:bg-accent hover:text-foreground"
+                          style={{ animationDelay: `${index * 50}ms` }}
+                        >
+                          {item.name}
+                        </a>
+                      ) : (
+                        <Link
+                          key={item.name}
+                          to={item.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={cn(
+                            "block rounded-xl px-4 py-3 text-base font-medium transition-all",
+                            location.pathname === item.href
+                              ? "bg-accent text-foreground"
+                              : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                          )}
+                          style={{ animationDelay: `${index * 50}ms` }}
+                        >
+                          {item.name}
+                        </Link>
+                      )
+                    )}
                     <Link
-                      key={item.name}
-                      to={item.href}
+                      to="/products"
                       onClick={() => setMobileMenuOpen(false)}
                       className={cn(
                         "block rounded-xl px-4 py-3 text-base font-medium transition-all",
-                        location.pathname === item.href
+                        isProductsActive
                           ? "bg-accent text-foreground"
                           : "text-muted-foreground hover:bg-accent hover:text-foreground"
                       )}
-                      style={{ animationDelay: `${index * 50}ms` }}
                     >
-                      {item.name}
+                      Products
                     </Link>
-                    )
-                  ))}
-                  <Link
-                    to="/products"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={cn(
-                      "block rounded-xl px-4 py-3 text-base font-medium transition-all",
-                      isProductsActive
-                        ? "bg-accent text-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                    )}
-                  >
-                    Products
-                  </Link>
-                  <div className="pl-4 space-y-1 mt-2">
+                    {/* Driven by src/config/products.ts so the mobile list can
+                        never drift from the desktop dropdown again. */}
+                    <div className="pl-4 space-y-1 mt-2">
+                      {products.map((product) =>
+                        isExternalHref(product.href) ? (
+                          <a
+                            key={product.id}
+                            href={product.href}
+                            target={product.href.startsWith("http") ? "_blank" : undefined}
+                            rel="noopener noreferrer"
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="block rounded-xl px-4 py-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
+                          >
+                            {product.name}
+                          </a>
+                        ) : (
+                          <Link
+                            key={product.id}
+                            to={product.href}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className="block rounded-xl px-4 py-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
+                          >
+                            {product.name}
+                          </Link>
+                        )
+                      )}
+                    </div>
+                  </div>
+                  <div className="py-6 space-y-1">
                     <Link
-                      to="/cookie-yeti"
+                      to="/get-started"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="block rounded-xl px-4 py-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
+                      className="block rounded-xl gradient-bg px-4 py-3 text-base font-medium text-white text-center shadow-sm"
                     >
-                      Cookie Yeti
+                      Get Started
                     </Link>
                     <Link
-                      to="/inventory-proof"
+                      to="/privacy-policy"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="block rounded-xl px-4 py-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
+                      className="block rounded-xl px-4 py-3 text-base font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
                     >
-                      InventoryProof
+                      Privacy Policy
                     </Link>
                     <Link
-                      to="/hoku"
+                      to="/terms-of-service"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="block rounded-xl px-4 py-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
+                      className="block rounded-xl px-4 py-3 text-base font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
                     >
-                      HOKU
+                      Terms of Service
                     </Link>
                   </div>
                 </div>
-                <div className="py-6 space-y-1">
-                  <Link
-                    to="/get-started"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="block rounded-xl gradient-bg px-4 py-3 text-base font-medium text-white text-center shadow-sm"
-                  >
-                    Get Started
-                  </Link>
-                  <Link
-                    to="/privacy-policy"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="block rounded-xl px-4 py-3 text-base font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
-                  >
-                    Privacy Policy
-                  </Link>
-                  <Link
-                    to="/terms-of-service"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="block rounded-xl px-4 py-3 text-base font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
-                  >
-                    Terms of Service
-                  </Link>
-                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
+
     </header>
   );
 }
