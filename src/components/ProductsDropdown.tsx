@@ -7,12 +7,39 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { products } from "@/config/products";
+import { products, isExternalHref } from "@/config/products";
 import type { Product } from "@/config/products";
 
 interface ProductsDropdownProps {
   className?: string;
   isActive?: boolean;
+}
+
+function ProductLink({
+  product,
+  children,
+}: {
+  product: Product;
+  children: React.ReactNode;
+}) {
+  const className = "flex items-start gap-3 p-3 cursor-pointer";
+  if (isExternalHref(product.href)) {
+    return (
+      <a
+        href={product.href}
+        target={product.href.startsWith("http") ? "_blank" : undefined}
+        rel="noopener noreferrer"
+        className={className}
+      >
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link to={product.href} className={className}>
+      {children}
+    </Link>
+  );
 }
 
 export function ProductsDropdown({ className, isActive }: ProductsDropdownProps) {
@@ -31,10 +58,9 @@ export function ProductsDropdown({ className, isActive }: ProductsDropdownProps)
       <DropdownMenuContent align="start" className="w-64">
         {products.map((product) => (
           <DropdownMenuItem key={product.name} asChild>
-            <Link
-              to={product.href}
-              className="flex items-start gap-3 p-3 cursor-pointer"
-            >
+            {/* Products can point at an external brand site; react-router's
+                <Link> would treat that as an in-app path. */}
+            <ProductLink product={product}>
               {product.image ? (
                 <img src={product.image} alt={product.name} className="h-8 w-8 shrink-0 rounded-md" />
               ) : product.icon ? (
@@ -46,7 +72,7 @@ export function ProductsDropdown({ className, isActive }: ProductsDropdownProps)
                 <p className="font-medium text-foreground">{product.name}</p>
                 <p className="text-xs text-muted-foreground">{product.description}</p>
               </div>
-            </Link>
+            </ProductLink>
           </DropdownMenuItem>
         ))}
         <DropdownMenuItem asChild>

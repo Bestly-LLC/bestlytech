@@ -5,10 +5,18 @@ import neckpilotIcon from "@/assets/neckpilot-icon.png";
 import schoolpilotIcon from "@/assets/schoolpilot-icon.png";
 import hoacureIcon from "@/assets/hoacure-icon.png";
 import confeshIcon from "@/assets/confesh-icon.png";
-import { Droplets } from "lucide-react";
+import { Droplets, Gem, HeartHandshake, Compass, Leaf, Flower2, ShoppingBag } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-export type ProductCategory = "Privacy" | "Productivity" | "Education" | "Home" | "Social" | "Health";
+export type ProductCategory =
+  | "Privacy"
+  | "Productivity"
+  | "Education"
+  | "Home"
+  | "Social"
+  | "Health"
+  | "Family"
+  | "Client Work";
 export type ProductStatus = "Live" | "Coming Soon" | "In Development";
 
 export interface Product {
@@ -110,6 +118,117 @@ export const products: Product[] = [
     status: "In Development",
     features: ["Fully anonymous posting", "End-to-end encryption", "No account required", "Community moderation"],
   },
+  {
+    id: "el-dora",
+    name: "El D'Ora",
+    description:
+      "Lab-grown diamond jewelry. Brand direction, product imagery, and a 190-piece storefront.",
+    href: "https://eldoraluxe.com",
+    icon: Gem,
+    category: "Client Work",
+    status: "Live",
+    features: [
+      "190+ piece catalog",
+      "Art-directed product imagery",
+      "Full brand identity",
+      "Storefront build",
+    ],
+  },
+  {
+    id: "parentiq",
+    name: "ParentIQ",
+    description:
+      "Co-parenting app built for peace of mind between households.",
+    href: "https://parentiq.io",
+    icon: HeartHandshake,
+    category: "Family",
+    status: "Live",
+    features: [
+      "Shared household calendar",
+      "Neutral, logged communication",
+      "Expense tracking",
+      "Built for two homes",
+    ],
+  },
+  {
+    id: "captains-log",
+    name: "Captain's Log",
+    description:
+      "A sailing app with real marine weather, plus a command center that plots live ship traffic on a map.",
+    href: "https://captainslog-command.higgsfield.app",
+    icon: Compass,
+    category: "Productivity",
+    status: "Live",
+    features: [
+      "Live marine weather",
+      "Real-time vessel tracking",
+      "iOS app + web command center",
+      "Shipped through Apple review",
+    ],
+  },
+  {
+    id: "purely-hunza",
+    name: "Purely Hunza",
+    description: "Food brand built and launched from a blank page.",
+    href: "https://purelyhunza.com",
+    icon: Leaf,
+    category: "Client Work",
+    status: "Live",
+    features: [
+      "Brand identity from scratch",
+      "Storefront and checkout",
+      "Product photography",
+      "Launch campaign",
+    ],
+  },
+  {
+    id: "golden-hour-garden",
+    name: "Golden Hour Garden Design",
+    description:
+      "High-end landscape studio in Florida. Portfolio gallery, a booking form that takes photo uploads, and email on their own domain.",
+    href: "https://goldenhourgardendesign.com",
+    icon: Flower2,
+    category: "Client Work",
+    status: "Live",
+    features: [
+      "Portfolio gallery",
+      "Booking form with photo uploads",
+      "Email on their own domain",
+      "Design, build, and hosting",
+    ],
+  },
+  {
+    id: "the-shift-shop",
+    name: "The Shift Shop",
+    description:
+      "Moved an entire business onto a new store, then added an Amazon shop and TikTok Shop so the same catalog sells in three places.",
+    href: "https://theshift.shop",
+    icon: ShoppingBag,
+    category: "Client Work",
+    status: "Live",
+    features: [
+      "Full platform migration",
+      "Amazon marketplace listing",
+      "TikTok Shop integration",
+      "One catalog, three channels",
+    ],
+  },
 ];
 
-export const categories: ProductCategory[] = ["Privacy", "Productivity", "Education", "Home", "Social", "Health"];
+export const categories: ProductCategory[] = [
+  "Privacy",
+  "Productivity",
+  "Education",
+  "Family",
+  "Home",
+  "Social",
+  "Health",
+  "Client Work",
+];
+
+/**
+ * True when a product href must be rendered as a plain <a>: an external brand
+ * site, or /work (a static page in public/ that lives outside the SPA router).
+ */
+export const isExternalHref = (href: string) =>
+  href.startsWith("http") || href.startsWith("/work");
