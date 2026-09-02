@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "updated": "2026-09-02",
   "base_url": "https://bestly.tech/social/",
   "note": "Public image pool for the daily Instagram + Facebook poster. Instagram requires a publicly fetchable image_url; these qualify. Rotation rule in social/config/MEDIA.md applies: never repeat within a rolling 5-post window.",
@@ -15,5 +15,35 @@
     { "file": "b_seat_math.png",     "layout": "B", "theme": "software-spend", "headline": "Add up every per-seat line.",              "accent": "per-seat" },
     { "file": "c_invisible.png",     "layout": "C", "theme": "risk",           "headline": "Small isn't invisible.",                   "accent": "invisible" },
     { "file": "c_one_box.png",       "layout": "C", "theme": "infrastructure", "headline": "Thirteen services. One box.",              "accent": "One box." }
+  ],
+  "carousel_structure": {
+    "slides": 5,
+    "beats": [
+      "1 CLAIM - the problem stated flat. No question mark. This is the feed thumbnail and does most of the work.",
+      "2 WHY IT HIDES - the mechanism that keeps the problem invisible.",
+      "3 DO THIS - one concrete action the reader can take this week. The screenshot slide.",
+      "4 THE CATCH - honestly naming what makes it hard. Earns trust and sets up the answer.",
+      "5 THE LANDING - one sentence where Bestly answers the catch. The ONLY slide that names the product."
+    ],
+    "rules": [
+      "Device render appears on slides 1 and 5 only. Middle slides stay about the reader.",
+      "Slides 1-4 must be useful to someone who never buys anything.",
+      "Never more than 5 slides. Completion rate falls off after six.",
+      "One carousel per week maximum. Singles carry the other days."
+    ]
+  },
+  "carousels": [
+    {
+      "id": "software-bill",
+      "theme": "software-spend",
+      "hook": "Nobody adds up the software bill.",
+      "slides": [
+        "carousels/software-bill/01.png",
+        "carousels/software-bill/02.png",
+        "carousels/software-bill/03.png",
+        "carousels/software-bill/04.png",
+        "carousels/software-bill/05.png"
+      ]
+    }
   ]
 }
