@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "updated": "2026-09-02",
+  "base_url": "https://bestly.tech/social/",
+  "note": "Public image pool for the daily Instagram + Facebook poster. Instagram requires a publicly fetchable image_url; these qualify. Rotation rule in social/config/MEDIA.md applies: never repeat within a rolling 5-post window.",
+  "layouts": {
+    "A": "headline top, device lower-right bleed",
+    "B": "device upper, headline lower over gradient",
+    "C": "large statement headline, small device lower-right"
+  },
+  "assets": [
+    { "file": "a_restore.png",       "layout": "A", "theme": "backups",        "headline": "An untested backup is a rumor.",            "accent": "rumor" },
+    { "file": "a_export.png",        "layout": "A", "theme": "ownership",      "headline": "If you can't export it, you don't own it.", "accent": "export" },
+    { "file": "b_restore_time.png",  "layout": "B", "theme": "downtime",       "headline": "Ask how long a full restore takes.",       "accent": "full restore" },
+    { "file": "b_seat_math.png",     "layout": "B", "theme": "software-spend", "headline": "Add up every per-seat line.",              "accent": "per-seat" },
+    { "file": "c_invisible.png",     "layout": "C", "theme": "risk",           "headline": "Small isn't invisible.",                   "accent": "invisible" },
+    { "file": "c_one_box.png",       "layout": "C", "theme": "infrastructure", "headline": "Thirteen services. One box.",              "accent": "One box." }
+  ]
+}
