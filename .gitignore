@@ -71,3 +71,6 @@ social/comment-scout/*.md
 
 # TypeScript incremental build caches
 *.tsbuildinfo
+
+# Local timestamped backups made before edits (not part of the project)
+.backups/

@@ -17,6 +17,7 @@ import {
   Activity,
   Sparkles,
   Car,
+  Mic,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -55,6 +56,7 @@ const workItems = [
   { title: "Hire Requests", url: "/admin/hires", icon: Briefcase, countKey: "hires" as CountKeys },
   { title: "Contacts", url: "/admin/contacts", icon: Mail, countKey: "contacts" as CountKeys },
   { title: "Waitlist", url: "/admin/waitlist", icon: ListChecks },
+  { title: "Meetings", url: "/admin/meetings", icon: Mic },
 ];
 
 const cookieYetiItems = [

@@ -78,6 +78,7 @@ const CYGrantedAccess = lazy(() => import("./pages/admin/CYGrantedAccess"));
 const CYDomains = lazy(() => import("./pages/admin/CYDomains"));
 const CommunityLearning = lazy(() => import("./pages/admin/CommunityLearning"));
 const AdminContacts = lazy(() => import("./pages/admin/AdminContacts"));
+const AdminMeetings = lazy(() => import("./pages/admin/AdminMeetings"));
 const AdminHireRequests = lazy(() => import("./pages/admin/AdminHireRequests"));
 const AdminWaitlist = lazy(() => import("./pages/admin/AdminWaitlist"));
 const CloudDeals = lazy(() => import("./pages/admin/CloudDeals"));
@@ -166,6 +167,7 @@ const App = () => (
                   <Route path="contacts" element={<AdminContacts />} />
                   <Route path="hires" element={<AdminHireRequests />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
+                  <Route path="meetings" element={<AdminMeetings />} />
                   <Route path="cloud" element={<CloudDeals />} />
                   <Route path="cloud/:id" element={<CloudDealDetail />} />
                   <Route path="cloud/:id/brief-pdf" element={<CloudDiscoveryBrief />} />

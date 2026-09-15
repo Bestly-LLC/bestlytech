@@ -83,3 +83,5 @@ project_id = "keowunrxpxlbgebujbao"
     verify_jwt = false
   [functions.cy-render-health]
     verify_jwt = false
+  [functions.meetings-archive]
+    verify_jwt = true
