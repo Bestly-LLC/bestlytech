@@ -56,9 +56,9 @@
       #boot-splash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fbfaf8;z-index:2147483647}
       #boot-splash.is-admin{background:#000}
       #boot-splash .mark{width:96px;height:96px;display:flex;align-items:center;justify-content:center;animation:boot-breathe 1.6s cubic-bezier(.4,0,.2,1) infinite}
-      #boot-splash.is-admin .mark{background:#fff;border-radius:24px;box-shadow:0 8px 32px rgba(99,102,241,.25)}
+      #boot-splash.is-admin .mark{width:112px;height:112px;animation:none}
       #boot-splash img{width:84px;height:84px}
-      #boot-splash.is-admin img{width:64px;height:64px}
+      #boot-splash.is-admin img{width:112px;height:112px}
       @keyframes boot-breathe{0%,100%{opacity:.55;transform:scale(.96)}50%{opacity:1;transform:scale(1)}}
       @media (prefers-reduced-motion:reduce){#boot-splash .mark{animation:none}}
     </style>
@@ -67,7 +67,14 @@
   <body>
     <div id="root"><div id="boot-splash" role="status" aria-label="Loading Bestly"><div class="mark"><img src="/bestly-mark.webp" alt="" width="64" height="64" /></div></div></div>
     <script>
-      if (location.pathname.indexOf("/admin") === 0) document.getElementById("boot-splash").className = "is-admin";
+      if (location.pathname.indexOf("/admin") === 0) {
+        document.getElementById("boot-splash").className = "is-admin";
+        document.querySelector("#boot-splash img").src = "/admin-mark.svg";
+        document.querySelectorAll('link[rel="icon"],link[rel="apple-touch-icon"]').forEach(function (l) {
+          l.setAttribute("data-site-href", l.getAttribute("href"));
+          l.href = l.rel === "apple-touch-icon" ? "/admin-apple-touch-icon.png" : l.type === "image/x-icon" ? "/admin-favicon.ico" : "/admin-favicon-512.png";
+        });
+      }
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
