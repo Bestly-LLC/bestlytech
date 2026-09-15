@@ -195,7 +195,7 @@ export default function AdminShieldReports() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-10 text-center">
-          <Shield className="h-10 w-10 text-white/30 mx-auto mb-3" />
+          <Shield className="h-10 w-10 text-white/50 mx-auto mb-3" />
           <h3 className="text-base font-medium text-white/80 mb-2">No reports here</h3>
           <p className="text-sm text-white/50">
             {filter === "new"
@@ -216,14 +216,14 @@ export default function AdminShieldReports() {
                     <Badge variant="outline" className={STATUS_COLOR[r.status]}>
                       {STATUS_LABEL[r.status]}
                     </Badge>
-                    <span className="text-xs text-white/40">{fmtAge(r.created_at)}</span>
+                    <span className="text-xs text-white/55">{fmtAge(r.created_at)}</span>
                     {r.reporter_org && (
                       <span className="text-xs text-white/60">· {r.reporter_org}</span>
                     )}
                   </div>
                   <div className="font-mono text-sm text-white/90 break-all">{r.reported_url}</div>
                   {r.reported_domain && r.reported_domain !== r.reported_url && (
-                    <div className="text-xs text-white/40 mt-0.5">
+                    <div className="text-xs text-white/55 mt-0.5">
                       domain: <span className="font-mono">{r.reported_domain}</span>
                     </div>
                   )}

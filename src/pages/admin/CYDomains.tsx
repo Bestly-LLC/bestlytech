@@ -258,7 +258,7 @@ export default function CYDomains() {
                           <div key={i} className="rounded-lg border border-border p-2 text-xs">
                             <code className="break-all text-foreground">{p.selector}</code>
                             <div className="mt-1 flex flex-wrap items-center gap-2 text-muted-foreground">
-                              <Badge variant="outline" className="text-[10px]">{p.action_type}</Badge>
+                              <Badge variant="outline" className="text-[0.625rem]">{p.action_type}</Badge>
                               <span>conf {p.confidence}</span>
                               <span>· {p.success_count} successes</span>
                               <span>· {p.cmp_fingerprint}</span>

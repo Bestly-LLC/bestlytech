@@ -186,13 +186,13 @@ export default function AdminSubmissions() {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-full sm:w-[160px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[10rem]"><SelectValue /></SelectTrigger>
           <SelectContent>
             {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={platformFilter} onValueChange={(v) => { setPlatformFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-full sm:w-[160px]"><SelectValue placeholder="Platform" /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[10rem]"><SelectValue placeholder="Platform" /></SelectTrigger>
           <SelectContent>
             {PLATFORMS.map((p) => <SelectItem key={p} value={p}>{p === "All" ? "All Platforms" : p}</SelectItem>)}
           </SelectContent>
@@ -341,7 +341,7 @@ export default function AdminSubmissions() {
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium text-primary truncate">{r.business_legal_name || "Unnamed"}</p>
                     <div className="flex items-center gap-1 shrink-0">
-                      <Badge className="text-[10px]">{r.status}</Badge>
+                      <Badge className="text-[0.625rem]">{r.status}</Badge>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm" aria-label="More actions" className="h-6 w-6 p-0" data-row-actions>
@@ -362,9 +362,9 @@ export default function AdminSubmissions() {
                   <p className="text-xs text-muted-foreground mt-0.5">{r.client_name || "—"} &middot; {r.client_email || ""}</p>
                   <div className="flex items-center gap-1.5 mt-1.5">
                     {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
-                      <Badge key={p} variant="outline" className="text-[10px] px-1.5 py-0">{p}</Badge>
+                      <Badge key={p} variant="outline" className="text-[0.625rem] px-1.5 py-0">{p}</Badge>
                     ))}
-                    <span className="text-[10px] text-muted-foreground ml-auto">
+                    <span className="text-[0.625rem] text-muted-foreground ml-auto">
                       {docCounts[r.id] || 0} docs &middot; {r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}
                     </span>
                   </div>

@@ -84,7 +84,7 @@ export default function HomeHubOverview() {
         actions={
           <div className="flex items-center gap-3">
             {lastUpdated && (
-              <span className="text-xs text-white/30">Last updated {lastUpdated.toLocaleTimeString()}</span>
+              <span className="text-xs text-white/50">Last updated {lastUpdated.toLocaleTimeString()}</span>
             )}
             <Button
               variant="ghost"
@@ -92,7 +92,7 @@ export default function HomeHubOverview() {
               onClick={() => load(true)}
               disabled={refreshing || initialLoading}
               aria-label="Refresh home hub data"
-              className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0"
+              className="text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             </Button>
@@ -121,11 +121,11 @@ export default function HomeHubOverview() {
                 </div>
               </div>
               <p className="text-2xl sm:text-3xl font-semibold text-white tabular-nums">{data.pihole.queriesBlocked.toLocaleString()}</p>
-              <p className="text-[11px] text-white/40 mt-0.5">Queries Blocked Today</p>
+              <p className="text-[0.6875rem] text-white/55 mt-0.5">Queries Blocked Today</p>
               <div className="flex items-center justify-between mt-1">
-                <p className="text-[10px] text-white/25">{data.pihole.percentBlocked}% blocked</p>
+                <p className="text-[0.625rem] text-white/50">{data.pihole.percentBlocked}% blocked</p>
                 {data.pihole.capturedAt && (
-                  <p className="text-[10px] text-white/20">Pi synced {timeAgo(data.pihole.capturedAt)}</p>
+                  <p className="text-[0.625rem] text-white/20">Pi synced {timeAgo(data.pihole.capturedAt)}</p>
                 )}
               </div>
             </div>
@@ -141,8 +141,8 @@ export default function HomeHubOverview() {
                 </div>
               </div>
               <p className="text-2xl sm:text-3xl font-semibold text-white tabular-nums">{data.homeAssistant.devicesOnline}</p>
-              <p className="text-[11px] text-white/40 mt-0.5">Devices Online</p>
-              <p className="text-[10px] text-white/25 mt-1">{data.homeAssistant.activeAutomations} active automations</p>
+              <p className="text-[0.6875rem] text-white/55 mt-0.5">Devices Online</p>
+              <p className="text-[0.625rem] text-white/50 mt-1">{data.homeAssistant.activeAutomations} active automations</p>
             </div>
 
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6 hover:bg-white/[0.05] transition-colors">
@@ -156,8 +156,8 @@ export default function HomeHubOverview() {
                 </div>
               </div>
               <p className="text-2xl sm:text-3xl font-semibold text-white tabular-nums">{data.homebridge.accessories}</p>
-              <p className="text-[11px] text-white/40 mt-0.5">Accessories</p>
-              <p className="text-[10px] text-white/25 mt-1">{data.homebridge.pluginsActive} plugins active</p>
+              <p className="text-[0.6875rem] text-white/55 mt-0.5">Accessories</p>
+              <p className="text-[0.625rem] text-white/50 mt-1">{data.homebridge.pluginsActive} plugins active</p>
             </div>
           </>
         ) : null}
@@ -180,20 +180,20 @@ export default function HomeHubOverview() {
       ) : data ? (
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl">
           <div className="flex items-center gap-2 p-4 sm:p-6 pb-3">
-            <Activity className="h-4 w-4 text-white/40" />
+            <Activity className="h-4 w-4 text-white/55" />
             <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
           </div>
           <div className="divide-y divide-white/[0.06]">
             {data.recentActivity.map((e) => (
               <div key={e.id} className="flex items-start gap-3 px-4 sm:px-6 py-3">
-                <div className={`mt-0.5 ${SERVICE_COLORS[e.service] || "text-white/40"}`}>
+                <div className={`mt-0.5 ${SERVICE_COLORS[e.service] || "text-white/55"}`}>
                   <Activity className="h-4 w-4" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white/80">{e.description}</p>
-                  <p className="text-xs text-white/30 mt-0.5">{timeAgo(e.timestamp)}</p>
+                  <p className="text-xs text-white/50 mt-0.5">{timeAgo(e.timestamp)}</p>
                 </div>
-                <Badge variant="outline" className="text-[10px] shrink-0 border-white/10 text-white/40">
+                <Badge variant="outline" className="text-[0.625rem] shrink-0 border-white/10 text-white/55">
                   {e.service}
                 </Badge>
               </div>

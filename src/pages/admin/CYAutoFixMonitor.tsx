@@ -122,7 +122,7 @@ export default function CYAutoFixMonitor() {
           <ShieldX className="h-5 w-5 text-sky-300 flex-none mt-0.5" />
           <div className="text-sm">
             <p className="font-medium text-sky-200">Render engine offline</p>
-            <p className="text-sky-200/70 text-[12.5px] mt-0.5">
+            <p className="text-sky-200/70 text-[0.7812rem] mt-0.5">
               <code className="px-1 rounded bg-white/10">BROWSERLESS_TOKEN</code> is not set on this Supabase project (verified live).
               Render + validation of JavaScript-rendered sites are safe no-ops until the secret is added.
             </p>
@@ -134,7 +134,7 @@ export default function CYAutoFixMonitor() {
           <AlertTriangle className="h-5 w-5 text-amber-300 flex-none mt-0.5" />
           <div className="text-sm">
             <p className="font-medium text-amber-200">Render engine status unknown</p>
-            <p className="text-amber-200/70 text-[12.5px] mt-0.5">
+            <p className="text-amber-200/70 text-[0.7812rem] mt-0.5">
               The render-health probe did not respond. Treat render coverage as unverified rather than assuming it is live.
             </p>
           </div>
@@ -147,7 +147,7 @@ export default function CYAutoFixMonitor() {
           <AlertTriangle className="h-5 w-5 text-red-300 flex-none" />
           <div className="text-sm">
             <p className="font-medium text-red-200">Pipeline status unavailable</p>
-            <p className="text-red-200/70 text-[12.5px] mt-0.5">
+            <p className="text-red-200/70 text-[0.7812rem] mt-0.5">
               The health view didn't return, so we can't confirm the pipeline is healthy. This is an error state — not "all clear."
             </p>
           </div>
@@ -157,7 +157,7 @@ export default function CYAutoFixMonitor() {
           <CheckCircle2 className="h-5 w-5 text-emerald-300 flex-none" />
           <div className="text-sm">
             <p className="font-medium text-emerald-200">All clear &mdash; everything's auto-fixing</p>
-            <p className="text-emerald-200/70 text-[12.5px] mt-0.5">
+            <p className="text-emerald-200/70 text-[0.7812rem] mt-0.5">
               No domains need you. {h.in_progress ?? 0} in progress, {h.resolved_24h ?? 0} resolved in the last 24h.
             </p>
           </div>
@@ -167,7 +167,7 @@ export default function CYAutoFixMonitor() {
           <AlertTriangle className="h-5 w-5 text-amber-300 flex-none" />
           <div className="text-sm">
             <p className="font-medium text-amber-200">{needs} domain{needs === 1 ? "" : "s"} need a look</p>
-            <p className="text-amber-200/70 text-[12.5px] mt-0.5">
+            <p className="text-amber-200/70 text-[0.7812rem] mt-0.5">
               These exhausted the automatic render + AI attempts. Everything else is still self-fixing.
             </p>
           </div>
@@ -200,7 +200,7 @@ export default function CYAutoFixMonitor() {
       {/* Needs-attention list — the only thing to act on */}
       <div className="rounded-2xl border border-white/10 bg-white/[0.02]">
         <div className="px-5 pt-4 pb-2 flex items-center gap-2">
-          <Globe className="h-4 w-4 text-white/40" />
+          <Globe className="h-4 w-4 text-white/55" />
           <h2 className="text-sm font-medium text-white">Needs attention &mdash; the only list you act on</h2>
         </div>
         {stuck.length === 0 ? (
@@ -215,7 +215,7 @@ export default function CYAutoFixMonitor() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-[11px] uppercase tracking-wide text-white/35">
+                <tr className="text-[0.6875rem] uppercase tracking-wide text-white/50">
                   <th className="text-left font-medium px-5 py-2.5">Domain</th>
                   <th className="text-left font-medium px-3 py-2.5">Reports</th>
                   <th className="text-left font-medium px-3 py-2.5">AI tries</th>
@@ -232,11 +232,11 @@ export default function CYAutoFixMonitor() {
                     <td className="px-3 py-2.5 text-white/60 tabular-nums">{r.ai_attempts ?? 0}</td>
                     <td className="px-3 py-2.5 text-white/60 tabular-nums">{r.render_attempts ?? 0}</td>
                     <td className="px-3 py-2.5">
-                      <span className="inline-block text-[11px] px-2 py-0.5 rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-300">
+                      <span className="inline-block text-[0.6875rem] px-2 py-0.5 rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-300">
                         {REASON_LABEL[r.reason] ?? r.reason}
                       </span>
                     </td>
-                    <td className="px-5 py-2.5 text-white/40">{relTime(r.last_reported)}</td>
+                    <td className="px-5 py-2.5 text-white/55">{relTime(r.last_reported)}</td>
                   </tr>
                 ))}
               </tbody>

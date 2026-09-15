@@ -56,7 +56,7 @@ function CustomTooltipContent({
   return (
     <div className="bg-[#1a1a1a] border border-white/[0.1] rounded-lg px-3 py-2 shadow-xl">
       <p className="text-xs font-medium text-white">{formatStatusLabel(status)}</p>
-      <p className="text-[11px] text-white/60 mt-0.5">
+      <p className="text-[0.6875rem] text-white/60 mt-0.5">
         {count.toLocaleString()} runs ({pct}%)
       </p>
     </div>
@@ -72,7 +72,7 @@ function CustomLegendContent({
   return (
     <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-1 px-2">
       {payload.map((entry) => (
-        <span key={entry.value} className="inline-flex items-center gap-1 text-[10px] text-white/50">
+        <span key={entry.value} className="inline-flex items-center gap-1 text-[0.625rem] text-white/50">
           <span
             className="inline-block h-2 w-2 rounded-full shrink-0"
             style={{ backgroundColor: entry.color }}
@@ -99,11 +99,11 @@ export function PipelineHealthRing({ data, successRate }: PipelineHealthRingProp
       {/* Header */}
       <div className="flex items-center gap-2 mb-1">
         <div className="h-8 w-8 rounded-xl bg-white/[0.05] flex items-center justify-center">
-          <Activity className="h-4 w-4 text-white/40" />
+          <Activity className="h-4 w-4 text-white/55" />
         </div>
         <div>
           <h3 className="text-sm font-medium text-white">AI Pipeline Health</h3>
-          <p className="text-[10px] text-white/25">
+          <p className="text-[0.625rem] text-white/50">
             {total.toLocaleString()} total runs
           </p>
         </div>
@@ -144,7 +144,7 @@ export function PipelineHealthRing({ data, successRate }: PipelineHealthRingProp
           <span className={`text-2xl font-bold tabular-nums ${rateColor}`}>
             {successRate.toFixed(1)}%
           </span>
-          <span className="text-[10px] text-white/30 font-medium">Success</span>
+          <span className="text-[0.625rem] text-white/50 font-medium">Success</span>
         </div>
       </div>
     </div>

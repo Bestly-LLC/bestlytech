@@ -127,7 +127,7 @@ export default function AdminContacts() {
           <Input placeholder="Search name, email, subject..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} className="pl-9" />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-[8.75rem]"><SelectValue /></SelectTrigger>
           <SelectContent>
             {STATUSES.map((s) => <SelectItem key={s} value={s}>{s === "All" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
           </SelectContent>
@@ -181,10 +181,10 @@ export default function AdminContacts() {
                     <TableCell className="font-medium text-sm">{r.name}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{r.email}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{r.category || "—"}</Badge></TableCell>
-                    <TableCell className="text-sm max-w-[200px] truncate">{r.subject}</TableCell>
+                    <TableCell className="text-sm max-w-[12.5rem] truncate">{r.subject}</TableCell>
                     <TableCell>
                       <Select value={r.status || "new"} onValueChange={(v) => updateStatus(r.id, v)}>
-                        <SelectTrigger className="h-7 w-[100px] text-xs"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-7 w-[6.25rem] text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {STATUSES.filter(s => s !== "All").map((s) => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
                         </SelectContent>
@@ -232,14 +232,14 @@ export default function AdminContacts() {
                     </div>
                     <p className="text-xs text-foreground line-clamp-1">{r.subject}</p>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className="text-[10px]">{r.category || "—"}</Badge>
+                      <Badge variant="outline" className="text-[0.625rem]">{r.category || "—"}</Badge>
                       <Select value={r.status || "new"} onValueChange={(v) => updateStatus(r.id, v)}>
-                        <SelectTrigger className="h-6 w-[90px] text-[10px]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-6 w-[5.625rem] text-[0.625rem]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {STATUSES.filter(s => s !== "All").map((s) => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <span className="text-[10px] text-muted-foreground ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</span>
+                      <span className="text-[0.625rem] text-muted-foreground ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</span>
                     </div>
                   </div>
                 </div>

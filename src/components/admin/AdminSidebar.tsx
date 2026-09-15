@@ -71,7 +71,6 @@ const cookieYetiItems = [
 const homeHubItems = [
   { title: "Overview", url: "/admin/home-hub", icon: Server },
   { title: "Pi-hole", url: "/admin/home-hub/pihole", icon: Shield },
-  { title: "Shield reports", url: "/admin/shield-reports", icon: Shield, countKey: "shieldReports" as CountKeys },
   { title: "Home Assistant", url: "/admin/home-hub/ha", icon: House },
   { title: "Homebridge", url: "/admin/home-hub/homebridge", icon: Plug },
 ];
@@ -82,6 +81,7 @@ const turoItems = [
 
 const cloudItems = [
   { title: "Cloud Deals", url: "/admin/cloud", icon: Cloud, countKey: "cloudLeads" as CountKeys },
+  { title: "Shield Reports", url: "/admin/shield-reports", icon: ShieldCheck, countKey: "shieldReports" as CountKeys },
 ];
 
 export function AdminSidebar() {
@@ -128,16 +128,16 @@ export function AdminSidebar() {
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all relative",
               active
-                ? "bg-[hsl(var(--wow-indigo)/0.12)] text-white font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-[hsl(var(--wow-indigo-light))] before:shadow-[0_0_8px_hsl(var(--wow-indigo-light)/0.6)]"
-                : "text-white/40 hover:text-white hover:bg-white/[0.05]"
+                ? "bg-[hsl(var(--wow-indigo)/0.12)] text-white font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[0.1875rem] before:rounded-full before:bg-[hsl(var(--wow-indigo-light))] before:shadow-[0_0_8px_hsl(var(--wow-indigo-light)/0.6)]"
+                : "text-white/55 hover:text-white hover:bg-white/[0.05]"
             )}
           >
-            <item.icon className="h-[18px] w-[18px] shrink-0" />
+            <item.icon className="h-[1.125rem] w-[1.125rem] shrink-0" />
             {!collapsed && (
               <span className="flex-1 flex items-center justify-between">
                 {item.title}
                 {count > 0 && (
-                  <span className="h-5 min-w-5 px-1.5 text-[10px] font-medium tabular-nums bg-white/10 text-white/60 rounded-full inline-flex items-center justify-center">
+                  <span className="h-5 min-w-5 px-1.5 text-[0.625rem] font-medium tabular-nums bg-white/10 text-white/60 rounded-full inline-flex items-center justify-center">
                     {count}
                   </span>
                 )}
@@ -160,7 +160,7 @@ export function AdminSidebar() {
         <div className="mx-3 my-2 h-px bg-white/[0.06]" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
+          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
             Marketplace
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -171,7 +171,7 @@ export function AdminSidebar() {
         <div className="mx-3 my-2 h-px bg-white/[0.06]" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
+          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
             General
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -182,7 +182,7 @@ export function AdminSidebar() {
         <div className="mx-3 my-2 h-px bg-white/[0.06]" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
+          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
             Cookie Yeti
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -193,7 +193,7 @@ export function AdminSidebar() {
         <div className="mx-3 my-2 h-px bg-white/[0.06]" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
+          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
             Home Hub
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -204,7 +204,7 @@ export function AdminSidebar() {
         <div className="mx-3 my-2 h-px bg-white/[0.06]" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
+          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
             Turo
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -215,7 +215,7 @@ export function AdminSidebar() {
         <div className="mx-3 my-2 h-px bg-white/[0.06]" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
+          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
             In-House Cloud
           </SidebarGroupLabel>
           <SidebarGroupContent>

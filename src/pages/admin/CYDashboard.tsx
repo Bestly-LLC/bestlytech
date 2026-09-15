@@ -277,7 +277,7 @@ export default function CYDashboard() {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Cookie className="h-4 w-4 text-violet-400" />
-          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Pattern Engine</h3>
+          <h3 className="text-xs font-semibold text-white/55 uppercase tracking-widest">Pattern Engine</h3>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <StatCard label="Active Patterns" value={activePatternCount} icon={Cookie} accentColor="#8b5cf6" iconBg="bg-violet-500/10" iconColor="text-violet-400" subtitle={`${patternCount} total`} />
@@ -285,7 +285,7 @@ export default function CYDashboard() {
           <StatCard label="AI Generations" value={aiGenCount} icon={Cpu} accentColor="#06b6d4" iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle={`${aiSuccessRateStr} success`} />
           <StatCard label="Pattern Fixes" value={fixCount} icon={Zap} accentColor="#f59e0b" iconBg="bg-amber-500/10" iconColor="text-amber-400" />
           <StatCard label="Unresolved" value={unresolvedReports.length} icon={AlertTriangle} accentColor={unresolvedReports.length > 0 ? "#ef4444" : "#10b981"} iconBg={unresolvedReports.length > 0 ? "bg-red-500/10" : "bg-emerald-500/10"} iconColor={unresolvedReports.length > 0 ? "text-red-400" : "text-emerald-400"} />
-          <StatCard label="Activations" value={activationCount} icon={Target} iconBg="bg-white/[0.05]" iconColor="text-white/40" subtitle={`${deviceCount} devices, ${pushCount} push`} />
+          <StatCard label="Activations" value={activationCount} icon={Target} iconBg="bg-white/[0.05]" iconColor="text-white/55" subtitle={`${deviceCount} devices, ${pushCount} push`} />
         </div>
       </div>
 
@@ -306,7 +306,7 @@ export default function CYDashboard() {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Crown className="h-4 w-4 text-yellow-400" />
-          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Active Users</h3>
+          <h3 className="text-xs font-semibold text-white/55 uppercase tracking-widest">Active Users</h3>
           <Link to="/admin/cookie-yeti/subscribers" className="ml-auto">
             <Button variant="ghost" size="sm" className="text-xs text-white/20 hover:text-white hover:bg-white/5 h-6 px-2">
               Manage <ArrowRight className="h-3 w-3 ml-1" />
@@ -328,12 +328,12 @@ export default function CYDashboard() {
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-400" />
             <div>
-              <h3 className="text-[15px] font-semibold text-white">Missed Banner Queue</h3>
-              <p className="text-xs text-white/30 mt-0.5">Unresolved reports sorted by urgency. Click a domain for details.</p>
+              <h3 className="text-[0.9375rem] font-semibold text-white">Missed Banner Queue</h3>
+              <p className="text-xs text-white/50 mt-0.5">Unresolved reports sorted by urgency. Click a domain for details.</p>
             </div>
           </div>
           <Link to="/admin/cookie-yeti/community">
-            <Button variant="ghost" size="sm" className="text-xs text-white/30 hover:text-white hover:bg-white/5 border-0">
+            <Button variant="ghost" size="sm" className="text-xs text-white/50 hover:text-white hover:bg-white/5 border-0">
               Community <ArrowRight className="h-3 w-3 ml-1" />
             </Button>
           </Link>
@@ -341,12 +341,12 @@ export default function CYDashboard() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent border-b border-white/[0.06]">
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Priority</TableHead>
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Domain</TableHead>
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Reports</TableHead>
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">AI Tries</TableHead>
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">CMP</TableHead>
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Last Reported</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Priority</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Domain</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Reports</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">AI Tries</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">CMP</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Last Reported</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -354,12 +354,12 @@ export default function CYDashboard() {
               const p = getPriority(r.report_count);
               return (
                 <TableRow key={r.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] cursor-pointer" onClick={() => handleDomainClick(r.domain)}>
-                  <TableCell><Badge variant={p.color} className="text-[10px] uppercase">{p.label}</Badge></TableCell>
+                  <TableCell><Badge variant={p.color} className="text-[0.625rem] uppercase">{p.label}</Badge></TableCell>
                   <TableCell className="text-sm text-white font-medium hover:text-cyan-400 transition-colors">{r.domain}</TableCell>
                   <TableCell className="text-sm text-white/60 tabular-nums">{r.report_count}</TableCell>
                   <TableCell className="text-sm text-white/60 tabular-nums">{r.ai_attempts ?? 0}</TableCell>
-                  <TableCell className="text-xs text-white/40">{r.cmp_fingerprint ?? "unknown"}</TableCell>
-                  <TableCell className="text-sm text-white/30">{r.last_reported ? new Date(r.last_reported).toLocaleDateString() : "—"}</TableCell>
+                  <TableCell className="text-xs text-white/55">{r.cmp_fingerprint ?? "unknown"}</TableCell>
+                  <TableCell className="text-sm text-white/50">{r.last_reported ? new Date(r.last_reported).toLocaleDateString() : "—"}</TableCell>
                 </TableRow>
               );
             })}
@@ -378,22 +378,22 @@ export default function CYDashboard() {
       <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
         <div className="px-5 py-4">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-[15px] font-semibold text-white">Top Patterns</h3>
+            <h3 className="text-[0.9375rem] font-semibold text-white">Top Patterns</h3>
             <Link to="/admin/cookie-yeti/domains" className="text-xs font-medium text-cyan-400 hover:text-cyan-300 transition-colors">
               View all domains →
             </Link>
           </div>
-          <p className="text-xs text-white/30 mt-0.5">Most-used cookie banner patterns by report count. Click a domain for details.</p>
+          <p className="text-xs text-white/50 mt-0.5">Most-used cookie banner patterns by report count. Click a domain for details.</p>
         </div>
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent border-b border-white/[0.06]">
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Domain</TableHead>
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Selector</TableHead>
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Action</TableHead>
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Confidence</TableHead>
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Reports</TableHead>
-              <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Source</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Domain</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Selector</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Action</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Confidence</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Reports</TableHead>
+              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Source</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -401,7 +401,7 @@ export default function CYDashboard() {
               <TableRow key={p.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] cursor-pointer" onClick={() => handleDomainClick(p.domain)}>
                 <TableCell className="text-sm text-white font-medium hover:text-cyan-400 transition-colors">{p.domain}</TableCell>
                 <TableCell>
-                  <code className="text-[11px] text-cyan-400 bg-cyan-400/10 px-1.5 py-0.5 rounded max-w-[200px] truncate block">{p.selector}</code>
+                  <code className="text-[0.6875rem] text-cyan-400 bg-cyan-400/10 px-1.5 py-0.5 rounded max-w-[12.5rem] truncate block">{p.selector}</code>
                 </TableCell>
                 <TableCell className="text-xs text-white/50">{p.action_type}</TableCell>
                 <TableCell>
@@ -411,7 +411,7 @@ export default function CYDashboard() {
                 </TableCell>
                 <TableCell className="text-sm text-white/60 tabular-nums">{p.report_count}</TableCell>
                 <TableCell>
-                  <Badge variant={p.source === "ai" ? "default" : "secondary"} className="text-[10px]">{p.source}</Badge>
+                  <Badge variant={p.source === "ai" ? "default" : "secondary"} className="text-[0.625rem]">{p.source}</Badge>
                 </TableCell>
               </TableRow>
             ))}

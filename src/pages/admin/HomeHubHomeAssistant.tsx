@@ -87,13 +87,13 @@ export default function HomeHubHomeAssistant() {
         description="Smart home automation control"
         actions={
           <div className="flex items-center gap-3">
-            <Badge variant="outline" className="border-amber-500/30 text-amber-400/70 text-[10px]">
+            <Badge variant="outline" className="border-amber-500/30 text-amber-400/70 text-[0.625rem]">
               Simulated data
             </Badge>
             {lastUpdated && (
-              <span className="text-xs text-white/30">Updated {lastUpdated.toLocaleTimeString()}</span>
+              <span className="text-xs text-white/50">Updated {lastUpdated.toLocaleTimeString()}</span>
             )}
-            <Button variant="ghost" size="icon" onClick={load} disabled={loading} aria-label="Refresh Home Assistant data" className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
+            <Button variant="ghost" size="icon" onClick={load} disabled={loading} aria-label="Refresh Home Assistant data" className="text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
           </div>
@@ -120,11 +120,11 @@ export default function HomeHubHomeAssistant() {
                   <span className="text-sm font-medium text-white">{s.name}</span>
                 </div>
                 <div className="h-8 w-8 rounded-xl bg-white/[0.05] flex items-center justify-center">
-                  <Icon className="h-4 w-4 text-white/40" />
+                  <Icon className="h-4 w-4 text-white/55" />
                 </div>
               </div>
               <p className="text-2xl font-semibold text-white">{s.value}</p>
-              <p className="text-[11px] text-white/40 mt-0.5 capitalize">{s.type} sensor</p>
+              <p className="text-[0.6875rem] text-white/55 mt-0.5 capitalize">{s.type} sensor</p>
             </div>
           );
         })}
@@ -140,7 +140,7 @@ export default function HomeHubHomeAssistant() {
             <div key={a.id} className="flex items-center justify-between px-4 sm:px-6 py-3">
               <div className="min-w-0">
                 <p className="text-sm text-white/80">{a.name}</p>
-                <p className="text-xs text-white/30">Last: {timeAgo(a.lastTriggered)}</p>
+                <p className="text-xs text-white/50">Last: {timeAgo(a.lastTriggered)}</p>
               </div>
               <Switch checked={a.enabled} onCheckedChange={(v) => handleToggle(a.id, v)} />
             </div>
@@ -151,7 +151,7 @@ export default function HomeHubHomeAssistant() {
       {/* Recent Activity */}
       <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl">
         <div className="flex items-center gap-2 p-4 sm:p-6 pb-3">
-          <Activity className="h-4 w-4 text-white/40" />
+          <Activity className="h-4 w-4 text-white/55" />
           <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
         </div>
         <div className="divide-y divide-white/[0.06]">
@@ -160,9 +160,9 @@ export default function HomeHubHomeAssistant() {
               <Activity className="h-4 w-4 text-blue-400 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-white/80">{e.description}</p>
-                <p className="text-xs text-white/30 mt-0.5">{timeAgo(e.timestamp)}</p>
+                <p className="text-xs text-white/50 mt-0.5">{timeAgo(e.timestamp)}</p>
               </div>
-              <Badge variant="outline" className="text-[10px] shrink-0 border-white/10 text-white/40">{e.type}</Badge>
+              <Badge variant="outline" className="text-[0.625rem] shrink-0 border-white/10 text-white/55">{e.type}</Badge>
             </div>
           ))}
         </div>

@@ -128,7 +128,7 @@ export default function AdminHireRequests() {
           <Input placeholder="Search name, email, company..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} className="pl-9" />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-[8.75rem]"><SelectValue /></SelectTrigger>
           <SelectContent>
             {STATUSES.map((s) => <SelectItem key={s} value={s}>{s === "All" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
           </SelectContent>
@@ -186,7 +186,7 @@ export default function AdminHireRequests() {
                     <TableCell className="text-sm">{r.timeline || "—"}</TableCell>
                     <TableCell>
                       <Select value={r.status || "new"} onValueChange={(v) => updateStatus(r.id, v)}>
-                        <SelectTrigger className="h-7 w-[110px] text-xs"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-7 w-[6.875rem] text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {STATUSES.filter(s => s !== "All").map((s) => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
                         </SelectContent>
@@ -233,15 +233,15 @@ export default function AdminHireRequests() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className="text-[10px]">{r.project_type}</Badge>
+                      <Badge variant="outline" className="text-[0.625rem]">{r.project_type}</Badge>
                       <span className="text-xs text-foreground">{r.budget_range || "—"}</span>
                       <Select value={r.status || "new"} onValueChange={(v) => updateStatus(r.id, v)}>
-                        <SelectTrigger className="h-6 w-[100px] text-[10px]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-6 w-[6.25rem] text-[0.625rem]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {STATUSES.filter(s => s !== "All").map((s) => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <span className="text-[10px] text-muted-foreground ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</span>
+                      <span className="text-[0.625rem] text-muted-foreground ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</span>
                     </div>
                   </div>
                 </div>

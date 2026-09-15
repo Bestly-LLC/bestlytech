@@ -187,7 +187,7 @@ export default function CloudDiscoveryBrief() {
               <Printer className="h-4 w-4" />
               Print / Save as PDF
             </Button>
-            <p className="text-[11px] text-white/40 mt-2">
+            <p className="text-[0.6875rem] text-white/55 mt-2">
               In the print dialog: pick "Save as PDF" as the destination, A4 or Letter, no headers/footers.
             </p>
           </div>

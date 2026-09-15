@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 /**
  * Soft indigo dot that lerps toward the cursor across the whole site.
@@ -11,6 +12,8 @@ import { useEffect, useRef, useState } from "react";
  * the viewport as a stray speck floating over the page.
  */
 export function CursorFollower() {
+  // Off inside /admin: a trailing dot over dense tables and controls is a distraction, not delight.
+  const inAdmin = useLocation().pathname.startsWith("/admin");
   const dotRef = useRef<HTMLDivElement | null>(null);
   const ringRef = useRef<HTMLDivElement | null>(null);
   const [active, setActive] = useState(false);
@@ -20,8 +23,8 @@ export function CursorFollower() {
     if (typeof window === "undefined") return;
     const isTouch = window.matchMedia("(pointer: coarse)").matches;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!isTouch && !reduce) setActive(true);
-  }, []);
+    setActive(!isTouch && !reduce && !inAdmin);
+  }, [inAdmin]);
 
   // Run the follow animation only when active (the nodes now exist).
   useEffect(() => {

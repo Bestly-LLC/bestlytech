@@ -120,8 +120,8 @@ export function OperationsPanel({
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <Zap className="h-3.5 w-3.5 text-white/40" />
-        <span className="text-xs font-semibold text-white/40 uppercase tracking-widest">
+        <Zap className="h-3.5 w-3.5 text-white/55" />
+        <span className="text-xs font-semibold text-white/55 uppercase tracking-widest">
           Operations
         </span>
       </div>
@@ -139,13 +139,13 @@ export function OperationsPanel({
               <div
                 className={`h-9 w-9 rounded-xl flex items-center justify-center mb-3 ${op.iconBg}`}
               >
-                <Icon className="h-[18px] w-[18px]" style={{ color: op.color }} />
+                <Icon className="h-[1.125rem] w-[1.125rem]" style={{ color: op.color }} />
               </div>
 
               <p className="text-sm font-medium text-white leading-tight">
                 {op.label}
               </p>
-              <p className="text-[11px] text-white/40 mt-1 leading-snug flex-1">
+              <p className="text-[0.6875rem] text-white/55 mt-1 leading-snug flex-1">
                 {op.subtitle}
               </p>
 

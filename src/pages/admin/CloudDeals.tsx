@@ -232,7 +232,7 @@ export default function CloudDeals() {
             return (
               <div
                 key={s.key}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 min-h-[200px]"
+                className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 min-h-[12.5rem]"
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -241,13 +241,13 @@ export default function CloudDeals() {
                   </div>
                   <Badge
                     variant="outline"
-                    className="border-white/10 bg-white/[0.04] text-white/60 text-[11px] font-normal"
+                    className="border-white/10 bg-white/[0.04] text-white/60 text-[0.6875rem] font-normal"
                   >
                     {cards.length}
                   </Badge>
                 </div>
                 {cards.length === 0 ? (
-                  <div className="text-xs text-white/30 py-4 text-center">No deals here</div>
+                  <div className="text-xs text-white/50 py-4 text-center">No deals here</div>
                 ) : (
                   <div className="space-y-2">
                     {cards.map((c) => {
@@ -269,7 +269,7 @@ export default function CloudDeals() {
                             {c.user_count_band} users
                             {c.urgency ? ` · ${URGENCY_LABEL[c.urgency] ?? c.urgency}` : ""}
                           </div>
-                          <div className="text-[11px] text-white/40 mt-1 flex items-center justify-between">
+                          <div className="text-[0.6875rem] text-white/55 mt-1 flex items-center justify-between">
                             <span>{fmtRelative(c.stage_changed_at || c.created_at)}</span>
                             {stuckHere && <span className="text-amber-400">stuck</span>}
                           </div>
@@ -287,7 +287,7 @@ export default function CloudDeals() {
       {/* Empty state */}
       {!loading && rows.length === 0 && (
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-10 text-center">
-          <Cloud className="h-10 w-10 text-white/30 mx-auto mb-3" />
+          <Cloud className="h-10 w-10 text-white/50 mx-auto mb-3" />
           <h3 className="text-base font-medium text-white/80 mb-2">No leads yet</h3>
           <p className="text-sm text-white/50 max-w-md mx-auto">
             When someone submits the form at{" "}

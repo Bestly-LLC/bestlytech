@@ -188,7 +188,7 @@ export function ChangePasswordDialog() {
           <span className="hidden sm:inline">Security</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[440px]">
+      <DialogContent className="sm:max-w-[27.5rem]">
         <DialogHeader>
           <DialogTitle>Security Settings</DialogTitle>
           <DialogDescription>Manage your passkeys, security keys, and password.</DialogDescription>

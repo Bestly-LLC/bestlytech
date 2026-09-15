@@ -620,7 +620,7 @@ export default function CloudDealDetail() {
         {/* LEFT: Contact + brief snapshot + actions */}
         <div className="space-y-4">
           <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-            <h3 className="text-xs uppercase tracking-wider text-white/40 mb-3">Contact</h3>
+            <h3 className="text-xs uppercase tracking-wider text-white/55 mb-3">Contact</h3>
             <div className="space-y-2 text-sm">
               <div className="text-white font-medium">{lead.contact_name}</div>
               <div className="flex items-center gap-2 text-white/70">
@@ -654,7 +654,7 @@ export default function CloudDealDetail() {
           </section>
 
           <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-            <h3 className="text-xs uppercase tracking-wider text-white/40 mb-3">Lead context</h3>
+            <h3 className="text-xs uppercase tracking-wider text-white/55 mb-3">Lead context</h3>
             <dl className="space-y-1.5 text-sm">
               {lead.primary_pain && (
                 <div className="flex justify-between">
@@ -679,7 +679,7 @@ export default function CloudDealDetail() {
 
           <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs uppercase tracking-wider text-white/40">Quick actions</h3>
+              <h3 className="text-xs uppercase tracking-wider text-white/55">Quick actions</h3>
             </div>
             <div className="space-y-2">
               <Button onClick={copyBriefLink} variant="outline" size="sm" className="w-full justify-start gap-2" disabled={!brief}>
@@ -744,7 +744,7 @@ export default function CloudDealDetail() {
                     <div>
                       <Label>Amount (USD)</Label>
                       <div className="relative">
-                        <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                        <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/55" />
                         <Input
                           value={paymentAmount}
                           onChange={(e) => setPaymentAmount(e.target.value)}
@@ -789,7 +789,7 @@ export default function CloudDealDetail() {
                   </DialogHeader>
 
                   <div className="space-y-2">
-                    <Label className="text-xs uppercase tracking-wider text-white/40">
+                    <Label className="text-xs uppercase tracking-wider text-white/55">
                       One-click via Libresign API
                     </Label>
                     <div className="grid grid-cols-3 gap-2">
@@ -818,14 +818,14 @@ export default function CloudDealDetail() {
                         Send Acceptance
                       </Button>
                     </div>
-                    <p className="text-[11px] text-white/40">
+                    <p className="text-[0.6875rem] text-white/55">
                       Requires Libresign installed + LIBRESIGN_BASE / LIBRESIGN_USER /
                       LIBRESIGN_APP_TOKEN / LIBRESIGN_TEMPLATES env vars set.
                     </p>
                   </div>
 
                   <div className="border-t border-white/[0.06] pt-3 mt-2 space-y-2">
-                    <Label className="text-xs uppercase tracking-wider text-white/40">
+                    <Label className="text-xs uppercase tracking-wider text-white/55">
                       Or paste a request ID (fallback)
                     </Label>
                     <Input
@@ -846,7 +846,7 @@ export default function CloudDealDetail() {
           </section>
 
           <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-            <h3 className="text-xs uppercase tracking-wider text-white/40 mb-3">Internal notes</h3>
+            <h3 className="text-xs uppercase tracking-wider text-white/55 mb-3">Internal notes</h3>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -864,7 +864,7 @@ export default function CloudDealDetail() {
         <div className="lg:col-span-2 space-y-4">
           <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs uppercase tracking-wider text-white/40">Pre-call brief</h3>
+              <h3 className="text-xs uppercase tracking-wider text-white/55">Pre-call brief</h3>
               {brief?.submitted_at ? (
                 <Badge variant="outline" className="border-emerald-500/30 text-emerald-300 bg-emerald-500/[0.08]">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -885,10 +885,10 @@ export default function CloudDealDetail() {
                   <dt className="text-white/50 text-xs mb-1">Current stack ({brief.current_apps.length})</dt>
                   <dd className="flex flex-wrap gap-1">
                     {brief.current_apps.length === 0 ? (
-                      <span className="text-white/30">—</span>
+                      <span className="text-white/50">—</span>
                     ) : (
                       brief.current_apps.map((a) => (
-                        <Badge key={a} variant="outline" className="border-white/10 bg-white/[0.04] text-white/80 text-[11px]">
+                        <Badge key={a} variant="outline" className="border-white/10 bg-white/[0.04] text-white/80 text-[0.6875rem]">
                           {APP_LABEL[a] ?? a}
                         </Badge>
                       ))
@@ -903,10 +903,10 @@ export default function CloudDealDetail() {
                   <dt className="text-white/50 text-xs mb-1">Compliance</dt>
                   <dd className="flex flex-wrap gap-1">
                     {brief.compliance_frameworks.length === 0 ? (
-                      <span className="text-white/30">—</span>
+                      <span className="text-white/50">—</span>
                     ) : (
                       brief.compliance_frameworks.map((c) => (
-                        <Badge key={c} variant="outline" className="border-white/10 bg-white/[0.04] text-white/80 text-[11px] uppercase">
+                        <Badge key={c} variant="outline" className="border-white/10 bg-white/[0.04] text-white/80 text-[0.6875rem] uppercase">
                           {c}
                         </Badge>
                       ))
@@ -947,21 +947,21 @@ export default function CloudDealDetail() {
 
           <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
             <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-              <h3 className="text-xs uppercase tracking-wider text-white/40">
+              <h3 className="text-xs uppercase tracking-wider text-white/55">
                 Shield allowlist requests
                 {shieldRequests.filter((r) => r.status === "pending").length > 0 && (
-                  <span className="ml-2 inline-flex items-center justify-center rounded-full bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5">
+                  <span className="ml-2 inline-flex items-center justify-center rounded-full bg-amber-500/20 text-amber-300 text-[0.625rem] px-2 py-0.5">
                     {shieldRequests.filter((r) => r.status === "pending").length} pending
                   </span>
                 )}
               </h3>
-              <div className="flex items-center gap-1 text-[11px]">
+              <div className="flex items-center gap-1 text-[0.6875rem]">
                 <button
                   onClick={() => setShieldFilter("pending")}
                   className={`px-2 py-1 rounded ${
                     shieldFilter === "pending"
                       ? "bg-white/[0.08] text-white/90"
-                      : "text-white/40 hover:text-white/70"
+                      : "text-white/55 hover:text-white/70"
                   }`}
                 >
                   Pending
@@ -971,7 +971,7 @@ export default function CloudDealDetail() {
                   className={`px-2 py-1 rounded ${
                     shieldFilter === "all"
                       ? "bg-white/[0.08] text-white/90"
-                      : "text-white/40 hover:text-white/70"
+                      : "text-white/55 hover:text-white/70"
                   }`}
                 >
                   All
@@ -979,7 +979,7 @@ export default function CloudDealDetail() {
               </div>
             </div>
             {shieldRequests.length === 0 ? (
-              <p className="text-sm text-white/40">
+              <p className="text-sm text-white/55">
                 No requests yet. Generate the Shield request URL above and add it to the pi-hole block page footer.
               </p>
             ) : (
@@ -1069,9 +1069,9 @@ export default function CloudDealDetail() {
           />
 
           <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-            <h3 className="text-xs uppercase tracking-wider text-white/40 mb-3">Timeline</h3>
+            <h3 className="text-xs uppercase tracking-wider text-white/55 mb-3">Timeline</h3>
             {events.length === 0 ? (
-              <p className="text-sm text-white/40">No events yet.</p>
+              <p className="text-sm text-white/55">No events yet.</p>
             ) : (
               <ol className="space-y-3">
                 {events.map((e) => (
@@ -1086,7 +1086,7 @@ export default function CloudDealDetail() {
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-white/40 mt-0.5">
+                      <div className="text-xs text-white/55 mt-0.5">
                         {fmtAbs(e.created_at)}
                         {e.triggered_by ? ` · ${e.triggered_by}` : ""}
                       </div>
@@ -1169,7 +1169,7 @@ function IntakeReviewSection({ deal }: { deal: Deal | null }) {
   return (
     <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs uppercase tracking-wider text-white/40">Technical intake</h3>
+        <h3 className="text-xs uppercase tracking-wider text-white/55">Technical intake</h3>
         {submitted ? (
           <Badge variant="outline" className="border-emerald-500/30 text-emerald-300 bg-emerald-500/[0.08]">
             <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -1213,10 +1213,10 @@ function IntakeReviewSection({ deal }: { deal: Deal | null }) {
                     {filled ? (
                       <CheckIcon className="h-3 w-3 text-emerald-500" />
                     ) : (
-                      <span className="text-[11px] text-white/40">empty</span>
+                      <span className="text-[0.6875rem] text-white/55">empty</span>
                     )}
                   </span>
-                  <span className="text-[11px] text-white/30 group-open:hidden">
+                  <span className="text-[0.6875rem] text-white/50 group-open:hidden">
                     {open[s.key] ? "−" : "+"}
                   </span>
                 </summary>
@@ -1240,14 +1240,14 @@ function Field({ label, value }: { label: string; value: any }) {
   if (value == null || value === "") return null;
   return (
     <div className="flex items-baseline gap-3 py-1">
-      <dt className="text-xs text-white/40 min-w-[110px] shrink-0">{label}</dt>
+      <dt className="text-xs text-white/55 min-w-[6.875rem] shrink-0">{label}</dt>
       <dd className="text-sm text-white/85 break-words">{String(value)}</dd>
     </div>
   );
 }
 
 function NetworkSummary({ data }: { data: any }) {
-  if (!data) return <p className="text-sm text-white/40">Empty.</p>;
+  if (!data) return <p className="text-sm text-white/55">Empty.</p>;
   const ship = [data.shipping_address, data.shipping_city, data.shipping_state, data.shipping_zip].filter(Boolean).join(", ");
   return (
     <dl>
@@ -1266,7 +1266,7 @@ function NetworkSummary({ data }: { data: any }) {
 }
 
 function BrandingSummary({ data }: { data: any }) {
-  if (!data) return <p className="text-sm text-white/40">Empty.</p>;
+  if (!data) return <p className="text-sm text-white/55">Empty.</p>;
   return (
     <div className="space-y-3">
       <dl>
@@ -1278,14 +1278,14 @@ function BrandingSummary({ data }: { data: any }) {
           <div className="flex items-center gap-1.5 text-xs text-white/70">
             <span className="inline-block w-4 h-4 rounded border border-white/20" style={{ background: data.primary_color }} />
             <span className="font-mono">{data.primary_color}</span>
-            <span className="text-white/40">primary</span>
+            <span className="text-white/55">primary</span>
           </div>
         )}
         {data.accent_color && (
           <div className="flex items-center gap-1.5 text-xs text-white/70">
             <span className="inline-block w-4 h-4 rounded border border-white/20" style={{ background: data.accent_color }} />
             <span className="font-mono">{data.accent_color}</span>
-            <span className="text-white/40">accent</span>
+            <span className="text-white/55">accent</span>
           </div>
         )}
       </div>
@@ -1293,13 +1293,13 @@ function BrandingSummary({ data }: { data: any }) {
         <div className="flex flex-wrap gap-3 pt-2 border-t border-white/[0.06]">
           {data.logo_url && (
             <a href={data.logo_url} target="_blank" rel="noopener noreferrer" className="block">
-              <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1">Logo</div>
-              <img src={data.logo_url} alt="logo" className="h-12 max-w-[160px] object-contain rounded border border-white/[0.06] bg-neutral-900 p-1" />
+              <div className="text-[0.625rem] uppercase tracking-wider text-white/55 mb-1">Logo</div>
+              <img src={data.logo_url} alt="logo" className="h-12 max-w-[10rem] object-contain rounded border border-white/[0.06] bg-neutral-900 p-1" />
             </a>
           )}
           {data.icon_url && (
             <a href={data.icon_url} target="_blank" rel="noopener noreferrer" className="block">
-              <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1">Icon</div>
+              <div className="text-[0.625rem] uppercase tracking-wider text-white/55 mb-1">Icon</div>
               <img src={data.icon_url} alt="icon" className="h-12 w-12 object-contain rounded border border-white/[0.06] bg-white p-1" />
             </a>
           )}
@@ -1314,7 +1314,7 @@ function BrandingSummary({ data }: { data: any }) {
 
 function UsersSummary({ data }: { data: any }) {
   const list: any[] = data?.list || [];
-  if (list.length === 0) return <p className="text-sm text-white/40">No users yet.</p>;
+  if (list.length === 0) return <p className="text-sm text-white/55">No users yet.</p>;
   const adminCount = list.filter((u) => u.role === "admin").length;
   return (
     <div>
@@ -1347,7 +1347,7 @@ function UsersSummary({ data }: { data: any }) {
             ))}
             {list.length > 50 && (
               <tr>
-                <td colSpan={4} className="px-2 py-1 text-center text-white/40 text-[11px]">
+                <td colSpan={4} className="px-2 py-1 text-center text-white/55 text-[0.6875rem]">
                   + {list.length - 50} more
                 </td>
               </tr>
@@ -1360,12 +1360,12 @@ function UsersSummary({ data }: { data: any }) {
 }
 
 function MigrationSummary({ data }: { data: any }) {
-  if (!data) return <p className="text-sm text-white/40">Empty.</p>;
+  if (!data) return <p className="text-sm text-white/55">Empty.</p>;
   const sources: string[] = data.selected_sources || [];
   const per = data.per_source || {};
   if (sources.length === 0)
     return (
-      <p className="text-sm text-white/40">No migration sources selected yet.</p>
+      <p className="text-sm text-white/55">No migration sources selected yet.</p>
     );
   return (
     <div className="space-y-2">
@@ -1380,10 +1380,10 @@ function MigrationSummary({ data }: { data: any }) {
             <div key={s} className="rounded-md border border-white/[0.06] bg-white/[0.02] px-3 py-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-white/85">{SOURCE_LABEL[s] ?? s}</span>
-                <span className="text-[11px] text-white/40">{ps.scope || "scope?"}</span>
+                <span className="text-[0.6875rem] text-white/55">{ps.scope || "scope?"}</span>
               </div>
               {(ps.data_volume_gb_per_user || ps.decommission_after_days) && (
-                <div className="text-[11px] text-white/50 mt-0.5">
+                <div className="text-[0.6875rem] text-white/50 mt-0.5">
                   {ps.data_volume_gb_per_user && `${ps.data_volume_gb_per_user} GB/user`}
                   {ps.data_volume_gb_per_user && ps.decommission_after_days && " · "}
                   {ps.decommission_after_days && `decommission +${ps.decommission_after_days}d`}
@@ -1404,7 +1404,7 @@ function MigrationSummary({ data }: { data: any }) {
 }
 
 function PolicySummary({ data }: { data: any }) {
-  if (!data) return <p className="text-sm text-white/40">Empty.</p>;
+  if (!data) return <p className="text-sm text-white/55">Empty.</p>;
   const cats: string[] = data.dns_filter_categories || [];
   return (
     <div>
@@ -1417,10 +1417,10 @@ function PolicySummary({ data }: { data: any }) {
       </dl>
       {cats.length > 0 && (
         <div className="mt-2">
-          <div className="text-xs text-white/40 mb-1">DNS filter</div>
+          <div className="text-xs text-white/55 mb-1">DNS filter</div>
           <div className="flex flex-wrap gap-1">
             {cats.map((c) => (
-              <Badge key={c} variant="outline" className="border-white/10 bg-white/[0.04] text-white/80 text-[11px]">
+              <Badge key={c} variant="outline" className="border-white/10 bg-white/[0.04] text-white/80 text-[0.6875rem]">
                 {c}
               </Badge>
             ))}
@@ -1521,7 +1521,7 @@ function ProvisioningChecklist({
   return (
     <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs uppercase tracking-wider text-white/40">Provisioning</h3>
+        <h3 className="text-xs uppercase tracking-wider text-white/55">Provisioning</h3>
         <Badge
           variant="outline"
           className={
@@ -1574,7 +1574,7 @@ function ProvisioningChecklist({
                       {s.label}
                     </div>
                     {st.completed_at && (
-                      <span className="text-[11px] text-white/40 shrink-0">{fmtAge(st.completed_at)}</span>
+                      <span className="text-[0.6875rem] text-white/55 shrink-0">{fmtAge(st.completed_at)}</span>
                     )}
                   </div>
                   <div className="text-xs text-white/50 leading-relaxed">{s.description}</div>
@@ -1725,7 +1725,7 @@ function InstallTracker({
   return (
     <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs uppercase tracking-wider text-white/40">Install</h3>
+        <h3 className="text-xs uppercase tracking-wider text-white/55">Install</h3>
         <div className="flex flex-wrap gap-1">
           <Badge variant="outline" className={shipped ? "border-emerald-500/30 text-emerald-300 bg-emerald-500/[0.08]" : "border-white/20 text-white/50 bg-white/[0.04]"}>
             {shipped ? "Shipped" : "Not shipped"}
@@ -1838,7 +1838,7 @@ function InstallTracker({
         <div className="flex items-center justify-between mb-2.5">
           <div className="text-xs uppercase tracking-wider text-white/50">Acceptance</div>
           {signed && (
-            <span className="text-[11px] text-emerald-400">
+            <span className="text-[0.6875rem] text-emerald-400">
               Signed {fmtAge(acceptance.signed_at!)}
             </span>
           )}
@@ -1851,7 +1851,7 @@ function InstallTracker({
             placeholder="Paste after the customer signs the acceptance"
             className="font-mono text-xs"
           />
-          <p className="text-[11px] text-white/40 mt-1.5">
+          <p className="text-[0.6875rem] text-white/55 mt-1.5">
             Send the acceptance envelope from <strong>Libresign</strong> on cloud.bestly.tech →
             paste the request ID here. Setting this stamps signed_at and unlocks Stage 8.
           </p>
@@ -2006,7 +2006,7 @@ function LiveOpsPanel({
           </button>
           <span className={`text-sm ${done ? "text-white/60 line-through" : "text-white/90"}`}>{label}</span>
         </div>
-        <span className={`text-xs ${overdue ? "text-red-300" : upcoming ? "text-amber-300" : "text-white/40"}`}>
+        <span className={`text-xs ${overdue ? "text-red-300" : upcoming ? "text-amber-300" : "text-white/55"}`}>
           {target ? new Date(target).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "—"}
           {target && !done && ` · ${fmtCountdown(days)}`}
         </span>
@@ -2017,7 +2017,7 @@ function LiveOpsPanel({
   return (
     <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs uppercase tracking-wider text-white/40">Live operations</h3>
+        <h3 className="text-xs uppercase tracking-wider text-white/55">Live operations</h3>
         {goLive && (
           <Badge variant="outline" className="border-emerald-500/30 text-emerald-300 bg-emerald-500/[0.08]">
             Live since {new Date(goLive).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}

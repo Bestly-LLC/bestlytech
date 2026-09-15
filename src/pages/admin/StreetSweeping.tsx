@@ -34,7 +34,7 @@ const OUTCOME: Record<SweepOutcome, { label: string; className: string }> = {
   disabled: { label: "Paused", className: "bg-white/[0.06] text-white/50 border-white/10" },
   skipped: { label: "Skipped day", className: "bg-white/[0.06] text-white/50 border-white/10" },
   location_error: { label: "No location", className: "bg-amber-500/10 text-amber-300 border-amber-500/20" },
-  outside_window: { label: "Outside window", className: "bg-white/[0.06] text-white/40 border-white/10" },
+  outside_window: { label: "Outside window", className: "bg-white/[0.06] text-white/55 border-white/10" },
   test: { label: "Test", className: "bg-indigo-500/10 text-indigo-300 border-indigo-500/20" },
 };
 
@@ -82,7 +82,7 @@ function StreetDiagram({ carSide, dangerSide }: { carSide: CurbSide | null; dang
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      className="w-full max-w-[300px] h-auto mx-auto block"
+      className="w-full max-w-[18.75rem] h-auto mx-auto block"
       role="img"
       aria-label={
         carSide
@@ -275,7 +275,7 @@ export default function StreetSweeping() {
               {derived.tone === "danger" ? <AlertTriangle className="h-6 w-6 text-red-300 shrink-0 mt-0.5" />
                 : derived.tone === "ok" ? <CheckCircle2 className="h-6 w-6 text-emerald-300 shrink-0 mt-0.5" />
                 : derived.tone === "warn" ? <BellOff className="h-6 w-6 text-amber-300 shrink-0 mt-0.5" />
-                : <CalendarDays className="h-6 w-6 text-white/40 shrink-0 mt-0.5" />}
+                : <CalendarDays className="h-6 w-6 text-white/55 shrink-0 mt-0.5" />}
               <div className="min-w-0">
                 <p className="text-lg sm:text-xl font-semibold text-white leading-snug">{derived.headline}</p>
                 <p className="text-sm text-white/50 mt-1">{derived.detail}</p>
@@ -313,11 +313,11 @@ export default function StreetSweeping() {
             />
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[10px] sm:text-[11px] font-medium text-white/40 uppercase tracking-widest">Alerts</p>
+                <p className="text-[0.625rem] sm:text-[0.6875rem] font-medium text-white/55 uppercase tracking-widest">Alerts</p>
                 <p className="text-xl sm:text-2xl font-semibold text-white mt-1 leading-none">
                   {state.config.alerts_enabled ? "On" : "Paused"}
                 </p>
-                <p className="text-[10px] sm:text-xs text-white/25 mt-1">ntfy + Claude push</p>
+                <p className="text-[0.625rem] sm:text-xs text-white/50 mt-1">ntfy + Claude push</p>
               </div>
               <Switch
                 checked={state.config.alerts_enabled}
@@ -334,11 +334,11 @@ export default function StreetSweeping() {
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-white">Where it's parked</h3>
                 {derived.car && (
-                  <span className="text-xs text-white/30">{fmtLA(derived.car.ran_at)}</span>
+                  <span className="text-xs text-white/50">{fmtLA(derived.car.ran_at)}</span>
                 )}
               </div>
               <StreetDiagram carSide={derived.car?.side ?? null} dangerSide={derived.dangerSide} />
-              <p className="text-xs text-white/40 mt-3 text-center">
+              <p className="text-xs text-white/55 mt-3 text-center">
                 Red = next curb swept. {derived.car?.side ? `Parked on the ${derived.car.side} curb.` : ""}
               </p>
             </div>
@@ -346,7 +346,7 @@ export default function StreetSweeping() {
             {/* Skip days */}
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
               <h3 className="text-sm font-semibold text-white">Upcoming sweep days</h3>
-              <p className="text-xs text-white/35 mt-1 mb-4">Tap a day to skip it: a holiday, a trip, or the car's out on a Turo booking.</p>
+              <p className="text-xs text-white/50 mt-1 mb-4">Tap a day to skip it: a holiday, a trip, or the car's out on a Turo booking.</p>
               <div className="grid grid-cols-2 gap-2">
                 {derived.days.map((d) => (
                   <button
@@ -356,12 +356,12 @@ export default function StreetSweeping() {
                     className={cn(
                       "rounded-xl border px-3 py-2.5 text-left transition-colors disabled:opacity-50",
                       d.skipped
-                        ? "border-white/[0.06] bg-transparent text-white/30"
+                        ? "border-white/[0.06] bg-transparent text-white/50"
                         : "border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.07]",
                     )}
                   >
                     <span className={cn("block text-sm font-medium", d.skipped && "line-through")}>{fmtDay(d.date)}</span>
-                    <span className="block text-[11px] text-white/40">{d.skipped ? "skipped" : `${d.side} curb`}</span>
+                    <span className="block text-[0.6875rem] text-white/55">{d.skipped ? "skipped" : `${d.side} curb`}</span>
                   </button>
                 ))}
               </div>
@@ -373,13 +373,13 @@ export default function StreetSweeping() {
             <div className="lg:col-span-2 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
               <h3 className="text-sm font-semibold text-white mb-3">Checks</h3>
               {state.runs.length === 0 ? (
-                <p className="text-sm text-white/40 py-6 text-center">No checks yet. The first runs Monday at 6:55am.</p>
+                <p className="text-sm text-white/55 py-6 text-center">No checks yet. The first runs Monday at 6:55am.</p>
               ) : (
                 <div className="divide-y divide-white/[0.06]">
                   {state.runs.map((r) => (
                     <div key={r.id} className="py-2.5 flex flex-wrap sm:flex-nowrap items-start gap-x-3 gap-y-1">
-                      <span className="text-xs text-white/40 tabular-nums sm:w-36 shrink-0 pt-0.5">{fmtLA(r.ran_at)}</span>
-                      <span className={cn("text-[11px] px-2 py-0.5 rounded-md border shrink-0", OUTCOME[r.outcome]?.className)}>
+                      <span className="text-xs text-white/55 tabular-nums sm:w-36 shrink-0 pt-0.5">{fmtLA(r.ran_at)}</span>
+                      <span className={cn("text-[0.6875rem] px-2 py-0.5 rounded-md border shrink-0", OUTCOME[r.outcome]?.className)}>
                         {OUTCOME[r.outcome]?.label ?? r.outcome}
                       </span>
                       <span className="text-sm text-white/60 min-w-0 break-words basis-full sm:basis-auto">
@@ -394,13 +394,13 @@ export default function StreetSweeping() {
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
               <h3 className="text-sm font-semibold text-white mb-3">Acknowledgments</h3>
               {state.acks.length === 0 ? (
-                <p className="text-sm text-white/40">None yet.</p>
+                <p className="text-sm text-white/55">None yet.</p>
               ) : (
                 <div className="divide-y divide-white/[0.06]">
                   {state.acks.map((a) => (
                     <div key={a.id} className="py-2 flex items-center justify-between gap-3">
                       <span className="text-xs text-white/50 tabular-nums">{fmtLA(a.acked_at)}</span>
-                      <span className="text-[11px] text-white/40">{a.via === "tap" ? "tapped alert" : a.via === "button" ? "Moved it button" : a.via}</span>
+                      <span className="text-[0.6875rem] text-white/55">{a.via === "tap" ? "tapped alert" : a.via === "button" ? "Moved it button" : a.via}</span>
                     </div>
                   ))}
                 </div>
@@ -408,7 +408,7 @@ export default function StreetSweeping() {
             </div>
           </div>
 
-          <div className="flex items-start gap-2 text-xs text-white/30">
+          <div className="flex items-start gap-2 text-xs text-white/50">
             <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <p>
               Checks run as two Claude scheduled tasks every 30 min, 6:55–9:55am on sweep days, reading the car from TezLab.

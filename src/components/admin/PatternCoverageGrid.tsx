@@ -77,11 +77,11 @@ export function PatternCoverageGrid({
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
         <div className="h-8 w-8 rounded-xl bg-white/[0.05] flex items-center justify-center">
-          <Grid3X3 className="h-4 w-4 text-white/40" />
+          <Grid3X3 className="h-4 w-4 text-white/55" />
         </div>
         <div>
           <h3 className="text-sm font-medium text-white">Pattern Coverage</h3>
-          <p className="text-[10px] text-white/25">
+          <p className="text-[0.625rem] text-white/50">
             Domains colored by confidence
           </p>
         </div>
@@ -91,8 +91,8 @@ export function PatternCoverageGrid({
       {topDomains.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Grid3X3 className="h-8 w-8 text-white/10 mb-2" />
-          <p className="text-xs text-white/30">No domain data available</p>
-          <p className="text-[10px] text-white/15 mt-0.5">
+          <p className="text-xs text-white/50">No domain data available</p>
+          <p className="text-[0.625rem] text-white/15 mt-0.5">
             Domains will appear here once patterns are generated
           </p>
         </div>
@@ -121,20 +121,20 @@ export function PatternCoverageGrid({
                         onDomainClick ? "cursor-pointer" : "cursor-default",
                       )}
                     >
-                      <p className="text-[10px] font-medium text-white/80 truncate leading-tight">
+                      <p className="text-[0.625rem] font-medium text-white/80 truncate leading-tight">
                         {truncateDomain(d.domain)}
                       </p>
-                      <p className="text-[9px] text-white/30 mt-0.5 tabular-nums">
+                      <p className="text-[0.5625rem] text-white/50 mt-0.5 tabular-nums">
                         {d.total_reports.toLocaleString()} reports
                       </p>
                     </button>
                   </TooltipTrigger>
                   <TooltipContent
                     side="top"
-                    className="max-w-[220px] space-y-1 text-xs"
+                    className="max-w-[13.75rem] space-y-1 text-xs"
                   >
                     <p className="font-medium text-white">{d.domain}</p>
-                    <div className="text-white/60 space-y-0.5 text-[11px]">
+                    <div className="text-white/60 space-y-0.5 text-[0.6875rem]">
                       <p>Patterns: {d.pattern_count}</p>
                       <p>
                         Confidence:{" "}

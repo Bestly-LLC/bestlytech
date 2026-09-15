@@ -140,7 +140,7 @@ export function SmartAlerts({
     <div className="space-y-3">
       {/* Section header */}
       <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-white/40" />
+        <Sparkles className="h-4 w-4 text-white/55" />
         <h3 className="text-sm font-semibold text-white">Insights</h3>
       </div>
 
@@ -177,7 +177,7 @@ export function SmartAlerts({
                   <p className="text-sm font-medium text-white leading-snug truncate">
                     {insight.title}
                   </p>
-                  <p className="text-xs text-white/40 mt-0.5 line-clamp-2">
+                  <p className="text-xs text-white/55 mt-0.5 line-clamp-2">
                     {insight.description}
                   </p>
                 </div>
@@ -186,9 +186,9 @@ export function SmartAlerts({
                 {insight.action && (
                   <button
                     onClick={insight.action.onClick}
-                    className="shrink-0 flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors px-2 py-1 rounded-lg hover:bg-white/[0.05]"
+                    className="shrink-0 flex items-center gap-1 text-xs text-white/55 hover:text-white transition-colors px-2 py-1 rounded-lg hover:bg-white/[0.05]"
                   >
-                    <span className="truncate max-w-[100px]">
+                    <span className="truncate max-w-[6.25rem]">
                       {insight.action.label}
                     </span>
                     <ExternalLink className="h-3 w-3" />

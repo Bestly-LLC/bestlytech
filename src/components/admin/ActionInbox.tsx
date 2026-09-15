@@ -44,7 +44,7 @@ const severityIconColor: Record<Severity, string> = {
   critical: "text-red-400",
   urgent: "text-amber-400",
   stale: "text-yellow-500",
-  info: "text-white/40",
+  info: "text-white/55",
 };
 
 const STALE_INTAKE_DAYS = 5;
@@ -242,8 +242,8 @@ export function ActionInbox() {
             <Sparkles className="h-5 w-5 text-emerald-400" />
           </div>
           <div>
-            <h3 className="text-[15px] font-semibold text-white">Inbox zero</h3>
-            <p className="text-xs text-white/40 mt-0.5">
+            <h3 className="text-[0.9375rem] font-semibold text-white">Inbox zero</h3>
+            <p className="text-xs text-white/55 mt-0.5">
               Nothing waiting on you. No system alerts, no unanswered requests, no stalled intakes.
             </p>
           </div>
@@ -263,7 +263,7 @@ export function ActionInbox() {
     <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
         <div>
-          <h3 className="text-[15px] font-semibold text-white">Action Inbox</h3>
+          <h3 className="text-[0.9375rem] font-semibold text-white">Action Inbox</h3>
           <p className={cn("text-xs mt-0.5 font-medium", headlineColor)}>
             {summary.total} {summary.total === 1 ? "item" : "items"} need you
             {summary.critical > 0 && ` · ${summary.critical} critical`}
@@ -294,10 +294,10 @@ export function ActionInbox() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-white truncate">{item.title}</p>
                   {item.detail && (
-                    <p className="text-xs text-white/40 truncate mt-0.5">{item.detail}</p>
+                    <p className="text-xs text-white/55 truncate mt-0.5">{item.detail}</p>
                   )}
                 </div>
-                <span className="text-[11px] text-white/30 tabular-nums shrink-0">
+                <span className="text-[0.6875rem] text-white/50 tabular-nums shrink-0">
                   {timeAgo(item.ageMs)}
                 </span>
                 <ChevronRight className="h-4 w-4 text-white/20 group-hover:text-white/60 transition-colors shrink-0" />
@@ -308,7 +308,7 @@ export function ActionInbox() {
       </ul>
       {items.length > 8 && (
         <div className="px-5 py-3 text-center border-t border-white/[0.04]">
-          <span className="text-xs text-white/30">
+          <span className="text-xs text-white/50">
             +{items.length - 8} more {items.length - 8 === 1 ? "item" : "items"} in queue
           </span>
         </div>

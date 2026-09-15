@@ -90,7 +90,7 @@ function InfoTip({ text }: { text: string }) {
         <TooltipTrigger asChild>
           <Info className="h-3 w-3 text-muted-foreground/60 cursor-help inline-block ml-1" />
         </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-[280px] text-xs">{text}</TooltipContent>
+        <TooltipContent side="top" className="max-w-[17.5rem] text-xs">{text}</TooltipContent>
       </UITooltip>
     </TooltipProvider>
   );
@@ -755,7 +755,7 @@ export default function CommunityLearning() {
           <TooltipTrigger asChild>
             <span className="inline-flex items-center gap-1 ml-1.5">
               <Bot className="h-3.5 w-3.5 text-purple-500" />
-              <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${FIX_ACTION_BADGE[fix.action] ?? "bg-purple-500/15 text-purple-500 border-purple-500/30"}`}>
+              <Badge variant="outline" className={`text-[0.625rem] py-0 px-1.5 ${FIX_ACTION_BADGE[fix.action] ?? "bg-purple-500/15 text-purple-500 border-purple-500/30"}`}>
                 {fix.action.replace(/_/g, " ")}
               </Badge>
             </span>
@@ -869,10 +869,10 @@ export default function CommunityLearning() {
                           <span className={`relative inline-flex rounded-full h-2 w-2 ${statusColor}`} />
                         </span>
                         <Icon className={`h-3 w-3 ${textColor}`} />
-                        <span className="text-[11px] font-medium text-foreground hidden sm:inline">{hb.label}</span>
+                        <span className="text-[0.6875rem] font-medium text-foreground hidden sm:inline">{hb.label}</span>
                       </div>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs max-w-[220px]">
+                    <TooltipContent side="bottom" className="text-xs max-w-[13.75rem]">
                       <p className="font-medium">{hb.label}</p>
                       <p className="text-muted-foreground">
                         {hb.lastRun ? `Last: ${timeAgo(hb.lastRun)}` : "No activity recorded"}
@@ -908,7 +908,7 @@ export default function CommunityLearning() {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{o.patterns_last_24h}</p>
-              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Active 24h<span className="hidden sm:inline"><InfoTip text="Patterns that matched a banner in the last 24 hours" /></span></p>
+              <p className="text-[0.6875rem] sm:text-xs text-muted-foreground truncate">Active 24h<span className="hidden sm:inline"><InfoTip text="Patterns that matched a banner in the last 24 hours" /></span></p>
             </div>
           </CardContent>
         </Card>
@@ -917,7 +917,7 @@ export default function CommunityLearning() {
             <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500 shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{o.stale_patterns}</p>
-              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Stale 30d+<span className="hidden sm:inline"><InfoTip text="Patterns not seen in 30+ days — may be outdated" /></span></p>
+              <p className="text-[0.6875rem] sm:text-xs text-muted-foreground truncate">Stale 30d+<span className="hidden sm:inline"><InfoTip text="Patterns not seen in 30+ days — may be outdated" /></span></p>
             </div>
           </CardContent>
         </Card>
@@ -926,7 +926,7 @@ export default function CommunityLearning() {
             <CircleAlert className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{issueCount}</p>
-              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Issues<span className="hidden sm:inline"><InfoTip text="Patterns with very low confidence, zero successes, or other problems" /></span></p>
+              <p className="text-[0.6875rem] sm:text-xs text-muted-foreground truncate">Issues<span className="hidden sm:inline"><InfoTip text="Patterns with very low confidence, zero successes, or other problems" /></span></p>
             </div>
           </CardContent>
         </Card>
@@ -935,7 +935,7 @@ export default function CommunityLearning() {
             <Coins className="h-4 w-4 sm:h-5 sm:w-5 text-primary shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{(aiTokenStats.totalPrompt + aiTokenStats.totalCompletion).toLocaleString()}</p>
-              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">AI Tokens<span className="hidden sm:inline"><InfoTip text={`${aiTokenStats.totalRuns} AI runs total. Prompt: ${aiTokenStats.totalPrompt.toLocaleString()}, Completion: ${aiTokenStats.totalCompletion.toLocaleString()}`} /></span></p>
+              <p className="text-[0.6875rem] sm:text-xs text-muted-foreground truncate">AI Tokens<span className="hidden sm:inline"><InfoTip text={`${aiTokenStats.totalRuns} AI runs total. Prompt: ${aiTokenStats.totalPrompt.toLocaleString()}, Completion: ${aiTokenStats.totalCompletion.toLocaleString()}`} /></span></p>
             </div>
           </CardContent>
         </Card>
@@ -944,7 +944,7 @@ export default function CommunityLearning() {
             <MousePointerClick className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500 shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{dismissalReports.length}</p>
-              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Dismissals<span className="hidden sm:inline"><InfoTip text="User-reported banner dismissals awaiting consensus processing" /></span></p>
+              <p className="text-[0.6875rem] sm:text-xs text-muted-foreground truncate">Dismissals<span className="hidden sm:inline"><InfoTip text="User-reported banner dismissals awaiting consensus processing" /></span></p>
             </div>
           </CardContent>
         </Card>
@@ -953,7 +953,7 @@ export default function CommunityLearning() {
             <Users className="h-4 w-4 sm:h-5 sm:w-5 text-teal-500 shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-semibold tabular-nums">{consensusPatternCount}</p>
-              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Consensus<span className="hidden sm:inline"><InfoTip text="Patterns created from user dismissal consensus" /></span></p>
+              <p className="text-[0.6875rem] sm:text-xs text-muted-foreground truncate">Consensus<span className="hidden sm:inline"><InfoTip text="Patterns created from user dismissal consensus" /></span></p>
             </div>
           </CardContent>
         </Card>
@@ -966,8 +966,8 @@ export default function CommunityLearning() {
             <TabsTrigger value="pipeline" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Zap className="h-3.5 w-3.5 hidden sm:block" />Pipeline</TabsTrigger>
             <TabsTrigger value="domains" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Globe className="h-3.5 w-3.5 hidden sm:block" />Domains</TabsTrigger>
             <TabsTrigger value="breakdown" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><BarChart3 className="h-3.5 w-3.5 hidden sm:block" />Breakdown</TabsTrigger>
-            <TabsTrigger value="dismissals" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><MousePointerClick className="h-3.5 w-3.5 hidden sm:block" />Dismissals{dismissalReports.length > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{dismissalReports.length}</Badge>}</TabsTrigger>
-            <TabsTrigger value="manual-review" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><AlertTriangle className="h-3.5 w-3.5 hidden sm:block" />Review{noHtmlReports.length > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{noHtmlReports.length}</Badge>}</TabsTrigger>
+            <TabsTrigger value="dismissals" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><MousePointerClick className="h-3.5 w-3.5 hidden sm:block" />Dismissals{dismissalReports.length > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[0.625rem]">{dismissalReports.length}</Badge>}</TabsTrigger>
+            <TabsTrigger value="manual-review" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><AlertTriangle className="h-3.5 w-3.5 hidden sm:block" />Review{noHtmlReports.length > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[0.625rem]">{noHtmlReports.length}</Badge>}</TabsTrigger>
             <TabsTrigger value="user-reports" className="gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"><Flag className="h-3.5 w-3.5 hidden sm:block" />Reports</TabsTrigger>
           </TabsList>
         </div>
@@ -990,7 +990,7 @@ export default function CommunityLearning() {
                       Last run: {aiGenLog.length > 0 ? (
                         <>
                           {timeAgo(aiGenLog[0].created_at)}
-                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 ml-0.5">
+                          <Badge variant="outline" className="text-[0.625rem] px-1 py-0 h-4 ml-0.5">
                             {inferRunSource(aiGenLog[0].created_at) === "auto" ? "auto" : "manual"}
                           </Badge>
                         </>
@@ -1072,7 +1072,7 @@ export default function CommunityLearning() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="h-[280px] sm:h-[350px]">
+                <div className="h-[17.5rem] sm:h-[21.875rem]">
                   <ResponsiveContainer width="100%" height="100%">
                     {chartType === "area" ? (
                       <AreaChart data={activity}>
@@ -1137,10 +1137,10 @@ export default function CommunityLearning() {
                   <CollapsibleContent>
                     <CardContent className="pt-0 space-y-4">
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <Card className="border-t-2 border-primary/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold tabular-nums">{genResults.processed ?? 0}</p><p className="text-[11px] text-muted-foreground">Processed</p></CardContent></Card>
-                        <Card className="border-t-2 border-green-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-green-500 tabular-nums">{genResults.generated ?? 0}</p><p className="text-[11px] text-muted-foreground">Generated</p></CardContent></Card>
-                        <Card className="border-t-2 border-muted"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-muted-foreground tabular-nums">{genResults.skipped ?? 0}</p><p className="text-[11px] text-muted-foreground">Skipped</p></CardContent></Card>
-                        <Card className="border-t-2 border-red-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-red-500 tabular-nums">{genResults.failed ?? 0}</p><p className="text-[11px] text-muted-foreground">Failed</p></CardContent></Card>
+                        <Card className="border-t-2 border-primary/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold tabular-nums">{genResults.processed ?? 0}</p><p className="text-[0.6875rem] text-muted-foreground">Processed</p></CardContent></Card>
+                        <Card className="border-t-2 border-green-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-green-500 tabular-nums">{genResults.generated ?? 0}</p><p className="text-[0.6875rem] text-muted-foreground">Generated</p></CardContent></Card>
+                        <Card className="border-t-2 border-muted"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-muted-foreground tabular-nums">{genResults.skipped ?? 0}</p><p className="text-[0.6875rem] text-muted-foreground">Skipped</p></CardContent></Card>
+                        <Card className="border-t-2 border-red-500/40"><CardContent className="py-2.5 text-center"><p className="text-xl font-bold text-red-500 tabular-nums">{genResults.failed ?? 0}</p><p className="text-[0.6875rem] text-muted-foreground">Failed</p></CardContent></Card>
                       </div>
                       {genResults.results?.length > 0 && (
                         <>
@@ -1151,7 +1151,7 @@ export default function CommunityLearning() {
                                   <span className="font-medium text-sm truncate">{r.domain}</span>
                                   <Badge variant="outline" className={`shrink-0 ${AI_STATUS_BADGE[r.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}`}>{r.status}</Badge>
                                 </div>
-                                {r.selector && <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded block truncate">{r.selector}</code>}
+                                {r.selector && <code className="text-[0.6875rem] bg-muted px-1.5 py-0.5 rounded block truncate">{r.selector}</code>}
                                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                   {r.action && <span>{r.action}</span>}
                                   {r.confidence != null && <span className="tabular-nums">{Math.round(r.confidence * 10)}%</span>}
@@ -1180,7 +1180,7 @@ export default function CommunityLearning() {
                                       </Badge>
                                     </TableCell>
                                     <TableCell>
-                                      {r.selector ? <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.selector}</code> : <span className="text-xs text-muted-foreground">—</span>}
+                                      {r.selector ? <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[12.5rem] truncate inline-block">{r.selector}</code> : <span className="text-xs text-muted-foreground">—</span>}
                                     </TableCell>
                                     <TableCell>{r.action ?? "—"}</TableCell>
                                     <TableCell className="text-right tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 10)}%` : "—"}</TableCell>
@@ -1252,20 +1252,20 @@ export default function CommunityLearning() {
                                 Re-run
                               </Button>
                             </div>
-                            <div className="flex items-center flex-wrap gap-1.5 text-[11px]">
+                            <div className="flex items-center flex-wrap gap-1.5 text-[0.6875rem]">
                               <span className="tabular-nums font-medium">{c.report_count} reports</span>
                               {c.banner_html ? (
-                                <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30 text-[10px]">HTML ✓</Badge>
+                                <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30 text-[0.625rem]">HTML ✓</Badge>
                               ) : (
-                                <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30 text-[10px]">No HTML</Badge>
+                                <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30 text-[0.625rem]">No HTML</Badge>
                               )}
                               <span className="text-muted-foreground">{c.cmp_fingerprint ?? "unknown"}</span>
                               {isNeverProcessed ? (
-                                <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[10px]">New</Badge>
+                                <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[0.625rem]">New</Badge>
                               ) : c.ai_attempts >= 5 ? (
-                                <Badge variant="outline" className="bg-red-900/15 text-red-400 border-red-900/30 text-[10px]">Perm failed</Badge>
+                                <Badge variant="outline" className="bg-red-900/15 text-red-400 border-red-900/30 text-[0.625rem]">Perm failed</Badge>
                               ) : (
-                                <Badge variant="outline" className="bg-blue-500/15 text-blue-500 border-blue-500/30 text-[10px]">Attempted</Badge>
+                                <Badge variant="outline" className="bg-blue-500/15 text-blue-500 border-blue-500/30 text-[0.625rem]">Attempted</Badge>
                               )}
                               <span className="text-muted-foreground tabular-nums">×{c.ai_attempts ?? 0}</span>
                             </div>
@@ -1371,14 +1371,14 @@ export default function CommunityLearning() {
                             <span className="font-medium text-sm truncate">{log.domain}</span>
                             <span className="inline-flex items-center gap-1 shrink-0">
                               {log.status === "permanently_failed" && <AlertTriangle className="h-3 w-3 text-red-400" />}
-                              <Badge variant="outline" className={`text-[10px] ${AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}`}>
+                              <Badge variant="outline" className={`text-[0.625rem] ${AI_STATUS_BADGE[log.status] ?? "bg-muted text-muted-foreground border-muted-foreground/30"}`}>
                                 {log.status.replace(/_/g, " ")}
                               </Badge>
                             </span>
                           </div>
-                          {log.selector_generated && <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded block truncate">{log.selector_generated}</code>}
-                          <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
-                            {log.action_type && <Badge variant="outline" className={`text-[10px] ${ACTION_BADGE_VARIANT[log.action_type] ?? ""}`}>{log.action_type}</Badge>}
+                          {log.selector_generated && <code className="text-[0.6875rem] bg-muted px-1.5 py-0.5 rounded block truncate">{log.selector_generated}</code>}
+                          <div className="flex items-center gap-3 text-[0.6875rem] text-muted-foreground flex-wrap">
+                            {log.action_type && <Badge variant="outline" className={`text-[0.625rem] ${ACTION_BADGE_VARIANT[log.action_type] ?? ""}`}>{log.action_type}</Badge>}
                             {log.confidence != null && <span className="tabular-nums">Conf: {Math.round(log.confidence * 10)}%</span>}
                             {(log.prompt_tokens || log.completion_tokens) && <span className="tabular-nums">{(log.prompt_tokens || 0) + (log.completion_tokens || 0)} tok</span>}
                             <span>{new Date(log.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
@@ -1420,7 +1420,7 @@ export default function CommunityLearning() {
                               </TableCell>
                               <TableCell>
                                 {log.selector_generated ? (
-                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block font-mono">{log.selector_generated}</code>
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[12.5rem] truncate inline-block font-mono">{log.selector_generated}</code>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">—</span>
                                 )}
@@ -1458,7 +1458,7 @@ export default function CommunityLearning() {
                       <div className="flex items-center gap-2">
                         <AlertTriangle className="h-4 w-4 text-muted-foreground" />
                         <CardTitle className="text-sm font-medium">Skipped — No HTML</CardTitle>
-                        <Badge variant="secondary" className="text-[10px]">{skippedDomains.length}</Badge>
+                        <Badge variant="secondary" className="text-[0.625rem]">{skippedDomains.length}</Badge>
                       </div>
                       <ChevronDown className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
@@ -1471,7 +1471,7 @@ export default function CommunityLearning() {
                             <div className="flex items-center gap-2 min-w-0 flex-1">
                               <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                               <span className="font-medium text-sm truncate">{log.domain}</span>
-                              <span className="text-[11px] text-muted-foreground shrink-0">{log.created_at ? timeAgo(log.created_at) : "—"}</span>
+                              <span className="text-[0.6875rem] text-muted-foreground shrink-0">{log.created_at ? timeAgo(log.created_at) : "—"}</span>
                             </div>
                             <Button
                               variant="outline"
@@ -1529,7 +1529,7 @@ export default function CommunityLearning() {
                           ); })()}
                           <div className="flex justify-between"><span className="text-muted-foreground">Confidence</span><span className="tabular-nums">{Math.round(d.avg_confidence * 10)}%</span></div>
                         </div>
-                        <p className="text-[11px] text-muted-foreground ml-7">Last active: {d.last_active ? timeAgo(d.last_active) : "—"}</p>
+                        <p className="text-[0.6875rem] text-muted-foreground ml-7">Last active: {d.last_active ? timeAgo(d.last_active) : "—"}</p>
                       </button>
                       {isExpanded && domainPatterns.length > 0 && (
                         <div className="border-t bg-muted/20 p-2 space-y-2">
@@ -1539,7 +1539,7 @@ export default function CommunityLearning() {
                             return (
                               <div key={j} className={`border rounded-lg p-2.5 space-y-1.5 bg-background ${isPatternFixed ? "border-l-2 border-l-purple-500/50" : ""} ${isInactive ? "opacity-50" : ""}`}>
                                 <div className="flex items-center justify-between">
-                                  <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded truncate flex-1">{r.selector}</code>
+                                  <code className="text-[0.6875rem] bg-muted px-1.5 py-0.5 rounded truncate flex-1">{r.selector}</code>
                                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
                                     <Switch
                                       checked={r.is_active !== false}
@@ -1554,12 +1554,12 @@ export default function CommunityLearning() {
                                   </div>
                                 </div>
                                 <div className="flex items-center flex-wrap gap-1">
-                                  <Badge variant="outline" className={`text-[10px] ${ACTION_BADGE_VARIANT[r.action_type] ?? ""}`}>{r.action_type}</Badge>
-                                  {r.strategy && <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-cyan-500/15 text-cyan-500 border-cyan-500/30">⚡ {r.strategy}</Badge>}
-                                  <Badge variant="secondary" className="text-[10px]">{r.source}</Badge>
+                                  <Badge variant="outline" className={`text-[0.625rem] ${ACTION_BADGE_VARIANT[r.action_type] ?? ""}`}>{r.action_type}</Badge>
+                                  {r.strategy && <Badge variant="outline" className="text-[0.625rem] py-0 px-1.5 bg-cyan-500/15 text-cyan-500 border-cyan-500/30">⚡ {r.strategy}</Badge>}
+                                  <Badge variant="secondary" className="text-[0.625rem]">{r.source}</Badge>
                                   <AiFixerIndicator domain={r.domain} selector={r.selector} />
                                 </div>
-                                <div className="grid grid-cols-3 gap-x-3 text-[11px]">
+                                <div className="grid grid-cols-3 gap-x-3 text-[0.6875rem]">
                                   <div><span className="text-muted-foreground">Conf:</span> <span className="tabular-nums">{r.confidence != null ? `${Math.round(r.confidence * 10)}%` : "—"}</span></div>
                                   <div><span className="text-muted-foreground">Reports:</span> <span className="tabular-nums">{r.report_count}</span></div>
                                   <div className="text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : "—"}</div>
@@ -1644,13 +1644,13 @@ export default function CommunityLearning() {
                                 <TableCell></TableCell>
                                 <TableCell colSpan={2}>
                                   <div className="flex flex-col gap-1 pl-4">
-                                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[300px] truncate inline-block">{r.selector}</code>
+                                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[18.75rem] truncate inline-block">{r.selector}</code>
                                     <div className="flex items-center gap-1.5">
-                                      <Badge variant="outline" className={`text-[10px] ${ACTION_BADGE_VARIANT[r.action_type] ?? ""}`}>{r.action_type}</Badge>
-                                      {r.strategy && <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-cyan-500/15 text-cyan-500 border-cyan-500/30">⚡ {r.strategy}</Badge>}
-                                      <Badge variant="secondary" className="text-[10px]">{r.source}</Badge>
+                                      <Badge variant="outline" className={`text-[0.625rem] ${ACTION_BADGE_VARIANT[r.action_type] ?? ""}`}>{r.action_type}</Badge>
+                                      {r.strategy && <Badge variant="outline" className="text-[0.625rem] py-0 px-1.5 bg-cyan-500/15 text-cyan-500 border-cyan-500/30">⚡ {r.strategy}</Badge>}
+                                      <Badge variant="secondary" className="text-[0.625rem]">{r.source}</Badge>
                                       <AiFixerIndicator domain={r.domain} selector={r.selector} />
-                                      {isInactive && <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-muted text-muted-foreground border-muted-foreground/30">Inactive</Badge>}
+                                      {isInactive && <Badge variant="outline" className="text-[0.625rem] py-0 px-1.5 bg-muted text-muted-foreground border-muted-foreground/30">Inactive</Badge>}
                                     </div>
                                   </div>
                                 </TableCell>
@@ -1708,25 +1708,25 @@ export default function CommunityLearning() {
               <Card className="border-t-2 border-primary/40">
                 <CardContent className="py-3 text-center">
                   <p className="text-2xl font-bold tabular-nums">{cmpDist.length}</p>
-                  <p className="text-[10px] text-muted-foreground font-medium">CMPs Detected</p>
+                  <p className="text-[0.625rem] text-muted-foreground font-medium">CMPs Detected</p>
                 </CardContent>
               </Card>
               <Card className="border-t-2 border-accent/40">
                 <CardContent className="py-3 text-center">
                   <p className="text-2xl font-bold tabular-nums">{actionStats.length > 0 ? actionStats.reduce((a: any, b: any) => a.count > b.count ? a : b).action_type : "—"}</p>
-                  <p className="text-[10px] text-muted-foreground font-medium">Top Action</p>
+                  <p className="text-[0.625rem] text-muted-foreground font-medium">Top Action</p>
                 </CardContent>
               </Card>
               <Card className="border-t-2 border-secondary/40">
                 <CardContent className="py-3 text-center">
                   <p className="text-2xl font-bold tabular-nums">{sourceDist.length > 0 ? sourceDist.reduce((a: any, b: any) => a.count > b.count ? a : b).source : "—"}</p>
-                  <p className="text-[10px] text-muted-foreground font-medium">Top Source</p>
+                  <p className="text-[0.625rem] text-muted-foreground font-medium">Top Source</p>
                 </CardContent>
               </Card>
               <Card className="border-t-2 border-muted-foreground/40">
                 <CardContent className="py-3 text-center">
                   <p className="text-2xl font-bold tabular-nums">{overview ? `${Math.round(overview.avg_confidence * 100)}%` : "—"}</p>
-                  <p className="text-[10px] text-muted-foreground font-medium">Avg Confidence</p>
+                  <p className="text-[0.625rem] text-muted-foreground font-medium">Avg Confidence</p>
                 </CardContent>
               </Card>
             </div>
@@ -1737,7 +1737,7 @@ export default function CommunityLearning() {
                 <CardDescription>How patterns are distributed across confidence levels</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[250px]">
+                <div className="h-[15.625rem]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={confDist}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -1761,7 +1761,7 @@ export default function CommunityLearning() {
                 <CardDescription>Which dismiss actions are most common across all patterns</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[250px]">
+                <div className="h-[15.625rem]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={actionStats} dataKey="count" nameKey="action_type" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} label={({ action_type }) => action_type}>
@@ -1793,7 +1793,7 @@ export default function CommunityLearning() {
                             <TooltipTrigger asChild>
                               <Eye className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                             </TooltipTrigger>
-                            <TooltipContent side="right" className="max-w-[280px] text-xs">
+                            <TooltipContent side="right" className="max-w-[17.5rem] text-xs">
                               {CMP_DESCRIPTIONS[c.cmp_fingerprint?.toLowerCase()] ?? `${c.cmp_fingerprint} — Third-party consent management platform`}
                             </TooltipContent>
                           </UITooltip>
@@ -1829,7 +1829,7 @@ export default function CommunityLearning() {
                                   <TooltipTrigger asChild>
                                     <Eye className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                                   </TooltipTrigger>
-                                  <TooltipContent side="right" className="max-w-[280px] text-xs">
+                                  <TooltipContent side="right" className="max-w-[17.5rem] text-xs">
                                     {CMP_DESCRIPTIONS[c.cmp_fingerprint?.toLowerCase()] ?? `${c.cmp_fingerprint} — Third-party consent management platform`}
                                   </TooltipContent>
                                 </UITooltip>
@@ -1854,7 +1854,7 @@ export default function CommunityLearning() {
                 <CardDescription>How patterns were created — community reports, AI, or manual</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[250px]">
+                <div className="h-[15.625rem]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={sourceDist} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -1877,19 +1877,19 @@ export default function CommunityLearning() {
               <Card className="border-t-2 border-purple-500/40">
                 <CardContent className="py-2.5 sm:py-3 text-center">
                   <p className="text-lg sm:text-2xl font-bold tabular-nums">{dismissalReports.length}</p>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground">Total Reports</p>
+                  <p className="text-[0.625rem] sm:text-xs text-muted-foreground">Total Reports</p>
                 </CardContent>
               </Card>
               <Card className="border-t-2 border-blue-500/40">
                 <CardContent className="py-2.5 sm:py-3 text-center">
                   <p className="text-lg sm:text-2xl font-bold text-blue-500 tabular-nums">{dismissalsByDomain.size}</p>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground">Unique Domains</p>
+                  <p className="text-[0.625rem] sm:text-xs text-muted-foreground">Unique Domains</p>
                 </CardContent>
               </Card>
               <Card className="border-t-2 border-teal-500/40">
                 <CardContent className="py-2.5 sm:py-3 text-center">
                   <p className="text-lg sm:text-2xl font-bold text-teal-500 tabular-nums">{consensusCandidates.length}</p>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground">Pending<span className="hidden sm:inline"> Consensus</span></p>
+                  <p className="text-[0.625rem] sm:text-xs text-muted-foreground">Pending<span className="hidden sm:inline"> Consensus</span></p>
                 </CardContent>
               </Card>
             </div>
@@ -1954,10 +1954,10 @@ export default function CommunityLearning() {
                             />
                             <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                             <span className="font-medium text-sm truncate flex-1">{r.domain}</span>
-                            <span className="text-[11px] text-muted-foreground shrink-0">{r.created_at ? timeAgo(r.created_at) : "—"}</span>
+                            <span className="text-[0.6875rem] text-muted-foreground shrink-0">{r.created_at ? timeAgo(r.created_at) : "—"}</span>
                           </div>
-                          <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded block truncate">{r.clicked_selector}</code>
-                          {r.banner_selector && <code className="text-[11px] bg-muted/50 px-1.5 py-0.5 rounded block truncate text-muted-foreground">{r.banner_selector}</code>}
+                          <code className="text-[0.6875rem] bg-muted px-1.5 py-0.5 rounded block truncate">{r.clicked_selector}</code>
+                          {r.banner_selector && <code className="text-[0.6875rem] bg-muted/50 px-1.5 py-0.5 rounded block truncate text-muted-foreground">{r.banner_selector}</code>}
                         </div>
                       ))}
                     </div>
@@ -2002,10 +2002,10 @@ export default function CommunityLearning() {
                                 <Globe className="h-3.5 w-3.5 text-muted-foreground" />
                                 {r.domain}
                               </TableCell>
-                              <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.clicked_selector}</code></TableCell>
+                              <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[12.5rem] truncate inline-block">{r.clicked_selector}</code></TableCell>
                               <TableCell>
                                 {r.banner_selector ? (
-                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate inline-block">{r.banner_selector}</code>
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[12.5rem] truncate inline-block">{r.banner_selector}</code>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">—</span>
                                 )}
@@ -2052,14 +2052,14 @@ export default function CommunityLearning() {
                             Fetch
                           </Button>
                         </div>
-                        <div className="flex items-center flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+                        <div className="flex items-center flex-wrap gap-1.5 text-[0.6875rem] text-muted-foreground">
                           <span className="tabular-nums">{c.report_count} reports</span>
                           <span>·</span>
                           <span>{c.cmp_fingerprint ?? "unknown"}</span>
                           <span>·</span>
                           <span>{c.last_reported ? timeAgo(c.last_reported) : "—"}</span>
                         </div>
-                        {c.page_url && <p className="text-[11px] text-muted-foreground truncate">{c.page_url}</p>}
+                        {c.page_url && <p className="text-[0.6875rem] text-muted-foreground truncate">{c.page_url}</p>}
                       </div>
                     ))}
                   </div>
@@ -2084,7 +2084,7 @@ export default function CommunityLearning() {
                             </TableCell>
                             <TableCell className="text-right font-medium tabular-nums">{c.report_count}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">{c.cmp_fingerprint ?? "unknown"}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{c.page_url || "—"}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-[12.5rem] truncate">{c.page_url || "—"}</TableCell>
                             <TableCell className="text-right text-xs text-muted-foreground">{c.last_reported ? timeAgo(c.last_reported) : "—"}</TableCell>
                             <TableCell>
                               <Button
@@ -2128,8 +2128,8 @@ export default function CommunityLearning() {
               ) : (
                 <>
                   <div className="grid grid-cols-2 gap-4 mb-6">
-                    <Card className="border-t-2 border-primary/40"><CardContent className="py-3 text-center"><p className="text-xl sm:text-2xl font-bold tabular-nums">{unresolvedReports.length}</p><p className="text-[10px] sm:text-xs text-muted-foreground">Unresolved</p></CardContent></Card>
-                    <Card className="border-t-2 border-amber-500/40"><CardContent className="py-3 text-center"><p className="text-xl sm:text-2xl font-bold text-amber-500 tabular-nums">{unresolvedReports.filter((r: any) => r.report_count >= 3).length}</p><p className="text-[10px] sm:text-xs text-muted-foreground">Priority (3+)</p></CardContent></Card>
+                    <Card className="border-t-2 border-primary/40"><CardContent className="py-3 text-center"><p className="text-xl sm:text-2xl font-bold tabular-nums">{unresolvedReports.length}</p><p className="text-[0.625rem] sm:text-xs text-muted-foreground">Unresolved</p></CardContent></Card>
+                    <Card className="border-t-2 border-amber-500/40"><CardContent className="py-3 text-center"><p className="text-xl sm:text-2xl font-bold text-amber-500 tabular-nums">{unresolvedReports.filter((r: any) => r.report_count >= 3).length}</p><p className="text-[0.625rem] sm:text-xs text-muted-foreground">Priority (3+)</p></CardContent></Card>
                   </div>
                   <div className="md:hidden space-y-3">
                     {unresolvedReports.map((r: any, i: number) => (
@@ -2138,15 +2138,15 @@ export default function CommunityLearning() {
                           <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           <span className="font-medium text-sm truncate flex-1">{r.domain}</span>
                           {r.report_count >= 3 && (
-                            <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[10px] shrink-0">Priority</Badge>
+                            <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[0.625rem] shrink-0">Priority</Badge>
                           )}
                         </div>
                         <div className="flex items-center gap-3 text-xs">
                           <span className="tabular-nums font-medium">{r.report_count} reports</span>
                           {r.has_working_pattern ? (
-                            <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30 text-[10px]">Pattern ✓</Badge>
+                            <Badge variant="outline" className="bg-green-600/15 text-green-600 border-green-600/30 text-[0.625rem]">Pattern ✓</Badge>
                           ) : (
-                            <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30 text-[10px]">No pattern</Badge>
+                            <Badge variant="outline" className="bg-red-500/15 text-red-500 border-red-500/30 text-[0.625rem]">No pattern</Badge>
                           )}
                           <span className="text-muted-foreground ml-auto">{r.last_reported ? timeAgo(r.last_reported) : "—"}</span>
                         </div>
@@ -2171,7 +2171,7 @@ export default function CommunityLearning() {
                               <Globe className="h-3.5 w-3.5 text-muted-foreground" />
                               {r.domain}
                               {r.report_count >= 3 && (
-                                <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[10px]">Priority</Badge>
+                                <Badge variant="outline" className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-[0.625rem]">Priority</Badge>
                               )}
                             </TableCell>
                             <TableCell className="text-right font-medium tabular-nums">{r.report_count}</TableCell>

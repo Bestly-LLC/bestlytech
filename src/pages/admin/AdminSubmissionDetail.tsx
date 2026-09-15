@@ -246,7 +246,7 @@ export default function AdminSubmissionDetail() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-full sm:w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[10rem]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
@@ -501,7 +501,7 @@ export default function AdminSubmissionDetail() {
             {guidance.map((g) => (
               <div key={g.id} className="p-3 rounded-md bg-muted/50 border">
                 <div className="flex items-center gap-2 mb-1">
-                  <Badge variant="outline" className="text-[10px]">{g.platform}</Badge>
+                  <Badge variant="outline" className="text-[0.625rem]">{g.platform}</Badge>
                   <p className="text-sm font-medium text-foreground">{g.field_name}</p>
                 </div>
                 <p className="text-sm text-muted-foreground">{g.guidance_text}</p>

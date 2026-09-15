@@ -32,7 +32,7 @@ export function DateRangeFilter({ value, onChange }: DateRangeFilterProps) {
   return (
     <div className="flex items-center gap-2">
       <Select value={preset} onValueChange={handlePreset}>
-        <SelectTrigger className="w-[140px] h-8 text-xs">
+        <SelectTrigger className="w-[8.75rem] h-8 text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

@@ -66,7 +66,7 @@ const AI_STATUS_COLORS: Record<string, string> = {
 };
 
 function confidenceColor(c: number | null | undefined): string {
-  if (c == null) return "text-white/40";
+  if (c == null) return "text-white/55";
   if (c >= 7) return "text-emerald-400";
   if (c >= 4) return "text-amber-400";
   return "text-red-400";
@@ -111,14 +111,14 @@ function Section({
       <CollapsibleTrigger asChild>
         <button className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-white hover:bg-white/[0.04] transition-colors">
           <span className="flex items-center gap-2">
-            <Icon className="h-4 w-4 text-white/40" />
+            <Icon className="h-4 w-4 text-white/55" />
             {title}
             {count !== undefined && (
-              <span className="ml-1 text-xs text-white/25">({count})</span>
+              <span className="ml-1 text-xs text-white/50">({count})</span>
             )}
           </span>
           <ChevronDown
-            className={`h-4 w-4 text-white/30 transition-transform ${open ? "rotate-180" : ""}`}
+            className={`h-4 w-4 text-white/50 transition-transform ${open ? "rotate-180" : ""}`}
           />
         </button>
       </CollapsibleTrigger>
@@ -276,7 +276,7 @@ export function DomainDeepDive({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-[500px] sm:w-[600px] overflow-y-auto bg-[#0a0a0a] border-white/[0.06]"
+        className="w-[31.25rem] sm:w-[37.5rem] overflow-y-auto bg-[#0a0a0a] border-white/[0.06]"
       >
         {/* Accessible description for screen readers */}
         <SheetDescription className="sr-only">
@@ -291,7 +291,7 @@ export function DomainDeepDive({
             {/* ---- HEADER ---- */}
             <SheetHeader className="gap-2">
               <SheetTitle className="text-xl font-bold text-white flex items-center gap-2">
-                <Globe className="h-5 w-5 text-white/40" />
+                <Globe className="h-5 w-5 text-white/55" />
                 {domain}
               </SheetTitle>
               <div className="flex items-center gap-2 flex-wrap">
@@ -349,14 +349,14 @@ export function DomainDeepDive({
               defaultOpen
             >
               {patterns.length === 0 ? (
-                <p className="text-sm text-white/25 px-2">
+                <p className="text-sm text-white/50 px-2">
                   No patterns found for this domain.
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="text-white/25 border-b border-white/[0.06]">
+                      <tr className="text-white/50 border-b border-white/[0.06]">
                         <th className="text-left py-2 px-2 font-medium">
                           Selector
                         </th>
@@ -385,7 +385,7 @@ export function DomainDeepDive({
                           className="border-b border-white/[0.04] hover:bg-white/[0.02]"
                         >
                           <td className="py-2 px-2">
-                            <code className="text-[11px] bg-white/[0.06] rounded px-1.5 py-0.5 text-white/70 font-mono">
+                            <code className="text-[0.6875rem] bg-white/[0.06] rounded px-1.5 py-0.5 text-white/70 font-mono">
                               {truncate(p.selector, 28)}
                             </code>
                           </td>
@@ -402,7 +402,7 @@ export function DomainDeepDive({
                           <td className="py-2 px-2">
                             <Badge
                               variant="outline"
-                              className="text-[10px] border-white/[0.1] text-white/50"
+                              className="text-[0.625rem] border-white/[0.1] text-white/50"
                             >
                               {p.source || "unknown"}
                             </Badge>
@@ -414,7 +414,7 @@ export function DomainDeepDive({
                               <Circle className="inline h-2.5 w-2.5 fill-red-400 text-red-400" />
                             )}
                           </td>
-                          <td className="py-2 px-2 text-white/40">
+                          <td className="py-2 px-2 text-white/55">
                             {fmtDate(p.last_seen)}
                           </td>
                           <td className="py-2 px-1">
@@ -422,7 +422,7 @@ export function DomainDeepDive({
                               onClick={() =>
                                 handleTogglePattern(p.id, p.is_active)
                               }
-                              className="text-white/30 hover:text-white transition-colors"
+                              className="text-white/50 hover:text-white transition-colors"
                               title={
                                 p.is_active ? "Deactivate" : "Activate"
                               }
@@ -430,7 +430,7 @@ export function DomainDeepDive({
                               {p.is_active ? (
                                 <ToggleRight className="h-4 w-4 text-emerald-400" />
                               ) : (
-                                <ToggleLeft className="h-4 w-4 text-white/25" />
+                                <ToggleLeft className="h-4 w-4 text-white/50" />
                               )}
                             </button>
                           </td>
@@ -450,7 +450,7 @@ export function DomainDeepDive({
               defaultOpen
             >
               {aiLogs.length === 0 ? (
-                <p className="text-sm text-white/25 px-2">
+                <p className="text-sm text-white/50 px-2">
                   No AI generation attempts yet.
                 </p>
               ) : (
@@ -464,18 +464,18 @@ export function DomainDeepDive({
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <Badge
                           variant="outline"
-                          className={`text-[10px] ${AI_STATUS_COLORS[log.status] || "bg-muted text-muted-foreground border-muted-foreground/30"}`}
+                          className={`text-[0.625rem] ${AI_STATUS_COLORS[log.status] || "bg-muted text-muted-foreground border-muted-foreground/30"}`}
                         >
                           {(log.status || "unknown").replaceAll("_", " ")}
                         </Badge>
-                        <span className="text-[10px] text-white/25 flex items-center gap-1">
+                        <span className="text-[0.625rem] text-white/50 flex items-center gap-1">
                           <Clock className="h-3 w-3" />
                           {fmtDate(log.created_at)}
                         </span>
                       </div>
 
                       {/* Details row */}
-                      <div className="flex items-center gap-3 text-[11px] text-white/40">
+                      <div className="flex items-center gap-3 text-[0.6875rem] text-white/55">
                         {log.model && (
                           <span className="flex items-center gap-1">
                             <Cpu className="h-3 w-3" />
@@ -493,7 +493,7 @@ export function DomainDeepDive({
 
                       {/* Error message */}
                       {log.error_message && (
-                        <div className="mt-1 rounded bg-red-500/10 border border-red-500/20 px-2 py-1.5 text-[11px] text-red-400 flex items-start gap-1.5">
+                        <div className="mt-1 rounded bg-red-500/10 border border-red-500/20 px-2 py-1.5 text-[0.6875rem] text-red-400 flex items-start gap-1.5">
                           <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
                           <span className="break-all">
                             {log.error_message}
@@ -552,7 +552,7 @@ export function DomainDeepDive({
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-white/25 px-2 mb-3">
+                <p className="text-sm text-white/50 px-2 mb-3">
                   No missed banner reports.
                 </p>
               )}
@@ -560,7 +560,7 @@ export function DomainDeepDive({
               {/* Dismissal reports */}
               {dismissals.length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-white/40 text-xs font-medium px-2">
+                  <p className="text-white/55 text-xs font-medium px-2">
                     Dismissal Reports
                   </p>
                   {dismissals.map((d: any, i: number) => (
@@ -568,10 +568,10 @@ export function DomainDeepDive({
                       key={d.id || i}
                       className="flex items-center justify-between gap-2 rounded bg-white/[0.02] px-3 py-2 text-xs"
                     >
-                      <code className="text-[11px] bg-white/[0.06] rounded px-1.5 py-0.5 text-white/70 font-mono">
+                      <code className="text-[0.6875rem] bg-white/[0.06] rounded px-1.5 py-0.5 text-white/70 font-mono">
                         {truncate(d.clicked_selector, 36)}
                       </code>
-                      <span className="text-white/25 whitespace-nowrap">
+                      <span className="text-white/50 whitespace-nowrap">
                         {fmtDate(d.created_at)}
                       </span>
                     </div>
@@ -587,14 +587,14 @@ export function DomainDeepDive({
               count={fixLogs.length}
             >
               {fixLogs.length === 0 ? (
-                <p className="text-sm text-white/25 px-2">
+                <p className="text-sm text-white/50 px-2">
                   No fix log entries.
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="text-white/25 border-b border-white/[0.06]">
+                      <tr className="text-white/50 border-b border-white/[0.06]">
                         <th className="text-left py-2 px-2 font-medium">
                           Issue Type
                         </th>
@@ -628,7 +628,7 @@ export function DomainDeepDive({
                               <XCircle className="inline h-3.5 w-3.5 text-red-400" />
                             )}
                           </td>
-                          <td className="py-2 px-2 text-white/40">
+                          <td className="py-2 px-2 text-white/55">
                             {fmtDate(f.created_at)}
                           </td>
                         </tr>
@@ -644,7 +644,7 @@ export function DomainDeepDive({
             {/* ---- QUICK ACTIONS ---- */}
             <div className="space-y-3 pb-4">
               <p className="text-sm font-medium text-white flex items-center gap-2">
-                <Zap className="h-4 w-4 text-white/40" /> Quick Actions
+                <Zap className="h-4 w-4 text-white/55" /> Quick Actions
               </p>
 
               <div className="flex flex-col gap-2">
@@ -682,7 +682,7 @@ export function DomainDeepDive({
                   Mark Resolved
                 </Button>
 
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed border-white/[0.08] text-xs text-white/30">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed border-white/[0.08] text-xs text-white/50">
                   <PenLine className="h-4 w-4" />
                   <span>
                     Create Manual Pattern — use the{" "}
@@ -714,9 +714,9 @@ function StatBox({
 }) {
   return (
     <div className="flex flex-col items-center gap-1 rounded-lg bg-white/[0.03] border border-white/[0.06] p-2.5">
-      <Icon className="h-3.5 w-3.5 text-white/25" />
+      <Icon className="h-3.5 w-3.5 text-white/50" />
       <span className="text-base font-semibold text-white">{value}</span>
-      <span className="text-[10px] text-white/40 text-center leading-tight">
+      <span className="text-[0.625rem] text-white/55 text-center leading-tight">
         {label}
       </span>
     </div>
@@ -736,7 +736,7 @@ function ActionBadge({ type }: { type: string | null | undefined }) {
     "bg-white/[0.06] text-white/50 border-white/[0.1]";
 
   return (
-    <Badge variant="outline" className={`text-[10px] ${cls}`}>
+    <Badge variant="outline" className={`text-[0.625rem] ${cls}`}>
       {type || "unknown"}
     </Badge>
   );

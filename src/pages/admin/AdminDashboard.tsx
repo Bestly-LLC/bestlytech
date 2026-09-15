@@ -23,7 +23,7 @@ import { ActionInbox } from "@/components/admin/ActionInbox";
 import { QuickActions } from "@/components/admin/QuickActions";
 
 const statusColor: Record<string, string> = {
-  Draft: "text-white/40",
+  Draft: "text-white/55",
   Submitted: "text-blue-400",
   "In Review": "text-amber-400",
   "Issues Flagged": "text-red-400",
@@ -194,7 +194,7 @@ export default function AdminDashboard() {
             <p className={`font-medium ${sysUnknown ? "text-amber-200" : "text-red-200"}`}>
               {sysUnknown ? "System health unknown" : "Systems reporting down"}
             </p>
-            <p className={`text-[12.5px] mt-0.5 ${sysUnknown ? "text-amber-200/70" : "text-red-200/70"}`}>
+            <p className={`text-[0.7812rem] mt-0.5 ${sysUnknown ? "text-amber-200/70" : "text-red-200/70"}`}>
               {sysUnknown
                 ? "Couldn't read system_alert_state — treat health as unverified, not healthy."
                 : (downSystems.length ? downSystems.join(", ") : "One or more systems are marked down.")}
@@ -216,7 +216,7 @@ export default function AdminDashboard() {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Snowflake className="h-4 w-4 text-sky-400" />
-          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">CookieYeti</h3>
+          <h3 className="text-xs font-semibold text-white/55 uppercase tracking-widest">CookieYeti</h3>
           <Link to="/admin/cookie-yeti" className="ml-auto">
             <Button variant="ghost" size="sm" className="text-xs text-white/20 hover:text-white hover:bg-white/5 h-6 px-2">
               Full Dashboard <ArrowRight className="h-3 w-3 ml-1" />
@@ -228,7 +228,7 @@ export default function AdminDashboard() {
           <StatCard label="Dismissals" value={dismissalCount} icon={CheckCircle2} accentColor="#10b981" iconBg="bg-emerald-500/10" iconColor="text-emerald-400" />
           <StatCard label="AI Generations" value={aiGenCount} icon={Cpu} accentColor="#06b6d4" iconBg="bg-cyan-500/10" iconColor="text-cyan-400" />
           <StatCard label="Unresolved" value={unresolvedCount} icon={AlertTriangle} accentColor={unresolvedCount > 0 ? "#f59e0b" : "#10b981"} iconBg={unresolvedCount > 0 ? "bg-amber-500/10" : "bg-emerald-500/10"} iconColor={unresolvedCount > 0 ? "text-amber-400" : "text-emerald-400"} />
-          <StatCard label="Devices" value={deviceCount} icon={Globe} iconBg="bg-white/[0.05]" iconColor="text-white/40" subtitle={`${pushCount} push-enabled`} />
+          <StatCard label="Devices" value={deviceCount} icon={Globe} iconBg="bg-white/[0.05]" iconColor="text-white/55" subtitle={`${pushCount} push-enabled`} />
         </div>
       </div>
 
@@ -236,13 +236,13 @@ export default function AdminDashboard() {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <TrendingUp className="h-4 w-4 text-emerald-400" />
-          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Revenue & Growth</h3>
+          <h3 className="text-xs font-semibold text-white/55 uppercase tracking-widest">Revenue & Growth</h3>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           <StatCard label="Active Users" value={dau === null ? "—" : dau} icon={Snowflake} accentColor="#38bdf8" iconBg="bg-sky-500/10" iconColor="text-sky-400" subtitle={dau === null ? "DAU unavailable" : `daily active · ${activationCount} activated, ${cySubCount} paid`} />
           <StatCard label="Waitlist" value={waitlistCount} icon={Users} accentColor="#8b5cf6" iconBg="bg-violet-500/10" iconColor="text-violet-400" />
           <StatCard label="Emails Sent" value={emailsSent} icon={Mail} accentColor="#10b981" iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle={emailsFailed > 0 ? `${emailsFailed} failed` : undefined} />
-          <StatCard label="Passkeys" value={passKeyCount} icon={Shield} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
+          <StatCard label="Passkeys" value={passKeyCount} icon={Shield} iconBg="bg-white/[0.05]" iconColor="text-white/55" />
         </div>
       </div>
 
@@ -250,14 +250,14 @@ export default function AdminDashboard() {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Activity className="h-4 w-4 text-amber-400" />
-          <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Operations</h3>
+          <h3 className="text-xs font-semibold text-white/55 uppercase tracking-widest">Operations</h3>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatCard label="New Contacts" value={contactCount} icon={Mail} accentColor={contactCount > 0 ? "#22c55e" : undefined} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
-          <StatCard label="Hire Requests" value={hireCount} icon={Briefcase} accentColor={hireCount > 0 ? "#a78bfa" : undefined} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
+          <StatCard label="New Contacts" value={contactCount} icon={Mail} accentColor={contactCount > 0 ? "#22c55e" : undefined} iconBg="bg-white/[0.05]" iconColor="text-white/55" />
+          <StatCard label="Hire Requests" value={hireCount} icon={Briefcase} accentColor={hireCount > 0 ? "#a78bfa" : undefined} iconBg="bg-white/[0.05]" iconColor="text-white/55" />
           <StatCard label="Intake Submissions" value={stats.total} icon={FileText} accentColor="#3b82f6" iconBg="bg-blue-500/10" iconColor="text-blue-400" subtitle={stats.needsReview > 0 ? `${stats.needsReview} need review` : undefined} />
-          <StatCard label="Amazon" value={stats.amazon} icon={ShoppingBag} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
-          <StatCard label="Shopify" value={stats.shopify} icon={Store} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
+          <StatCard label="Amazon" value={stats.amazon} icon={ShoppingBag} iconBg="bg-white/[0.05]" iconColor="text-white/55" />
+          <StatCard label="Shopify" value={stats.shopify} icon={Store} iconBg="bg-white/[0.05]" iconColor="text-white/55" />
         </div>
       </div>
 
@@ -266,7 +266,7 @@ export default function AdminDashboard() {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <Shield className="h-4 w-4 text-blue-400" />
-            <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">Home Hub</h3>
+            <h3 className="text-xs font-semibold text-white/55 uppercase tracking-widest">Home Hub</h3>
             <Link to="/admin/home-hub/pihole" className="ml-auto">
               <Button variant="ghost" size="sm" className="text-xs text-white/20 hover:text-white hover:bg-white/5 h-6 px-2">
                 Pi-hole <ArrowRight className="h-3 w-3 ml-1" />
@@ -276,7 +276,7 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatCard label="DNS Queries" value={(pihole.total_queries ?? 0).toLocaleString()} icon={Globe} iconBg="bg-blue-500/10" iconColor="text-blue-400" />
             <StatCard label="Blocked" value={(pihole.queries_blocked ?? 0).toLocaleString()} icon={Ban} accentColor="#ef4444" iconBg="bg-red-500/10" iconColor="text-red-400" subtitle={`${(pihole.percent_blocked ?? 0).toFixed(1)}%`} />
-            <StatCard label="Blocklist" value={(pihole.domains_on_blocklist ?? 0).toLocaleString()} icon={Server} iconBg="bg-white/[0.05]" iconColor="text-white/40" />
+            <StatCard label="Blocklist" value={(pihole.domains_on_blocklist ?? 0).toLocaleString()} icon={Server} iconBg="bg-white/[0.05]" iconColor="text-white/55" />
             <StatCard label="Clients" value={pihole.active_clients ?? 0} icon={Wifi} accentColor={pihole.status === "enabled" ? "#10b981" : "#ef4444"} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle={pihole.status ?? "unknown"} />
           </div>
         </div>
@@ -288,11 +288,11 @@ export default function AdminDashboard() {
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4">
             <div>
-              <h3 className="text-[15px] font-semibold text-white">Recent Submissions</h3>
-              <p className="text-xs text-white/30 mt-0.5">Latest marketplace intake submissions.</p>
+              <h3 className="text-[0.9375rem] font-semibold text-white">Recent Submissions</h3>
+              <p className="text-xs text-white/50 mt-0.5">Latest marketplace intake submissions.</p>
             </div>
             <Link to="/admin/submissions">
-              <Button variant="ghost" size="sm" className="text-xs text-white/30 hover:text-white hover:bg-white/5 border-0">
+              <Button variant="ghost" size="sm" className="text-xs text-white/50 hover:text-white hover:bg-white/5 border-0">
                 View all <ArrowRight className="h-3 w-3 ml-1" />
               </Button>
             </Link>
@@ -302,11 +302,11 @@ export default function AdminDashboard() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent border-b border-white/[0.06]">
-                  <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Business</TableHead>
-                  <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Contact</TableHead>
-                  <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Platform</TableHead>
-                  <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Status</TableHead>
-                  <TableHead className="text-[11px] text-white/25 uppercase tracking-wider">Date</TableHead>
+                  <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Business</TableHead>
+                  <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Contact</TableHead>
+                  <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Platform</TableHead>
+                  <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Status</TableHead>
+                  <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -317,7 +317,7 @@ export default function AdminDashboard() {
                         {r.business_legal_name || "Unnamed"}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-white/40 text-sm">{r.client_name || "—"}</TableCell>
+                    <TableCell className="text-white/55 text-sm">{r.client_name || "—"}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
@@ -326,9 +326,9 @@ export default function AdminDashboard() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={`text-xs font-medium ${statusColor[r.status] || "text-white/40"}`}>{r.status}</span>
+                      <span className={`text-xs font-medium ${statusColor[r.status] || "text-white/55"}`}>{r.status}</span>
                     </TableCell>
-                    <TableCell className="text-white/30 text-sm">
+                    <TableCell className="text-white/50 text-sm">
                       {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
                     </TableCell>
                   </TableRow>
@@ -349,14 +349,14 @@ export default function AdminDashboard() {
               <Link key={r.id} to={`/admin/submissions/${r.id}`} className="block p-3 hover:bg-white/[0.03] transition-colors">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-medium text-white truncate">{r.business_legal_name || "Unnamed"}</p>
-                  <span className={`text-[10px] font-medium shrink-0 ${statusColor[r.status] || "text-white/40"}`}>{r.status}</span>
+                  <span className={`text-[0.625rem] font-medium shrink-0 ${statusColor[r.status] || "text-white/55"}`}>{r.status}</span>
                 </div>
-                <p className="text-xs text-white/30 mt-0.5">{r.client_name || "—"}</p>
+                <p className="text-xs text-white/50 mt-0.5">{r.client_name || "—"}</p>
                 <div className="flex items-center gap-1.5 mt-1.5">
                   {(r.selected_platforms?.length ? r.selected_platforms : [r.platform]).map((p: string) => (
-                    <span key={p} className="text-[10px] text-white/40 border border-white/10 rounded-full px-1.5 py-0">{p}</span>
+                    <span key={p} className="text-[0.625rem] text-white/55 border border-white/10 rounded-full px-1.5 py-0">{p}</span>
                   ))}
-                  <span className="text-[10px] text-white/20 ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}</span>
+                  <span className="text-[0.625rem] text-white/20 ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}</span>
                 </div>
               </Link>
             ))}

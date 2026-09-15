@@ -149,13 +149,13 @@ export default function CYSubscribers() {
           <Input placeholder="Search by email..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} className="pl-9" />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-[8.75rem]"><SelectValue /></SelectTrigger>
           <SelectContent>
             {["All", "active", "canceled", "past_due", "expired"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={planFilter} onValueChange={(v) => { setPlanFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-[8.75rem]"><SelectValue /></SelectTrigger>
           <SelectContent>
             {["All", "monthly", "yearly", "lifetime"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
           </SelectContent>
@@ -403,7 +403,7 @@ export default function CYSubscribers() {
                 { label: "Updated", value: selected.updated_at ? new Date(selected.updated_at).toLocaleString() : "—" },
               ].map((item) => (
                 <div key={item.label} className="space-y-0.5">
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{item.label}</p>
+                  <p className="text-[0.6875rem] font-medium text-muted-foreground uppercase tracking-wide">{item.label}</p>
                   <p className={`text-sm ${item.mono ? "font-mono text-xs break-all" : ""}`}>{item.value}</p>
                 </div>
               ))}

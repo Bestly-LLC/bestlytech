@@ -103,7 +103,7 @@ export default function HomeHubPihole() {
         actions={
           <div className="flex items-center gap-2">
             {data?.capturedAt && (
-              <span className="text-xs text-white/30">
+              <span className="text-xs text-white/50">
                 Pi synced {dataAge(data.capturedAt)}
               </span>
             )}
@@ -146,7 +146,7 @@ export default function HomeHubPihole() {
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-8 text-center">
           <Shield className="h-8 w-8 text-white/20 mx-auto mb-3" />
           <p className="text-sm text-white/50">No data yet — waiting for the Pi cron script to push its first snapshot.</p>
-          <p className="text-xs text-white/25 mt-1">Run <code className="text-white/40">scripts/push_pihole_stats.py</code> on the Raspberry Pi to start.</p>
+          <p className="text-xs text-white/50 mt-1">Run <code className="text-white/55">scripts/push_pihole_stats.py</code> on the Raspberry Pi to start.</p>
         </div>
       )}
 
@@ -187,14 +187,14 @@ export default function HomeHubPihole() {
                 <ExportButton data={filteredBlocked} filename="pihole-blocked" columns={[{ key: "domain", label: "Domain" }, { key: "hits", label: "Hits" }]} />
               </div>
               <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
-                <Input placeholder="Search domains..." value={blockedSearch} onChange={(e) => setBlockedSearch(e.target.value)} className="pl-9 bg-white/[0.03] border-white/[0.06] text-white placeholder:text-white/30 h-9 text-sm" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
+                <Input placeholder="Search domains..." value={blockedSearch} onChange={(e) => setBlockedSearch(e.target.value)} className="pl-9 bg-white/[0.03] border-white/[0.06] text-white placeholder:text-white/45 h-9 text-sm" />
               </div>
               <div className="divide-y divide-white/[0.06]">
                 {filteredBlocked.map((d) => (
                   <div key={d.domain} className="flex items-center justify-between py-2.5">
                     <span className="text-sm text-white/70 truncate">{d.domain}</span>
-                    <span className="text-sm text-white/40 tabular-nums shrink-0 ml-3">{d.hits.toLocaleString()}</span>
+                    <span className="text-sm text-white/55 tabular-nums shrink-0 ml-3">{d.hits.toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -207,14 +207,14 @@ export default function HomeHubPihole() {
                 <ExportButton data={filteredPermitted} filename="pihole-permitted" columns={[{ key: "domain", label: "Domain" }, { key: "hits", label: "Hits" }]} />
               </div>
               <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
-                <Input placeholder="Search domains..." value={permittedSearch} onChange={(e) => setPermittedSearch(e.target.value)} className="pl-9 bg-white/[0.03] border-white/[0.06] text-white placeholder:text-white/30 h-9 text-sm" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
+                <Input placeholder="Search domains..." value={permittedSearch} onChange={(e) => setPermittedSearch(e.target.value)} className="pl-9 bg-white/[0.03] border-white/[0.06] text-white placeholder:text-white/45 h-9 text-sm" />
               </div>
               <div className="divide-y divide-white/[0.06]">
                 {filteredPermitted.map((d) => (
                   <div key={d.domain} className="flex items-center justify-between py-2.5">
                     <span className="text-sm text-white/70 truncate">{d.domain}</span>
-                    <span className="text-sm text-white/40 tabular-nums shrink-0 ml-3">{d.hits.toLocaleString()}</span>
+                    <span className="text-sm text-white/55 tabular-nums shrink-0 ml-3">{d.hits.toLocaleString()}</span>
                   </div>
                 ))}
               </div>

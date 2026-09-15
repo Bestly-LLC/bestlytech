@@ -257,7 +257,7 @@ export default function AdminLogin() {
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.03)_0%,_transparent_70%)]" />
 
       <div
-        className="relative w-full max-w-[340px] space-y-10"
+        className="relative w-full max-w-[21.25rem] space-y-10"
         style={{
           animation: "apple-fade-in 1s cubic-bezier(0.16, 1, 0.3, 1) forwards",
           opacity: 0,
@@ -272,7 +272,7 @@ export default function AdminLogin() {
               className="h-12 object-contain brightness-0 invert"
             />
           </div>
-          <p className="text-[13px] text-white/40 font-light tracking-wide">
+          <p className="text-[0.8125rem] text-white/55 font-light tracking-wide">
             Admin
           </p>
         </div>
@@ -284,9 +284,9 @@ export default function AdminLogin() {
             type="button"
             onClick={handleAppleSignIn}
             disabled={oauthLoading}
-            className="w-full h-12 rounded-full bg-white text-black font-medium text-[15px] flex items-center justify-center gap-2.5 transition-all duration-200 hover:bg-white/90 active:scale-[0.98] disabled:opacity-50"
+            className="w-full h-12 rounded-full bg-white text-black font-medium text-[0.9375rem] flex items-center justify-center gap-2.5 transition-all duration-200 hover:bg-white/90 active:scale-[0.98] disabled:opacity-50"
           >
-            <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="h-[1.125rem] w-[1.125rem]" viewBox="0 0 24 24" fill="currentColor">
               <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
             </svg>
             {oauthLoading ? "Signing in…" : "Sign in with Apple"}
@@ -297,9 +297,9 @@ export default function AdminLogin() {
             type="button"
             onClick={handlePasskeySignIn}
             disabled={passkeyLoading}
-            className="w-full h-12 rounded-full bg-transparent text-white font-medium text-[15px] flex items-center justify-center gap-2.5 border border-white/20 transition-all duration-200 hover:bg-white/5 active:scale-[0.98] disabled:opacity-50"
+            className="w-full h-12 rounded-full bg-transparent text-white font-medium text-[0.9375rem] flex items-center justify-center gap-2.5 border border-white/20 transition-all duration-200 hover:bg-white/5 active:scale-[0.98] disabled:opacity-50"
           >
-            <Fingerprint className="h-[18px] w-[18px]" />
+            <Fingerprint className="h-[1.125rem] w-[1.125rem]" />
             {passkeyLoading ? "Authenticating…" : "Sign in with Passkey"}
           </button>
         </div>
@@ -309,7 +309,7 @@ export default function AdminLogin() {
           <button
             type="button"
             onClick={() => setShowEmail(!showEmail)}
-            className="text-[12px] text-white/20 hover:text-white/40 transition-colors duration-200 font-light"
+            className="text-[0.75rem] text-white/20 hover:text-white/40 transition-colors duration-200 font-light"
           >
             {showEmail ? "Hide" : "Sign in with email instead"}
           </button>
@@ -321,7 +321,7 @@ export default function AdminLogin() {
         >
           <div className="relative flex items-center mb-6">
             <div className="flex-1 h-px bg-white/10" />
-            <span className="px-4 text-[11px] text-white/30 font-light">or</span>
+            <span className="px-4 text-[0.6875rem] text-white/50 font-light">or</span>
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
@@ -333,7 +333,7 @@ export default function AdminLogin() {
                 onChange={(e) => setEmail(e.target.value)}
                 required={showEmail}
                 placeholder="Email"
-                className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[15px] pb-3 pt-1 placeholder:text-white/25 focus:outline-none focus:border-white/40 transition-colors duration-200"
+                className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[0.9375rem] pb-3 pt-1 placeholder:text-white/45 focus:outline-none focus:border-white/40 transition-colors duration-200"
               />
               <input
                 type="password"
@@ -341,14 +341,14 @@ export default function AdminLogin() {
                 onChange={(e) => setPassword(e.target.value)}
                 required={showEmail}
                 placeholder="Password"
-                className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[15px] pb-3 pt-1 placeholder:text-white/25 focus:outline-none focus:border-white/40 transition-colors duration-200"
+                className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[0.9375rem] pb-3 pt-1 placeholder:text-white/45 focus:outline-none focus:border-white/40 transition-colors duration-200"
               />
             </div>
 
             <button
               type="submit"
               disabled={submitting}
-              className="w-full h-12 rounded-full bg-[hsl(221,83%,53%)] text-white font-medium text-[15px] transition-all duration-200 hover:bg-[hsl(221,83%,48%)] active:scale-[0.98] disabled:opacity-50"
+              className="w-full h-12 rounded-full bg-[hsl(221,83%,53%)] text-white font-medium text-[0.9375rem] transition-all duration-200 hover:bg-[hsl(221,83%,48%)] active:scale-[0.98] disabled:opacity-50"
             >
               {submitting ? (
                 <span className="flex items-center justify-center gap-1.5">

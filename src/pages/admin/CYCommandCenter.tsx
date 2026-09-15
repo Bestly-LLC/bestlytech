@@ -185,8 +185,8 @@ export default function CYCommandCenter() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
           </span>
-          <h3 className="text-[15px] font-semibold text-white">Just in</h3>
-          <span className="text-xs text-white/30">live · newest reported domains</span>
+          <h3 className="text-[0.9375rem] font-semibold text-white">Just in</h3>
+          <span className="text-xs text-white/50">live · newest reported domains</span>
         </div>
 
         {feed.length === 0 ? (
@@ -207,9 +207,9 @@ export default function CYCommandCenter() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-white truncate group-hover:text-cyan-300 transition-colors">{r.domain}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${meta.pill} shrink-0`}>{meta.label}</span>
+                      <span className={`text-[0.625rem] px-1.5 py-0.5 rounded-full border ${meta.pill} shrink-0`}>{meta.label}</span>
                     </div>
-                    <p className="text-xs text-white/35 mt-0.5 truncate">
+                    <p className="text-xs text-white/50 mt-0.5 truncate">
                       {(r.report_count ?? 1)} {(r.report_count ?? 1) === 1 ? "report" : "reports"}
                       {ttf && <span className="text-emerald-400/70"> · fixed in {ttf}</span>}
                       {st === "needs" && <span className="text-red-400/70"> · AI couldn’t auto-fix</span>}
@@ -217,7 +217,7 @@ export default function CYCommandCenter() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-xs text-white/25 tabular-nums">{relTime(r.last_reported || r.created_at)}</span>
+                    <span className="text-xs text-white/50 tabular-nums">{relTime(r.last_reported || r.created_at)}</span>
                     <ChevronRight className="h-4 w-4 text-white/15 group-hover:text-white/40 transition-colors" />
                   </div>
                 </button>
@@ -232,8 +232,8 @@ export default function CYCommandCenter() {
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
           <div className="flex items-center gap-2 px-5 py-4 border-b border-white/[0.06]">
             <AlertTriangle className="h-4 w-4 text-red-400" />
-            <h3 className="text-[15px] font-semibold text-white">Needs you</h3>
-            <span className="text-xs text-white/30">domains the AI couldn’t fix — most-reported first</span>
+            <h3 className="text-[0.9375rem] font-semibold text-white">Needs you</h3>
+            <span className="text-xs text-white/50">domains the AI couldn’t fix — most-reported first</span>
           </div>
           <div className="divide-y divide-white/[0.04]">
             {needs.slice(0, 8).map((r) => (
@@ -243,8 +243,8 @@ export default function CYCommandCenter() {
                 className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-white/[0.025] transition-colors group"
               >
                 <span className="text-sm font-medium text-white truncate flex-1 group-hover:text-cyan-300 transition-colors">{r.domain}</span>
-                <span className="text-xs text-white/40 tabular-nums shrink-0">{r.report_count} reports</span>
-                <span className="text-xs text-white/25 shrink-0 w-20 text-right">{relTime(r.last_reported)}</span>
+                <span className="text-xs text-white/55 tabular-nums shrink-0">{r.report_count} reports</span>
+                <span className="text-xs text-white/50 shrink-0 w-20 text-right">{relTime(r.last_reported)}</span>
                 <ChevronRight className="h-4 w-4 text-white/15 group-hover:text-white/40 transition-colors shrink-0" />
               </button>
             ))}
@@ -254,7 +254,7 @@ export default function CYCommandCenter() {
 
       {/* ── Advanced links ── */}
       <div className="flex flex-wrap items-center gap-2 pt-2">
-        <span className="text-[11px] uppercase tracking-widest text-white/25 font-semibold mr-1">Advanced</span>
+        <span className="text-[0.6875rem] uppercase tracking-widest text-white/50 font-semibold mr-1">Advanced</span>
         {[
           { to: "/admin/cookie-yeti/analytics", label: "Product analytics" },
           { to: "/admin/cookie-yeti/ops", label: "Operations & pipeline" },

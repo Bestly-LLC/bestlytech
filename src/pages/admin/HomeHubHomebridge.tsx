@@ -71,13 +71,13 @@ export default function HomeHubHomebridge() {
         description="HomeKit accessory bridge"
         actions={
           <div className="flex items-center gap-3">
-            <Badge variant="outline" className="border-amber-500/30 text-amber-400/70 text-[10px]">
+            <Badge variant="outline" className="border-amber-500/30 text-amber-400/70 text-[0.625rem]">
               Simulated data
             </Badge>
             {lastUpdated && (
-              <span className="text-xs text-white/30">Updated {lastUpdated.toLocaleTimeString()}</span>
+              <span className="text-xs text-white/50">Updated {lastUpdated.toLocaleTimeString()}</span>
             )}
-            <Button variant="ghost" size="icon" onClick={load} disabled={loading} aria-label="Refresh Homebridge data" className="text-white/30 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
+            <Button variant="ghost" size="icon" onClick={load} disabled={loading} aria-label="Refresh Homebridge data" className="text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
             <AlertDialog>
@@ -122,11 +122,11 @@ export default function HomeHubHomebridge() {
             return (
               <div key={a.name} className="flex items-center gap-3 px-4 sm:px-6 py-3">
                 <div className="h-9 w-9 rounded-xl bg-white/[0.05] flex items-center justify-center shrink-0">
-                  <Icon className="h-4 w-4 text-white/40" />
+                  <Icon className="h-4 w-4 text-white/55" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white/80">{a.name}</p>
-                  <p className="text-xs text-white/30">{a.details}</p>
+                  <p className="text-xs text-white/50">{a.details}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`h-2 w-2 rounded-full ${statusColor(a.status)}`} />
@@ -148,15 +148,15 @@ export default function HomeHubHomebridge() {
             <div key={p.name} className="flex items-center justify-between px-4 sm:px-6 py-3">
               <div className="min-w-0">
                 <p className="text-sm text-white/80 font-mono">{p.name}</p>
-                <p className="text-xs text-white/30">v{p.version}</p>
+                <p className="text-xs text-white/50">v{p.version}</p>
               </div>
               {p.updateAvailable ? (
-                <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] gap-1">
+                <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[0.625rem] gap-1">
                   <ArrowUpCircle className="h-3 w-3" />
                   {p.updateAvailable}
                 </Badge>
               ) : (
-                <Badge variant="outline" className="border-white/10 text-white/30 text-[10px]">Up to date</Badge>
+                <Badge variant="outline" className="border-white/10 text-white/50 text-[0.625rem]">Up to date</Badge>
               )}
             </div>
           ))}

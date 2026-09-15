@@ -118,7 +118,7 @@ export default function CYProductAnalytics() {
           <AlertTriangle className="h-5 w-5 text-red-300 flex-none mt-0.5" />
           <div className="text-sm">
             <p className="font-medium text-red-200">Analytics data unavailable</p>
-            <p className="text-red-200/70 text-[12.5px] mt-0.5">
+            <p className="text-red-200/70 text-[0.7812rem] mt-0.5">
               The rollup RPCs did not return. This is an error state, not "zero activity." ({error})
             </p>
           </div>
@@ -164,8 +164,8 @@ export default function CYProductAnalytics() {
                       <span className="text-white/80">{step.label}</span>
                       <span className="text-white/50 tabular-nums">
                         {val.toLocaleString()}
-                        <span className="text-white/30"> · {pctOfInstall}% of installs</span>
-                        {i > 0 && <span className="text-white/30"> · {stepConv}% step</span>}
+                        <span className="text-white/50"> · {pctOfInstall}% of installs</span>
+                        {i > 0 && <span className="text-white/50"> · {stepConv}% step</span>}
                       </span>
                     </div>
                     <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/[0.05]">
@@ -182,7 +182,7 @@ export default function CYProductAnalytics() {
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium text-white">Daily active users · 30d</h2>
-              <span className="text-xs text-white/30">distinct anonymous devices</span>
+              <span className="text-xs text-white/50">distinct anonymous devices</span>
             </div>
             {dau.length > 1 ? (
               <div className="h-64">
@@ -206,7 +206,7 @@ export default function CYProductAnalytics() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex h-40 items-center justify-center text-sm text-white/30">
+              <div className="flex h-40 items-center justify-center text-sm text-white/50">
                 Not enough days of data yet.
               </div>
             )}
@@ -225,7 +225,7 @@ export default function CYProductAnalytics() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-[11px] uppercase tracking-wide text-white/35">
+                    <tr className="text-[0.6875rem] uppercase tracking-wide text-white/50">
                       <th className="text-left font-medium px-5 py-2.5">Platform</th>
                       <th className="text-left font-medium px-3 py-2.5">Active</th>
                       <th className="text-left font-medium px-3 py-2.5">DAU</th>
@@ -243,7 +243,7 @@ export default function CYProductAnalytics() {
                         <tr key={r.platform} className="border-t border-white/[0.06]">
                           <td className="px-5 py-2.5 text-white/90">
                             <span className="inline-flex items-center gap-2">
-                              <Icon className="h-4 w-4 text-white/40" /> {meta.label}
+                              <Icon className="h-4 w-4 text-white/55" /> {meta.label}
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-white/70 tabular-nums">{r.active_users}</td>
@@ -261,9 +261,9 @@ export default function CYProductAnalytics() {
             )}
           </div>
 
-          <p className="text-xs text-white/25">
-            Anonymous, aggregate-only. Backed by <code className="text-white/40">product_events</code> via the
-            SECURITY DEFINER rollups <code className="text-white/40">cy_funnel / cy_dau / cy_conversion / cy_platform_breakdown</code>.
+          <p className="text-xs text-white/50">
+            Anonymous, aggregate-only. Backed by <code className="text-white/55">product_events</code> via the
+            SECURITY DEFINER rollups <code className="text-white/55">cy_funnel / cy_dau / cy_conversion / cy_platform_breakdown</code>.
             No emails, URLs, or IPs are stored.
           </p>
         </>

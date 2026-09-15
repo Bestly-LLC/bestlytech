@@ -322,14 +322,14 @@ export function SystemPulse({ className }: SystemPulseProps) {
 
       {/* Last-checked from alert_state */}
       {relativeTime && (
-        <span className="text-xs text-white/25 tabular-nums whitespace-nowrap">Checked {relativeTime}</span>
+        <span className="text-xs text-white/50 tabular-nums whitespace-nowrap">Checked {relativeTime}</span>
       )}
 
       {/* Refresh button */}
       <button
         onClick={handleRefresh}
         disabled={isRefreshing}
-        className="shrink-0 p-1 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.05] transition-colors disabled:opacity-40"
+        className="shrink-0 p-1 rounded-lg text-white/50 hover:text-white/60 hover:bg-white/[0.05] transition-colors disabled:opacity-40"
         title="Refresh system health"
         aria-label="Refresh system health"
       >
@@ -355,9 +355,9 @@ export function SystemPulse({ className }: SystemPulseProps) {
         {subsystems.map((s) => (
           <div key={s.key} className="flex items-center gap-1.5" title={s.detail}>
             <span className={cn("h-1.5 w-1.5 rounded-full transition-colors duration-500", STATUS_DOT[s.status])} />
-            <span className="text-[11px] text-white/40 whitespace-nowrap">
+            <span className="text-[0.6875rem] text-white/55 whitespace-nowrap">
               {s.label}
-              <span className="text-white/25 ml-1">{s.detail}</span>
+              <span className="text-white/50 ml-1">{s.detail}</span>
             </span>
           </div>
         ))}

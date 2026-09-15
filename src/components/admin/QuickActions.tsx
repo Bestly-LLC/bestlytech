@@ -93,7 +93,7 @@ export function QuickActions() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <h3 className="text-xs font-semibold text-white/40 uppercase tracking-widest">
+        <h3 className="text-xs font-semibold text-white/55 uppercase tracking-widest">
           Quick Jump
         </h3>
       </div>
@@ -108,11 +108,11 @@ export function QuickActions() {
                   a.iconBg,
                 )}
               >
-                <Icon className={cn("h-[18px] w-[18px]", a.iconColor)} />
+                <Icon className={cn("h-[1.125rem] w-[1.125rem]", a.iconColor)} />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium text-white truncate">{a.label}</p>
-                <p className="text-[11px] text-white/40 truncate mt-0.5">
+                <p className="text-[0.6875rem] text-white/55 truncate mt-0.5">
                   {a.description}
                 </p>
               </div>
