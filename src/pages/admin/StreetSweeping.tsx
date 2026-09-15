@@ -24,8 +24,6 @@ import {
   fmtDay,
   fmtLA,
   ago,
-  STREET_BOUNDS,
-  SIDE_SPLIT_LON,
 } from "@/services/streetSweepingApi";
 
 const OUTCOME: Record<SweepOutcome, { label: string; className: string }> = {
@@ -53,47 +51,71 @@ const TONE: Record<Tone, string> = {
   neutral: "border-white/[0.06] bg-white/[0.03]",
 };
 
-function StreetDiagram({ carLon, carSide, dangerSide }: { carLon: number | null; carSide: CurbSide | null; dangerSide: CurbSide | null }) {
-  // West on the left, east on the right. The car dot is placed by longitude within the street bounds.
-  const W = 320;
-  const H = 150;
-  const streetX = 92;
-  const streetW = 136;
-  let carX: number | null = null;
-  if (carLon !== null && carLon >= STREET_BOUNDS.lonMin && carLon <= STREET_BOUNDS.lonMax) {
-    const t = (carLon - STREET_BOUNDS.lonMin) / (STREET_BOUNDS.lonMax - STREET_BOUNDS.lonMin);
-    carX = streetX + 14 + t * (streetW - 28);
-  }
-  const splitT = (SIDE_SPLIT_LON - STREET_BOUNDS.lonMin) / (STREET_BOUNDS.lonMax - STREET_BOUNDS.lonMin);
-  const splitX = streetX + 14 + splitT * (streetW - 28);
-  const laneFill = (side: CurbSide) => (dangerSide === side ? "rgba(248,113,113,0.16)" : "rgba(255,255,255,0.03)");
+function StreetDiagram({ carSide, dangerSide }: { carSide: CurbSide | null; dangerSide: CurbSide | null }) {
+  // Top-down view of N Kings Rd (north is up). The car snaps to whichever curb it's parked on:
+  // far left = west curb (swept Mondays), far right = east curb (swept Tuesdays).
+  const W = 240;
+  const H = 108;
+  const road = { x: 60, y: 6, w: 120, h: 96 };
+  const mid = road.x + road.w / 2;
+  const car = { w: 20, h: 38 };
+  const carX = carSide === "west" ? road.x + 5 : carSide === "east" ? road.x + road.w - 5 - car.w : null;
+  const carY = road.y + (road.h - car.h) / 2;
+  const danger = carSide !== null && carSide === dangerSide;
+  const laneTint = (side: CurbSide) => (dangerSide === side ? "rgba(248,113,113,0.14)" : "transparent");
+  const label = (side: CurbSide) => {
+    const x = side === "west" ? road.x - 10 : road.x + road.w + 10;
+    const anchor = side === "west" ? "end" : "start";
+    const hot = dangerSide === side;
+    return (
+      <g>
+        <text x={x} y={H / 2 - 4} textAnchor={anchor} fontSize="11" fontWeight={500} fill="rgba(255,255,255,0.75)">
+          {side === "west" ? "West" : "East"}
+        </text>
+        <text x={x} y={H / 2 + 11} textAnchor={anchor} fontSize="10" fill={hot ? "#fca5a5" : "rgba(255,255,255,0.4)"}>
+          {side === "west" ? "Mon" : "Tue"} 8–10
+        </text>
+      </g>
+    );
+  };
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="North Kings Road with the car's curb position">
-      {/* sidewalks */}
-      <rect x={streetX - 16} y={4} width={16} height={H - 18} rx={3} fill="rgba(255,255,255,0.06)" />
-      <rect x={streetX + streetW} y={4} width={16} height={H - 18} rx={3} fill="rgba(255,255,255,0.06)" />
-      {/* lanes */}
-      <rect x={streetX} y={4} width={splitX - streetX} height={H - 18} fill={laneFill("west")} />
-      <rect x={splitX} y={4} width={streetX + streetW - splitX} height={H - 18} fill={laneFill("east")} />
-      <line x1={splitX} y1={10} x2={splitX} y2={H - 20} stroke="rgba(255,255,255,0.18)" strokeDasharray="6 6" />
-      {/* labels */}
-      <text x={streetX - 22} y={H / 2 - 10} textAnchor="end" fontSize="12" fill="rgba(255,255,255,0.7)">West curb</text>
-      <text x={streetX - 22} y={H / 2 + 6} textAnchor="end" fontSize="11" fill={dangerSide === "west" ? "#fca5a5" : "rgba(255,255,255,0.35)"}>Swept Mon</text>
-      <text x={streetX + streetW + 22} y={H / 2 - 10} fontSize="12" fill="rgba(255,255,255,0.7)">East curb</text>
-      <text x={streetX + streetW + 22} y={H / 2 + 6} fontSize="11" fill={dangerSide === "east" ? "#fca5a5" : "rgba(255,255,255,0.35)"}>Swept Tue</text>
-      <text x={streetX + streetW / 2} y={H - 2} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.3)" letterSpacing="1.5">N KINGS RD · NORTH ↑</text>
-      {/* car */}
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="w-full max-w-[300px] h-auto mx-auto block"
+      role="img"
+      aria-label={
+        carSide
+          ? `Blue Steel is parked on the ${carSide} curb of North Kings Road${danger ? ", the next side to be swept" : ""}`
+          : "Blue Steel isn't parked on this block"
+      }
+    >
+      {/* road + lane tints, clipped to one rounded shape so the lanes meet cleanly at the center line */}
+      <defs>
+        <clipPath id="kings-road">
+          <rect x={road.x} y={road.y} width={road.w} height={road.h} rx={6} />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#kings-road)">
+        <rect x={road.x} y={road.y} width={road.w} height={road.h} fill="rgba(255,255,255,0.05)" />
+        <rect x={road.x} y={road.y} width={road.w / 2} height={road.h} fill={laneTint("west")} />
+        <rect x={mid} y={road.y} width={road.w / 2} height={road.h} fill={laneTint("east")} />
+      </g>
+      {/* curbs */}
+      <line x1={road.x} y1={road.y} x2={road.x} y2={road.y + road.h} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeLinecap="round" />
+      <line x1={road.x + road.w} y1={road.y} x2={road.x + road.w} y2={road.y + road.h} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeLinecap="round" />
+      {/* center line */}
+      <line x1={mid} y1={road.y + 6} x2={mid} y2={road.y + road.h - 6} stroke="rgba(250,204,21,0.45)" strokeWidth={1.5} strokeDasharray="7 6" />
+      {label("west")}
+      {label("east")}
       {carX !== null ? (
         <g>
-          <rect x={carX - 11} y={H / 2 - 27} width={22} height={40} rx={6}
-            fill={carSide && carSide === dangerSide ? "#f87171" : "#818cf8"} />
-          <rect x={carX - 7} y={H / 2 - 19} width={14} height={9} rx={2} fill="rgba(0,0,0,0.35)" />
+          <rect x={carX} y={carY} width={car.w} height={car.h} rx={6} fill={danger ? "#f87171" : "#818cf8"} />
+          <rect x={carX + 3} y={carY + 6} width={car.w - 6} height={8} rx={2} fill="rgba(0,0,0,0.35)" />
+          <rect x={carX + 3} y={carY + car.h - 11} width={car.w - 6} height={6} rx={2} fill="rgba(0,0,0,0.25)" />
         </g>
       ) : (
-        <text x={streetX + streetW / 2} y={H / 2 + 4} textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.35)">
-          Car not on this block
-        </text>
+        <text x={mid} y={H / 2 + 4} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.4)">Not on block</text>
       )}
     </svg>
   );
@@ -112,6 +134,8 @@ export default function StreetSweeping() {
       setError(null);
     } catch (e) {
       setError((e as Error).message);
+      // Network blips (sleeping laptop, Wi-Fi hand-off) come back on their own: retry soon.
+      setTimeout(() => load(), 8_000);
     } finally {
       setLoading(false);
     }
@@ -223,8 +247,14 @@ export default function StreetSweeping() {
       />
 
       {error && (
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4 text-sm text-red-300">
-          Couldn't load sweeping status: {error}
+        <div role="alert" className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-4 text-sm text-amber-200 flex items-center justify-between gap-3">
+          <span>
+            {state ? "Connection dropped. Showing the last update, retrying automatically." : "Couldn't reach the server. Retrying automatically."}
+          </span>
+          <Button size="sm" variant="outline" onClick={load} disabled={loading}
+            className="border-white/10 text-white/70 hover:text-white hover:bg-white/5 shrink-0">
+            Retry now
+          </Button>
         </div>
       )}
 
@@ -298,27 +328,23 @@ export default function StreetSweeping() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Street */}
-            <div className="lg:col-span-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-white">Where it's parked</h3>
                 {derived.car && (
                   <span className="text-xs text-white/30">{fmtLA(derived.car.ran_at)}</span>
                 )}
               </div>
-              <StreetDiagram
-                carLon={derived.car?.longitude ?? null}
-                carSide={derived.car?.side ?? null}
-                dangerSide={derived.dangerSide}
-              />
-              <p className="text-xs text-white/30 mt-2">
-                Red lane = the next curb to be swept. Side is read from GPS longitude; the two curb lanes sit about 30 ft apart.
+              <StreetDiagram carSide={derived.car?.side ?? null} dangerSide={derived.dangerSide} />
+              <p className="text-xs text-white/40 mt-3 text-center">
+                Red = next curb swept. {derived.car?.side ? `Parked on the ${derived.car.side} curb.` : ""}
               </p>
             </div>
 
             {/* Skip days */}
-            <div className="lg:col-span-2 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
               <h3 className="text-sm font-semibold text-white">Upcoming sweep days</h3>
               <p className="text-xs text-white/35 mt-1 mb-4">Tap a day to skip it: a holiday, a trip, or the car's out on a Turo booking.</p>
               <div className="grid grid-cols-2 gap-2">
