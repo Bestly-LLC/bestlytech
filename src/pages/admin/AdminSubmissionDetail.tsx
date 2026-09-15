@@ -166,13 +166,14 @@ export default function AdminSubmissionDetail() {
   };
 
   const handleDelete = async () => {
-    await Promise.all([
-      supabase.from("intake_documents").delete().eq("intake_id", id!),
-      supabase.from("intake_validations").delete().eq("intake_id", id!),
-    ]);
-    const { error } = await supabase.from("seller_intakes").delete().eq("id", id!);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    // Documents and validations cascade via FK; `.select` confirms the row was really removed.
+    const { data, error } = await supabase.from("seller_intakes").delete().eq("id", id!).select("id");
+    if (error || !data?.length) {
+      toast({
+        title: "Couldn't delete",
+        description: error?.message ?? "Nothing was removed. Your account may not have delete permission.",
+        variant: "destructive",
+      });
     } else {
       toast({ title: "Submission deleted" });
       navigate("/admin/submissions");

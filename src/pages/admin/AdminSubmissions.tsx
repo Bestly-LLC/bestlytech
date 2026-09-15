@@ -131,16 +131,18 @@ export default function AdminSubmissions() {
   };
 
   const handleDelete = async (ids: string[]) => {
-    // Cascade delete documents and validations first
-    await Promise.all([
-      supabase.from("intake_documents").delete().in("intake_id", ids),
-      supabase.from("intake_validations").delete().in("intake_id", ids),
-    ]);
-    const { error } = await supabase.from("seller_intakes").delete().in("id", ids);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    // Documents and validations cascade via FK. `.select` returns the rows actually removed, so a
+    // policy that silently blocks the delete shows up as an error instead of a fake "Deleted".
+    const { data, error } = await supabase.from("seller_intakes").delete().in("id", ids).select("id");
+    const removed = data?.length ?? 0;
+    if (error || removed === 0) {
+      toast({
+        title: "Couldn't delete",
+        description: error?.message ?? "Nothing was removed. Your account may not have delete permission.",
+        variant: "destructive",
+      });
     } else {
-      toast({ title: `Deleted ${ids.length} submission${ids.length > 1 ? "s" : ""}` });
+      toast({ title: `Deleted ${removed} submission${removed > 1 ? "s" : ""}` });
       setSelected(new Set());
       loadData();
     }
