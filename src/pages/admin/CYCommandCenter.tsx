@@ -1,22 +1,16 @@
 import { useEffect, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
-import { Link } from "react-router-dom";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  Globe, Cookie, Sparkles, AlertTriangle, CheckCircle2, Clock, Plus,
-  ArrowRight, Inbox, Activity, ChevronRight,
+  Globe, Sparkles, AlertTriangle, Inbox, Activity, ChevronRight, RefreshCw, CheckCircle2, ArrowRight,
 } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { EmptyState } from "@/components/admin/EmptyState";
-import { useAdminRealtime } from "@/hooks/useAdminRealtime";
-import { DomainDeepDive } from "@/components/admin/DomainDeepDive";
+import { DomainDeepDive, useCyLiveRefresh } from "@/components/admin/DomainDeepDive";
 
 // ── helpers ───────────────────────────────────────────────
 function relTime(iso?: string | null): string {
@@ -41,38 +35,69 @@ function fmtDuration(ms: number): string {
   return `${Math.round(h / 24)}d`;
 }
 
+type FeedRow = {
+  id: number;
+  domain: string;
+  report_count: number | null;
+  resolved: boolean | null;
+  resolved_at: string | null;
+  has_working_pattern: boolean | null;
+  ai_attempts: number | null;
+  render_attempts: number | null;
+  ai_processed_at: string | null;
+  last_reported: string | null;
+  created_at: string | null;
+};
+
+type NeedsRow = {
+  id: number;
+  domain: string;
+  report_count: number | null;
+  ai_attempts: number | null;
+  render_attempts: number | null;
+  last_reported: string | null;
+  reason: string;
+};
+
 type FeedState = "fixed" | "fixing" | "needs";
 
-function deriveState(r: any): FeedState {
+// Same rule as the v_cookieyeti_needs_attention view, so the feed, the "Needs you"
+// list and the Auto-Fix page never disagree.
+function deriveState(r: FeedRow): FeedState {
   if (r.resolved) return "fixed";
-  if ((r.ai_attempts ?? 0) >= 2 && !r.has_working_pattern) return "needs";
+  if (!r.has_working_pattern && ((r.ai_attempts ?? 0) >= 4 || (r.render_attempts ?? 0) >= 3)) return "needs";
   return "fixing";
 }
 
 const STATE_META: Record<FeedState, { label: string; dot: string; pill: string }> = {
-  fixed: { label: "Fixed", dot: "bg-emerald-400", pill: "text-emerald-300 bg-emerald-500/10 border-emerald-500/20" },
-  fixing: { label: "Fixing…", dot: "bg-amber-400 animate-pulse", pill: "text-amber-300 bg-amber-500/10 border-amber-500/20" },
-  needs: { label: "Needs you", dot: "bg-red-400", pill: "text-red-300 bg-red-500/10 border-red-500/20" },
+  fixed: { label: "Fixed", dot: "bg-emerald-400", pill: "text-emerald-300 bg-emerald-500/10 border-emerald-500/25" },
+  fixing: { label: "Fixing", dot: "bg-amber-400", pill: "text-amber-300 bg-amber-500/10 border-amber-500/25" },
+  needs: { label: "Needs you", dot: "bg-red-400", pill: "text-red-300 bg-red-500/10 border-red-500/25" },
 };
 
-function timeToFix(r: any): string | null {
+const REASON_LABEL: Record<string, string> = {
+  render_exhausted: "Render gave up",
+  ai_exhausted: "AI gave up",
+  stuck: "Stuck",
+};
+
+function timeToFix(r: FeedRow): string | null {
   if (!r.resolved) return null;
-  const end = r.resolved_at || r.ai_processed_at || r.last_reported;
+  const end = r.resolved_at || r.ai_processed_at;
   if (!end || !r.created_at) return null;
   return fmtDuration(new Date(end).getTime() - new Date(r.created_at).getTime());
 }
 
-export default function CYCommandCenter() {
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [overview, setOverview] = useState<any>(null);
-  const [feed, setFeed] = useState<any[]>([]);
-  const [needs, setNeeds] = useState<any[]>([]);
+const FEED_COLUMNS =
+  "id, domain, report_count, resolved, resolved_at, has_working_pattern, ai_attempts, render_attempts, ai_processed_at, last_reported, created_at";
 
-  // grant access
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [grantEmail, setGrantEmail] = useState("");
-  const [grantReason, setGrantReason] = useState("");
+export default function CYCommandCenter() {
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [overview, setOverview] = useState<any>(null);
+  const [feed, setFeed] = useState<FeedRow[]>([]);
+  const [needs, setNeeds] = useState<NeedsRow[]>([]);
 
   // domain deep dive
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
@@ -83,54 +108,47 @@ export default function CYCommandCenter() {
   }, []);
 
   const loadData = useCallback(async () => {
-    const [ov, recent, unresolved] = await Promise.all([
+    const [ov, recent, attention] = await Promise.all([
       supabase.rpc("get_community_overview" as any),
       supabase
         .from("missed_banner_reports")
-        .select("*")
+        .select(FEED_COLUMNS)
         .order("last_reported", { ascending: false, nullsFirst: false })
-        .limit(20) as any,
-      supabase.rpc("get_unresolved_reports" as any),
+        .limit(20),
+      supabase
+        .from("v_cookieyeti_needs_attention" as any)
+        .select("id, domain, report_count, ai_attempts, render_attempts, last_reported, reason")
+        .order("report_count", { ascending: false })
+        .limit(50),
     ]);
-    if (ov.error) console.error("[CYCommandCenter] overview", ov.error.message);
-    if (recent.error) console.error("[CYCommandCenter] feed", recent.error.message);
-    setOverview(Array.isArray(ov.data) ? ov.data[0] : ov.data);
-    setFeed(recent.data || []);
-    const un = (unresolved.data || []) as any[];
-    un.sort((a, b) => (b.report_count ?? 0) - (a.report_count ?? 0));
-    setNeeds(un);
+    const firstErr = [ov, recent, attention].find((r) => r.error)?.error;
+    // Keep showing the last good data when a refresh fails.
+    if (firstErr) {
+      console.error("[CYCommandCenter]", firstErr.message);
+      setError(firstErr.message);
+    } else {
+      setError(null);
+    }
+    if (!ov.error) setOverview(Array.isArray(ov.data) ? ov.data[0] : ov.data);
+    if (!recent.error) setFeed((recent.data as unknown as FeedRow[]) || []);
+    if (!attention.error) setNeeds((attention.data as unknown as NeedsRow[]) || []);
     setLoading(false);
+    setRefreshing(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+  useCyLiveRefresh(["cookie_patterns", "missed_banner_reports"], loadData);
 
-  useAdminRealtime({
-    tables: ["cookie_patterns", "missed_banner_reports"] as any,
-    onNewRecord: () => loadData(),
-  });
-
-  const handleGrant = async () => {
-    if (!grantEmail) return;
-    const { error } = await supabase.from("granted_access").insert({
-      email: grantEmail.trim().toLowerCase(),
-      granted_by: "admin",
-      reason: grantReason || null,
-    });
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Access granted" });
-      setGrantEmail(""); setGrantReason(""); setDialogOpen(false);
-    }
-  };
+  const refresh = () => { setRefreshing(true); loadData(); };
 
   if (loading) {
     return (
-      <div className="space-y-8 max-w-5xl">
+      <div className="space-y-8 max-w-5xl" aria-busy="true">
         <div><Skeleton className="h-9 w-48" /><Skeleton className="h-4 w-72 mt-3" /></div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
         </div>
+        <Skeleton className="h-64 rounded-2xl" />
         <Skeleton className="h-96 rounded-2xl" />
       </div>
     );
@@ -141,136 +159,143 @@ export default function CYCommandCenter() {
 
   return (
     <div className="space-y-8 max-w-5xl">
-      {/* ── Header ── */}
       <PageHeader
         title="Cookie Yeti"
-        description="Domains your users report, fixed automatically. Newest first."
+        description="What users reported, what fixed itself, and what needs you."
         actions={
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-white/70 hover:text-white hover:bg-white/[0.06]">
-                <Plus className="h-4 w-4 mr-1" /> Grant access
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Refresh"
+                onClick={refresh}
+                disabled={refreshing}
+                className="h-9 w-9 border-white/10 text-white/70 hover:text-white hover:bg-white/5"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Grant premium access</DialogTitle></DialogHeader>
-              <div className="space-y-4 pt-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Email</Label>
-                  <Input value={grantEmail} onChange={(e) => setGrantEmail(e.target.value)} placeholder="user@example.com" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Reason</Label>
-                  <Textarea value={grantReason} onChange={(e) => setGrantReason(e.target.value)} placeholder="Why grant access?" rows={2} />
-                </div>
-                <Button onClick={handleGrant} className="w-full">Grant access</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+            </TooltipTrigger>
+            <TooltipContent>Refresh (updates live on its own)</TooltipContent>
+          </Tooltip>
         }
       />
 
+      {error && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border border-red-500/25 bg-red-500/[0.06] px-4 py-3">
+          <AlertTriangle className="h-5 w-5 text-red-300 shrink-0" aria-hidden="true" />
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="font-medium text-red-200">Some data didn't load</p>
+            <p className="text-red-200/75 text-xs mt-0.5 break-words">
+              {feed.length || needs.length ? "Showing the last data that loaded. " : ""}{error}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={refresh} disabled={refreshing} className="h-9 border-red-500/30 text-red-100 hover:bg-red-500/10">
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* ── Hero stats ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Domains covered" value={o.total_domains ?? 0} icon={Globe} accentColor="#8b5cf6" iconBg="bg-violet-500/10" iconColor="text-violet-400" subtitle={`${o.total_patterns ?? 0} patterns`} />
-        <StatCard label="Fixed this week" value={o.patterns_last_7d ?? 0} icon={Sparkles} accentColor="#10b981" iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle={`${o.new_domains_last_7d ?? 0} new domains`} />
-        <StatCard label="Learning now" value={o.patterns_last_24h ?? 0} icon={Activity} accentColor="#06b6d4" iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle="patterns last 24h" />
-        <StatCard label="Needs you" value={needsCount} icon={AlertTriangle} accentColor={needsCount > 0 ? "#ef4444" : "#10b981"} iconBg={needsCount > 0 ? "bg-red-500/10" : "bg-emerald-500/10"} iconColor={needsCount > 0 ? "text-red-400" : "text-emerald-400"} subtitle={needsCount > 0 ? "domains to review" : "all clear"} />
+        <StatCard label="Needs you" value={needsCount} icon={AlertTriangle}
+          accentColor={needsCount > 0 ? "#ef4444" : "#10b981"}
+          iconBg={needsCount > 0 ? "bg-red-500/10" : "bg-emerald-500/10"}
+          iconColor={needsCount > 0 ? "text-red-400" : "text-emerald-400"}
+          subtitle={needsCount > 0 ? "auto-fix gave up" : "all clear"} />
+        <StatCard label="Domains covered" value={o.total_domains ?? 0} icon={Globe} iconBg="bg-violet-500/10" iconColor="text-violet-400" subtitle={`${(o.total_patterns ?? 0).toLocaleString()} patterns`} />
+        <StatCard label="Active this week" value={o.patterns_last_7d ?? 0} icon={Sparkles} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle={`${o.new_domains_last_7d ?? 0} new domains`} tooltip="Patterns seen working in the last 7 days." />
+        <StatCard label="Active today" value={o.patterns_last_24h ?? 0} icon={Activity} iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle="patterns, last 24h" />
       </div>
 
-      {/* ── Just In feed (hero) ── */}
-      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+      {/* ── Needs you (the only list to act on) ── */}
+      <section aria-labelledby="needs-title" className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2 px-5 py-4 border-b border-white/[0.06]">
+          <AlertTriangle className={`h-4 w-4 ${needsCount ? "text-red-400" : "text-emerald-400"}`} aria-hidden="true" />
+          <h2 id="needs-title" className="text-[0.9375rem] font-semibold text-white">Needs you</h2>
+          <span className="text-xs text-white/55">automatic render and AI attempts ran out</span>
+          {needsCount > 8 && (
+            <Link to="/admin/cookie-yeti/autofix" className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-white/70 hover:text-white hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+              All {needsCount} <ArrowRight className="h-3 w-3" aria-hidden="true" />
+            </Link>
+          )}
+        </div>
+        {needsCount === 0 ? (
+          <EmptyState compact icon={CheckCircle2} title="Nothing needs you" description="Every reported domain is either fixed or still being worked on automatically." />
+        ) : (
+          <ul className="divide-y divide-white/[0.04]">
+            {needs.slice(0, 8).map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => openDomain(r.domain)}
+                  className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-white/[0.025] focus-visible:outline-none focus-visible:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/30 transition-colors group"
+                >
+                  <span className="text-sm font-medium text-white truncate flex-1 group-hover:text-cyan-300 transition-colors">{r.domain}</span>
+                  <span className="hidden sm:inline text-[0.6875rem] px-2 py-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-300 shrink-0">
+                    {REASON_LABEL[r.reason] ?? r.reason}
+                  </span>
+                  <span className="text-xs text-white/60 tabular-nums shrink-0">{r.report_count ?? 0} reports</span>
+                  <span className="hidden sm:inline text-xs text-white/55 shrink-0 w-20 text-right">{relTime(r.last_reported)}</span>
+                  <ChevronRight className="h-4 w-4 text-white/30 group-hover:text-white/60 transition-colors shrink-0" aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* ── Just in feed ── */}
+      <section aria-labelledby="feed-title" className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-white/[0.06]">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60" />
+          <span className="relative flex h-2 w-2" aria-hidden="true">
+            <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
           </span>
-          <h3 className="text-[0.9375rem] font-semibold text-white">Just in</h3>
-          <span className="text-xs text-white/50">live · newest reported domains</span>
+          <h2 id="feed-title" className="text-[0.9375rem] font-semibold text-white">Just in</h2>
+          <span className="text-xs text-white/55">live · most recently reported domains</span>
         </div>
 
         {feed.length === 0 ? (
-          <EmptyState icon={Inbox} title="Nothing reported yet" description="Reported domains will stream in here as users hit cookie banners." />
+          <EmptyState compact icon={Inbox} title="Nothing reported yet" description="Domains appear here as soon as users report a cookie banner Cookie Yeti missed." />
         ) : (
-          <div className="divide-y divide-white/[0.04]">
+          <ul className="divide-y divide-white/[0.04]">
             {feed.map((r) => {
               const st = deriveState(r);
               const meta = STATE_META[st];
               const ttf = timeToFix(r);
+              const count = r.report_count ?? 1;
               return (
-                <button
-                  key={r.id}
-                  onClick={() => openDomain(r.domain)}
-                  className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-white/[0.025] transition-colors group"
-                >
-                  <span className={`h-2 w-2 rounded-full shrink-0 ${meta.dot}`} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-white truncate group-hover:text-cyan-300 transition-colors">{r.domain}</span>
-                      <span className={`text-[0.625rem] px-1.5 py-0.5 rounded-full border ${meta.pill} shrink-0`}>{meta.label}</span>
+                <li key={r.id}>
+                  <button
+                    type="button"
+                    onClick={() => openDomain(r.domain)}
+                    className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-white/[0.025] focus-visible:outline-none focus-visible:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/30 transition-colors group"
+                  >
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${meta.dot}`} aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white truncate group-hover:text-cyan-300 transition-colors">{r.domain}</span>
+                        <span className={`text-[0.6875rem] px-1.5 py-0.5 rounded-full border ${meta.pill} shrink-0`}>{meta.label}</span>
+                      </div>
+                      <p className="text-xs text-white/55 mt-0.5 truncate">
+                        {count} {count === 1 ? "report" : "reports"}
+                        {ttf && <span className="text-emerald-300/80"> · fixed in {ttf}</span>}
+                        {st === "needs" && <span className="text-red-300/80"> · auto-fix gave up</span>}
+                        {st === "fixing" && <span className="text-amber-300/80"> · {r.ai_attempts ?? 0} AI attempts so far</span>}
+                      </p>
                     </div>
-                    <p className="text-xs text-white/50 mt-0.5 truncate">
-                      {(r.report_count ?? 1)} {(r.report_count ?? 1) === 1 ? "report" : "reports"}
-                      {ttf && <span className="text-emerald-400/70"> · fixed in {ttf}</span>}
-                      {st === "needs" && <span className="text-red-400/70"> · AI couldn’t auto-fix</span>}
-                      {st === "fixing" && <span className="text-amber-400/70"> · AI working on it</span>}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-xs text-white/50 tabular-nums">{relTime(r.last_reported || r.created_at)}</span>
-                    <ChevronRight className="h-4 w-4 text-white/15 group-hover:text-white/40 transition-colors" />
-                  </div>
-                </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs text-white/55 tabular-nums">{relTime(r.last_reported || r.created_at)}</span>
+                      <ChevronRight className="h-4 w-4 text-white/30 group-hover:text-white/60 transition-colors" aria-hidden="true" />
+                    </div>
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
-      </div>
-
-      {/* ── Needs you ── */}
-      {needsCount > 0 && (
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-white/[0.06]">
-            <AlertTriangle className="h-4 w-4 text-red-400" />
-            <h3 className="text-[0.9375rem] font-semibold text-white">Needs you</h3>
-            <span className="text-xs text-white/50">domains the AI couldn’t fix — most-reported first</span>
-          </div>
-          <div className="divide-y divide-white/[0.04]">
-            {needs.slice(0, 8).map((r) => (
-              <button
-                key={r.domain}
-                onClick={() => openDomain(r.domain)}
-                className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-white/[0.025] transition-colors group"
-              >
-                <span className="text-sm font-medium text-white truncate flex-1 group-hover:text-cyan-300 transition-colors">{r.domain}</span>
-                <span className="text-xs text-white/55 tabular-nums shrink-0">{r.report_count} reports</span>
-                <span className="text-xs text-white/50 shrink-0 w-20 text-right">{relTime(r.last_reported)}</span>
-                <ChevronRight className="h-4 w-4 text-white/15 group-hover:text-white/40 transition-colors shrink-0" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Advanced links ── */}
-      <div className="flex flex-wrap items-center gap-2 pt-2">
-        <span className="text-[0.6875rem] uppercase tracking-widest text-white/50 font-semibold mr-1">Advanced</span>
-        {[
-          { to: "/admin/cookie-yeti/analytics", label: "Product analytics" },
-          { to: "/admin/cookie-yeti/ops", label: "Operations & pipeline" },
-          { to: "/admin/cookie-yeti/community", label: "Community analytics" },
-          { to: "/admin/cookie-yeti/domains", label: "All domains" },
-          { to: "/admin/cookie-yeti/subscribers", label: "Subscribers" },
-        ].map((l) => (
-          <Link
-            key={l.to}
-            to={l.to}
-            className="inline-flex items-center gap-1 text-xs text-white/45 hover:text-white bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-lg px-3 py-1.5 transition-colors"
-          >
-            {l.label}<ArrowRight className="h-3 w-3" />
-          </Link>
-        ))}
-      </div>
+      </section>
 
       <DomainDeepDive domain={selectedDomain} open={drawerOpen} onOpenChange={setDrawerOpen} onRefresh={loadData} />
     </div>

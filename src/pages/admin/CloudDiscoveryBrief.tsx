@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Printer } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const APP_LABEL: Record<string, string> = {
   drive: "Drive",
@@ -67,38 +68,46 @@ export default function CloudDiscoveryBrief() {
     new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
   );
 
-  useEffect(() => {
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
     if (!id) return;
-    let cancelled = false;
-    (async () => {
-      const [lRes, bRes] = await Promise.all([
-        supabase.from("cloud_leads").select("*").eq("id", id).maybeSingle(),
-        supabase.from("cloud_briefs").select("*").eq("lead_id", id).maybeSingle(),
-      ]);
-      if (cancelled) return;
-      const l = lRes.data;
-      setLead(l);
-      setBrief(bRes.data);
-      if (l) {
-        // Pre-populate spend default from brief band, else from user-count band
-        const briefBand: string | null = (bRes.data as any)?.annual_saas_spend_band ?? null;
-        const briefSpendDefault: Record<string, number> = {
-          "<25k": 18000,
-          "25-75k": 50000,
-          "75-150k": 110000,
-          "150-300k": 220000,
-          "300k+": 400000,
-          unsure: PER_USER_BAND_DEFAULT_ANNUAL[l.user_count_band] || 100000,
-        };
-        setAnnualSpend(briefBand ? briefSpendDefault[briefBand] : PER_USER_BAND_DEFAULT_ANNUAL[l.user_count_band] || 100000);
-        setDeployFee(DEPLOY_FEE_DEFAULT[l.user_count_band] || 50000);
-      }
+    setLoading(true);
+    setLoadError(null);
+    const [lRes, bRes] = await Promise.all([
+      supabase.from("cloud_leads").select("*").eq("id", id).maybeSingle(),
+      supabase.from("cloud_briefs").select("*").eq("lead_id", id).maybeSingle(),
+    ]);
+    if (lRes.error || bRes.error) {
+      setLoadError((lRes.error || bRes.error)!.message);
       setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
+      return;
+    }
+    const l = lRes.data;
+    setLead(l);
+    setBrief(bRes.data);
+    if (l) {
+      // Pre-populate spend default from brief band, else from user-count band
+      const briefBand: string | null = (bRes.data as any)?.annual_saas_spend_band ?? null;
+      const briefSpendDefault: Record<string, number> = {
+        "<25k": 18000,
+        "25-75k": 50000,
+        "75-150k": 110000,
+        "150-300k": 220000,
+        "300k+": 400000,
+        unsure: PER_USER_BAND_DEFAULT_ANNUAL[l.user_count_band] || 100000,
+      };
+      setAnnualSpend(
+        (briefBand && briefSpendDefault[briefBand]) || PER_USER_BAND_DEFAULT_ANNUAL[l.user_count_band] || 100000
+      );
+      setDeployFee(DEPLOY_FEE_DEFAULT[l.user_count_band] || 50000);
+    }
+    setLoading(false);
   }, [id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const threeYearCloud = annualSpend * 3;
   const threeYearInHouse = deployFee + monthlyFee * 36;
@@ -106,17 +115,45 @@ export default function CloudDiscoveryBrief() {
   const monthlyAvgInHouse = threeYearInHouse / 36;
 
   if (loading) {
-    return <div className="text-white/50 p-10 text-center">Loading…</div>;
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <Skeleton className="h-9 w-32" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-[40rem] w-full max-w-[8.5in] mx-auto rounded-lg" />
+      </div>
+    );
+  }
+  if (loadError) {
+    return (
+      <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/[0.06] p-8 text-center">
+        <h3 className="text-base font-medium text-red-200 mb-2">Couldn't load this lead</h3>
+        <p className="text-sm text-red-200/80 mb-4">{loadError}</p>
+        <div className="flex justify-center gap-2">
+          <Button variant="outline" asChild>
+            <Link to={`/admin/cloud/${id}`}>Back to deal</Link>
+          </Button>
+          <Button onClick={load}>Retry</Button>
+        </div>
+      </div>
+    );
   }
   if (!lead) {
-    return <div className="text-white/50 p-10 text-center">Lead not found.</div>;
+    return (
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-10 text-center">
+        <h3 className="text-base font-medium text-white/80 mb-2">Lead not found</h3>
+        <p className="text-sm text-white/60 mb-4">It may have been deleted.</p>
+        <Button variant="outline" asChild>
+          <Link to="/admin/cloud">Back to pipeline</Link>
+        </Button>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
       {/* Operator controls (hidden in print) */}
       <div className="print:hidden space-y-4">
-        <Button asChild variant="ghost" size="sm" className="text-white/50 hover:text-white">
+        <Button asChild variant="ghost" size="sm" className="text-white/70 hover:text-white">
           <Link to={`/admin/cloud/${id}`}>
             <ArrowLeft className="h-4 w-4 mr-1.5" />
             Back to deal
@@ -129,8 +166,9 @@ export default function CloudDiscoveryBrief() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div>
-              <Label className="text-xs text-white/50">Estimated annual spend</Label>
+              <Label htmlFor="db-spend" className="text-xs text-white/60">Estimated annual spend</Label>
               <Input
+                id="db-spend"
                 type="number"
                 value={annualSpend}
                 onChange={(e) => setAnnualSpend(Number(e.target.value) || 0)}
@@ -138,8 +176,9 @@ export default function CloudDiscoveryBrief() {
               />
             </div>
             <div>
-              <Label className="text-xs text-white/50">Deployment fee</Label>
+              <Label htmlFor="db-deploy" className="text-xs text-white/60">Deployment fee</Label>
               <Input
+                id="db-deploy"
                 type="number"
                 value={deployFee}
                 onChange={(e) => setDeployFee(Number(e.target.value) || 0)}
@@ -147,8 +186,9 @@ export default function CloudDiscoveryBrief() {
               />
             </div>
             <div>
-              <Label className="text-xs text-white/50">Monthly support fee</Label>
+              <Label htmlFor="db-monthly" className="text-xs text-white/60">Monthly support fee</Label>
               <Input
+                id="db-monthly"
                 type="number"
                 value={monthlyFee}
                 onChange={(e) => setMonthlyFee(Number(e.target.value) || 0)}
@@ -156,24 +196,27 @@ export default function CloudDiscoveryBrief() {
               />
             </div>
             <div>
-              <Label className="text-xs text-white/50">Support tier</Label>
+              <Label htmlFor="db-tier" className="text-xs text-white/60">Support tier</Label>
               <Input
+                id="db-tier"
                 value={supportTier}
                 onChange={(e) => setSupportTier(e.target.value)}
                 className="bg-black/30 border-white/[0.08]"
               />
             </div>
             <div className="sm:col-span-2">
-              <Label className="text-xs text-white/50">Date on PDF</Label>
+              <Label htmlFor="db-date" className="text-xs text-white/60">Date on PDF</Label>
               <Input
+                id="db-date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="bg-black/30 border-white/[0.08]"
               />
             </div>
             <div className="sm:col-span-3">
-              <Label className="text-xs text-white/50">Custom notes (optional)</Label>
+              <Label htmlFor="db-notes" className="text-xs text-white/60">Custom notes (optional)</Label>
               <Textarea
+                id="db-notes"
                 value={customNotes}
                 onChange={(e) => setCustomNotes(e.target.value)}
                 placeholder="A few sentences specific to their situation, surfaced on page 2."
@@ -184,10 +227,10 @@ export default function CloudDiscoveryBrief() {
           </div>
           <div className="mt-4">
             <Button onClick={() => window.print()} className="gap-2">
-              <Printer className="h-4 w-4" />
-              Print / Save as PDF
+              <Printer className="h-4 w-4" aria-hidden />
+              Save as PDF
             </Button>
-            <p className="text-[0.6875rem] text-white/55 mt-2">
+            <p className="text-xs text-white/60 mt-2">
               In the print dialog: pick "Save as PDF" as the destination, A4 or Letter, no headers/footers.
             </p>
           </div>
@@ -198,9 +241,17 @@ export default function CloudDiscoveryBrief() {
       <div className="print-brief bg-white text-slate-900 p-12 max-w-[8.5in] mx-auto print:p-10 print:shadow-none shadow-2xl rounded-lg print:rounded-none">
         <style>{`
           @media print {
-            body { background: white !important; }
-            .admin-shell, .sidebar, header { display: none !important; }
-            .print-brief { box-shadow: none !important; padding: 0.5in !important; }
+            html, body { background: white !important; }
+            /* The brief lives inside .admin-shell, so hiding the shell blanks the PDF.
+               Hide everything that is not the brief or one of its ancestors instead. */
+            body *:not(:has(.print-brief)):not(.print-brief):not(.print-brief *) { display: none !important; }
+            body *:has(.print-brief) {
+              display: block !important; position: static !important; overflow: visible !important;
+              height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
+              background: white !important; box-shadow: none !important; backdrop-filter: none !important;
+            }
+            .print-brief { box-shadow: none !important; padding: 0 !important; max-width: none !important; }
+            .print-brief .page-break { break-before: page; }
             @page { margin: 0.5in; size: letter; }
           }
           .print-brief h1, .print-brief h2, .print-brief h3 { color: #0f172a; }

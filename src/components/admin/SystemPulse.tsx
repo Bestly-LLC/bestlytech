@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface SystemPulseProps {
   className?: string;
@@ -43,6 +44,13 @@ const STATUS_DOT: Record<Status, string> = {
   unknown: "bg-white/20",
 };
 
+const STATUS_WORD: Record<Status, string> = {
+  ok: "healthy",
+  warn: "degraded",
+  down: "down",
+  unknown: "unknown",
+};
+
 const HEADLINE_BG: Record<Status, string> = {
   ok: "bg-emerald-500/5 border-emerald-500/20",
   warn: "bg-amber-500/5 border-amber-500/20",
@@ -79,7 +87,8 @@ export function SystemPulse({ className }: SystemPulseProps) {
   const [downSystems, setDownSystems] = useState<string[]>([]);
   const [lastChecked, setLastChecked] = useState<string | null>(null);
   const [relativeTime, setRelativeTime] = useState("");
-  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const [alertUnknown, setAlertUnknown] = useState(false);
 
   const updateRelativeTime = useCallback((iso: string | null) => {
     if (iso) setRelativeTime(formatRelativeTime(iso));
@@ -212,34 +221,13 @@ export function SystemPulse({ className }: SystemPulseProps) {
 
     setSubsystems(next);
 
+    // A failed read of system_alert_state must read as "unknown", never as healthy.
+    setAlertUnknown(!!alertStateRes.error);
     const alertState = alertStateRes.data as { down_systems?: string[]; last_checked?: string } | null;
     setDownSystems(alertState?.down_systems ?? []);
     setLastChecked(alertState?.last_checked ?? null);
     updateRelativeTime(alertState?.last_checked ?? null);
   }, [updateRelativeTime]);
-
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (token) {
-        await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-system-health`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        ).catch(() => {});
-      }
-      await loadHealth();
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [loadHealth]);
 
   useEffect(() => {
     loadHealth();
@@ -247,20 +235,9 @@ export function SystemPulse({ className }: SystemPulseProps) {
     return () => clearInterval(interval);
   }, [loadHealth]);
 
-  // Subscribe to alert_state realtime so SMS-fired downs surface instantly
-  useEffect(() => {
-    const channel = supabase
-      .channel("system-pulse")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "system_alert_state", filter: "id=eq.1" },
-        () => loadHealth()
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [loadHealth]);
+  // Note: there is no manual "run health check" button. check-system-health only accepts the service
+  // role key or MAINTENANCE_SECRET (it runs on cron), so an admin JWT always got a silent 401. The
+  // banner re-reads live data every 60s; the dashboard's More menu offers "Refresh now".
 
   // Tick relative time every 30s
   useEffect(() => {
@@ -270,30 +247,39 @@ export function SystemPulse({ className }: SystemPulseProps) {
   }, [lastChecked, updateRelativeTime]);
 
   const headlineStatus: Status = useMemo(() => {
+    if (downSystems.length > 0) return "down";
     if (subsystems.some((s) => s.status === "down")) return "down";
     if (subsystems.some((s) => s.status === "warn")) return "warn";
     if (subsystems.length === 0) return "unknown";
+    if (alertUnknown) return "warn";
     return "ok";
-  }, [subsystems]);
+  }, [subsystems, downSystems, alertUnknown]);
 
   const headlineText = useMemo(() => {
-    if (downSystems.length > 0) return `System Alert — ${downSystems.join(", ")}`;
+    if (downSystems.length > 0) return `System alert: ${downSystems.join(", ")}`;
     if (headlineStatus === "down") {
       const down = subsystems.filter((s) => s.status === "down").map((s) => s.label);
-      return `System Alert — ${down.join(", ")}`;
+      return `System alert: ${down.join(", ")}`;
     }
     if (headlineStatus === "warn") {
       const warn = subsystems.filter((s) => s.status === "warn").map((s) => s.label);
-      return `Degraded — ${warn.join(", ")}`;
+      if (warn.length === 0 && alertUnknown) return "Health unverified: couldn't read system_alert_state";
+      return `Degraded: ${warn.join(", ")}`;
     }
-    if (headlineStatus === "unknown") return "Loading statusâ¦";
-    return "All Systems Operational";
-  }, [headlineStatus, subsystems, downSystems]);
+    if (headlineStatus === "unknown") return "Status unknown";
+    return "All systems operational";
+  }, [headlineStatus, subsystems, downSystems, alertUnknown]);
 
   if (subsystems.length === 0) {
     return (
-      <div className={cn("rounded-2xl border px-4 py-3 bg-white/[0.03] border-white/[0.06] animate-pulse", className)}>
-        <div className="h-5" />
+      <div
+        className={cn("rounded-2xl border px-4 py-3 bg-white/[0.03] border-white/[0.06] flex items-center gap-3", className)}
+        aria-busy="true"
+        aria-label="Loading system status"
+      >
+        <Skeleton className="h-2.5 w-2.5 rounded-full bg-white/[0.08]" />
+        <Skeleton className="h-4 w-48 bg-white/[0.06]" />
+        <Skeleton className="h-3 w-64 ml-auto bg-white/[0.04] hidden sm:block" />
       </div>
     );
   }
@@ -305,10 +291,12 @@ export function SystemPulse({ className }: SystemPulseProps) {
         HEADLINE_BG[headlineStatus],
         className
       )}
+      role="status"
+      aria-live="polite"
     >
       {/* Headline pulse + text */}
       <div className="flex items-center gap-2.5 min-w-0">
-        <span className="relative flex h-2.5 w-2.5 shrink-0">
+        <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
           <span
             className={cn(
               "absolute inline-flex h-full w-full rounded-full opacity-75 animate-[pulse-dot_1.5s_ease-in-out_infinite]",
@@ -322,42 +310,18 @@ export function SystemPulse({ className }: SystemPulseProps) {
 
       {/* Last-checked from alert_state */}
       {relativeTime && (
-        <span className="text-xs text-white/50 tabular-nums whitespace-nowrap">Checked {relativeTime}</span>
+        <span className="text-xs text-white/60 tabular-nums whitespace-nowrap">Last check {relativeTime}</span>
       )}
-
-      {/* Refresh button */}
-      <button
-        onClick={handleRefresh}
-        disabled={isRefreshing}
-        className="shrink-0 p-1 rounded-lg text-white/50 hover:text-white/60 hover:bg-white/[0.05] transition-colors disabled:opacity-40"
-        title="Refresh system health"
-        aria-label="Refresh system health"
-      >
-        <svg
-          className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-          <path d="M3 3v5h5" />
-          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-          <path d="M16 21h5v-5" />
-        </svg>
-      </button>
 
       {/* Subsystem indicators */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ml-auto">
         {subsystems.map((s) => (
           <div key={s.key} className="flex items-center gap-1.5" title={s.detail}>
-            <span className={cn("h-1.5 w-1.5 rounded-full transition-colors duration-500", STATUS_DOT[s.status])} />
-            <span className="text-[0.6875rem] text-white/55 whitespace-nowrap">
+            <span className={cn("h-1.5 w-1.5 rounded-full transition-colors duration-500", STATUS_DOT[s.status])} aria-hidden />
+            <span className="text-xs text-white/70 whitespace-nowrap">
               {s.label}
-              <span className="text-white/50 ml-1">{s.detail}</span>
+              <span className="text-white/55 ml-1">{s.detail}</span>
+              <span className="sr-only"> ({STATUS_WORD[s.status]})</span>
             </span>
           </div>
         ))}

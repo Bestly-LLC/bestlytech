@@ -1,7 +1,13 @@
 import { useState } from "react";
-import { Brain, RotateCcw, Wrench, RefreshCw, Zap, Loader2, LucideIcon } from "lucide-react";
+import { Brain, Loader2, RotateCcw, Wrench, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { ActionMenu } from "@/components/admin/ActionMenu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface OperationsPanelProps {
   onRefresh?: () => void;
@@ -9,168 +15,141 @@ interface OperationsPanelProps {
   permanentlyFailedCount?: number;
 }
 
-interface Operation {
-  id: string;
-  label: string;
-  subtitle: string;
-  icon: LucideIcon;
-  color: string;
-  iconBg: string;
-  run: () => Promise<string>;
-}
+type OpId = "ai-generate" | "retry-failed" | "run-maintenance" | "reset-failed";
 
-export function OperationsPanel({
-  onRefresh,
-  candidateCount,
-  permanentlyFailedCount,
-}: OperationsPanelProps) {
-  const [runningOps, setRunningOps] = useState<Record<string, boolean>>({});
+const LABELS: Record<OpId, string> = {
+  "ai-generate": "AI generator",
+  "retry-failed": "Retry failed domains",
+  "run-maintenance": "Pattern maintenance",
+  "reset-failed": "Reset failed domains",
+};
 
-  const callEdgeFunction = async (functionName: string): Promise<string> => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
-    if (!accessToken) throw new Error("Not authenticated");
+/**
+ * Cookie Yeti maintenance jobs, grouped by task:
+ *   primary   Run AI generator          edge fn ai-generate-pattern (admin JWT accepted)
+ *   menu      Retry failed domains      edge fn auto-retry-failed-patterns (admin JWT accepted)
+ *             Run pattern maintenance   rpc run_maintenance_cron
+ *   danger    Reset failed domains…     rpc reset_failed_domains_cron (deletes 30-day-old failure logs)
+ * All of these also run on cron; this panel is for running one now.
+ */
+export function OperationsPanel({ onRefresh, candidateCount, permanentlyFailedCount }: OperationsPanelProps) {
+  const [running, setRunning] = useState<OpId | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
 
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
+  const invokeFn = async (slug: string): Promise<any> => {
+    const { data, error } = await supabase.functions.invoke(slug, { body: {} });
+    if (error) {
+      let detail = error.message;
+      try {
+        const body = await (error as any).context?.json?.();
+        if (body?.error) detail = body.error;
+      } catch {
+        /* keep generic message */
       }
-    );
-
-    if (!res.ok) {
-      const errorBody = await res.text();
-      throw new Error(errorBody || `HTTP ${res.status}`);
+      throw new Error(detail);
     }
-
-    const json = await res.json();
-    return json.message ?? JSON.stringify(json);
+    return data;
   };
 
-  const operations: Operation[] = [
-    {
-      id: "ai-generate",
-      label: "Run AI Generator",
-      subtitle: candidateCount !== undefined ? `${candidateCount} candidates` : "Generate cookie patterns with AI",
-      icon: Brain,
-      color: "rgb(34 211 238)",   // cyan-400
-      iconBg: "bg-cyan-500/10",
-      run: () => callEdgeFunction("ai-generate-pattern"),
+  const ops: Record<OpId, () => Promise<string>> = {
+    "ai-generate": async () => {
+      const d = await invokeFn("ai-generate-pattern");
+      if (!d?.processed) return "No domains were waiting for a pattern.";
+      return `Processed ${d.processed}: ${d.generated} generated, ${d.failed} failed, ${d.skipped} skipped.`;
     },
-    {
-      id: "retry-failed",
-      label: "Retry Failed",
-      subtitle: "Retry domains that failed AI generation",
-      icon: RotateCcw,
-      color: "rgb(251 191 36)",   // amber-400
-      iconBg: "bg-amber-500/10",
-      run: () => callEdgeFunction("auto-retry-failed-patterns"),
+    "retry-failed": async () => {
+      const d = await invokeFn("auto-retry-failed-patterns");
+      if (d?.message) return d.message;
+      return `Retried ${d?.processed ?? 0}: ${d?.succeeded ?? 0} fixed, ${d?.still_failed ?? 0} still failing, ${d?.permanently_failed ?? 0} gave up.`;
     },
-    {
-      id: "run-maintenance",
-      label: "Run Maintenance",
-      subtitle: "Fix patterns + process reports",
-      icon: Wrench,
-      color: "rgb(167 139 250)",  // violet-400
-      iconBg: "bg-violet-500/10",
-      run: async () => {
-        const { error } = await supabase.rpc("run_maintenance_cron" as any);
-        if (error) throw error;
-        return "Maintenance completed successfully";
-      },
+    "run-maintenance": async () => {
+      const { data, error } = await supabase.rpc("run_maintenance_cron" as never);
+      if (error) throw error;
+      return data ? "Pattern fixes and user reports processed." : "Maintenance ran.";
     },
-    {
-      id: "reset-failed",
-      label: "Reset Failed",
-      subtitle: permanentlyFailedCount !== undefined
-        ? `${permanentlyFailedCount} permanently failed`
-        : "Reset permanently failed domains",
-      icon: RefreshCw,
-      color: "rgb(251 113 133)",  // rose-400
-      iconBg: "bg-rose-500/10",
-      run: async () => {
-        const { error } = await supabase.rpc("reset_failed_domains_cron" as any);
-        if (error) throw error;
-        return "Failed domains reset successfully";
-      },
+    "reset-failed": async () => {
+      const { data, error } = await supabase.rpc("reset_failed_domains_cron" as never);
+      if (error) throw error;
+      const d = data as { reset_domains?: number; cleaned_logs?: number } | null;
+      return `${d?.reset_domains ?? 0} domains queued for retry, ${d?.cleaned_logs ?? 0} old failure logs cleared.`;
     },
-  ];
+  };
 
-  const handleRun = async (op: Operation) => {
-    if (runningOps[op.id]) return;
-
-    setRunningOps((prev) => ({ ...prev, [op.id]: true }));
+  const run = async (id: OpId) => {
+    if (running) return;
+    setRunning(id);
     try {
-      const result = await op.run();
-      toast.success(`${op.label} completed`, { description: result });
+      const result = await ops[id]();
+      toast.success(`${LABELS[id]} finished`, { description: result });
       onRefresh?.();
     } catch (err: any) {
-      toast.error(`${op.label} failed`, {
-        description: err?.message ?? "Unknown error",
+      toast.error(`${LABELS[id]} failed`, {
+        description: `${err?.message ?? "Unknown error"}. Try again, or check the function logs in Supabase.`,
       });
     } finally {
-      setRunningOps((prev) => ({ ...prev, [op.id]: false }));
+      setRunning(null);
     }
   };
 
+  const busyLabel = running ? `${LABELS[running]} running…` : null;
+
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        <Zap className="h-3.5 w-3.5 text-white/55" />
-        <span className="text-xs font-semibold text-white/55 uppercase tracking-widest">
-          Operations
-        </span>
+    <section aria-labelledby="ops-title" className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-5">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="h-9 w-9 rounded-xl bg-cyan-500/10 flex items-center justify-center shrink-0">
+            <Zap className="h-4 w-4 text-cyan-400" aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <h3 id="ops-title" className="text-sm font-semibold text-white">Operations</h3>
+            <p className="text-xs text-white/60 mt-0.5" aria-live="polite">
+              {busyLabel ??
+                [
+                  candidateCount !== undefined ? `${candidateCount} unresolved report${candidateCount === 1 ? "" : "s"}` : null,
+                  permanentlyFailedCount !== undefined ? `${permanentlyFailedCount} permanently failed` : null,
+                  "Jobs also run on schedule.",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" className="h-9" onClick={() => run("ai-generate")} disabled={running !== null}>
+            {running === "ai-generate" ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden /> : <Brain className="h-4 w-4 mr-1.5" aria-hidden />}
+            {running === "ai-generate" ? "Generating…" : "Run AI generator"}
+          </Button>
+          <ActionMenu
+            label="More maintenance jobs"
+            items={[
+              { label: "Retry failed domains", icon: RotateCcw, group: "Maintenance", disabled: running !== null, onSelect: () => run("retry-failed") },
+              { label: "Run pattern maintenance", icon: Wrench, group: "Maintenance", disabled: running !== null, onSelect: () => run("run-maintenance") },
+              { label: "Reset failed domains…", icon: RotateCcw, destructive: true, disabled: running !== null, onSelect: () => setConfirmReset(true) },
+            ]}
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {operations.map((op) => {
-          const Icon = op.icon;
-          const isRunning = runningOps[op.id];
-
-          return (
-            <div
-              key={op.id}
-              className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 hover:bg-white/[0.05] transition-colors duration-200 flex flex-col"
+      <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset failed domains?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Domains that failed 5+ times over 30 days ago get their attempt count reset so the AI generator tries them again.
+              Failure log entries older than 30 days are deleted. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => run("reset-failed")}
             >
-              <div
-                className={`h-9 w-9 rounded-xl flex items-center justify-center mb-3 ${op.iconBg}`}
-              >
-                <Icon className="h-[1.125rem] w-[1.125rem]" style={{ color: op.color }} />
-              </div>
-
-              <p className="text-sm font-medium text-white leading-tight">
-                {op.label}
-              </p>
-              <p className="text-[0.6875rem] text-white/55 mt-1 leading-snug flex-1">
-                {op.subtitle}
-              </p>
-
-              <button
-                onClick={() => handleRun(op)}
-                disabled={isRunning}
-                className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-150 disabled:opacity-60"
-                style={{
-                  backgroundColor: isRunning ? "rgba(255,255,255,0.05)" : `color-mix(in srgb, ${op.color} 15%, transparent)`,
-                  color: isRunning ? "rgba(255,255,255,0.4)" : op.color,
-                }}
-              >
-                {isRunning ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Running...
-                  </>
-                ) : (
-                  "Run"
-                )}
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+              Reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </section>
   );
 }

@@ -35,9 +35,7 @@ function getStatusColor(status: string): string {
 }
 
 function formatStatusLabel(status: string): string {
-  return status
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function CustomTooltipContent({
@@ -56,27 +54,20 @@ function CustomTooltipContent({
   return (
     <div className="bg-[#1a1a1a] border border-white/[0.1] rounded-lg px-3 py-2 shadow-xl">
       <p className="text-xs font-medium text-white">{formatStatusLabel(status)}</p>
-      <p className="text-[0.6875rem] text-white/60 mt-0.5">
+      <p className="text-xs text-white/70 mt-0.5">
         {count.toLocaleString()} runs ({pct}%)
       </p>
     </div>
   );
 }
 
-function CustomLegendContent({
-  payload,
-}: {
-  payload?: Array<{ value: string; color: string }>;
-}) {
+function CustomLegendContent({ payload }: { payload?: Array<{ value: string; color: string }> }) {
   if (!payload?.length) return null;
   return (
     <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-1 px-2">
       {payload.map((entry) => (
-        <span key={entry.value} className="inline-flex items-center gap-1 text-[0.625rem] text-white/50">
-          <span
-            className="inline-block h-2 w-2 rounded-full shrink-0"
-            style={{ backgroundColor: entry.color }}
-          />
+        <span key={entry.value} className="inline-flex items-center gap-1 text-xs text-white/60">
+          <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} aria-hidden />
           {formatStatusLabel(entry.value)}
         </span>
       ))}
@@ -87,66 +78,65 @@ function CustomLegendContent({
 export function PipelineHealthRing({ data, successRate }: PipelineHealthRingProps) {
   const total = useMemo(() => data.reduce((sum, d) => sum + d.count, 0), [data]);
 
-  const rateColor =
-    successRate >= 70
-      ? "text-emerald-400"
-      : successRate >= 50
-        ? "text-amber-400"
-        : "text-red-400";
+  const rateColor = successRate >= 70 ? "text-emerald-400" : successRate >= 50 ? "text-amber-400" : "text-red-400";
 
   return (
     <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5">
       {/* Header */}
       <div className="flex items-center gap-2 mb-1">
         <div className="h-8 w-8 rounded-xl bg-white/[0.05] flex items-center justify-center">
-          <Activity className="h-4 w-4 text-white/55" />
+          <Activity className="h-4 w-4 text-white/55" aria-hidden />
         </div>
         <div>
-          <h3 className="text-sm font-medium text-white">AI Pipeline Health</h3>
-          <p className="text-[0.625rem] text-white/50">
-            {total.toLocaleString()} total runs
-          </p>
+          <h3 className="text-sm font-medium text-white">AI pipeline health</h3>
+          <p className="text-xs text-white/60">{total.toLocaleString()} total runs</p>
         </div>
       </div>
 
       {/* Chart */}
-      <div className="relative" style={{ height: 220 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="count"
-              nameKey="status"
-              cx="50%"
-              cy="50%"
-              innerRadius="58%"
-              outerRadius="82%"
-              paddingAngle={1.5}
-              strokeWidth={0}
-            >
-              {data.map((entry) => (
-                <Cell key={entry.status} fill={getStatusColor(entry.status)} />
-              ))}
-            </Pie>
-            <RechartsTooltip
-              content={<CustomTooltipContent total={total} />}
-              cursor={false}
-            />
-            <Legend
-              content={<CustomLegendContent />}
-              verticalAlign="bottom"
-            />
-          </PieChart>
-        </ResponsiveContainer>
-
-        {/* Center label */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style={{ marginBottom: 30 }}>
-          <span className={`text-2xl font-bold tabular-nums ${rateColor}`}>
-            {successRate.toFixed(1)}%
-          </span>
-          <span className="text-[0.625rem] text-white/50 font-medium">Success</span>
+      {total === 0 ? (
+        <div className="h-[13.75rem] flex flex-col items-center justify-center text-center">
+          <Activity className="h-6 w-6 text-white/30 mb-2" aria-hidden />
+          <p className="text-sm text-white/70">No AI runs yet</p>
+          <p className="text-xs text-white/55 mt-0.5">Runs appear here after the generator processes a report.</p>
         </div>
-      </div>
+      ) : (
+        <div
+          className="relative h-[13.75rem]"
+          role="img"
+          aria-label={`AI pipeline: ${successRate.toFixed(1)}% success across ${total.toLocaleString()} runs. ${data
+            .map((d) => `${formatStatusLabel(d.status)} ${d.count}`)
+            .join(", ")}.`}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="count"
+                nameKey="status"
+                cx="50%"
+                cy="50%"
+                innerRadius="58%"
+                outerRadius="82%"
+                paddingAngle={1.5}
+                strokeWidth={0}
+              >
+                {data.map((entry) => (
+                  <Cell key={entry.status} fill={getStatusColor(entry.status)} />
+                ))}
+              </Pie>
+              <RechartsTooltip content={<CustomTooltipContent total={total} />} cursor={false} />
+              <Legend content={<CustomLegendContent />} verticalAlign="bottom" />
+            </PieChart>
+          </ResponsiveContainer>
+
+          {/* Center label, lifted to clear the legend */}
+          <div className="absolute inset-0 mb-8 flex flex-col items-center justify-center pointer-events-none">
+            <span className={`text-2xl font-bold tabular-nums ${rateColor}`}>{successRate.toFixed(1)}%</span>
+            <span className="text-xs text-white/60 font-medium">success</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

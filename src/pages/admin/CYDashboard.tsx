@@ -1,513 +1,179 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Crown, Users, ShieldCheck, Calendar, Plus, ArrowRight, Cookie, Cpu, AlertTriangle,
-  CheckCircle2, Globe, Zap, Ban, Target,
+  Cookie, Cpu, CheckCircle2, Zap, Smartphone, RefreshCw, AlertTriangle,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
-import { EmptyState } from "@/components/admin/EmptyState";
-import { Skeleton } from "@/components/ui/skeleton";
-import { DateRangeFilter, filterByDateRange, type DateRange } from "@/components/admin/DateRangeFilter";
-import { useAdminRealtime } from "@/hooks/useAdminRealtime";
-
-// New components
+import { OperationsPanel } from "@/components/admin/OperationsPanel";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SystemPulse } from "@/components/admin/SystemPulse";
 import { PipelineHealthRing } from "@/components/admin/PipelineHealthRing";
 import { PatternCoverageGrid } from "@/components/admin/PatternCoverageGrid";
-import { SmartAlerts } from "@/components/admin/SmartAlerts";
-import { OperationsPanel } from "@/components/admin/OperationsPanel";
-import { DomainDeepDive } from "@/components/admin/DomainDeepDive";
+import { DomainDeepDive, isRealAiAttempt, useCyLiveRefresh } from "@/components/admin/DomainDeepDive";
+
+/**
+ * Operations — the pipeline engine room.
+ *
+ * Owns: system health, pattern-engine numbers, and the manual "run it now" jobs.
+ * Everything triage-related (what needs you, per-domain actions) lives on the
+ * Command Center and Auto-Fix pages; subscribers and grants live on their own pages.
+ */
+
+const WINDOW_DAYS = 30;
 
 export default function CYDashboard() {
-  const [subs, setSubs] = useState<any[]>([]);
-  const [grants, setGrants] = useState<any[]>([]);
-  const [grantEmail, setGrantEmail] = useState("");
-  const [grantReason, setGrantReason] = useState("");
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
-  const { toast } = useToast();
+  const [error, setError] = useState<string | null>(null);
+  const [openReports, setOpenReports] = useState<number | undefined>(undefined);
 
-  // CookieYeti Command Center state
   const [patternCount, setPatternCount] = useState(0);
   const [activePatternCount, setActivePatternCount] = useState(0);
   const [dismissalCount, setDismissalCount] = useState(0);
-  const [aiGenCount, setAiGenCount] = useState(0);
-  const [aiSuccessCount, setAiSuccessCount] = useState(0);
   const [fixCount, setFixCount] = useState(0);
-  const [unresolvedReports, setUnresolvedReports] = useState<any[]>([]);
-  const [topPatterns, setTopPatterns] = useState<any[]>([]);
   const [deviceCount, setDeviceCount] = useState(0);
   const [pushCount, setPushCount] = useState(0);
-  const [activationCount, setActivationCount] = useState(0);
-  // Real Active Users = today's DAU from product_events. null => unavailable.
-  const [dau, setDau] = useState<number | null>(null);
-
-  // New state for upgraded components
-  const [aiStatusBreakdown, setAiStatusBreakdown] = useState<Array<{ status: string; count: number }>>([]);
+  const [aiStatuses, setAiStatuses] = useState<string[]>([]);
   const [domainCoverage, setDomainCoverage] = useState<any[]>([]);
-  const [allPatterns, setAllPatterns] = useState<any[]>([]);
-  const [permanentlyFailedCount, setPermanentlyFailedCount] = useState(0);
-  const [candidateCount, setCandidateCount] = useState(0);
 
-  // Domain deep dive state
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-
   const handleDomainClick = useCallback((domain: string) => {
     setSelectedDomain(domain);
     setDrawerOpen(true);
   }, []);
 
-  useAdminRealtime({
-    tables: ["subscriptions", "granted_access", "cookie_patterns", "missed_banner_reports"] as any,
-    onNewRecord: (table, record) => {
-      if (table === "subscriptions") setSubs((p) => [record, ...p]);
-      if (table === "granted_access") setGrants((p) => [record, ...p]);
-      // Refresh data when CY tables change
-      if ((table as string) === "cookie_patterns" || (table as string) === "missed_banner_reports") loadData();
-    },
-  });
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    // Original data
-    const [{ data: s }, { data: g }] = await Promise.all([
-      supabase.from("subscriptions").select("*").order("created_at", { ascending: false }),
-      supabase.from("granted_access").select("*").order("created_at", { ascending: false }),
-    ]);
-    setSubs(s || []);
-    setGrants(g || []);
-
-    // CookieYeti Command Center data + new visualization data
-    const [
-      pAll, pActive, dCount, aiAll, aiSuccess, fixes,
-      missed, patterns, devices, push, activations,
-      aiLogs, topDomains, allActivePatterns, permFailed, genCandidates,
-    ] = await Promise.all([
+  const loadData = useCallback(async () => {
+    const since = new Date(Date.now() - WINDOW_DAYS * 86400000).toISOString();
+    const results = await Promise.all([
       supabase.from("cookie_patterns").select("id", { count: "exact", head: true }),
       supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("is_active", true),
-      supabase.from("dismissal_reports").select("id", { count: "exact", head: true }),
-      supabase.from("ai_generation_log").select("id", { count: "exact", head: true }),
-      supabase.from("ai_generation_log").select("id", { count: "exact", head: true }).like("status", "success%"),
-      supabase.from("pattern_fix_log").select("id", { count: "exact", head: true }).eq("success", true),
-      supabase.from("missed_banner_reports").select("*").eq("resolved", false).order("report_count", { ascending: false }).limit(10) as any,
-      supabase.from("cookie_patterns").select("*").eq("is_active", true).order("report_count", { ascending: false }).limit(10) as any,
+      supabase.from("dismissal_reports").select("id", { count: "exact", head: true }).gte("created_at", since),
+      // Real fixes only — the maintenance job writes a '_system' heartbeat row every run.
+      supabase.from("pattern_fix_log").select("id", { count: "exact", head: true }).eq("success", true).neq("domain", "_system").gte("created_at", since),
       supabase.from("device_registrations").select("id", { count: "exact", head: true }),
       supabase.from("device_tokens").select("id", { count: "exact", head: true }),
-      supabase.from("activation_codes").select("id", { count: "exact", head: true }).eq("active", true),
-      // New: AI status breakdown for PipelineHealthRing
-      supabase.from("ai_generation_log").select("status"),
-      // New: Domain coverage for PatternCoverageGrid
+      supabase.from("ai_generation_log").select("status").gte("created_at", since).limit(5000),
       supabase.rpc("get_top_domains" as any, { p_limit: 50 }),
-      // New: All active patterns for SmartAlerts
-      supabase.from("cookie_patterns").select("domain, confidence, is_active, success_count, report_count").eq("is_active", true),
-      // New: Permanently failed count
-      supabase.from("ai_generation_log").select("id", { count: "exact", head: true }).eq("status", "permanently_failed"),
-      // New: Candidate count for operations panel
       supabase.from("missed_banner_reports").select("id", { count: "exact", head: true }).eq("resolved", false),
     ]);
+    const [pAll, pActive, dCount, fixes, devices, push, aiLogs, topDomains, open] = results;
 
-    // Log any query errors for debugging
-    [pAll, pActive, dCount, aiAll, aiSuccess, fixes, missed, patterns, devices, push, activations].forEach((r, i) => {
-      if (r.error) console.error(`[CY Dashboard Query ${i}]`, r.error.message);
-    });
+    const firstErr = results.find((r) => r.error)?.error;
+    setError(firstErr ? firstErr.message : null);
+    if (firstErr) console.error("[CY Operations]", firstErr.message);
 
-    setPatternCount(pAll.count ?? 0);
-    setActivePatternCount(pActive.count ?? 0);
-    setDismissalCount(dCount.count ?? 0);
-    setAiGenCount(aiAll.count ?? 0);
-    setAiSuccessCount(aiSuccess.count ?? 0);
-    setFixCount(fixes.count ?? 0);
-    setUnresolvedReports(missed.data || []);
-    setTopPatterns(patterns.data || []);
-    setDeviceCount(devices.count ?? 0);
-    setPushCount(push.count ?? 0);
-    setActivationCount(activations.count ?? 0);
-
-    // Process AI status breakdown for donut chart
-    if (aiLogs.data) {
-      const statusMap = new Map<string, number>();
-      (aiLogs.data as any[]).forEach((log: any) => {
-        const st = log.status || "unknown";
-        statusMap.set(st, (statusMap.get(st) || 0) + 1);
-      });
-      setAiStatusBreakdown(Array.from(statusMap.entries()).map(([status, count]) => ({ status, count })));
-    }
-
-    // Domain coverage data
-    setDomainCoverage(topDomains.data || []);
-
-    // All patterns for smart alerts
-    setAllPatterns(allActivePatterns.data || []);
-
-    // Permanently failed count
-    setPermanentlyFailedCount(permFailed.count ?? 0);
-
-    // Candidate count
-    setCandidateCount(genCandidates.count ?? 0);
-
-    // Active Users = today's DAU (anonymous analytics), not a summed aggregate.
-    const dauRes = await supabase.rpc("cy_dau" as any, { days: 1 });
-    if (dauRes.error || !Array.isArray(dauRes.data)) {
-      setDau(null);
-    } else {
-      const rows = dauRes.data as any[];
-      setDau(rows.length ? Number(rows[rows.length - 1].dau ?? 0) : 0);
-    }
-
+    if (!pAll.error) setPatternCount(pAll.count ?? 0);
+    if (!pActive.error) setActivePatternCount(pActive.count ?? 0);
+    if (!dCount.error) setDismissalCount(dCount.count ?? 0);
+    if (!fixes.error) setFixCount(fixes.count ?? 0);
+    if (!devices.error) setDeviceCount(devices.count ?? 0);
+    if (!push.error) setPushCount(push.count ?? 0);
+    if (!aiLogs.error) setAiStatuses(((aiLogs.data as any[]) || []).map((l) => l.status || "unknown"));
+    if (!topDomains.error) setDomainCoverage((topDomains.data as any[]) || []);
+    if (!open.error) setOpenReports(open.count ?? 0);
     setLoading(false);
-  };
+  }, []);
 
-  const handleGrant = async () => {
-    if (!grantEmail) return;
-    const { error } = await supabase.from("granted_access").insert({
-      email: grantEmail.trim().toLowerCase(),
-      granted_by: "admin",
-      reason: grantReason || null,
-    });
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Access Granted" });
-      setGrantEmail("");
-      setGrantReason("");
-      setDialogOpen(false);
-      loadData();
-    }
-  };
+  useEffect(() => { loadData(); }, [loadData]);
+  useCyLiveRefresh(["cookie_patterns", "missed_banner_reports"], loadData, 3000);
 
-  const filteredSubs = useMemo(() => filterByDateRange(subs, dateRange), [subs, dateRange]);
-  const filteredGrants = useMemo(() => filterByDateRange(grants, dateRange), [grants, dateRange]);
+  // Heartbeat / skip rows are bookkeeping, not attempts — counting them made the
+  // success rate and donut meaningless.
+  const { breakdown, attempts, successRate } = useMemo(() => {
+    const real = aiStatuses.filter(isRealAiAttempt);
+    const map = new Map<string, number>();
+    real.forEach((s) => map.set(s, (map.get(s) || 0) + 1));
+    const ok = real.filter((s) => s.startsWith("success")).length;
+    return {
+      breakdown: Array.from(map.entries()).map(([status, count]) => ({ status, count })).sort((a, b) => b.count - a.count),
+      attempts: real.length,
+      successRate: real.length ? (ok / real.length) * 100 : 0,
+    };
+  }, [aiStatuses]);
 
-  const activeSubs = filteredSubs.filter((s) => s.status === "active");
-  const monthly = activeSubs.filter((s) => s.plan === "monthly").length;
-  const yearly = activeSubs.filter((s) => s.plan === "yearly").length;
-  const lifetime = activeSubs.filter((s) => s.plan === "lifetime").length;
-  const aiSuccessRate = aiGenCount > 0 ? Math.round((aiSuccessCount / aiGenCount) * 100) : 0;
-  const aiSuccessRateStr = aiGenCount > 0 ? `${((aiSuccessCount / aiGenCount) * 100).toFixed(1)}%` : "N/A";
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
 
-  const getPriority = (count: number) => {
-    if (count >= 10) return { label: "critical", color: "destructive" as const };
-    if (count >= 5) return { label: "high", color: "default" as const };
-    if (count >= 2) return { label: "medium", color: "secondary" as const };
-    return { label: "low", color: "outline" as const };
-  };
+  const headerActions = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="outline" size="icon" aria-label="Refresh numbers"
+          onClick={refresh} disabled={refreshing}
+          className="h-9 w-9 border-white/10 text-white/70 hover:text-white hover:bg-white/5"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>Refresh (updates live on its own)</TooltipContent>
+    </Tooltip>
+  );
 
   if (loading) {
     return (
-      <div className="space-y-8 max-w-7xl">
-        <div><Skeleton className="h-7 w-56" /><Skeleton className="h-4 w-72 mt-2" /></div>
-        <Skeleton className="h-16 rounded-2xl" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
+      <div className="space-y-8 max-w-7xl" aria-busy="true">
+        <div><Skeleton className="h-9 w-48" /><Skeleton className="h-4 w-80 mt-3" /></div>
+        <Skeleton className="h-14 rounded-2xl" />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
         </div>
-        <div className="grid md:grid-cols-2 gap-6">
-          <Skeleton className="h-72 rounded-xl" />
-          <Skeleton className="h-72 rounded-xl" />
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Skeleton className="h-80 rounded-2xl" />
+          <Skeleton className="h-80 rounded-2xl" />
         </div>
-        <Skeleton className="h-24 rounded-xl" />
-        <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }
 
   return (
     <div className="space-y-8 max-w-7xl">
-      {/* ─── Header ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <PageHeader
-          title="CookieYeti Command Center"
-          description="Pattern management, AI pipeline, subscribers, and cross-platform metrics."
-          actions={
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Grant Access</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Grant Premium Access</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Email</Label>
-                    <Input value={grantEmail} onChange={(e) => setGrantEmail(e.target.value)} placeholder="user@example.com" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Reason</Label>
-                    <Textarea value={grantReason} onChange={(e) => setGrantReason(e.target.value)} placeholder="Why grant access?" rows={2} />
-                  </div>
-                  <Button onClick={handleGrant} className="w-full">Grant Access</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          }
-        />
-        <DateRangeFilter value={dateRange} onChange={setDateRange} />
-      </div>
-
-      {/* ─── Live System Pulse ─── */}
-      <SystemPulse />
-
-      {/* ─── Smart Alerts ─── */}
-      <SmartAlerts
-        unresolvedReports={unresolvedReports}
-        patterns={allPatterns}
-        aiSuccessRate={aiSuccessRate}
-        permanentlyFailedCount={permanentlyFailedCount}
-        onDomainClick={handleDomainClick}
+      <PageHeader
+        title="Operations"
+        description="Pipeline health, the pattern engine, and running a scheduled job now when you don't want to wait."
+        actions={headerActions}
       />
 
-      {/* ─── Pattern & AI Stats ─── */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Cookie className="h-4 w-4 text-violet-400" />
-          <h3 className="text-xs font-semibold text-white/55 uppercase tracking-widest">Pattern Engine</h3>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <StatCard label="Active Patterns" value={activePatternCount} icon={Cookie} accentColor="#8b5cf6" iconBg="bg-violet-500/10" iconColor="text-violet-400" subtitle={`${patternCount} total`} />
-          <StatCard label="Dismissals" value={dismissalCount} icon={CheckCircle2} accentColor="#10b981" iconBg="bg-emerald-500/10" iconColor="text-emerald-400" />
-          <StatCard label="AI Generations" value={aiGenCount} icon={Cpu} accentColor="#06b6d4" iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle={`${aiSuccessRateStr} success`} />
-          <StatCard label="Pattern Fixes" value={fixCount} icon={Zap} accentColor="#f59e0b" iconBg="bg-amber-500/10" iconColor="text-amber-400" />
-          <StatCard label="Unresolved" value={unresolvedReports.length} icon={AlertTriangle} accentColor={unresolvedReports.length > 0 ? "#ef4444" : "#10b981"} iconBg={unresolvedReports.length > 0 ? "bg-red-500/10" : "bg-emerald-500/10"} iconColor={unresolvedReports.length > 0 ? "text-red-400" : "text-emerald-400"} />
-          <StatCard label="Activations" value={activationCount} icon={Target} iconBg="bg-white/[0.05]" iconColor="text-white/55" subtitle={`${deviceCount} devices, ${pushCount} push`} />
-        </div>
-      </div>
+      <SystemPulse />
 
-      {/* ─── AI Pipeline Health + Pattern Coverage ─── */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <PipelineHealthRing data={aiStatusBreakdown} successRate={aiSuccessRate} />
+      {/* Manual runs of the scheduled jobs: one primary, the rest in its menu. */}
+      <OperationsPanel onRefresh={loadData} candidateCount={openReports} />
+
+      {error && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border border-red-500/25 bg-red-500/[0.06] px-4 py-3">
+          <AlertTriangle className="h-5 w-5 text-red-300 shrink-0" aria-hidden="true" />
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="font-medium text-red-200">Some numbers didn't load</p>
+            <p className="text-red-200/75 text-xs mt-0.5 break-words">Showing the last values that loaded. {error}</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={refresh} disabled={refreshing} className="h-9 border-red-500/30 text-red-100 hover:bg-red-500/10">
+            Retry
+          </Button>
+        </div>
+      )}
+
+      <section aria-labelledby="engine-title">
+        <div className="flex items-center gap-2 mb-3">
+          <Cookie className="h-4 w-4 text-violet-400" aria-hidden="true" />
+          <h2 id="engine-title" className="text-xs font-semibold text-white/60 uppercase tracking-widest">Pattern engine</h2>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <StatCard label="Active patterns" value={activePatternCount} icon={Cookie} iconBg="bg-violet-500/10" iconColor="text-violet-400" subtitle={`${patternCount.toLocaleString()} total`} />
+          <StatCard label={`AI success · ${WINDOW_DAYS}d`} value={attempts ? `${successRate.toFixed(0)}%` : "—"} icon={Cpu} iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle={`${attempts.toLocaleString()} real attempts`} tooltip="Excludes heartbeat and already-covered rows the generator logs when it has nothing to do." />
+          <StatCard label={`Auto fixes · ${WINDOW_DAYS}d`} value={fixCount} icon={Zap} iconBg="bg-amber-500/10" iconColor="text-amber-400" subtitle="patterns repaired" />
+          <StatCard label={`Dismissals · ${WINDOW_DAYS}d`} value={dismissalCount} icon={CheckCircle2} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle="banners users closed" />
+          <StatCard label="Devices" value={deviceCount} icon={Smartphone} subtitle={`${pushCount.toLocaleString()} with push`} />
+        </div>
+      </section>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <PipelineHealthRing data={breakdown} successRate={successRate} />
         <PatternCoverageGrid domains={domainCoverage} onDomainClick={handleDomainClick} />
       </div>
 
-      {/* ─── Operations Panel ─── */}
-      <OperationsPanel
-        onRefresh={loadData}
-        candidateCount={candidateCount}
-        permanentlyFailedCount={permanentlyFailedCount}
-      />
-
-      {/* ─── Subscriber Stats ─── */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Crown className="h-4 w-4 text-yellow-400" />
-          <h3 className="text-xs font-semibold text-white/55 uppercase tracking-widest">Active Users</h3>
-          <Link to="/admin/cookie-yeti/subscribers" className="ml-auto">
-            <Button variant="ghost" size="sm" className="text-xs text-white/20 hover:text-white hover:bg-white/5 h-6 px-2">
-              Manage <ArrowRight className="h-3 w-3 ml-1" />
-            </Button>
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatCard label="Active Today (DAU)" value={dau === null ? "—" : dau} icon={Crown} iconColor="text-yellow-500" iconBg="bg-yellow-500/10" accentColor="#eab308" subtitle={dau === null ? "analytics unavailable" : `${activationCount + activeSubs.length + filteredGrants.length} lifetime (act+paid+grant)`} />
-          <StatCard label="Activated" value={activationCount} icon={Target} iconColor="text-white" iconBg="bg-white/[0.05]" accentColor="#ffffff" subtitle="extension codes" />
-          <StatCard label="Paid" value={activeSubs.length} icon={Users} iconColor="text-primary" iconBg="bg-primary/10" accentColor="#3b82f6" subtitle={activeSubs.length === 0 ? "pre-Stripe" : `${monthly}m / ${yearly}y / ${lifetime}∞`} />
-          <StatCard label="Granted" value={filteredGrants.length} icon={ShieldCheck} iconColor="text-green-500" iconBg="bg-green-500/10" accentColor="#22c55e" subtitle="comp / testing" />
-          <StatCard label="Devices" value={deviceCount} icon={Globe} iconColor="text-cyan-400" iconBg="bg-cyan-500/10" subtitle={`${pushCount} push-enabled`} />
-        </div>
-      </div>
-
-      {/* ─── Missed Banner Queue ─── */}
-      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-400" />
-            <div>
-              <h3 className="text-[0.9375rem] font-semibold text-white">Missed Banner Queue</h3>
-              <p className="text-xs text-white/50 mt-0.5">Unresolved reports sorted by urgency. Click a domain for details.</p>
-            </div>
-          </div>
-          <Link to="/admin/cookie-yeti/community">
-            <Button variant="ghost" size="sm" className="text-xs text-white/50 hover:text-white hover:bg-white/5 border-0">
-              Community <ArrowRight className="h-3 w-3 ml-1" />
-            </Button>
-          </Link>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent border-b border-white/[0.06]">
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Priority</TableHead>
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Domain</TableHead>
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Reports</TableHead>
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">AI Tries</TableHead>
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">CMP</TableHead>
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Last Reported</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {unresolvedReports.map((r) => {
-              const p = getPriority(r.report_count);
-              return (
-                <TableRow key={r.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] cursor-pointer" onClick={() => handleDomainClick(r.domain)}>
-                  <TableCell><Badge variant={p.color} className="text-[0.625rem] uppercase">{p.label}</Badge></TableCell>
-                  <TableCell className="text-sm text-white font-medium hover:text-cyan-400 transition-colors">{r.domain}</TableCell>
-                  <TableCell className="text-sm text-white/60 tabular-nums">{r.report_count}</TableCell>
-                  <TableCell className="text-sm text-white/60 tabular-nums">{r.ai_attempts ?? 0}</TableCell>
-                  <TableCell className="text-xs text-white/55">{r.cmp_fingerprint ?? "unknown"}</TableCell>
-                  <TableCell className="text-sm text-white/50">{r.last_reported ? new Date(r.last_reported).toLocaleDateString() : "—"}</TableCell>
-                </TableRow>
-              );
-            })}
-            {unresolvedReports.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="p-0">
-                  <EmptyState icon={CheckCircle2} title="All clear!" description="No unresolved missed banner reports." />
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* ─── Top Patterns ─── */}
-      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
-        <div className="px-5 py-4">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-[0.9375rem] font-semibold text-white">Top Patterns</h3>
-            <Link to="/admin/cookie-yeti/domains" className="text-xs font-medium text-cyan-400 hover:text-cyan-300 transition-colors">
-              View all domains →
-            </Link>
-          </div>
-          <p className="text-xs text-white/50 mt-0.5">Most-used cookie banner patterns by report count. Click a domain for details.</p>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent border-b border-white/[0.06]">
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Domain</TableHead>
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Selector</TableHead>
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Action</TableHead>
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Confidence</TableHead>
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Reports</TableHead>
-              <TableHead className="text-[0.6875rem] text-white/50 uppercase tracking-wider">Source</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {topPatterns.map((p) => (
-              <TableRow key={p.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] cursor-pointer" onClick={() => handleDomainClick(p.domain)}>
-                <TableCell className="text-sm text-white font-medium hover:text-cyan-400 transition-colors">{p.domain}</TableCell>
-                <TableCell>
-                  <code className="text-[0.6875rem] text-cyan-400 bg-cyan-400/10 px-1.5 py-0.5 rounded max-w-[12.5rem] truncate block">{p.selector}</code>
-                </TableCell>
-                <TableCell className="text-xs text-white/50">{p.action_type}</TableCell>
-                <TableCell>
-                  <span className={`text-sm font-medium tabular-nums ${p.confidence >= 7 ? "text-emerald-400" : p.confidence >= 4 ? "text-amber-400" : "text-red-400"}`}>
-                    {p.confidence}/10
-                  </span>
-                </TableCell>
-                <TableCell className="text-sm text-white/60 tabular-nums">{p.report_count}</TableCell>
-                <TableCell>
-                  <Badge variant={p.source === "ai" ? "default" : "secondary"} className="text-[0.625rem]">{p.source}</Badge>
-                </TableCell>
-              </TableRow>
-            ))}
-            {topPatterns.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="p-0">
-                  <EmptyState icon={Cookie} title="No patterns yet" description="Patterns will appear as CookieYeti users report cookie banners." />
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* ─── Subscribers & Grants ─── */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card className="border-border/50">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <div>
-              <CardTitle className="text-sm font-semibold">Recent Subscribers</CardTitle>
-              <CardDescription className="text-xs">Latest paid subscriptions.</CardDescription>
-            </div>
-            <Link to="/admin/cookie-yeti/subscribers">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7">
-                View all <ArrowRight className="h-3 w-3 ml-1" />
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs">Email</TableHead>
-                  <TableHead className="text-xs">Plan</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSubs.slice(0, 5).map((s) => (
-                  <TableRow key={s.id} className="even:bg-muted/30">
-                    <TableCell className="text-sm">{s.email}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{s.plan}</Badge></TableCell>
-                    <TableCell><Badge variant={s.status === "active" ? "default" : "secondary"} className="text-xs">{s.status}</Badge></TableCell>
-                  </TableRow>
-                ))}
-                {filteredSubs.length === 0 && (
-                  <TableRow><TableCell colSpan={3} className="p-0"><EmptyState icon={Users} title="No subscribers" /></TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/50">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <div>
-              <CardTitle className="text-sm font-semibold">Recently Granted</CardTitle>
-              <CardDescription className="text-xs">Manual premium access grants.</CardDescription>
-            </div>
-            <Link to="/admin/cookie-yeti/granted">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7">
-                View all <ArrowRight className="h-3 w-3 ml-1" />
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs">Email</TableHead>
-                  <TableHead className="text-xs">Reason</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredGrants.slice(0, 5).map((g) => (
-                  <TableRow key={g.id} className="even:bg-muted/30">
-                    <TableCell className="text-sm">{g.email}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{g.reason || "—"}</TableCell>
-                  </TableRow>
-                ))}
-                {filteredGrants.length === 0 && (
-                  <TableRow><TableCell colSpan={2} className="p-0"><EmptyState icon={ShieldCheck} title="No granted access" /></TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ─── Domain Deep Dive Drawer ─── */}
-      <DomainDeepDive
-        domain={selectedDomain}
-        open={drawerOpen}
-        onOpenChange={setDrawerOpen}
-        onRefresh={loadData}
-      />
+      <DomainDeepDive domain={selectedDomain} open={drawerOpen} onOpenChange={setDrawerOpen} onRefresh={loadData} />
     </div>
   );
 }

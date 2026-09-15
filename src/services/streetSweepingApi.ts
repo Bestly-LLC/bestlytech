@@ -57,7 +57,11 @@ async function call<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-export const fetchSweepState = () => call<SweepState>("admin_bluesteel_sweep_state");
+export const fetchSweepState = async () => {
+  const s = await call<SweepState>("admin_bluesteel_sweep_state");
+  if (!s || typeof s !== "object" || !("config" in s) || !s.la_today) throw new Error("Unexpected response from the server");
+  return s;
+};
 export const setAlertsEnabled = (enabled: boolean) =>
   call<SweepState["config"]>("admin_bluesteel_sweep_set", { p_alerts_enabled: enabled });
 export const setSkipDates = (dates: string[]) =>

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { EmptyState } from "@/components/admin/EmptyState";
@@ -63,10 +64,10 @@ export default function CYProductAnalytics() {
     ]);
 
     // Any RPC error → surface an explicit error state (never fake-green zeros).
+    // Keep the last good data on screen if we had some.
     const firstErr = [f, d, c, p].find((r) => r.error)?.error;
     if (firstErr) {
       setError(firstErr.message || "Analytics is temporarily unavailable.");
-      setFunnel(null); setDau([]); setConversion(null); setPlatforms([]);
     } else {
       setFunnel((f.data as unknown as Funnel) ?? null);
       setDau(((d.data as unknown as DauPoint[]) ?? []).map((x) => ({ ...x, day: String(x.day).slice(5) })));
@@ -93,6 +94,7 @@ export default function CYProductAnalytics() {
 
   const totalEvents = dau.reduce((n, x) => n + (x.events || 0), 0);
   const hasAnyData = (funnel?.install ?? 0) > 0 || totalEvents > 0 || platforms.length > 0;
+  const refresh = () => { setRefreshing(true); loadData(); };
   const installBase = funnel?.install ?? 0;
   const maxDau = Math.max(1, ...dau.map((x) => x.dau));
 
@@ -102,26 +104,34 @@ export default function CYProductAnalytics() {
         title="Product Analytics"
         description="Privacy-first product funnel, activation, and Free→Pro conversion — anonymous aggregates only, no PII."
         actions={
-          <Button
-            size="sm" variant="outline"
-            className="border-white/10 bg-white/[0.03] text-white/70 hover:text-white hover:bg-white/[0.06]"
-            onClick={() => { setRefreshing(true); loadData(); }}
-          >
-            <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon" variant="outline" aria-label="Refresh analytics"
+                className="h-9 w-9 border-white/10 text-white/70 hover:text-white hover:bg-white/5"
+                onClick={refresh} disabled={refreshing}
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Refresh analytics</TooltipContent>
+          </Tooltip>
         }
       />
 
       {/* Explicit error state — failures look like failures. */}
       {error && (
-        <div className="flex items-start gap-3 rounded-2xl border border-red-500/25 bg-red-500/[0.06] px-4 py-3.5">
-          <AlertTriangle className="h-5 w-5 text-red-300 flex-none mt-0.5" />
-          <div className="text-sm">
-            <p className="font-medium text-red-200">Analytics data unavailable</p>
-            <p className="text-red-200/70 text-[0.7812rem] mt-0.5">
-              The rollup RPCs did not return. This is an error state, not "zero activity." ({error})
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border border-red-500/25 bg-red-500/[0.06] px-4 py-3.5">
+          <AlertTriangle className="h-5 w-5 text-red-300 flex-none" aria-hidden="true" />
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="font-medium text-red-200">Analytics didn't load</p>
+            <p className="text-red-200/75 text-xs mt-0.5 break-words">
+              {hasAnyData ? "Showing the last numbers that loaded. " : "This is an error, not zero activity. "}({error})
             </p>
           </div>
+          <Button size="sm" variant="outline" onClick={refresh} disabled={refreshing} className="h-9 border-red-500/30 text-red-100 hover:bg-red-500/10">
+            Retry
+          </Button>
         </div>
       )}
 
@@ -130,12 +140,12 @@ export default function CYProductAnalytics() {
           <EmptyState
             icon={Activity}
             title="No product events yet"
-            description="The analytics pipeline is live and ready. Metrics will populate once the apps and extensions start emitting events to /functions/v1/track."
+            description="Metrics appear once the apps and extensions send events to the track function."
           />
         </div>
       )}
 
-      {!error && hasAnyData && (
+      {hasAnyData && (
         <>
           {/* ── Headline conversion cards ── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -162,13 +172,17 @@ export default function CYProductAnalytics() {
                   <div key={step.key}>
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span className="text-white/80">{step.label}</span>
-                      <span className="text-white/50 tabular-nums">
-                        {val.toLocaleString()}
-                        <span className="text-white/50"> · {pctOfInstall}% of installs</span>
-                        {i > 0 && <span className="text-white/50"> · {stepConv}% step</span>}
+                      <span className="text-white/60 tabular-nums text-xs sm:text-sm">
+                        <span className="text-white/90">{val.toLocaleString()}</span>
+                        <span> · {pctOfInstall}% of installs</span>
+                        {i > 0 && <span className="hidden sm:inline"> · {stepConv}% from previous step</span>}
                       </span>
                     </div>
-                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/[0.05]">
+                    <div
+                      className="h-2.5 w-full overflow-hidden rounded-full bg-white/[0.05]"
+                      role="img"
+                      aria-label={`${step.label}: ${val} users, ${pctOfInstall}% of installs`}
+                    >
                       <div className="h-full rounded-full bg-gradient-to-r from-sky-500/70 to-emerald-500/70"
                         style={{ width: `${Math.max(pctOfInstall, val > 0 ? 2 : 0)}%` }} />
                     </div>
@@ -182,12 +196,12 @@ export default function CYProductAnalytics() {
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-medium text-white">Daily active users · 30d</h2>
-              <span className="text-xs text-white/50">distinct anonymous devices</span>
+              <span className="text-xs text-white/55">distinct anonymous devices</span>
             </div>
             {dau.length > 1 ? (
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={dau} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <AreaChart data={dau} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} accessibilityLayer>
                     <defs>
                       <linearGradient id="dauFill" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.45} />
@@ -195,19 +209,20 @@ export default function CYProductAnalytics() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                    <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} domain={[0, maxDau]} />
+                    <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.6)", fontSize: "0.75rem" }} tickLine={false} axisLine={false} minTickGap={16} />
+                    <YAxis tick={{ fill: "rgba(255,255,255,0.6)", fontSize: "0.75rem" }} tickLine={false} axisLine={false} allowDecimals={false} domain={[0, maxDau]} width={32} />
                     <RTooltip
-                      contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 12, color: "#fafafa" }}
-                      formatter={(v: number) => [`${v} DAU`, "Active"]}
+                      contentStyle={{ background: "#18181b", border: "0.0625rem solid #3f3f46", borderRadius: "0.75rem", color: "#fafafa", fontSize: "0.8125rem" }}
+                      labelStyle={{ color: "rgba(255,255,255,0.7)" }}
+                      formatter={(v: number) => [`${v} active`, "DAU"]}
                     />
                     <Area type="monotone" dataKey="dau" stroke="#38bdf8" strokeWidth={2} fill="url(#dauFill)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex h-40 items-center justify-center text-sm text-white/50">
-                Not enough days of data yet.
+              <div className="flex h-40 items-center justify-center text-sm text-white/60">
+                Needs at least two days of events to draw a trend.
               </div>
             )}
           </div>
@@ -225,14 +240,14 @@ export default function CYProductAnalytics() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-[0.6875rem] uppercase tracking-wide text-white/50">
-                      <th className="text-left font-medium px-5 py-2.5">Platform</th>
-                      <th className="text-left font-medium px-3 py-2.5">Active</th>
-                      <th className="text-left font-medium px-3 py-2.5">DAU</th>
-                      <th className="text-left font-medium px-3 py-2.5">Installs</th>
-                      <th className="text-left font-medium px-3 py-2.5">Activated</th>
-                      <th className="text-left font-medium px-3 py-2.5">Limit hits</th>
-                      <th className="text-left font-medium px-5 py-2.5">Upgrades</th>
+                    <tr className="text-[0.6875rem] uppercase tracking-wide text-white/55">
+                      <th scope="col" className="text-left font-medium px-5 py-2.5">Platform</th>
+                      <th scope="col" className="text-left font-medium px-3 py-2.5">Active</th>
+                      <th scope="col" className="text-left font-medium px-3 py-2.5">DAU</th>
+                      <th scope="col" className="text-left font-medium px-3 py-2.5">Installs</th>
+                      <th scope="col" className="text-left font-medium px-3 py-2.5">Activated</th>
+                      <th scope="col" className="text-left font-medium px-3 py-2.5">Limit hits</th>
+                      <th scope="col" className="text-left font-medium px-5 py-2.5">Upgrades</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -243,7 +258,7 @@ export default function CYProductAnalytics() {
                         <tr key={r.platform} className="border-t border-white/[0.06]">
                           <td className="px-5 py-2.5 text-white/90">
                             <span className="inline-flex items-center gap-2">
-                              <Icon className="h-4 w-4 text-white/55" /> {meta.label}
+                              <Icon className="h-4 w-4 text-white/55" aria-hidden="true" /> {meta.label}
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-white/70 tabular-nums">{r.active_users}</td>
@@ -261,10 +276,8 @@ export default function CYProductAnalytics() {
             )}
           </div>
 
-          <p className="text-xs text-white/50">
-            Anonymous, aggregate-only. Backed by <code className="text-white/55">product_events</code> via the
-            SECURITY DEFINER rollups <code className="text-white/55">cy_funnel / cy_dau / cy_conversion / cy_platform_breakdown</code>.
-            No emails, URLs, or IPs are stored.
+          <p className="text-xs text-white/55">
+            Anonymous and aggregate-only, from <code className="text-white/70">product_events</code>. No emails, URLs or IPs are stored.
           </p>
         </>
       )}

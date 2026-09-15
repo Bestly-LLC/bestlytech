@@ -1,206 +1,214 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { fetchOverviewStats, OverviewStats } from "@/services/homeHubApi";
-import { pollInterval } from "@/lib/polling";
-import { Shield, House, Plug, RefreshCw, Activity } from "lucide-react";
+import { ActionMenu } from "@/components/admin/ActionMenu";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  fetchPiholeStats, fetchAgentState, fetchRecentCommands, isAgentOnline, describeCommand,
+  HomeHubError, STATS_STALE_MS, ACTION_LABELS,
+  type PiholeStats, type AgentState, type HomeHubCommand,
+} from "@/services/homeHubApi";
+import { pollInterval } from "@/lib/polling";
+import { Shield, Cpu, RefreshCw, ArrowRight, CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, History } from "lucide-react";
 
-function timeAgo(date: string): string {
-  const diff = Date.now() - new Date(date).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+function ago(iso: string, now: number): string {
+  const s = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 1000));
+  if (s < 90) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
 }
 
-function StatusDot({ status }: { status: string }) {
-  const color =
-    status === "enabled" || status === "online" || status === "running"
-      ? "bg-green-500"
-      : status === "degraded" || status === "disabled"
-      ? "bg-yellow-500"
-      : "bg-red-500";
+type Health = "ok" | "warn" | "down";
+
+function HealthBadge({ health, label }: { health: Health; label: string }) {
+  const tone = health === "ok" ? "text-green-300 bg-green-500/10 border-green-500/25"
+    : health === "warn" ? "text-amber-300 bg-amber-500/10 border-amber-500/25"
+    : "text-red-300 bg-red-500/10 border-red-500/25";
+  const Icon = health === "ok" ? CheckCircle2 : health === "warn" ? AlertTriangle : XCircle;
   return (
-    <span className="relative flex h-2.5 w-2.5">
-      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${color} opacity-75`} />
-      <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${color}`} />
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${tone}`}>
+      <Icon className="h-3.5 w-3.5" aria-hidden />
+      {label}
     </span>
   );
 }
 
-const SERVICE_COLORS: Record<string, string> = {
-  "Pi-hole": "text-green-400",
-  "Home Assistant": "text-blue-400",
-  Homebridge: "text-purple-400",
-};
-
-function ServiceCardSkeleton() {
+function CardShell({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
-      <div className="flex items-center justify-between mb-3">
-        <Skeleton className="h-4 w-24 bg-white/[0.05]" />
-        <Skeleton className="h-8 w-8 rounded-xl bg-white/[0.05]" />
-      </div>
-      <Skeleton className="h-8 w-20 bg-white/[0.05] mt-2" />
-      <Skeleton className="h-3 w-32 bg-white/[0.03] mt-2" />
-    </div>
+    <section aria-label={label} className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6 flex flex-col">
+      {children}
+    </section>
   );
 }
 
 export default function HomeHubOverview() {
-  const [data, setData] = useState<OverviewStats | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [stats, setStats] = useState<PiholeStats | null>(null);
+  const [agent, setAgent] = useState<AgentState | null>(null);
+  const [commands, setCommands] = useState<HomeHubCommand[]>([]);
+  const [errors, setErrors] = useState<{ stats?: string; agent?: HomeHubError; commands?: HomeHubError }>({});
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
-  const load = useCallback(async (manual = false) => {
-    if (manual) setRefreshing(true);
-    try {
-      const stats = await fetchOverviewStats();
-      setData(stats);
-      setLastUpdated(new Date());
-    } finally {
-      setInitialLoading(false);
-      setRefreshing(false);
-    }
+  const load = useCallback(async () => {
+    const [s, a, c] = await Promise.allSettled([fetchPiholeStats(), fetchAgentState(), fetchRecentCommands(8)]);
+    const next: typeof errors = {};
+    if (s.status === "fulfilled") setStats(s.value); else next.stats = (s.reason as Error).message;
+    if (a.status === "fulfilled") setAgent(a.value); else next.agent = a.reason instanceof HomeHubError ? a.reason : new HomeHubError(String(a.reason));
+    if (c.status === "fulfilled") setCommands(c.value); else next.commands = c.reason instanceof HomeHubError ? c.reason : new HomeHubError(String(c.reason));
+    setErrors(next);
+    setNow(Date.now());
+    setInitialLoading(false);
   }, []);
 
-  // Poll every 30s — overview aggregates all services
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await load(); } finally { setRefreshing(false); }
+  }, [load]);
+
   useEffect(() => {
     load();
-    const iv = setInterval(() => load(), pollInterval(30_000));
-    return () => clearInterval(iv);
+    const iv = setInterval(load, pollInterval(30_000));
+    const tick = setInterval(() => setNow(Date.now()), 15_000);
+    return () => { clearInterval(iv); clearInterval(tick); };
   }, [load]);
+
+  const agentOnline = isAgentOnline(agent, now);
+  const statsAge = stats ? now - new Date(stats.capturedAt).getTime() : Infinity;
+  const statsHealth: Health = !stats ? "down" : statsAge > STATS_STALE_MS ? "warn" : "ok";
+  const anyError = errors.stats || errors.agent || errors.commands;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Home Hub"
-        description="Raspberry Pi 5 service monitoring"
+        description="Health of the Raspberry Pi agent and the Pi-hole feed"
         actions={
-          <div className="flex items-center gap-3">
-            {lastUpdated && (
-              <span className="text-xs text-white/50">Last updated {lastUpdated.toLocaleTimeString()}</span>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => load(true)}
-              disabled={refreshing || initialLoading}
-              aria-label="Refresh home hub data"
-              className="text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+          <>
+            <Button asChild variant="outline" className="border-white/15 text-white/85 hover:text-white hover:bg-white/5">
+              <Link to="/admin/home-hub/pihole">Open Pi-hole <ArrowRight className="h-4 w-4 ml-1.5" aria-hidden /></Link>
             </Button>
-          </div>
+            <ActionMenu
+              label="More Home Hub actions"
+              items={[{ group: "View", label: refreshing ? "Refreshing…" : "Refresh now", icon: RefreshCw, disabled: refreshing, onSelect: refresh }]}
+            />
+          </>
         }
       />
 
-      {/* Status cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {anyError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
+          <ul className="space-y-0.5">
+            {errors.stats && <li>{errors.stats}</li>}
+            {errors.agent && <li>{errors.agent.message}</li>}
+            {errors.commands && errors.commands.message !== errors.agent?.message && <li>{errors.commands.message}</li>}
+          </ul>
+          <Button size="sm" variant="outline" onClick={refresh} disabled={refreshing} className="border-red-500/30 text-red-100 hover:bg-red-500/10">
+            {refreshing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}Retry
+          </Button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {initialLoading ? (
           <>
-            <ServiceCardSkeleton />
-            <ServiceCardSkeleton />
-            <ServiceCardSkeleton />
+            <Skeleton className="h-40 rounded-2xl bg-white/[0.04]" />
+            <Skeleton className="h-40 rounded-2xl bg-white/[0.04]" />
           </>
-        ) : data ? (
+        ) : (
           <>
-            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6 hover:bg-white/[0.05] transition-colors">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <StatusDot status={data.pihole.status} />
-                  <span className="text-sm font-medium text-white">Pi-hole</span>
-                </div>
-                <div className="h-8 w-8 rounded-xl bg-green-500/10 flex items-center justify-center">
-                  <Shield className="h-4 w-4 text-green-400" />
-                </div>
+            <CardShell label="Home Hub agent">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <span className="inline-flex items-center gap-2 text-sm font-medium text-white">
+                  <Cpu className="h-4 w-4 text-white/60" aria-hidden /> Home Hub agent
+                </span>
+                {errors.agent ? <HealthBadge health="warn" label="Unknown" />
+                  : !agent ? <HealthBadge health="down" label="Never seen" />
+                  : agentOnline ? <HealthBadge health="ok" label="Online" />
+                  : <HealthBadge health="down" label="Offline" />}
               </div>
-              <p className="text-2xl sm:text-3xl font-semibold text-white tabular-nums">{data.pihole.queriesBlocked.toLocaleString()}</p>
-              <p className="text-[0.6875rem] text-white/55 mt-0.5">Queries Blocked Today</p>
-              <div className="flex items-center justify-between mt-1">
-                <p className="text-[0.625rem] text-white/50">{data.pihole.percentBlocked}% blocked</p>
-                {data.pihole.capturedAt && (
-                  <p className="text-[0.625rem] text-white/20">Pi synced {timeAgo(data.pihole.capturedAt)}</p>
-                )}
-              </div>
-            </div>
+              {errors.agent ? (
+                <p className="text-sm text-white/70">{errors.agent.accessDenied ? "This dashboard can't read the agent heartbeat yet." : "Heartbeat couldn't be loaded."}</p>
+              ) : !agent ? (
+                <p className="text-sm text-white/70">The systemd agent on the Pi hasn't checked in. Pi-hole controls stay disabled until it does.</p>
+              ) : (
+                <>
+                  <p className="text-2xl font-semibold text-white tabular-nums">{ago(agent.lastSeenAt, now)}</p>
+                  <p className="text-xs text-white/60 mt-0.5">
+                    {agentOnline ? "Last heartbeat" : `Offline since ${new Date(agent.lastSeenAt).toLocaleString()}`}
+                  </p>
+                  <p className="text-xs text-white/60 mt-3">
+                    {[agent.host, agent.version ? `v${agent.version}` : null].filter(Boolean).join(" · ") || agent.agent}
+                  </p>
+                </>
+              )}
+            </CardShell>
 
-            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6 hover:bg-white/[0.05] transition-colors">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <StatusDot status={data.homeAssistant.status} />
-                  <span className="text-sm font-medium text-white">Home Assistant</span>
-                </div>
-                <div className="h-8 w-8 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                  <House className="h-4 w-4 text-blue-400" />
-                </div>
+            <CardShell label="Pi-hole stats feed">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <span className="inline-flex items-center gap-2 text-sm font-medium text-white">
+                  <Shield className="h-4 w-4 text-white/60" aria-hidden /> Pi-hole
+                </span>
+                {errors.stats && !stats ? <HealthBadge health="warn" label="Unknown" />
+                  : statsHealth === "ok" ? <HealthBadge health="ok" label={stats?.status === "disabled" ? "Paused" : "Reporting"} />
+                  : statsHealth === "warn" ? <HealthBadge health="warn" label="Stale" />
+                  : <HealthBadge health="down" label="No data" />}
               </div>
-              <p className="text-2xl sm:text-3xl font-semibold text-white tabular-nums">{data.homeAssistant.devicesOnline}</p>
-              <p className="text-[0.6875rem] text-white/55 mt-0.5">Devices Online</p>
-              <p className="text-[0.625rem] text-white/50 mt-1">{data.homeAssistant.activeAutomations} active automations</p>
-            </div>
-
-            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6 hover:bg-white/[0.05] transition-colors">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <StatusDot status={data.homebridge.status} />
-                  <span className="text-sm font-medium text-white">Homebridge</span>
-                </div>
-                <div className="h-8 w-8 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                  <Plug className="h-4 w-4 text-purple-400" />
-                </div>
-              </div>
-              <p className="text-2xl sm:text-3xl font-semibold text-white tabular-nums">{data.homebridge.accessories}</p>
-              <p className="text-[0.6875rem] text-white/55 mt-0.5">Accessories</p>
-              <p className="text-[0.625rem] text-white/50 mt-1">{data.homebridge.pluginsActive} plugins active</p>
-            </div>
+              {stats ? (
+                <>
+                  <p className="text-2xl font-semibold text-white tabular-nums">{stats.queriesBlocked.toLocaleString()}</p>
+                  <p className="text-xs text-white/60 mt-0.5">
+                    queries blocked today, {stats.percentBlocked.toFixed(1)}% of {stats.totalQueries.toLocaleString()}
+                  </p>
+                  <p className={`text-xs mt-3 ${statsHealth === "warn" ? "text-amber-300" : "text-white/60"}`}>
+                    Last push {ago(stats.capturedAt, now)}{statsHealth === "warn" ? " (expected every minute)" : ""}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-white/70">No snapshot has arrived from the Pi yet.</p>
+              )}
+            </CardShell>
           </>
-        ) : null}
+        )}
       </div>
 
-      {/* Recent Activity */}
-      {initialLoading ? (
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6">
-          <Skeleton className="h-4 w-32 bg-white/[0.05] mb-4" />
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex items-start gap-3 py-3 border-t border-white/[0.04]">
-              <Skeleton className="h-4 w-4 rounded bg-white/[0.05] shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-1.5">
-                <Skeleton className="h-3.5 w-3/4 bg-white/[0.05]" />
-                <Skeleton className="h-3 w-1/4 bg-white/[0.03]" />
-              </div>
-            </div>
-          ))}
+      <section className="bg-white/[0.03] border border-white/[0.06] rounded-2xl" aria-label="Recent commands">
+        <div className="flex items-center gap-2 p-4 sm:p-6 pb-3">
+          <History className="h-4 w-4 text-white/60" aria-hidden />
+          <h3 className="text-sm font-semibold text-white">Recent commands</h3>
         </div>
-      ) : data ? (
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl">
-          <div className="flex items-center gap-2 p-4 sm:p-6 pb-3">
-            <Activity className="h-4 w-4 text-white/55" />
-            <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
+        {initialLoading ? (
+          <div className="px-4 sm:px-6 pb-6 space-y-3">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 rounded-lg bg-white/[0.04]" />)}
           </div>
-          <div className="divide-y divide-white/[0.06]">
-            {data.recentActivity.map((e) => (
-              <div key={e.id} className="flex items-start gap-3 px-4 sm:px-6 py-3">
-                <div className={`mt-0.5 ${SERVICE_COLORS[e.service] || "text-white/55"}`}>
-                  <Activity className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white/80">{e.description}</p>
-                  <p className="text-xs text-white/50 mt-0.5">{timeAgo(e.timestamp)}</p>
-                </div>
-                <Badge variant="outline" className="text-[0.625rem] shrink-0 border-white/10 text-white/55">
-                  {e.service}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+        ) : errors.commands ? (
+          <p className="px-4 sm:px-6 pb-6 text-sm text-white/60">Command history is unavailable.</p>
+        ) : commands.length === 0 ? (
+          <p className="px-4 sm:px-6 pb-6 text-sm text-white/60">No commands yet. Pausing, resuming or updating Pi-hole from its page will show up here with the agent's reply.</p>
+        ) : (
+          <ul className="divide-y divide-white/[0.06]">
+            {commands.map((c) => {
+              const Icon = c.status === "done" ? CheckCircle2 : c.status === "failed" ? XCircle : c.status === "expired" ? Clock : Loader2;
+              const tone = c.status === "done" ? "text-green-400" : c.status === "failed" ? "text-red-400" : c.status === "expired" ? "text-amber-400" : "text-white/60 animate-spin";
+              return (
+                <li key={c.id} className="flex items-start gap-3 px-4 sm:px-6 py-3">
+                  <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${tone}`} aria-hidden />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white/85">
+                      {c.target === "pihole" ? "Pi-hole" : c.target}: {ACTION_LABELS[c.action] ?? c.action}
+                      <span className="text-white/60 capitalize"> · {c.status}</span>
+                    </p>
+                    <p className="text-xs text-white/60 mt-0.5 break-words">{describeCommand(c)}</p>
+                  </div>
+                  <span className="text-xs text-white/60 shrink-0 tabular-nums">{ago(c.createdAt, now)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

@@ -9,35 +9,17 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import {
-  LayoutDashboard,
-  FileText,
-  BookOpen,
-  Snowflake,
-  Users,
-  ShieldCheck,
-  Brain,
-  Moon,
-  Sun,
-  PanelLeft,
-} from "lucide-react";
-import { useTheme } from "next-themes";
+import { PanelLeft } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
+import { ADMIN_NAV_SECTIONS, dashboardItem } from "./AdminSidebar";
 
-const NAV_ITEMS = [
-  { label: "Amazon Dashboard", path: "/admin", icon: LayoutDashboard },
-  { label: "Submissions", path: "/admin/submissions", icon: FileText },
-  { label: "Setup Guide", path: "/admin/guide", icon: BookOpen },
-  { label: "CY Dashboard", path: "/admin/cookie-yeti", icon: Snowflake },
-  { label: "Subscribers", path: "/admin/cookie-yeti/subscribers", icon: Users },
-  { label: "Granted Access", path: "/admin/cookie-yeti/granted", icon: ShieldCheck },
-  { label: "Community Learning", path: "/admin/cookie-yeti/community", icon: Brain },
-];
+/** Fired by the ⌘K button in the admin header. */
+export const OPEN_ADMIN_PALETTE_EVENT = "bestly:open-admin-palette";
 
+/** ⌘K palette. Navigation comes straight from the sidebar sections so the two never drift apart. */
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
   const { toggleSidebar } = useSidebar();
 
   useEffect(() => {
@@ -51,8 +33,13 @@ export function CommandPalette() {
         toggleSidebar();
       }
     };
+    const openFromButton = () => setOpen(true);
     document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
+    window.addEventListener(OPEN_ADMIN_PALETTE_EVENT, openFromButton);
+    return () => {
+      document.removeEventListener("keydown", down);
+      window.removeEventListener(OPEN_ADMIN_PALETTE_EVENT, openFromButton);
+    };
   }, [toggleSidebar]);
 
   const runCommand = useCallback((cmd: () => void) => {
@@ -62,29 +49,35 @@ export function CommandPalette() {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Search pages, actions..." />
+      <CommandInput placeholder="Go to a page…" />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
-        <CommandGroup heading="Navigate">
-          {NAV_ITEMS.map((item) => (
-            <CommandItem
-              key={item.path}
-              onSelect={() => runCommand(() => navigate(item.path))}
-            >
-              <item.icon className="mr-2 h-4 w-4" />
-              {item.label}
-            </CommandItem>
-          ))}
-        </CommandGroup>
-        <CommandSeparator />
-        <CommandGroup heading="Actions">
-          <CommandItem onSelect={() => runCommand(() => setTheme(theme === "dark" ? "light" : "dark"))}>
-            {theme === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-            Toggle {theme === "dark" ? "Light" : "Dark"} Mode
+        <CommandEmpty>No matching page.</CommandEmpty>
+        <CommandGroup heading="Admin">
+          <CommandItem onSelect={() => runCommand(() => navigate(dashboardItem.url))}>
+            <dashboardItem.icon className="mr-2 h-4 w-4" />
+            {dashboardItem.title}
           </CommandItem>
+        </CommandGroup>
+        {ADMIN_NAV_SECTIONS.map((section) => (
+          <CommandGroup key={section.label} heading={section.label}>
+            {section.items.map((item) => (
+              <CommandItem
+                key={item.url}
+                value={`${section.label} ${item.title}`}
+                onSelect={() => runCommand(() => navigate(item.url))}
+              >
+                <item.icon className="mr-2 h-4 w-4" />
+                {item.title}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ))}
+        <CommandSeparator />
+        <CommandGroup heading="View">
           <CommandItem onSelect={() => runCommand(toggleSidebar)}>
             <PanelLeft className="mr-2 h-4 w-4" />
-            Toggle Sidebar
+            Toggle sidebar
+            <span className="ml-auto text-xs text-muted-foreground">⌘/</span>
           </CommandItem>
         </CommandGroup>
       </CommandList>

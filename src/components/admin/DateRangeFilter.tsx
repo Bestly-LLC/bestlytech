@@ -19,10 +19,13 @@ const PRESETS: Record<string, () => DateRange> = {
 interface DateRangeFilterProps {
   value: DateRange;
   onChange: (range: DateRange) => void;
+  /** Accessible name for the preset picker. */
+  label?: string;
 }
 
-export function DateRangeFilter({ value, onChange }: DateRangeFilterProps) {
-  const [preset, setPreset] = useState("all");
+export function DateRangeFilter({ value, onChange, label = "Date range" }: DateRangeFilterProps) {
+  // Start on "custom" if the parent already holds a range, so the picker reflects reality.
+  const [preset, setPreset] = useState(value.from ? "custom" : "all");
 
   const handlePreset = (v: string) => {
     setPreset(v);
@@ -32,7 +35,7 @@ export function DateRangeFilter({ value, onChange }: DateRangeFilterProps) {
   return (
     <div className="flex items-center gap-2">
       <Select value={preset} onValueChange={handlePreset}>
-        <SelectTrigger className="w-[8.75rem] h-8 text-xs">
+        <SelectTrigger aria-label={label} className="w-[9.5rem] h-9 text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -46,8 +49,8 @@ export function DateRangeFilter({ value, onChange }: DateRangeFilterProps) {
       {preset === "custom" && (
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className={cn("h-8 text-xs gap-1.5", !value.from && "text-muted-foreground")}>
-              <CalendarIcon className="h-3.5 w-3.5" />
+            <Button variant="outline" size="sm" className={cn("h-9 text-xs gap-1.5", !value.from && "text-muted-foreground")}>
+              <CalendarIcon className="h-3.5 w-3.5" aria-hidden="true" />
               {value.from ? (
                 <>
                   {format(value.from, "MMM d")} – {value.to ? format(value.to, "MMM d") : "..."}
@@ -57,7 +60,7 @@ export function DateRangeFilter({ value, onChange }: DateRangeFilterProps) {
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent className="w-auto p-0" align="end">
             <Calendar
               mode="range"
               selected={value.from ? { from: value.from, to: value.to } : undefined}

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -8,6 +8,8 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ActionMenu } from "@/components/admin/ActionMenu";
+import { DeleteLeadDialog } from "@/components/admin/DeleteLeadDialog";
 import {
   Cloud,
   Inbox,
@@ -19,6 +21,11 @@ import {
   CheckCircle2,
   ArrowRight,
   AlertTriangle,
+  RefreshCw,
+  Link2,
+  ExternalLink,
+  Trash2,
+  FolderOpen,
 } from "lucide-react";
 
 // Stage definitions ─ keep in sync with docs/customer-intake-opusplan.md
@@ -90,49 +97,66 @@ function fmtRelative(iso: string | null): string {
 
 function stageOf(row: LeadRow): { num: number; key: string } {
   if (row.deal_stage != null) {
-    const s = STAGES.find((x) => x.num === row.deal_stage)!;
+    const s = STAGES.find((x) => x.num === row.deal_stage) ?? STAGES[0];
     return { num: s.num, key: s.key };
   }
-  // No deal yet → lead/brief stages
+  // No deal yet. Matches CloudDealDetail: brief submitted = Discovery, otherwise Brief.
+  // Every lead gets a brief shell on insert, so "lead-only" only happens on a data anomaly.
   if (row.brief_submitted_at) return { num: 3, key: "discovery" };
-  if (row.funnel_state === "brief-pending" || row.funnel_state === "lead-only") {
-    return { num: row.brief_submitted_at ? 3 : row.brief_submitted_at == null ? 2 : 1, key: "brief" };
-  }
-  return { num: 1, key: "lead" };
+  if (row.funnel_state === "lead-only") return { num: 1, key: "lead" };
+  return { num: 2, key: "brief" };
 }
 
 function isStuck(row: LeadRow): boolean {
+  // Live deployments are the terminal stage, not stuck.
+  if (row.deal_stage === 8) return false;
   const ref = row.stage_changed_at || row.created_at;
   return Date.now() - new Date(ref).getTime() > 7 * 86400000;
 }
 
 export default function CloudDeals() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [rows, setRows] = useState<LeadRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{ id: string; company_name: string; hasDeal: boolean } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoadError(null);
+    const { data, error } = await supabase
+      .from("v_cloud_lead_funnel")
+      .select("*")
+      .limit(500);
+    if (error) {
+      // Keep the last good rows on screen.
+      setLoadError(error.message);
+    } else {
+      // The funnel view joins deals, so a lead with several deal rows appears several times.
+      // Keep one card per lead: the most advanced deal wins.
+      const byLead = new Map<string, LeadRow>();
+      for (const r of (data || []) as LeadRow[]) {
+        const prev = byLead.get(r.id);
+        if (!prev || (r.deal_stage ?? 0) > (prev.deal_stage ?? 0)) byLead.set(r.id, r);
+      }
+      setRows(Array.from(byLead.values()));
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from("v_cloud_lead_funnel")
-        .select("*")
-        .limit(500);
-      if (cancelled) return;
-      if (error) {
-        toast({
-          title: "Couldn't load deals",
-          description: error.message,
-          variant: "destructive",
-        });
-      }
-      setRows((data || []) as LeadRow[]);
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [toast]);
+    load();
+  }, [load]);
+
+  async function copyLeadFormLink() {
+    const url = `${window.location.origin}/get-started`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: "Lead form link copied", description: url });
+    } catch {
+      toast({ title: "Couldn't copy", description: url, variant: "destructive" });
+    }
+  }
 
   // Group rows by stage
   const grouped = useMemo(() => {
@@ -156,9 +180,32 @@ export default function CloudDeals() {
       <PageHeader
         title="Cloud Deals"
         description="In-House Cloud customer intake pipeline. Lead → brief → discovery → quote → install → live."
+        actions={
+          <ActionMenu
+            items={[
+              { group: "Lead form", label: "Copy lead form link", icon: Link2, onSelect: copyLeadFormLink },
+              { group: "Lead form", label: "Open lead form", icon: ExternalLink, onSelect: () => { window.open("/get-started", "_blank", "noopener,noreferrer"); } },
+              { group: "View", label: "Refresh", icon: RefreshCw, onSelect: load },
+            ]}
+          />
+        }
       />
 
+      {loadError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-500/30 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
+          <span>Couldn't load deals: {loadError}</span>
+          <Button size="sm" variant="outline" onClick={load}>Retry</Button>
+        </div>
+      )}
+
       {/* Stat cards */}
+      {loading ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Total leads"
@@ -189,28 +236,29 @@ export default function CloudDeals() {
           iconColor="text-emerald-400"
         />
       </div>
+      )}
 
       {/* Stuck strip */}
       {stuck.length > 0 && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-400 mt-0.5 shrink-0" />
+          <AlertTriangle className="h-5 w-5 text-amber-400 mt-0.5 shrink-0" aria-hidden />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-amber-200 mb-2">
-              {stuck.length} deal{stuck.length === 1 ? "" : "s"} stuck &gt; 7 days
+              {stuck.length} deal{stuck.length === 1 ? "" : "s"} stuck for more than 7 days
             </div>
             <div className="flex flex-wrap gap-2">
               {stuck.slice(0, 6).map((r) => (
                 <Link
                   key={r.id}
                   to={`/admin/cloud/${r.id}`}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-100 hover:bg-amber-500/20"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-100 hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
                 >
                   {r.company_name}
-                  <span className="text-amber-300/70">· {fmtRelative(r.stage_changed_at || r.created_at)}</span>
+                  <span className="text-amber-200/80">· {fmtRelative(r.stage_changed_at || r.created_at)}</span>
                 </Link>
               ))}
               {stuck.length > 6 && (
-                <span className="text-xs text-amber-200/60">+{stuck.length - 6} more</span>
+                <span className="text-xs text-amber-200/80">+{stuck.length - 6} more</span>
               )}
             </div>
           </div>
@@ -224,6 +272,21 @@ export default function CloudDeals() {
             <Skeleton key={i} className="h-40 w-full" />
           ))}
         </div>
+      ) : rows.length === 0 && !loadError ? (
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-10 text-center">
+          <Cloud className="h-10 w-10 text-white/40 mx-auto mb-3" aria-hidden />
+          <h3 className="text-base font-medium text-white/80 mb-2">No leads yet</h3>
+          <p className="text-sm text-white/60 max-w-md mx-auto">
+            When someone submits the form at{" "}
+            <Link to="/get-started" className="underline">
+              /get-started
+            </Link>
+            , they'll show up here as a new lead.
+          </p>
+          <Button variant="outline" size="sm" className="mt-4" onClick={copyLeadFormLink}>
+            <Link2 className="h-4 w-4" /> Copy lead form link
+          </Button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {STAGES.map((s) => {
@@ -236,7 +299,7 @@ export default function CloudDeals() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Icon className={`h-4 w-4 ${s.accent}`} />
+                    <Icon className={`h-4 w-4 ${s.accent}`} aria-hidden />
                     <span className="text-sm font-medium text-white/80">{s.label}</span>
                   </div>
                   <Badge
@@ -247,33 +310,47 @@ export default function CloudDeals() {
                   </Badge>
                 </div>
                 {cards.length === 0 ? (
-                  <div className="text-xs text-white/50 py-4 text-center">No deals here</div>
+                  <div className="text-xs text-white/55 py-4 text-center">No deals here</div>
                 ) : (
                   <div className="space-y-2">
                     {cards.map((c) => {
                       const stuckHere = isStuck(c);
                       return (
-                        <Link
+                        <div
                           key={c.id}
-                          to={`/admin/cloud/${c.id}`}
-                          className={`block rounded-lg border p-2.5 hover:bg-white/[0.04] transition-colors ${
+                          className={`group relative rounded-lg border transition-colors hover:bg-white/[0.04] ${
                             stuckHere
                               ? "border-amber-500/30 bg-amber-500/[0.03]"
                               : "border-white/[0.06] bg-white/[0.02]"
                           }`}
                         >
-                          <div className="text-sm font-medium text-white/90 truncate">
-                            {c.company_name}
+                          <Link
+                            to={`/admin/cloud/${c.id}`}
+                            className="block rounded-lg p-2.5 pr-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <div className="text-sm font-medium text-white/90 truncate">
+                              {c.company_name}
+                            </div>
+                            <div className="text-xs text-white/60 mt-0.5 truncate">
+                              {c.user_count_band} users
+                              {c.urgency ? ` · ${URGENCY_LABEL[c.urgency] ?? c.urgency}` : ""}
+                            </div>
+                            <div className="text-xs text-white/60 mt-1 flex items-center justify-between">
+                              <span>{fmtRelative(c.stage_changed_at || c.created_at)}</span>
+                              {stuckHere && <span className="inline-flex items-center gap-1 text-amber-300"><AlertTriangle className="h-3 w-3" aria-hidden />Stuck</span>}
+                            </div>
+                          </Link>
+                          <div className="absolute right-1.5 top-1.5">
+                            <ActionMenu
+                              label={`Actions for ${c.company_name}`}
+                              className="h-8 w-8 border-transparent bg-transparent"
+                              items={[
+                                { label: "Open deal", icon: FolderOpen, onSelect: () => navigate(`/admin/cloud/${c.id}`) },
+                                { label: "Delete lead…", icon: Trash2, destructive: true, onSelect: () => setDeleting({ id: c.id, company_name: c.company_name, hasDeal: !!c.deal_id }) },
+                              ]}
+                            />
                           </div>
-                          <div className="text-xs text-white/50 mt-0.5 truncate">
-                            {c.user_count_band} users
-                            {c.urgency ? ` · ${URGENCY_LABEL[c.urgency] ?? c.urgency}` : ""}
-                          </div>
-                          <div className="text-[0.6875rem] text-white/55 mt-1 flex items-center justify-between">
-                            <span>{fmtRelative(c.stage_changed_at || c.created_at)}</span>
-                            {stuckHere && <span className="text-amber-400">stuck</span>}
-                          </div>
-                        </Link>
+                        </div>
                       );
                     })}
                   </div>
@@ -284,20 +361,11 @@ export default function CloudDeals() {
         </div>
       )}
 
-      {/* Empty state */}
-      {!loading && rows.length === 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-10 text-center">
-          <Cloud className="h-10 w-10 text-white/50 mx-auto mb-3" />
-          <h3 className="text-base font-medium text-white/80 mb-2">No leads yet</h3>
-          <p className="text-sm text-white/50 max-w-md mx-auto">
-            When someone submits the form at{" "}
-            <Link to="/get-started" className="underline">
-              /get-started
-            </Link>
-            , they'll show up here. Existing CTAs on the In-House Cloud page now route there.
-          </p>
-        </div>
-      )}
+      <DeleteLeadDialog
+        lead={deleting}
+        onOpenChange={(o) => { if (!o) setDeleting(null); }}
+        onDeleted={load}
+      />
     </div>
   );
 }

@@ -86,8 +86,6 @@ const CloudDiscoveryBrief = lazy(() => import("./pages/admin/CloudDiscoveryBrief
 const AdminShieldReports = lazy(() => import("./pages/admin/AdminShieldReports"));
 const HomeHubOverview = lazy(() => import("./pages/admin/HomeHubOverview"));
 const HomeHubPihole = lazy(() => import("./pages/admin/HomeHubPihole"));
-const HomeHubHomeAssistant = lazy(() => import("./pages/admin/HomeHubHomeAssistant"));
-const HomeHubHomebridge = lazy(() => import("./pages/admin/HomeHubHomebridge"));
 const StreetSweeping = lazy(() => import("./pages/admin/StreetSweeping"));
 
 const queryClient = new QueryClient();
@@ -182,8 +180,6 @@ const App = () => (
                   <Route path="cookie-yeti/domains" element={<CYDomains />} />
                   <Route path="home-hub" element={<HomeHubOverview />} />
                   <Route path="home-hub/pihole" element={<HomeHubPihole />} />
-                  <Route path="home-hub/ha" element={<HomeHubHomeAssistant />} />
-                  <Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
                   <Route path="street-sweeping" element={<StreetSweeping />} />
                 </Route>
 

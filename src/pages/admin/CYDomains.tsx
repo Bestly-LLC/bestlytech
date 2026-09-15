@@ -1,16 +1,17 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Search, Globe, Loader2, ArrowUpDown, ExternalLink } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Globe, RefreshCw, Search } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ExportButton } from "@/components/admin/ExportButton";
+import { DomainDeepDive } from "@/components/admin/DomainDeepDive";
+import { cn } from "@/lib/utils";
 
 type DomainRow = {
   domain: string;
@@ -21,16 +22,15 @@ type DomainRow = {
   reports: number;
   resolved: boolean | null;
   lastReported: string | null;
-  patternRows: any[];
 };
 
 type SortKey = "domain" | "reports" | "bestConfidence" | "successes" | "status";
 
 const STATUS = {
-  working: { label: "Working", className: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30" },
-  pending: { label: "Pending fix", className: "bg-amber-500/15 text-amber-500 border-amber-500/30" },
-  noPattern: { label: "No pattern", className: "bg-red-500/15 text-red-500 border-red-500/30" },
-  resolved: { label: "Resolved", className: "bg-sky-500/15 text-sky-500 border-sky-500/30" },
+  working: { label: "Working", className: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
+  pending: { label: "Pending fix", className: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
+  noPattern: { label: "No pattern", className: "bg-red-500/15 text-red-300 border-red-500/30" },
+  resolved: { label: "Resolved", className: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
 } as const;
 
 function statusOf(r: DomainRow): keyof typeof STATUS {
@@ -50,43 +50,60 @@ const EXPORT_COLUMNS = [
   { key: "lastReported", label: "Last Reported" },
 ];
 
+const FILTERS: ["all" | keyof typeof STATUS, string][] = [
+  ["all", "All"],
+  ["working", "Working"],
+  ["pending", "Pending"],
+  ["noPattern", "No pattern"],
+  ["resolved", "Resolved"],
+];
+
 export default function CYDomains() {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<DomainRow[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | keyof typeof STATUS>("all");
   const [sortKey, setSortKey] = useState<SortKey>("reports");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [selected, setSelected] = useState<DomainRow | null>(null);
+
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const openDomain = (domain: string) => { setSelectedDomain(domain); setDrawerOpen(true); };
 
   const fetchAll = useCallback(async () => {
-    setLoading(true);
     const [patternsRes, reportsRes] = await Promise.all([
-      supabase.from("cookie_patterns").select("domain, selector, action_type, cmp_fingerprint, confidence, success_count, is_active, last_seen"),
-      supabase.from("missed_banner_reports").select("domain, report_count, resolved, has_working_pattern, last_reported, ai_attempts"),
+      supabase.from("cookie_patterns").select("domain, confidence, success_count, is_active").limit(10000),
+      supabase.from("missed_banner_reports").select("domain, report_count, resolved, last_reported").limit(10000),
     ]);
-    const patterns = (patternsRes.data as any[]) || [];
-    const reports = (reportsRes.data as any[]) || [];
+    const firstErr = patternsRes.error || reportsRes.error;
+    if (firstErr) {
+      // Keep the last good table rather than blanking it.
+      setError(firstErr.message);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+    setError(null);
 
     const map = new Map<string, DomainRow>();
     const ensure = (domain: string): DomainRow => {
       let r = map.get(domain);
       if (!r) {
-        r = { domain, patterns: 0, activePatterns: 0, bestConfidence: 0, successes: 0, reports: 0, resolved: null, lastReported: null, patternRows: [] };
+        r = { domain, patterns: 0, activePatterns: 0, bestConfidence: 0, successes: 0, reports: 0, resolved: null, lastReported: null };
         map.set(domain, r);
       }
       return r;
     };
-
-    for (const p of patterns) {
+    for (const p of patternsRes.data || []) {
       const r = ensure(p.domain);
       r.patterns += 1;
       if (p.is_active) r.activePatterns += 1;
       r.bestConfidence = Math.max(r.bestConfidence, Number(p.confidence) || 0);
       r.successes += Number(p.success_count) || 0;
-      r.patternRows.push(p);
     }
-    for (const rep of reports) {
+    for (const rep of reportsRes.data || []) {
       const r = ensure(rep.domain);
       r.reports = Number(rep.report_count) || 0;
       r.resolved = !!rep.resolved;
@@ -95,9 +112,12 @@ export default function CYDomains() {
 
     setRows(Array.from(map.values()));
     setLoading(false);
+    setRefreshing(false);
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const refresh = () => { setRefreshing(true); fetchAll(); };
 
   const filtered = useMemo(() => {
     let list = rows;
@@ -105,11 +125,9 @@ export default function CYDomains() {
       const q = search.trim().toLowerCase();
       list = list.filter((r) => r.domain.toLowerCase().includes(q));
     }
-    if (statusFilter !== "all") {
-      list = list.filter((r) => statusOf(r) === statusFilter);
-    }
+    if (statusFilter !== "all") list = list.filter((r) => statusOf(r) === statusFilter);
     const dir = sortDir === "asc" ? 1 : -1;
-    list = [...list].sort((a, b) => {
+    return [...list].sort((a, b) => {
       switch (sortKey) {
         case "domain": return a.domain.localeCompare(b.domain) * dir;
         case "bestConfidence": return (a.bestConfidence - b.bestConfidence) * dir;
@@ -119,7 +137,6 @@ export default function CYDomains() {
         default: return (a.reports - b.reports) * dir;
       }
     });
-    return list;
   }, [rows, search, statusFilter, sortKey, sortDir]);
 
   const counts = useMemo(() => {
@@ -130,7 +147,7 @@ export default function CYDomains() {
 
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortKey(k); setSortDir("desc"); }
+    else { setSortKey(k); setSortDir(k === "domain" ? "asc" : "desc"); }
   };
 
   const exportData = filtered.map((r) => ({
@@ -143,137 +160,149 @@ export default function CYDomains() {
     lastReported: r.lastReported ?? "",
   }));
 
+  // A render helper (not a component) so the header button keeps focus across re-sorts.
+  const sortHead = (k: SortKey, children: string, align: "left" | "right" = "left", className?: string) => {
+    const active = sortKey === k;
+    const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+    return (
+      <TableHead
+        key={k}
+        aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+        className={cn("text-xs text-white/60", align === "right" && "text-right", className)}
+      >
+        <button
+          type="button"
+          onClick={() => toggleSort(k)}
+          className={cn(
+            "inline-flex items-center gap-1 rounded px-1 py-1 -mx-1 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
+            active && "text-white",
+          )}
+        >
+          {children}
+          <Icon className={cn("h-3 w-3", active ? "opacity-90" : "opacity-50")} aria-hidden="true" />
+        </button>
+      </TableHead>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="All Domains"
+        description="Every domain with a pattern or a user report. Open one for its history and actions."
         actions={
-          <div className="flex items-center gap-2">
+          <>
             <ExportButton data={exportData} columns={EXPORT_COLUMNS} filename="cookie-yeti-domains" />
-            <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />} Refresh
-            </Button>
-          </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline" size="icon" aria-label="Refresh"
+                  onClick={refresh} disabled={refreshing || loading}
+                  className="h-9 w-9 border-white/10 text-white/70 hover:text-white hover:bg-white/5"
+                >
+                  <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Refresh</TooltipContent>
+            </Tooltip>
+          </>
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        {([
-          ["all", `All ${counts.all}`],
-          ["working", `Working ${counts.working}`],
-          ["pending", `Pending ${counts.pending}`],
-          ["noPattern", `No pattern ${counts.noPattern}`],
-          ["resolved", `Resolved ${counts.resolved}`],
-        ] as ["all" | keyof typeof STATUS, string][]).map(([key, label]) => (
+      {error && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border border-red-500/25 bg-red-500/[0.06] px-4 py-3">
+          <AlertTriangle className="h-5 w-5 text-red-300 shrink-0" aria-hidden="true" />
+          <p className="min-w-0 flex-1 text-sm text-red-200">
+            Couldn't load domains{rows.length ? " (showing the last list that loaded)" : ""}: <span className="text-red-200/75">{error}</span>
+          </p>
+          <Button size="sm" variant="outline" onClick={refresh} disabled={refreshing} className="h-9 border-red-500/30 text-red-100 hover:bg-red-500/10">Retry</Button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by status">
+        {FILTERS.map(([key, label]) => (
           <button
             key={key}
+            type="button"
+            aria-pressed={statusFilter === key}
             onClick={() => setStatusFilter(key)}
-            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-              statusFilter === key ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/50"
-            }`}
+            className={cn(
+              "min-h-[2.25rem] rounded-full border px-3 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
+              statusFilter === key
+                ? "border-white/40 bg-white/10 text-white"
+                : "border-white/10 text-white/65 hover:bg-white/[0.05] hover:text-white",
+            )}
           >
-            {label}
+            {label} <span className="tabular-nums text-white/55">{counts[key] ?? 0}</span>
           </button>
         ))}
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="flex items-center gap-2 border-b border-border p-3">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search domains…"
-              className="border-0 bg-transparent focus-visible:ring-0"
-            />
-            <span className="text-xs text-muted-foreground shrink-0">{filtered.length} domains</span>
-          </div>
+      <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-2">
+          <Search className="h-4 w-4 text-white/45 shrink-0" aria-hidden="true" />
+          <Input
+            aria-label="Search domains"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search domains"
+            className="h-9 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
+          <span className="text-xs text-white/55 shrink-0 tabular-nums">{filtered.length} domains</span>
+        </div>
 
-          {loading ? (
-            <div className="space-y-2 p-4">
-              {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-            </div>
-          ) : filtered.length === 0 ? (
-            <EmptyState icon={Globe} title="No domains" description="No actioned domains match your filters yet." />
-          ) : (
+        {loading ? (
+          <div className="space-y-2 p-4" aria-busy="true">
+            {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={Globe}
+            title={rows.length ? "No domains match" : "No domains yet"}
+            description={rows.length ? "Try a different search or status." : "Domains appear once users report banners or patterns are created."}
+          />
+        ) : (
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="cursor-pointer" onClick={() => toggleSort("domain")}>Domain <ArrowUpDown className="inline h-3 w-3 opacity-50" /></TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => toggleSort("status")}>Status</TableHead>
-                  <TableHead className="cursor-pointer text-right" onClick={() => toggleSort("reports")}>Reports</TableHead>
-                  <TableHead className="text-right">Patterns</TableHead>
-                  <TableHead className="cursor-pointer text-right" onClick={() => toggleSort("bestConfidence")}>Confidence</TableHead>
-                  <TableHead className="cursor-pointer text-right" onClick={() => toggleSort("successes")}>Successes</TableHead>
+                <TableRow className="hover:bg-transparent border-white/[0.06]">
+                  {sortHead("domain", "Domain")}
+                  {sortHead("status", "Status")}
+                  {sortHead("reports", "Reports", "right")}
+                  <TableHead className="text-right text-xs text-white/60 hidden sm:table-cell">Active / total</TableHead>
+                  {sortHead("bestConfidence", "Best conf.", "right", "hidden md:table-cell")}
+                  {sortHead("successes", "Successes", "right", "hidden md:table-cell")}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((r) => {
                   const s = STATUS[statusOf(r)];
                   return (
-                    <TableRow key={r.domain} className="cursor-pointer" onClick={() => setSelected(r)}>
-                      <TableCell className="font-medium">{r.domain}</TableCell>
-                      <TableCell><Badge variant="outline" className={s.className}>{s.label}</Badge></TableCell>
-                      <TableCell className="text-right tabular-nums">{r.reports}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.activePatterns}/{r.patterns}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.bestConfidence}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.successes}</TableCell>
+                    <TableRow key={r.domain} className="border-white/[0.04]">
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={() => openDomain(r.domain)}
+                          className="rounded text-left font-medium text-white/90 hover:text-cyan-300 break-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                        >
+                          {r.domain}
+                        </button>
+                      </TableCell>
+                      <TableCell><Badge variant="outline" className={cn("text-xs whitespace-nowrap", s.className)}>{s.label}</Badge></TableCell>
+                      <TableCell className="text-right tabular-nums text-white/80">{r.reports}</TableCell>
+                      <TableCell className="text-right tabular-nums text-white/60 hidden sm:table-cell">{r.activePatterns}/{r.patterns}</TableCell>
+                      <TableCell className="text-right tabular-nums text-white/60 hidden md:table-cell">{r.bestConfidence}</TableCell>
+                      <TableCell className="text-right tabular-nums text-white/60 hidden md:table-cell">{r.successes}</TableCell>
                     </TableRow>
                   );
                 })}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
+      </div>
 
-      <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          {selected && (
-            <>
-              <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  {selected.domain}
-                  <a href={`https://${selected.domain}`} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground">
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </SheetTitle>
-              </SheetHeader>
-              <div className="mt-4 space-y-4">
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-lg border border-border p-2"><div className="text-lg font-bold">{selected.reports}</div><div className="text-xs text-muted-foreground">Reports</div></div>
-                  <div className="rounded-lg border border-border p-2"><div className="text-lg font-bold">{selected.patterns}</div><div className="text-xs text-muted-foreground">Patterns</div></div>
-                  <div className="rounded-lg border border-border p-2"><div className="text-lg font-bold">{selected.successes}</div><div className="text-xs text-muted-foreground">Successes</div></div>
-                </div>
-                <div>
-                  <p className="mb-2 text-sm font-semibold">Patterns</p>
-                  {selected.patternRows.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No patterns generated yet — the AI will attempt this domain on the next run.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {[...selected.patternRows]
-                        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-                        .map((p, i) => (
-                          <div key={i} className="rounded-lg border border-border p-2 text-xs">
-                            <code className="break-all text-foreground">{p.selector}</code>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-muted-foreground">
-                              <Badge variant="outline" className="text-[0.625rem]">{p.action_type}</Badge>
-                              <span>conf {p.confidence}</span>
-                              <span>· {p.success_count} successes</span>
-                              <span>· {p.cmp_fingerprint}</span>
-                              {!p.is_active && <span className="text-red-500">· inactive</span>}
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+      <DomainDeepDive domain={selectedDomain} open={drawerOpen} onOpenChange={setDrawerOpen} onRefresh={fetchAll} />
     </div>
   );
 }

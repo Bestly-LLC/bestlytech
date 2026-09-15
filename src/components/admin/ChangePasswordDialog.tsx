@@ -3,8 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { KeyRound, Fingerprint, Shield, Trash2 } from "lucide-react";
+import { KeyRound, Fingerprint, Shield, Trash2, Loader2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
@@ -33,6 +39,22 @@ function base64urlToBuffer(base64url: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+/** supabase.functions.invoke puts non-2xx bodies on error.context; pull the server's message out. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function functionErrorMessage(res: { data: any; error: any }, fallback: string): Promise<string> {
+  if (res.data?.error) return String(res.data.error);
+  const ctx = res.error?.context;
+  if (ctx && typeof ctx.json === "function") {
+    try {
+      const body = await ctx.clone().json();
+      if (body?.error) return String(body.error);
+    } catch { /* not JSON */ }
+  }
+  return res.error?.message || fallback;
+}
+
+const MIN_PASSWORD_LENGTH = 6;
+
 interface PasskeyRow {
   id: string;
   credential_id: string;
@@ -48,6 +70,9 @@ export function ChangePasswordDialog() {
   const [loading, setLoading] = useState(false);
   const [passkeys, setPasskeys] = useState<PasskeyRow[]>([]);
   const [loadingPasskeys, setLoadingPasskeys] = useState(false);
+  const [passkeyLoadError, setPasskeyLoadError] = useState<string | null>(null);
+  const [passkeyToDelete, setPasskeyToDelete] = useState<PasskeyRow | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [registeringPasskey, setRegisteringPasskey] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -57,26 +82,38 @@ export function ChangePasswordDialog() {
 
   const loadPasskeys = async () => {
     setLoadingPasskeys(true);
-    const { data: session } = await supabase.auth.getSession();
-    if (!session?.session?.user) { setPasskeys([]); setLoadingPasskeys(false); return; }
-    const { data, error } = await supabase
-      .from("passkey_credentials")
-      .select("id, credential_id, device_type, device_name, created_at")
-      .eq("user_id", session.session.user.id)
-      .order("created_at", { ascending: true });
-    if (error) { setPasskeys([]); } else { setPasskeys((data as PasskeyRow[]) || []); }
-    setLoadingPasskeys(false);
+    setPasskeyLoadError(null);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.user) {
+        setPasskeys([]);
+        setPasskeyLoadError("Your session expired. Sign in again to manage passkeys.");
+        return;
+      }
+      const { data, error } = await supabase
+        .from("passkey_credentials")
+        .select("id, credential_id, device_type, device_name, created_at")
+        .eq("user_id", session.session.user.id)
+        .order("created_at", { ascending: true });
+      if (error) setPasskeyLoadError(`Couldn't load your passkeys: ${error.message}`);
+      else setPasskeys((data as PasskeyRow[]) || []);
+    } finally {
+      setLoadingPasskeys(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 6) { toast.error("Password must be at least 6 characters"); return; }
-    if (newPassword !== confirmPassword) { toast.error("Passwords do not match"); return; }
+    if (newPassword.length < MIN_PASSWORD_LENGTH) { setPasswordError(`Use at least ${MIN_PASSWORD_LENGTH} characters.`); return; }
+    if (newPassword !== confirmPassword) { setPasswordError("The two passwords don't match."); return; }
+    setPasswordError(null);
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setLoading(false);
-    if (error) { toast.error(error.message); } else {
-      toast.success("Password updated successfully");
+    if (error) {
+      setPasswordError(`Password not changed: ${error.message}`);
+    } else {
+      toast.success("Password updated");
       setNewPassword(""); setConfirmPassword(""); setOpen(false);
     }
   };
@@ -97,7 +134,7 @@ export function ChangePasswordDialog() {
         },
       });
       if (optionsRes.error || optionsRes.data?.error) {
-        toast.error(optionsRes.data?.error || "Failed to get options");
+        toast.error(`Couldn't start registration: ${await functionErrorMessage(optionsRes, "no response from the server")}`);
         return;
       }
 
@@ -143,7 +180,7 @@ export function ChangePasswordDialog() {
       });
 
       if (verifyRes.error || verifyRes.data?.error) {
-        toast.error(verifyRes.data?.error || "Registration failed");
+        toast.error(`Registration failed: ${await functionErrorMessage(verifyRes, "the server rejected the credential")}`);
         return;
       }
 
@@ -152,6 +189,8 @@ export function ChangePasswordDialog() {
     } catch (err) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
         toast.info("Registration was cancelled.");
+      } else if (err instanceof DOMException && err.name === "InvalidStateError") {
+        toast.info("This device is already registered.");
       } else {
         toast.error(err instanceof Error ? err.message : "Registration failed");
       }
@@ -163,28 +202,37 @@ export function ChangePasswordDialog() {
   const handleDeletePasskey = async (credentialDbId: string) => {
     setDeletingId(credentialDbId);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("passkey_credentials")
         .delete()
-        .eq("id", credentialDbId);
+        .eq("id", credentialDbId)
+        .select("id");
       if (error) {
-        toast.error("Failed to remove credential");
+        toast.error(`Couldn't remove the credential: ${error.message}`);
+      } else if (!data?.length) {
+        // RLS only lets you delete your own credentials; 0 rows means it wasn't removed.
+        toast.error("Nothing was removed. The credential may belong to another account or was already deleted.");
+        await loadPasskeys();
       } else {
         setPasskeys((prev) => prev.filter((p) => p.id !== credentialDbId));
-        toast.success("Credential removed.");
+        toast.success("Credential removed");
       }
-    } catch {
-      toast.error("Failed to remove credential");
+      setPasskeyToDelete(null);
+    } catch (err) {
+      toast.error(`Couldn't remove the credential: ${err instanceof Error ? err.message : "network error"}`);
     } finally {
       setDeletingId(null);
     }
   };
 
+  const passkeyLabel = (pk: PasskeyRow) =>
+    pk.device_name || (pk.device_type === "cross-platform" ? "Security Key" : "Platform Passkey");
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setPasswordError(null); }}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-          <KeyRound className="h-4 w-4 mr-1" />
+        <Button variant="ghost" size="sm" aria-label="Security settings" className="h-9 text-muted-foreground hover:text-foreground">
+          <KeyRound className="h-4 w-4 mr-1" aria-hidden />
           <span className="hidden sm:inline">Security</span>
         </Button>
       </DialogTrigger>
@@ -201,8 +249,15 @@ export function ChangePasswordDialog() {
             <span className="text-sm font-medium">Passkeys & Security Keys</span>
           </div>
 
-          {loadingPasskeys ? (
-            <p className="text-xs text-muted-foreground">Loading…</p>
+          {loadingPasskeys && passkeys.length === 0 ? (
+            <div className="space-y-2" role="status" aria-label="Loading passkeys">
+              <Skeleton className="h-12 w-full rounded-md" />
+            </div>
+          ) : passkeyLoadError ? (
+            <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-red-500/30 bg-red-500/[0.06] px-3 py-2 text-xs text-red-300">
+              <span>{passkeyLoadError}</span>
+              <Button variant="outline" size="sm" onClick={loadPasskeys} disabled={loadingPasskeys}>Retry</Button>
+            </div>
           ) : passkeys.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               No passkeys or security keys registered. Add one below.
@@ -221,24 +276,29 @@ export function ChangePasswordDialog() {
                       <Fingerprint className="h-4 w-4 text-muted-foreground shrink-0" />
                     )}
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {pk.device_name || (pk.device_type === "cross-platform" ? "Security Key" : "Platform Passkey")}
-                      </p>
+                      <p className="text-sm font-medium truncate">{passkeyLabel(pk)}</p>
                       <p className="text-xs text-muted-foreground">
                         Registered {format(new Date(pk.created_at), "MMM d, yyyy")}
                       </p>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Delete passkey"
-                    className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0"
-                    onClick={() => handleDeletePasskey(pk.id)}
-                    disabled={deletingId === pk.id}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Remove ${passkeyLabel(pk)} registered ${format(new Date(pk.created_at), "MMM d, yyyy")}`}
+                          className="text-destructive hover:text-destructive h-9 w-9 shrink-0"
+                          onClick={() => setPasskeyToDelete(pk)}
+                          disabled={deletingId === pk.id}
+                        >
+                          {deletingId === pk.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left"><p className="text-xs">Remove</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               ))}
             </div>
@@ -281,9 +341,12 @@ export function ChangePasswordDialog() {
             <Input
               id="new-password"
               type="password"
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD_LENGTH}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="••••••••"
+              aria-invalid={!!passwordError}
+              aria-describedby={passwordError ? "password-error" : undefined}
               required
             />
           </div>
@@ -292,18 +355,44 @@ export function ChangePasswordDialog() {
             <Input
               id="confirm-password"
               type="password"
+              autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="••••••••"
+              aria-invalid={!!passwordError}
+              aria-describedby={passwordError ? "password-error" : undefined}
               required
             />
           </div>
+          {passwordError && <p id="password-error" role="alert" className="text-sm text-red-400">{passwordError}</p>}
           <DialogFooter>
             <Button type="submit" disabled={loading}>
-              {loading ? "Updating…" : "Update Password"}
+              {loading ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Updating…</> : "Update password"}
             </Button>
           </DialogFooter>
         </form>
+
+        <AlertDialog open={!!passkeyToDelete} onOpenChange={(o) => { if (!o && !deletingId) setPasskeyToDelete(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove this {passkeyToDelete?.device_type === "cross-platform" ? "security key" : "passkey"}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {passkeyToDelete ? `${passkeyLabel(passkeyToDelete)}, registered ${format(new Date(passkeyToDelete.created_at), "MMM d, yyyy")}. ` : ""}
+                You won't be able to sign in with it again.
+                {passkeys.length === 1 ? " It's your only one, so you'll need your password to sign in." : ""}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={!!deletingId}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!!deletingId}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={(e) => { e.preventDefault(); if (passkeyToDelete) handleDeletePasskey(passkeyToDelete.id); }}
+              >
+                {deletingId ? <><Loader2 className="h-4 w-4 animate-spin" /> Removing…</> : "Remove"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

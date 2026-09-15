@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { AlertTriangle, CircleAlert, Info, Sparkles, ExternalLink } from "lucide-react";
+import { AlertTriangle, CircleAlert, Info, Sparkles, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SmartAlertsProps {
@@ -36,22 +36,26 @@ const SEVERITY_CONFIG: Record<
     icon: typeof AlertTriangle;
     iconColor: string;
     borderColor: string;
+    word: string;
   }
 > = {
   critical: {
     icon: AlertTriangle,
     iconColor: "text-red-400",
     borderColor: "border-l-red-500",
+    word: "Critical",
   },
   warning: {
     icon: CircleAlert,
     iconColor: "text-amber-400",
     borderColor: "border-l-amber-500",
+    word: "Warning",
   },
   info: {
     icon: Info,
     iconColor: "text-blue-400",
     borderColor: "border-l-blue-500",
+    word: "Info",
   },
 };
 
@@ -75,7 +79,7 @@ export function SmartAlerts({
         title: `No working pattern for ${d.domain}`,
         description: `${d.report_count} reports but no successful AI attempts.`,
         action: onDomainClick
-          ? { label: d.domain, onClick: () => onDomainClick(d.domain) }
+          ? { label: "Inspect", onClick: () => onDomainClick(d.domain) }
           : undefined,
       });
     }
@@ -140,28 +144,28 @@ export function SmartAlerts({
     <div className="space-y-3">
       {/* Section header */}
       <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-white/55" />
+        <Sparkles className="h-4 w-4 text-white/55" aria-hidden />
         <h3 className="text-sm font-semibold text-white">Insights</h3>
       </div>
 
       {insights.length === 0 ? (
         <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3 flex items-center gap-3">
           <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
-            <Sparkles className="h-4 w-4 text-emerald-400" />
+            <Sparkles className="h-4 w-4 text-emerald-400" aria-hidden />
           </div>
           <p className="text-sm text-emerald-300 font-medium">
-            All clear &mdash; no issues detected
+            All clear. No issues detected.
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <ul className="space-y-2">
           {insights.map((insight, idx) => {
             const config = SEVERITY_CONFIG[insight.severity];
             const Icon = config.icon;
 
             return (
-              <div
-                key={idx}
+              <li
+                key={`${insight.title}-${idx}`}
                 className={cn(
                   "bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex items-center gap-3 border-l-2",
                   config.borderColor
@@ -169,15 +173,16 @@ export function SmartAlerts({
               >
                 {/* Severity icon */}
                 <div className="shrink-0">
-                  <Icon className={cn("h-4 w-4", config.iconColor)} />
+                  <Icon className={cn("h-4 w-4", config.iconColor)} aria-hidden />
                 </div>
 
                 {/* Text */}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-white leading-snug truncate">
+                    <span className="sr-only">{config.word}: </span>
                     {insight.title}
                   </p>
-                  <p className="text-xs text-white/55 mt-0.5 line-clamp-2">
+                  <p className="text-xs text-white/60 mt-0.5 line-clamp-2">
                     {insight.description}
                   </p>
                 </div>
@@ -185,19 +190,19 @@ export function SmartAlerts({
                 {/* Action button */}
                 {insight.action && (
                   <button
+                    type="button"
                     onClick={insight.action.onClick}
-                    className="shrink-0 flex items-center gap-1 text-xs text-white/55 hover:text-white transition-colors px-2 py-1 rounded-lg hover:bg-white/[0.05]"
+                    aria-label={`${insight.action.label}: ${insight.title}`}
+                    className="shrink-0 h-9 flex items-center gap-1 text-xs text-white/70 hover:text-white transition-colors px-2.5 rounded-lg hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="truncate max-w-[6.25rem]">
-                      {insight.action.label}
-                    </span>
-                    <ExternalLink className="h-3 w-3" />
+                    {insight.action.label}
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden />
                   </button>
                 )}
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );

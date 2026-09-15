@@ -13,8 +13,6 @@ import {
   ListChecks,
   Server,
   Shield,
-  House,
-  Plug,
   Cloud,
   Activity,
   Sparkles,
@@ -44,16 +42,16 @@ type CountKeys =
   | "cloudLeads"
   | "shieldReports";
 
-const dashboardItem = { title: "Command Center", url: "/admin", icon: LayoutDashboard };
+export const dashboardItem = { title: "Command Center", url: "/admin", icon: LayoutDashboard };
 
-const amazonItems = [
-  { title: "Submissions", url: "/admin/submissions", icon: FileText, countKey: "submissions" as CountKeys },
+// Work: everything that brings in or serves a customer (bids, deals, intake, inbound), in one place.
+const workItems = [
+  { title: "Cloud Deals", url: "/admin/cloud", icon: Cloud, countKey: "cloudLeads" as CountKeys },
+  { title: "Shield Reports", url: "/admin/shield-reports", icon: ShieldCheck, countKey: "shieldReports" as CountKeys },
+  { title: "Marketplace Intake", url: "/admin/submissions", icon: FileText, countKey: "submissions" as CountKeys },
   { title: "Setup Guide", url: "/admin/guide", icon: BookOpen },
-];
-
-const generalItems = [
-  { title: "Contacts", url: "/admin/contacts", icon: Mail, countKey: "contacts" as CountKeys },
   { title: "Hire Requests", url: "/admin/hires", icon: Briefcase, countKey: "hires" as CountKeys },
+  { title: "Contacts", url: "/admin/contacts", icon: Mail, countKey: "contacts" as CountKeys },
   { title: "Waitlist", url: "/admin/waitlist", icon: ListChecks },
 ];
 
@@ -71,17 +69,18 @@ const cookieYetiItems = [
 const homeHubItems = [
   { title: "Overview", url: "/admin/home-hub", icon: Server },
   { title: "Pi-hole", url: "/admin/home-hub/pihole", icon: Shield },
-  { title: "Home Assistant", url: "/admin/home-hub/ha", icon: House },
-  { title: "Homebridge", url: "/admin/home-hub/homebridge", icon: Plug },
 ];
 
 const turoItems = [
   { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Car },
 ];
 
-const cloudItems = [
-  { title: "Cloud Deals", url: "/admin/cloud", icon: Cloud, countKey: "cloudLeads" as CountKeys },
-  { title: "Shield Reports", url: "/admin/shield-reports", icon: ShieldCheck, countKey: "shieldReports" as CountKeys },
+
+export const ADMIN_NAV_SECTIONS = [
+  { label: "Work", items: workItems },
+  { label: "Cookie Yeti", items: cookieYetiItems },
+  { label: "Home Hub", items: homeHubItems },
+  { label: "Turo", items: turoItems },
 ];
 
 export function AdminSidebar() {
@@ -114,6 +113,7 @@ export function AdminSidebar() {
   const isActive = (path: string) => {
     if (path === "/admin") return currentPath === "/admin";
     if (path === "/admin/cookie-yeti") return currentPath === "/admin/cookie-yeti";
+    if (path === "/admin/home-hub") return currentPath === "/admin/home-hub";
     return currentPath.startsWith(path);
   };
 
@@ -157,71 +157,19 @@ export function AdminSidebar() {
           {renderItem(dashboardItem)}
         </SidebarMenu>
 
-        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
-            Marketplace
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{amazonItems.map(renderItem)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
-            General
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{generalItems.map(renderItem)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
-            Cookie Yeti
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{cookieYetiItems.map(renderItem)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
-            Home Hub
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{homeHubItems.map(renderItem)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
-            Turo
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{turoItems.map(renderItem)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
-            In-House Cloud
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{cloudItems.map(renderItem)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {ADMIN_NAV_SECTIONS.map((section) => (
+          <div key={section.label}>
+            <div className="mx-3 my-2 h-px bg-white/[0.06]" />
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
+                {section.label}
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>{section.items.map(renderItem)}</SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </div>
+        ))}
       </SidebarContent>
     </Sidebar>
   );

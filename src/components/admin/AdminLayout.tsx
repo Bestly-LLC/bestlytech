@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "./AdminSidebar";
@@ -7,11 +8,11 @@ import { LogOut, Home, Command, Minus, Plus } from "lucide-react";
 import { useAdminTextSize } from "@/hooks/useAdminTextSize";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { CommandPalette } from "./CommandPalette";
+import { CommandPalette, OPEN_ADMIN_PALETTE_EVENT } from "./CommandPalette";
 
 const BREADCRUMB_MAP: Record<string, string> = {
   "/admin": "Dashboard",
-  "/admin/submissions": "Submissions",
+  "/admin/submissions": "Marketplace Intake",
   "/admin/guide": "Setup Guide",
   "/admin/cookie-yeti": "CY Command Center",
   "/admin/cookie-yeti/ops": "CY Operations",
@@ -21,8 +22,6 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/cookie-yeti/community": "Community Learning",
   "/admin/home-hub": "Home Hub",
   "/admin/home-hub/pihole": "Pi-hole",
-  "/admin/home-hub/ha": "Home Assistant",
-  "/admin/home-hub/homebridge": "Homebridge",
   "/admin/street-sweeping": "Street Sweeping",
   "/admin/contacts": "Contacts",
   "/admin/hires": "Hire Requests",
@@ -36,6 +35,13 @@ const BREADCRUMB_MAP: Record<string, string> = {
 export function AdminLayout() {
   const { user, signOut } = useAdminAuth();
   const textSize = useAdminTextSize();
+
+  // Menus, dialogs and toasts render in portals on <body>, outside the admin wrapper. Put the
+  // admin theme tokens on <body> too so they come up dark instead of in the public site's light theme.
+  useEffect(() => {
+    document.body.classList.add("admin-shell");
+    return () => document.body.classList.remove("admin-shell");
+  }, []);
   const location = useLocation();
 
   const currentLabel = BREADCRUMB_MAP[location.pathname] ??
@@ -94,7 +100,7 @@ export function AdminLayout() {
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" className="text-white/50 hover:text-white hover:bg-white/5 h-8 gap-1.5 text-xs hidden sm:flex border-0">
+                    <Button onClick={() => window.dispatchEvent(new Event(OPEN_ADMIN_PALETTE_EVENT))} aria-label="Open command palette" variant="ghost" size="sm" className="text-white/50 hover:text-white hover:bg-white/5 h-8 gap-1.5 text-xs hidden sm:flex border-0">
                       <Command className="h-3 w-3" />K
                     </Button>
                   </TooltipTrigger>

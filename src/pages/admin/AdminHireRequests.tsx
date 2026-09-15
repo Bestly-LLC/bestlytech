@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,16 +7,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, Search, Briefcase, Eye, Trash2, Archive } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Briefcase, Eye, Trash2, Archive, Download, RefreshCw, Reply, ChevronDown, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
-import { ExportButton } from "@/components/admin/ExportButton";
+import { ActionMenu } from "@/components/admin/ActionMenu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
-const STATUSES = ["All", "new", "contacted", "proposal", "accepted", "declined", "archived"];
+const STATUSES = ["new", "contacted", "proposal", "accepted", "declined", "archived"] as const;
+const STATUS_LABEL: Record<string, string> = {
+  new: "New",
+  contacted: "Contacted",
+  proposal: "Proposal",
+  accepted: "Accepted",
+  declined: "Declined",
+  archived: "Archived",
+};
 const PAGE_SIZE = 20;
 
 const EXPORT_COLUMNS = [
@@ -30,59 +38,108 @@ const EXPORT_COLUMNS = [
   { key: "created_at", label: "Date" },
 ];
 
+function downloadCsv(rows: Record<string, any>[], columns: { key: string; label: string }[], filename: string) {
+  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [columns.map((c) => esc(c.label)).join(","), ...rows.map((r) => columns.map((c) => esc(r[c.key])).join(","))].join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function replyHref(r: any) {
+  return `mailto:${r.email}?subject=${encodeURIComponent(`Your ${r.project_type || "project"} inquiry${r.company ? ` — ${r.company}` : ""}`)}`;
+}
+
 export default function AdminHireRequests() {
   const [data, setData] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<any | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => { loadData(); }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const { data: rows, error } = await supabase
       .from("hire_requests")
       .select("*")
       .order("created_at", { ascending: false });
-    if (error) toast({ title: "Failed to load", description: error.message, variant: "destructive" });
-    setData(rows || []);
+    if (error) {
+      setLoadError(error.message);
+    } else {
+      setLoadError(null);
+      setData(rows || []);
+    }
     setLoading(false);
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  /** Updates status and verifies rows actually changed (RLS returns success on 0 rows). */
+  const setStatus = async (ids: string[], status: string, { quiet = false } = {}) => {
+    setSaving((prev) => new Set([...prev, ...ids]));
+    const { data: updated, error } = await supabase
+      .from("hire_requests")
+      .update({ status })
+      .in("id", ids)
+      .select("id");
+    setSaving((prev) => { const n = new Set(prev); ids.forEach((i) => n.delete(i)); return n; });
+    const n = updated?.length ?? 0;
+    if (error) {
+      toast({ title: "Couldn't update status", description: `${error.message}. Nothing changed — try again.`, variant: "destructive" });
+      return 0;
+    }
+    if (n === 0) {
+      toast({ title: "Status not changed", description: "No rows were updated. Your account may not have permission, or the request was removed. Refresh and try again.", variant: "destructive" });
+      return 0;
+    }
+    const done = new Set(updated!.map((r) => r.id));
+    setData((prev) => prev.map((r) => (done.has(r.id) ? { ...r, status } : r)));
+    setViewing((v: any) => (v && done.has(v.id) ? { ...v, status } : v));
+    if (!quiet) {
+      toast({
+        title: ids.length === 1 ? `Marked ${STATUS_LABEL[status].toLowerCase()}` : `Marked ${n} request${n === 1 ? "" : "s"} ${STATUS_LABEL[status].toLowerCase()}`,
+        description: n < ids.length ? `${ids.length - n} could not be updated.` : undefined,
+      });
+    }
+    return n;
   };
 
-  const updateStatus = async (id: string, status: string) => {
-    const { error } = await supabase.from("hire_requests").update({ status }).eq("id", id);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: `Marked as ${status}` });
-      loadData();
-    }
-  };
-
-  const bulkUpdateStatus = async (newStatus: string) => {
-    const ids = Array.from(selected);
-    const { error } = await supabase.from("hire_requests").update({ status: newStatus }).in("id", ids);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: `Updated ${ids.length} requests to "${newStatus}"` });
-      setSelected(new Set());
-      loadData();
-    }
+  const bulkStatus = async (status: string) => {
+    setBulkBusy(true);
+    const n = await setStatus(Array.from(selected), status);
+    setBulkBusy(false);
+    if (n > 0) setSelected(new Set());
   };
 
   const handleDelete = async (ids: string[]) => {
-    const { error } = await supabase.from("hire_requests").delete().in("id", ids);
+    setDeleting(true);
+    const { data: removed, error } = await supabase.from("hire_requests").delete().in("id", ids).select("id");
+    setDeleting(false);
+    const n = removed?.length ?? 0;
     if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Couldn't delete", description: `${error.message}. Nothing was removed — try again.`, variant: "destructive" });
+    } else if (n === 0) {
+      toast({ title: "Nothing was deleted", description: "Your account isn't allowed to delete these requests, or they were already removed. Refresh and try again.", variant: "destructive" });
     } else {
-      toast({ title: `Deleted ${ids.length} request${ids.length > 1 ? "s" : ""}` });
+      toast({
+        title: `Deleted ${n} request${n === 1 ? "" : "s"}`,
+        description: n < ids.length ? `${ids.length - n} could not be deleted.` : undefined,
+        variant: n < ids.length ? "destructive" : undefined,
+      });
+      const gone = new Set(removed!.map((r) => r.id));
+      setData((prev) => prev.filter((r) => !gone.has(r.id)));
       setSelected(new Set());
-      loadData();
+      if (viewing && gone.has(viewing.id)) setViewing(null);
     }
     setDeleteConfirm(null);
   };
@@ -94,7 +151,7 @@ export default function AdminHireRequests() {
   };
 
   const filtered = data.filter((r) => {
-    if (statusFilter !== "All" && r.status !== statusFilter) return false;
+    if (statusFilter !== "All" && (r.status || "new") !== statusFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       return (r.name || "").toLowerCase().includes(q) || (r.email || "").toLowerCase().includes(q) || (r.company || "").toLowerCase().includes(q);
@@ -102,14 +159,44 @@ export default function AdminHireRequests() {
     return true;
   });
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const paged = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+  const allOnPageSelected = paged.length > 0 && paged.every((r) => selected.has(r.id));
+  const isFiltering = !!search || statusFilter !== "All";
+
+  const rowActions = (r: any) => [
+    { label: "Open request", icon: Eye, onSelect: () => setViewing(r) },
+    { label: "Reply by email", icon: Reply, onSelect: () => { window.location.href = replyHref(r); } },
+    { label: "Delete…", icon: Trash2, destructive: true, onSelect: () => setDeleteConfirm([r.id]) },
+  ];
+
+  const statusSelect = (r: any) => (
+    <Select value={r.status || "new"} onValueChange={(v) => setStatus([r.id], v)} disabled={saving.has(r.id)}>
+      <SelectTrigger aria-label={`Status for request from ${r.name}`} className="h-9 w-32 text-xs"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+
+  const emptyState = (
+    <EmptyState
+      icon={Briefcase}
+      title={isFiltering ? "No matching requests" : "No hire requests yet"}
+      description={isFiltering ? "Try a different search or status filter." : "Project inquiries from the hire form will appear here."}
+      action={isFiltering ? <Button variant="outline" size="sm" onClick={() => { setSearch(""); setStatusFilter("All"); }}>Clear filters</Button> : undefined}
+    />
+  );
 
   if (loading) {
     return (
       <div className="space-y-6 max-w-6xl">
-        <Skeleton className="h-7 w-48" />
-        <Skeleton className="h-80 rounded-xl" />
+        <Skeleton className="h-8 w-56" />
+        <div className="flex gap-3"><Skeleton className="h-10 w-72" /><Skeleton className="h-10 w-36" /></div>
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+        </div>
       </div>
     );
   }
@@ -119,18 +206,33 @@ export default function AdminHireRequests() {
       <PageHeader
         title="Hire Requests"
         description="Project inquiries from the hire form."
-        actions={<ExportButton data={filtered} filename="hire-requests" columns={EXPORT_COLUMNS} />}
+        actions={
+          <ActionMenu
+            items={[
+              { group: "Export", label: `Export CSV (${filtered.length})`, icon: Download, disabled: filtered.length === 0, onSelect: () => downloadCsv(filtered, EXPORT_COLUMNS, "hire-requests") },
+              { group: "View", label: "Refresh", icon: RefreshCw, onSelect: loadData },
+            ]}
+          />
+        }
       />
+
+      {loadError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-500/30 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
+          <span>Couldn't load hire requests: {loadError}</span>
+          <Button size="sm" variant="outline" onClick={loadData}>Retry</Button>
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative max-w-xs flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search name, email, company..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} className="pl-9" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden />
+          <Input aria-label="Search hire requests" placeholder="Search name, email, company..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); setSelected(new Set()); }} className="pl-9" />
         </div>
-        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[8.75rem]"><SelectValue /></SelectTrigger>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); setSelected(new Set()); }}>
+          <SelectTrigger aria-label="Filter by status" className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {STATUSES.map((s) => <SelectItem key={s} value={s}>{s === "All" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
+            <SelectItem value="All">All statuses</SelectItem>
+            {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -138,15 +240,23 @@ export default function AdminHireRequests() {
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 sm:px-4 py-2">
           <span className="text-sm font-medium">{selected.size} selected</span>
-          <span className="text-muted-foreground hidden sm:inline">&middot;</span>
-          <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => bulkUpdateStatus("contacted")}>Mark Contacted</Button>
-          <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => bulkUpdateStatus("archived")}>
-            <Archive className="h-3 w-3 mr-1" /> Archive
+          <Button variant="outline" size="sm" className="ml-2" disabled={bulkBusy} onClick={() => bulkStatus("archived")}>
+            {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />} Archive
           </Button>
-          <Button variant="outline" size="sm" className="text-xs h-7 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm(Array.from(selected))}>
-            <Trash2 className="h-3 w-3 mr-1" /> Delete
+          <ActionMenu
+            label="Set status for selected"
+            align="start"
+            trigger={
+              <Button variant="outline" size="sm" disabled={bulkBusy}>
+                Mark as <ChevronDown className="h-4 w-4" />
+              </Button>
+            }
+            items={STATUSES.filter((s) => s !== "archived").map((s) => ({ label: STATUS_LABEL[s], onSelect: () => bulkStatus(s) }))}
+          />
+          <Button variant="outline" size="sm" className="text-red-400 hover:text-red-300 border-red-500/30" disabled={bulkBusy} onClick={() => setDeleteConfirm(Array.from(selected))}>
+            <Trash2 className="h-4 w-4" /> Delete
           </Button>
-          <Button variant="ghost" size="sm" className="text-xs h-7 ml-auto" onClick={() => setSelected(new Set())}>Clear</Button>
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setSelected(new Set())}>Clear selection</Button>
         </div>
       )}
 
@@ -159,7 +269,8 @@ export default function AdminHireRequests() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-10">
                     <Checkbox
-                      checked={selected.size === paged.length && paged.length > 0}
+                      aria-label="Select all on this page"
+                      checked={allOnPageSelected}
                       onCheckedChange={(checked) => setSelected(checked ? new Set(paged.map((r) => r.id)) : new Set())}
                     />
                   </TableHead>
@@ -170,43 +281,33 @@ export default function AdminHireRequests() {
                   <TableHead className="text-xs">Timeline</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
                   <TableHead className="text-xs">Date</TableHead>
-                  <TableHead className="text-xs w-20">Actions</TableHead>
+                  <TableHead className="text-xs w-12"><span className="sr-only">Actions</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paged.map((r) => (
-                  <TableRow key={r.id} className="even:bg-muted/30">
+                  <TableRow key={r.id} className="even:bg-muted/30" data-state={selected.has(r.id) ? "selected" : undefined}>
                     <TableCell>
-                      <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} />
+                      <Checkbox aria-label={`Select request from ${r.name}`} checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} />
                     </TableCell>
-                    <TableCell className="font-medium text-sm">{r.name}</TableCell>
+                    <TableCell className="font-medium text-sm">
+                      <button type="button" onClick={() => setViewing(r)} className="text-left hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        {r.name}
+                      </button>
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{r.company || "—"}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{r.project_type}</Badge></TableCell>
                     <TableCell className="text-sm">{r.budget_range || "—"}</TableCell>
                     <TableCell className="text-sm">{r.timeline || "—"}</TableCell>
-                    <TableCell>
-                      <Select value={r.status || "new"} onValueChange={(v) => updateStatus(r.id, v)}>
-                        <SelectTrigger className="h-7 w-[6.875rem] text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {STATUSES.filter(s => s !== "All").map((s) => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
+                    <TableCell>{statusSelect(r)}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" aria-label="View hire request" className="h-7 w-7 p-0" onClick={() => setViewing(r)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" aria-label="Delete hire request" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm([r.id])}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <ActionMenu label={`Actions for request from ${r.name}`} items={rowActions(r)} />
                     </TableCell>
                   </TableRow>
                 ))}
                 {paged.length === 0 && (
-                  <TableRow><TableCell colSpan={9} className="p-0"><EmptyState icon={Briefcase} title="No hire requests" description="Hire inquiries will appear here." /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="p-0">{emptyState}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -214,87 +315,95 @@ export default function AdminHireRequests() {
           {/* Mobile cards */}
           <div className="md:hidden divide-y divide-border">
             {paged.map((r) => (
-              <div key={r.id} className="p-3 space-y-1.5">
+              <div key={r.id} className="p-3 space-y-2">
                 <div className="flex items-start gap-2">
-                  <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} className="mt-1" />
+                  <Checkbox aria-label={`Select request from ${r.name}`} checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} className="mt-1" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
+                      <button type="button" onClick={() => setViewing(r)} className="min-w-0 text-left rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                         <p className="text-sm font-medium text-foreground truncate">{r.name}</p>
                         <p className="text-xs text-muted-foreground">{r.company || "No company"}</p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button variant="ghost" size="sm" aria-label="View hire request" className="h-7 w-7 p-0" onClick={() => setViewing(r)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" aria-label="Delete hire request" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm([r.id])}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                      </button>
+                      <ActionMenu label={`Actions for request from ${r.name}`} items={rowActions(r)} />
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className="text-[0.625rem]">{r.project_type}</Badge>
+                    <div className="flex items-center gap-2 flex-wrap mt-2">
+                      <Badge variant="outline" className="text-xs">{r.project_type}</Badge>
                       <span className="text-xs text-foreground">{r.budget_range || "—"}</span>
-                      <Select value={r.status || "new"} onValueChange={(v) => updateStatus(r.id, v)}>
-                        <SelectTrigger className="h-6 w-[6.25rem] text-[0.625rem]"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {STATUSES.filter(s => s !== "All").map((s) => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <span className="text-[0.625rem] text-muted-foreground ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</span>
+                      {statusSelect(r)}
+                      <span className="text-xs text-muted-foreground ml-auto">{r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</span>
                     </div>
                   </div>
                 </div>
               </div>
             ))}
-            {paged.length === 0 && (
-              <div className="p-4"><EmptyState icon={Briefcase} title="No hire requests" description="Hire inquiries will appear here." /></div>
-            )}
+            {paged.length === 0 && <div className="p-4">{emptyState}</div>}
           </div>
         </CardContent>
       </Card>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-3">
-          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)} aria-label="Previous page"><ChevronLeft className="h-4 w-4" /></Button>
-          <span className="text-xs text-muted-foreground tabular-nums">Page {page + 1} of {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} aria-label="Next page"><ChevronRight className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" className="h-9 w-9" disabled={safePage === 0} onClick={() => setPage(safePage - 1)} aria-label="Previous page"><ChevronLeft className="h-4 w-4" /></Button>
+          <span className="text-xs text-muted-foreground tabular-nums">Page {safePage + 1} of {totalPages}</span>
+          <Button variant="outline" size="icon" className="h-9 w-9" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)} aria-label="Next page"><ChevronRight className="h-4 w-4" /></Button>
         </div>
       )}
 
-      <Dialog open={!!viewing} onOpenChange={() => setViewing(null)}>
+      <Dialog open={!!viewing} onOpenChange={(o) => { if (!o) setViewing(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Hire Request — {viewing?.name}</DialogTitle>
+            <DialogTitle>Hire request — {viewing?.name}</DialogTitle>
           </DialogHeader>
           {viewing && (
             <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <div><span className="text-muted-foreground">Email:</span> <span>{viewing.email}</span></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><span className="text-muted-foreground">Email:</span> <span className="break-all">{viewing.email}</span></div>
                 <div><span className="text-muted-foreground">Company:</span> <span>{viewing.company || "—"}</span></div>
                 <div><span className="text-muted-foreground">Type:</span> <Badge variant="outline">{viewing.project_type}</Badge></div>
                 <div><span className="text-muted-foreground">Budget:</span> <span>{viewing.budget_range || "—"}</span></div>
                 <div><span className="text-muted-foreground">Timeline:</span> <span>{viewing.timeline || "—"}</span></div>
                 <div><span className="text-muted-foreground">Referral:</span> <span>{viewing.referral_source || "—"}</span></div>
               </div>
-              <div className="border-t pt-3">
-                <p className="text-muted-foreground mb-1">Description:</p>
+              <div className="border-t pt-3 max-h-[50vh] overflow-y-auto">
+                <p className="text-muted-foreground mb-1">Description</p>
                 <p className="whitespace-pre-wrap text-foreground">{viewing.description}</p>
               </div>
             </div>
           )}
+          {viewing && (
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button
+                variant="outline"
+                disabled={saving.has(viewing.id) || viewing.status === "archived"}
+                onClick={async () => { const n = await setStatus([viewing.id], "archived"); if (n) setViewing(null); }}
+              >
+                <Archive className="h-4 w-4" /> Archive
+              </Button>
+              <Button asChild>
+                <a href={replyHref(viewing)} onClick={() => { if ((viewing.status || "new") === "new") setStatus([viewing.id], "contacted", { quiet: true }); }}>
+                  <Reply className="h-4 w-4" /> Reply
+                </a>
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+      <AlertDialog open={!!deleteConfirm} onOpenChange={(o) => { if (!o && !deleting) setDeleteConfirm(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {deleteConfirm?.length === 1 ? "hire request" : `${deleteConfirm?.length} hire requests`}?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently delete the selected hire request{(deleteConfirm?.length || 0) > 1 ? "s" : ""}. This action cannot be undone.</AlertDialogDescription>
+            <AlertDialogDescription>This permanently deletes the selected hire request{(deleteConfirm?.length || 0) > 1 ? "s" : ""}. This can't be undone. Archive instead if you only want it out of the way.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>Delete</AlertDialogAction>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); if (deleteConfirm) handleDelete(deleteConfirm); }}
+            >
+              {deleting ? <><Loader2 className="h-4 w-4 animate-spin" /> Deleting…</> : "Delete"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

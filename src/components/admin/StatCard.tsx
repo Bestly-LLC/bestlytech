@@ -1,5 +1,6 @@
 import { LucideIcon, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 interface StatCardProps {
@@ -12,6 +13,12 @@ interface StatCardProps {
   subtitle?: string;
   centered?: boolean;
   tooltip?: string;
+  /** Show a skeleton in place of the value (keeps the final layout while loading). */
+  loading?: boolean;
+}
+
+function formatValue(value: number | string): string {
+  return typeof value === "number" ? value.toLocaleString() : value;
 }
 
 export function StatCard({
@@ -24,6 +31,7 @@ export function StatCard({
   subtitle,
   centered = false,
   tooltip,
+  loading = false,
 }: StatCardProps) {
   const labelWithTip = (
     <span className="inline-flex items-center gap-1">
@@ -32,9 +40,15 @@ export function StatCard({
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Info className="h-3 w-3 text-white/20 cursor-help" />
+              <button
+                type="button"
+                aria-label={`About ${label}: ${tooltip}`}
+                className="inline-flex rounded-sm text-white/55 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+              >
+                <Info className="h-3 w-3" aria-hidden="true" />
+              </button>
             </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[16.25rem] text-xs">
+            <TooltipContent side="top" className="max-w-[16.25rem] text-xs normal-case tracking-normal">
               {tooltip}
             </TooltipContent>
           </Tooltip>
@@ -45,35 +59,40 @@ export function StatCard({
 
   const resolvedIconBg = iconBg ?? "bg-white/[0.05]";
   const resolvedIconColor = iconColor ?? "text-white/55";
+  const valueNode = loading ? (
+    <Skeleton className={cn("h-7 w-16 bg-white/[0.06]", centered && "mx-auto")} />
+  ) : (
+    formatValue(value)
+  );
 
   if (centered) {
     return (
       <div className={cn(
-        "bg-white/[0.03] border border-white/[0.06] rounded-2xl hover:bg-white/[0.05] transition-colors duration-200 p-5 text-center",
+        "bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 text-center",
         accentColor && "border-l-2",
       )} style={accentColor ? { borderLeftColor: accentColor } : undefined}>
-        <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center mx-auto mb-2", resolvedIconBg)}>
+        <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center mx-auto mb-2", resolvedIconBg)} aria-hidden="true">
           <Icon className={cn("h-[1.125rem] w-[1.125rem]", resolvedIconColor)} />
         </div>
-        <p className="text-2xl font-semibold text-white tabular-nums">{value}</p>
-        <p className="text-[0.6875rem] text-white/55 mt-0.5 font-medium">{labelWithTip}</p>
-        {subtitle && <p className="text-[0.625rem] text-white/50 mt-0.5">{subtitle}</p>}
+        <div className="text-2xl font-semibold text-white tabular-nums">{valueNode}</div>
+        <p className="text-xs text-white/60 mt-0.5 font-medium">{labelWithTip}</p>
+        {subtitle && <p className="text-xs text-white/55 mt-0.5">{subtitle}</p>}
       </div>
     );
   }
 
   return (
     <div className={cn(
-      "bg-white/[0.03] border border-white/[0.06] rounded-2xl hover:bg-white/[0.05] transition-colors duration-200 p-4 sm:p-5",
+      "bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-5",
       accentColor && "border-l-2",
     )} style={accentColor ? { borderLeftColor: accentColor } : undefined}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[0.625rem] sm:text-[0.6875rem] font-medium text-white/55 uppercase tracking-widest truncate">{labelWithTip}</p>
-          <p className="text-xl sm:text-2xl font-semibold text-white mt-1 tabular-nums leading-none">{value}</p>
-          {subtitle && <p className="text-[0.625rem] sm:text-xs text-white/50 mt-1">{subtitle}</p>}
+          <p className="text-[0.6875rem] font-medium text-white/60 uppercase tracking-wider truncate">{labelWithTip}</p>
+          <div className="text-xl sm:text-2xl font-semibold text-white mt-1.5 tabular-nums leading-none">{valueNode}</div>
+          {subtitle && <p className="text-xs text-white/55 mt-1.5 truncate">{subtitle}</p>}
         </div>
-        <div className={cn("h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0", resolvedIconBg)}>
+        <div className={cn("h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0", resolvedIconBg)} aria-hidden="true">
           <Icon className={cn("h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]", resolvedIconColor)} />
         </div>
       </div>

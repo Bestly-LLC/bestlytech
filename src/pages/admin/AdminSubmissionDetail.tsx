@@ -1,24 +1,33 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, ChevronDown, Copy, Download, Play, Check, Minimize2, Maximize2, Archive, Trash2 } from "lucide-react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronDown, Copy, Download, ExternalLink, FileText,
+  Loader2, Maximize2, Minimize2, Play, RefreshCw, Trash2,
+} from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ActionMenu } from "@/components/admin/ActionMenu";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { cn } from "@/lib/utils";
 
 const STATUSES = ["Draft", "Submitted", "In Review", "Issues Flagged", "Approved", "Archived"];
+const COMPACT_KEY = "admin.submissionDetail.compact";
 
 function formatDate(d: string | null | undefined): string {
   if (!d) return "—";
-  const date = new Date(d);
-  return date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  return new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
 function formatPhone(phone: string | null | undefined): string {
@@ -31,26 +40,37 @@ function formatPhone(phone: string | null | undefined): string {
 
 function CopyField({ label, value, masked }: { label: string; value: string | null | undefined; masked?: boolean }) {
   const [copied, setCopied] = useState(false);
-  const display = value || "—";
-  const handleCopy = () => {
-    if (!value) return;
-    navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  const { toast } = useToast();
+  const hasValue = !!value && value !== "—";
+  const handleCopy = async () => {
+    if (!hasValue) return;
+    try {
+      await navigator.clipboard.writeText(value!);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast({ title: "Couldn't copy", description: "Your browser blocked clipboard access. Select the text instead.", variant: "destructive" });
+    }
   };
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-1 py-1.5 group">
-      <span className="text-sm font-medium text-muted-foreground w-36 sm:w-48 shrink-0">{label}</span>
-      <span className="text-sm text-foreground flex items-center gap-1.5">
-        {masked && value ? `***${value.slice(-4)}` : display}
-        {value && (
-          <button
-            onClick={handleCopy}
-            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
-            title="Copy"
-          >
-            {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
-          </button>
+      <span className="text-sm text-white/60 w-36 sm:w-48 shrink-0">{label}</span>
+      <span className="text-sm text-white flex items-center gap-1.5 min-w-0">
+        <span className="break-words">{masked && hasValue ? `•••${value!.slice(-4)}` : value || "—"}</span>
+        {hasValue && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleCopy}
+                aria-label={`Copy ${label}`}
+                className="h-9 w-9 -my-2 inline-flex items-center justify-center rounded-lg text-white/55 hover:text-white hover:bg-white/5 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-opacity"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{copied ? "Copied" : `Copy ${label.toLowerCase()}`}</TooltipContent>
+          </Tooltip>
         )}
       </span>
     </div>
@@ -60,29 +80,38 @@ function CopyField({ label, value, masked }: { label: string; value: string | nu
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-1 py-1.5">
-      <span className="text-sm font-medium text-muted-foreground w-36 sm:w-48 shrink-0">{label}</span>
-      <span className="text-sm text-foreground">{value || "—"}</span>
+      <span className="text-sm text-white/60 w-36 sm:w-48 shrink-0">{label}</span>
+      <span className="text-sm text-white break-words">{value || "—"}</span>
     </div>
   );
 }
 
-function Section({ title, defaultOpen, compact, children }: { title: string; defaultOpen?: boolean; compact?: boolean; children: React.ReactNode }) {
+function Section({
+  title, defaultOpen, compact, children, badge,
+}: { title: string; defaultOpen?: boolean; compact?: boolean; children: React.ReactNode; badge?: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <Card>
+      <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] overflow-hidden">
         <CollapsibleTrigger asChild>
-          <CardHeader className={`cursor-pointer hover:bg-muted/50 transition-colors ${compact ? "py-2 px-3" : ""}`}>
-            <div className="flex items-center justify-between">
-              <CardTitle className={compact ? "text-sm" : "text-base"}>{title}</CardTitle>
-              <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
-            </div>
-          </CardHeader>
+          <button
+            type="button"
+            className={cn(
+              "w-full flex items-center justify-between gap-3 text-left hover:bg-white/[0.02] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+              compact ? "px-4 py-2.5" : "px-5 py-4",
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <span className={cn("font-semibold text-white", compact ? "text-sm" : "text-[0.9375rem]")}>{title}</span>
+              {badge}
+            </span>
+            <ChevronDown className={cn("h-4 w-4 text-white/55 transition-transform", open && "rotate-180")} aria-hidden />
+          </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <CardContent className={`pt-0 ${compact ? "px-3 pb-3 text-xs" : ""}`}>{children}</CardContent>
+          <div className={cn("border-t border-white/[0.06]", compact ? "px-4 py-3 text-xs" : "px-5 py-4")}>{children}</div>
         </CollapsibleContent>
-      </Card>
+      </section>
     </Collapsible>
   );
 }
@@ -90,16 +119,14 @@ function Section({ title, defaultOpen, compact, children }: { title: string; def
 function SubSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mb-4 last:mb-0">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wider text-white/55 mb-2">{label}</p>
       {children}
     </div>
   );
 }
 
 function getSelectedPlatforms(intake: any): string[] {
-  if (intake.selected_platforms && intake.selected_platforms.length > 0) {
-    return intake.selected_platforms;
-  }
+  if (intake.selected_platforms && intake.selected_platforms.length > 0) return intake.selected_platforms;
   return [intake.platform || "Amazon"];
 }
 
@@ -115,428 +142,625 @@ export default function AdminSubmissionDetail() {
   const [docs, setDocs] = useState<any[]>([]);
   const [validations, setValidations] = useState<any[]>([]);
   const [guidance, setGuidance] = useState<any[]>([]);
-  const [status, setStatus] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
-  const [compact, setCompact] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [compact, setCompact] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(COMPACT_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [busy, setBusy] = useState<null | "status" | "notes" | "validate" | "delete" | "download">(null);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (id) loadData();
+  const loadData = useCallback(async () => {
+    if (!id) return;
+    const [intakeRes, docsRes, valRes] = await Promise.all([
+      supabase.from("seller_intakes").select("*").eq("id", id).maybeSingle(),
+      supabase.from("intake_documents").select("*").eq("intake_id", id),
+      supabase.from("intake_validations").select("*").eq("intake_id", id).order("created_at"),
+    ]);
+    const err = intakeRes.error ?? docsRes.error ?? valRes.error;
+    setLoadError(err ? err.message : null);
+    if (!intakeRes.error) {
+      const i = intakeRes.data;
+      setIntake(i);
+      if (i) {
+        setNotes(i.admin_notes || "");
+        const { data: g } = await supabase
+          .from("setup_guidance")
+          .select("*")
+          .in("platform", getSelectedPlatforms(i))
+          .order("display_order");
+        setGuidance(g || []);
+      }
+    }
+    if (!docsRes.error) setDocs(docsRes.data || []);
+    if (!valRes.error) setValidations(valRes.data || []);
+    setLoading(false);
   }, [id]);
 
-  const loadData = async () => {
-    const [{ data: i }, { data: d }, { data: v }] = await Promise.all([
-      supabase.from("seller_intakes").select("*").eq("id", id!).single(),
-      supabase.from("intake_documents").select("*").eq("intake_id", id!),
-      supabase.from("intake_validations").select("*").eq("intake_id", id!).order("created_at"),
-    ]);
-    if (i) {
-      setIntake(i);
-      setStatus(i.status);
-      setNotes(i.admin_notes || "");
-      const platforms = getSelectedPlatforms(i);
-      const { data: g } = await supabase
-        .from("setup_guidance")
-        .select("*")
-        .in("platform", platforms)
-        .order("display_order");
-      setGuidance(g || []);
-    }
-    setDocs(d || []);
-    setValidations(v || []);
-    setLoading(false);
-  };
-
-  const saveStatus = async () => {
-    await supabase.from("seller_intakes").update({ status, admin_notes: notes }).eq("id", id!);
-    toast({ title: "Saved", description: "Status and notes updated." });
+  useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  const toggleCompact = () => {
+    setCompact((c) => {
+      try {
+        localStorage.setItem(COMPACT_KEY, c ? "0" : "1");
+      } catch {
+        /* per-viewer convenience only */
+      }
+      return !c;
+    });
   };
 
-  const handleArchive = async () => {
-    const { error } = await supabase.from("seller_intakes").update({ status: "Archived" }).eq("id", id!);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Submission archived" });
-      setStatus("Archived");
-      loadData();
+  /** Writes a partial update and confirms the row really changed (RLS can match 0 rows silently). */
+  const writeIntake = async (patch: { status?: string; admin_notes?: string }) => {
+    const { data, error } = await supabase.from("seller_intakes").update(patch).eq("id", id!).select("id, status, admin_notes, updated_at");
+    if (error || !data?.length) {
+      return { ok: false as const, message: error?.message ?? "No rows were changed. Your account may not have edit permission." };
     }
+    return { ok: true as const, row: data[0] };
+  };
+
+  const changeStatus = async (next: string) => {
+    if (!intake || next === intake.status) return;
+    const previous = intake.status;
+    setIntake({ ...intake, status: next });
+    setBusy("status");
+    const res = await writeIntake({ status: next });
+    setBusy(null);
+    if (!res.ok) {
+      setIntake((cur: any) => (cur ? { ...cur, status: previous } : cur));
+      toast({ title: "Status not changed", description: res.message, variant: "destructive" });
+      return;
+    }
+    setIntake((cur: any) => (cur ? { ...cur, ...res.row } : cur));
+    toast({ title: `Status set to “${next}”` });
+  };
+
+  const saveNotes = async () => {
+    setBusy("notes");
+    const res = await writeIntake({ admin_notes: notes });
+    setBusy(null);
+    if (!res.ok) {
+      toast({ title: "Notes not saved", description: res.message, variant: "destructive" });
+      return;
+    }
+    setIntake((cur: any) => (cur ? { ...cur, ...res.row } : cur));
+    toast({ title: "Notes saved" });
   };
 
   const handleDelete = async () => {
     // Documents and validations cascade via FK; `.select` confirms the row was really removed.
+    setBusy("delete");
     const { data, error } = await supabase.from("seller_intakes").delete().eq("id", id!).select("id");
+    setBusy(null);
     if (error || !data?.length) {
       toast({
         title: "Couldn't delete",
         description: error?.message ?? "Nothing was removed. Your account may not have delete permission.",
         variant: "destructive",
       });
-    } else {
-      toast({ title: "Submission deleted" });
-      navigate("/admin/submissions");
+      setShowDeleteConfirm(false);
+      return;
     }
+    toast({ title: "Submission deleted" });
     setShowDeleteConfirm(false);
+    navigate("/admin/submissions");
   };
 
   const runValidation = async () => {
-    try {
-      const { error } = await supabase.functions.invoke("validate-intake", { body: { intake_id: id } });
-      if (error) throw error;
-      toast({ title: "Validation Complete" });
-      loadData();
-    } catch {
-      toast({ title: "Validation Error", variant: "destructive" });
+    setBusy("validate");
+    const { data, error } = await supabase.functions.invoke("validate-intake", { body: { intake_id: id } });
+    setBusy(null);
+    if (error || !data?.success) {
+      let detail = error?.message ?? "The validator did not return a result.";
+      try {
+        const body = await (error as any)?.context?.json?.();
+        if (body?.error) detail = body.error;
+      } catch {
+        /* keep generic message */
+      }
+      toast({ title: "Validation failed to run", description: `${detail} Try again in a moment.`, variant: "destructive" });
+      return;
     }
-  };
-
-  const resolveValidation = async (vid: string, resolvedNotes: string) => {
-    await supabase.from("intake_validations").update({ resolved: true, resolved_notes: resolvedNotes }).eq("id", vid);
+    toast({
+      title: data.total === 0 ? "Validation passed" : "Validation complete",
+      description:
+        data.total === 0
+          ? "No issues found."
+          : `${data.errors} error${data.errors === 1 ? "" : "s"}, ${data.warnings} warning${data.warnings === 1 ? "" : "s"}.`,
+    });
     loadData();
   };
 
-  const downloadAllDocs = async () => {
-    for (const doc of docs) {
-      const { data } = await supabase.storage.from("intake-documents").createSignedUrl(doc.file_path, 3600);
-      if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+  const resolveValidation = async (vid: string) => {
+    setResolvingId(vid);
+    const { data, error } = await supabase
+      .from("intake_validations")
+      .update({ resolved: true, resolved_notes: "Resolved by admin" })
+      .eq("id", vid)
+      .select("id, resolved, resolved_notes");
+    setResolvingId(null);
+    if (error || !data?.length) {
+      toast({ title: "Couldn't mark resolved", description: error?.message ?? "No rows were changed.", variant: "destructive" });
+      return;
     }
+    setValidations((prev) => prev.map((v) => (v.id === vid ? { ...v, ...data[0] } : v)));
+    toast({ title: "Marked resolved" });
+  };
+
+  const openDoc = async (doc: any) => {
+    // Open the tab synchronously so the popup blocker sees a user gesture, then point it at the signed URL.
+    const win = window.open("", "_blank");
+    const { data, error } = await supabase.storage.from("intake-documents").createSignedUrl(doc.file_path, 3600);
+    if (error || !data?.signedUrl) {
+      win?.close();
+      toast({ title: `Couldn't open ${doc.file_name}`, description: error?.message ?? "No link was returned.", variant: "destructive" });
+      return;
+    }
+    if (win) {
+      win.opener = null;
+      win.location.href = data.signedUrl;
+    } else {
+      window.location.assign(data.signedUrl);
+    }
+  };
+
+  const downloadAllDocs = async () => {
+    setBusy("download");
+    const { data, error } = await supabase.storage
+      .from("intake-documents")
+      .createSignedUrls(docs.map((d) => d.file_path), 3600, { download: true });
+    setBusy(null);
+    const urls = (data ?? []).filter((d) => d.signedUrl && !d.error);
+    if (error || urls.length === 0) {
+      toast({ title: "Couldn't prepare downloads", description: error?.message ?? "No download links were returned.", variant: "destructive" });
+      return;
+    }
+    // Attachment links download in place, so no popups are needed.
+    urls.forEach((u, i) => {
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = u.signedUrl;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }, i * 400);
+    });
+    toast({
+      title: `Downloading ${urls.length} file${urls.length === 1 ? "" : "s"}`,
+      description: urls.length < docs.length ? `${docs.length - urls.length} file(s) could not be found in storage.` : "Your browser may ask to allow multiple downloads.",
+    });
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      <div className="space-y-4 max-w-4xl" aria-busy="true">
+        <Skeleton className="h-9 w-24 bg-white/[0.05]" />
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <Skeleton className="h-8 w-64 bg-white/[0.05]" />
+            <Skeleton className="h-5 w-40 mt-2 bg-white/[0.05]" />
+          </div>
+          <Skeleton className="h-9 w-72 bg-white/[0.05]" />
+        </div>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-14 rounded-2xl bg-white/[0.03]" />
+        ))}
       </div>
     );
   }
 
   if (!intake) {
-    return <div className="text-center py-20 text-muted-foreground">Submission not found.</div>;
+    return (
+      <div className="max-w-4xl space-y-4">
+        {loadError ? (
+          <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border border-red-500/25 bg-red-500/[0.06] px-4 py-3">
+            <AlertTriangle className="h-4 w-4 text-red-300" aria-hidden />
+            <p className="text-sm text-red-200 flex-1">Couldn't load this submission: {loadError}</p>
+            <Button size="sm" variant="outline" className="h-9 border-red-400/30 text-red-100" onClick={() => loadData()}>Retry</Button>
+          </div>
+        ) : (
+          <EmptyState
+            icon={FileText}
+            title="Submission not found"
+            description="It may have been deleted, or the link is wrong."
+            action={<Button asChild variant="outline" size="sm" className="h-9 border-white/10"><Link to="/admin/submissions">Back to submissions</Link></Button>}
+          />
+        )}
+      </div>
+    );
   }
 
   const platforms = getSelectedPlatforms(intake);
   const hasAmazon = platforms.includes("Amazon");
   const hasShopify = platforms.includes("Shopify");
   const hasTikTok = platforms.includes("TikTok");
+  const openValidations = validations.filter((v) => !v.resolved);
+  const notesDirty = notes !== (intake.admin_notes || "");
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <div className="flex items-center justify-between">
-        <Link to="/admin/submissions">
-          <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" /> Back</Button>
-        </Link>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Compact</span>
-          <Switch checked={compact} onCheckedChange={setCompact} />
-          {compact ? <Minimize2 className="h-3 w-3 text-muted-foreground" /> : <Maximize2 className="h-3 w-3 text-muted-foreground" />}
-        </div>
-      </div>
+      <Button asChild variant="ghost" size="sm" className="h-9 -ml-2 text-white/70 hover:text-white hover:bg-white/5">
+        <Link to="/admin/submissions"><ArrowLeft className="h-4 w-4 mr-1" aria-hidden /> Submissions</Link>
+      </Button>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{intake.business_legal_name || "Unnamed Submission"}</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-muted-foreground text-sm">Platforms:</span>
+      {loadError && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-amber-300" aria-hidden />
+          <p className="text-sm text-amber-100 flex-1">Some details didn't refresh: {loadError}</p>
+          <Button size="sm" variant="outline" className="h-9 border-amber-400/30 text-amber-100" onClick={() => loadData()}>Retry</Button>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="font-display text-2xl sm:text-3xl font-normal text-white leading-tight break-words">
+            {intake.business_legal_name || "Unnamed submission"}
+          </h1>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
             {platforms.map((p: string) => (
-              <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
+              <Badge key={p} variant="outline" className="text-xs border-white/10 text-white/70">{p}</Badge>
             ))}
+            <span className="text-xs text-white/55">Updated {formatDate(intake.updated_at)}</span>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-full sm:w-[10rem]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button onClick={saveStatus} size="sm">Save</Button>
-          <Button onClick={runValidation} variant="outline" size="sm">
-            <Play className="h-3 w-3 mr-1" /> Validate
+          <div className="relative">
+            <Select value={intake.status} onValueChange={changeStatus} disabled={busy === "status"}>
+              <SelectTrigger className="w-44 h-9" aria-label="Submission status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {busy === "status" && <Loader2 className="absolute right-9 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-white/60" aria-label="Saving status" />}
+          </div>
+          <Button onClick={runValidation} size="sm" className="h-9" disabled={busy === "validate"}>
+            {busy === "validate" ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden /> : <Play className="h-4 w-4 mr-1.5" aria-hidden />}
+            {busy === "validate" ? "Validating…" : "Run validation"}
           </Button>
-          <Button onClick={handleArchive} variant="outline" size="sm">
-            <Archive className="h-3 w-3 mr-1" /> Archive
-          </Button>
-          <Button onClick={() => setShowDeleteConfirm(true)} variant="outline" size="sm" className="text-destructive hover:text-destructive">
-            <Trash2 className="h-3 w-3 mr-1" /> Delete
-          </Button>
+          <ActionMenu
+            label="More submission actions"
+            items={[
+              ...(docs.length > 0
+                ? [{ label: `Download all documents (${docs.length})`, icon: Download, group: "Documents", onSelect: downloadAllDocs, disabled: busy === "download" }]
+                : []),
+              { label: compact ? "Comfortable view" : "Compact view", icon: compact ? Maximize2 : Minimize2, group: "View", onSelect: toggleCompact },
+              { label: "Reload", icon: RefreshCw, group: "View", onSelect: () => loadData() },
+              { label: "Delete submission…", icon: Trash2, destructive: true, onSelect: () => setShowDeleteConfirm(true) },
+            ]}
+          />
         </div>
       </div>
 
-      <Section title="Client Contact" defaultOpen compact={compact}>
+      <Section title="Client contact" defaultOpen compact={compact}>
         <CopyField label="Name" value={intake.client_name} />
         <CopyField label="Email" value={intake.client_email} />
-        <CopyField label="Phone" value={formatPhone(intake.client_phone)} />
-        <Field label="Preferred Contact" value={intake.preferred_contact_method} />
+        <CopyField label="Phone" value={intake.client_phone ? formatPhone(intake.client_phone) : null} />
+        <Field label="Preferred contact" value={intake.preferred_contact_method} />
         <Field label="Timezone" value={intake.client_timezone} />
       </Section>
 
-      <Section title="Business Information" compact={compact}>
-        <CopyField label="Legal Name" value={intake.business_legal_name} />
-        <Field label="Business Type" value={intake.business_type} />
-        <Field label="State of Registration" value={intake.state_of_registration} />
+      <Section title="Business information" compact={compact}>
+        <CopyField label="Legal name" value={intake.business_legal_name} />
+        <Field label="Business type" value={intake.business_type} />
+        <Field label="State of registration" value={intake.state_of_registration} />
         <CopyField label="EIN" value={intake.ein} />
-        <CopyField label="Business Phone" value={formatPhone(intake.business_phone)} />
-        <CopyField label="Business Email" value={intake.business_email} />
-        <Field label="Business Website" value={intake.business_website} />
-        <Field label="Years in Business" value={intake.years_in_business} />
-        <Field label="Registered Agent" value={intake.registered_agent_service} />
-        <CopyField label="Agent Address" value={formatAddress(intake.registered_agent_address, intake.registered_agent_city, intake.registered_agent_state, intake.registered_agent_zip)} />
+        <CopyField label="Business phone" value={intake.business_phone ? formatPhone(intake.business_phone) : null} />
+        <CopyField label="Business email" value={intake.business_email} />
+        <Field label="Business website" value={intake.business_website} />
+        <Field label="Years in business" value={intake.years_in_business} />
+        <Field label="Registered agent" value={intake.registered_agent_service} />
+        <CopyField label="Agent address" value={formatAddress(intake.registered_agent_address, intake.registered_agent_city, intake.registered_agent_state, intake.registered_agent_zip)} />
         {intake.addresses_differ && (
-          <CopyField label="Operating Address" value={formatAddress(intake.operating_address, intake.operating_city, intake.operating_state, intake.operating_zip)} />
+          <CopyField label="Operating address" value={formatAddress(intake.operating_address, intake.operating_city, intake.operating_state, intake.operating_zip)} />
         )}
       </Section>
 
-      <Section title="Owner / Contact Info" compact={compact}>
-        <CopyField label="Full Name" value={[intake.contact_first_name, intake.contact_middle_name, intake.contact_last_name].filter(Boolean).join(" ")} />
-        <Field label="Title/Role" value={intake.owner_title} />
-        <Field label="Ownership %" value={intake.ownership_percentage ? `${intake.ownership_percentage}%` : null} />
-        <Field label="Date of Birth" value={formatDate(intake.date_of_birth)} />
+      <Section title="Owner / contact" compact={compact}>
+        <CopyField label="Full name" value={[intake.contact_first_name, intake.contact_middle_name, intake.contact_last_name].filter(Boolean).join(" ")} />
+        <Field label="Title / role" value={intake.owner_title} />
+        <Field label="Ownership" value={intake.ownership_percentage ? `${intake.ownership_percentage}%` : null} />
+        <Field label="Date of birth" value={formatDate(intake.date_of_birth)} />
         <Field label="Citizenship" value={intake.citizenship_country} />
-        <Field label="Birth Country" value={intake.birth_country} />
-        <CopyField label="SSN/ITIN" value={intake.ssn_itin} masked />
-        <Field label="Tax Residency" value={intake.tax_residency} />
-        <Field label="ID Type" value={intake.id_type} />
-        <CopyField label="ID Number" value={intake.id_number} masked />
-        <Field label="ID Expiry" value={formatDate(intake.id_expiry_date)} />
-        <CopyField label="Residential Address" value={formatAddress(intake.residential_address, intake.residential_city, intake.residential_state, intake.residential_zip)} />
-        <CopyField label="Phone" value={formatPhone(intake.phone_number)} />
+        <Field label="Birth country" value={intake.birth_country} />
+        <CopyField label="SSN / ITIN" value={intake.ssn_itin} masked />
+        <Field label="Tax residency" value={intake.tax_residency} />
+        <Field label="ID type" value={intake.id_type} />
+        <CopyField label="ID number" value={intake.id_number} masked />
+        <Field label="ID expiry" value={formatDate(intake.id_expiry_date)} />
+        <CopyField label="Residential address" value={formatAddress(intake.residential_address, intake.residential_city, intake.residential_state, intake.residential_zip)} />
+        <CopyField label="Phone" value={intake.phone_number ? formatPhone(intake.phone_number) : null} />
         <SubSection label="Authorization">
-          <Field label="Setup by Rep" value={intake.setup_by_representative ? "Yes" : "No"} />
+          <Field label="Set up by rep" value={intake.setup_by_representative ? "Yes" : "No"} />
           {intake.setup_by_representative && (
             <>
-              <CopyField label="Rep Name" value={intake.rep_name} />
+              <CopyField label="Rep name" value={intake.rep_name} />
               <Field label="Relationship" value={intake.rep_relationship} />
             </>
           )}
         </SubSection>
       </Section>
 
-      <Section title="Bank &amp; Payment" compact={compact}>
-        <SubSection label="Primary Bank Account">
-          <CopyField label="Bank Name" value={intake.bank_name} />
-          <CopyField label="Account Holder" value={intake.account_holder_name} />
-          <CopyField label="Account Last 4" value={intake.account_number_last4} />
-          <CopyField label="Routing Last 4" value={intake.routing_number_last4} />
-          <Field label="Account Type" value={intake.account_type} />
-          <Field label="US Bank" value={intake.is_us_bank === false ? "No (International)" : "Yes"} />
+      <Section title="Bank & payment" compact={compact}>
+        <SubSection label="Primary bank account">
+          <CopyField label="Bank name" value={intake.bank_name} />
+          <CopyField label="Account holder" value={intake.account_holder_name} />
+          <CopyField label="Account last 4" value={intake.account_number_last4} />
+          <CopyField label="Routing last 4" value={intake.routing_number_last4} />
+          <Field label="Account type" value={intake.account_type} />
+          <Field label="US bank" value={intake.is_us_bank === false ? "No (international)" : "Yes"} />
           {intake.is_us_bank === false && (
             <>
               <CopyField label="IBAN" value={intake.iban} />
-              <CopyField label="SWIFT/BIC" value={intake.swift_bic} />
-              <Field label="Bank Country" value={intake.bank_country} />
+              <CopyField label="SWIFT / BIC" value={intake.swift_bic} />
+              <Field label="Bank country" value={intake.bank_country} />
             </>
           )}
-          <CopyField label="Bank Email" value={intake.bank_email} />
+          <CopyField label="Bank email" value={intake.bank_email} />
         </SubSection>
 
         {intake.same_bank_all_platforms === false && (
           <>
             {hasShopify && (
-              <SubSection label="Shopify Bank Account">
-                <CopyField label="Bank Name" value={intake.shopify_bank_name} />
-                <CopyField label="Account Holder" value={intake.shopify_account_holder} />
-                <CopyField label="Account Last 4" value={intake.shopify_account_last4} />
-                <CopyField label="Routing Last 4" value={intake.shopify_routing_last4} />
-                <Field label="Account Type" value={intake.shopify_account_type} />
+              <SubSection label="Shopify bank account">
+                <CopyField label="Bank name" value={intake.shopify_bank_name} />
+                <CopyField label="Account holder" value={intake.shopify_account_holder} />
+                <CopyField label="Account last 4" value={intake.shopify_account_last4} />
+                <CopyField label="Routing last 4" value={intake.shopify_routing_last4} />
+                <Field label="Account type" value={intake.shopify_account_type} />
               </SubSection>
             )}
             {hasTikTok && (
-              <SubSection label="TikTok Bank Account">
-                <CopyField label="Bank Name" value={intake.tiktok_bank_name} />
-                <CopyField label="Account Holder" value={intake.tiktok_account_holder} />
-                <CopyField label="Account Last 4" value={intake.tiktok_account_last4} />
-                <CopyField label="Routing Last 4" value={intake.tiktok_routing_last4} />
-                <Field label="Account Type" value={intake.tiktok_account_type} />
-                <CopyField label="Bank Email" value={intake.tiktok_bank_email} />
+              <SubSection label="TikTok bank account">
+                <CopyField label="Bank name" value={intake.tiktok_bank_name} />
+                <CopyField label="Account holder" value={intake.tiktok_account_holder} />
+                <CopyField label="Account last 4" value={intake.tiktok_account_last4} />
+                <CopyField label="Routing last 4" value={intake.tiktok_routing_last4} />
+                <Field label="Account type" value={intake.tiktok_account_type} />
+                <CopyField label="Bank email" value={intake.tiktok_bank_email} />
               </SubSection>
             )}
           </>
         )}
 
-        <SubSection label="Payment Card">
-          <CopyField label="Card Holder" value={intake.card_holder_name} />
-          <Field label="Card Last 4" value={intake.credit_card_last4} />
-          <Field label="Card Expiry" value={intake.credit_card_expiry} />
+        <SubSection label="Payment card">
+          <CopyField label="Card holder" value={intake.card_holder_name} />
+          <Field label="Card last 4" value={intake.credit_card_last4} />
+          <Field label="Card expiry" value={intake.credit_card_expiry} />
         </SubSection>
       </Section>
 
-      <Section title="Brand &amp; Accounts" compact={compact}>
-        <Field label="Owns Brand" value={intake.owns_brand ? "Yes" : "No"} />
-        <CopyField label="Brand Name" value={intake.brand_name} />
-        <Field label="Has Trademark" value={intake.has_trademark ? "Yes" : "No"} />
+      <Section title="Brand & accounts" compact={compact}>
+        <Field label="Owns brand" value={intake.owns_brand ? "Yes" : "No"} />
+        <CopyField label="Brand name" value={intake.brand_name} />
+        <Field label="Has trademark" value={intake.has_trademark ? "Yes" : "No"} />
         <CopyField label="Trademark #" value={intake.trademark_number} />
         <Field label="Brand Registry" value={intake.brand_registry_enrolled ? "Enrolled" : "No"} />
-        <Field label="Has Diversity Certs" value={intake.has_diversity_certs ? "Yes" : "No"} />
+        <Field label="Diversity certs" value={intake.has_diversity_certs ? "Yes" : "No"} />
         <Field label="Description" value={intake.product_description} />
 
         {hasAmazon && (
           <SubSection label="Amazon">
-            <Field label="Existing Account" value={intake.has_existing_amazon_account ? "Yes" : "No"} />
-            <CopyField label="Store Name" value={intake.amazon_store_name} />
+            <Field label="Existing account" value={intake.has_existing_amazon_account ? "Yes" : "No"} />
+            <CopyField label="Store name" value={intake.amazon_store_name} />
             <CopyField label="Email" value={intake.amazon_email} />
-            <CopyField label="Phone" value={formatPhone(intake.amazon_phone)} />
-            <Field label="Seller Plan" value={intake.seller_plan} />
-            <Field label="Target Marketplace" value={intake.target_amazon_marketplace} />
-            <Field label="Product Category" value={intake.product_category} />
-            <Field label="# Products" value={intake.number_of_products} />
+            <CopyField label="Phone" value={intake.amazon_phone ? formatPhone(intake.amazon_phone) : null} />
+            <Field label="Seller plan" value={intake.seller_plan} />
+            <Field label="Target marketplace" value={intake.target_amazon_marketplace} />
+            <Field label="Product category" value={intake.product_category} />
+            <Field label="# products" value={intake.number_of_products} />
             <Field label="Fulfillment" value={intake.fulfillment_method} />
-            <Field label="FBA Warehousing" value={intake.plan_fba_warehousing ? "Yes" : "No"} />
+            <Field label="FBA warehousing" value={intake.plan_fba_warehousing ? "Yes" : "No"} />
             <Field label="Has UPCs" value={intake.has_upcs ? "Yes" : "No"} />
-            <Field label="Existing Listings" value={intake.has_existing_amazon_listings ? "Yes" : "No"} />
+            <Field label="Existing listings" value={intake.has_existing_amazon_listings ? "Yes" : "No"} />
           </SubSection>
         )}
 
         {hasShopify && (
           <SubSection label="Shopify">
-            <Field label="Existing Account" value={intake.has_existing_shopify_account ? "Yes" : "No"} />
-            <CopyField label="Store Name" value={intake.shopify_store_name} />
+            <Field label="Existing account" value={intake.has_existing_shopify_account ? "Yes" : "No"} />
+            <CopyField label="Store name" value={intake.shopify_store_name} />
             <CopyField label="Email" value={intake.shopify_email} />
-            <CopyField label="Phone" value={formatPhone(intake.shopify_phone)} />
+            <CopyField label="Phone" value={intake.shopify_phone ? formatPhone(intake.shopify_phone) : null} />
             <Field label="Plan" value={intake.shopify_plan} />
             <CopyField label="Domain" value={intake.shopify_domain} />
-            <Field label="Has Domain" value={intake.shopify_has_domain ? "Yes" : "No"} />
-            <CopyField label="Preferred Domain" value={intake.shopify_preferred_domain} />
-            <Field label="Has Logo" value={intake.shopify_has_logo ? "Yes" : "No"} />
-            <Field label="Theme Style" value={intake.shopify_theme_style} />
-            <Field label="Shipping Method" value={intake.shipping_method} />
-            <Field label="Payment Gateway" value={intake.shopify_payment_gateway} />
-            <Field label="Product Description" value={intake.shopify_product_description} />
+            <Field label="Has domain" value={intake.shopify_has_domain ? "Yes" : "No"} />
+            <CopyField label="Preferred domain" value={intake.shopify_preferred_domain} />
+            <Field label="Has logo" value={intake.shopify_has_logo ? "Yes" : "No"} />
+            <Field label="Theme style" value={intake.shopify_theme_style} />
+            <Field label="Shipping method" value={intake.shipping_method} />
+            <Field label="Payment gateway" value={intake.shopify_payment_gateway} />
+            <Field label="Product description" value={intake.shopify_product_description} />
           </SubSection>
         )}
 
         {hasTikTok && (
           <SubSection label="TikTok">
-            <Field label="Existing Account" value={intake.has_existing_tiktok_account ? "Yes" : "No"} />
-            <CopyField label="Shop Name" value={intake.tiktok_shop_name} />
+            <Field label="Existing account" value={intake.has_existing_tiktok_account ? "Yes" : "No"} />
+            <CopyField label="Shop name" value={intake.tiktok_shop_name} />
             <CopyField label="Email" value={intake.tiktok_email} />
-            <CopyField label="Phone" value={formatPhone(intake.tiktok_phone)} />
+            <CopyField label="Phone" value={intake.tiktok_phone ? formatPhone(intake.tiktok_phone) : null} />
             <CopyField label="Handle" value={intake.tiktok_handle} />
             <Field label="Category" value={intake.tiktok_category} />
             <Field label="Fulfillment" value={intake.tiktok_fulfillment} />
-            <Field label="Has Creator Account" value={intake.has_tiktok_creator ? "Yes" : "No"} />
-            <Field label="Existing Content" value={intake.tiktok_has_existing_content ? "Yes" : "No"} />
+            <Field label="Creator account" value={intake.has_tiktok_creator ? "Yes" : "No"} />
+            <Field label="Existing content" value={intake.tiktok_has_existing_content ? "Yes" : "No"} />
             <Field label="Followers" value={intake.tiktok_follower_count} />
-            <Field label="Price Range" value={intake.tiktok_price_range} />
-            <Field label="Product Description" value={intake.tiktok_product_description} />
-            <CopyField label="Warehouse Address" value={formatAddress(intake.tiktok_warehouse_address, intake.tiktok_warehouse_city, intake.tiktok_warehouse_state, intake.tiktok_warehouse_zip)} />
+            <Field label="Price range" value={intake.tiktok_price_range} />
+            <Field label="Product description" value={intake.tiktok_product_description} />
+            <CopyField label="Warehouse address" value={formatAddress(intake.tiktok_warehouse_address, intake.tiktok_warehouse_city, intake.tiktok_warehouse_state, intake.tiktok_warehouse_zip)} />
           </SubSection>
         )}
       </Section>
 
-      <Section title={`Documents (${docs.length})`} compact={compact}>
+      <Section
+        title="Documents"
+        compact={compact}
+        badge={<Badge variant="outline" className="text-xs border-white/10 text-white/70 tabular-nums">{docs.length}</Badge>}
+      >
         {docs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No documents uploaded.</p>
+          <p className="text-sm text-white/60">No documents uploaded yet.</p>
         ) : (
-          <>
-            {docs.length > 1 && (
-              <Button variant="outline" size="sm" className="mb-3" onClick={downloadAllDocs}>
-                <Download className="h-3 w-3 mr-1" /> Download All ({docs.length})
-              </Button>
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {docs.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between p-2 rounded-md border">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{doc.file_name}</p>
-                    <p className="text-xs text-muted-foreground">{doc.document_type} {doc.file_size ? `\u00b7 ${(doc.file_size / 1024).toFixed(0)}KB` : ""}</p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={async () => {
-                      const { data } = await supabase.storage.from("intake-documents").createSignedUrl(doc.file_path, 3600);
-                      if (data?.signedUrl) window.open(data.signedUrl, "_blank");
-                    }}
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {docs.map((doc) => (
+              <li key={doc.id} className="flex items-center justify-between gap-2 p-2 pl-3 rounded-xl border border-white/[0.06]">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{doc.file_name}</p>
+                  <p className="text-xs text-white/55">
+                    {doc.document_type}{doc.file_size ? ` · ${(doc.file_size / 1024).toFixed(0)} KB` : ""}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 text-white/70 hover:text-white hover:bg-white/5"
+                      aria-label={`Open ${doc.file_name}`}
+                      onClick={() => openDoc(doc)}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Open in new tab</TooltipContent>
+                </Tooltip>
+              </li>
+            ))}
+          </ul>
         )}
       </Section>
 
       {intake.special_instructions && (
-        <Section title="Special Instructions" defaultOpen compact={compact}>
-          <p className="text-sm text-foreground whitespace-pre-wrap">{intake.special_instructions}</p>
+        <Section title="Special instructions" defaultOpen compact={compact}>
+          <p className="text-sm text-white whitespace-pre-wrap">{intake.special_instructions}</p>
         </Section>
       )}
 
-      <Section title={`Validation Warnings (${validations.filter((v) => !v.resolved).length})`} compact={compact}>
+      <Section
+        title="Validation"
+        compact={compact}
+        defaultOpen={openValidations.length > 0}
+        badge={
+          openValidations.length > 0 ? (
+            <Badge variant="outline" className="text-xs border-amber-400/30 text-amber-300 tabular-nums">{openValidations.length} open</Badge>
+          ) : undefined
+        }
+      >
         {validations.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No validation issues.</p>
+          <p className="text-sm text-white/60">No issues recorded. Use “Run validation” to check this submission.</p>
         ) : (
-          <div className="space-y-2">
+          <ul className="space-y-2">
             {validations.map((v) => (
-              <div key={v.id} className={`p-3 rounded-md border ${v.resolved ? "opacity-50" : ""}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Badge variant={v.severity === "error" ? "destructive" : "secondary"} className="mb-1">
+              <li key={v.id} className={cn("p-3 rounded-xl border border-white/[0.06]", v.resolved && "opacity-60")}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "mb-1 text-xs capitalize",
+                        v.severity === "error" ? "border-red-400/30 text-red-300" : "border-amber-400/30 text-amber-300",
+                      )}
+                    >
+                      {v.severity === "error" ? <AlertTriangle className="h-3 w-3 mr-1" aria-hidden /> : null}
                       {v.severity}
                     </Badge>
-                    <p className="text-sm text-foreground">{v.message}</p>
-                    <p className="text-xs text-muted-foreground">Field: {v.field_name}</p>
+                    <p className="text-sm text-white">{v.message}</p>
+                    <p className="text-xs text-white/55">Field: {v.field_name}</p>
+                    {v.resolved && (
+                      <p className="text-xs text-emerald-300/90 mt-1 flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" aria-hidden /> {v.resolved_notes || "Resolved"}
+                      </p>
+                    )}
                   </div>
                   {!v.resolved && (
-                    <Button size="sm" variant="outline" onClick={() => resolveValidation(v.id, "Resolved by admin")}>
-                      Resolve
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 shrink-0 border-white/10"
+                      disabled={resolvingId === v.id}
+                      onClick={() => resolveValidation(v.id)}
+                    >
+                      {resolvingId === v.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Mark resolved"}
                     </Button>
                   )}
                 </div>
-                {v.resolved && <p className="text-xs text-muted-foreground mt-1">&#x2713; {v.resolved_notes}</p>}
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </Section>
 
-      <Section title="Operator Guide" compact={compact}>
+      <Section title="Operator guide" compact={compact}>
         {guidance.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No guidance entries.</p>
+          <p className="text-sm text-white/60">
+            No guidance for {platforms.join(", ")} yet. Add entries in <Link to="/admin/guide" className="underline underline-offset-2 text-white">Setup Guide</Link>.
+          </p>
         ) : (
           <div className="space-y-3">
             {guidance.map((g) => (
-              <div key={g.id} className="p-3 rounded-md bg-muted/50 border">
+              <div key={g.id} className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
                 <div className="flex items-center gap-2 mb-1">
-                  <Badge variant="outline" className="text-[0.625rem]">{g.platform}</Badge>
-                  <p className="text-sm font-medium text-foreground">{g.field_name}</p>
+                  <Badge variant="outline" className="text-xs border-white/10 text-white/70">{g.platform}</Badge>
+                  <p className="text-sm font-medium text-white">{g.field_name}</p>
                 </div>
-                <p className="text-sm text-muted-foreground">{g.guidance_text}</p>
+                <p className="text-sm text-white/70">{g.guidance_text}</p>
                 {g.answer_recommendation && (
-                  <p className="text-sm mt-1"><span className="font-medium">Recommended:</span> {g.answer_recommendation}</p>
+                  <p className="text-sm mt-1 text-white/80"><span className="font-medium text-white">Recommended:</span> {g.answer_recommendation}</p>
                 )}
-                {g.reason && <p className="text-xs text-muted-foreground mt-1">Why: {g.reason}</p>}
+                {g.reason && <p className="text-xs text-white/55 mt-1">Why: {g.reason}</p>}
               </div>
             ))}
           </div>
         )}
       </Section>
 
-      <Section title="Admin Notes" defaultOpen compact={compact}>
+      <Section title="Admin notes" defaultOpen compact={compact}>
+        <label htmlFor="admin-notes" className="sr-only">Admin notes</label>
         <Textarea
+          id="admin-notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Internal notes about this submission..."
+          placeholder="Internal notes about this submission"
           rows={4}
         />
-        <Button onClick={saveStatus} size="sm" className="mt-2">Save Notes</Button>
+        <div className="flex items-center justify-end gap-3 mt-2">
+          {notesDirty && <span className="text-xs text-white/55">Unsaved changes</span>}
+          <Button onClick={saveNotes} size="sm" className="h-9" disabled={!notesDirty || busy === "notes"}>
+            {busy === "notes" ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden /> Saving…</> : "Save notes"}
+          </Button>
+        </div>
       </Section>
 
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+      <AlertDialog open={showDeleteConfirm} onOpenChange={(o) => { if (busy !== "delete") setShowDeleteConfirm(o); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this submission?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{intake.business_legal_name || "Unnamed"}" along with all associated documents and validations. This action cannot be undone.
+              This permanently deletes “{intake.business_legal_name || "Unnamed"}” with its documents and validation results.
+              This can't be undone. To keep a record, set the status to Archived instead.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDelete}>
-              Delete
+            <AlertDialogCancel disabled={busy === "delete"}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={busy === "delete"}
+              onClick={(e) => {
+                e.preventDefault();
+                handleDelete();
+              }}
+            >
+              {busy === "delete" ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden /> Deleting…</> : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
