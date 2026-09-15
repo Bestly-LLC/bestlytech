@@ -1,9 +1,11 @@
 import { Navigate } from "react-router-dom";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { BrandLoader } from "@/components/BrandLoader";
+import { useAdminFavicon } from "@/hooks/useAdminFavicon";
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, isAdmin } = useAdminAuth();
+  useAdminFavicon();
 
   if (loading) {
     return <BrandLoader tone="dark" fullScreen label="Checking your admin session" />;

@@ -25,12 +25,14 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { AdminMark } from "@/components/AdminMark";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -151,6 +153,16 @@ export function AdminSidebar() {
 
   return (
     <Sidebar collapsible="icon">
+      <SidebarHeader className="bg-[#0a0a0a] border-r border-white/[0.06] px-2 pt-3 pb-1">
+        <Link
+          to="/admin"
+          aria-label="Bestly Admin home"
+          className={cn("flex items-center gap-2.5 rounded-lg py-1.5", collapsed ? "justify-center px-0" : "px-2")}
+        >
+          <AdminMark className={cn("shrink-0", collapsed ? "h-7 w-7" : "h-8 w-8")} />
+          {!collapsed && <span className="text-[0.9375rem] font-semibold tracking-tight text-white">Bestly Admin</span>}
+        </Link>
+      </SidebarHeader>
       <SidebarContent className="pt-2 bg-[#0a0a0a] border-r border-white/[0.06]">
 
         <SidebarMenu className="px-2">
