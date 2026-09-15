@@ -626,3 +626,14 @@
     .cy-zap-anim    { opacity: 0; }
   }
 }
+
+/* Brand loader: the Bestly mark "breathes" while a route or session loads.
+   Mirrors #boot-splash in index.html so the hand-off from HTML to React is seamless. */
+@keyframes brand-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50%      { opacity: 1;    transform: scale(1); }
+}
+.brand-loader-mark { animation: brand-breathe 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .brand-loader-mark { animation: none; opacity: 1; }
+}

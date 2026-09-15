@@ -1,8 +1,9 @@
-import { Loader2 } from 'lucide-react';
+import { useLocation } from "react-router-dom";
+import { BrandLoader } from "@/components/BrandLoader";
 
 /** Suspense fallback used while lazy-loaded route chunks are fetched. */
-export const RouteFallback = () => (
-  <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-label="Loading">
-    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-  </div>
-);
+export const RouteFallback = () => {
+  const { pathname } = useLocation();
+  const isAdmin = pathname.startsWith("/admin");
+  return <BrandLoader tone={isAdmin ? "dark" : "light"} fullScreen={isAdmin} />;
+};
