@@ -18,6 +18,7 @@ import {
   Cloud,
   Activity,
   Sparkles,
+  Car,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -73,6 +74,10 @@ const homeHubItems = [
   { title: "Shield reports", url: "/admin/shield-reports", icon: Shield, countKey: "shieldReports" as CountKeys },
   { title: "Home Assistant", url: "/admin/home-hub/ha", icon: House },
   { title: "Homebridge", url: "/admin/home-hub/homebridge", icon: Plug },
+];
+
+const turoItems = [
+  { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Car },
 ];
 
 const cloudItems = [
@@ -193,6 +198,17 @@ export function AdminSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>{homeHubItems.map(renderItem)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <div className="mx-3 my-2 h-px bg-white/[0.06]" />
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-white/25 font-semibold px-3">
+            Turo
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>{turoItems.map(renderItem)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 

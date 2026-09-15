@@ -88,6 +88,7 @@ const HomeHubOverview = lazy(() => import("./pages/admin/HomeHubOverview"));
 const HomeHubPihole = lazy(() => import("./pages/admin/HomeHubPihole"));
 const HomeHubHomeAssistant = lazy(() => import("./pages/admin/HomeHubHomeAssistant"));
 const HomeHubHomebridge = lazy(() => import("./pages/admin/HomeHubHomebridge"));
+const StreetSweeping = lazy(() => import("./pages/admin/StreetSweeping"));
 
 const queryClient = new QueryClient();
 
@@ -183,6 +184,7 @@ const App = () => (
                   <Route path="home-hub/pihole" element={<HomeHubPihole />} />
                   <Route path="home-hub/ha" element={<HomeHubHomeAssistant />} />
                   <Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
+                  <Route path="street-sweeping" element={<StreetSweeping />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

@@ -22,6 +22,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/home-hub/pihole": "Pi-hole",
   "/admin/home-hub/ha": "Home Assistant",
   "/admin/home-hub/homebridge": "Homebridge",
+  "/admin/street-sweeping": "Street Sweeping",
 };
 
 export function AdminLayout() {
