@@ -6,7 +6,9 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Fingerprint } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import bestlyLogo from "@/assets/bestly-logo.png";
+import { AdminMark } from "@/components/AdminMark";
+import { BrandLoader } from "@/components/BrandLoader";
+import { useAdminFavicon } from "@/hooks/useAdminFavicon";
 
 function bufferToBase64url(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -53,6 +55,7 @@ function speakWelcome(name: string) {
 
 export default function AdminLogin() {
   const { user, loading, isAdmin, signIn } = useAdminAuth();
+  useAdminFavicon();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -64,13 +67,7 @@ export default function AdminLogin() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black">
-        <div className="flex gap-1">
-          <div className="h-2 w-2 rounded-full bg-white/60 animate-pulse" style={{ animationDelay: "0ms" }} />
-          <div className="h-2 w-2 rounded-full bg-white/60 animate-pulse" style={{ animationDelay: "150ms" }} />
-          <div className="h-2 w-2 rounded-full bg-white/60 animate-pulse" style={{ animationDelay: "300ms" }} />
-        </div>
-      </div>
+      <BrandLoader tone="dark" fullScreen label="Checking your admin session" />
     );
   }
 
@@ -266,14 +263,10 @@ export default function AdminLogin() {
         {/* Header */}
         <div className="text-center space-y-3">
           <div className="flex justify-center">
-            <img
-              src={bestlyLogo}
-              alt="Bestly"
-              className="h-12 object-contain brightness-0 invert"
-            />
+            <AdminMark label="Bestly Admin" className="h-20 w-20" />
           </div>
           <p className="text-[0.8125rem] text-white/55 font-light tracking-wide">
-            Admin
+            Bestly Admin
           </p>
         </div>
 
