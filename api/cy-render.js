@@ -80,6 +80,10 @@ async function withPage(fn, opts = {}) {
   try {
     const page = await browser.newPage();
     await page.setUserAgent(profile.ua);
+    // Sites with looping animations (bestly.tech's own homepage) peg a serverless CPU so hard that
+    // screenshots never come back. Most honor reduced motion; the screenshot fallback pauses the rest.
+    await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]).catch(() => {
+    });
     await page.setRequestInterception(true);
     page.on("request", (r) => {
       const t = r.resourceType();
@@ -337,7 +341,25 @@ async function replay(page, steps) {
   }
   return null;
 }
-const shot = (page) => within(page.screenshot({ type: "jpeg", quality: 55, encoding: "base64", captureBeyondViewport: false }), 15e3, "screenshot");
+const shot = async (page) => {
+  try {
+    return await within(page.screenshot({ type: "jpeg", quality: 55, encoding: "base64", captureBeyondViewport: false }), 12e3, "screenshot");
+  } catch {
+    // Freeze CSS/Web animations and grab the last painted frame instead of waiting for a fresh one.
+    const cdp = await page.createCDPSession();
+    try {
+      await within(cdp.send("Emulation.setScriptExecutionDisabled", { value: true }), 3e3, "pause").catch(() => {
+      });
+      await within(cdp.send("Animation.enable").then(() => cdp.send("Animation.setPlaybackRate", { playbackRate: 0 })), 3e3, "pause").catch(() => {
+      });
+      const out = await within(cdp.send("Page.captureScreenshot", { format: "jpeg", quality: 50, optimizeForSpeed: true }), 12e3, "screenshot");
+      return out.data;
+    } finally {
+      await cdp.detach().catch(() => {
+      });
+    }
+  }
+};
 function cleanSteps(raw) {
   if (raw == null) return [];
   if (!Array.isArray(raw) || raw.length > 6) return null;
