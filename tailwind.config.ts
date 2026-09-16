@@ -14,6 +14,10 @@ export default {
     },
     extend: {
       colors: {
+        // White/black go through variables so the admin's light "bento" theme can swap them
+        // (index.css .admin-bento). Everywhere else they stay plain white and black.
+        white: "rgb(var(--tw-white, 255 255 255) / <alpha-value>)",
+        black: "rgb(var(--tw-black, 0 0 0) / <alpha-value>)",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -174,5 +178,9 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    // bento:… applies only inside the admin's light theme.
+    ({ addVariant }: { addVariant: (name: string, def: string) => void }) => addVariant("bento", ".admin-bento &"),
+  ],
 } satisfies Config;
