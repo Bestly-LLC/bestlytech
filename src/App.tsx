@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { ScrollProgress } from "@/components/ScrollProgress";
@@ -68,14 +68,10 @@ const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminSubmissions = lazy(() => import("./pages/admin/AdminSubmissions"));
 const AdminSubmissionDetail = lazy(() => import("./pages/admin/AdminSubmissionDetail"));
-const CYDashboard = lazy(() => import("./pages/admin/CYDashboard"));
-const CYCommandCenter = lazy(() => import("./pages/admin/CYCommandCenter"));
-const CYAutoFixMonitor = lazy(() => import("./pages/admin/CYAutoFixMonitor"));
-const CYProductAnalytics = lazy(() => import("./pages/admin/CYProductAnalytics"));
-const CYSubscribers = lazy(() => import("./pages/admin/CYSubscribers"));
-const CYGrantedAccess = lazy(() => import("./pages/admin/CYGrantedAccess"));
-const CYDomains = lazy(() => import("./pages/admin/CYDomains"));
-const CommunityLearning = lazy(() => import("./pages/admin/CommunityLearning"));
+// Cookie Yeti: three tabbed sections; each lazy-loads only its active tab's page.
+const CookieYetiCommandCenter = lazy(() => import("./pages/admin/CookieYetiCommandCenter"));
+const CookieYetiSubscribers = lazy(() => import("./pages/admin/CookieYetiSubscribers"));
+const CookieYetiAnalytics = lazy(() => import("./pages/admin/CookieYetiAnalytics"));
 const AdminContacts = lazy(() => import("./pages/admin/AdminContacts"));
 const AdminMeetings = lazy(() => import("./pages/admin/AdminMeetings"));
 const AdminHireRequests = lazy(() => import("./pages/admin/AdminHireRequests"));
@@ -88,6 +84,14 @@ const HomeHubOverview = lazy(() => import("./pages/admin/HomeHubOverview"));
 const HomeHubPihole = lazy(() => import("./pages/admin/HomeHubPihole"));
 const StreetSweeping = lazy(() => import("./pages/admin/StreetSweeping"));
 const AdminNotFound = lazy(() => import("./pages/admin/AdminNotFound"));
+
+/** Redirects an old route to a section tab, carrying over the query string (e.g. ?q= for Granted Access). */
+function TabRedirect({ to, tab }: { to: string; tab: string }) {
+  const { search, hash } = useLocation();
+  const params = new URLSearchParams(search);
+  params.set("tab", tab);
+  return <Navigate to={`${to}?${params.toString()}${hash}`} replace />;
+}
 
 const queryClient = new QueryClient();
 
@@ -173,14 +177,15 @@ const App = () => (
                   <Route path="cloud/:id" element={<CloudDealDetail />} />
                   <Route path="cloud/:id/brief-pdf" element={<CloudDiscoveryBrief />} />
                   <Route path="shield-reports" element={<Navigate to="/admin" replace />} />
-                  <Route path="cookie-yeti" element={<CYCommandCenter />} />
-                  <Route path="cookie-yeti/autofix" element={<CYAutoFixMonitor />} />
-                  <Route path="cookie-yeti/analytics" element={<CYProductAnalytics />} />
-                  <Route path="cookie-yeti/ops" element={<CYDashboard />} />
-                  <Route path="cookie-yeti/subscribers" element={<CYSubscribers />} />
-                  <Route path="cookie-yeti/granted" element={<CYGrantedAccess />} />
-                  <Route path="cookie-yeti/community" element={<CommunityLearning />} />
-                  <Route path="cookie-yeti/domains" element={<CYDomains />} />
+                  <Route path="cookie-yeti" element={<CookieYetiCommandCenter />} />
+                  <Route path="cookie-yeti/subscribers" element={<CookieYetiSubscribers />} />
+                  <Route path="cookie-yeti/analytics" element={<CookieYetiAnalytics />} />
+                  {/* Old Cookie Yeti pages, now tabs of the three sections. */}
+                  <Route path="cookie-yeti/autofix" element={<TabRedirect to="/admin/cookie-yeti" tab="autofix" />} />
+                  <Route path="cookie-yeti/domains" element={<TabRedirect to="/admin/cookie-yeti" tab="domains" />} />
+                  <Route path="cookie-yeti/granted" element={<TabRedirect to="/admin/cookie-yeti/subscribers" tab="granted" />} />
+                  <Route path="cookie-yeti/ops" element={<TabRedirect to="/admin/cookie-yeti/analytics" tab="operations" />} />
+                  <Route path="cookie-yeti/community" element={<TabRedirect to="/admin/cookie-yeti/analytics" tab="community" />} />
                   <Route path="home-hub" element={<HomeHubOverview />} />
                   <Route path="home-hub/pihole" element={<HomeHubPihole />} />
                   <Route path="street-sweeping" element={<StreetSweeping />} />
