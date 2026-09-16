@@ -10,8 +10,9 @@ import {
 import { PageHeader } from "@/components/admin/PageHeader";
 import { ActionMenu } from "@/components/admin/ActionMenu";
 import { DomainDeepDive, markDomainResolved, useCyLiveRefresh } from "@/components/admin/DomainDeepDive";
+import { GuideWizard } from "@/components/admin/GuideWizard";
 import {
-  AlertTriangle, CheckCircle2, ExternalLink, Hand, Link2, Loader2, PanelRightOpen, RotateCcw, ShieldX, Sparkles, XCircle,
+  AlertTriangle, CheckCircle2, ExternalLink, Hand, Link2, Loader2, MousePointerClick, PanelRightOpen, RotateCcw, ShieldX, Sparkles, XCircle,
 } from "lucide-react";
 
 /*
@@ -46,7 +47,9 @@ const REPORT_STEP = (
   <>Tap <strong className="text-white">Cookie Yeti</strong>, then <strong className="text-white">Report a missed banner</strong>.</>
 );
 
-function guidance(r: Stuck): { title: string; steps: React.ReactNode[]; after: string } {
+const GUIDE_STEP = <>Tap <strong className="text-white">Guide it</strong> and tap the button that closes the banner (Reject if there is one).</>;
+
+function guidance(r: Stuck): { title: string; steps: React.ReactNode[]; after: string; guideFirst: boolean } {
   const host = siteHost(r);
   switch (r.autofix_outcome) {
     case "blocked":
@@ -54,28 +57,32 @@ function guidance(r: Stuck): { title: string; steps: React.ReactNode[]; after: s
         title: "The site blocks our robot browser",
         steps: [<>Open <strong className="text-white">{host}</strong> on your phone or Mac.</>, REPORT_STEP],
         after: "Your report carries the real banner. The AI fixes and tests it from there.",
+        guideFirst: false,
       };
     case "no_banner_seen":
       return {
         title: "No cookie banner showed up for us",
         steps: [
-          <>Open <strong className="text-white">{host}</strong>. Is there a cookie banner?</>,
-          <>Yes: tap <strong className="text-white">Cookie Yeti</strong>, then <strong className="text-white">Report a missed banner</strong>.</>,
-          <>No: tap <strong className="text-white">No banner</strong> below.</>,
+          <>Tap <strong className="text-white">Guide it</strong>. See a cookie banner in the screenshot?</>,
+          <>Yes: tap its closing button, then <strong className="text-white">Test</strong> and <strong className="text-white">Save</strong>.</>,
+          <>No: close it and tap <strong className="text-white">No banner</strong>.</>,
         ],
-        after: "Either way you're done. A report goes straight to the AI.",
+        after: "Either way you're done in under a minute.",
+        guideFirst: true,
       };
     case "ai_wrong":
       return {
         title: "The AI's fix didn't close the banner",
-        steps: [<>Open <strong className="text-white">{host}</strong> with Cookie Yeti on.</>, REPORT_STEP],
-        after: "That gives the AI the exact banner you see. It retries and tests on its own.",
+        steps: [GUIDE_STEP, <>Tap <strong className="text-white">Test</strong>, then <strong className="text-white">Save</strong>.</>],
+        after: "The robot re-tests before it goes live for everyone.",
+        guideFirst: true,
       };
     default:
       return {
         title: "The AI couldn't find the right button",
-        steps: [<>Open <strong className="text-white">{host}</strong> with Cookie Yeti on.</>, REPORT_STEP],
-        after: "That gives the AI the exact banner you see. It retries and tests on its own.",
+        steps: [GUIDE_STEP, <>Tap <strong className="text-white">Test</strong>, then <strong className="text-white">Save</strong>.</>],
+        after: "The robot re-tests before it goes live for everyone.",
+        guideFirst: true,
       };
   }
 }
@@ -113,6 +120,7 @@ export default function CYAutoFixMonitor({ embedded = false }: { embedded?: bool
   const [linkFor, setLinkFor] = useState<Stuck | null>(null);
   const [linkValue, setLinkValue] = useState("");
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  const [guideFor, setGuideFor] = useState<Stuck | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -235,7 +243,10 @@ export default function CYAutoFixMonitor({ embedded = false }: { embedded?: bool
                     <ActionMenu
                       label={`More for ${r.domain}`}
                       items={[
+                        ...(g.guideFirst ? [] : [{ label: "Guide it anyway", icon: MousePointerClick, onSelect: () => setGuideFor(r) }]),
+                        { label: "Try auto-fix again", icon: RotateCcw, onSelect: () => withBusy(r.domain, () => runAutofix(r.domain)) },
                         { label: "Banner is on another page…", icon: Link2, onSelect: () => { setLinkValue(""); setLinkFor(r); } },
+                        ...(r.autofix_outcome === "no_banner_seen" ? [] : [{ label: "No banner here", icon: XCircle, onSelect: () => withBusy(r.domain, async () => { await markDomainResolved(r.domain); }) }]),
                         { label: "Details and history", icon: PanelRightOpen, onSelect: () => { setSelectedDomain(r.domain); setDrawerOpen(true); } },
                       ]}
                     />
@@ -253,27 +264,28 @@ export default function CYAutoFixMonitor({ embedded = false }: { embedded?: bool
                 <p className="text-xs text-white/55 mt-2">{g.after}</p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Button asChild size="sm" className="h-9">
+                  {g.guideFirst && (
+                    <Button size="sm" className="h-9" disabled={running} onClick={() => setGuideFor(r)}>
+                      <MousePointerClick className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" /> Guide it
+                    </Button>
+                  )}
+                  <Button asChild size="sm" variant={g.guideFirst ? "outline" : "default"} className={`h-9 ${g.guideFirst ? "border-white/15 text-white/80 hover:bg-white/5" : ""}`}>
                     <a href={siteUrl(r)} target="_blank" rel="noopener noreferrer">
                       Open {siteHost(r)} <ExternalLink className="h-3.5 w-3.5 ml-1.5" aria-hidden="true" />
                     </a>
                   </Button>
-                  <Button
-                    size="sm" variant="outline" className="h-9 border-white/15 text-white/80 hover:bg-white/5"
-                    disabled={running}
-                    onClick={() => withBusy(r.domain, async () => { if (await markDomainResolved(r.domain)) toast.message("It comes back only if someone reports it again."); })}
-                  >
-                    <XCircle className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" /> No banner
-                  </Button>
-                  <Button
-                    size="sm" variant="ghost" className="h-9 text-white/70 hover:text-white hover:bg-white/5"
-                    disabled={running}
-                    onClick={() => withBusy(r.domain, () => runAutofix(r.domain))}
-                  >
-                    {running
-                      ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden="true" /> Checking, about a minute</>
-                      : <><RotateCcw className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" /> Try again</>}
-                  </Button>
+                  {r.autofix_outcome === "no_banner_seen" && (
+                    <Button
+                      size="sm" variant="ghost" className="h-9 text-white/70 hover:text-white hover:bg-white/5"
+                      disabled={running}
+                      onClick={() => withBusy(r.domain, async () => { if (await markDomainResolved(r.domain)) toast.message("It comes back only if someone reports it again."); })}
+                    >
+                      <XCircle className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" /> No banner
+                    </Button>
+                  )}
+                  {running && (
+                    <span className="flex items-center text-xs text-white/60"><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden="true" /> Robot is checking, about a minute</span>
+                  )}
                 </div>
                 {r.autofix_note && <p className="text-[0.6875rem] text-white/45 mt-3">Robot's note: {r.autofix_note}</p>}
               </article>
@@ -340,6 +352,14 @@ export default function CYAutoFixMonitor({ embedded = false }: { embedded?: bool
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <GuideWizard
+        domain={guideFor?.domain ?? null}
+        startUrl={guideFor?.page_url}
+        open={!!guideFor}
+        onOpenChange={(o) => { if (!o) setGuideFor(null); }}
+        onSaved={loadData}
+      />
 
       <DomainDeepDive domain={selectedDomain} open={drawerOpen} onOpenChange={setDrawerOpen} onRefresh={loadData} />
     </div>
