@@ -81,6 +81,7 @@
     <script>
       if (location.pathname.indexOf("/admin") === 0) {
         document.getElementById("boot-splash").className = "is-admin";
+        document.title = "Bestly Admin";
         // Inline the side-eye mark (no network wait, no flash of the marketing logo). Same markup
         // and classes as AdminMark.tsx, so React's loaders pick up the glance mid-cycle.
         document.querySelector("#boot-splash .mark").innerHTML =
