@@ -6,6 +6,7 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, Home, Command, Minus, Plus } from "lucide-react";
 import { useAdminTextSize } from "@/hooks/useAdminTextSize";
+import { useDeployRefresh } from "@/hooks/useDeployRefresh";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CommandPalette, OPEN_ADMIN_PALETTE_EVENT } from "./CommandPalette";
 
@@ -35,6 +36,7 @@ function sidebarDefaultOpen(): boolean {
 export function AdminLayout() {
   const { user, signOut } = useAdminAuth();
   const textSize = useAdminTextSize();
+  useDeployRefresh();
 
   // Menus, dialogs and toasts render in portals on <body>, outside the admin wrapper. Put the
   // admin theme tokens on <body> too so they come up dark instead of in the public site's light theme.
