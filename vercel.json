@@ -2,6 +2,7 @@
   "functions": {
     "api/cy-render.js": {
       "maxDuration": 60,
+      "regions": ["fra1"],
       "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
     }
   },
