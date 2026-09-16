@@ -158,10 +158,12 @@ export default function AdminShieldReports() {
       }
     }
     setBusy(r.id);
+    // Reopening ("new") clears the review so the report doesn't read "Reviewed just now".
+    const reopening = status === "new";
     const update = {
       status,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: "operator",
+      reviewed_at: reopening ? null : new Date().toISOString(),
+      reviewed_by: reopening ? null : "operator",
     };
     const { data, error } = await supabase
       .from("shield_url_reports")

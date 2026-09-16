@@ -137,7 +137,9 @@ export default function AdminSubmissions() {
   );
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  // Clamp: archiving or filtering can leave `page` past the end (e.g. the last row on page 2).
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+  const paged = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
   const allOnPageSelected = paged.length > 0 && paged.every((r) => selected.has(r.id));
 
   const toggleSelect = (id: string) => {
@@ -536,11 +538,11 @@ export default function AdminSubmissions() {
 
       {totalPages > 1 && (
         <nav className="flex items-center justify-center gap-3" aria-label="Pagination">
-          <Button variant="outline" size="icon" className="h-9 w-9 border-white/10" disabled={page === 0} onClick={() => setPage(page - 1)} aria-label="Previous page">
+          <Button variant="outline" size="icon" className="h-9 w-9 border-white/10" disabled={safePage === 0} onClick={() => setPage(safePage - 1)} aria-label="Previous page">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-xs text-white/60 tabular-nums">Page {page + 1} of {totalPages}</span>
-          <Button variant="outline" size="icon" className="h-9 w-9 border-white/10" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} aria-label="Next page">
+          <span className="text-xs text-white/60 tabular-nums">Page {safePage + 1} of {totalPages}</span>
+          <Button variant="outline" size="icon" className="h-9 w-9 border-white/10" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)} aria-label="Next page">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </nav>

@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AdminMark } from "@/components/AdminMark";
 import { BrandLoader } from "@/components/BrandLoader";
 import { useAdminFavicon } from "@/hooks/useAdminFavicon";
+import { AdminAccessDenied } from "@/components/admin/AdminAccessDenied";
 
 function bufferToBase64url(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -54,7 +55,7 @@ function speakWelcome(name: string) {
 }
 
 export default function AdminLogin() {
-  const { user, loading, isAdmin, signIn } = useAdminAuth();
+  const { user, loading, isAdmin, roleError, checking, recheck, signIn, signOut } = useAdminAuth();
   useAdminFavicon();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -65,7 +66,8 @@ export default function AdminLogin() {
   
   const { toast } = useToast();
 
-  if (loading) {
+  // `checking` covers the moment right after sign-in, before the role check answers.
+  if (loading || (user && checking && !isAdmin)) {
     return (
       <BrandLoader tone="dark" fullScreen label="Checking your admin session" />
     );
@@ -73,6 +75,11 @@ export default function AdminLogin() {
 
   if (user && isAdmin) {
     return <Navigate to="/admin" replace />;
+  }
+
+  // Signed in but not an admin (or the role check failed): say so instead of showing the form again.
+  if (user) {
+    return <AdminAccessDenied email={user.email} checkFailed={!!roleError} onRetry={recheck} onSignOut={signOut} />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
