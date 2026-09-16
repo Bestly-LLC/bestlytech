@@ -3,7 +3,7 @@
 // POST /api/cy-render   header x-render-key: <key from Supabase Vault "cy_render_key">
 //   { action: "ping" }                                   -> { ok: true, engine }
 //   { action: "content",  url }                          -> { ok, html, finalUrl }
-//   { action: "validate", url, selector }                -> { ok, found, dismissed, error }
+//   { action: "validate", url, selector }                -> { ok, found, dismissed, inConsent, error }
 //   { action: "inspect",  url, steps?, viewport? }       -> { ok, shot, vw, vh, elements[], note? }
 //   { action: "test",     url, steps, viewport? }        -> { ok, dismissed, failedStep?, before, after }
 //
@@ -96,6 +96,20 @@ async function load(page, url) {
 const visible = (sel) => {
   const el = document.querySelector(sel);
   return { exists: !!el, vis: !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length)) };
+};
+const inConsentBanner = (sel) => {
+  const el = document.querySelector(sel);
+  if (!el) return false;
+  const KEY = /cookie|consent|gdpr|ccpa|onetrust|optanon|didomi|cookiebot|cybot|usercentrics|truste-|trustarc|quantcast|qc-cmp|sp_message|sourcepoint|osano|iubenda|(^|[^a-z])cky-|cmplz|complianz|termly|klaro|(^|[^a-z])ketch|borlabs|axeptio|tarteaucitron|guce-/i;
+  const TEXT = /(we|site|website|this site|our partners)\s+(and our partners\s+)?uses?\s+cookies|cookies? (to|for|help|and similar)|(accept|reject|allow|decline)( all)? cookies|necessary cookies|cookie (settings|preferences|choices)|manage (cookies|consent|preferences)|your consent|consent to|datenschutz|einwilligung|tracking technolog|your privacy choices|we value your privacy/i;
+  let container = null;
+  for (let a = el; a && a !== document.body; a = a.parentElement) {
+    const idc = `${a.id} ${typeof a.className === "string" ? a.className : ""} ${a.getAttribute("aria-label") || ""} ${a.getAttribute("data-testid") || ""}`;
+    if (KEY.test(idc)) return true;
+    const cs = getComputedStyle(a);
+    if (!container && (cs.position === "fixed" || a.getAttribute("role") === "dialog" || a.getAttribute("role") === "alertdialog" || a.tagName === "DIALOG" || a.getAttribute("aria-modal") === "true")) container = a;
+  }
+  return !!container && TEXT.test((container.innerText || "").slice(0, 4e3));
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function settledEval(page, fn, ...args) {
@@ -305,12 +319,14 @@ async function handler(req, res) {
       const selector = String(body.selector || "");
       if (!selector || selector.length > 500) return res.status(400).json({ ok: false, error: "Bad selector" });
       const out = await withPage(async (page) => {
-        const r = { found: false, dismissed: false, error: null };
+        const r = { found: false, dismissed: false, inConsent: false, error: null };
         try {
           await load(page, url);
-          const before = await page.evaluate(visible, selector);
+          await waitForConsent(page, 7e3);
+          const before = await settledEval(page, visible, selector);
           r.found = before.exists;
           if (!before.exists) return r;
+          r.inConsent = await settledEval(page, inConsentBanner, selector).catch(() => false);
           let clicked = false;
           try {
             await page.click(selector);
