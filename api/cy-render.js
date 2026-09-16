@@ -165,14 +165,17 @@ const collectElements = (maxN) => {
   const seen = /* @__PURE__ */ new Set();
   for (const el of Array.from(document.querySelectorAll(q))) {
     const r = el.getBoundingClientRect();
-    if (r.width < 10 || r.height < 10 || r.bottom <= 0 || r.right <= 0 || r.top >= vh || r.left >= vw) continue;
+    if (r.width < 10 || r.height < 10) continue;
+    const offscreen = r.bottom <= 0 || r.right <= 0 || r.top >= vh || r.left >= vw;
     if (el.tagName !== "BUTTON" && el.querySelector(q)) continue;
     const cs = getComputedStyle(el);
     if (cs.visibility === "hidden" || cs.display === "none" || Number(cs.opacity) === 0) continue;
-    const cx = Math.min(vw - 1, Math.max(0, r.left + r.width / 2));
-    const cy = Math.min(vh - 1, Math.max(0, r.top + r.height / 2));
-    const top = document.elementFromPoint(cx, cy);
-    if (top && top !== el && !el.contains(top) && !top.contains(el)) continue;
+    if (!offscreen) {
+      const cx = Math.min(vw - 1, Math.max(0, r.left + r.width / 2));
+      const cy = Math.min(vh - 1, Math.max(0, r.top + r.height / 2));
+      const top = document.elementFromPoint(cx, cy);
+      if (top && top !== el && !el.contains(top) && !top.contains(el)) continue;
+    }
     const text = (el.innerText || el.value || el.getAttribute("aria-label") || el.getAttribute("title") || "").trim().replace(/\s+/g, " ").slice(0, 60);
     if (!text && r.width > 64) continue;
     const selector = selectorFor(el);
@@ -191,7 +194,8 @@ const collectElements = (maxN) => {
         break;
       }
     }
-    out.push({ selector, text, x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), likely });
+    if (offscreen && !likely) continue;
+    out.push({ selector, text, x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), likely, offscreen });
   }
   out.sort((a, b) => Number(b.likely) - Number(a.likely));
   const frames = Array.from(document.querySelectorAll("iframe")).map((f) => f.src || "").filter((s) => /consent|cmp|privacy|cookie|sourcepoint|privacy-mgmt|trustarc|didomi/i.test(s));

@@ -15,7 +15,7 @@ import {
  */
 
 type Action = "reject" | "necessary" | "accept" | "save" | "close" | "next";
-type Box = { selector: string; text: string; x: number; y: number; w: number; h: number; likely: boolean; guess: Action | null };
+type Box = { selector: string; text: string; x: number; y: number; w: number; h: number; likely: boolean; offscreen?: boolean; guess: Action | null };
 type Step = { selector: string; text: string; action: Action };
 type Inspect = { url: string; shot: string; vw: number; vh: number; elements: Box[]; failedStep: number | null; frames?: string[]; shadow?: boolean };
 type TestResult = { dismissed: boolean; failedStep: number | null; before: string; after: string; saved?: boolean };
@@ -206,7 +206,7 @@ export function GuideWizard({
               {view ? (
                 <div className={`relative mx-auto ${phone ? "max-w-[24rem]" : "max-w-full"}`}>
                   <img src={`data:image/jpeg;base64,${view.shot}`} alt={`Screenshot of ${domain}`} className="block w-full h-auto rounded-md select-none" draggable={false} />
-                  {!loading && boxes.map((b) => {
+                  {!loading && boxes.filter((b) => !b.offscreen).map((b) => {
                     const on = picked?.selector === b.selector;
                     return (
                       <button
@@ -303,6 +303,7 @@ export function GuideWizard({
                         <button type="button" onClick={() => pick(b)}
                           className={`w-full text-left rounded-lg px-3 py-2 text-sm flex items-center gap-2 ${picked?.selector === b.selector ? "bg-cyan-300/15 text-white" : "text-white/75 hover:bg-white/5"}`}>
                           <span className="min-w-0 flex-1 truncate">{b.text || <span className="text-white/45">{b.selector}</span>}</span>
+                          {b.offscreen && <span className="text-[0.6875rem] text-white/45 flex-none">below</span>}
                           {b.guess && <span className="text-[0.6875rem] text-white/45 flex-none">{actionLabel(b.guess)}</span>}
                         </button>
                       </li>
