@@ -25,9 +25,11 @@ export default function HomeHubHomebridge() {
 
   const d = snap?.data ?? {};
   const stale = snap ? now - new Date(snap.capturedAt).getTime() > SNAPSHOT_STALE_MS : false;
-  const up = snap?.ok && d.status === "up";
+  // The Homebridge UI reports "up" or "ok" depending on its version.
+  const running = d.status === "up" || d.status === "ok";
+  const up = snap?.ok && running;
   const health: Health = !snap ? "down" : stale || snap.fails >= 3 ? "down" : up ? "ok" : "warn";
-  const healthLabel = !snap ? "No data" : stale ? "Stale" : !snap.ok ? "Not responding" : d.status === "up" ? "Running" : (d.status ?? "Unknown");
+  const healthLabel = !snap ? "No data" : stale ? "Stale" : !snap.ok ? "Not responding" : running ? "Running" : (d.status ?? "Unknown");
   const pluginUpdates = (d.plugins ?? []).filter((p) => p.update_available);
 
   return (
