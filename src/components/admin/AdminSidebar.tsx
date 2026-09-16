@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { AdminMark } from "@/components/AdminMark";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAdminTheme } from "@/hooks/useAdminTheme";
 
 type CountKeys =
   | "leads"
@@ -75,6 +76,7 @@ const COUNT_POLL_MS = 60_000;
 
 export function AdminSidebar() {
   const { state, isMobile, setOpenMobile } = useSidebar();
+  const { bento } = useAdminTheme();
   // The mobile sheet always shows full labels, whatever the saved desktop collapsed state is.
   const collapsed = state === "collapsed" && !isMobile;
   const location = useLocation();
@@ -156,9 +158,10 @@ export function AdminSidebar() {
             aria-current={active ? "page" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all relative",
+              "bento:rounded-full bento:py-2.5",
               active
-                ? "bg-[hsl(var(--wow-indigo)/0.12)] text-white font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[0.1875rem] before:rounded-full before:bg-[hsl(var(--wow-indigo-light))] before:shadow-[0_0_8px_hsl(var(--wow-indigo-light)/0.6)]"
-                : "text-white/55 hover:text-white hover:bg-white/[0.05]"
+                ? "bg-[hsl(var(--wow-indigo)/0.12)] text-white font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[0.1875rem] before:rounded-full before:bg-[hsl(var(--wow-indigo-light))] before:shadow-[0_0_8px_hsl(var(--wow-indigo-light)/0.6)] bento:bg-[#111114] bento:text-[#fff] bento:before:hidden bento:hover:bg-[#111114] bento:hover:text-[#fff]"
+                : "text-white/55 hover:text-white hover:bg-white/[0.05] bento:text-white/70"
             )}
           >
             <item.icon className="h-[1.125rem] w-[1.125rem] shrink-0" />
@@ -166,7 +169,7 @@ export function AdminSidebar() {
               <span className="flex-1 flex items-center justify-between">
                 {item.title}
                 {count > 0 && (
-                  <span className="h-5 min-w-5 px-1.5 text-[0.625rem] font-medium tabular-nums bg-white/10 text-white/60 rounded-full inline-flex items-center justify-center">
+                  <span className={cn("h-5 min-w-5 px-1.5 text-[0.625rem] font-medium tabular-nums bg-white/10 text-white/60 rounded-full inline-flex items-center justify-center", active && "bento:bg-[rgba(255,255,255,0.18)] bento:text-[#fff]")}>
                     {count}
                   </span>
                 )}
@@ -179,8 +182,8 @@ export function AdminSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="bg-[#0a0a0a] border-r border-white/[0.06] px-2 pt-3 pb-1">
+    <Sidebar collapsible="icon" variant={bento ? "floating" : "sidebar"} className="bento:p-3">
+      <SidebarHeader className="bg-[#0a0a0a] border-r border-white/[0.06] px-2 pt-3 pb-1 bento:border-0 bento:pt-4">
         <Link
           to="/admin"
           onClick={closeMobile}
@@ -191,7 +194,7 @@ export function AdminSidebar() {
           {!collapsed && <span className="text-[0.9375rem] font-semibold tracking-tight text-white">Bestly Admin</span>}
         </Link>
       </SidebarHeader>
-      <SidebarContent className="pt-2 bg-[#0a0a0a] border-r border-white/[0.06]">
+      <SidebarContent className="pt-2 bg-[#0a0a0a] border-r border-white/[0.06] bento:border-0">
 
         <SidebarMenu className="px-2">
           {renderItem(dashboardItem)}
@@ -199,7 +202,7 @@ export function AdminSidebar() {
 
         {ADMIN_NAV_SECTIONS.map((section) => (
           <div key={section.label}>
-            <div className="mx-3 my-2 h-px bg-white/[0.06]" />
+            <div className="mx-3 my-2 h-px bg-white/[0.06] bento:bg-transparent bento:my-1" />
             <SidebarGroup>
               <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
                 {section.label}

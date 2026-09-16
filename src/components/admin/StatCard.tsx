@@ -68,8 +68,8 @@ export function StatCard({
   if (centered) {
     return (
       <div className={cn(
-        "bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 text-center",
-        accentColor && "border-l-2",
+        "stat-card bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 text-center",
+        accentColor && "border-l-2 bento:border-l-0",
       )} style={accentColor ? { borderLeftColor: accentColor } : undefined}>
         <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center mx-auto mb-2", resolvedIconBg)} aria-hidden="true">
           <Icon className={cn("h-[1.125rem] w-[1.125rem]", resolvedIconColor)} />
@@ -83,8 +83,8 @@ export function StatCard({
 
   return (
     <div className={cn(
-      "bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-5",
-      accentColor && "border-l-2",
+      "stat-card bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-5",
+      accentColor && "border-l-2 bento:border-l-0",
     )} style={accentColor ? { borderLeftColor: accentColor } : undefined}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">

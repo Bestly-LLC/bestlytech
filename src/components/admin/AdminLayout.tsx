@@ -4,7 +4,9 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "./AdminSidebar";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Button } from "@/components/ui/button";
-import { LogOut, Home, Command, Minus, Plus } from "lucide-react";
+import { LogOut, Home, Command, Minus, Plus, Sun, Moon } from "lucide-react";
+import { useAdminTheme } from "@/hooks/useAdminTheme";
+import { cn } from "@/lib/utils";
 import { useAdminTextSize } from "@/hooks/useAdminTextSize";
 import { useDeployRefresh } from "@/hooks/useDeployRefresh";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -38,6 +40,7 @@ function sidebarDefaultOpen(): boolean {
 export function AdminLayout() {
   const { user, signOut } = useAdminAuth();
   const textSize = useAdminTextSize();
+  const { bento, toggle: toggleTheme } = useAdminTheme();
   useDeployRefresh();
 
   // Menus, dialogs and toasts render in portals on <body>, outside the admin wrapper. Put the
@@ -46,6 +49,10 @@ export function AdminLayout() {
     document.body.classList.add("admin-shell");
     return () => document.body.classList.remove("admin-shell");
   }, []);
+  useEffect(() => {
+    document.body.classList.toggle("admin-bento", bento);
+    return () => document.body.classList.remove("admin-bento");
+  }, [bento]);
   const location = useLocation();
 
   const currentLabel = BREADCRUMB_MAP[location.pathname] ??
@@ -56,9 +63,9 @@ export function AdminLayout() {
   return (
     <TooltipProvider>
       <SidebarProvider defaultOpen={sidebarDefaultOpen()}>
-        <div className="admin-shell min-h-screen flex w-full bg-black">
-          {/* Indigo radial glow — matches the marketing site's v7/v8 theming */}
-          <div className="fixed inset-0 pointer-events-none z-0">
+        <div className={cn("admin-shell min-h-screen flex w-full", bento ? "admin-bento bg-[#F3F2EE]" : "bg-black")}>
+          {/* Indigo radial glow — matches the marketing site's v7/v8 theming (dark theme only) */}
+          <div className={cn("fixed inset-0 pointer-events-none z-0", bento && "hidden")}>
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[50rem] h-[37.5rem] bg-[hsl(var(--wow-indigo)/0.12)] rounded-full blur-[7.5rem]" />
             <div className="absolute bottom-0 right-0 w-[25rem] h-[25rem] bg-[hsl(var(--wow-indigo-deep)/0.08)] rounded-full blur-[6.25rem]" />
           </div>
@@ -67,13 +74,13 @@ export function AdminLayout() {
 
           <div className="flex-1 flex flex-col min-w-0 relative z-10">
             {/* Frosted glass header */}
-            <header className="sticky top-0 z-30 h-12 sm:h-14 flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] backdrop-blur-xl px-3 sm:px-4">
+            <header className="sticky top-0 z-30 h-12 sm:h-14 flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] backdrop-blur-xl px-3 sm:px-4 bento:h-16 bento:border-0 bento:bg-[#F3F2EE]/85 bento:px-4 sm:bento:px-6 lg:bento:px-8">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <SidebarTrigger className="text-white/50 hover:text-white hover:bg-white/5" />
-                <span className="text-[0.8125rem] text-white/50 hidden sm:inline truncate">{currentLabel}</span>
+                <span className="text-[0.8125rem] text-white/50 hidden sm:inline truncate bento:text-sm bento:font-medium bento:text-white/80">{currentLabel}</span>
               </div>
               <div className="flex items-center gap-1 sm:gap-2">
-                <div role="group" aria-label="Text size" className="flex items-center rounded-lg border border-white/[0.08] bg-white/[0.02]">
+                <div role="group" aria-label="Text size" className="flex items-center rounded-lg border border-white/[0.08] bg-white/[0.02] bento:rounded-full bento:border-0 bento:shadow-sm">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button variant="ghost" size="icon" onClick={textSize.smaller} disabled={!textSize.canShrink}
@@ -110,6 +117,15 @@ export function AdminLayout() {
                   </TooltipTrigger>
                   <TooltipContent>Command palette (⌘K)</TooltipContent>
                 </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={bento ? "Switch to dark theme" : "Switch to light theme"}
+                      className="text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0 bento:rounded-full">
+                      {bento ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{bento ? "Dark theme" : "Light theme"}</TooltipContent>
+                </Tooltip>
                 <NotificationBell />
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -136,7 +152,7 @@ export function AdminLayout() {
                 </Tooltip>
               </div>
             </header>
-            <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+            <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto bento:pt-2 md:bento:pt-2 lg:bento:pt-2">
               <Outlet />
             </main>
             <CommandPalette />
