@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -65,11 +65,38 @@ export function GuideWizard({
   const [pendingFinal, setPendingFinal] = useState<Step | null>(null);
   const [busy, setBusy] = useState<"test" | "save" | null>(null);
 
+  // The screenshot area. Its shape decides how tall a page the robot renders, so the
+  // screenshot fills the panel instead of floating in it (responsive, like a real window).
+  const areaRef = useRef<HTMLDivElement | null>(null);
+  const areaObserver = useRef<ResizeObserver | null>(null);
+  const [area, setArea] = useState({ w: 0, h: 0 });
+  const robotHeight = useRef<number | undefined>(undefined);
+  const attachArea = useCallback((el: HTMLDivElement | null) => {
+    areaObserver.current?.disconnect();
+    areaRef.current = el;
+    if (!el) return;
+    areaObserver.current = new ResizeObserver(([e]) => {
+      const w = Math.round(e.contentRect.width), h = Math.round(e.contentRect.height);
+      setArea((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+    });
+    areaObserver.current.observe(el);
+  }, []);
+  const measureRobotHeight = (vp: "desktop" | "phone") => {
+    const el = areaRef.current;
+    const w = el?.clientWidth || window.innerWidth * 0.7;
+    const h = el?.clientHeight || window.innerHeight * 0.7;
+    if (vp === "phone") return Math.round(Math.min(1000, Math.max(640, (390 * h) / Math.max(w, 1))));
+    return Math.round(Math.min(1600, Math.max(560, (1280 * h) / Math.max(w, 1))));
+  };
+
   const inspect = useCallback(async (nextSteps: Step[], vp = viewport) => {
     if (!domain) return;
     setLoading(true); setError(null); setPicked(null); setAction(null); setTest(null); setPendingFinal(null);
+    // Size is fixed per session so replayed clicks land on the same layout.
+    if (nextSteps.length === 0) robotHeight.current = measureRobotHeight(vp);
     const { data, error: err } = await callGuide<Inspect>({
-      action: "inspect", domain, url: startUrl || undefined, viewport: vp, steps: nextSteps.map((s) => ({ selector: s.selector })),
+      action: "inspect", domain, url: startUrl || undefined, viewport: vp, height: robotHeight.current,
+      steps: nextSteps.map((s) => ({ selector: s.selector })),
     });
     setLoading(false);
     if (err || !data) { setError(err ?? "No response"); return; }
@@ -82,7 +109,11 @@ export function GuideWizard({
 
   // Fresh start every time the wizard opens.
   useEffect(() => {
-    if (open && domain) { setSteps([]); setView(null); inspect([], viewport); }
+    if (open && domain) {
+      setSteps([]); setView(null);
+      // Wait a frame so the dialog is laid out and the screenshot area can be measured.
+      requestAnimationFrame(() => requestAnimationFrame(() => inspect([], viewport)));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, domain]);
 
@@ -100,7 +131,7 @@ export function GuideWizard({
     const final: Step = { selector: picked.selector, text: picked.text, action };
     const all = [...steps, final];
     setBusy("test"); setError(null);
-    const { data, error: err } = await callGuide<TestResult>({ action: "test", domain, url: startUrl || undefined, viewport, steps: all });
+    const { data, error: err } = await callGuide<TestResult>({ action: "test", domain, url: startUrl || undefined, viewport, height: robotHeight.current, steps: all });
     setBusy(null);
     if (err || !data) { setError(err ?? "No response"); return; }
     setPendingFinal(final);
@@ -111,7 +142,7 @@ export function GuideWizard({
     if (!pendingFinal || !domain) return;
     setBusy("save"); setError(null);
     const all = [...steps, pendingFinal];
-    const { data, error: err } = await callGuide<TestResult>({ action: "save", domain, url: startUrl || undefined, viewport, steps: all, force });
+    const { data, error: err } = await callGuide<TestResult>({ action: "save", domain, url: startUrl || undefined, viewport, height: robotHeight.current, steps: all, force });
     setBusy(null);
     if (err || !data) { setError(err ?? "No response"); return; }
     if (!data.saved) { setTest(data); setError("The robot's re-test didn't close the banner, so nothing was saved."); return; }
@@ -202,10 +233,17 @@ export function GuideWizard({
         ) : (
           <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
             {/* Screenshot with tappable boxes */}
-            <div className="relative flex-1 min-h-0 overflow-auto bg-black/40 p-3">
+            <div className="relative flex-1 min-h-[16rem] bg-black/40">
+              <div ref={attachArea} className="absolute inset-2 sm:inset-3 flex items-center justify-center">
               {view ? (
-                <div className={`relative mx-auto ${phone ? "max-w-[24rem]" : "max-w-full"}`}>
-                  <img src={`data:image/jpeg;base64,${view.shot}`} alt={`Screenshot of ${domain}`} className="block w-full h-auto rounded-md select-none" draggable={false} />
+                <div
+                  className="relative"
+                  style={{
+                    aspectRatio: `${view.vw} / ${view.vh}`,
+                    width: area.w && area.h ? Math.min(area.w, (area.h * view.vw) / view.vh) : "100%",
+                  }}
+                >
+                  <img src={`data:image/jpeg;base64,${view.shot}`} alt={`Screenshot of ${domain}`} className="block w-full h-full rounded-md select-none" draggable={false} />
                   {!loading && boxes.filter((b) => !b.offscreen).map((b) => {
                     const on = picked?.selector === b.selector;
                     return (
@@ -221,8 +259,9 @@ export function GuideWizard({
                   })}
                 </div>
               ) : !error && (
-                <div className="h-full grid place-items-center text-sm text-white/60">Starting the robot browser…</div>
+                <div className="text-sm text-white/60">Starting the robot browser…</div>
               )}
+              </div>
               {loading && (
                 <div className="absolute inset-0 grid place-items-center bg-black/55">
                   <div className="flex items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-sm text-white">
@@ -276,11 +315,31 @@ export function GuideWizard({
                     )}
                   </>
                 ) : (
-                  <p className="text-sm text-white/65">
-                    {view && !loading
-                      ? view.elements.length ? "Tap a highlighted box, or pick from the list." : "No buttons found on this screen."
-                      : " "}
-                  </p>
+                  view && !loading && !view.elements.some((e) => e.likely && !e.offscreen) ? (
+                    <div className="space-y-2.5">
+                      <p className="text-sm font-medium text-white">
+                        {steps.length ? "No banner buttons on this screen." : "No cookie banner showed up for the robot."}
+                      </p>
+                      <p className="text-xs text-white/60">
+                        {steps.length
+                          ? "Undo the last click and pick another button."
+                          : "Banners sometimes load late or only show on phones. Reload or switch views. If it never shows, there's nothing to fix. Just close this."}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" className="h-9 border-white/15 text-white/80 hover:bg-white/5" onClick={() => inspect(steps)}>
+                          <RotateCcw className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" /> Reload page
+                        </Button>
+                        {steps.length === 0 && (
+                          <Button size="sm" variant="ghost" className="h-9 text-white/70 hover:text-white" onClick={() => switchViewport(phone ? "desktop" : "phone")}>
+                            {phone ? <Monitor className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" /> : <Smartphone className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />}
+                            Try {phone ? "desktop" : "phone"} view
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-white/65">{view && !loading ? "Tap a highlighted box, or pick from the list." : " "}</p>
+                  )
                 )}
                 {view && (view.frames?.length || view.shadow) && !loading ? (
                   <p className="text-[0.6875rem] text-white/50">

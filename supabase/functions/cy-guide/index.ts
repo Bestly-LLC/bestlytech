@@ -89,6 +89,8 @@ Deno.serve(async (req) => {
   const domain = String(body.domain || "").trim().toLowerCase();
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return json({ error: "domain required" }, 400);
   const viewport = body.viewport === "phone" ? "phone" : "desktop";
+  // Screenshot height that matches the admin panel's shape (the robot clamps it to 560-1600).
+  const height = Number.isFinite(Number(body.height)) ? Number(body.height) : undefined;
 
   const { data: key } = await svc.rpc("cy_render_key");
   if (!key) return json({ error: "Robot browser key missing" }, 503);
@@ -99,7 +101,7 @@ Deno.serve(async (req) => {
   if (action === "inspect") {
     const steps = cleanSteps(body.steps, false);
     if (typeof steps === "string") return json({ error: steps }, 400);
-    const out = await engine(String(key), { action: "inspect", url, viewport, steps: steps.map((s) => ({ selector: s.selector })) });
+    const out = await engine(String(key), { action: "inspect", url, viewport, height, steps: steps.map((s) => ({ selector: s.selector })) });
     if (!out.ok) return json({ error: out.error, url }, 502);
     const elements = (out.elements || []).map((e: any) => ({ ...e, guess: guess(e.text || "") }));
     return json({ url, viewport, shot: out.shot, vw: out.vw, vh: out.vh, elements, failedStep: out.failedStep, frames: out.frames, shadow: out.shadow });
@@ -109,7 +111,7 @@ Deno.serve(async (req) => {
     const steps = cleanSteps(body.steps, action === "save");
     if (typeof steps === "string") return json({ error: steps }, 400);
     if (!steps.length) return json({ error: "Pick at least one button." }, 400);
-    const test = await engine(String(key), { action: "test", url, viewport, steps: steps.map((s) => ({ selector: s.selector })) });
+    const test = await engine(String(key), { action: "test", url, viewport, height, steps: steps.map((s) => ({ selector: s.selector })) });
     if (!test.ok) return json({ error: test.error, url }, 502);
     const verdict = { dismissed: !!test.dismissed, failedStep: test.failedStep ?? null, before: test.before, after: test.after };
 

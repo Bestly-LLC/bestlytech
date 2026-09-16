@@ -63,9 +63,10 @@ function safeUrl(raw) {
 }
 async function withPage(fn, opts = {}) {
   const profile = opts.phone ? PHONE : DESKTOP;
+  const viewport = opts.height ? { ...profile.viewport, height: opts.height } : profile.viewport;
   const browser = await puppeteer.launch({
     args: await puppeteer.defaultArgs({ args: chromium.args, headless: "shell" }),
-    defaultViewport: profile.viewport,
+    defaultViewport: viewport,
     executablePath: await chromium.executablePath(),
     headless: "shell"
   });
@@ -111,6 +112,30 @@ async function settledEval(page, fn, ...args) {
     }
   }
   throw last;
+}
+const consentVisible = () => {
+  const KEY = /cookie|consent|gdpr|onetrust|didomi|usercentrics|truste|cmp|privacy-?(banner|notice|center)|sp_message|qc-cmp/i;
+  for (const el of Array.from(document.querySelectorAll("body *"))) {
+    const idc = `${el.id} ${typeof el.className === "string" ? el.className : ""}`;
+    if (!KEY.test(idc)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 120 || r.height < 40) continue;
+    const cs = getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) continue;
+    if (r.bottom > 0 && r.top < window.innerHeight) return true;
+  }
+  return false;
+};
+async function waitForConsent(page, ms) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    if (await settledEval(page, consentVisible).catch(() => false)) {
+      await sleep(600);
+      return true;
+    }
+    await sleep(500);
+  }
+  return false;
 }
 const collectElements = (maxN) => {
   const KEY = /cookie|consent|privacy|gdpr|ccpa|tracking|datenschutz|cmp|onetrust|didomi|usercentrics|truste|notice|banner/i;
@@ -267,6 +292,7 @@ async function handler(req, res) {
   const url = safeUrl(body.url);
   if (!url) return res.status(400).json({ ok: false, error: "Bad url" });
   const phone = body.viewport === "phone";
+  const height = Number.isFinite(Number(body.height)) ? Math.round(Math.min(1600, Math.max(560, Number(body.height)))) : void 0;
   try {
     if (action === "content") {
       const out = await withPage(async (page) => {
@@ -310,13 +336,14 @@ async function handler(req, res) {
       if (!steps) return res.status(400).json({ ok: false, error: "Bad steps" });
       const out = await withPage(async (page) => {
         await load(page, url);
+        if (!steps.length) await waitForConsent(page, 7e3);
         const failedStep = await replay(page, steps);
         if (failedStep !== null) {
           return { failedStep, shot: await shot(page), vw: page.viewport().width, vh: page.viewport().height, elements: [] };
         }
         const found = await settledEval(page, collectElements, 80);
         return { failedStep: null, shot: await shot(page), finalUrl: page.url(), ...found };
-      }, { phone, images: true });
+      }, { phone, images: true, height });
       return res.status(200).json({ ok: true, engine: ENGINE, ...out });
     }
     if (action === "test") {
@@ -324,12 +351,13 @@ async function handler(req, res) {
       if (!steps || steps.length === 0) return res.status(400).json({ ok: false, error: "Bad steps" });
       const out = await withPage(async (page) => {
         await load(page, url);
+        await waitForConsent(page, 7e3);
         const before = await shot(page);
         const failedStep = await replay(page, steps);
         await sleep(800);
         const dismissed = failedStep === null ? await settledEval(page, rootsGone).catch(() => true) : false;
         return { dismissed, failedStep, before, after: await shot(page) };
-      }, { phone, images: true });
+      }, { phone, images: true, height });
       return res.status(200).json({ ok: true, engine: ENGINE, ...out });
     }
     return res.status(400).json({ ok: false, error: "Unknown action" });
