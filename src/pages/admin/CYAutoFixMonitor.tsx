@@ -60,7 +60,7 @@ export default function CYAutoFixMonitor() {
   // A failed query must read as UNKNOWN, never as a healthy all-zero pipeline.
   const [healthError, setHealthError] = useState<string | null>(null);
   const [stuckError, setStuckError] = useState<string | null>(null);
-  // null = probe failed (unknown); true/false = real BROWSERLESS_TOKEN config state.
+  // null = probe failed (unknown); true/false = the render engine answered an authenticated ping.
   const [renderConfigured, setRenderConfigured] = useState<boolean | null>(null);
 
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
@@ -84,7 +84,7 @@ export default function CYAutoFixMonitor() {
     setStuckError(s.error ? s.error.message : null);
     if (!s.error) setStuck((s.data as unknown as Stuck[]) || []);
     if (render.error || !render.data) setRenderConfigured(null);
-    else setRenderConfigured(!!(render.data as any).configured);
+    else setRenderConfigured(!!((render.data as any).online ?? (render.data as any).configured));
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -174,8 +174,8 @@ export default function CYAutoFixMonitor() {
           <div className="text-sm">
             <p className="font-medium text-sky-200">Render engine offline</p>
             <p className="text-sky-200/75 text-xs mt-0.5">
-              <code className="px-1 rounded bg-white/10">BROWSERLESS_TOKEN</code> isn't set on this Supabase project, so
-              JavaScript-rendered sites can't be rendered or validated. Pattern validation stays at 0 until it's added.
+              The renderer at <code className="px-1 rounded bg-white/10">bestly.tech/api/cy-render</code> didn't answer, so
+              JavaScript-rendered sites can't be rendered or validated right now. It retries on the next run.
             </p>
           </div>
         </div>

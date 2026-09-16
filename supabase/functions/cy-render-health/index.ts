@@ -1,14 +1,11 @@
 // Cookie Yeti — render-engine health probe (admin-facing).
 //
 // GET /functions/v1/cy-render-health
-// Returns whether the headless render engine is actually configured, based on a
-// REAL secret check (BROWSERLESS_TOKEN). Supabase Edge secrets are project-wide,
-// so this reflects the true config the render/validate stages see — not an
-// inferred "render_attempts > 0" heuristic. Used by CYAutoFixMonitor to show an
-// honest "render engine offline" state instead of a fake-green pipeline.
-//
-// No PII, no DB access. Anonymous (verify_jwt = false) so the admin client can
-// call it with the anon key.
+// Pings the self-hosted render engine (www.bestly.tech/api/cy-render) with the key
+// from Vault, so "online" means a real authenticated round trip, not just that a
+// setting exists. No PII. Anonymous (verify_jwt = false); the key never leaves
+// the server.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,17 +13,42 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-Deno.serve((req) => {
+const RENDER_URL = Deno.env.get("CY_RENDER_URL") ?? "https://www.bestly.tech/api/cy-render";
+
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const token = Deno.env.get("BROWSERLESS_TOKEN") ?? "";
-  const configured = token.trim().length > 0;
+  let online = false;
+  let detail = "";
+  const started = Date.now();
+  try {
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data: key, error } = await supabase.rpc("cy_render_key");
+    if (error || !key) {
+      detail = "render key missing from Vault";
+    } else {
+      const res = await fetch(RENDER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-render-key": String(key) },
+        body: JSON.stringify({ action: "ping" }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const body = await res.json().catch(() => ({}));
+      online = res.ok && body?.ok === true;
+      detail = online ? "ok" : `engine answered ${res.status}`;
+    }
+  } catch (e) {
+    detail = `engine unreachable: ${String(e).slice(0, 120)}`;
+  }
 
   return new Response(
     JSON.stringify({
-      configured,
-      // Coarse, non-secret signal only. Never echo the token.
-      status: configured ? "configured" : "not_configured",
+      configured: online, // kept for older admin builds
+      online,
+      engine: "vercel-chromium",
+      status: online ? "online" : "offline",
+      detail,
+      latency_ms: Date.now() - started,
       checked_at: new Date().toISOString(),
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
