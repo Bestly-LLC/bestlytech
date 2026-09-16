@@ -56,10 +56,34 @@ interface DomainDeepDiveProps {
 // Shared domain actions (also used by the Auto-Fix and Command Center pages)
 // ---------------------------------------------------------------------------
 
-/** ai_generation_log rows that are bookkeeping, not real generation attempts. */
-const NON_ATTEMPT_STATUSES = new Set(["no_candidates", "skipped_already_covered", "skipped_excluded_domain"]);
+/**
+ * ai_generation_log statuses that are real AI generator outcomes. Everything else is bookkeeping:
+ * success_consensus (report dismissals, no AI call), success_probe, no_candidates, skipped_*
+ * (incl. skipped_no_html) and permanently_failed (the retry job's marker; the failure is already
+ * logged). Keep in sync with cy_operations_stats / v_cookieyeti_pipeline_health.
+ */
+export const AI_SUCCESS_STATUSES = new Set([
+  "success", "success_cmp_fallback", "success_cmp_fingerprint", "success_failsafe",
+  "success_failsafe_autocorrected", "success_gemini_failsafe",
+]);
+export const AI_FAILURE_STATUSES = new Set([
+  "needs_manual_review", "error", "failed", "failed_not_cookie_banner", "rejected_dangerous_selector", "generation_failed",
+]);
 export function isRealAiAttempt(status: string | null | undefined): boolean {
-  return !!status && !NON_ATTEMPT_STATUSES.has(status);
+  return !!status && (AI_SUCCESS_STATUSES.has(status) || AI_FAILURE_STATUSES.has(status));
+}
+
+/** Real AI attempts counted once per domain per UTC day; a day with any success counts as a success. */
+export function countAiAttempts(logs: { domain?: string | null; status?: string | null; created_at?: string | null }[]) {
+  const days = new Map<string, boolean>();
+  for (const l of logs) {
+    if (!isRealAiAttempt(l.status)) continue;
+    const key = `${l.domain ?? ""}|${(l.created_at ?? "").slice(0, 10)}`;
+    days.set(key, (days.get(key) ?? false) || AI_SUCCESS_STATUSES.has(l.status!));
+  }
+  const attempts = days.size;
+  const successes = Array.from(days.values()).filter(Boolean).length;
+  return { attempts, successes };
 }
 
 async function edgeErrorMessage(error: any): Promise<string> {
@@ -97,6 +121,30 @@ export async function runAiForDomain(domain: string): Promise<boolean> {
   }
   toast.warning(`AI could not fix ${domain}`, {
     description: res.results?.[0]?.error?.slice(0, 180) || status.replace(/_/g, " "),
+  });
+  return true;
+}
+
+/**
+ * Give a render_exhausted domain another go: resets render_attempts so render-banner (every 10 min)
+ * picks it up again. The RPC returns how many open reports it changed.
+ */
+export async function retryRenderForDomain(domain: string, renderConfigured?: boolean | null): Promise<boolean> {
+  const { data, error } = await supabase.rpc("reset_render_attempts" as never, { p_domain: domain } as never);
+  if (error) {
+    toast.error(`Couldn't queue a render for ${domain}`, { description: error.message });
+    return false;
+  }
+  if (!data) {
+    toast.error(`Nothing to retry for ${domain}`, {
+      description: "No open report with used-up render attempts was found. It may already be resolved.",
+    });
+    return false;
+  }
+  toast.success(`${domain} queued for another render`, {
+    description: renderConfigured === false
+      ? "Heads up: BROWSERLESS_TOKEN isn't set, so the render job will skip it until the token is added."
+      : "The render job runs every 10 minutes.",
   });
   return true;
 }
@@ -308,9 +356,8 @@ export function DomainDeepDive({
 
   // ---- Derived stats ----
   const activePatterns = patterns.filter((p) => p.is_active);
-  const attempts = aiLogs.filter((l) => isRealAiAttempt(l.status));
-  const successCount = attempts.filter((l) => (l.status || "").startsWith("success")).length;
-  const successRate = attempts.length > 0 ? Math.round((successCount / attempts.length) * 100) : null;
+  const { attempts: attemptCount, successes: successCount } = countAiAttempts(aiLogs);
+  const successRate = attemptCount > 0 ? Math.round((successCount / attemptCount) * 100) : null;
   const cmpFingerprint =
     missedReport?.cmp_fingerprint && missedReport.cmp_fingerprint !== "unknown"
       ? missedReport.cmp_fingerprint
@@ -492,7 +539,7 @@ export function DomainDeepDive({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <StatBox label="Active patterns" value={`${activePatterns.length}/${patterns.length}`} icon={CheckCircle2} />
               <StatBox label="User reports" value={missedReport?.report_count ?? 0} icon={FileWarning} />
-              <StatBox label="AI attempts" value={attempts.length} icon={Cpu} />
+              <StatBox label="AI attempts" value={attemptCount} icon={Cpu} />
               <StatBox label="AI success" value={successRate === null ? "—" : `${successRate}%`} icon={Zap} />
             </div>
 

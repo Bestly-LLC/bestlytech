@@ -4,9 +4,10 @@ import { ADMIN_MARK_PERIOD_MS } from "@/components/AdminMark";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { BrandLoader } from "@/components/BrandLoader";
 import { useAdminFavicon } from "@/hooks/useAdminFavicon";
+import { AdminAccessDenied } from "./AdminAccessDenied";
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading, isAdmin } = useAdminAuth();
+  const { user, loading, isAdmin, roleError, recheck, signOut } = useAdminAuth();
   useAdminFavicon();
 
   // On a fresh page load, let the side-eye finish one full glance (3.2s from navigation start)
@@ -27,14 +28,7 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <h1 className="text-2xl font-bold text-destructive">Access Denied</h1>
-          <p className="text-muted-foreground">You do not have admin privileges.</p>
-        </div>
-      </div>
-    );
+    return <AdminAccessDenied email={user.email} checkFailed={!!roleError} onRetry={recheck} onSignOut={signOut} />;
   }
 
   return <>{children}</>;

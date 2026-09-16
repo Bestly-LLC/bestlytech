@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { AdminMark } from "@/components/AdminMark";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 type CountKeys =
@@ -87,32 +87,72 @@ export const ADMIN_NAV_SECTIONS = [
   { label: "Turo", items: turoItems },
 ];
 
+const COUNT_MIN_INTERVAL_MS = 15_000;
+const COUNT_POLL_MS = 60_000;
+
 export function AdminSidebar() {
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
+  const { state, isMobile, setOpenMobile } = useSidebar();
+  // The mobile sheet always shows full labels, whatever the saved desktop collapsed state is.
+  const collapsed = state === "collapsed" && !isMobile;
   const location = useLocation();
   const currentPath = location.pathname;
-  const [counts, setCounts] = useState<Record<CountKeys, number>>({ submissions: 0, contacts: 0, hires: 0, cySubscribers: 0, cloudLeads: 0, shieldReports: 0 });
+  // A key is missing until its count loads. A failed count keeps its last value instead of reading 0.
+  const [counts, setCounts] = useState<Partial<Record<CountKeys, number>>>({});
+  const lastFetchRef = useRef(0);
+  const inFlightRef = useRef(false);
+
+  const loadCounts = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (inFlightRef.current) return;
+    if (!force && now - lastFetchRef.current < COUNT_MIN_INTERVAL_MS) return;
+    inFlightRef.current = true;
+    lastFetchRef.current = now;
+    try {
+      const head = { count: "exact" as const, head: true };
+      const results = await Promise.all([
+        supabase.from("seller_intakes").select("id", head).in("status", ["Submitted", "In Review"]),
+        supabase.from("contact_submissions").select("id", head).eq("status", "new"),
+        supabase.from("hire_requests").select("id", head).eq("status", "new"),
+        supabase.from("subscriptions").select("id", head).eq("status", "active"),
+        // Leads with no deal yet, or whose furthest deal is still at stage 1-2.
+        supabase.from("v_cloud_leads_needing_action" as any).select("id", head),
+        supabase.from("shield_url_reports").select("id", head).eq("status", "new"),
+      ]);
+      const keys: CountKeys[] = ["submissions", "contacts", "hires", "cySubscribers", "cloudLeads", "shieldReports"];
+      setCounts((prev) => {
+        const next = { ...prev };
+        results.forEach((r, i) => {
+          if (!r.error && typeof r.count === "number") next[keys[i]] = r.count;
+        });
+        return next;
+      });
+    } catch {
+      // Network failure: keep the last counts.
+    } finally {
+      inFlightRef.current = false;
+    }
+  }, []);
+
+  // Route changes (throttled), a steady poll, and coming back to the tab.
+  useEffect(() => {
+    loadCounts();
+  }, [currentPath, loadCounts]);
 
   useEffect(() => {
-    Promise.all([
-      supabase.from("seller_intakes").select("id", { count: "exact", head: true }).in("status", ["Submitted", "In Review"]),
-      supabase.from("contact_submissions").select("id", { count: "exact", head: true }).eq("status", "new"),
-      supabase.from("hire_requests").select("id", { count: "exact", head: true }).eq("status", "new"),
-      supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "active"),
-      supabase.from("cloud_leads").select("id", { count: "exact", head: true }).eq("status", "new"),
-      supabase.from("shield_url_reports").select("id", { count: "exact", head: true }).eq("status", "new"),
-    ]).then(([subs, contacts, hires, cySubs, cloudLeads, shieldReports]) => {
-      setCounts({
-        submissions: subs.count ?? 0,
-        contacts: contacts.count ?? 0,
-        hires: hires.count ?? 0,
-        cySubscribers: cySubs.count ?? 0,
-        cloudLeads: cloudLeads.count ?? 0,
-        shieldReports: shieldReports.count ?? 0,
-      });
-    });
-  }, []);
+    const interval = setInterval(() => {
+      if (!document.hidden) loadCounts(true);
+    }, COUNT_POLL_MS);
+    const onFocus = () => loadCounts();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [loadCounts]);
+
+  const closeMobile = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   const isActive = (path: string) => {
     if (path === "/admin") return currentPath === "/admin";
@@ -123,12 +163,15 @@ export function AdminSidebar() {
 
   const renderItem = (item: { title: string; url: string; icon: any; countKey?: CountKeys }) => {
     const active = isActive(item.url);
-    const count = item.countKey ? counts[item.countKey] : 0;
+    const count = item.countKey ? counts[item.countKey] ?? 0 : 0;
     return (
       <SidebarMenuItem key={item.title}>
-        <SidebarMenuButton asChild isActive={active}>
+        <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
           <Link
             to={item.url}
+            onClick={closeMobile}
+            aria-label={count > 0 ? `${item.title} (${count})` : item.title}
+            aria-current={active ? "page" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all relative",
               active
@@ -158,6 +201,7 @@ export function AdminSidebar() {
       <SidebarHeader className="bg-[#0a0a0a] border-r border-white/[0.06] px-2 pt-3 pb-1">
         <Link
           to="/admin"
+          onClick={closeMobile}
           aria-label="Bestly Admin home"
           className={cn("flex items-center gap-2.5 rounded-lg py-1.5", collapsed ? "justify-center px-0" : "px-2")}
         >

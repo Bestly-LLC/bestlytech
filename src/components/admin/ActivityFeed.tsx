@@ -34,7 +34,14 @@ function timeAgo(date: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export function ActivityFeed() {
+interface ActivityFeedProps {
+  /** How many events to show (default 20). */
+  limit?: number;
+  /** Drop the card chrome and heading, for use inside another section. */
+  embedded?: boolean;
+}
+
+export function ActivityFeed({ limit = 20, embedded = false }: ActivityFeedProps = {}) {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,14 +52,14 @@ export function ActivityFeed() {
       .from("admin_activity_log" as never)
       .select("id, event_type, description, created_at")
       .order("created_at", { ascending: false })
-      .limit(20) as unknown as Promise<{ data: ActivityEvent[] | null; error: { message: string } | null }>);
+      .limit(limit) as unknown as Promise<{ data: ActivityEvent[] | null; error: { message: string } | null }>);
     if (err) setError(err.message);
     else {
       setError(null);
       setEvents(data || []);
     }
     setLoading(false);
-  }, []);
+  }, [limit]);
 
   useEffect(() => {
     load();
@@ -65,7 +72,12 @@ export function ActivityFeed() {
   };
 
   return (
-    <section aria-labelledby="activity-feed-title" className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+    <section
+      aria-labelledby={embedded ? undefined : "activity-feed-title"}
+      aria-label={embedded ? "Recent activity" : undefined}
+      className={embedded ? "overflow-hidden" : "bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden"}
+    >
+      {!embedded && (
       <div className="flex items-center gap-2 px-5 py-4">
         <Activity className="h-4 w-4 text-white/55" aria-hidden />
         <div>
@@ -73,6 +85,7 @@ export function ActivityFeed() {
           <p className="text-xs text-white/60 mt-0.5">Recent events across the admin suite.</p>
         </div>
       </div>
+      )}
 
       {error && (
         <div role="alert" className="flex items-center gap-3 px-5 py-2.5 border-y border-red-500/20 bg-red-500/[0.06]">

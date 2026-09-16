@@ -32,6 +32,13 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/cookie-yeti/autofix": "Auto-Fix",
 };
 
+/** ui/sidebar.tsx saves the desktop open/collapsed state in this cookie; read it back on load. */
+function sidebarDefaultOpen(): boolean {
+  if (typeof document === "undefined") return true;
+  const match = document.cookie.split("; ").find((c) => c.startsWith("sidebar:state="));
+  return match ? match.slice("sidebar:state=".length) !== "false" : true;
+}
+
 export function AdminLayout() {
   const { user, signOut } = useAdminAuth();
   const textSize = useAdminTextSize();
@@ -51,7 +58,7 @@ export function AdminLayout() {
 
   return (
     <TooltipProvider>
-      <SidebarProvider>
+      <SidebarProvider defaultOpen={sidebarDefaultOpen()}>
         <div className="admin-shell min-h-screen flex w-full bg-black">
           {/* Indigo radial glow — matches the marketing site's v7/v8 theming */}
           <div className="fixed inset-0 pointer-events-none z-0">

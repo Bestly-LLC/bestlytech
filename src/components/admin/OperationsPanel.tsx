@@ -28,13 +28,14 @@ const LABELS: Record<OpId, string> = {
  * Cookie Yeti maintenance jobs, grouped by task:
  *   primary   Run AI generator          edge fn ai-generate-pattern (admin JWT accepted)
  *   menu      Retry failed domains      edge fn auto-retry-failed-patterns (admin JWT accepted)
- *             Run pattern maintenance   rpc run_maintenance_cron
+ *             Run pattern maintenance…  rpc run_maintenance_cron (confirm: deactivates stale, deletes broken)
  *   danger    Reset failed domains…     rpc reset_failed_domains_cron (deletes 30-day-old failure logs)
  * All of these also run on cron; this panel is for running one now.
  */
 export function OperationsPanel({ onRefresh, candidateCount, permanentlyFailedCount }: OperationsPanelProps) {
   const [running, setRunning] = useState<OpId | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmMaintenance, setConfirmMaintenance] = useState(false);
 
   const invokeFn = async (slug: string): Promise<any> => {
     const { data, error } = await supabase.functions.invoke(slug, { body: {} });
@@ -65,13 +66,15 @@ export function OperationsPanel({ onRefresh, candidateCount, permanentlyFailedCo
     "run-maintenance": async () => {
       const { data, error } = await supabase.rpc("run_maintenance_cron" as never);
       if (error) throw error;
-      return data ? "Pattern fixes and user reports processed." : "Maintenance ran.";
+      const d = data as { fix?: { processed?: number; fixed?: number; failed?: number }; reports?: { newly_resolved?: number } } | null;
+      if (!d?.fix) return "Maintenance ran.";
+      return `${d.fix.fixed ?? 0} pattern${d.fix.fixed === 1 ? "" : "s"} changed${d.fix.failed ? `, ${d.fix.failed} failed` : ""}, ${d.reports?.newly_resolved ?? 0} reports resolved.`;
     },
     "reset-failed": async () => {
       const { data, error } = await supabase.rpc("reset_failed_domains_cron" as never);
       if (error) throw error;
-      const d = data as { reset_domains?: number; cleaned_logs?: number } | null;
-      return `${d?.reset_domains ?? 0} domains queued for retry, ${d?.cleaned_logs ?? 0} old failure logs cleared.`;
+      const d = data as { reset_domains?: number; reset_render?: number; cleaned_logs?: number } | null;
+      return `${d?.reset_domains ?? 0} domains queued for AI retry, ${d?.reset_render ?? 0} for another render, ${d?.cleaned_logs ?? 0} old failure logs cleared.`;
     },
   };
 
@@ -123,19 +126,38 @@ export function OperationsPanel({ onRefresh, candidateCount, permanentlyFailedCo
             label="More maintenance jobs"
             items={[
               { label: "Retry failed domains", icon: RotateCcw, group: "Maintenance", disabled: running !== null, onSelect: () => run("retry-failed") },
-              { label: "Run pattern maintenance", icon: Wrench, group: "Maintenance", disabled: running !== null, onSelect: () => run("run-maintenance") },
+              { label: "Run pattern maintenance…", icon: Wrench, group: "Maintenance", disabled: running !== null, onSelect: () => setConfirmMaintenance(true) },
               { label: "Reset failed domains…", icon: RotateCcw, destructive: true, disabled: running !== null, onSelect: () => setConfirmReset(true) },
             ]}
           />
         </div>
       </div>
 
+      <AlertDialog open={confirmMaintenance} onOpenChange={setConfirmMaintenance}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Run pattern maintenance now?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This is the same job that runs every 3 hours. It changes live patterns: patterns not re-reported in 30 days
+              are deactivated, patterns reported more than 5 times that never worked are deleted, and weak patterns have
+              their confidence lowered. It also resolves user reports that now have a working pattern. Deleted patterns
+              can't be restored.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => run("run-maintenance")}>Run maintenance</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Reset failed domains?</AlertDialogTitle>
             <AlertDialogDescription>
-              Domains that failed 5+ times over 30 days ago get their attempt count reset so the AI generator tries them again.
+              Domains whose last permanent AI failure was over 30 days ago get their attempt count reset so the AI generator
+              tries them again, and domains whose render attempts ran out over 30 days ago get another render.
               Failure log entries older than 30 days are deleted. This can't be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
