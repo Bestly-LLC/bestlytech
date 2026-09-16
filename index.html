@@ -55,6 +55,7 @@
     <style>
       #boot-splash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fbfaf8;z-index:2147483647}
       #boot-splash.is-admin{background:#000}
+      #boot-splash.is-admin.is-bento{background:#F3F2EE}
       #boot-splash .mark{width:96px;height:96px;display:flex;align-items:center;justify-content:center;animation:boot-breathe 1.6s cubic-bezier(.4,0,.2,1) infinite}
       #boot-splash.is-admin .mark{width:112px;height:112px;animation:none}
       #boot-splash img{width:84px;height:84px}
@@ -80,12 +81,14 @@
     <div id="root"><div id="boot-splash" role="status" aria-label="Loading Bestly"><div class="mark"><img src="/bestly-mark.webp" alt="" width="64" height="64" /></div></div></div>
     <script>
       if (location.pathname.indexOf("/admin") === 0) {
-        document.getElementById("boot-splash").className = "is-admin";
+        var adminLight = true;
+        try { adminLight = localStorage.getItem("bestly-admin-theme") !== "dark"; } catch (e) {}
+        document.getElementById("boot-splash").className = adminLight ? "is-admin is-bento" : "is-admin";
         document.title = "Bestly Admin";
         // Inline the side-eye mark (no network wait, no flash of the marketing logo). Same markup
         // and classes as AdminMark.tsx, so React's loaders pick up the glance mid-cycle.
         document.querySelector("#boot-splash .mark").innerHTML =
-          '<svg viewBox="0 0 72 72" style="width:112px;height:112px;color:#fff" aria-hidden="true">' +
+          '<svg viewBox="0 0 72 72" style="width:112px;height:112px;color:' + (adminLight ? "#111114" : "#fff") + '" aria-hidden="true">' +
           '<defs><mask id="bm" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72"><rect width="72" height="72" fill="#fff"/><circle cx="19" cy="44" r="10.3"/><circle cx="53" cy="44" r="10.3"/></mask>' +
           '<clipPath id="bcl"><circle cx="19" cy="44" r="10.7"/></clipPath><clipPath id="bcr"><circle cx="53" cy="44" r="10.7"/></clipPath>' +
           '<mask id="bpm" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72"><rect width="72" height="72" fill="#fff"/><g class="am-lidL"><rect x="0" y="10" width="40" height="34.8"/></g><g class="am-lidR"><rect x="32" y="10" width="40" height="34.8"/></g></mask></defs>' +
