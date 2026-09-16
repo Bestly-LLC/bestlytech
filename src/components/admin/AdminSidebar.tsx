@@ -10,7 +10,7 @@ import {
   Shield,
   Car,
   Mic,
-  House, Boxes, KeyRound,
+  House, Boxes, KeyRound, BookMarked,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -67,12 +67,19 @@ const turoItems = [
   { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Car },
 ];
 
+// Backup of the account's Claude skills. The copies a session sees on disk are a
+// read-only cache; this is the copy we own.
+const opsItems = [
+  { title: "Claude Skills", url: "/admin/skills", icon: BookMarked },
+];
+
 
 export const ADMIN_NAV_SECTIONS = [
   { label: "Work", items: workItems },
   { label: "Cookie Yeti", items: cookieYetiItems },
   { label: "Home Hub", items: homeHubItems },
   { label: "Turo", items: turoItems },
+  { label: "Ops", items: opsItems },
 ];
 
 const COUNT_MIN_INTERVAL_MS = 15_000;

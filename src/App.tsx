@@ -84,6 +84,7 @@ const HomeHubHomeAssistant = lazy(() => import("./pages/admin/HomeHubHomeAssista
 const HomeHubHomebridge = lazy(() => import("./pages/admin/HomeHubHomebridge"));
 const HomeHubAccess = lazy(() => import("./pages/admin/HomeHubAccess"));
 const StreetSweeping = lazy(() => import("./pages/admin/StreetSweeping"));
+const AdminSkills = lazy(() => import("./pages/admin/AdminSkills"));
 const AdminNotFound = lazy(() => import("./pages/admin/AdminNotFound"));
 
 /** Redirects an old route to a section tab, carrying over the query string (e.g. ?q= for Granted Access). */
@@ -194,6 +195,7 @@ const App = () => (
                   <Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
                   <Route path="home-hub/access" element={<HomeHubAccess />} />
                   <Route path="street-sweeping" element={<StreetSweeping />} />
+                  <Route path="skills" element={<AdminSkills />} />
                   <Route path="*" element={<AdminNotFound />} />
                 </Route>
 
