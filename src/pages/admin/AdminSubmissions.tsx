@@ -73,7 +73,7 @@ function toCsv(rows: Record<string, any>[]): string {
   return [header, ...body].join("\n");
 }
 
-export default function AdminSubmissions() {
+export default function AdminSubmissions({ embedded = false }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<any[]>([]);
   const [docCounts, setDocCounts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
@@ -285,6 +285,7 @@ export default function AdminSubmissions() {
   return (
     <div className="space-y-6 max-w-6xl">
       <PageHeader
+        embedded={embedded}
         title="Submissions"
         description="Marketplace seller intake submissions."
         actions={

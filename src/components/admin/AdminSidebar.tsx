@@ -1,16 +1,13 @@
 import {
   LayoutDashboard,
-  FileText,
   Settings,
   BarChart3,
   Snowflake,
   Users,
   Mail,
-  Briefcase,
   ListChecks,
   Server,
   Shield,
-  Cloud,
   Car,
   Mic,
 } from "lucide-react";
@@ -33,19 +30,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 type CountKeys =
-  | "submissions"
+  | "leads"
   | "contacts"
-  | "hires"
-  | "cySubscribers"
-  | "cloudLeads";
+  | "cySubscribers";
 
 export const dashboardItem = { title: "Command Center", url: "/admin", icon: LayoutDashboard };
 
-// Work: everything that brings in or serves a customer (bids, deals, intake, inbound), in one place.
+// Work: Leads is the CRM (every funnel in one pipeline); inbound messages, waitlist, meetings and settings sit beside it.
 const workItems = [
-  { title: "Cloud Deals", url: "/admin/cloud", icon: Cloud, countKey: "cloudLeads" as CountKeys },
-  { title: "Marketplace Intake", url: "/admin/submissions", icon: FileText, countKey: "submissions" as CountKeys },
-  { title: "Hire Requests", url: "/admin/hires", icon: Briefcase, countKey: "hires" as CountKeys },
+  { title: "Leads", url: "/admin/leads", icon: Users, countKey: "leads" as CountKeys },
   { title: "Contacts", url: "/admin/contacts", icon: Mail, countKey: "contacts" as CountKeys },
   { title: "Waitlist", url: "/admin/waitlist", icon: ListChecks },
   { title: "Meetings", url: "/admin/meetings", icon: Mic },
@@ -100,14 +93,12 @@ export function AdminSidebar() {
     try {
       const head = { count: "exact" as const, head: true };
       const results = await Promise.all([
-        supabase.from("seller_intakes").select("id", head).in("status", ["Submitted", "In Review"]),
+        // New leads across every funnel (cloud, marketplace intake, hire requests).
+        supabase.from("v_crm_leads" as any).select("lead_key", head).eq("stage", "new"),
         supabase.from("contact_submissions").select("id", head).eq("status", "new"),
-        supabase.from("hire_requests").select("id", head).eq("status", "new"),
         supabase.from("subscriptions").select("id", head).eq("status", "active"),
-        // Leads with no deal yet, or whose furthest deal is still at stage 1-2.
-        supabase.from("v_cloud_leads_needing_action" as any).select("id", head),
       ]);
-      const keys: CountKeys[] = ["submissions", "contacts", "hires", "cySubscribers", "cloudLeads"];
+      const keys: CountKeys[] = ["leads", "contacts", "cySubscribers"];
       setCounts((prev) => {
         const next = { ...prev };
         results.forEach((r, i) => {
@@ -147,6 +138,8 @@ export function AdminSidebar() {
     if (path === "/admin") return currentPath === "/admin";
     if (path === "/admin/cookie-yeti") return currentPath === "/admin/cookie-yeti";
     if (path === "/admin/home-hub") return currentPath === "/admin/home-hub";
+    // Lead detail pages (a cloud deal, a marketplace submission) belong to Leads.
+    if (path === "/admin/leads") return ["/admin/leads", "/admin/cloud", "/admin/submissions", "/admin/hires"].some((p) => currentPath.startsWith(p));
     return currentPath.startsWith(path);
   };
 

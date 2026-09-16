@@ -9,11 +9,13 @@ import { useAdminTextSize } from "@/hooks/useAdminTextSize";
 import { useDeployRefresh } from "@/hooks/useDeployRefresh";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CommandPalette, OPEN_ADMIN_PALETTE_EVENT } from "./CommandPalette";
+import { NotificationBell } from "./NotificationBell";
 
 const BREADCRUMB_MAP: Record<string, string> = {
   "/admin": "Dashboard",
   "/admin/submissions": "Marketplace Intake",
   "/admin/settings": "Settings",
+  "/admin/leads": "Leads",
   "/admin/cookie-yeti": "CY Command Center",
   "/admin/cookie-yeti/subscribers": "CY Subscribers",
   "/admin/cookie-yeti/analytics": "CY Analytics",
@@ -108,6 +110,7 @@ export function AdminLayout() {
                   </TooltipTrigger>
                   <TooltipContent>Command palette (⌘K)</TooltipContent>
                 </Tooltip>
+                <NotificationBell />
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" asChild className="text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0">

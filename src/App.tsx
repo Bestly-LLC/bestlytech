@@ -66,7 +66,6 @@ import { AdminRoute } from "@/components/admin/AdminRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
-const AdminSubmissions = lazy(() => import("./pages/admin/AdminSubmissions"));
 const AdminSubmissionDetail = lazy(() => import("./pages/admin/AdminSubmissionDetail"));
 // Cookie Yeti: three tabbed sections; each lazy-loads only its active tab's page.
 const CookieYetiCommandCenter = lazy(() => import("./pages/admin/CookieYetiCommandCenter"));
@@ -74,12 +73,11 @@ const CookieYetiSubscribers = lazy(() => import("./pages/admin/CookieYetiSubscri
 const CookieYetiAnalytics = lazy(() => import("./pages/admin/CookieYetiAnalytics"));
 const AdminContacts = lazy(() => import("./pages/admin/AdminContacts"));
 const AdminMeetings = lazy(() => import("./pages/admin/AdminMeetings"));
-const AdminHireRequests = lazy(() => import("./pages/admin/AdminHireRequests"));
 const AdminWaitlist = lazy(() => import("./pages/admin/AdminWaitlist"));
-const CloudDeals = lazy(() => import("./pages/admin/CloudDeals"));
 const CloudDealDetail = lazy(() => import("./pages/admin/CloudDealDetail"));
 const CloudDiscoveryBrief = lazy(() => import("./pages/admin/CloudDiscoveryBrief"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
+const AdminLeads = lazy(() => import("./pages/admin/AdminLeads"));
 const HomeHubOverview = lazy(() => import("./pages/admin/HomeHubOverview"));
 const HomeHubPihole = lazy(() => import("./pages/admin/HomeHubPihole"));
 const StreetSweeping = lazy(() => import("./pages/admin/StreetSweeping"));
@@ -165,15 +163,16 @@ const App = () => (
                 <Route path="/admin/login" element={<AdminLogin />} />
                 <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
                   <Route index element={<AdminDashboard />} />
-                  <Route path="submissions" element={<AdminSubmissions />} />
+                  <Route path="leads" element={<AdminLeads />} />
+                  <Route path="submissions" element={<TabRedirect to="/admin/leads" tab="marketplace" />} />
                   <Route path="submissions/:id" element={<AdminSubmissionDetail />} />
                   <Route path="settings" element={<AdminSettings />} />
                   <Route path="guide" element={<Navigate to="/admin/settings?tab=guide" replace />} />
                   <Route path="contacts" element={<AdminContacts />} />
-                  <Route path="hires" element={<AdminHireRequests />} />
+                  <Route path="hires" element={<TabRedirect to="/admin/leads" tab="hire" />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
                   <Route path="meetings" element={<AdminMeetings />} />
-                  <Route path="cloud" element={<CloudDeals />} />
+                  <Route path="cloud" element={<TabRedirect to="/admin/leads" tab="cloud" />} />
                   <Route path="cloud/:id" element={<CloudDealDetail />} />
                   <Route path="cloud/:id/brief-pdf" element={<CloudDiscoveryBrief />} />
                   <Route path="shield-reports" element={<Navigate to="/admin" replace />} />

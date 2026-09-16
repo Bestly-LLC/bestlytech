@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +54,7 @@ function replyHref(r: any) {
   return `mailto:${r.email}?subject=${encodeURIComponent(`Your ${r.project_type || "project"} inquiry${r.company ? ` — ${r.company}` : ""}`)}`;
 }
 
-export default function AdminHireRequests() {
+export default function AdminHireRequests({ embedded = false }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -83,6 +84,19 @@ export default function AdminHireRequests() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Deep link from Leads and notifications: ?open=<request id>
+  const [params, setParams] = useSearchParams();
+  const openId = params.get("open");
+  useEffect(() => {
+    if (!openId || loading) return;
+    const hit = data.find((r) => r.id === openId);
+    if (hit) setViewing(hit);
+    const next = new URLSearchParams(params);
+    next.delete("open");
+    setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, loading, data]);
 
   /** Updates status and verifies rows actually changed (RLS returns success on 0 rows). */
   const setStatus = async (ids: string[], status: string, { quiet = false } = {}) => {
@@ -204,6 +218,7 @@ export default function AdminHireRequests() {
   return (
     <div className="space-y-6 max-w-6xl">
       <PageHeader
+        embedded={embedded}
         title="Hire Requests"
         description="Project inquiries from the hire form."
         actions={

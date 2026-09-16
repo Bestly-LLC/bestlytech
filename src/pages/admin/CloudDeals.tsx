@@ -77,7 +77,7 @@ function isStuck(row: LeadRow): boolean {
   return Date.now() - new Date(ref).getTime() > 7 * 86400000;
 }
 
-export default function CloudDeals() {
+export default function CloudDeals({ embedded = false }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [rows, setRows] = useState<LeadRow[]>([]);
@@ -194,6 +194,7 @@ export default function CloudDeals() {
   return (
     <div className="space-y-6">
       <PageHeader
+        embedded={embedded}
         title="Cloud Deals"
         description="In-House Cloud customer intake pipeline. Lead → brief → discovery → quote → install → live."
         actions={

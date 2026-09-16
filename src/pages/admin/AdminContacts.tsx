@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -75,6 +76,19 @@ export default function AdminContacts() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Deep link from notifications: ?open=<message id>
+  const [params, setParams] = useSearchParams();
+  const openId = params.get("open");
+  useEffect(() => {
+    if (!openId || loading) return;
+    const hit = data.find((r) => r.id === openId);
+    if (hit) setViewing(hit);
+    const next = new URLSearchParams(params);
+    next.delete("open");
+    setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, loading, data]);
 
   /** Updates status and verifies rows actually changed (RLS returns success on 0 rows). */
   const setStatus = async (ids: string[], status: string, { quiet = false } = {}) => {
