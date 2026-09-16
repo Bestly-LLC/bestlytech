@@ -58,8 +58,10 @@ trusting the command's return value — that was the original bug.
 The agent heartbeats into `home_hub_agent_state` on every poll. The UI treats
 `last_seen_at` within **3 minutes** as connected. When it isn't, the controls are
 disabled with the last-seen time shown — never hidden, and never silently faked.
-Commands nothing claims within 10 minutes are marked `expired` by
-`expire_stale_home_hub_commands()`.
+Commands nothing claims within 10 minutes, and commands claimed but not finished within
+15 minutes (the Pi died mid-run), are marked `expired` by `expire_stale_home_hub_commands()`,
+which runs on every agent poll and from pg_cron every 5 minutes. The edge function fails any
+command outside the contract table above before the agent sees it.
 
 ## The Pi
 
