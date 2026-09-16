@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { ScrollProgress } from "@/components/ScrollProgress";
@@ -68,7 +68,6 @@ const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminSubmissions = lazy(() => import("./pages/admin/AdminSubmissions"));
 const AdminSubmissionDetail = lazy(() => import("./pages/admin/AdminSubmissionDetail"));
-const AdminSetupGuide = lazy(() => import("./pages/admin/AdminSetupGuide"));
 const CYDashboard = lazy(() => import("./pages/admin/CYDashboard"));
 const CYCommandCenter = lazy(() => import("./pages/admin/CYCommandCenter"));
 const CYAutoFixMonitor = lazy(() => import("./pages/admin/CYAutoFixMonitor"));
@@ -84,7 +83,7 @@ const AdminWaitlist = lazy(() => import("./pages/admin/AdminWaitlist"));
 const CloudDeals = lazy(() => import("./pages/admin/CloudDeals"));
 const CloudDealDetail = lazy(() => import("./pages/admin/CloudDealDetail"));
 const CloudDiscoveryBrief = lazy(() => import("./pages/admin/CloudDiscoveryBrief"));
-const AdminShieldReports = lazy(() => import("./pages/admin/AdminShieldReports"));
+const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const HomeHubOverview = lazy(() => import("./pages/admin/HomeHubOverview"));
 const HomeHubPihole = lazy(() => import("./pages/admin/HomeHubPihole"));
 const StreetSweeping = lazy(() => import("./pages/admin/StreetSweeping"));
@@ -164,7 +163,8 @@ const App = () => (
                   <Route index element={<AdminDashboard />} />
                   <Route path="submissions" element={<AdminSubmissions />} />
                   <Route path="submissions/:id" element={<AdminSubmissionDetail />} />
-                  <Route path="guide" element={<AdminSetupGuide />} />
+                  <Route path="settings" element={<AdminSettings />} />
+                  <Route path="guide" element={<Navigate to="/admin/settings?tab=guide" replace />} />
                   <Route path="contacts" element={<AdminContacts />} />
                   <Route path="hires" element={<AdminHireRequests />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
@@ -172,7 +172,7 @@ const App = () => (
                   <Route path="cloud" element={<CloudDeals />} />
                   <Route path="cloud/:id" element={<CloudDealDetail />} />
                   <Route path="cloud/:id/brief-pdf" element={<CloudDiscoveryBrief />} />
-                  <Route path="shield-reports" element={<AdminShieldReports />} />
+                  <Route path="shield-reports" element={<Navigate to="/admin" replace />} />
                   <Route path="cookie-yeti" element={<CYCommandCenter />} />
                   <Route path="cookie-yeti/autofix" element={<CYAutoFixMonitor />} />
                   <Route path="cookie-yeti/analytics" element={<CYProductAnalytics />} />

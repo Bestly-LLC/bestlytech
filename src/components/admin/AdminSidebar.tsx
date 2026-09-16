@@ -1,7 +1,7 @@
 import {
   LayoutDashboard,
   FileText,
-  BookOpen,
+  Settings,
   BarChart3,
   Snowflake,
   Users,
@@ -42,21 +42,19 @@ type CountKeys =
   | "contacts"
   | "hires"
   | "cySubscribers"
-  | "cloudLeads"
-  | "shieldReports";
+  | "cloudLeads";
 
 export const dashboardItem = { title: "Command Center", url: "/admin", icon: LayoutDashboard };
 
 // Work: everything that brings in or serves a customer (bids, deals, intake, inbound), in one place.
 const workItems = [
   { title: "Cloud Deals", url: "/admin/cloud", icon: Cloud, countKey: "cloudLeads" as CountKeys },
-  { title: "Shield Reports", url: "/admin/shield-reports", icon: ShieldCheck, countKey: "shieldReports" as CountKeys },
   { title: "Marketplace Intake", url: "/admin/submissions", icon: FileText, countKey: "submissions" as CountKeys },
-  { title: "Setup Guide", url: "/admin/guide", icon: BookOpen },
   { title: "Hire Requests", url: "/admin/hires", icon: Briefcase, countKey: "hires" as CountKeys },
   { title: "Contacts", url: "/admin/contacts", icon: Mail, countKey: "contacts" as CountKeys },
   { title: "Waitlist", url: "/admin/waitlist", icon: ListChecks },
   { title: "Meetings", url: "/admin/meetings", icon: Mic },
+  { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 
 const cookieYetiItems = [
@@ -116,9 +114,8 @@ export function AdminSidebar() {
         supabase.from("subscriptions").select("id", head).eq("status", "active"),
         // Leads with no deal yet, or whose furthest deal is still at stage 1-2.
         supabase.from("v_cloud_leads_needing_action" as any).select("id", head),
-        supabase.from("shield_url_reports").select("id", head).eq("status", "new"),
       ]);
-      const keys: CountKeys[] = ["submissions", "contacts", "hires", "cySubscribers", "cloudLeads", "shieldReports"];
+      const keys: CountKeys[] = ["submissions", "contacts", "hires", "cySubscribers", "cloudLeads"];
       setCounts((prev) => {
         const next = { ...prev };
         results.forEach((r, i) => {

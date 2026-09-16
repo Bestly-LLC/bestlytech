@@ -6,14 +6,13 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, Home, Command, Minus, Plus } from "lucide-react";
 import { useAdminTextSize } from "@/hooks/useAdminTextSize";
-import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CommandPalette, OPEN_ADMIN_PALETTE_EVENT } from "./CommandPalette";
 
 const BREADCRUMB_MAP: Record<string, string> = {
   "/admin": "Dashboard",
   "/admin/submissions": "Marketplace Intake",
-  "/admin/guide": "Setup Guide",
+  "/admin/settings": "Settings",
   "/admin/cookie-yeti": "CY Command Center",
   "/admin/cookie-yeti/ops": "CY Operations",
   "/admin/cookie-yeti/analytics": "Product Analytics",
@@ -27,7 +26,6 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/hires": "Hire Requests",
   "/admin/waitlist": "Waitlist",
   "/admin/cloud": "Cloud Deals",
-  "/admin/shield-reports": "Shield Reports",
   "/admin/cookie-yeti/domains": "All Domains",
   "/admin/cookie-yeti/autofix": "Auto-Fix",
 };
@@ -128,7 +126,6 @@ export function AdminLayout() {
                   </span>
                   <span className="text-xs text-white/50">{user?.email}</span>
                 </div>
-                <ChangePasswordDialog />
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out" className="text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0">

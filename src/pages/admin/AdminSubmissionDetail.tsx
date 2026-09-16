@@ -715,7 +715,7 @@ export default function AdminSubmissionDetail() {
       <Section title="Operator guide" compact={compact}>
         {guidance.length === 0 ? (
           <p className="text-sm text-white/60">
-            No guidance for {platforms.join(", ")} yet. Add entries in <Link to="/admin/guide" className="underline underline-offset-2 text-white">Setup Guide</Link>.
+            No guidance for {platforms.join(", ")} yet. Add entries in <Link to="/admin/settings?tab=guide" className="underline underline-offset-2 text-white">Settings → Marketplace guide</Link>.
           </p>
         ) : (
           <div className="space-y-3">

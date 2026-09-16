@@ -63,7 +63,7 @@ interface PasskeyRow {
   created_at: string;
 }
 
-export function ChangePasswordDialog() {
+export function ChangePasswordDialog({ inline = false }: { inline?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -231,10 +231,17 @@ export function ChangePasswordDialog() {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setPasswordError(null); }}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label="Security settings" className="h-9 text-muted-foreground hover:text-foreground">
-          <KeyRound className="h-4 w-4 mr-1" aria-hidden />
-          <span className="hidden sm:inline">Security</span>
-        </Button>
+        {inline ? (
+          <Button size="sm" className="h-9">
+            <KeyRound className="h-4 w-4 mr-1.5" aria-hidden />
+            Manage passkeys and password
+          </Button>
+        ) : (
+          <Button variant="ghost" size="sm" aria-label="Security settings" className="h-9 text-muted-foreground hover:text-foreground">
+            <KeyRound className="h-4 w-4 mr-1" aria-hidden />
+            <span className="hidden sm:inline">Security</span>
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[27.5rem]">
         <DialogHeader>

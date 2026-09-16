@@ -117,7 +117,6 @@ async function countWithOldest<T>(query: PromiseLike<{ data: T[] | null; count: 
 type ContactRow = { id: string; name: string | null; created_at: string };
 type HireRow = { id: string; name: string | null; company: string | null; project_type: string | null; created_at: string };
 type IntakeRow = { id: string; business_legal_name: string | null; status: string; updated_at: string | null; created_at: string };
-type ShieldRow = { id: string; reported_domain: string | null; created_at: string };
 type EmailRow = { template_name: string | null; error_message: string | null; created_at: string };
 type LeadRow = { id: string; company_name: string | null; created_at: string };
 type DealRow = { id: string; lead_id: string; company_name: string | null; current_stage: number; stage_changed_at: string | null; created_at: string };
@@ -141,12 +140,6 @@ const loadIntakes = () =>
   countWithOldest<IntakeRow>(
     db.from("seller_intakes").select("id, business_legal_name, status, updated_at, created_at", { count: "exact" })
       .in("status", ["Submitted", "In Review"]).order("updated_at", { ascending: true }).limit(1),
-  );
-
-const loadShield = () =>
-  countWithOldest<ShieldRow>(
-    db.from("shield_url_reports").select("id, reported_domain, created_at", { count: "exact" })
-      .eq("status", "new").order("created_at", { ascending: true }).limit(1),
   );
 
 const loadFailedEmails = () =>
@@ -416,7 +409,6 @@ export default function AdminDashboard() {
   const contacts = useSource(loadContacts, true);
   const hires = useSource(loadHires, true);
   const intakes = useSource(loadIntakes, true);
-  const shield = useSource(loadShield, true);
   const emails = useSource(loadFailedEmails, true);
   const cloudLeads = useSource(loadCloudLeads, true);
   const deals = useSource(loadActiveDeals, true);
@@ -431,7 +423,7 @@ export default function AdminDashboard() {
   const [showRecent, setShowRecent] = useState(false);
   const [activityKey, setActivityKey] = useState(0);
 
-  const all = [contacts, hires, intakes, shield, emails, cloudLeads, deals, sweep, health, homeHub, cy, newLeads, paidSubs, waitlist];
+  const all = [contacts, hires, intakes, emails, cloudLeads, deals, sweep, health, homeHub, cy, newLeads, paidSubs, waitlist];
   const refreshAll = async () => {
     setActivityKey((k) => k + 1);
     await Promise.all(all.map((s) => s.reload()));
@@ -444,7 +436,6 @@ export default function AdminDashboard() {
     { label: "hire requests", source: hires },
     { label: "contact messages", source: contacts },
     { label: "seller intakes", source: intakes },
-    { label: "Shield reports", source: shield },
     { label: "Cookie Yeti fixes", source: cy },
     { label: "failed emails", source: emails },
   ];
@@ -527,23 +518,13 @@ export default function AdminDashboard() {
       href: count === 1 && oldest ? `/admin/submissions/${oldest.id}` : "/admin/submissions",
     });
   }
-  if (shield.data && shield.data.count > 0) {
-    const { count, oldest } = shield.data;
-    const domain = oldest?.reported_domain || "a site";
-    needs.push({
-      id: "shield",
-      title: count === 1 ? `Decide on Shield report: ${domain}` : `Decide on ${count} Shield reports`,
-      why: count === 1 ? `A client asked to unblock it · waiting ${ageText(oldest?.created_at)}.` : `Oldest: ${domain}, waiting ${ageText(oldest?.created_at)}.`,
-      href: "/admin/shield-reports",
-    });
-  }
   if (cy.data && cy.data.needs_attention > 0) {
     const n = cy.data.needs_attention;
     needs.push({
       id: "cy-attention",
-      title: `Fix ${n} Cookie Yeti ${plural(n, "site", "sites")} by hand`,
-      why: "Auto-fix gave up on these after its AI and render attempts.",
-      href: "/admin/cookie-yeti",
+      title: `Help Auto-Fix with ${n} Cookie Yeti ${plural(n, "site", "sites")}`,
+      why: "About 30 seconds each. The page tells you exactly what to tap.",
+      href: "/admin/cookie-yeti/autofix",
     });
   }
   if (emails.data && emails.data.count > 0) {

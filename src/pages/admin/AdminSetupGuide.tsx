@@ -30,7 +30,7 @@ interface GuidanceEntry {
 const PLATFORMS = ["Amazon", "Shopify", "TikTok"];
 const EDITABLE: (keyof GuidanceEntry)[] = ["section", "field_name", "guidance_text", "answer_recommendation", "reason"];
 
-export default function AdminSetupGuide() {
+export default function AdminSetupGuide({ embedded = false }: { embedded?: boolean } = {}) {
   /** Last saved copy from the database, keyed by id. Groups are built from this so cards don't jump while typing. */
   const [saved, setSaved] = useState<Record<string, GuidanceEntry>>({});
   const [drafts, setDrafts] = useState<Record<string, GuidanceEntry>>({});
@@ -164,8 +164,8 @@ export default function AdminSetupGuide() {
   return (
     <div className="space-y-6 max-w-4xl">
       <PageHeader
-        title="Setup Guide"
-        description="Operator guidance shown on each submission, by marketplace."
+        title={embedded ? "" : "Setup Guide"}
+        description="Guidance shown on each marketplace submission, by platform."
         actions={
           <>
             <Button onClick={addEntry} size="sm" className="h-9" disabled={loading || busy === "add"}>
