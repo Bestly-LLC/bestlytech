@@ -68,3 +68,6 @@ social/kit/videos/
 social/kit/thumbnails/
 social/comment-scout/*.md
 !social/comment-scout/.gitkeep
+
+# TypeScript incremental build caches
+*.tsbuildinfo
