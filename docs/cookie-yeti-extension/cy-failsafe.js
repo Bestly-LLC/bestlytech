@@ -75,12 +75,25 @@
       document.querySelectorAll('[role="dialog"],[role="alertdialog"],[aria-modal="true"],dialog[open]'), visible);
   }
 
+  // Version and browser family only: no user id, no page URL beyond the domain already reported.
+  function buildInfo() {
+    var version = null, platform = "unknown";
+    try {
+      var api = (typeof browser !== "undefined" && browser.runtime) ? browser : (typeof chrome !== "undefined" ? chrome : null);
+      if (api && api.runtime && api.runtime.getManifest) version = api.runtime.getManifest().version || null;
+      var url = api && api.runtime && api.runtime.getURL ? api.runtime.getURL("") : "";
+      platform = url.indexOf("safari-web-extension://") === 0 ? "safari" : url.indexOf("chrome-extension://") === 0 ? "chrome" : "unknown";
+    } catch (e) { /* ignore */ }
+    return { version: version, platform: platform };
+  }
+
   function reportLoop(domain, selector, reason) {
     try {
+      var info = buildInfo();
       fetch(LOOP_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY },
-        body: JSON.stringify({ domain: domain, selector: selector, reason: reason }),
+        body: JSON.stringify({ domain: domain, selector: selector, reason: reason, version: info.version, platform: info.platform }),
         keepalive: true,
       }).catch(function () {});
     } catch (e) { /* never break the page */ }

@@ -1,0 +1,24 @@
+Ship the Cookie Yeti click-loop fail-safe to the Mac App Store, iOS App Store and Chrome Web Store. Work on your own from start to finish and report progress to Supabase as you go. If an earlier session already did part of this, check the tracker table and the extension's git log and continue from there instead of redoing it.
+
+CONTEXT
+- The server side is already live (Supabase project rcqfqhguwpmaarseifqg). The extension change is in the bestlytech repo: pull main, then read docs/cookie-yeti-extension/README.md (how to wire it) and docs/cookie-yeti-extension/cy-failsafe.js.
+- The extension source is only on this Mac, not in GitHub. Find it: look under ~/Developer, ~/Documents, ~/Desktop and ~/Projects for an .xcodeproj with "Cookie" or "Yeti" in the name and a Chrome manifest.json whose name is Cookie Yeti.
+- Progress tracker: table public.cy_extension_releases, one row per channel (mac, ios, chrome). Columns: status (not_started, building, uploaded, in_review, approved, live, rejected, blocked), version, detail, needs_jared, store_url. Update it with the Supabase tools at every step. Every change pings Jared's admin bell.
+- needs_jared is only for a single physical action you truly cannot do yourself (a 2FA prompt, a sign-in, a file drag). Write it as one short instruction. Jared taps Done in the admin, which sets needs_jared back to null: poll the row every 30 seconds and carry on when it clears.
+
+STEPS
+1. Find the source. If it isn't a git repo, git init and commit the current state first so there is a rollback point. Otherwise commit or stash anything uncommitted.
+2. Wire cy-failsafe.js in exactly as the README says, in both builds: the Safari Web Extension resources shared by the Mac and iOS apps, and the Chrome MV3 manifest content_scripts (listed before the main script). Set ANON_KEY to the anon key the extension already uses. Skip auto-clicking on bestly.tech and its subdomains. reportLoop already sends the extension version and browser family.
+3. Test before shipping. Build a local HTML page with a menu button that opens a dialog when clicked and a pattern that targets that button. Load the Chrome build unpacked, using Playwright with --load-extension or a throwaway Chrome profile. Confirm Cookie Yeti clicks once, then pauses itself after the dialog reopens, with no loop. Also confirm a real cookie banner (for example on bbc.co.uk) still gets dismissed.
+4. Bump the version. Patch-bump manifest.json. For the Mac and iOS targets, bump MARKETING_VERSION to match and increment CURRENT_PROJECT_VERSION. Commit.
+5. Apple upload. For the macOS app and the iOS app: xcodebuild archive with -allowProvisioningUpdates, then xcodebuild -exportArchive with an ExportOptions.plist of method app-store-connect, destination upload, and the project's teamID. Set mac and ios to uploaded. If there is no Apple account in Xcode, set needs_jared to "Open Xcode > Settings > Accounts and sign in to the Apple ID for Bestly LLC".
+6. Apple submit. Use an App Store Connect API key if one is in Keychain (service asc-api-key). Otherwise drive appstoreconnect.apple.com in Chrome, where Jared is signed in. For each of macOS and iOS: add the new version, set What's New to "Fixes a loop where Cookie Yeti could reopen a menu you had just closed.", wait for the build to finish processing (check every few minutes), select it, then Submit for Review. Set status to in_review and store_url to the App Store Connect page.
+7. Chrome. Zip the extension folder with manifest.json at the root of the zip. Use the Chrome Web Store API if credentials are in Keychain (service chrome-webstore-api). Otherwise open https://chrome.google.com/webstore/devconsole in Chrome, then Cookie Yeti > Package > Upload new package. If you can't drive the file picker, reveal the zip in Finder and set needs_jared to "Drag CookieYeti-<version>.zip onto the upload box in the open Chrome Web Store tab". Then Submit for review and set chrome to in_review.
+8. For next time: if gh is already signed in, create the private repo Bestly-LLC/cookie-yeti-extension and push the source. Don't ask Jared to sign in just for this.
+9. Update public.bestly_credential_registry: the row with system 'cookie-yeti-extension-source' (status, notes, verified_at), plus a row for any App Store Connect or Chrome Web Store access you find or set up. Never store secret values.
+10. Finish with a short summary: the version shipped, what is in review on each store, and anything still open.
+
+RULES
+- Never print, log or paste a token, key or password. Never ask Jared to paste one into chat.
+- Don't change store listing text, pricing or screenshots. Only the version, What's New and the build.
+- If a store rejects the release, set status to rejected, put the reason in detail, fix it if it's in the code, and resubmit.

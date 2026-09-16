@@ -46,11 +46,13 @@ CookieYetiFailsafe.resume(hostname);
 
 Also skip auto-clicking entirely on `bestly.tech` and its subdomains.
 
-## Release checklist
+## Release
 
-1. Bump the version in the Xcode project (Mac + iOS targets) and in Chrome `manifest.json`.
-2. Xcode: Product → Archive for the macOS app, then the iOS app → Distribute → App Store Connect → Upload.
-   Release notes: "Fixes a loop where Cookie Yeti could reopen a menu you had just closed."
-3. Chrome: zip the extension folder → Chrome Web Store Developer Dashboard → Package → Upload new
-   package → Submit for review.
-4. After approval, test on bestly.tech/admin/cookie-yeti and admin.shopify.com: nothing opens on its own.
+Paste `RELEASE-PROMPT.md` into Claude on the Mac (also behind **Copy Mac prompt** on
+/admin/cookie-yeti). It wires this file in, tests, bumps versions, uploads to App Store Connect
+(Mac + iOS) and the Chrome Web Store, submits for review, and writes progress to
+`cy_extension_releases`. The Cookie Yeti admin page shows each store's status; the bell pings on every
+change. When it needs a hand (2FA, a file drag) the card says so and **Done** tells the Mac to carry on.
+The first loop report from an installed extension raises "fail-safe is working in the wild".
+
+After approval, test on bestly.tech/admin/cookie-yeti and admin.shopify.com: nothing opens on its own.

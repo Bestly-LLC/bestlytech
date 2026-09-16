@@ -2,11 +2,12 @@
 // coming back (it clicked, the thing reappeared or the user undid it) so no other user
 // gets stuck in the same open/close cycle.
 //
-// POST { domain, selector, reason? }   anonymous (verify_jwt = false), like report-dismissal
+// POST { domain, selector, reason?, version?, platform? }   anonymous (verify_jwt = false), like report-dismissal
 //
 // Effect: the pattern is switched off and queued for the robot browser, which turns it back on
 // only if the button sits in a real cookie banner and clicking it closes the banner.
 // Switching off is the safe direction, so one report is enough.
+// version/platform (extension version, "chrome" | "safari") show which release is out in the wild.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
@@ -25,6 +26,8 @@ Deno.serve(async (req) => {
   const domain = String(body.domain || "").trim().toLowerCase().replace(/^www\./, "");
   const selector = String(body.selector || "").trim();
   const reason = String(body.reason || "loop").slice(0, 60);
+  const version = /^[0-9][0-9.]{0,19}$/.test(String(body.version || "")) ? String(body.version) : null;
+  const platform = ["chrome", "safari"].includes(String(body.platform)) ? String(body.platform) : null;
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain) || !selector || selector.length > 500) {
     return json({ error: "domain and selector required" }, 400);
   }
@@ -47,9 +50,10 @@ Deno.serve(async (req) => {
     paused++;
   }
 
+  const build = [platform, version].filter(Boolean).join(" ") || "unknown build";
   await svc.from("ai_generation_log").insert({
     domain, status: paused ? "paused_by_loop_report" : "loop_report_no_match", selector_generated: selector,
-    ai_model: "extension", html_source: `Extension reported a click loop (${reason}). Paused ${paused} pattern(s) for a robot check.`,
+    ai_model: "extension", html_source: `Extension (${build}) reported a click loop (${reason}). Paused ${paused} pattern(s) for a robot check.`,
   });
   return json({ ok: true, paused });
 });

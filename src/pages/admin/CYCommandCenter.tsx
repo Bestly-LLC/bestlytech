@@ -11,6 +11,7 @@ import { ActionMenu } from "@/components/admin/ActionMenu";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { CYReleaseTracker } from "@/components/admin/CYReleaseTracker";
 import { DomainDeepDive, retryRenderForDomain, runAiForDomain, useCyLiveRefresh } from "@/components/admin/DomainDeepDive";
 
 // ── helpers ───────────────────────────────────────────────
@@ -208,6 +209,8 @@ export default function CYCommandCenter({ embedded = false }: { embedded?: boole
           </Button>
         </div>
       )}
+
+      <CYReleaseTracker />
 
       {/* ── Hero stats ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
