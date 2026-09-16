@@ -17,8 +17,8 @@ import {
 type Action = "reject" | "necessary" | "accept" | "save" | "close" | "next";
 type Box = { selector: string; text: string; x: number; y: number; w: number; h: number; likely: boolean; offscreen?: boolean; guess: Action | null };
 type Step = { selector: string; text: string; action: Action };
-type Inspect = { url: string; shot: string; vw: number; vh: number; elements: Box[]; failedStep: number | null; frames?: string[]; shadow?: boolean };
-type TestResult = { dismissed: boolean; failedStep: number | null; before: string; after: string; saved?: boolean };
+type Inspect = { url: string; shot: string; vw: number; vh: number; elements: Box[]; failedStep: number | null; frames?: string[]; shadow?: boolean; slow?: boolean };
+type TestResult = { dismissed: boolean; failedStep: number | null; slow?: boolean; before: string; after: string; saved?: boolean };
 
 const ACTIONS: { value: Action; label: string; tone: string }[] = [
   { value: "reject", label: "Reject", tone: "emerald" },
@@ -101,7 +101,9 @@ export function GuideWizard({
     setLoading(false);
     if (err || !data) { setError(err ?? "No response"); return; }
     if (data.failedStep !== null && data.failedStep !== undefined) {
-      setError(`The robot couldn't find step ${data.failedStep + 1} (“${nextSteps[data.failedStep]?.text || "button"}”) this time. Undo it and pick again.`);
+      setError(data.slow
+        ? `The site was slow and the robot ran out of time before step ${data.failedStep + 1}. Try again.`
+        : `The robot couldn't find step ${data.failedStep + 1} (“${nextSteps[data.failedStep]?.text || "button"}”) this time. Undo it and pick again.`);
     }
     setView(data);
     setShowAll(!data.elements.some((e) => e.likely));
@@ -394,7 +396,7 @@ function TestView({
           : <XCircle className="h-5 w-5 text-red-300 flex-none mt-0.5" aria-hidden="true" />}
         <div className="text-sm">
           <p className={`font-semibold ${test.dismissed ? "text-emerald-100" : "text-red-100"}`}>
-            {test.dismissed ? "Banner gone. This fix works." : stuckAt !== null ? `The robot couldn't find click ${stuckAt + 1} on a fresh load.` : "The banner was still there after the clicks."}
+            {test.dismissed ? "Banner gone. This fix works." : stuckAt !== null ? (test.slow ? `The site was slow and the robot ran out of time before click ${stuckAt + 1}. Test again.` : `The robot couldn't find click ${stuckAt + 1} on a fresh load.`) : "The banner was still there after the clicks."}
           </p>
           <p className="text-xs text-white/60 mt-0.5">
             {total} click{total === 1 ? "" : "s"}, ending with {actionLabel(final.action)} on “{final.text || "button"}”.
