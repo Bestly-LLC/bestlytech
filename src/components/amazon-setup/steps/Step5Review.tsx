@@ -44,8 +44,26 @@ export const Step5Review = () => {
     }
     setSubmitting(true);
     try {
-      await saveNow();
-      await (supabase as any).from('seller_intakes').update({ status: 'Submitted' }).eq('id', formId);
+      // Save the latest edits first. saveNow shows its own error toast when it fails.
+      const saved = await saveNow();
+      if (!saved) return;
+
+      // Anon RLS only allows edits while the intake is a Draft, so the status change goes
+      // through a token-bound RPC. Only show success once the server confirms it.
+      const { data, error } = await supabase.rpc('submit_intake' as any, { p_id: formId });
+      const result = data as { ok?: boolean; reason?: string } | null;
+      if (error || !result?.ok) {
+        console.error('Submit failed', error ?? result);
+        toast({
+          title: 'Submission failed',
+          description: result?.reason === 'consent_required'
+            ? 'Please check the authorization box, then submit again.'
+            : "We couldn't submit your application. Your answers are saved. Check your connection and tap Confirm & Submit to try again.",
+          variant: 'destructive',
+        });
+        return;
+      }
+
       setStatus('Submitted');
       setSubmitted(true);
       setShowConfirm(false);
@@ -88,7 +106,8 @@ export const Step5Review = () => {
         console.error('Notification failed:', notifyErr);
       }
     } catch (e) {
-      toast({ title: 'Submission failed', description: 'Please try again', variant: 'destructive' });
+      console.error('Submit failed', e);
+      toast({ title: 'Submission failed', description: "We couldn't submit your application. Your answers are saved. Please try again.", variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
