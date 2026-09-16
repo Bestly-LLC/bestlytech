@@ -53,10 +53,15 @@ async function engine(key: string, body: Record<string, unknown>) {
       signal: AbortSignal.timeout(62_000),
     });
     const out = await res.json().catch(() => null);
-    if (!res.ok || !out?.ok) return { ok: false, error: out?.error || `Robot browser answered ${res.status}` };
+    if (!res.ok || !out?.ok) {
+      const fallback = res.status === 504
+        ? "That site took too long for the robot browser. Try again, or try the phone view."
+        : `Robot browser answered ${res.status}`;
+      return { ok: false, error: out?.error || fallback };
+    }
     return out;
   } catch (e) {
-    return { ok: false, error: `Robot browser didn't answer: ${String(e).slice(0, 120)}` };
+    return { ok: false, error: /timeout|abort/i.test(String(e)) ? "That site took too long for the robot browser. Try again, or try the phone view." : `Robot browser didn't answer: ${String(e).slice(0, 120)}` };
   }
 }
 
@@ -104,7 +109,7 @@ Deno.serve(async (req) => {
     const out = await engine(String(key), { action: "inspect", url, viewport, height, steps: steps.map((s) => ({ selector: s.selector })) });
     if (!out.ok) return json({ error: out.error, url }, 502);
     const elements = (out.elements || []).map((e: any) => ({ ...e, guess: guess(e.text || "") }));
-    return json({ url, viewport, shot: out.shot, vw: out.vw, vh: out.vh, elements, failedStep: out.failedStep, frames: out.frames, shadow: out.shadow });
+    return json({ url, viewport, shot: out.shot, vw: out.vw, vh: out.vh, elements, failedStep: out.failedStep, frames: out.frames, shadow: out.shadow, slow: !!out.slow });
   }
 
   if (action === "test" || action === "save") {
@@ -113,7 +118,7 @@ Deno.serve(async (req) => {
     if (!steps.length) return json({ error: "Pick at least one button." }, 400);
     const test = await engine(String(key), { action: "test", url, viewport, height, steps: steps.map((s) => ({ selector: s.selector })) });
     if (!test.ok) return json({ error: test.error, url }, 502);
-    const verdict = { dismissed: !!test.dismissed, failedStep: test.failedStep ?? null, before: test.before, after: test.after };
+    const verdict = { dismissed: !!test.dismissed, failedStep: test.failedStep ?? null, slow: !!test.slow, before: test.before, after: test.after };
 
     if (action === "test") return json({ url, ...verdict });
     if (!verdict.dismissed && !body.force) return json({ saved: false, url, ...verdict });
