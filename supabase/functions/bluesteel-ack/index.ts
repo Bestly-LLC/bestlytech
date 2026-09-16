@@ -3,6 +3,8 @@
 // read through the service-role-only RPC public.bluesteel_ack_key(), so it is not in git.
 // Only effect: calls public.bluesteel_sweep_ack, which records the ack (stops the remaining alerts)
 // and sends one confirmation push via pg_net.
+// Test alerts from the admin page link with via=test-tap / via=test-button: those acks are logged but
+// never stop real alerts (bluesteel_sweep_ack and acked_today ignore via starting with "test").
 // Deployed with verify_jwt = false: the ntfy iOS app can't attach a Supabase JWT to a tap.
 
 const base = Deno.env.get("SUPABASE_URL")!;
@@ -51,7 +53,10 @@ Deno.serve(async (req: Request) => {
     detail = ` (${e})`;
   }
 
+  const isTest = via.startsWith("test");
   return ok
-    ? text("GOT IT. Blue Steel sweeping alerts are off for this morning. You can close this.", 200)
+    ? text(isTest
+      ? "GOT IT (test). The test worked; real sweeping alerts are not affected. You can close this."
+      : "GOT IT. Blue Steel sweeping alerts are off for this morning. You can close this.", 200)
     : text(`DIDN'T GO THROUGH${detail}. Tap again, or just move the car.`, 502);
 });
