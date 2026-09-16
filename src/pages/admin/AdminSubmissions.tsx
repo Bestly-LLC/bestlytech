@@ -67,7 +67,8 @@ function StatusBadge({ status, className }: { status: string; className?: string
 function toCsv(rows: Record<string, any>[]): string {
   const header = EXPORT_COLUMNS.map((c) => `"${c.label}"`).join(",");
   const body = rows.map((row) =>
-    EXPORT_COLUMNS.map((c) => (row[c.key] == null ? '""' : `"${String(row[c.key]).replace(/"/g, '""')}"`)).join(","),
+    // Prefix formula-like cells with ' so spreadsheet apps don't run them.
+    EXPORT_COLUMNS.map((c) => (row[c.key] == null ? '""' : `"${String(row[c.key]).replace(/^[=+\-@\t\r]/, "'$&").replace(/"/g, '""')}"`)).join(","),
   );
   return [header, ...body].join("\n");
 }
@@ -91,7 +92,8 @@ export default function AdminSubmissions() {
 
   const loadData = useCallback(async () => {
     const [intakesRes, docsRes] = await Promise.all([
-      supabase.from("seller_intakes").select("*").order("created_at", { ascending: false }),
+      // List columns only; the detail page loads the full record for one seller.
+      supabase.from("seller_intakes").select("id, created_at, updated_at, status, platform, selected_platforms, business_legal_name, client_name, client_email, client_phone, ein, completed_steps").order("created_at", { ascending: false }),
       supabase.from("intake_documents").select("intake_id"),
     ]);
     if (intakesRes.error) {
@@ -199,6 +201,15 @@ export default function AdminSubmissions() {
     // Documents and validations cascade via FK. `.select` returns the rows actually removed, so a
     // policy that silently blocks the delete shows up as an error instead of a fake "Deleted".
     setBusy("delete");
+    // Remove the uploaded ID scans from storage first; the FK cascade only removes the document rows.
+    const { data: docRows, error: docErr } = await supabase.from("intake_documents").select("file_path").in("intake_id", ids);
+    const paths = (docRows ?? []).map((d) => d.file_path).filter(Boolean);
+    const fileErr = docErr ?? (paths.length ? (await supabase.storage.from("intake-documents").remove(paths)).error : null);
+    if (fileErr) {
+      setBusy(null);
+      toast({ title: "Couldn't delete", description: `The uploaded documents couldn't be removed, so nothing was deleted. ${fileErr.message}`, variant: "destructive" });
+      return;
+    }
     const { data: rows, error } = await supabase.from("seller_intakes").delete().in("id", ids).select("id");
     setBusy(null);
     const removed = rows?.length ?? 0;

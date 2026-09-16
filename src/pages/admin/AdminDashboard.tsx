@@ -73,7 +73,8 @@ export default function AdminDashboard() {
   const loadData = useCallback(async () => {
     // Original queries
     const [intakesRes, contactsRes, hiresRes, waitlistRes, cySubsRes, activationsRes] = await Promise.all([
-      supabase.from("seller_intakes").select("*").order("created_at", { ascending: false }),
+      // Only what the dashboard shows. Never pull SSNs, ID or bank fields into the browser for a summary.
+      supabase.from("seller_intakes").select("id, created_at, updated_at, status, platform, selected_platforms, business_legal_name, client_name").order("created_at", { ascending: false }),
       supabase.from("contact_submissions").select("id", { count: "exact", head: true }).eq("status", "new"),
       supabase.from("hire_requests").select("id", { count: "exact", head: true }).eq("status", "new"),
       supabase.from("waitlist_subscribers").select("id", { count: "exact", head: true }),

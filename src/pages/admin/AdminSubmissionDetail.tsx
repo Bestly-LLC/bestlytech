@@ -238,6 +238,18 @@ export default function AdminSubmissionDetail() {
   const handleDelete = async () => {
     // Documents and validations cascade via FK; `.select` confirms the row was really removed.
     setBusy("delete");
+    // Remove the uploaded ID scans from storage first; the FK cascade only removes the document rows.
+    const { data: docRows, error: docErr } = await supabase.from("intake_documents").select("file_path").eq("intake_id", id!);
+    const paths = (docRows ?? []).map((d) => d.file_path).filter(Boolean);
+    if (docErr || paths.length) {
+      const fileErr = docErr ?? (await supabase.storage.from("intake-documents").remove(paths)).error;
+      if (fileErr) {
+        setBusy(null);
+        toast({ title: "Couldn't delete", description: `The uploaded documents couldn't be removed, so nothing was deleted. ${fileErr.message}`, variant: "destructive" });
+        setShowDeleteConfirm(false);
+        return;
+      }
+    }
     const { data, error } = await supabase.from("seller_intakes").delete().eq("id", id!).select("id");
     setBusy(null);
     if (error || !data?.length) {
