@@ -1,14 +1,17 @@
-// Cookie Yeti — Pattern Validation Gate (Phase 2, autonomous auto-fix)
-// Before an AI-generated pattern is trusted, this worker loads the real page in
-// headless Chromium, CLICKS the generated selector, and confirms the banner goes away.
-//   passed        banner found and dismissed      -> promote (confidence 8)
-//   not_dismissed banner found, click did nothing -> pull from serving, re-queue for AI
-//   not_seen      selector never appeared         -> keep serving, stop re-checking.
-//                 (The renderer runs from a US datacenter, so many sites never show
-//                 it a GDPR banner. Absence is not proof the selector is wrong.)
-//   inconclusive  page failed to load             -> untouched, retried after fresh ones
+// Cookie Yeti — Pattern Validation Gate
+// The robot browser (/api/cy-render, Frankfurt) loads the real page, CLICKS the selector and checks
+// two things: the button sits inside a cookie/consent banner, and the banner goes away.
 //
-// Engine: www.bestly.tech/api/cy-render, key from Vault (cy_render_key).
+// Queue 1 (first): validation_status = 'needs_robot_check'. Learned patterns the cy_pattern_gate
+//   trigger holds OFF because their selector doesn't look like a cookie control (user dismissals,
+//   extension reports, loop reports). Only a full pass turns them on.
+// Queue 2: AI-generated patterns not validated yet (served at confidence 1-6).
+//
+//   passed                      in a cookie banner + closes it  -> on, confidence 8
+//   rejected_not_cookie_banner  button isn't in a cookie banner -> off for good
+//   not_dismissed               in a banner, click didn't close -> off (AI domains re-queued)
+//   not_seen                    button never appeared           -> held patterns stay off; AI ones keep serving
+//   inconclusive                page failed                     -> retried later
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -16,20 +19,23 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 const RENDER_URL = Deno.env.get("CY_RENDER_URL") ?? "https://www.bestly.tech/api/cy-render";
+const json = (b: unknown, status = 200) =>
+  new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-type Verdict = { found: boolean; dismissed: boolean; error: string | null };
+type Verdict = { found: boolean; dismissed: boolean; inConsent: boolean; error: string | null };
 
 async function runValidation(key: string, url: string, selector: string): Promise<Verdict | null> {
   try {
     const res = await fetch(RENDER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-render-key": key },
-      signal: AbortSignal.timeout(55_000),
+      signal: AbortSignal.timeout(58_000),
       body: JSON.stringify({ action: "validate", url, selector }),
     });
     const body = await res.json().catch(() => null);
     if (!res.ok || !body?.ok) { console.log(`validate ${res.status} ${url} ${body?.error ?? ""}`); return null; }
-    return { found: !!body.found, dismissed: !!body.dismissed, error: body.error ?? null };
+    if (typeof body.inConsent !== "boolean") return null; // older robot build: don't judge without the banner check
+    return { found: !!body.found, dismissed: !!body.dismissed, inConsent: body.inConsent, error: body.error ?? null };
   } catch (e) {
     console.log(`validation error: ${e}`);
     return null;
@@ -42,90 +48,85 @@ Deno.serve(async (req) => {
   const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const auth = req.headers.get("Authorization") || "";
   const maint = req.headers.get("x-maintenance-secret");
-  const ok = auth === `Bearer ${SERVICE}` || (!!maint && maint === Deno.env.get("MAINTENANCE_SECRET"));
-  if (!ok) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  if (!(auth === `Bearer ${SERVICE}` || (!!maint && maint === Deno.env.get("MAINTENANCE_SECRET")))) {
+    return json({ error: "Unauthorized" }, 401);
   }
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE);
   const { data: key } = await supabase.rpc("cy_render_key");
-  if (!key) {
-    return new Response(JSON.stringify({ skipped: "render key missing from Vault", validated: 0 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
+  if (!key) return json({ skipped: "render key missing from Vault", validated: 0 });
 
   let limit = 3;
   let only: string | null = null;
   try { const b = await req.json(); if (b.limit) limit = Math.min(b.limit, 5); if (b.domain) only = b.domain; } catch { /* no body */ }
 
-  // Unproven AI patterns: generated, not yet validated, currently served (conf 1..6).
-  // Never-checked first, then earlier inconclusive runs.
-  let q = supabase
-    .from("cookie_patterns")
-    .select("id,domain,selector,action_type,confidence,source,validated_at,validation_status")
-    .eq("source", "ai_generated")
-    .is("validated_at", null)
-    .eq("is_active", true)
-    .gte("confidence", 1)
-    .lt("confidence", 7)
-    .or("validation_status.is.null,validation_status.eq.inconclusive");
-  q = only
-    ? q.eq("domain", only).limit(limit)
-    : q.order("validation_status", { ascending: true, nullsFirst: true }).order("created_at", { ascending: false }).limit(limit);
+  const cols = "id,domain,selector,action_type,confidence,source,validation_status";
+  let held = supabase.from("cookie_patterns").select(cols).eq("validation_status", "needs_robot_check");
+  held = only ? held.eq("domain", only) : held;
+  const { data: heldRows, error: heldErr } = await held.order("updated_at", { ascending: true }).limit(limit);
+  if (heldErr) return json({ error: heldErr.message }, 500);
 
-  const { data: pats, error } = await q;
-  if (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  let aiRows: any[] = [];
+  const room = limit - (heldRows?.length ?? 0);
+  if (room > 0) {
+    let q = supabase.from("cookie_patterns").select(cols)
+      .eq("source", "ai_generated").is("validated_at", null).eq("is_active", true)
+      .gte("confidence", 1).lt("confidence", 7)
+      .or("validation_status.is.null,validation_status.eq.inconclusive");
+    q = only ? q.eq("domain", only) : q;
+    const { data, error } = await q.order("validation_status", { ascending: true, nullsFirst: true })
+      .order("created_at", { ascending: false }).limit(room);
+    if (error) return json({ error: error.message }, 500);
+    aiRows = data ?? [];
   }
 
   const results: any[] = [];
-  let passed = 0, failed = 0, notSeen = 0, inconclusive = 0;
+  const tally: Record<string, number> = {};
+  const now = () => new Date().toISOString();
 
-  for (const p of (pats ?? [])) {
+  for (const p of [...(heldRows ?? []).map((r) => ({ ...r, held: true })), ...aiRows.map((r) => ({ ...r, held: false }))]) {
     let testUrl = `https://${p.domain}`;
     try {
-      const { data: rep } = await supabase
-        .from("missed_banner_reports")
-        .select("page_url")
-        .eq("domain", p.domain)
-        .order("last_reported", { ascending: false })
-        .limit(1);
+      const { data: rep } = await supabase.from("missed_banner_reports").select("page_url")
+        .eq("domain", p.domain).order("last_reported", { ascending: false }).limit(1);
       if (rep && rep[0]?.page_url) testUrl = rep[0].page_url;
-    } catch (_e) { /* default to https://domain */ }
+    } catch (_e) { /* default */ }
 
     const v = await runValidation(String(key), testUrl, p.selector);
+    let status: string;
 
     if (!v || v.error) {
-      await supabase.from("cookie_patterns").update({ validation_status: "inconclusive" }).eq("id", p.id);
-      inconclusive++;
-      results.push({ domain: p.domain, status: "inconclusive", error: v?.error ?? "engine" });
-      continue;
+      status = "inconclusive";
+      // Held patterns stay held (and rotate to the back of the queue); AI ones get marked.
+      await supabase.from("cookie_patterns").update({ validation_status: p.held ? "needs_robot_check" : "inconclusive" }).eq("id", p.id);
+    } else if (v.found && !v.inConsent) {
+      status = "rejected_not_cookie_banner";
+      await supabase.from("cookie_patterns").update({
+        is_active: false, confidence: 0, validated_at: now(), validation_status: status,
+      }).eq("id", p.id);
+    } else if (v.found && v.dismissed) {
+      status = "passed";
+      await supabase.from("cookie_patterns").update({
+        is_active: true, confidence: 8, validated_at: now(), validation_status: status,
+      }).eq("id", p.id);
+      try { await supabase.rpc("mark_ai_processed", { _domain: p.domain, _resolved: true }); } catch (_e) { /* best effort */ }
+    } else if (v.found) {
+      status = "not_dismissed";
+      await supabase.from("cookie_patterns").update({
+        is_active: false, confidence: 0, validated_at: now(), validation_status: status,
+      }).eq("id", p.id);
+      if (!p.held) {
+        try { await supabase.from("missed_banner_reports").update({ resolved: false, ai_processed_at: null }).eq("domain", p.domain); } catch (_e) { /* best effort */ }
+      }
+    } else {
+      status = "not_seen";
+      // The gate trigger keeps a held (non-cookie-looking) pattern off; AI cookie selectors keep serving.
+      await supabase.from("cookie_patterns").update({ validation_status: status }).eq("id", p.id);
     }
 
-    if (v.found && v.dismissed) {
-      await supabase.from("cookie_patterns").update({
-        confidence: 8, is_active: true, validated_at: new Date().toISOString(), validation_status: "passed",
-      }).eq("id", p.id);
-      try { await supabase.rpc("mark_ai_processed", { _domain: p.domain, _resolved: true }); } catch (_e) {}
-      passed++;
-      results.push({ domain: p.domain, status: "passed", selector: p.selector });
-    } else if (v.found) {
-      // Proven failure: the banner was there and the click didn't clear it.
-      await supabase.from("cookie_patterns").update({
-        confidence: 0, is_active: false, validated_at: new Date().toISOString(), validation_status: "not_dismissed",
-      }).eq("id", p.id);
-      try {
-        await supabase.from("missed_banner_reports")
-          .update({ resolved: false, ai_processed_at: null })
-          .eq("domain", p.domain);
-      } catch (_e) {}
-      failed++;
-      results.push({ domain: p.domain, status: "not_dismissed", selector: p.selector });
-    } else {
-      await supabase.from("cookie_patterns").update({ validation_status: "not_seen" }).eq("id", p.id);
-      notSeen++;
-      results.push({ domain: p.domain, status: "not_seen", selector: p.selector });
-    }
+    tally[status] = (tally[status] ?? 0) + 1;
+    results.push({ domain: p.domain, selector: p.selector, held: p.held, status });
   }
 
-  return new Response(JSON.stringify({ checked: (pats ?? []).length, passed, failed, not_seen: notSeen, inconclusive, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  return json({ checked: results.length, ...tally, results });
 });

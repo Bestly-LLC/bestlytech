@@ -1,3 +1,14 @@
+// Cookie Yeti — a user closed a banner by hand; learn from it, carefully.
+//
+// POST { domain, clicked_selector, banner_selector?, banner_html? }
+//
+// 2026-09-16 fix: this used to turn ONE click on ANY overlay into a live pattern, which taught
+// the extension to click menu buttons (Shopify Settings, "More actions", Bestly's own admin rows)
+// and reopen what the user had just closed, over and over. Now:
+//   * the thing the user closed must look like a cookie/consent banner, or nothing is learned
+//   * Bestly's own sites are never learned
+//   * whatever is learned goes through the cy_pattern_gate trigger: a selector that isn't
+//     obviously a cookie control stays OFF until the robot browser proves it (validate-pattern).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -5,147 +16,98 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+const json = (b: unknown, status = 200) =>
+  new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 const BANNED_SELECTORS = ["body", "html", "head", "body *", "html *", "*"];
 const EXCLUDED_DOMAINS = [
   "icloud.com", "mail.google.com", "drive.google.com", "docs.google.com",
   "outlook.live.com", "outlook.office.com", "teams.microsoft.com",
-  "accounts.google.com", "appleid.apple.com",
+  "accounts.google.com", "appleid.apple.com", "bestly.tech",
 ];
+
+// Words that show up in real consent banners (ids, classes, visible text), in several languages.
+const CONSENT_RE = /cookie|consent|gdpr|ccpa|onetrust|optanon|didomi|cookiebot|usercentrics|trustarc|truste-|quantcast|qc-cmp|sourcepoint|sp_message|osano|iubenda|cookieyes|(^|[^a-z])cky-|cmplz|complianz|termly|klaro|borlabs|axeptio|tarteaucitron|datenschutz|einwilligung|rgpd|privacy (settings|preferences|choices)|your privacy|we value your privacy|tracking technologies/i;
 
 function inferActionType(selector: string): string {
   const s = (selector || "").toLowerCase();
-  if (/accept|agree|allow|got-it|gotit|ok-button/i.test(s)) return "accept";
-  if (/close|dismiss|x-button|btn-close/i.test(s)) return "close";
+  if (/reject|decline|deny|refuse/i.test(s)) return "reject";
   if (/necessary|essential|required-only/i.test(s)) return "necessary";
+  if (/accept|agree|allow|got-it|gotit|ok-button/i.test(s)) return "accept";
   if (/save|confirm|preferences/i.test(s)) return "save";
-  return "reject";
+  return "close";
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { domain, clicked_selector, banner_selector, banner_html } = await req.json();
+    if (!domain || !clicked_selector) return json({ error: "domain and clicked_selector are required" }, 400);
 
-    if (!domain || !clicked_selector) {
-      return new Response(
-        JSON.stringify({ error: "domain and clicked_selector are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (BANNED_SELECTORS.includes(String(clicked_selector).trim().toLowerCase())) {
+      return json({ error: "Rejected banned selector", skipped: true });
     }
-
-    // Guard: banned selectors
-    if (BANNED_SELECTORS.includes((clicked_selector || "").trim().toLowerCase())) {
-      return new Response(
-        JSON.stringify({ error: "Rejected banned selector", skipped: true }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Guard: excluded domains
-    const domainLower = (domain || "").toLowerCase();
+    const domainLower = String(domain).toLowerCase();
     if (EXCLUDED_DOMAINS.some((ed) => domainLower === ed || domainLower.endsWith("." + ed))) {
-      return new Response(
-        JSON.stringify({ error: "Excluded domain", skipped: true }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return json({ error: "Excluded domain", skipped: true });
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // 1. Save the dismissal report
+    // Only learn from something that is actually a cookie banner.
+    const context = `${banner_selector || ""} ${String(banner_html || "").slice(0, 5000)} ${clicked_selector}`;
+    if (!CONSENT_RE.test(context)) {
+      await supabase.from("ai_generation_log").insert({
+        domain, status: "skipped_not_cookie_banner", selector_generated: clicked_selector, ai_model: "user_consensus",
+        html_source: `Ignored a dismissal: the closed element (${banner_selector || "unknown"}) doesn't look like a cookie banner.`.substring(0, 500),
+      });
+      return json({ skipped: true, reason: "not_a_cookie_banner" });
+    }
+
     await supabase.from("dismissal_reports").insert({
       domain,
       clicked_selector,
       banner_selector: banner_selector || null,
-      banner_html: banner_html ? banner_html.substring(0, 5000) : null,
+      banner_html: banner_html ? String(banner_html).substring(0, 5000) : null,
     });
 
-    // 2. Check if domain already has a high-confidence pattern (skip if so)
     const { data: existing } = await supabase
-      .from("cookie_patterns")
-      .select("id, confidence")
-      .eq("domain", domain)
-      .eq("is_active", true)
-      .gte("confidence", 5)
-      .limit(1);
+      .from("cookie_patterns").select("id").eq("domain", domain).eq("is_active", true).gte("confidence", 5).limit(1);
+    if (existing && existing.length > 0) return json({ message: "Pattern already exists", domain, skipped: true });
 
-    if (existing && existing.length > 0) {
-      return new Response(
-        JSON.stringify({ message: "Pattern already exists", domain, skipped: true }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 3. Count total dismissal reports for this domain+selector
     const { count } = await supabase
-      .from("dismissal_reports")
-      .select("id", { count: "exact", head: true })
-      .eq("domain", domain)
-      .eq("clicked_selector", clicked_selector);
-
+      .from("dismissal_reports").select("id", { count: "exact", head: true })
+      .eq("domain", domain).eq("clicked_selector", clicked_selector);
     const reportCount = count || 1;
-
-    // 4. Infer action type and create pattern immediately
     const actionType = inferActionType(clicked_selector);
 
     await supabase.rpc("upsert_pattern", {
-      _domain: domain,
-      _selector: clicked_selector,
-      _action_type: actionType,
-      _cmp_fingerprint: "generic",
-      _source: "user_consensus",
+      _domain: domain, _selector: clicked_selector, _action_type: actionType, _cmp_fingerprint: "generic", _source: "user_consensus",
     });
-
-    // 5. Set confidence based on report count
+    // The gate trigger zeroes this again for selectors that still need a robot check.
     const confidence = Math.min(5 + reportCount, 9);
-    await supabase
-      .from("cookie_patterns")
-      .update({ confidence })
-      .eq("domain", domain)
-      .eq("selector", clicked_selector);
+    const { data: row } = await supabase.from("cookie_patterns").update({ confidence })
+      .eq("domain", domain).eq("selector", clicked_selector).eq("action_type", actionType)
+      .select("is_active, validation_status").maybeSingle();
 
-    // 6. Log to ai_generation_log
+    const live = !!row?.is_active;
     await supabase.from("ai_generation_log").insert({
       domain,
-      status: "success_consensus",
+      status: live ? "success_consensus" : "consensus_needs_robot_check",
       selector_generated: clicked_selector,
       action_type: actionType,
-      confidence,
+      confidence: live ? confidence : 0,
       ai_model: "user_consensus",
-      html_source: `Real-time consensus from ${reportCount} dismissal(s). Banner: ${banner_selector || "unknown"}. Action: ${actionType}`.substring(0, 500),
+      html_source: `From ${reportCount} dismissal(s). Banner: ${banner_selector || "unknown"}. ${live ? "Live." : "Held until the robot confirms it closes a cookie banner."}`.substring(0, 500),
     });
+    if (live) {
+      await supabase.rpc("mark_ai_processed", { _domain: domain, _resolved: true });
+      await supabase.from("dismissal_reports").delete().eq("domain", domain);
+    }
 
-    // 7. Mark any matching missed_banner_reports as resolved
-    await supabase.rpc("mark_ai_processed", {
-      _domain: domain,
-      _resolved: true,
-    });
-
-    // 8. Clean up processed dismissal reports for this domain
-    await supabase.from("dismissal_reports").delete().eq("domain", domain);
-
-    return new Response(
-      JSON.stringify({
-        message: "Pattern created",
-        domain,
-        selector: clicked_selector,
-        action_type: actionType,
-        confidence,
-        reports: reportCount,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ message: live ? "Pattern created" : "Pattern held for robot check", domain, selector: clicked_selector, action_type: actionType, live, reports: reportCount });
   } catch (err: any) {
-    return new Response(
-      JSON.stringify({ error: err.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ error: err.message }, 500);
   }
 });
