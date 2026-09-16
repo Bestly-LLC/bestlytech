@@ -308,6 +308,7 @@ export type Database = {
           lead_id: string
           live_data: Json
           monthly_support_fee_cents: number | null
+          nda_signed_at: string | null
           notes: string | null
           primary_contact_email: string
           primary_contact_name: string
@@ -316,6 +317,7 @@ export type Database = {
           signing_document_url: string | null
           signing_provider: string
           signing_request_id: string | null
+          signing_requests: Json
           sow_sent_at: string | null
           sow_signed_at: string | null
           stage_changed_at: string
@@ -344,6 +346,7 @@ export type Database = {
           lead_id: string
           live_data?: Json
           monthly_support_fee_cents?: number | null
+          nda_signed_at?: string | null
           notes?: string | null
           primary_contact_email: string
           primary_contact_name: string
@@ -352,6 +355,7 @@ export type Database = {
           signing_document_url?: string | null
           signing_provider?: string
           signing_request_id?: string | null
+          signing_requests?: Json
           sow_sent_at?: string | null
           sow_signed_at?: string | null
           stage_changed_at?: string
@@ -380,6 +384,7 @@ export type Database = {
           lead_id?: string
           live_data?: Json
           monthly_support_fee_cents?: number | null
+          nda_signed_at?: string | null
           notes?: string | null
           primary_contact_email?: string
           primary_contact_name?: string
@@ -388,6 +393,7 @@ export type Database = {
           signing_document_url?: string | null
           signing_provider?: string
           signing_request_id?: string | null
+          signing_requests?: Json
           sow_sent_at?: string | null
           sow_signed_at?: string | null
           stage_changed_at?: string
