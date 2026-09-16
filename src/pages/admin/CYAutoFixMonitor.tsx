@@ -121,6 +121,7 @@ export default function CYAutoFixMonitor({ embedded = false }: { embedded?: bool
   const [linkValue, setLinkValue] = useState("");
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [guideFor, setGuideFor] = useState<Stuck | null>(null);
+  const [anySite, setAnySite] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -294,6 +295,33 @@ export default function CYAutoFixMonitor({ embedded = false }: { embedded?: bool
         </section>
       )}
 
+      {/* Guide any site on demand, e.g. one you just hit a banner on. */}
+      <form
+        className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const raw = anySite.trim();
+          let host = raw;
+          let page: string | null = null;
+          try { const u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`); host = u.hostname.replace(/^www\./, ""); page = /^https?:\/\//i.test(raw) ? u.toString() : null; } catch { return; }
+          if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)) { toast.error("That doesn't look like a website"); return; }
+          setGuideFor({ id: -1, domain: host.toLowerCase(), page_url: page, report_count: 0, autofix_outcome: null, autofix_note: null, autofix_last_at: null });
+        }}
+      >
+        <h2 className="text-sm font-medium text-white">Fix a site yourself</h2>
+        <p className="text-xs text-white/55 mt-0.5">Saw a banner Cookie Yeti missed? Show the robot which button closes it.</p>
+        <div className="mt-3 flex gap-2">
+          <Input
+            value={anySite} onChange={(e) => setAnySite(e.target.value)}
+            placeholder="nytimes.com" inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            aria-label="Website" className="h-9"
+          />
+          <Button type="submit" size="sm" className="h-9 flex-none" disabled={!anySite.trim()}>
+            <MousePointerClick className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" /> Guide it
+          </Button>
+        </div>
+      </form>
+
       {/* Fixing on its own: visible so nothing looks lost, no action required. */}
       {fixing.length > 0 && (
         <section aria-labelledby="fixing" className="rounded-2xl border border-white/10 bg-white/[0.02]">
@@ -358,7 +386,7 @@ export default function CYAutoFixMonitor({ embedded = false }: { embedded?: bool
         startUrl={guideFor?.page_url}
         open={!!guideFor}
         onOpenChange={(o) => { if (!o) setGuideFor(null); }}
-        onSaved={loadData}
+        onSaved={() => { setAnySite(""); loadData(); }}
       />
 
       <DomainDeepDive domain={selectedDomain} open={drawerOpen} onOpenChange={setDrawerOpen} onRefresh={loadData} />
