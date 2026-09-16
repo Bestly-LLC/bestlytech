@@ -14,6 +14,7 @@
 
 import chromium from "@sparticuz/chromium";
 import puppeteer from "puppeteer-core";
+import { AsyncLocalStorage } from "node:async_hooks";
 const config = { maxDuration: 60 };
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://rcqfqhguwpmaarseifqg.supabase.co";
 const SUPABASE_ANON = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTc1OTUsImV4cCI6MjA5MDkzMzU5NX0.MHwsTd3CmaTViv3HoFRbeF1t6hmlf5W-p_4eHFBQP9k";
@@ -70,6 +71,12 @@ async function withPage(fn, opts = {}) {
     executablePath: await chromium.executablePath(),
     headless: "shell"
   });
+  const c = clock.getStore();
+  const watchdog = c ? setTimeout(() => {
+    c.killed = true;
+    browser.close().catch(() => {
+    });
+  }, Math.max(1e3, c.start + KILL_MS - Date.now())) : null;
   try {
     const page = await browser.newPage();
     await page.setUserAgent(profile.ua);
@@ -83,15 +90,24 @@ async function withPage(fn, opts = {}) {
     });
     return await fn(page);
   } finally {
+    if (watchdog) clearTimeout(watchdog);
     await browser.close().catch(() => {
     });
   }
 }
 async function load(page, url) {
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 2e4 });
-  await page.waitForNetworkIdle({ idleTime: 600, timeout: 8e3 }).catch(() => {
+  try {
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: cap(2e4) });
+  } catch (e) {
+    // A slow page that has started rendering is still worth a look; anything else is a real failure.
+    if (!/timeout/i.test(String(e))) throw e;
+    markSlow();
+    const hasBody = await page.evaluate(() => !!document.body && document.body.childElementCount > 0).catch(() => false);
+    if (!hasBody) throw new Error("The site didn't load in 20 seconds.");
+  }
+  await page.waitForNetworkIdle({ idleTime: 600, timeout: cap(8e3) }).catch(() => {
   });
-  await new Promise((r) => setTimeout(r, 2e3));
+  await napFor(2e3);
 }
 const visible = (sel) => {
   const el = document.querySelector(sel);
@@ -112,6 +128,22 @@ const inConsentBanner = (sel) => {
   return !!container && TEXT.test((container.innerText || "").slice(0, 4e3));
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Time budget. Vercel kills the function at 60s and the caller only sees a bare 504, so every
+// wait is clamped to what's left of a per-request budget, and a watchdog closes Chromium a few
+// seconds before the platform limit so we can still answer with a plain-English error.
+const BUDGET_MS = 44e3;
+const KILL_MS = 53e3;
+const clock = new AsyncLocalStorage();
+const left = () => {
+  const c = clock.getStore();
+  return c ? c.end - Date.now() : Infinity;
+};
+const cap = (ms) => Math.max(1, Math.min(ms, left()));
+const napFor = (ms) => sleep(Math.max(0, Math.min(ms, left())));
+const markSlow = () => {
+  const c = clock.getStore();
+  if (c) c.slow = true;
+};
 async function settledEval(page, fn, ...args) {
   let last;
   for (let i = 0; i < 3; i++) {
@@ -120,9 +152,10 @@ async function settledEval(page, fn, ...args) {
     } catch (e) {
       last = e;
       if (!/context was destroyed|navigation|detached/i.test(String(e))) throw e;
-      await page.waitForNetworkIdle({ idleTime: 600, timeout: 6e3 }).catch(() => {
+      if (left() < 2e3) throw e;
+      await page.waitForNetworkIdle({ idleTime: 600, timeout: cap(6e3) }).catch(() => {
       });
-      await sleep(1500);
+      await napFor(1500);
     }
   }
   throw last;
@@ -141,7 +174,7 @@ const consentVisible = () => {
   return false;
 };
 async function waitForConsent(page, ms) {
-  const until = Date.now() + ms;
+  const until = Date.now() + Math.min(ms, Math.max(0, left() - 6e3));
   while (Date.now() < until) {
     if (await settledEval(page, consentVisible).catch(() => false)) {
       await sleep(600);
@@ -262,19 +295,23 @@ const rootsGone = () => {
   });
 };
 async function clickStep(page, selector) {
-  await page.waitForSelector(selector, { visible: true, timeout: 7e3 });
+  await page.waitForSelector(selector, { visible: true, timeout: cap(7e3) });
   await settledEval(page, markRoot, selector).catch(() => false);
   try {
     await page.click(selector);
   } catch {
     await page.evaluate((s) => document.querySelector(s)?.click(), selector);
   }
-  await page.waitForNetworkIdle({ idleTime: 400, timeout: 3e3 }).catch(() => {
+  await page.waitForNetworkIdle({ idleTime: 400, timeout: cap(3e3) }).catch(() => {
   });
-  await sleep(1200);
+  await napFor(1200);
 }
 async function replay(page, steps) {
   for (let i = 0; i < steps.length; i++) {
+    if (left() < 4e3) {
+      markSlow();
+      return i;
+    }
     try {
       await clickStep(page, steps[i].selector);
     } catch {
@@ -295,7 +332,7 @@ function cleanSteps(raw) {
   }
   return out;
 }
-async function handler(req, res) {
+async function inner(req, res, c) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "POST only" });
   const key = String(req.headers["x-render-key"] || "");
@@ -313,7 +350,7 @@ async function handler(req, res) {
         await load(page, url);
         return { html: await page.content(), finalUrl: page.url() };
       });
-      return res.status(200).json({ ok: true, engine: ENGINE, ...out });
+      return res.status(200).json({ ok: true, engine: ENGINE, ...out, slow: c.slow });
     }
     if (action === "validate") {
       const selector = String(body.selector || "");
@@ -345,7 +382,7 @@ async function handler(req, res) {
         }
         return r;
       });
-      return res.status(200).json({ ok: true, engine: ENGINE, ...out });
+      return res.status(200).json({ ok: true, engine: ENGINE, ...out, slow: c.slow });
     }
     if (action === "inspect") {
       const steps = cleanSteps(body.steps);
@@ -360,7 +397,7 @@ async function handler(req, res) {
         const found = await settledEval(page, collectElements, 80);
         return { failedStep: null, shot: await shot(page), finalUrl: page.url(), ...found };
       }, { phone, images: true, height });
-      return res.status(200).json({ ok: true, engine: ENGINE, ...out });
+      return res.status(200).json({ ok: true, engine: ENGINE, ...out, slow: c.slow });
     }
     if (action === "test") {
       const steps = cleanSteps(body.steps);
@@ -374,12 +411,24 @@ async function handler(req, res) {
         const dismissed = failedStep === null ? await settledEval(page, rootsGone).catch(() => true) : false;
         return { dismissed, failedStep, before, after: await shot(page) };
       }, { phone, images: true, height });
-      return res.status(200).json({ ok: true, engine: ENGINE, ...out });
+      return res.status(200).json({ ok: true, engine: ENGINE, ...out, slow: c.slow });
     }
     return res.status(400).json({ ok: false, error: "Unknown action" });
   } catch (e) {
-    return res.status(502).json({ ok: false, engine: ENGINE, error: String(e).slice(0, 300) });
+    if (c.killed) {
+      return res.status(504).json({ ok: false, engine: ENGINE, slow: true, error: "That site took too long for the robot browser (over 50 seconds). Try again, or try the phone view." });
+    }
+    const msg = String(e?.message || e);
+    if (/didn't load|timeout/i.test(msg)) {
+      return res.status(504).json({ ok: false, engine: ENGINE, slow: true, error: "That site didn't load in time for the robot browser. Try again in a minute." });
+    }
+    return res.status(502).json({ ok: false, engine: ENGINE, error: msg.slice(0, 300) });
   }
+}
+function handler(req, res) {
+  const start = Date.now();
+  const c = { start, end: start + BUDGET_MS, killed: false, slow: false };
+  return clock.run(c, () => inner(req, res, c));
 }
 export {
   config,
