@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,6 +48,7 @@ type FeedRow = {
   ai_processed_at: string | null;
   last_reported: string | null;
   created_at: string | null;
+  autofix_outcome?: string | null;
 };
 
 type NeedsRow = {
@@ -58,15 +59,17 @@ type NeedsRow = {
   render_attempts: number | null;
   last_reported: string | null;
   reason: string;
+  autofix_outcome: string | null;
 };
 
 type FeedState = "fixed" | "fixing" | "needs";
 
-// Same rule as the v_cookieyeti_needs_attention view, so the feed, the "Needs you"
-// list and the Auto-Fix page never disagree.
+// "Needs you" = Auto-Fix already tried and handed it to a human (same rule as the
+// pipeline-health view), so the feed, this list and the Auto-Fix page never disagree.
+const HUMAN_OUTCOMES = new Set(["blocked", "no_banner_seen", "ai_failed", "ai_wrong"]);
 function deriveState(r: FeedRow): FeedState {
   if (r.resolved) return "fixed";
-  if (!r.has_working_pattern && ((r.ai_attempts ?? 0) >= 4 || (r.render_attempts ?? 0) >= 3)) return "needs";
+  if (HUMAN_OUTCOMES.has(r.autofix_outcome ?? "")) return "needs";
   return "fixing";
 }
 
@@ -74,6 +77,13 @@ const STATE_META: Record<FeedState, { label: string; dot: string; pill: string }
   fixed: { label: "Fixed", dot: "bg-emerald-400", pill: "text-emerald-300 bg-emerald-500/10 border-emerald-500/25" },
   fixing: { label: "Fixing", dot: "bg-amber-400", pill: "text-amber-300 bg-amber-500/10 border-amber-500/25" },
   needs: { label: "Needs you", dot: "bg-red-400", pill: "text-red-300 bg-red-500/10 border-red-500/25" },
+};
+
+const OUTCOME_LABEL: Record<string, string> = {
+  blocked: "Blocks our robot",
+  no_banner_seen: "Check for a banner",
+  ai_failed: "AI needs your report",
+  ai_wrong: "AI fix didn't work",
 };
 
 const REASON_LABEL: Record<string, string> = {
@@ -90,9 +100,10 @@ function timeToFix(r: FeedRow): string | null {
 }
 
 const FEED_COLUMNS =
-  "id, domain, report_count, resolved, resolved_at, has_working_pattern, ai_attempts, render_attempts, ai_processed_at, last_reported, created_at";
+  "id, domain, report_count, resolved, resolved_at, has_working_pattern, ai_attempts, render_attempts, ai_processed_at, last_reported, created_at, autofix_outcome";
 
 export default function CYCommandCenter() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +129,7 @@ export default function CYCommandCenter() {
         .limit(20),
       supabase
         .from("v_cookieyeti_needs_attention" as any)
-        .select("id, domain, report_count, ai_attempts, render_attempts, last_reported, reason")
+        .select("id, domain, report_count, ai_attempts, render_attempts, last_reported, reason, autofix_outcome")
         .order("report_count", { ascending: false })
         .limit(50),
     ]);
@@ -132,7 +143,7 @@ export default function CYCommandCenter() {
     }
     if (!ov.error) setOverview(Array.isArray(ov.data) ? ov.data[0] : ov.data);
     if (!recent.error) setFeed((recent.data as unknown as FeedRow[]) || []);
-    if (!attention.error) setNeeds((attention.data as unknown as NeedsRow[]) || []);
+    if (!attention.error) setNeeds(((attention.data as unknown as NeedsRow[]) || []).filter((r) => HUMAN_OUTCOMES.has(r.autofix_outcome ?? "")));
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -203,7 +214,7 @@ export default function CYCommandCenter() {
           accentColor={needsCount > 0 ? "#ef4444" : "#10b981"}
           iconBg={needsCount > 0 ? "bg-red-500/10" : "bg-emerald-500/10"}
           iconColor={needsCount > 0 ? "text-red-400" : "text-emerald-400"}
-          subtitle={needsCount > 0 ? "auto-fix gave up" : "all clear"} />
+          subtitle={needsCount > 0 ? "about 30 seconds each" : "all clear"} />
         <StatCard label="Domains covered" value={o.total_domains ?? 0} icon={Globe} iconBg="bg-violet-500/10" iconColor="text-violet-400" subtitle={`${(o.total_patterns ?? 0).toLocaleString()} patterns`} />
         <StatCard label="Active this week" value={o.patterns_last_7d ?? 0} icon={Sparkles} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle={`${o.new_domains_last_7d ?? 0} new domains`} tooltip="Patterns seen working in the last 7 days." />
         <StatCard label="Active today" value={o.patterns_last_24h ?? 0} icon={Activity} iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle="patterns, last 24h" />
@@ -222,19 +233,19 @@ export default function CYCommandCenter() {
           )}
         </div>
         {needsCount === 0 ? (
-          <EmptyState compact icon={CheckCircle2} title="Nothing needs you" description="Every reported domain is either fixed or still being worked on automatically." />
+          <EmptyState compact icon={CheckCircle2} title="Nothing needs you" description="Every reported domain is fixed or being fixed automatically." />
         ) : (
           <ul className="divide-y divide-white/[0.04]">
             {needs.slice(0, 8).map((r) => (
               <li key={r.id} className="flex items-center pr-3">
                 <button
                   type="button"
-                  onClick={() => openDomain(r.domain)}
+                  onClick={() => navigate("/admin/cookie-yeti/autofix")}
                   className="min-w-0 flex-1 flex items-center gap-3 px-5 py-3 text-left hover:bg-white/[0.025] focus-visible:outline-none focus-visible:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/30 transition-colors group"
                 >
                   <span className="text-sm font-medium text-white truncate flex-1 group-hover:text-cyan-300 transition-colors">{r.domain}</span>
                   <span className="hidden sm:inline text-[0.6875rem] px-2 py-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-300 shrink-0">
-                    {REASON_LABEL[r.reason] ?? r.reason}
+                    {OUTCOME_LABEL[r.autofix_outcome ?? ""] ?? "Needs a hand"}
                   </span>
                   <span className="text-xs text-white/60 tabular-nums shrink-0">{r.report_count ?? 0} reports</span>
                   <span className="hidden sm:inline text-xs text-white/55 shrink-0 w-20 text-right">{relTime(r.last_reported)}</span>
@@ -243,11 +254,8 @@ export default function CYCommandCenter() {
                 <ActionMenu
                   label={`Actions for ${r.domain}`}
                   items={[
-                    { label: "Open details", icon: PanelRightOpen, onSelect: () => openDomain(r.domain) },
-                    ...((r.render_attempts ?? 0) >= 3
-                      ? [{ label: "Retry render", icon: RotateCcw, onSelect: async () => { if (await retryRenderForDomain(r.domain)) loadData(); } }]
-                      : []),
-                    { label: "Re-run AI", icon: Sparkles, onSelect: async () => { if (await runAiForDomain(r.domain)) loadData(); } },
+                    { label: "Show me what to do", icon: Sparkles, onSelect: () => navigate("/admin/cookie-yeti/autofix") },
+                    { label: "Details and history", icon: PanelRightOpen, onSelect: () => openDomain(r.domain) },
                   ]}
                 />
               </li>
@@ -292,7 +300,7 @@ export default function CYCommandCenter() {
                       <p className="text-xs text-white/55 mt-0.5 truncate">
                         {count} {count === 1 ? "report" : "reports"}
                         {ttf && <span className="text-emerald-300/80"> · fixed in {ttf}</span>}
-                        {st === "needs" && <span className="text-red-300/80"> · auto-fix gave up</span>}
+                        {st === "needs" && <span className="text-red-300/80"> · needs a hand</span>}
                         {st === "fixing" && <span className="text-amber-300/80"> · {r.ai_attempts ?? 0} AI attempts so far</span>}
                       </p>
                     </div>

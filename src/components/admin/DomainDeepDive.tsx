@@ -143,7 +143,7 @@ export async function retryRenderForDomain(domain: string, renderConfigured?: bo
   }
   toast.success(`${domain} queued for another render`, {
     description: renderConfigured === false
-      ? "Heads up: BROWSERLESS_TOKEN isn't set, so the render job will skip it until the token is added."
+      ? "Heads up: the robot browser is offline, so the render job will pick it up once it is back."
       : "The render job runs every 10 minutes.",
   });
   return true;
