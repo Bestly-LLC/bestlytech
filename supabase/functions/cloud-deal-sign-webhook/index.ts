@@ -4,8 +4,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
  * cloud-deal-sign-webhook — Libresign callback handler.
  *
  * Libresign POSTs here when a signing event happens. We look up the deal by
- * signing_request_id, stamp the appropriate timestamp, write a deal_event,
- * fire ntfy + customer email, and (for SOW) optionally auto-advance stage.
+ * request UUID in cloud_deals.signing_requests ({sow, nda, acceptance}), falling back
+ * to the legacy signing_request_id column and install_data.acceptance.envelope_id.
+ * The document kind comes from the key that matched, else the ?kind= query param
+ * that cloud-deal-sign puts on the callback URL, else the old stage-based guess.
+ * Then we stamp the matching timestamp (sow_signed_at, nda_signed_at, or
+ * install_data.acceptance.signed_at), write a deal_event and fire ntfy.
  *
  * Auth: verify_jwt = false (Libresign won't carry our JWT). We instead require
  * a shared secret in the X-Bestly-Sign-Secret header (LIBRESIGN_WEBHOOK_SECRET
@@ -60,6 +64,13 @@ function pickRequestUuid(body: any): string | null {
   return null;
 }
 
+const KINDS = ["sow", "nda", "acceptance"] as const;
+type SignKind = (typeof KINDS)[number];
+const KIND_LABEL: Record<SignKind, string> = { sow: "SOW", nda: "NDA", acceptance: "Acceptance" };
+function asKind(v: unknown): SignKind | null {
+  return typeof v === "string" && (KINDS as readonly string[]).includes(v) ? (v as SignKind) : null;
+}
+
 function pickEventType(body: any): "signed" | "declined" | "viewed" | "other" {
   const t = (body?.event || body?.type || "").toString().toLowerCase();
   if (t.includes("sign")) return "signed";
@@ -88,7 +99,7 @@ Deno.serve(async (req) => {
   }
 
   // Libresign 13 posts the callback as multipart/form-data with three fields:
-  //   uuid    — request UUID (matches cloud_deals.signing_request_id)
+  //   uuid    — request UUID (matches a value in cloud_deals.signing_requests)
   //   status  — file status code (fires only when the whole envelope is signed)
   //   file    — the signed PDF binary (we don't store; Nextcloud has it)
   // We also tolerate a JSON shape for forward-compat / Workflow Engine path.
@@ -129,17 +140,46 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const sb = createClient(supabaseUrl, serviceKey);
 
-  // Look up the deal
-  const { data: deal } = await sb
+  // Libresign request UUIDs are UUIDs; anything else can't match and must not reach a filter string.
+  if (!/^[A-Za-z0-9-]{1,100}$/.test(reqUuid)) {
+    console.warn("webhook with malformed request uuid");
+    return ok({ ok: true, ignored: true });
+  }
+  const kindFromUrl = asKind(new URL(req.url).searchParams.get("kind"));
+
+  // Look up the deal: per-kind slots first, then the legacy single slot, then the
+  // acceptance ID typed into the Install panel.
+  const dealCols =
+    "id, lead_id, current_stage, company_name, primary_contact_name, primary_contact_email, sow_signed_at, nda_signed_at, install_data, signing_requests, signing_request_id";
+  let matchedKind: SignKind | null = null;
+  let { data: deal } = await sb
     .from("cloud_deals")
-    .select(
-      "id, lead_id, current_stage, company_name, primary_contact_name, primary_contact_email, sow_signed_at, install_data"
-    )
-    .eq("signing_request_id", reqUuid)
+    .select(dealCols)
+    .or(KINDS.map((k) => `signing_requests->>${k}.eq.${reqUuid}`).join(","))
+    .limit(1)
     .maybeSingle();
+  if (deal) {
+    matchedKind = KINDS.find((k) => (deal as any).signing_requests?.[k] === reqUuid) ?? null;
+  } else {
+    ({ data: deal } = await sb
+      .from("cloud_deals")
+      .select(dealCols)
+      .eq("signing_request_id", reqUuid)
+      .limit(1)
+      .maybeSingle());
+    if (!deal) {
+      ({ data: deal } = await sb
+        .from("cloud_deals")
+        .select(dealCols)
+        .eq("install_data->acceptance->>envelope_id", reqUuid)
+        .limit(1)
+        .maybeSingle());
+      if (deal) matchedKind = "acceptance";
+    }
+  }
 
   if (!deal) {
-    console.warn("webhook for unknown signing_request_id", reqUuid);
+    console.warn("webhook for unknown signing request", reqUuid);
     return ok({ ok: true, unmatched: true });
   }
 
@@ -191,13 +231,17 @@ Deno.serve(async (req) => {
   // ── Signed ──
   const signedAt =
     body?.signed_at || body?.timestamp || new Date().toISOString();
-  const isAcceptance =
-    deal.current_stage === 7 ||
-    !!(deal.install_data as any)?.acceptance?.envelope_id ||
-    body?.kind === "acceptance";
+  // Kind: the slot that matched is the truth; then the callback URL; then the legacy guess
+  // (only for requests recorded before per-kind tracking).
+  const kind: SignKind =
+    matchedKind ??
+    kindFromUrl ??
+    asKind(body?.kind) ??
+    (deal.current_stage === 7 || !!(deal.install_data as any)?.acceptance?.envelope_id ? "acceptance" : "sow");
+  const label = KIND_LABEL[kind];
 
   const updates: Record<string, any> = {};
-  if (isAcceptance) {
+  if (kind === "acceptance") {
     // Stamp acceptance.signed_at inside install_data
     const install = (deal.install_data as any) || {};
     install.acceptance = {
@@ -206,28 +250,35 @@ Deno.serve(async (req) => {
       signed_at: signedAt,
     };
     updates.install_data = install;
+  } else if (kind === "nda") {
+    if (!deal.nda_signed_at) updates.nda_signed_at = signedAt;
   } else {
     if (!deal.sow_signed_at) updates.sow_signed_at = signedAt;
   }
+  if (!(deal as any).signing_requests?.[kind]) {
+    updates.signing_requests = { ...((deal as any).signing_requests || {}), [kind]: reqUuid };
+  }
 
   if (Object.keys(updates).length > 0) {
-    await sb.from("cloud_deals").update(updates).eq("id", deal.id);
+    const { error: uErr } = await sb.from("cloud_deals").update(updates).eq("id", deal.id);
+    if (uErr) {
+      console.error("sign-webhook deal update error", uErr);
+      return bad("could not update deal", 500);
+    }
   }
 
   await sb.from("cloud_deal_events").insert({
     deal_id: deal.id,
     lead_id: deal.lead_id,
-    event_type: isAcceptance ? "acceptance_signed" : "sow_signed",
-    event_payload: { signing_request_id: reqUuid, signed_at: signedAt, raw: body },
+    event_type: `${kind}_signed`,
+    event_payload: { signing_request_id: reqUuid, template_kind: kind, signed_at: signedAt, raw: body },
     triggered_by: "libresign-webhook",
   });
 
   // ntfy push
   try {
     const headers: Record<string, string> = {
-      Title: asciiHeader(
-        `${isAcceptance ? "Acceptance" : "SOW"} signed: ${deal.company_name}`
-      ),
+      Title: asciiHeader(`${label} signed: ${deal.company_name}`),
       Tags: "white_check_mark",
       Priority: "5",
       Click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
@@ -237,13 +288,13 @@ Deno.serve(async (req) => {
     await fetch(`${NTFY_BASE}/${NTFY_TOPIC}`, {
       method: "POST",
       headers,
-      body: `${deal.primary_contact_name ?? "Client"} just signed.${
-        isAcceptance ? " Stage 7 complete — Mark live unlocked." : ""
+      body: `${deal.primary_contact_name ?? "Client"} just signed the ${label}.${
+        kind === "acceptance" ? " Stage 7 complete — Mark live unlocked." : ""
       }`,
     });
   } catch (e) {
     console.error("ntfy sign-complete failed", e);
   }
 
-  return ok({ ok: true, recorded: isAcceptance ? "acceptance_signed" : "sow_signed" });
+  return ok({ ok: true, recorded: `${kind}_signed` });
 });
