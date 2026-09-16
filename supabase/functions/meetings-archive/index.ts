@@ -160,16 +160,24 @@ Deno.serve(async (req) => {
   });
   if (!isAdmin) return json({ error: "forbidden" }, 403);
 
-  // --- 2. Nextcloud credential (function secret) ---
-  const ncPass = Deno.env.get("NEXTCLOUD_APP_PASSWORD");
-  const ncUser = Deno.env.get("NEXTCLOUD_USER") ?? "jared";
+  // --- 2. Nextcloud credential ---
+  // Prefer the function secret; otherwise read the same credential the rest of the
+  // Nextcloud integrations use from Vault (get_nextcloud_credentials, service role only).
+  let ncPass = Deno.env.get("NEXTCLOUD_APP_PASSWORD") ?? "";
+  let ncUser = Deno.env.get("NEXTCLOUD_USER") ?? "";
+  if (!ncPass) {
+    const svc = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data: cred } = await svc.rpc("get_nextcloud_credentials");
+    const row = Array.isArray(cred) ? cred[0] : cred;
+    ncPass = row?.app_password ?? "";
+    ncUser = ncUser || row?.username || "";
+  }
+  ncUser = ncUser || "jared";
   if (!ncPass) {
     return json(
       {
         error: "not_configured",
-        message:
-          "NEXTCLOUD_APP_PASSWORD secret is not set on this function. " +
-          "Set it with: supabase secrets set NEXTCLOUD_APP_PASSWORD=...",
+        message: "No Nextcloud credential: set NEXTCLOUD_APP_PASSWORD or the nextcloud_app_password Vault secret.",
       },
       503,
     );
