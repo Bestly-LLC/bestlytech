@@ -9,6 +9,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
  *
  * Stores stripe_customer_id (on deal) once created so subsequent links reuse
  * the same customer record.
+ *
+ * Each link accepts exactly one completed payment (restrictions.completed_sessions.limit = 1)
+ * so a forwarded or bookmarked link can't take the deposit twice.
+ *
+ * Also makes sure the deal has an intake_token before the customer can pay, so the
+ * "deposit paid" email sent by stripe-webhook always carries the intake link.
  */
 
 const corsHeaders = {
@@ -24,6 +30,14 @@ function ok(b: unknown, s = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+function randomHex(bytes: number): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  return Array.from(buf)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function bad(reason: string, status = 400) {
   return new Response(JSON.stringify({ ok: false, error: reason }), {
     status,
@@ -61,9 +75,7 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   // Verify the caller's JWT and get their user_id, then check has_role(uid, 'admin')
-  const sbAuth = createClient(supabaseUrl, serviceKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
+  const sbAuth = createClient(supabaseUrl, serviceKey);
   const { data: userRes } = await sbAuth.auth.getUser(token);
   const uid = userRes?.user?.id;
   if (!uid) return bad("invalid auth", 401);
@@ -89,11 +101,26 @@ Deno.serve(async (req) => {
   // Fetch deal + lead
   const { data: deal, error: dealErr } = await sb
     .from("cloud_deals")
-    .select("id, lead_id, company_name, primary_contact_name, primary_contact_email, stripe_customer_id")
+    .select("id, lead_id, company_name, primary_contact_name, primary_contact_email, stripe_customer_id, intake_token")
     .eq("id", dealId)
     .maybeSingle();
 
   if (dealErr || !deal) return bad("deal not found", 404);
+
+  // Intake link must exist before payment: stripe-webhook puts it in the receipt email.
+  // Same format as the admin "Copy intake link" button (24 random bytes, 48 hex chars).
+  // Only fills an empty slot, so a link already sent to the customer keeps working.
+  if (!deal.intake_token) {
+    const { error: tokErr } = await sb
+      .from("cloud_deals")
+      .update({ intake_token: randomHex(24) })
+      .eq("id", deal.id)
+      .is("intake_token", null);
+    if (tokErr) {
+      console.error("intake_token create error", tokErr);
+      return bad("could not create the intake link for this deal", 500);
+    }
+  }
 
   try {
     // 1. Create or reuse Stripe customer
@@ -129,6 +156,8 @@ Deno.serve(async (req) => {
       "metadata[company_name]": deal.company_name,
       "after_completion[type]": "redirect",
       "after_completion[redirect][url]": `https://bestly.tech/get-started?paid=${deal.id}`,
+      // One successful payment per link — Stripe deactivates the link after it.
+      "restrictions[completed_sessions][limit]": "1",
     });
 
     await sb.from("cloud_deal_events").insert({
