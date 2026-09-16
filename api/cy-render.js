@@ -15,7 +15,7 @@
 import chromium from "@sparticuz/chromium";
 import puppeteer from "puppeteer-core";
 import { AsyncLocalStorage } from "node:async_hooks";
-const config = { maxDuration: 60 };
+const config = { maxDuration: 120 };
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://rcqfqhguwpmaarseifqg.supabase.co";
 const SUPABASE_ANON = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTc1OTUsImV4cCI6MjA5MDkzMzU5NX0.MHwsTd3CmaTViv3HoFRbeF1t6hmlf5W-p_4eHFBQP9k";
 const ENGINE = "vercel-chromium";
@@ -83,7 +83,7 @@ async function withPage(fn, opts = {}) {
     await page.setRequestInterception(true);
     page.on("request", (r) => {
       const t = r.resourceType();
-      if (t === "media" || t === "font" || t === "image" && !opts.images) r.abort().catch(() => {
+      if (t === "media" || t === "font" || t === "image" && !opts.images || heavyHost(r.url())) r.abort().catch(() => {
       });
       else r.continue().catch(() => {
       });
@@ -102,7 +102,7 @@ async function load(page, url) {
     // A slow page that has started rendering is still worth a look; anything else is a real failure.
     if (!/timeout/i.test(String(e))) throw e;
     markSlow();
-    const hasBody = await page.evaluate(() => !!document.body && document.body.childElementCount > 0).catch(() => false);
+    const hasBody = await within(page.evaluate(() => !!document.body && document.body.childElementCount > 0), 5e3, "evaluate").catch(() => false);
     if (!hasBody) throw new Error("The site didn't load in 20 seconds.");
   }
   await page.waitForNetworkIdle({ idleTime: 600, timeout: cap(8e3) }).catch(() => {
@@ -128,11 +128,11 @@ const inConsentBanner = (sel) => {
   return !!container && TEXT.test((container.innerText || "").slice(0, 4e3));
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-// Time budget. Vercel kills the function at 60s and the caller only sees a bare 504, so every
+// Time budget. Vercel kills the function at 120s and the caller only sees a bare 504, so every
 // wait is clamped to what's left of a per-request budget, and a watchdog closes Chromium a few
 // seconds before the platform limit so we can still answer with a plain-English error.
-const BUDGET_MS = 44e3;
-const KILL_MS = 53e3;
+const BUDGET_MS = 80e3;
+const KILL_MS = 106e3;
 const clock = new AsyncLocalStorage();
 const left = () => {
   const c = clock.getStore();
@@ -144,11 +144,28 @@ const markSlow = () => {
   const c = clock.getStore();
   if (c) c.slow = true;
 };
+// A page whose main thread is pegged can hang evaluate/screenshot forever; give up instead.
+const within = (p, ms, what) => {
+  let t;
+  const timer = new Promise((_, rej) => {
+    t = setTimeout(() => rej(new Error(`${what} timeout`)), Math.max(1500, Math.min(ms, left() + 8e3)));
+  });
+  return Promise.race([p, timer]).finally(() => clearTimeout(t));
+};
+// Ads, analytics and video players make pages slow and never hold the cookie banner.
+const HEAVY = /(^|\.)(doubleclick\.net|googlesyndication\.com|googleadservices\.com|adservice\.google\.[a-z.]+|google-analytics\.com|googletagservices\.com|amazon-adsystem\.com|adnxs\.com|criteo\.(com|net)|taboola\.com|outbrain\.com|scorecardresearch\.com|quantserve\.com|hotjar\.com|clarity\.ms|facebook\.net|analytics\.tiktok\.com|snap\.licdn\.com|ads\.linkedin\.com|bat\.bing\.com|pubmatic\.com|rubiconproject\.com|openx\.net|casalemedia\.com|moatads\.com|adsrvr\.org|yieldmo\.com|teads\.tv|jwplayer\.com|jwpcdn\.com|brightcove\.net|vimeocdn\.com|ytimg\.com|newrelic\.com|nr-data\.net|segment\.(io|com)|mixpanel\.com|fullstory\.com|chartbeat\.(com|net)|parsely\.com|permutive\.(com|app)|media\.net|sharethrough\.com|indexww\.com|3lift\.com|smartadserver\.com|adform\.net|bidswitch\.net|lijit\.com|sovrn\.com|gumgum\.com|kargo\.com|zemanta\.com|mgid\.com|revcontent\.com)$/i;
+const heavyHost = (u) => {
+  try {
+    return HEAVY.test(new URL(u).hostname);
+  } catch {
+    return false;
+  }
+};
 async function settledEval(page, fn, ...args) {
   let last;
   for (let i = 0; i < 3; i++) {
     try {
-      return await page.evaluate(fn, ...args);
+      return await within(page.evaluate(fn, ...args), 15e3, "evaluate");
     } catch (e) {
       last = e;
       if (!/context was destroyed|navigation|detached/i.test(String(e))) throw e;
@@ -320,7 +337,7 @@ async function replay(page, steps) {
   }
   return null;
 }
-const shot = (page) => page.screenshot({ type: "jpeg", quality: 55, encoding: "base64", captureBeyondViewport: false });
+const shot = (page) => within(page.screenshot({ type: "jpeg", quality: 55, encoding: "base64", captureBeyondViewport: false }), 15e3, "screenshot");
 function cleanSteps(raw) {
   if (raw == null) return [];
   if (!Array.isArray(raw) || raw.length > 6) return null;
@@ -416,7 +433,7 @@ async function inner(req, res, c) {
     return res.status(400).json({ ok: false, error: "Unknown action" });
   } catch (e) {
     if (c.killed) {
-      return res.status(504).json({ ok: false, engine: ENGINE, slow: true, error: "That site took too long for the robot browser (over 50 seconds). Try again, or try the phone view." });
+      return res.status(504).json({ ok: false, engine: ENGINE, slow: true, error: "That site took too long for the robot browser (over 100 seconds). Try again, or try the phone view." });
     }
     const msg = String(e?.message || e);
     if (/didn't load|timeout/i.test(msg)) {
@@ -425,10 +442,28 @@ async function inner(req, res, c) {
     return res.status(502).json({ ok: false, engine: ENGINE, error: msg.slice(0, 300) });
   }
 }
-function handler(req, res) {
+async function handler(req, res) {
   const start = Date.now();
   const c = { start, end: start + BUDGET_MS, killed: false, slow: false };
-  return clock.run(c, () => inner(req, res, c));
+  const status = res.status.bind(res);
+  let code = 200;
+  res.status = (n) => {
+    code = n;
+    return status(n);
+  };
+  try {
+    return await clock.run(c, () => inner(req, res, c));
+  } finally {
+    const b = req.body && typeof req.body === "object" ? req.body : {};
+    let host = "";
+    try {
+      host = new URL(String(b.url)).hostname;
+    } catch {
+    }
+    if (b.action !== "ping") {
+      console.log(JSON.stringify({ cyRender: b.action, host, viewport: b.viewport || "desktop", steps: Array.isArray(b.steps) ? b.steps.length : 0, code, ms: Date.now() - start, slow: c.slow, killed: c.killed }));
+    }
+  }
 }
 export {
   config,
