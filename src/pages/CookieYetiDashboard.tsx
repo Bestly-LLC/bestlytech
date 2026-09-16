@@ -321,7 +321,8 @@ function useDashboardData() {
             .limit(10),
           supabase.from("ai_generation_log").select("domain, status, created_at"),
           supabase.from("cookie_patterns").select("domain"),
-          supabase.from("device_registrations").select("id", { count: "exact", head: true }),
+          // Count only: the table itself is admin-only (it holds emails).
+          supabase.rpc("cy_devices_protected" as any),
           // Admin-read-only under RLS; will usually 0 for anon. Fall back below.
           supabase.from("dismissal_reports").select("id", { count: "exact", head: true }),
         ]);
@@ -368,7 +369,7 @@ function useDashboardData() {
           ai_generations: aiRows.length || FALLBACK.ai_generations,
           ai_success: aiRows.filter((r) => isSuccessStatus(r.status)).length,
           banners_dismissed: dismissed > 0 ? dismissed : FALLBACK.banners_dismissed,
-          devices_protected: devicesRes.count ?? FALLBACK.devices_protected,
+          devices_protected: typeof devicesRes.data === "number" ? devicesRes.data : FALLBACK.devices_protected,
           active_patterns: patternRows.length || FALLBACK.active_patterns,
           offenders: (offendersRes.data as Offender[]) ?? FALLBACK.offenders,
           ai_status_breakdown: [...statusCounts.entries()]
