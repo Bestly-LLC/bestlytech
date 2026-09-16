@@ -51,10 +51,21 @@ const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
       typeof p.sha256 === "string" && /^[0-9a-f]{64}$/.test(p.sha256)
         ? null
         : "agent.update needs version (x.y.z) and sha256",
+    // agent >= 1.2.0
+    test_alert: none,
+    run_maintenance: (p) => {
+      if (p.steps === undefined || p.steps === null) return null;
+      return Array.isArray(p.steps) && p.steps.every((s) => typeof s === "string" && MAINT_STEPS.has(s))
+        ? null
+        : `steps must be a list of: ${[...MAINT_STEPS].join(", ")}`;
+    },
   },
 };
 
-const SNAPSHOT_SOURCES = new Set(["homeassistant", "homebridge", "host"]);
+const MAINT_STEPS = new Set(["agent", "homeassistant", "homebridge", "pihole", "os", "housekeeping"]);
+const SNAPSHOT_SOURCES = new Set(["homeassistant", "homebridge", "host", "health"]);
+const EVENT_KINDS = new Set(["problem", "resolved", "info"]);
+const EVENT_SEVERITIES = new Set(["info", "success", "warning", "error"]);
 // The only secrets the agent may back up. Vault names are fixed here, not taken from the Pi.
 const BACKUP_SECRETS: Record<string, string> = {
   home_hub_ha_token: "Home Assistant long-lived token (backed up by the Home Hub agent)",
@@ -211,6 +222,45 @@ Deno.serve(async (req) => {
       if (error) skipped.push(name); else stored.push(name);
     }
     return json({ stored, skipped });
+  }
+
+  // Health events from the agent (>= 1.2.0). home_hub_raise() keeps the issue list and decides
+  // what reaches ntfy, so a chatty or retrying agent can't spam the phone.
+  if (op === "event") {
+    const key = String(body.key ?? "");
+    const kind = String(body.kind ?? "");
+    const severity = String(body.severity ?? "info");
+    if (!/^[a-z0-9_.@\/-]{2,120}$/i.test(key)) return json({ error: "Bad event key" }, 400);
+    if (!EVENT_KINDS.has(kind)) return json({ error: `Bad event kind: ${kind}` }, 400);
+    if (!EVENT_SEVERITIES.has(severity)) return json({ error: `Bad event severity: ${severity}` }, 400);
+    const occurred = typeof body.occurred_at === "string" && !Number.isNaN(Date.parse(body.occurred_at))
+      ? body.occurred_at
+      : null;
+    const { data, error } = await supabase.rpc("home_hub_raise", {
+      p_key: key,
+      p_kind: kind,
+      p_severity: severity,
+      p_title: String(body.title ?? key).slice(0, 200),
+      p_body: body.body ? String(body.body).slice(0, 3000) : null,
+      p_push: body.push === true,
+      p_source: "agent",
+      p_occurred_at: occurred,
+    });
+    if (error) return json({ error: error.message }, 500);
+    return json(data ?? { ok: true });
+  }
+
+  // The newest published agent release, for nightly self-update. Version + hash only.
+  if (op === "release_latest") {
+    const { data, error } = await supabase.from("home_hub_agent_releases").select("version, sha256");
+    if (error) return json({ error: error.message }, 500);
+    const parse = (v: string) => v.split(".").map((n) => parseInt(n, 10));
+    const newest = (data ?? []).sort((a, b) => {
+      const [x, y] = [parse(a.version), parse(b.version)];
+      for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return y[i] - x[i];
+      return 0;
+    })[0];
+    return json(newest ?? {});
   }
 
   // Hand the agent the source of a published release for agent.update.

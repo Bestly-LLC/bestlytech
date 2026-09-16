@@ -52,6 +52,8 @@ Nothing in the browser touches the LAN, and nothing inbound is opened on the Pi.
 | `homeassistant` | `toggle_automation` | `{automation_id: "automation.<id>", enabled}` |
 | `homeassistant` | `refresh` | — |
 | `agent` | `update` | `{version, sha256}` (agent >= 1.1.0) |
+| `agent` | `test_alert` | — (agent >= 1.2.0) |
+| `agent` | `run_maintenance` | `{steps?: ["agent","homeassistant","homebridge","pihole","os","housekeeping"]}` (agent >= 1.2.0) |
 
 After `update_gravity` completes the UI re-reads `home_hub_pihole_stats` rather than
 trusting the command's return value — that was the original bug.
@@ -86,6 +88,90 @@ Other edge-function ops besides `poll` / `result` / `heartbeat`:
    and exits; systemd restarts it on the new version.
 
 1.0.0 → 1.1.0 is the one upgrade that still needs SSH, because 1.0.0 predates `agent.update`.
+
+## Self-managing (agent 1.2.0, 2026-09-16)
+
+The Pi heals, updates and cleans up after itself, and only pushes to Jared's phone (ntfy topic
+`bestly-sysalert-7q2k9mx4`, the same one Blue Steel uses) when something needs him.
+
+### Health loop (every minute)
+
+| check | automatic fix | if the fix doesn't work |
+|---|---|---|
+| Home Assistant, Homebridge (snapshot + light probe; 4 min boot grace) | `docker restart`, 2 tries, 3 min apart | error push; quiet retry hourly |
+| Home Assistant / Homebridge rejecting the agent's login (401/403) | none (a restart can't fix a token) | warning push |
+| Pi-hole: `pihole-FTL` active **and** a raw DNS query to 127.0.0.1 answers | `systemctl restart pihole-FTL` | error push |
+| Docker | `systemctl restart docker` once | error push |
+| Tailscale online (only when the internet is up) | `systemctl restart tailscaled` | warning push |
+| `/mnt/ssd` mounted | `mount -a` once | error push |
+| Disk `/` and `/mnt/ssd` under 90% | cleanup (below) | warning push |
+| Power/heat (`vcgencmd get_throttled`, CPU ≥ 80 °C), 5 min | — | warning push |
+| RAM available ≥ 5%, 10 min | — | warning push |
+| Failed systemd units | reset-failed + restart once | warning push |
+
+Three automatic restarts of the same thing in 24 hours raises a separate "keeps failing" warning.
+Everything the loop sees goes up every minute as the `health` row in `home_hub_snapshots`.
+A watchdog thread exits the agent if the main loop hangs for 30 minutes; systemd restarts it
+(the Pi's hardware watchdog, `RuntimeWatchdogSec=1min`, covers a frozen kernel).
+
+### Nightly maintenance (3–5 AM, Pi local time)
+
+In order; each step is recorded in the agent state, so a restart resumes rather than repeats:
+
+1. **agent**: newest row in `home_hub_agent_releases` (op `release_latest`) → self-update. `launch.sh`
+   restores `agent.py.prev` if the new version fails to start 3 times or can't reach the server for
+   5 minutes, and the restored agent raises a warning and skips that version.
+2. **homeassistant**: the latest stable core release once it has been out 3 days
+   (`ha_min_release_age_days`). Pull the pinned tag, stop, tar `/mnt/ssd/apps/homeassistant`, recreate the
+   container with the same run args (derived from `docker inspect`), wait up to 15 min for
+   `/api/config` state RUNNING. Otherwise: restore the directory, start the previous image (tagged
+   `bestly-rollback/homeassistant:<stamp>`), push, and skip that version. Then HACS `update.*` entities,
+   one restart, same rollback for `custom_components`.
+3. **homebridge**: `npm outdated` in `/homebridge`; same-major updates are installed and verified
+   (`/api/status/homebridge`), rolled back on failure. Major updates are never automatic; they push
+   once per version. Then the `homebridge/homebridge:latest` image, same backup/rollback as HA.
+4. **pihole**: `pihole -up` when `pihole -v` shows a newer version; verify DNS; restart FTL if needed.
+   There is no rollback, so a failure pushes (error if DNS is down).
+5. **os** (Sundays only): waits for `nextcloud-update.sh` / `backup-server.py` to finish, then
+   `apt-get upgrade --with-new-pkgs` (confold). Reboots at the end if a newer kernel is installed or
+   `/run/reboot-required` exists; 7 minutes after boot it reports whether everything came back.
+6. **housekeeping**: dangling images, rollback images and backups older than 14 days (newest 3 always
+   kept), `*.failed-*` directories, journal over 500 MB, any `/home/pi/scripts/*.log` over 200 MB.
+
+Backups: `/mnt/ssd/backups/home-hub/`. State: `/var/lib/bestly-home-hub/state.json`.
+Knobs (all optional) go in the config under `"manage"`: `heal`, `updates`, `window_start_hour`,
+`window_end_hour`, `os_update_weekday`, `reboot`, `ha_min_release_age_days`, `backup_keep_days`,
+`ignore` (e.g. `["homebridge"]` to leave it alone while you work on it).
+
+### What reaches the phone
+
+The agent sends events (op `event`) to `home_hub_raise()`; the server side raises its own.
+`home_hub_issues` holds one row per problem key, `home_hub_events` the history.
+
+- A **problem** pushes when it opens, again only after `repush_hours` (6) if still open, or when it
+  escalates to error. Its **all-clear** pushes only if the problem did.
+- error → priority 5, rings immediately. warning → 4, info → 3. Between 22:00 and 08:00 anything
+  below 5 is scheduled by ntfy for 08:00 (`home_hub_settings`).
+- Fixes that worked, update summaries and heal attempts go to the admin bell / event log only.
+- Server-side (pg_cron `home-hub-agent-offline-check`, every 5 min): agent silent 10 min (error),
+  Pi-hole stats older than 15 min (warning), agent ≥ 1.2.0 online but no health snapshot for 10 min.
+- The Pi changing address pushes a warning (the SSH alias on the Mac needs updating).
+
+Commands: `agent.test_alert` sends a test push; `agent.run_maintenance {steps?}` runs maintenance now
+(outside the window; `os` included only if listed or no steps given).
+
+To publish a new agent for self-update: bump `VERSION`, commit, copy the file to the Pi and run
+`python3 scripts/home-hub-agent/publish-release.py <path to agent.py> "notes"` there (it uses the
+service key already in `/home/pi/scripts/.env`). The Pi picks it up the next night.
+
+### Legacy jobs handed over (2026-09-16)
+
+- `pi-manager.py` no longer checks or restarts Home Assistant, Homebridge, Pi-hole, Tailscale, disk,
+  temperature or memory (added to `SKIP_CHECKS`; `open_webui` too — it probed Pi-hole's :8080). It still
+  covers internet, containers, Nextcloud, the tunnel and swap. Backup: `pi-manager.py.bak-20260916-homehub`.
+- The weekly `home-stack-update.sh` cron line is commented out (it had no rollback).
+- `/etc/logrotate.d/bestly-pihole-push` removed: it duplicated `bestly-scripts` and made logrotate fail
+  every night from Sep 14.
 
 ## Agent connectivity
 
