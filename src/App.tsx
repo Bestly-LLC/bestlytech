@@ -88,6 +88,7 @@ const AdminShieldReports = lazy(() => import("./pages/admin/AdminShieldReports")
 const HomeHubOverview = lazy(() => import("./pages/admin/HomeHubOverview"));
 const HomeHubPihole = lazy(() => import("./pages/admin/HomeHubPihole"));
 const StreetSweeping = lazy(() => import("./pages/admin/StreetSweeping"));
+const AdminNotFound = lazy(() => import("./pages/admin/AdminNotFound"));
 
 const queryClient = new QueryClient();
 
@@ -183,6 +184,7 @@ const App = () => (
                   <Route path="home-hub" element={<HomeHubOverview />} />
                   <Route path="home-hub/pihole" element={<HomeHubPihole />} />
                   <Route path="street-sweeping" element={<StreetSweeping />} />
+                  <Route path="*" element={<AdminNotFound />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />
