@@ -34,6 +34,26 @@ function ago(iso: string, now: number): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+const LA_TZ = "America/Los_Angeles";
+const fmtLATime = (ms: number) => new Intl.DateTimeFormat("en-US", { timeZone: LA_TZ, hour: "numeric", minute: "2-digit" }).format(new Date(ms));
+
+/**
+ * The Pi sends 24 hour-of-day slots labelled "00:00".."23:00" in LA local time, always in that
+ * order. Rotate them so the chart runs oldest to newest and ends on the hour of the snapshot.
+ * Labels in any other shape are left as they came.
+ */
+function chronologicalHours<T extends { hour: string }>(rows: T[], capturedAt: string): T[] {
+  const laHour = Number(
+    new Intl.DateTimeFormat("en-US", { timeZone: LA_TZ, hour: "2-digit", hourCycle: "h23" }).format(new Date(capturedAt)),
+  );
+  const idx = rows.findIndex((r) => {
+    const m = /^(\d{1,2}):00$/.exec(r.hour);
+    return !!m && Number(m[1]) === laHour;
+  });
+  if (idx < 0) return rows;
+  return [...rows.slice(idx + 1), ...rows.slice(0, idx + 1)];
+}
+
 function downloadCsv(rows: { domain: string; hits: number }[], filename: string) {
   const csv = ["\"Domain\",\"Hits\"", ...rows.map((r) => `"${r.domain.replace(/"/g, '""')}",${r.hits}`)].join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
@@ -173,7 +193,26 @@ export default function HomeHubPihole() {
     [stats?.topPermitted, debouncedPermittedSearch],
   );
 
-  const isPaused = stats?.status === "disabled";
+  const hourlyChart = useMemo(
+    () => (stats ? chronologicalHours(stats.hourlyChart, stats.capturedAt) : []),
+    [stats],
+  );
+
+  // A snapshot only arrives about once a minute. Until one lands that is newer than the last
+  // pause/resume the Pi finished, trust that command's result for the blocking state.
+  const lastToggle = commands.find(
+    (c) => (c.action === "enable" || c.action === "disable") && c.status === "done" && c.completedAt,
+  );
+  const toggleDoneAt = lastToggle?.completedAt ? new Date(lastToggle.completedAt).getTime() : 0;
+  const pauseSeconds = lastToggle?.action === "disable" ? Number(lastToggle.payload.seconds) || 0 : 0;
+  const resumesAt = pauseSeconds > 0 ? toggleDoneAt + pauseSeconds * 1000 : null;
+  const toggleNewer = !!stats && !!lastToggle && toggleDoneAt > new Date(stats.capturedAt).getTime();
+  const blockingStatus: PiholeStats["status"] | undefined = toggleNewer
+    ? (lastToggle!.action === "enable" || (resumesAt !== null && resumesAt <= now) ? "enabled" : "disabled")
+    : stats?.status;
+  const showResumesAt = blockingStatus === "disabled" && lastToggle?.action === "disable" && resumesAt !== null && resumesAt > now;
+
+  const isPaused = blockingStatus === "disabled";
   const controlsDisabled = !!controlsBlockedReason || pending !== null || !stats;
 
   return (
@@ -221,9 +260,11 @@ export default function HomeHubPihole() {
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl px-4 sm:px-6 py-3 space-y-2" role="status" aria-live="polite">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
             {stats ? (
-              <span className={`inline-flex items-center gap-1.5 ${isPaused ? "text-amber-300" : stats.status === "enabled" ? "text-green-300" : "text-white/70"}`}>
+              <span className={`inline-flex items-center gap-1.5 ${isPaused ? "text-amber-300" : blockingStatus === "enabled" ? "text-green-300" : "text-white/70"}`}>
                 {isPaused ? <ShieldOff className="h-4 w-4" aria-hidden /> : <Shield className="h-4 w-4" aria-hidden />}
-                {isPaused ? "Blocking paused" : stats.status === "enabled" ? "Blocking on" : "Blocking state unknown"}
+                {isPaused
+                  ? `Blocking paused${showResumesAt ? `. Resumes at ${fmtLATime(resumesAt!)}` : ""}`
+                  : blockingStatus === "enabled" ? "Blocking on" : "Blocking state unknown"}
               </span>
             ) : null}
             {stats && (
@@ -288,8 +329,8 @@ export default function HomeHubPihole() {
       {stats && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <StatCard label="Queries today" value={stats.totalQueries.toLocaleString()} icon={BarChart3} />
-            <StatCard label="Blocked" value={stats.queriesBlocked.toLocaleString()} icon={Shield} />
+            <StatCard label="Queries" value={stats.totalQueries.toLocaleString()} subtitle="last 24 hours" icon={BarChart3} />
+            <StatCard label="Blocked" value={stats.queriesBlocked.toLocaleString()} subtitle="last 24 hours" icon={Shield} />
             <StatCard label="Percent blocked" value={`${stats.percentBlocked.toFixed(1)}%`} icon={ListFilter} />
             <StatCard label="Blocklist domains" value={stats.domainsOnBlocklist.toLocaleString()} icon={Database} />
             <StatCard label="Active clients" value={stats.activeClients.toLocaleString()} icon={Users} />
@@ -297,12 +338,12 @@ export default function HomeHubPihole() {
 
           <section className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6" aria-label="Queries over the last 24 hours">
             <h3 className="text-sm font-semibold text-white mb-4">Queries, last 24 hours</h3>
-            {stats.hourlyChart.length === 0 ? (
+            {hourlyChart.length === 0 ? (
               <p className="text-sm text-white/55 py-16 text-center">The latest snapshot has no hourly data.</p>
             ) : (
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={stats.hourlyChart}>
+                  <LineChart data={hourlyChart}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                     <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "rgba(255,255,255,0.6)" }} tickLine={false} axisLine={false} interval={3} />
                     <YAxis tick={{ fontSize: 11, fill: "rgba(255,255,255,0.6)" }} tickLine={false} axisLine={false} />

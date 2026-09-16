@@ -160,7 +160,7 @@ export default function HomeHubOverview() {
                 <>
                   <p className="text-2xl font-semibold text-white tabular-nums">{stats.queriesBlocked.toLocaleString()}</p>
                   <p className="text-xs text-white/60 mt-0.5">
-                    queries blocked today, {stats.percentBlocked.toFixed(1)}% of {stats.totalQueries.toLocaleString()}
+                    queries blocked in the last 24 hours, {stats.percentBlocked.toFixed(1)}% of {stats.totalQueries.toLocaleString()}
                   </p>
                   <p className={`text-xs mt-3 ${statsHealth === "warn" ? "text-amber-300" : "text-white/60"}`}>
                     Last push {ago(stats.capturedAt, now)}{statsHealth === "warn" ? " (expected every minute)" : ""}

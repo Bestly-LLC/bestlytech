@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Printer } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Printer } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const APP_LABEL: Record<string, string> = {
@@ -45,6 +45,21 @@ const DEPLOY_FEE_DEFAULT: Record<string, number> = {
   "100": 78000,
   "200+": 110000,
 };
+
+// Share of today's annual spend per line in "What's in the price". Must add up to 1.
+const LINE_ITEMS: { label: string; share: number; tier?: boolean }[] = [
+  { label: "Productivity, AI, video, chat, mail", share: 0.45 },
+  { label: "Project mgmt, e-sign, passwords", share: 0.15 },
+  { label: "DNS, VPN, backup, extra storage", share: 0.1 },
+  { label: "Managed IT support / helpdesk", share: 0.3, tier: true },
+];
+
+/** Split a whole-dollar total by shares; the last part takes the rounding remainder so parts sum exactly. */
+function splitWhole(total: number, shares: number[]): number[] {
+  const parts = shares.map((sh) => Math.round(total * sh));
+  parts[parts.length - 1] = total - parts.slice(0, -1).reduce((a, b) => a + b, 0);
+  return parts;
+}
 
 function dollars(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -113,6 +128,27 @@ export default function CloudDiscoveryBrief() {
   const threeYearInHouse = deployFee + monthlyFee * 36;
   const threeYearSavings = threeYearCloud - threeYearInHouse;
   const monthlyAvgInHouse = threeYearInHouse / 36;
+  // Never print a proposal that says "You save" zero or a negative number.
+  const savingsOk = threeYearSavings > 0;
+
+  // Annual table in whole dollars. The In-House annual (3-year average) is spread across the
+  // lines in proportion to today's spend, so every row reads Today − In-House = Saved and
+  // every column adds up to the Annual row.
+  const annualToday = Math.round(annualSpend);
+  const annualInHouse = Math.round(monthlyAvgInHouse * 12);
+  const shares = LINE_ITEMS.map((li) => li.share);
+  const todayParts = splitWhole(annualToday, shares);
+  const inHouseParts = splitWhole(annualInHouse, shares);
+  const lineRows = LINE_ITEMS.map((li, i) => ({
+    ...li,
+    today: todayParts[i],
+    inHouse: inHouseParts[i],
+    saved: todayParts[i] - inHouseParts[i],
+  }));
+
+  const complianceList: string[] = (brief?.compliance_frameworks ?? [])
+    .filter((c: string) => c !== "none" && c !== "unsure")
+    .map((c: string) => c.toUpperCase());
 
   if (loading) {
     return (
@@ -226,7 +262,21 @@ export default function CloudDiscoveryBrief() {
             </div>
           </div>
           <div className="mt-4">
-            <Button onClick={() => window.print()} className="gap-2">
+            {!savingsOk && (
+              <div
+                role="alert"
+                className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] p-3 text-sm text-amber-200"
+              >
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
+                <span>
+                  {threeYearSavings === 0
+                    ? "With these numbers the customer saves nothing over 3 years."
+                    : `With these numbers the In-House Cloud costs ${dollars(-threeYearSavings)} more over 3 years than their current stack.`}{" "}
+                  Check the annual spend, deployment fee and monthly fee. Saving the PDF is off until the brief shows a saving.
+                </span>
+              </div>
+            )}
+            <Button onClick={() => window.print()} className="gap-2" disabled={!savingsOk}>
               <Printer className="h-4 w-4" aria-hidden />
               Save as PDF
             </Button>
@@ -238,7 +288,9 @@ export default function CloudDiscoveryBrief() {
       </div>
 
       {/* ─────────── Printable brief — light styling for paper ─────────── */}
-      <div className="print-brief bg-white text-slate-900 p-12 max-w-[8.5in] mx-auto print:p-10 print:shadow-none shadow-2xl rounded-lg print:rounded-none">
+      <div
+        className={`print-brief bg-white text-slate-900 p-12 max-w-[8.5in] mx-auto print:p-10 print:shadow-none shadow-2xl rounded-lg print:rounded-none ${savingsOk ? "" : "print:hidden"}`}
+      >
         <style>{`
           @media print {
             html, body { background: white !important; }
@@ -299,7 +351,7 @@ export default function CloudDiscoveryBrief() {
             </div>
             <div className="border-2 border-teal-600 rounded-lg p-5 bg-teal-50">
               <div className="text-xs uppercase tracking-wider accent font-semibold mb-1">You save</div>
-              <div className="text-3xl font-semibold accent">{dollars(threeYearSavings)}</div>
+              <div className="text-3xl font-semibold accent">{savingsOk ? dollars(threeYearSavings) : "—"}</div>
               <div className="text-xs muted mt-1">over 36 months</div>
             </div>
           </div>
@@ -316,40 +368,28 @@ export default function CloudDiscoveryBrief() {
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-slate-100">
-                <td className="py-2.5">Productivity, AI, video, chat, mail</td>
-                <td className="py-2.5 text-right tabular-nums">{dollars(annualSpend * 0.45)}</td>
-                <td className="py-2.5 text-right tabular-nums accent">$0</td>
-                <td className="py-2.5 text-right tabular-nums">{dollars(annualSpend * 0.45)}</td>
-              </tr>
-              <tr className="border-b border-slate-100">
-                <td className="py-2.5">Project mgmt, e-sign, passwords</td>
-                <td className="py-2.5 text-right tabular-nums">{dollars(annualSpend * 0.15)}</td>
-                <td className="py-2.5 text-right tabular-nums accent">$0</td>
-                <td className="py-2.5 text-right tabular-nums">{dollars(annualSpend * 0.15)}</td>
-              </tr>
-              <tr className="border-b border-slate-100">
-                <td className="py-2.5">DNS, VPN, backup, extra storage</td>
-                <td className="py-2.5 text-right tabular-nums">{dollars(annualSpend * 0.1)}</td>
-                <td className="py-2.5 text-right tabular-nums accent">$0</td>
-                <td className="py-2.5 text-right tabular-nums">{dollars(annualSpend * 0.1)}</td>
-              </tr>
-              <tr className="border-b border-slate-100">
-                <td className="py-2.5">Managed IT support / helpdesk</td>
-                <td className="py-2.5 text-right tabular-nums">{dollars(annualSpend * 0.3)}</td>
-                <td className="py-2.5 text-right tabular-nums">incl. ({supportTier})</td>
-                <td className="py-2.5 text-right tabular-nums">—</td>
-              </tr>
+              {lineRows.map((row) => (
+                <tr key={row.label} className="border-b border-slate-100">
+                  <td className="py-2.5">
+                    {row.label}
+                    {row.tier && supportTier ? <span className="muted"> ({supportTier})</span> : null}
+                  </td>
+                  <td className="py-2.5 text-right tabular-nums">{dollars(row.today)}</td>
+                  <td className="py-2.5 text-right tabular-nums accent">{dollars(row.inHouse)}</td>
+                  <td className="py-2.5 text-right tabular-nums">{dollars(row.saved)}</td>
+                </tr>
+              ))}
               <tr className="border-t-2 border-slate-300 font-semibold">
                 <td className="py-3">Annual</td>
-                <td className="py-3 text-right tabular-nums">{dollars(annualSpend)}</td>
-                <td className="py-3 text-right tabular-nums accent">{dollars(monthlyAvgInHouse * 12)}*</td>
-                <td className="py-3 text-right tabular-nums accent">{dollars(annualSpend - monthlyAvgInHouse * 12)}</td>
+                <td className="py-3 text-right tabular-nums">{dollars(annualToday)}</td>
+                <td className="py-3 text-right tabular-nums accent">{dollars(annualInHouse)}*</td>
+                <td className="py-3 text-right tabular-nums accent">{dollars(annualToday - annualInHouse)}</td>
               </tr>
             </tbody>
           </table>
           <p className="text-xs muted">
-            * In-House annual is averaged across the 3-year window: deployment fee {dollars(deployFee)} + monthly {dollars(monthlyFee)} × 36 months.
+            * In-House annual is averaged across the 3-year window: deployment fee {dollars(deployFee)} + monthly {dollars(monthlyFee)} × 36 months,
+            spread across the line items in proportion to today's spend.
           </p>
         </div>
 
@@ -359,12 +399,7 @@ export default function CloudDiscoveryBrief() {
           <p className="muted mb-6">
             {lead.user_count_band} users
             {brief?.office_city ? ` · based in ${brief.office_city}${brief.office_state ? `, ${brief.office_state}` : ""}` : ""}
-            {brief?.compliance_frameworks?.length
-              ? ` · aligned to ${brief.compliance_frameworks
-                  .filter((c: string) => c !== "none" && c !== "unsure")
-                  .map((c: string) => c.toUpperCase())
-                  .join(", ")}`
-              : ""}
+            {complianceList.length ? ` · aligned to ${complianceList.join(", ")}` : ""}
             .
           </p>
 

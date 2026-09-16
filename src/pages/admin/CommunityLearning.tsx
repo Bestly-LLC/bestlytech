@@ -111,27 +111,19 @@ function timeAgo(dateStr: string) {
   return `${days}d ago`;
 }
 
-/** Cron jobs run at 06:00 UTC (auto-retry) and 07:00 UTC (maintenance). */
-function inferRunSource(dateStr: string): "auto" | "manual" {
-  const d = new Date(dateStr);
-  const h = d.getUTCHours();
-  const m = d.getUTCMinutes();
-  // Within ~5 min of cron schedule → likely automated
-  if ((h === 6 && m < 5) || (h === 7 && m < 5) || (h === 3 && m < 5)) return "auto";
-  return "manual";
-}
-
+// Next run of the pg_cron job 'ai-generate-patterns' (schedule "30 */6 * * *": minute 30 of
+// 00, 06, 12 and 18 UTC), shown in Pacific time. Update this if the cron schedule changes.
 function nextAutoRun(): string {
   const now = new Date();
-  // Next 06:00 UTC
   const next = new Date(now);
-  next.setUTCHours(6, 0, 0, 0);
-  if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+  next.setUTCMinutes(30, 0, 0);
+  next.setUTCHours(Math.floor(now.getUTCHours() / 6) * 6);
+  while (next <= now) next.setUTCHours(next.getUTCHours() + 6);
   const diff = next.getTime() - now.getTime();
   const hrs = Math.floor(diff / 3600000);
   const mins = Math.floor((diff % 3600000) / 60000);
-  if (hrs > 0) return `${hrs}h ${mins}m`;
-  return `${mins}m`;
+  const at = next.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles", timeZoneName: "short" });
+  return `${at} (in ${hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`})`;
 }
 
 function rateColor(rate: number) {
@@ -309,8 +301,8 @@ export default function CommunityLearning() {
         supabase.from("missed_banner_reports").select("*").eq("resolved", false).order("report_count", { ascending: false }).limit(50),
         supabase.from("ai_generation_log").select("*").order("created_at", { ascending: false }).limit(50),
         supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("source", "ai_generated"),
-        // AI token usage stats
-        supabase.from("ai_generation_log").select("prompt_tokens, completion_tokens, status"),
+        // AI token usage + open permanently failed domains, aggregated server-side (a plain select is capped at 1,000 rows)
+        supabase.rpc("cy_community_ai_totals" as any),
         // Dismissal reports
         supabase.from("dismissal_reports").select("*").order("created_at", { ascending: false }).limit(200),
         // Consensus candidates via RPC
@@ -340,12 +332,15 @@ export default function CommunityLearning() {
       if (!r13.error) setAiGenLog(r13.data as any ?? []);
       if (!r14.error) setAiGeneratedCount(r14.count ?? 0);
 
-      if (!r15.error) {
-        const allLogs = r15.data as any[] ?? [];
-        const totalPrompt = allLogs.reduce((s: number, l: any) => s + (l.prompt_tokens || 0), 0);
-        const totalCompletion = allLogs.reduce((s: number, l: any) => s + (l.completion_tokens || 0), 0);
-        const permFailedCount = allLogs.filter((l: any) => l.status === "permanently_failed").length;
-        setAiTokenStats({ totalPrompt, totalCompletion, totalRuns: allLogs.length, permFailedCount });
+      if (!r15.error && r15.data) {
+        const t = r15.data as any;
+        setAiTokenStats({
+          totalPrompt: Number(t.prompt_tokens) || 0,
+          totalCompletion: Number(t.completion_tokens) || 0,
+          totalRuns: Number(t.total_runs) || 0,
+          // Distinct domains still unresolved, not every permanently_failed log row ever written.
+          permFailedCount: Number(t.perm_failed_domains) || 0,
+        });
       }
 
       if (!r16.error) setDismissalReports(r16.data as any[] ?? []);
@@ -785,7 +780,7 @@ export default function CommunityLearning() {
             label: "Cron Jobs",
             icon: CalendarClock,
             lastRun: fixLog.length > 0 ? fixLog[0]?.created_at : null,
-            thresholds: [1, 4], // batch cron runs every 15min, 1h amber / 4h red
+            thresholds: [4, 7], // pattern-maintenance writes a heartbeat every 3h: amber after a missed run, red after two
           },
         ];
 
@@ -929,9 +924,6 @@ export default function CommunityLearning() {
                       Last run: {aiGenLog.length > 0 ? (
                         <>
                           {timeAgo(aiGenLog[0].created_at)}
-                          <Badge variant="outline" className="text-[0.625rem] px-1 py-0 h-4 ml-0.5">
-                            {inferRunSource(aiGenLog[0].created_at) === "auto" ? "auto" : "manual"}
-                          </Badge>
                         </>
                       ) : "Never"}
                     </span>

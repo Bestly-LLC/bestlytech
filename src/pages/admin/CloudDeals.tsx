@@ -10,14 +10,24 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ActionMenu } from "@/components/admin/ActionMenu";
 import { DeleteLeadDialog } from "@/components/admin/DeleteLeadDialog";
+import { CloudLeadsList } from "@/components/admin/CloudLeadsList";
+import {
+  DEFAULT_LEAD_FILTERS,
+  STAGES,
+  buildLeadItems,
+  exportLeadItems,
+  filterLeadItems,
+  fmtRelative,
+  stageOf,
+  type LeadExtra,
+  type LeadListFilters,
+  type LeadRow,
+} from "@/components/admin/cloudLeads";
+import { cn } from "@/lib/utils";
 import {
   Cloud,
   Inbox,
-  CalendarCheck,
   FileText,
-  CreditCard,
-  Wrench,
-  Truck,
   CheckCircle2,
   ArrowRight,
   AlertTriangle,
@@ -26,44 +36,10 @@ import {
   ExternalLink,
   Trash2,
   FolderOpen,
+  Download,
+  LayoutGrid,
+  List as ListIcon,
 } from "lucide-react";
-
-// Stage definitions ─ keep in sync with docs/customer-intake-opusplan.md
-const STAGES: {
-  num: number;
-  key: string;
-  label: string;
-  short: string;
-  description: string;
-  icon: any;
-  accent: string;
-}[] = [
-  { num: 1, key: "lead",        label: "New lead",       short: "Lead",      description: "Form submitted, awaiting first contact", icon: Inbox,         accent: "text-blue-400" },
-  { num: 2, key: "brief",       label: "Brief in flight", short: "Brief",     description: "Pre-call brief sent, awaiting answers",  icon: FileText,      accent: "text-purple-400" },
-  { num: 3, key: "discovery",   label: "Discovery",       short: "Call",      description: "Discovery call scheduled or done",        icon: CalendarCheck, accent: "text-amber-400" },
-  { num: 4, key: "sow",         label: "SOW + deposit",   short: "Quote",     description: "Quote sent, signature/payment pending",  icon: CreditCard,    accent: "text-orange-400" },
-  { num: 5, key: "intake",      label: "Tech intake",     short: "Intake",    description: "Client filling network/branding/users",  icon: Wrench,        accent: "text-fuchsia-400" },
-  { num: 6, key: "provisioning",label: "Provisioning",    short: "Build",     description: "Bestly building the box",                 icon: Cloud,         accent: "text-teal-400" },
-  { num: 7, key: "install",     label: "Install",         short: "Install",   description: "Hardware shipped or being installed",    icon: Truck,         accent: "text-cyan-400" },
-  { num: 8, key: "live",        label: "Live",            short: "Live",      description: "Deployed and running",                    icon: CheckCircle2,  accent: "text-emerald-400" },
-];
-
-type LeadRow = {
-  id: string;
-  created_at: string;
-  contact_name: string;
-  contact_email: string;
-  company_name: string;
-  user_count_band: string;
-  primary_pain: string | null;
-  urgency: string | null;
-  status: string;
-  brief_submitted_at: string | null;
-  deal_id: string | null;
-  deal_stage: number | null;
-  stage_changed_at: string | null;
-  funnel_state: string;
-};
 
 const PAIN_LABEL: Record<string, string> = {
   cost: "Cost",
@@ -81,30 +57,17 @@ const URGENCY_LABEL: Record<string, string> = {
   exploring: "Exploring",
 };
 
-function fmtRelative(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  const diffMs = Date.now() - d.getTime();
-  const m = Math.floor(diffMs / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const days = Math.floor(h / 24);
-  if (days < 7) return `${days}d ago`;
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
-}
+type ViewMode = "board" | "list";
+const VIEW_KEY = "bestly.admin.cloud.view";
 
-function stageOf(row: LeadRow): { num: number; key: string } {
-  if (row.deal_stage != null) {
-    const s = STAGES.find((x) => x.num === row.deal_stage) ?? STAGES[0];
-    return { num: s.num, key: s.key };
+function readViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_KEY);
+    if (v === "board" || v === "list") return v;
+  } catch {
+    /* storage unavailable */
   }
-  // No deal yet. Matches CloudDealDetail: brief submitted = Discovery, otherwise Brief.
-  // Every lead gets a brief shell on insert, so "lead-only" only happens on a data anomaly.
-  if (row.brief_submitted_at) return { num: 3, key: "discovery" };
-  if (row.funnel_state === "lead-only") return { num: 1, key: "lead" };
-  return { num: 2, key: "brief" };
+  return "list";
 }
 
 function isStuck(row: LeadRow): boolean {
@@ -121,16 +84,43 @@ export default function CloudDeals() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; company_name: string; hasDeal: boolean } | null>(null);
+  const [extras, setExtras] = useState<Map<string, LeadExtra>>(new Map());
+  const [view, setView] = useState<ViewMode>(readViewMode);
+  const [listFilters, setListFilters] = useState<LeadListFilters>(DEFAULT_LEAD_FILTERS);
 
   const load = useCallback(async () => {
     setLoadError(null);
-    const { data, error } = await supabase
-      .from("v_cloud_lead_funnel")
-      .select("*")
-      .limit(500);
-    if (error) {
+    const [funnel, leads, deals] = await Promise.all([
+      supabase.from("v_cloud_lead_funnel").select("*").limit(500),
+      // Columns the funnel view doesn't carry, for the list view.
+      supabase.from("cloud_leads").select("id, source, updated_at").limit(500),
+      supabase
+        .from("cloud_deals")
+        .select("lead_id, updated_at, company_name, primary_contact_name, primary_contact_email")
+        .limit(500),
+    ]);
+    const { data, error } = funnel;
+    const extraError = leads.error ?? deals.error;
+    if (!error && !extraError) {
+      const m = new Map<string, LeadExtra>();
+      for (const l of leads.data ?? []) {
+        m.set(l.id, { source: l.source, lead_updated_at: l.updated_at, deal_updated_at: null, deal_company_name: null, deal_contact_name: null, deal_contact_email: null });
+      }
+      for (const d of deals.data ?? []) {
+        const e = m.get(d.lead_id);
+        if (!e) continue;
+        // One deal per lead (unique index); if that ever changes, keep the most recently touched.
+        if (e.deal_updated_at && new Date(e.deal_updated_at) > new Date(d.updated_at)) continue;
+        e.deal_updated_at = d.updated_at;
+        e.deal_company_name = d.company_name;
+        e.deal_contact_name = d.primary_contact_name;
+        e.deal_contact_email = d.primary_contact_email;
+      }
+      setExtras(m);
+    }
+    if (error || extraError) {
       // Keep the last good rows on screen.
-      setLoadError(error.message);
+      setLoadError((error ?? extraError)!.message);
     } else {
       // The funnel view joins deals, so a lead with several deal rows appears several times.
       // Keep one card per lead: the most advanced deal wins.
@@ -147,6 +137,32 @@ export default function CloudDeals() {
   useEffect(() => {
     load();
   }, [load]);
+
+  function changeView(next: ViewMode) {
+    if (next === view) return;
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* storage unavailable */
+    }
+    // Pick up anything changed in the other view (deletes, status changes).
+    load();
+  }
+
+  const leadItems = useMemo(() => buildLeadItems(rows, extras), [rows, extras]);
+  const filteredLeadItems = useMemo(() => filterLeadItems(leadItems, listFilters), [leadItems, listFilters]);
+
+  function removeRows(ids: string[]) {
+    const gone = new Set(ids);
+    setRows((prev) => prev.filter((r) => !gone.has(r.id)));
+    load();
+  }
+
+  function exportFiltered() {
+    const n = exportLeadItems(filteredLeadItems);
+    toast({ title: n ? `Exported ${n} lead${n === 1 ? "" : "s"}` : "Nothing to export" });
+  }
 
   async function copyLeadFormLink() {
     const url = `${window.location.origin}/get-started`;
@@ -181,13 +197,38 @@ export default function CloudDeals() {
         title="Cloud Deals"
         description="In-House Cloud customer intake pipeline. Lead → brief → discovery → quote → install → live."
         actions={
+          <>
+          <div role="group" aria-label="View" className="inline-flex rounded-md border border-white/10 bg-white/[0.03] p-0.5">
+            {([
+              ["list", "List", ListIcon],
+              ["board", "Board", LayoutGrid],
+            ] as const).map(([key, label, Icon]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={view === key}
+                onClick={() => changeView(key)}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded px-3 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
+                  view === key ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/[0.05] hover:text-white",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden />
+                {label}
+              </button>
+            ))}
+          </div>
           <ActionMenu
             items={[
+              ...(view === "list"
+                ? [{ group: "Export", label: `Export CSV (${filteredLeadItems.length})`, icon: Download, disabled: filteredLeadItems.length === 0, onSelect: exportFiltered }]
+                : []),
               { group: "Lead form", label: "Copy lead form link", icon: Link2, onSelect: copyLeadFormLink },
               { group: "Lead form", label: "Open lead form", icon: ExternalLink, onSelect: () => { window.open("/get-started", "_blank", "noopener,noreferrer"); } },
               { group: "View", label: "Refresh", icon: RefreshCw, onSelect: load },
             ]}
           />
+          </>
         }
       />
 
@@ -265,8 +306,19 @@ export default function CloudDeals() {
         </div>
       )}
 
-      {/* Pipeline */}
-      {loading ? (
+      {view === "list" ? (
+        <CloudLeadsList
+          items={leadItems}
+          loading={loading}
+          filters={listFilters}
+          onFiltersChange={setListFilters}
+          onRequestDelete={(i) => setDeleting({ id: i.id, company_name: i.company, hasDeal: i.hasDeal })}
+          onRemoved={removeRows}
+          onStatusChanged={(id, status) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)))}
+          onCopyLeadFormLink={copyLeadFormLink}
+        />
+      ) : /* Pipeline */
+      loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="h-40 w-full" />
@@ -364,7 +416,7 @@ export default function CloudDeals() {
       <DeleteLeadDialog
         lead={deleting}
         onOpenChange={(o) => { if (!o) setDeleting(null); }}
-        onDeleted={load}
+        onDeleted={() => { if (deleting) removeRows([deleting.id]); else load(); }}
       />
     </div>
   );

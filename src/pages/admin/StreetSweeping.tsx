@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -124,35 +124,52 @@ function StreetDiagram({ carSide, dangerSide }: { carSide: CurbSide | null; dang
 export default function StreetSweeping() {
   const [state, setState] = useState<SweepState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Only a manual refresh spins the button; background polls stay quiet.
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  // At most one pending retry, cancelled on success and on unmount.
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const poll = useCallback(async () => {
     try {
-      setState(await fetchSweepState());
+      const next = await fetchSweepState();
+      if (!mountedRef.current) return;
+      setState(next);
       setError(null);
+      if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
     } catch (e) {
+      if (!mountedRef.current) return;
       setError((e as Error).message);
       // Network blips (sleeping laptop, Wi-Fi hand-off) come back on their own: retry soon.
-      setTimeout(() => load(), 8_000);
-    } finally {
-      setLoading(false);
+      if (!retryRef.current) {
+        retryRef.current = setTimeout(() => { retryRef.current = null; void poll(); }, 8_000);
+      }
     }
   }, []);
 
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { await poll(); } finally { if (mountedRef.current) setLoading(false); }
+  }, [poll]);
+
   useEffect(() => {
-    load();
-    const iv = setInterval(load, pollInterval(60_000));
-    return () => clearInterval(iv);
-  }, [load]);
+    mountedRef.current = true;
+    poll();
+    const iv = setInterval(poll, pollInterval(60_000));
+    return () => {
+      mountedRef.current = false;
+      clearInterval(iv);
+      if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
+    };
+  }, [poll]);
 
   const run = async (key: string, fn: () => Promise<unknown>, ok: string) => {
     setBusy(key);
     try {
       await fn();
       toast.success(ok);
-      await load();
+      await poll();
     } catch (e) {
       toast.error((e as Error).message || "That didn't go through");
     } finally {
@@ -173,6 +190,10 @@ export default function StreetSweeping() {
     );
     const latestToday = todaysChecks[0] ?? null;
     const inWindowToday = !!todaySide && nowMin < 600 && !state.config.skip_dates.includes(today);
+    // Checks run every 30 min from 6:55am. Past 7:05 with nothing logged in 40 min, they've stopped.
+    const lastCheck = state.runs.find((r) => r.outcome !== "test") ?? null;
+    const checksMissing = inWindowToday && nowMin >= 425
+      && (!lastCheck || Date.now() - new Date(lastCheck.ran_at).getTime() > 40 * 60_000);
 
     let tone: Tone = "neutral";
     let headline = "";
@@ -186,6 +207,13 @@ export default function StreetSweeping() {
       tone = "ok";
       headline = "Handled this morning";
       detail = "You acknowledged, so the rest of today's alerts are off.";
+    } else if (checksMissing) {
+      tone = "danger";
+      headline = "No check has run. Check the car yourself.";
+      detail = `${cap(todaySide!)} curb is swept today, 8–10am. `
+        + (latestToday
+          ? `Last check ${fmtLA(latestToday.ran_at, { hour: "numeric", minute: "2-digit" })}${latestToday.side ? ` saw it on the ${latestToday.side} curb` : ""}.`
+          : "Nothing has checked the car this morning.");
     } else if (inWindowToday && latestToday?.outcome === "alerted") {
       tone = "danger";
       headline = `Move Blue Steel: it's on the ${latestToday.side} curb`;
@@ -400,7 +428,7 @@ export default function StreetSweeping() {
                   {state.acks.map((a) => (
                     <div key={a.id} className="py-2 flex items-center justify-between gap-3">
                       <span className="text-xs text-white/50 tabular-nums">{fmtLA(a.acked_at)}</span>
-                      <span className="text-[0.6875rem] text-white/55">{a.via === "tap" ? "tapped alert" : a.via === "button" ? "Moved it button" : a.via}</span>
+                      <span className="text-[0.6875rem] text-white/55">{a.via === "tap" ? "tapped alert" : a.via === "button" ? "Moved it button" : a.via === "test-tap" ? "tapped test" : a.via === "test-button" ? "test Moved it button" : a.via}</span>
                     </div>
                   ))}
                 </div>

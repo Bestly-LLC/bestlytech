@@ -132,10 +132,12 @@ type Deal = {
   shield_request_token: string | null;
   docusign_envelope_id?: string | null; // deprecated — use signing_request_id
   signing_provider?: "libresign" | "docusign" | null;
-  signing_request_id?: string | null;
+  signing_request_id?: string | null; // most recent send; per-kind IDs live in signing_requests
+  signing_requests?: Partial<Record<SignKind, string>> | null;
   signing_document_url?: string | null;
   sow_sent_at?: string | null;
   sow_signed_at?: string | null;
+  nda_signed_at?: string | null;
   deposit_paid_at?: string | null;
 };
 
@@ -187,7 +189,9 @@ const APP_LABEL: Record<string, string> = {
   sign: "E-sign",
 };
 
-const SIGN_KIND_LABEL: Record<"sow" | "nda" | "acceptance", string> = {
+type SignKind = "sow" | "nda" | "acceptance";
+
+const SIGN_KIND_LABEL: Record<SignKind, string> = {
   sow: "Statement of work (SOW)",
   nda: "NDA",
   acceptance: "Install acceptance",
@@ -311,6 +315,7 @@ export default function CloudDealDetail() {
   const [sendingSign, setSendingSign] = useState(false);
 
   const [recordOpen, setRecordOpen] = useState(false);
+  const [recordKind, setRecordKind] = useState<SignKind>("sow");
   const [signingRequestId, setSigningRequestId] = useState("");
   const [savingEnvelope, setSavingEnvelope] = useState(false);
 
@@ -330,7 +335,15 @@ export default function CloudDealDetail() {
     const [lRes, bRes, dRes, eRes] = await Promise.all([
       supabase.from("cloud_leads").select("*").eq("id", id).maybeSingle(),
       supabase.from("cloud_briefs").select("*").eq("lead_id", id).maybeSingle(),
-      supabase.from("cloud_deals").select("*").eq("lead_id", id).maybeSingle(),
+      // A lead should have one deal, but older data can hold duplicates: show the most advanced.
+      supabase
+        .from("cloud_deals")
+        .select("*")
+        .eq("lead_id", id)
+        .order("current_stage", { ascending: false })
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
       supabase
         .from("cloud_deal_events")
         .select("*")
@@ -421,18 +434,45 @@ export default function CloudDealDetail() {
       ? "Waiting on the signed install acceptance."
       : null;
 
+  const movingRef = useRef(false);
+
   async function moveToStage(target: number) {
     if (!lead || target < 1 || target > 8 || target === stage) return;
+    // A second click can land before the disabled state renders.
+    if (movingRef.current) return;
+    movingRef.current = true;
     setAdvancing(true);
     try {
-      if (deal) {
+      const moveExisting = async (existing: Deal) => {
+        dealRef.current = existing;
+        setDeal(existing);
         const patch: Record<string, any> = { current_stage: target };
-        if (target === 8 && !deal.go_live_at) patch.go_live_at = new Date().toISOString();
+        if (target === 8 && !existing.go_live_at) patch.go_live_at = new Date().toISOString();
         const ok = await saveDeal(patch, { success: `Moved to ${STAGE_LABELS[target]}` });
         if (ok) await loadEvents(lead.id);
+      };
+      const findExisting = async () => {
+        const { data } = await supabase
+          .from("cloud_deals")
+          .select("*")
+          .eq("lead_id", lead.id)
+          .order("current_stage", { ascending: false })
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return (data as Deal | null) ?? null;
+      };
+
+      if (deal) {
+        await moveExisting(deal);
         return;
       }
-      // No deal row yet — create it at the target stage.
+      // No deal loaded. Re-check first (another tab or click may have created it), then create.
+      const already = await findExisting();
+      if (already) {
+        await moveExisting(already);
+        return;
+      }
       const { data, error } = await supabase
         .from("cloud_deals")
         .insert({
@@ -444,6 +484,14 @@ export default function CloudDealDetail() {
         })
         .select("*")
         .maybeSingle();
+      if (error?.code === "23505") {
+        // Unique index on lead_id: the deal was created in the meantime. Use it.
+        const existing = await findExisting();
+        if (existing) {
+          await moveExisting(existing);
+          return;
+        }
+      }
       if (error || !data) {
         toast({
           title: "Couldn't create the deal",
@@ -452,6 +500,7 @@ export default function CloudDealDetail() {
         });
         return;
       }
+      dealRef.current = data as Deal;
       setDeal(data as Deal);
       await supabase.from("cloud_deal_events").insert({
         deal_id: data.id,
@@ -463,6 +512,7 @@ export default function CloudDealDetail() {
       toast({ title: `Moved to ${STAGE_LABELS[target]}` });
       await loadEvents(lead.id);
     } finally {
+      movingRef.current = false;
       setAdvancing(false);
     }
   }
@@ -595,23 +645,34 @@ export default function CloudDealDetail() {
       return;
     }
     setSavingEnvelope(true);
-    const ok = await saveDeal({
-      signing_provider: "libresign",
-      signing_request_id: reqId,
-      sow_sent_at: new Date().toISOString(),
+    const kind = recordKind;
+    const label = SIGN_KIND_LABEL[kind];
+    const ok = await saveDeal((current) => {
+      const patch: Record<string, any> = {
+        signing_provider: "libresign",
+        signing_request_id: reqId,
+        signing_requests: { ...(current.signing_requests || {}), [kind]: reqId },
+      };
+      if (kind === "sow") patch.sow_sent_at = new Date().toISOString();
+      if (kind === "acceptance") {
+        const install = { ...(current.install_data || {}) } as any;
+        install.acceptance = { ...(install.acceptance || {}), envelope_id: reqId };
+        patch.install_data = install;
+      }
+      return patch;
     });
     if (ok) {
       const { error } = await supabase.from("cloud_deal_events").insert({
         deal_id: deal.id,
         lead_id: lead.id,
-        event_type: "sow_sent",
-        event_payload: { signing_provider: "libresign", signing_request_id: reqId, recorded_manually: true },
+        event_type: `${kind}_sent`,
+        event_payload: { signing_provider: "libresign", signing_request_id: reqId, template_kind: kind, recorded_manually: true },
         triggered_by: "admin",
       });
       toast(
         error
-          ? { title: "SOW recorded", description: "The timeline entry couldn't be added, but the deal was updated." }
-          : { title: "SOW recorded", description: "The deal will update when the customer signs." }
+          ? { title: `${label} recorded`, description: "The timeline entry couldn't be added, but the deal was updated." }
+          : { title: `${label} recorded`, description: "The deal will update when the customer signs." }
       );
       setRecordOpen(false);
       setSigningRequestId("");
@@ -735,7 +796,7 @@ export default function CloudDealDetail() {
   if (!secondaryLabels.has("Send SOW") && !secondaryLabels.has("Send acceptance")) {
     menuItems.push({ group: "Contract & payment", label: "Send for signature…", icon: PenSquare, disabled: !deal, hint: needsDealHint, onSelect: () => openSign(stage >= 7 ? "acceptance" : "sow") });
   }
-  menuItems.push({ group: "Contract & payment", label: "Record signing request…", icon: ClipboardPaste, disabled: !deal, hint: needsDealHint, onSelect: () => setRecordOpen(true) });
+  menuItems.push({ group: "Contract & payment", label: "Record signing request…", icon: ClipboardPaste, disabled: !deal, hint: needsDealHint, onSelect: () => { setRecordKind(stage >= 7 ? "acceptance" : "sow"); setRecordOpen(true); } });
   if (!secondaryLabels.has("Payment link")) {
     menuItems.push({ group: "Contract & payment", label: "Create payment link…", icon: CreditCard, disabled: !deal, hint: needsDealHint, onSelect: openPayment });
   }
@@ -898,6 +959,9 @@ export default function CloudDealDetail() {
             <Section title="Deal status">
               <ul className="space-y-1.5 text-sm">
                 {[
+                  ...(deal.signing_requests?.nda || deal.nda_signed_at
+                    ? [{ label: "NDA signed", at: deal.nda_signed_at }]
+                    : []),
                   { label: "SOW sent", at: deal.sow_sent_at },
                   { label: "SOW signed", at: deal.sow_signed_at },
                   { label: "Deposit paid", at: deal.deposit_paid_at },
@@ -1286,7 +1350,7 @@ export default function CloudDealDetail() {
           <DialogHeader>
             <DialogTitle>Record signing request</DialogTitle>
             <DialogDescription>
-              Sent the SOW yourself from Libresign? Paste its request ID so the deal tracks it and updates when the customer signs.
+              Sent a document yourself from Libresign? Pick which one and paste its request ID so the deal tracks it and updates when the customer signs.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -1296,6 +1360,17 @@ export default function CloudDealDetail() {
               recordEnvelope();
             }}
           >
+            <div>
+              <Label htmlFor="record-kind">Document</Label>
+              <Select value={recordKind} onValueChange={(v) => setRecordKind(v as SignKind)}>
+                <SelectTrigger id="record-kind"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(SIGN_KIND_LABEL) as SignKind[]).map((k) => (
+                    <SelectItem key={k} value={k}>{SIGN_KIND_LABEL[k]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label htmlFor="sign-req-id">Libresign request ID</Label>
               <Input
@@ -1310,7 +1385,7 @@ export default function CloudDealDetail() {
             <DialogFooter className="gap-2 sm:gap-2">
               <Button type="button" variant="outline" onClick={() => setRecordOpen(false)} disabled={savingEnvelope}>Cancel</Button>
               <Button type="submit" disabled={savingEnvelope || !signingRequestId.trim()}>
-                {savingEnvelope ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : "Record SOW sent"}
+                {savingEnvelope ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : "Record as sent"}
               </Button>
             </DialogFooter>
           </form>
@@ -1351,20 +1426,28 @@ function DraftField({
 }) {
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
   const focused = useRef(false);
 
   useEffect(() => {
-    if (!focused.current) setDraft(value);
-  }, [value]);
+    // Don't overwrite typing, or text whose save failed (it's shown as unsaved instead).
+    if (!focused.current && !failed) setDraft(value);
+  }, [value, failed]);
 
   async function commit() {
     focused.current = false;
-    if (draft === value) return;
+    if (draft === value) {
+      setFailed(false);
+      return;
+    }
     setSaving(true);
     const ok = await onCommit(draft);
     setSaving(false);
-    if (!ok) setDraft(value);
+    // Keep what was typed on failure; leaving the field again retries the save.
+    setFailed(!ok);
   }
+
+  const unsaved = failed && draft !== value;
 
   const common = {
     id,
@@ -1372,6 +1455,8 @@ function DraftField({
     placeholder,
     disabled: saving,
     "aria-busy": saving || undefined,
+    "aria-invalid": unsaved || undefined,
+    "aria-describedby": unsaved ? `${id}-unsaved` : undefined,
     onFocus: () => {
       focused.current = true;
     },
@@ -1395,6 +1480,11 @@ function DraftField({
       )}
       {saving && (
         <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-white/60" aria-label="Saving" />
+      )}
+      {unsaved && !saving && (
+        <p id={`${id}-unsaved`} className="mt-1 flex items-center gap-1 text-xs text-amber-300">
+          <AlertTriangle className="h-3 w-3" aria-hidden /> Unsaved. Click in and out of the field to retry.
+        </p>
       )}
     </div>
   );
@@ -2123,8 +2213,19 @@ function InstallTracker({
             <Label htmlFor="accept-id" className="text-xs text-white/60">Libresign acceptance request ID</Label>
             <DraftField
               id="accept-id"
-              value={acceptance.envelope_id ?? ""}
-              onCommit={(v) => patchSection("acceptance", "envelope_id", v.trim())}
+              value={acceptance.envelope_id ?? deal.signing_requests?.acceptance ?? ""}
+              onCommit={(v) =>
+                saveDeal((current) => {
+                  const id = v.trim() || undefined;
+                  const install = { ...(current.install_data || {}) } as any;
+                  install.acceptance = { ...(install.acceptance || {}), envelope_id: id };
+                  const requests = { ...(current.signing_requests || {}) };
+                  if (id) requests.acceptance = id;
+                  else delete requests.acceptance;
+                  // The sign webhook matches signing_requests.acceptance, so keep both in step.
+                  return { install_data: install, signing_requests: requests };
+                })
+              }
               placeholder="Filled automatically when sent from this page"
               className={`font-mono text-xs ${fieldClass}`}
             />
