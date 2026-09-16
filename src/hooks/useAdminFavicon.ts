@@ -32,11 +32,22 @@ function restore() {
   }
 }
 
+const ADMIN_TITLE = "Bestly Admin";
+
+function applyTitle() {
+  if (document.title !== ADMIN_TITLE) document.title = ADMIN_TITLE;
+}
+
 export function useAdminFavicon() {
   useEffect(() => {
     mounted += 1;
     apply();
+    // Admin pages don't set their own <title>; without this the tab keeps the marketing title.
+    // Re-apply after a tick in case a public page's Helmet was still flushing on the way in.
+    applyTitle();
+    const titleTimer = window.setTimeout(applyTitle, 150);
     return () => {
+      window.clearTimeout(titleTimer);
       mounted -= 1;
       // Defer so a login → dashboard handoff doesn't flicker back to the site icon.
       setTimeout(() => {
