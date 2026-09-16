@@ -20,8 +20,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
  * }
  *
  * Side effects:
- *  - Stamps the deal with signing_provider = 'libresign', signing_request_id,
+ *  - Stamps the deal with signing_provider = 'libresign', signing_requests[template_kind]
+ *    (one slot per document kind), signing_request_id (most recent send, legacy),
  *    signing_document_url, plus sow_sent_at when template_kind='sow'.
+ *  - The callback URL carries ?kind=<template_kind> so the webhook knows which
+ *    document was signed.
  *  - Inserts a cloud_deal_events row with event_type matching template_kind.
  *  - Fires ntfy push to operator.
  *
@@ -231,7 +234,7 @@ Deno.serve(async (req) => {
   // Look up deal
   const { data: deal, error: dErr } = await sb
     .from("cloud_deals")
-    .select("id, lead_id, company_name, primary_contact_name, primary_contact_email")
+    .select("id, lead_id, company_name, primary_contact_name, primary_contact_email, signing_requests")
     .eq("id", dealId)
     .maybeSingle();
   if (dErr || !deal) return bad("deal not found", 404);
@@ -245,9 +248,9 @@ Deno.serve(async (req) => {
   // so we encode the shared secret as a query param. The webhook handler
   // accepts either ?secret= or the X-Bestly-Sign-Secret header.
   const webhookSecret = Deno.env.get("LIBRESIGN_WEBHOOK_SECRET");
-  const callbackUrl = webhookSecret
-    ? `${supabaseUrl}/functions/v1/cloud-deal-sign-webhook?secret=${encodeURIComponent(webhookSecret)}`
-    : `${supabaseUrl}/functions/v1/cloud-deal-sign-webhook`;
+  const callbackParams = new URLSearchParams({ kind });
+  if (webhookSecret) callbackParams.set("secret", webhookSecret);
+  const callbackUrl = `${supabaseUrl}/functions/v1/cloud-deal-sign-webhook?${callbackParams.toString()}`;
 
   // Create the signing request
   const requestName =
@@ -279,6 +282,7 @@ Deno.serve(async (req) => {
   // Stamp the deal
   const update: Record<string, any> = {
     signing_provider: "libresign",
+    signing_requests: { ...((deal as any).signing_requests || {}), [kind]: result.uuid },
     signing_request_id: result.uuid,
     signing_document_url: documentUrl,
   };
