@@ -536,6 +536,7 @@
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
 }
 body.admin-bento { background-color: var(--bento-page); }
+.admin-bento, body.admin-bento { color-scheme: light; }
 
 /* Cards: the dark theme's faint white washes become white cards on the warm page.
    Match whole class tokens (start or after a space) so hover:bg-white/… doesn't count. */
@@ -575,6 +576,8 @@ body.admin-bento { background-color: var(--bento-page); }
   padding: 0.25rem;
   box-shadow: 0 1px 2px rgba(17, 17, 20, 0.05);
 }
+.admin-bento [role="tablist"] { scrollbar-width: none; }
+.admin-bento [role="tablist"]::-webkit-scrollbar { display: none; }
 .admin-bento [role="tab"] { border-radius: 9999px; color: rgba(17, 17, 20, 0.65); }
 .admin-bento [role="tab"][data-state="active"] { background: var(--bento-ink); color: #fff; box-shadow: none; }
 
