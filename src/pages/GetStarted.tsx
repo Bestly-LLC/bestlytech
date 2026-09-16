@@ -161,6 +161,67 @@ export default function GetStarted() {
     }
   }
 
+  // Stripe payment links redirect here with ?paid=<deal id> after the deposit.
+  // Show a plain thank-you. The id is never looked up, so the URL reveals nothing;
+  // the intake link arrives by email (sent by the Stripe webhook).
+  if (params.has("paid")) {
+    return (
+      <>
+        <SEOHead
+          title="Payment received — thank you"
+          description="Your Bestly In-House Cloud deposit is in."
+        />
+        <div className="relative overflow-hidden">
+          <div className="mx-auto max-w-3xl px-6 py-16 lg:py-24">
+            <AnimatedSection>
+              <div className="text-center mb-10">
+                <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 mb-5">
+                  <CheckCircle2 className="h-9 w-9 text-emerald-500" />
+                </div>
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl mb-3">
+                  Payment received. Thank you.
+                </h1>
+                <p className="text-lg text-muted-foreground">
+                  Your deposit is in and your deployment is officially on the schedule.
+                </p>
+              </div>
+            </AnimatedSection>
+
+            <AnimatedSection delay={80}>
+              <GlowCard className="mb-5">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                    <Server className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold mb-1">Next — the technical intake</h3>
+                    <p className="text-sm text-muted-foreground">
+                      We've emailed you a private link to the technical intake: five short sections on
+                      network, branding, users, migration, and policy. Forward it to whoever runs IT for you.
+                    </p>
+                  </div>
+                </div>
+              </GlowCard>
+            </AnimatedSection>
+
+            <AnimatedSection delay={140}>
+              <p className="text-sm text-muted-foreground text-center mt-8">
+                Didn't get the email within a few minutes? Write to{" "}
+                <a
+                  href="mailto:jared@bestly.tech"
+                  className="text-foreground underline underline-offset-4 hover:text-primary transition-colors"
+                >
+                  jared@bestly.tech
+                </a>
+                .
+              </p>
+            </AnimatedSection>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (success) {
     return (
       <>
