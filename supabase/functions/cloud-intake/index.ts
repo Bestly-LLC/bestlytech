@@ -59,10 +59,11 @@ Deno.serve(async (req) => {
     const token = new URL(req.url).searchParams.get("token");
     if (!token || token.length < 16) return bad("token required");
 
+    // live_data is operator-only (churn risk, health notes): never send it to the customer.
     const { data: deal, error } = await sb
       .from("cloud_deals")
       .select(
-        "id, lead_id, current_stage, company_name, primary_contact_name, primary_contact_email, target_user_count, intake_data, intake_submitted_at, provisioning_data, install_data, live_data, go_live_at"
+        "id, lead_id, current_stage, company_name, primary_contact_name, primary_contact_email, target_user_count, intake_data, intake_submitted_at, provisioning_data, install_data, go_live_at"
       )
       .eq("intake_token", token)
       .maybeSingle();
