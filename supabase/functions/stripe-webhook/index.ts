@@ -147,7 +147,7 @@ serve(async (req) => {
         if (dealIdMeta) {
           const { data: deal } = await supabase
             .from("cloud_deals")
-            .select("id, lead_id, current_stage, deposit_paid_at, company_name, primary_contact_name")
+            .select("id, lead_id, current_stage, deposit_paid_at, company_name, primary_contact_name, intake_token")
             .eq("id", dealIdMeta)
             .maybeSingle();
 
@@ -156,23 +156,91 @@ serve(async (req) => {
             break;
           }
 
-          const updates: Record<string, any> = {};
-          if (!deal.deposit_paid_at) updates.deposit_paid_at = new Date().toISOString();
-          // Auto-advance to Stage 5 (Tech intake) only if currently <= 4
-          if ((deal.current_stage ?? 0) <= 4) updates.current_stage = 5;
+          const paidAmount = `$${((session.amount_total ?? 0) / 100).toFixed(2)}`;
+          const sendNtfy = async (title: string, message: string, priority: string) => {
+            try {
+              const ntfyToken = Deno.env.get("NTFY_TOKEN");
+              const headers: Record<string, string> = {
+                Title: title,
+                Tags: "money-bag",
+                Priority: priority,
+                Click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
+              };
+              if (ntfyToken) headers["Authorization"] = `Bearer ${ntfyToken}`;
+              await fetch("https://ntfy.sh/bestly-sysalert-7q2k9mx4", { method: "POST", headers, body: message });
+            } catch (ntfyErr) {
+              console.error("ntfy push failed (cloud deal)", ntfyErr);
+            }
+          };
+
           if (customerId && typeof customerId === "string") {
-            updates.stripe_customer_id = customerId;
+            await supabase.from("cloud_deals").update({ stripe_customer_id: customerId }).eq("id", deal.id);
           }
 
-          if (Object.keys(updates).length > 0) {
-            const { error: updErr } = await supabase
+          // Idempotent per deal: only the first completed payment claims deposit_paid_at.
+          // The conditional update is the guard, so two different Stripe events for the
+          // same deal (e.g. an old link paid twice) can't both log deposit_paid or email.
+          let firstDeposit = false;
+          if (!deal.deposit_paid_at) {
+            const { data: claimed, error: claimErr } = await supabase
               .from("cloud_deals")
-              .update(updates)
-              .eq("id", deal.id);
-            if (updErr) {
-              console.error("cloud_deal payment update error", updErr);
+              .update({ deposit_paid_at: new Date().toISOString() })
+              .eq("id", deal.id)
+              .is("deposit_paid_at", null)
+              .select("id");
+            if (claimErr) {
+              console.error("cloud_deal payment update error", claimErr);
               break;
             }
+            firstDeposit = !!claimed?.length;
+          }
+
+          if (!firstDeposit) {
+            // Deposit already recorded: note the extra payment for the operator, no customer email.
+            await supabase.from("cloud_deal_events").insert({
+              deal_id: deal.id,
+              lead_id: deal.lead_id,
+              event_type: "payment_received",
+              event_payload: {
+                deposit_already_paid: true,
+                amount_total: session.amount_total,
+                currency: session.currency,
+                session_id: session.id,
+                payment_intent: session.payment_intent,
+              },
+              triggered_by: "stripe-webhook",
+            });
+            await sendNtfy(
+              `Extra payment: ${deal.company_name} (${paidAmount})`,
+              "Deposit was already recorded for this deal. Check Stripe; this may need a refund.",
+              "5"
+            );
+            console.log("Cloud deal payment after deposit already recorded", deal.id);
+            break;
+          }
+
+          // Auto-advance to Stage 5 (Tech intake) only if currently <= 4
+          if ((deal.current_stage ?? 0) <= 4) {
+            const { error: stageErr } = await supabase
+              .from("cloud_deals")
+              .update({ current_stage: 5 })
+              .eq("id", deal.id)
+              .lte("current_stage", 4);
+            if (stageErr) console.error("cloud_deal stage advance error", stageErr);
+          }
+
+          // The receipt email carries the intake link, so make sure the deal has a token.
+          // Same format as the admin "Copy intake link" button (24 random bytes, 48 hex chars).
+          if (!deal.intake_token) {
+            const buf = new Uint8Array(24);
+            crypto.getRandomValues(buf);
+            const token = Array.from(buf).map((b) => b.toString(16).padStart(2, "0")).join("");
+            const { error: tokErr } = await supabase
+              .from("cloud_deals")
+              .update({ intake_token: token })
+              .eq("id", deal.id)
+              .is("intake_token", null);
+            if (tokErr) console.error("intake_token create error", tokErr);
           }
 
           await supabase.from("cloud_deal_events").insert({
@@ -188,26 +256,11 @@ serve(async (req) => {
             triggered_by: "stripe-webhook",
           });
 
-          // ntfy push to operator
-          try {
-            const NTFY_BASE = "https://ntfy.sh";
-            const NTFY_TOPIC = "bestly-sysalert-7q2k9mx4";
-            const ntfyToken = Deno.env.get("NTFY_TOKEN");
-            const headers: Record<string, string> = {
-              Title: `Deposit paid: ${deal.company_name} ($${((session.amount_total ?? 0) / 100).toFixed(2)})`,
-              Tags: "money-bag",
-              Priority: "5",
-              Click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
-            };
-            if (ntfyToken) headers["Authorization"] = `Bearer ${ntfyToken}`;
-            await fetch(`${NTFY_BASE}/${NTFY_TOPIC}`, {
-              method: "POST",
-              headers,
-              body: `${deal.primary_contact_name ?? "Client"} just paid the deposit. Auto-advanced to Stage 5: Tech intake.`,
-            });
-          } catch (ntfyErr) {
-            console.error("ntfy push failed (cloud deal)", ntfyErr);
-          }
+          await sendNtfy(
+            `Deposit paid: ${deal.company_name} (${paidAmount})`,
+            `${deal.primary_contact_name ?? "Client"} just paid the deposit. Auto-advanced to Stage 5: Tech intake.`,
+            "5"
+          );
 
           // Customer-facing receipt + intake invitation
           const { data: dealFull } = await supabase
@@ -226,7 +279,8 @@ serve(async (req) => {
               supabase,
               "cloud-deposit-paid",
               dealFull.primary_contact_email,
-              `cloud-deposit-paid-${deal.id}-${event.id}`,
+              // One deposit email per deal, whatever Stripe event triggered it.
+              `cloud-deposit-paid-${deal.id}`,
               {
                 contact_name: dealFull.primary_contact_name,
                 company_name: dealFull.company_name,
@@ -269,6 +323,16 @@ serve(async (req) => {
               ? new Date(sub.current_period_end * 1000).toISOString()
               : null;
           }
+        }
+
+        // CY-LIVE-01: session.metadata.plan is set authoritatively by create-checkout
+        // and is mode-agnostic, so it is the source of truth for the plan label. The
+        // price-ID comparison above relies on STRIPE_PRICE_* env vars (test IDs) which
+        // will NOT match live price IDs, so without this a live yearly purchase would be
+        // mislabeled "monthly". periodEnd is still taken from the subscription fetch above.
+        const metaPlan = session.metadata?.plan;
+        if (metaPlan === "monthly" || metaPlan === "yearly" || metaPlan === "lifetime") {
+          plan = metaPlan;
         }
 
         const { error } = await supabase
