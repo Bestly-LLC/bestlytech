@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   fetchPiholeStats, fetchAgentState, fetchRecentCommands, isAgentOnline, describeCommand,
-  HomeHubError, STATS_STALE_MS, ACTION_LABELS,
+  HomeHubError, STATS_STALE_MS, ACTION_LABELS, TARGET_LABELS, SNAPSHOT_STALE_MS,
   type PiholeStats, type AgentState, type HomeHubCommand,
 } from "@/services/homeHubApi";
 import { pollInterval } from "@/lib/polling";
+import { AgentUpgradeBanner, useSnapshot } from "@/components/admin/homeHub/shared";
+import type { HaSnapshot, HbSnapshot } from "@/services/homeHubApi";
 import { Shield, Cpu, RefreshCw, ArrowRight, CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, History } from "lucide-react";
 
 function ago(iso: string, now: number): string {
@@ -79,12 +81,16 @@ export default function HomeHubOverview() {
   const statsAge = stats ? now - new Date(stats.capturedAt).getTime() : Infinity;
   const statsHealth: Health = !stats ? "down" : statsAge > STATS_STALE_MS ? "warn" : "ok";
   const anyError = errors.stats || errors.agent || errors.commands;
+  const ha = useSnapshot<HaSnapshot>("homeassistant");
+  const hb = useSnapshot<HbSnapshot>("homebridge");
+  const serviceHealth = (snap: { ok: boolean; fails: number; capturedAt: string } | null): Health =>
+    !snap ? "down" : now - new Date(snap.capturedAt).getTime() > SNAPSHOT_STALE_MS || snap.fails >= 3 ? "down" : snap.ok ? "ok" : "warn";
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Home Hub"
-        description="Health of the Raspberry Pi agent and the Pi-hole feed"
+        description="The Pi agent, Pi-hole, Home Assistant and Homebridge"
         actions={
           <>
             <Button asChild variant="outline" className="border-white/15 text-white/85 hover:text-white hover:bg-white/5">
@@ -174,6 +180,33 @@ export default function HomeHubOverview() {
         )}
       </div>
 
+      <AgentUpgradeBanner agent={agent} />
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {[
+          { to: "/admin/home-hub/home-assistant", label: "Home Assistant", snap: ha.snap, detail: ha.snap ? `${ha.snap.data.entity_count ?? 0} entities · ${(ha.snap.data.automations ?? []).filter((a) => a.on).length} automations on` : "Waiting for data" },
+          { to: "/admin/home-hub/homebridge", label: "Homebridge", snap: hb.snap, detail: hb.snap ? `${(hb.snap.data.plugins ?? []).length} plugins${hb.snap.data.update_available ? " · update available" : ""}` : "Waiting for data" },
+        ].map((x) => {
+          const hh = serviceHealth(x.snap);
+          return (
+            <Link key={x.to} to={x.to} className="group bg-white/[0.03] border border-white/[0.06] hover:border-white/15 rounded-2xl p-4 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-white">{x.label}</p>
+                <p className="text-xs text-white/60 mt-0.5 truncate">{x.detail}</p>
+              </div>
+              <HealthBadge health={hh} label={!x.snap ? "No data" : hh === "ok" ? "Running" : hh === "warn" ? "Check" : "Down"} />
+            </Link>
+          );
+        })}
+        <Link to="/admin/home-hub/access" className="bg-white/[0.03] border border-white/[0.06] hover:border-white/15 rounded-2xl p-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white">Access backup</p>
+            <p className="text-xs text-white/60 mt-0.5">IPs, SSH, logins and where secrets live</p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-white/60" aria-hidden />
+        </Link>
+      </div>
+
       <section className="bg-white/[0.03] border border-white/[0.06] rounded-2xl" aria-label="Recent commands">
         <div className="flex items-center gap-2 p-4 sm:p-6 pb-3">
           <History className="h-4 w-4 text-white/60" aria-hidden />
@@ -197,7 +230,7 @@ export default function HomeHubOverview() {
                   <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${tone}`} aria-hidden />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white/85">
-                      {c.target === "pihole" ? "Pi-hole" : c.target}: {ACTION_LABELS[c.action] ?? c.action}
+                      {TARGET_LABELS[c.target] ?? c.target}: {ACTION_LABELS[c.action] ?? c.action}
                       <span className="text-white/60 capitalize"> · {c.status}</span>
                     </p>
                     <p className="text-xs text-white/60 mt-0.5 break-words">{describeCommand(c)}</p>

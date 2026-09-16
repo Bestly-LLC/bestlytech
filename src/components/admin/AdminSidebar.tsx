@@ -10,6 +10,7 @@ import {
   Shield,
   Car,
   Mic,
+  House, Boxes, KeyRound,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -57,6 +58,9 @@ const cookieYetiItems = [
 const homeHubItems = [
   { title: "Overview", url: "/admin/home-hub", icon: Server },
   { title: "Pi-hole", url: "/admin/home-hub/pihole", icon: Shield },
+  { title: "Home Assistant", url: "/admin/home-hub/home-assistant", icon: House },
+  { title: "Homebridge", url: "/admin/home-hub/homebridge", icon: Boxes },
+  { title: "Access backup", url: "/admin/home-hub/access", icon: KeyRound },
 ];
 
 const turoItems = [

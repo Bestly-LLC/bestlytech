@@ -80,6 +80,9 @@ const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminLeads = lazy(() => import("./pages/admin/AdminLeads"));
 const HomeHubOverview = lazy(() => import("./pages/admin/HomeHubOverview"));
 const HomeHubPihole = lazy(() => import("./pages/admin/HomeHubPihole"));
+const HomeHubHomeAssistant = lazy(() => import("./pages/admin/HomeHubHomeAssistant"));
+const HomeHubHomebridge = lazy(() => import("./pages/admin/HomeHubHomebridge"));
+const HomeHubAccess = lazy(() => import("./pages/admin/HomeHubAccess"));
 const StreetSweeping = lazy(() => import("./pages/admin/StreetSweeping"));
 const AdminNotFound = lazy(() => import("./pages/admin/AdminNotFound"));
 
@@ -187,6 +190,9 @@ const App = () => (
                   <Route path="cookie-yeti/community" element={<TabRedirect to="/admin/cookie-yeti/analytics" tab="community" />} />
                   <Route path="home-hub" element={<HomeHubOverview />} />
                   <Route path="home-hub/pihole" element={<HomeHubPihole />} />
+                  <Route path="home-hub/home-assistant" element={<HomeHubHomeAssistant />} />
+                  <Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
+                  <Route path="home-hub/access" element={<HomeHubAccess />} />
                   <Route path="street-sweeping" element={<StreetSweeping />} />
                   <Route path="*" element={<AdminNotFound />} />
                 </Route>

@@ -36,14 +36,32 @@ const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
     },
     update_gravity: none,
   },
-  homebridge: { restart: none },
+  homebridge: { restart: none, refresh: none },
   homeassistant: {
     toggle_automation: (p) =>
-      typeof p.automation_id === "string" && p.automation_id && typeof p.enabled === "boolean"
+      typeof p.automation_id === "string" && /^automation\.[a-z0-9_]+$/.test(p.automation_id) && typeof p.enabled === "boolean"
         ? null
-        : "toggle_automation needs automation_id (string) and enabled (boolean)",
+        : "toggle_automation needs automation_id (automation.<id>) and enabled (boolean)",
+    refresh: none,
+  },
+  // Self-update (agent >= 1.1.0). The agent re-checks the sha256 against the file it downloads.
+  agent: {
+    update: (p) =>
+      typeof p.version === "string" && /^\d+\.\d+\.\d+$/.test(p.version) &&
+      typeof p.sha256 === "string" && /^[0-9a-f]{64}$/.test(p.sha256)
+        ? null
+        : "agent.update needs version (x.y.z) and sha256",
   },
 };
+
+const SNAPSHOT_SOURCES = new Set(["homeassistant", "homebridge", "host"]);
+// The only secrets the agent may back up. Vault names are fixed here, not taken from the Pi.
+const BACKUP_SECRETS: Record<string, string> = {
+  home_hub_ha_token: "Home Assistant long-lived token (backed up by the Home Hub agent)",
+  home_hub_homebridge_password: "Homebridge UI password (backed up by the Home Hub agent)",
+  home_hub_homebridge_user: "Homebridge UI username (backed up by the Home Hub agent)",
+};
+const MAX_BODY_BYTES = 512_000;
 
 function validate(c: { target: string; action: string; payload: unknown }): string | null {
   const check = ALLOWED[c.target]?.[c.action];
@@ -62,7 +80,9 @@ Deno.serve(async (req) => {
 
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    const raw = await req.text();
+    if (raw.length > MAX_BODY_BYTES) return json({ error: "Body too large" }, 413);
+    body = JSON.parse(raw);
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
@@ -157,6 +177,53 @@ Deno.serve(async (req) => {
 
     if (error) return json({ error: error.message }, 500);
     return json({ ok: true });
+  }
+
+  // Read-only snapshot of Home Assistant, Homebridge or the host (agent >= 1.1.0).
+  if (op === "snapshot") {
+    // No heartbeat here: snapshot posts carry no version/info, and poll already beats every 15s.
+    const source = String(body.source ?? "");
+    if (!SNAPSHOT_SOURCES.has(source)) return json({ error: `Unknown snapshot source: ${source}` }, 400);
+    const data = body.data && typeof body.data === "object" && !Array.isArray(body.data) ? body.data : {};
+    const { error } = await supabase.rpc("home_hub_ingest_snapshot", {
+      p_source: source,
+      p_ok: body.ok === true,
+      p_error: body.error ? String(body.error).slice(0, 1000) : null,
+      p_data: data,
+    });
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true });
+  }
+
+  // Mirror the agent's own credentials into Vault. Write-only: nothing here ever returns a value.
+  if (op === "backup_secrets") {
+    const secrets = (body.secrets && typeof body.secrets === "object") ? body.secrets as Record<string, unknown> : {};
+    const stored: string[] = [];
+    const skipped: string[] = [];
+    for (const [name, value] of Object.entries(secrets)) {
+      if (!(name in BACKUP_SECRETS) || typeof value !== "string" || !value || value.length > 8000) {
+        skipped.push(name);
+        continue;
+      }
+      const { error } = await supabase.rpc("home_hub_vault_put", {
+        p_name: name, p_value: value, p_description: BACKUP_SECRETS[name],
+      });
+      if (error) skipped.push(name); else stored.push(name);
+    }
+    return json({ stored, skipped });
+  }
+
+  // Hand the agent the source of a published release for agent.update.
+  if (op === "release") {
+    const version = String(body.version ?? "");
+    const { data, error } = await supabase
+      .from("home_hub_agent_releases")
+      .select("version, sha256, source")
+      .eq("version", version)
+      .maybeSingle();
+    if (error) return json({ error: error.message }, 500);
+    if (!data) return json({ error: `No release ${version}` }, 404);
+    return json(data);
   }
 
   return json({ error: `Unknown op: ${op}` }, 400);

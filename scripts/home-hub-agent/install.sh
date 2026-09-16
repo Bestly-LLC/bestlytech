@@ -43,5 +43,7 @@ WantedBy=multi-user.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable --now bestly-home-hub-agent
+systemctl enable bestly-home-hub-agent
+# restart, not just start: on an upgrade the old process is still running the old code
+systemctl restart bestly-home-hub-agent
 echo "Installed. Logs: journalctl -u bestly-home-hub-agent -f"
