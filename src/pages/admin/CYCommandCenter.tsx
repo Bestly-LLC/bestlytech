@@ -102,7 +102,7 @@ function timeToFix(r: FeedRow): string | null {
 const FEED_COLUMNS =
   "id, domain, report_count, resolved, resolved_at, has_working_pattern, ai_attempts, render_attempts, ai_processed_at, last_reported, created_at, autofix_outcome";
 
-export default function CYCommandCenter() {
+export default function CYCommandCenter({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -156,7 +156,7 @@ export default function CYCommandCenter() {
   if (loading) {
     return (
       <div className="space-y-8 max-w-5xl" aria-busy="true">
-        <div><Skeleton className="h-9 w-48" /><Skeleton className="h-4 w-72 mt-3" /></div>
+        {!embedded && <div><Skeleton className="h-9 w-48" /><Skeleton className="h-4 w-72 mt-3" /></div>}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
         </div>
@@ -172,6 +172,7 @@ export default function CYCommandCenter() {
   return (
     <div className="space-y-8 max-w-5xl">
       <PageHeader
+        embedded={embedded}
         title="Cookie Yeti"
         description="What users reported, what fixed itself, and what needs you."
         actions={
@@ -220,14 +221,33 @@ export default function CYCommandCenter() {
         <StatCard label="Active today" value={o.patterns_last_24h ?? 0} icon={Activity} iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle="patterns, last 24h" />
       </div>
 
-      {/* ── Needs you (the only list to act on) ── */}
+      {/* ── Needs you ── In the Command Center section the Auto-Fix tab already lists these same
+          sites (same view and filter) with the steps and actions, so embedded shows one line to it. */}
+      {embedded ? (
+        <Link
+          to="/admin/cookie-yeti?tab=autofix"
+          className={`flex items-center gap-3 rounded-2xl border px-5 py-3.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 group ${needsCount
+            ? "border-red-500/25 bg-red-500/[0.06] hover:bg-red-500/10"
+            : "border-emerald-500/20 bg-emerald-500/[0.05] hover:bg-emerald-500/10"}`}
+        >
+          {needsCount
+            ? <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" aria-hidden="true" />
+            : <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" aria-hidden="true" />}
+          <span className={`min-w-0 flex-1 font-medium ${needsCount ? "text-red-100" : "text-emerald-100"}`}>
+            {needsCount
+              ? `${needsCount} site${needsCount === 1 ? " needs" : "s need"} you — see Auto-Fix`
+              : "Nothing needs you — see Auto-Fix"}
+          </span>
+          <ArrowRight className="h-4 w-4 text-white/50 group-hover:text-white/80 transition-colors shrink-0" aria-hidden="true" />
+        </Link>
+      ) : (
       <section aria-labelledby="needs-title" className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 px-5 py-4 border-b border-white/[0.06]">
           <AlertTriangle className={`h-4 w-4 ${needsCount ? "text-red-400" : "text-emerald-400"}`} aria-hidden="true" />
           <h2 id="needs-title" className="text-[0.9375rem] font-semibold text-white">Needs you</h2>
           <span className="text-xs text-white/55">automatic render and AI attempts ran out</span>
           {needsCount > 8 && (
-            <Link to="/admin/cookie-yeti/autofix" className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-white/70 hover:text-white hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+            <Link to="/admin/cookie-yeti?tab=autofix" className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-white/70 hover:text-white hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
               All {needsCount} <ArrowRight className="h-3 w-3" aria-hidden="true" />
             </Link>
           )}
@@ -240,7 +260,7 @@ export default function CYCommandCenter() {
               <li key={r.id} className="flex items-center pr-3">
                 <button
                   type="button"
-                  onClick={() => navigate("/admin/cookie-yeti/autofix")}
+                  onClick={() => navigate("/admin/cookie-yeti?tab=autofix")}
                   className="min-w-0 flex-1 flex items-center gap-3 px-5 py-3 text-left hover:bg-white/[0.025] focus-visible:outline-none focus-visible:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/30 transition-colors group"
                 >
                   <span className="text-sm font-medium text-white truncate flex-1 group-hover:text-cyan-300 transition-colors">{r.domain}</span>
@@ -254,7 +274,7 @@ export default function CYCommandCenter() {
                 <ActionMenu
                   label={`Actions for ${r.domain}`}
                   items={[
-                    { label: "Show me what to do", icon: Sparkles, onSelect: () => navigate("/admin/cookie-yeti/autofix") },
+                    { label: "Show me what to do", icon: Sparkles, onSelect: () => navigate("/admin/cookie-yeti?tab=autofix") },
                     { label: "Details and history", icon: PanelRightOpen, onSelect: () => openDomain(r.domain) },
                   ]}
                 />
@@ -263,6 +283,7 @@ export default function CYCommandCenter() {
           </ul>
         )}
       </section>
+      )}
 
       {/* ── Just in feed ── */}
       <section aria-labelledby="feed-title" className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">

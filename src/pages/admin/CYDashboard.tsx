@@ -31,7 +31,7 @@ type OpsStats = {
 
 const WINDOW_DAYS = 30;
 
-export default function CYDashboard() {
+export default function CYDashboard({ embedded = false }: { embedded?: boolean } = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openReports, setOpenReports] = useState<number | undefined>(undefined);
@@ -115,7 +115,7 @@ export default function CYDashboard() {
   if (loading) {
     return (
       <div className="space-y-8 max-w-7xl" aria-busy="true">
-        <div><Skeleton className="h-9 w-48" /><Skeleton className="h-4 w-80 mt-3" /></div>
+        {!embedded && <div><Skeleton className="h-9 w-48" /><Skeleton className="h-4 w-80 mt-3" /></div>}
         <Skeleton className="h-14 rounded-2xl" />
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
@@ -131,6 +131,7 @@ export default function CYDashboard() {
   return (
     <div className="space-y-8 max-w-7xl">
       <PageHeader
+        embedded={embedded}
         title="Operations"
         description="Pipeline health, the pattern engine, and running a scheduled job now when you don't want to wait."
         actions={headerActions}

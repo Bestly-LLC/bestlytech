@@ -102,7 +102,7 @@ async function runAutofix(domain: string, url?: string): Promise<boolean> {
   return true;
 }
 
-export default function CYAutoFixMonitor() {
+export default function CYAutoFixMonitor({ embedded = false }: { embedded?: boolean } = {}) {
   const [loading, setLoading] = useState(true);
   const [health, setHealth] = useState<Health | null>(null);
   const [stuck, setStuck] = useState<Stuck[]>([]);
@@ -147,7 +147,7 @@ export default function CYAutoFixMonitor() {
   if (loading) {
     return (
       <div className="space-y-6 max-w-3xl" aria-busy="true">
-        <div><Skeleton className="h-9 w-56" /><Skeleton className="h-4 w-80 mt-3" /></div>
+        {!embedded && <div><Skeleton className="h-9 w-56" /><Skeleton className="h-4 w-80 mt-3" /></div>}
         <Skeleton className="h-20 rounded-2xl" />
         <Skeleton className="h-56 rounded-2xl" />
       </div>
@@ -161,6 +161,7 @@ export default function CYAutoFixMonitor() {
   return (
     <div className="space-y-6 max-w-3xl">
       <PageHeader
+        embedded={embedded}
         title="Auto-Fix"
         description="Stuck sites get fixed on their own. You only see what a robot can't do."
       />

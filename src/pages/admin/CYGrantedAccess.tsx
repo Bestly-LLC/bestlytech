@@ -68,7 +68,7 @@ function friendlyInsertError(err: { code?: string; message: string; hint?: strin
   return err.message;
 }
 
-export default function CYGrantedAccess() {
+export default function CYGrantedAccess({ embedded = false }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<Grant[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -194,7 +194,7 @@ export default function CYGrantedAccess() {
   if (loading) {
     return (
       <div className="space-y-6 max-w-5xl" aria-busy="true">
-        <div><Skeleton className="h-9 w-44" /><Skeleton className="h-4 w-72 mt-3" /></div>
+        {!embedded && <div><Skeleton className="h-9 w-44" /><Skeleton className="h-4 w-72 mt-3" /></div>}
         <Skeleton className="h-10 w-80" />
         <Skeleton className="h-64 rounded-2xl" />
       </div>
@@ -206,6 +206,7 @@ export default function CYGrantedAccess() {
   return (
     <div className="space-y-6 max-w-5xl">
       <PageHeader
+        embedded={embedded}
         title="Granted Access"
         description="Comp premium access that bypasses Stripe."
         actions={

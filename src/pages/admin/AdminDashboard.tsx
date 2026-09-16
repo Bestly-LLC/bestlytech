@@ -454,7 +454,7 @@ export default function AdminDashboard() {
       title: `${names.length} ${plural(names.length, "system is", "systems are")} down`,
       why: `The health check flagged ${names.slice(0, 3).join(", ")}.`,
       // check-system-health watches the Cookie Yeti AI generator and cron, which live on the CY ops page.
-      href: "/admin/cookie-yeti/ops",
+      href: "/admin/cookie-yeti/analytics?tab=operations",
     });
   }
   if (cloudLeads.data && cloudLeads.data.count > 0) {
@@ -524,7 +524,7 @@ export default function AdminDashboard() {
       id: "cy-attention",
       title: `Help Auto-Fix with ${n} Cookie Yeti ${plural(n, "site", "sites")}`,
       why: "About 30 seconds each. The page tells you exactly what to tap.",
-      href: "/admin/cookie-yeti/autofix",
+      href: "/admin/cookie-yeti?tab=autofix",
     });
   }
   if (emails.data && emails.data.count > 0) {
@@ -669,7 +669,7 @@ export default function AdminDashboard() {
       <section aria-labelledby="status-title">
         <SectionTitle id="status-title">Status</SectionTitle>
         <ul className="flex flex-wrap gap-2">
-          <StatusChip label="System" source={health} to="/admin/cookie-yeti/ops" render={healthChip} />
+          <StatusChip label="System" source={health} to="/admin/cookie-yeti/analytics?tab=operations" render={healthChip} />
           <StatusChip label="Home Hub" source={homeHub} to="/admin/home-hub" render={homeHubChip} />
           <StatusChip label="Street Sweeping" source={sweep} to="/admin/street-sweeping" render={sweepChip} />
           <StatusChip label="Cookie Yeti" source={cy} to="/admin/cookie-yeti" render={cyChip} />

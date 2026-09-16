@@ -59,7 +59,7 @@ const FILTERS: ["all" | keyof typeof STATUS, string][] = [
   ["resolved", "Resolved"],
 ];
 
-export default function CYDomains() {
+export default function CYDomains({ embedded = false }: { embedded?: boolean } = {}) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -194,6 +194,7 @@ export default function CYDomains() {
   return (
     <div className="space-y-6">
       <PageHeader
+        embedded={embedded}
         title="All Domains"
         description="Every domain with a pattern or a user report. Open one for its history and actions."
         actions={
