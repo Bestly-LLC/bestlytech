@@ -488,6 +488,271 @@
   --sidebar-ring: 0 0% 30%;
 }
 
+/* ============================================================================
+ * Admin "bento" theme (light). Opt-in class on the admin wrapper and <body>.
+ * White/black utilities are variables (tailwind.config.ts), so text-white/60 becomes
+ * ink at 60% here with no per-page changes. Surfaces, tabs and pale accent text are
+ * adjusted below; pages add bento:… classes only where the layout itself changes.
+ * ========================================================================== */
+.admin-bento {
+  --tw-white: 17 17 20;
+  --tw-black: 255 255 255;
+  --background: 48 13% 94%;
+  --foreground: 240 8% 7%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 8% 7%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 8% 7%;
+  --primary: 240 8% 7%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 45 12% 91%;
+  --secondary-foreground: 240 8% 7%;
+  --muted: 45 12% 91%;
+  --muted-foreground: 240 4% 36%;
+  --accent: 45 12% 90%;
+  --accent-foreground: 240 8% 7%;
+  --border: 40 8% 86%;
+  --input: 40 8% 84%;
+  --ring: 240 8% 7%;
+  --radius: 1rem;
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 240 8% 7%;
+  --sidebar-primary: 240 8% 7%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 45 12% 93%;
+  --sidebar-accent-foreground: 240 8% 7%;
+  --sidebar-border: 40 8% 90%;
+  --sidebar-ring: 240 8% 30%;
+  --bento-page: #F3F2EE;
+  --bento-card: #FFFFFF;
+  --bento-well: #F7F6F2;
+  --bento-ink: #111114;
+  --bento-lime: #C8F169;
+  --bento-lavender: #CFC6FF;
+  --bento-peach: #FFD5BF;
+  --bento-sky: #BFE3FF;
+  --bento-butter: #FFF1B8;
+  color: hsl(var(--foreground));
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+}
+body.admin-bento { background-color: var(--bento-page); }
+
+/* Cards: the dark theme's faint white washes become white cards on the warm page.
+   Match whole class tokens (start or after a space) so hover:bg-white/… doesn't count. */
+.admin-bento :is([class^="bg-white/[0.02]"], [class*=" bg-white/[0.02]"]),
+.admin-bento :is([class^="bg-white/[0.03]"], [class*=" bg-white/[0.03]"]),
+.admin-bento :is([class^="bg-white/[0.04]"], [class*=" bg-white/[0.04]"]),
+.admin-bento :is([class^="bg-[#0a0a0a]"], [class*=" bg-[#0a0a0a]"]),
+.admin-bento :is([class^="bg-[#0b0d12]"], [class*=" bg-[#0b0d12]"]),
+.admin-bento :is([class^="bg-[#1a1a1a]"], [class*=" bg-[#1a1a1a]"]),
+.admin-bento main .rounded-2xl.border:not([class*="bg-"]),
+.admin-bento main .rounded-xl.border:not([class*="bg-"]) {
+  background-color: var(--bento-card);
+}
+/* A card inside a card gets a soft well instead of more white. */
+.admin-bento :is(:is([class^="bg-white/[0.02]"], [class*=" bg-white/[0.02]"]), :is([class^="bg-white/[0.03]"], [class*=" bg-white/[0.03]"]), :is([class^="bg-white/[0.04]"], [class*=" bg-white/[0.04]"]), .rounded-2xl.border) :is(:is([class^="bg-white/[0.02]"], [class*=" bg-white/[0.02]"]), :is([class^="bg-white/[0.03]"], [class*=" bg-white/[0.03]"]), :is([class^="bg-white/[0.04]"], [class*=" bg-white/[0.04]"])) {
+  background-color: var(--bento-well);
+}
+.admin-bento main :is(:is([class^="bg-white/[0.02]"], [class*=" bg-white/[0.02]"]), :is([class^="bg-white/[0.03]"], [class*=" bg-white/[0.03]"]), :is([class^="bg-white/[0.04]"], [class*=" bg-white/[0.04]"]), .border):is(.rounded-2xl, .rounded-3xl) {
+  box-shadow: 0 1px 2px rgba(17, 17, 20, 0.04), 0 10px 30px -18px rgba(17, 17, 20, 0.18);
+  border-color: rgba(17, 17, 20, 0.06);
+}
+.admin-bento main .rounded-2xl { border-radius: 1.5rem; }
+
+/* Floating sidebar: one white rounded panel on the warm page. */
+.admin-bento [data-variant="floating"] [data-sidebar="sidebar"] {
+  border-radius: 1.75rem;
+  border: 0;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(17, 17, 20, 0.04), 0 18px 40px -24px rgba(17, 17, 20, 0.25);
+}
+.admin-bento [data-sidebar="group-label"] { color: rgba(17, 17, 20, 0.45); }
+
+/* Tabs are pills: white track, black active pill with white text. */
+.admin-bento [role="tablist"] {
+  background: var(--bento-card);
+  border-radius: 9999px;
+  padding: 0.25rem;
+  box-shadow: 0 1px 2px rgba(17, 17, 20, 0.05);
+}
+.admin-bento [role="tab"] { border-radius: 9999px; color: rgba(17, 17, 20, 0.65); }
+.admin-bento [role="tab"][data-state="active"] { background: var(--bento-ink); color: #fff; box-shadow: none; }
+
+/* Pastel tile helpers (ink text on top). */
+.admin-bento .bento-tile { border-radius: 1.75rem; color: var(--bento-ink); border: 0; box-shadow: none; }
+.admin-bento .bento-lime { background-color: var(--bento-lime) !important; }
+.admin-bento .bento-lavender { background-color: var(--bento-lavender) !important; }
+.admin-bento .bento-peach { background-color: var(--bento-peach) !important; }
+.admin-bento .bento-sky { background-color: var(--bento-sky) !important; }
+.admin-bento .bento-butter { background-color: var(--bento-butter) !important; }
+
+/* Pale accent text meant for black backgrounds, darkened for the light page. */
+.admin-bento .text-red-50,
+.admin-bento .text-red-100,
+.admin-bento .text-red-200,
+.admin-bento .text-red-300,
+.admin-bento .hover\:text-red-100:hover,
+.admin-bento .hover\:text-red-200:hover,
+.admin-bento .hover\:text-red-300:hover { color: #b91c1c; }
+.admin-bento .text-red-400 { color: #dc2626; }
+.admin-bento .text-rose-50,
+.admin-bento .text-rose-100,
+.admin-bento .text-rose-200,
+.admin-bento .text-rose-300,
+.admin-bento .hover\:text-rose-100:hover,
+.admin-bento .hover\:text-rose-200:hover,
+.admin-bento .hover\:text-rose-300:hover { color: #be123c; }
+.admin-bento .text-rose-400 { color: #e11d48; }
+.admin-bento .text-pink-50,
+.admin-bento .text-pink-100,
+.admin-bento .text-pink-200,
+.admin-bento .text-pink-300,
+.admin-bento .hover\:text-pink-100:hover,
+.admin-bento .hover\:text-pink-200:hover,
+.admin-bento .hover\:text-pink-300:hover { color: #be185d; }
+.admin-bento .text-pink-400 { color: #db2777; }
+.admin-bento .text-fuchsia-50,
+.admin-bento .text-fuchsia-100,
+.admin-bento .text-fuchsia-200,
+.admin-bento .text-fuchsia-300,
+.admin-bento .hover\:text-fuchsia-100:hover,
+.admin-bento .hover\:text-fuchsia-200:hover,
+.admin-bento .hover\:text-fuchsia-300:hover { color: #a21caf; }
+.admin-bento .text-fuchsia-400 { color: #c026d3; }
+.admin-bento .text-purple-50,
+.admin-bento .text-purple-100,
+.admin-bento .text-purple-200,
+.admin-bento .text-purple-300,
+.admin-bento .hover\:text-purple-100:hover,
+.admin-bento .hover\:text-purple-200:hover,
+.admin-bento .hover\:text-purple-300:hover { color: #7e22ce; }
+.admin-bento .text-purple-400 { color: #9333ea; }
+.admin-bento .text-violet-50,
+.admin-bento .text-violet-100,
+.admin-bento .text-violet-200,
+.admin-bento .text-violet-300,
+.admin-bento .hover\:text-violet-100:hover,
+.admin-bento .hover\:text-violet-200:hover,
+.admin-bento .hover\:text-violet-300:hover { color: #6d28d9; }
+.admin-bento .text-violet-400 { color: #7c3aed; }
+.admin-bento .text-indigo-50,
+.admin-bento .text-indigo-100,
+.admin-bento .text-indigo-200,
+.admin-bento .text-indigo-300,
+.admin-bento .hover\:text-indigo-100:hover,
+.admin-bento .hover\:text-indigo-200:hover,
+.admin-bento .hover\:text-indigo-300:hover { color: #4338ca; }
+.admin-bento .text-indigo-400 { color: #4f46e5; }
+.admin-bento .text-blue-50,
+.admin-bento .text-blue-100,
+.admin-bento .text-blue-200,
+.admin-bento .text-blue-300,
+.admin-bento .hover\:text-blue-100:hover,
+.admin-bento .hover\:text-blue-200:hover,
+.admin-bento .hover\:text-blue-300:hover { color: #1d4ed8; }
+.admin-bento .text-blue-400 { color: #2563eb; }
+.admin-bento .text-sky-50,
+.admin-bento .text-sky-100,
+.admin-bento .text-sky-200,
+.admin-bento .text-sky-300,
+.admin-bento .hover\:text-sky-100:hover,
+.admin-bento .hover\:text-sky-200:hover,
+.admin-bento .hover\:text-sky-300:hover { color: #0369a1; }
+.admin-bento .text-sky-400 { color: #0284c7; }
+.admin-bento .text-cyan-50,
+.admin-bento .text-cyan-100,
+.admin-bento .text-cyan-200,
+.admin-bento .text-cyan-300,
+.admin-bento .hover\:text-cyan-100:hover,
+.admin-bento .hover\:text-cyan-200:hover,
+.admin-bento .hover\:text-cyan-300:hover { color: #0e7490; }
+.admin-bento .text-cyan-400 { color: #0891b2; }
+.admin-bento .text-teal-50,
+.admin-bento .text-teal-100,
+.admin-bento .text-teal-200,
+.admin-bento .text-teal-300,
+.admin-bento .hover\:text-teal-100:hover,
+.admin-bento .hover\:text-teal-200:hover,
+.admin-bento .hover\:text-teal-300:hover { color: #0f766e; }
+.admin-bento .text-teal-400 { color: #0d9488; }
+.admin-bento .text-emerald-50,
+.admin-bento .text-emerald-100,
+.admin-bento .text-emerald-200,
+.admin-bento .text-emerald-300,
+.admin-bento .hover\:text-emerald-100:hover,
+.admin-bento .hover\:text-emerald-200:hover,
+.admin-bento .hover\:text-emerald-300:hover { color: #047857; }
+.admin-bento .text-emerald-400 { color: #059669; }
+.admin-bento .text-green-50,
+.admin-bento .text-green-100,
+.admin-bento .text-green-200,
+.admin-bento .text-green-300,
+.admin-bento .hover\:text-green-100:hover,
+.admin-bento .hover\:text-green-200:hover,
+.admin-bento .hover\:text-green-300:hover { color: #15803d; }
+.admin-bento .text-green-400 { color: #16a34a; }
+.admin-bento .text-lime-50,
+.admin-bento .text-lime-100,
+.admin-bento .text-lime-200,
+.admin-bento .text-lime-300,
+.admin-bento .hover\:text-lime-100:hover,
+.admin-bento .hover\:text-lime-200:hover,
+.admin-bento .hover\:text-lime-300:hover { color: #4d7c0f; }
+.admin-bento .text-lime-400 { color: #65a30d; }
+.admin-bento .text-yellow-50,
+.admin-bento .text-yellow-100,
+.admin-bento .text-yellow-200,
+.admin-bento .text-yellow-300,
+.admin-bento .hover\:text-yellow-100:hover,
+.admin-bento .hover\:text-yellow-200:hover,
+.admin-bento .hover\:text-yellow-300:hover { color: #a16207; }
+.admin-bento .text-yellow-400 { color: #ca8a04; }
+.admin-bento .text-amber-50,
+.admin-bento .text-amber-100,
+.admin-bento .text-amber-200,
+.admin-bento .text-amber-300,
+.admin-bento .hover\:text-amber-100:hover,
+.admin-bento .hover\:text-amber-200:hover,
+.admin-bento .hover\:text-amber-300:hover { color: #b45309; }
+.admin-bento .text-amber-400 { color: #d97706; }
+.admin-bento .text-orange-50,
+.admin-bento .text-orange-100,
+.admin-bento .text-orange-200,
+.admin-bento .text-orange-300,
+.admin-bento .hover\:text-orange-100:hover,
+.admin-bento .hover\:text-orange-200:hover,
+.admin-bento .hover\:text-orange-300:hover { color: #c2410c; }
+.admin-bento .text-orange-400 { color: #ea580c; }
+
+
+/* …including their opacity forms (text-red-200/70). */
+.admin-bento :is([class^="text-red-100/"], [class*=" text-red-100/"]),.admin-bento :is([class^="text-red-200/"], [class*=" text-red-200/"]),.admin-bento :is([class^="text-red-300/"], [class*=" text-red-300/"]) { color: #b91c1c; }
+.admin-bento :is([class^="text-rose-100/"], [class*=" text-rose-100/"]),.admin-bento :is([class^="text-rose-200/"], [class*=" text-rose-200/"]),.admin-bento :is([class^="text-rose-300/"], [class*=" text-rose-300/"]) { color: #be123c; }
+.admin-bento :is([class^="text-emerald-100/"], [class*=" text-emerald-100/"]),.admin-bento :is([class^="text-emerald-200/"], [class*=" text-emerald-200/"]),.admin-bento :is([class^="text-emerald-300/"], [class*=" text-emerald-300/"]) { color: #047857; }
+.admin-bento :is([class^="text-green-100/"], [class*=" text-green-100/"]),.admin-bento :is([class^="text-green-200/"], [class*=" text-green-200/"]),.admin-bento :is([class^="text-green-300/"], [class*=" text-green-300/"]) { color: #15803d; }
+.admin-bento :is([class^="text-amber-100/"], [class*=" text-amber-100/"]),.admin-bento :is([class^="text-amber-200/"], [class*=" text-amber-200/"]),.admin-bento :is([class^="text-amber-300/"], [class*=" text-amber-300/"]) { color: #b45309; }
+.admin-bento :is([class^="text-yellow-100/"], [class*=" text-yellow-100/"]),.admin-bento :is([class^="text-yellow-200/"], [class*=" text-yellow-200/"]),.admin-bento :is([class^="text-yellow-300/"], [class*=" text-yellow-300/"]) { color: #a16207; }
+.admin-bento :is([class^="text-orange-100/"], [class*=" text-orange-100/"]),.admin-bento :is([class^="text-orange-200/"], [class*=" text-orange-200/"]),.admin-bento :is([class^="text-orange-300/"], [class*=" text-orange-300/"]) { color: #c2410c; }
+.admin-bento :is([class^="text-sky-100/"], [class*=" text-sky-100/"]),.admin-bento :is([class^="text-sky-200/"], [class*=" text-sky-200/"]),.admin-bento :is([class^="text-sky-300/"], [class*=" text-sky-300/"]) { color: #0369a1; }
+.admin-bento :is([class^="text-blue-100/"], [class*=" text-blue-100/"]),.admin-bento :is([class^="text-blue-200/"], [class*=" text-blue-200/"]),.admin-bento :is([class^="text-blue-300/"], [class*=" text-blue-300/"]) { color: #1d4ed8; }
+.admin-bento :is([class^="text-indigo-100/"], [class*=" text-indigo-100/"]),.admin-bento :is([class^="text-indigo-200/"], [class*=" text-indigo-200/"]),.admin-bento :is([class^="text-indigo-300/"], [class*=" text-indigo-300/"]) { color: #4338ca; }
+.admin-bento :is([class^="text-violet-100/"], [class*=" text-violet-100/"]),.admin-bento :is([class^="text-violet-200/"], [class*=" text-violet-200/"]),.admin-bento :is([class^="text-violet-300/"], [class*=" text-violet-300/"]) { color: #6d28d9; }
+.admin-bento :is([class^="text-purple-100/"], [class*=" text-purple-100/"]),.admin-bento :is([class^="text-purple-200/"], [class*=" text-purple-200/"]),.admin-bento :is([class^="text-purple-300/"], [class*=" text-purple-300/"]) { color: #7e22ce; }
+.admin-bento :is([class^="text-cyan-100/"], [class*=" text-cyan-100/"]),.admin-bento :is([class^="text-cyan-200/"], [class*=" text-cyan-200/"]),.admin-bento :is([class^="text-cyan-300/"], [class*=" text-cyan-300/"]) { color: #0e7490; }
+.admin-bento :is([class^="text-teal-100/"], [class*=" text-teal-100/"]),.admin-bento :is([class^="text-teal-200/"], [class*=" text-teal-200/"]),.admin-bento :is([class^="text-teal-300/"], [class*=" text-teal-300/"]) { color: #0f766e; }
+.admin-bento :is([class^="text-lime-100/"], [class*=" text-lime-100/"]),.admin-bento :is([class^="text-lime-200/"], [class*=" text-lime-200/"]),.admin-bento :is([class^="text-lime-300/"], [class*=" text-lime-300/"]) { color: #4d7c0f; }
+.admin-bento :is([class^="text-pink-100/"], [class*=" text-pink-100/"]),.admin-bento :is([class^="text-pink-200/"], [class*=" text-pink-200/"]),.admin-bento :is([class^="text-pink-300/"], [class*=" text-pink-300/"]) { color: #be185d; }
+.admin-bento :is([class^="text-fuchsia-100/"], [class*=" text-fuchsia-100/"]),.admin-bento :is([class^="text-fuchsia-200/"], [class*=" text-fuchsia-200/"]),.admin-bento :is([class^="text-fuchsia-300/"], [class*=" text-fuchsia-300/"]) { color: #a21caf; }
+
+/* Stat cards in a row take turns with the pastel tiles. */
+.admin-bento .grid > .stat-card { border: 0; }
+.admin-bento .grid > .stat-card:nth-child(4n+1) { background-color: var(--bento-lime); }
+.admin-bento .grid > .stat-card:nth-child(4n+2) { background-color: var(--bento-lavender); }
+.admin-bento .grid > .stat-card:nth-child(4n+3) { background-color: var(--bento-peach); }
+.admin-bento .grid > .stat-card:nth-child(4n+4) { background-color: var(--bento-sky); }
+.admin-bento .grid > .stat-card [class*="bg-"][class*="/"]:is(.rounded-xl) { background-color: rgba(255, 255, 255, 0.55); }
+.admin-bento .stat-card { border-radius: 1.75rem; }
+
 /* Animated gradient underline for the hero's "We think you should." */
 .cloud-underline::after {
   content: "";
