@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { AdminMark } from "@/components/AdminMark";
+import { useAdminTheme } from "@/hooks/useAdminTheme";
 
 /**
  * Bestly mark shown while a route chunk or the admin session loads — never a blank screen.
@@ -16,6 +17,8 @@ export function BrandLoader({
   fullScreen?: boolean;
   label?: string;
 }) {
+  const { bento } = useAdminTheme();
+  const lightAdmin = tone === "dark" && bento;
   return (
     <div
       role="status"
@@ -24,6 +27,8 @@ export function BrandLoader({
         "flex w-full items-center justify-center",
         fullScreen ? "min-h-dvh" : "min-h-[60vh]",
         fullScreen && (tone === "dark" ? "bg-black" : "bg-background"),
+        lightAdmin && "admin-bento",
+        lightAdmin && fullScreen && "bg-[#F3F2EE]",
       )}
     >
       {tone === "dark" ? (
