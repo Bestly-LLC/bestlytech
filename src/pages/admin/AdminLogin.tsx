@@ -10,6 +10,7 @@ import { AdminMark } from "@/components/AdminMark";
 import { BrandLoader } from "@/components/BrandLoader";
 import { useAdminFavicon } from "@/hooks/useAdminFavicon";
 import { AdminAccessDenied } from "@/components/admin/AdminAccessDenied";
+import { useAdminTheme } from "@/hooks/useAdminTheme";
 
 function bufferToBase64url(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -55,6 +56,7 @@ function speakWelcome(name: string) {
 }
 
 export default function AdminLogin() {
+  const { bento } = useAdminTheme();
   const { user, loading, isAdmin, roleError, checking, recheck, signIn, signOut } = useAdminAuth();
   useAdminFavicon();
   const [email, setEmail] = useState("");
@@ -256,12 +258,12 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black p-4">
+    <div className={`min-h-screen flex items-center justify-center p-4 ${bento ? "admin-shell admin-bento bg-[#F3F2EE]" : "bg-black"}`}>
       {/* Subtle radial glow */}
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.03)_0%,_transparent_70%)]" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.03)_0%,_transparent_70%)] bento:hidden" />
 
       <div
-        className="relative w-full max-w-[21.25rem] space-y-10"
+        className="relative w-full max-w-[21.25rem] space-y-10 bento:max-w-[26rem] bento:rounded-[2rem] bento:bg-[#fff] bento:px-10 bento:py-12 bento:shadow-[0_1px_2px_rgba(17,17,20,0.04),0_30px_60px_-30px_rgba(17,17,20,0.25)]"
         style={{
           animation: "apple-fade-in 1s cubic-bezier(0.16, 1, 0.3, 1) forwards",
           opacity: 0,
@@ -309,7 +311,7 @@ export default function AdminLogin() {
           <button
             type="button"
             onClick={() => setShowEmail(!showEmail)}
-            className="text-[0.75rem] text-white/20 hover:text-white/40 transition-colors duration-200 font-light"
+            className="text-[0.75rem] text-white/20 hover:text-white/40 transition-colors duration-200 font-light bento:text-white/55 bento:hover:text-white/80"
           >
             {showEmail ? "Hide" : "Sign in with email instead"}
           </button>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useAdminTheme, adminInk } from "@/hooks/useAdminTheme";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
@@ -51,6 +52,8 @@ const PLATFORM_META: Record<string, { label: string; icon: any }> = {
 };
 
 export default function CYProductAnalytics({ embedded = false }: { embedded?: boolean } = {}) {
+  const { bento } = useAdminTheme();
+  const ink = (a: number) => adminInk(bento, a);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -231,12 +234,12 @@ export default function CYProductAnalytics({ embedded = false }: { embedded?: bo
                         <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                    <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.6)", fontSize: "0.75rem" }} tickLine={false} axisLine={false} minTickGap={16} />
-                    <YAxis tick={{ fill: "rgba(255,255,255,0.6)", fontSize: "0.75rem" }} tickLine={false} axisLine={false} allowDecimals={false} domain={[0, maxDau]} width={32} />
+                    <CartesianGrid stroke={ink(0.06)} vertical={false} />
+                    <XAxis dataKey="day" tick={{ fill: ink(0.6), fontSize: "0.75rem" }} tickLine={false} axisLine={false} minTickGap={16} />
+                    <YAxis tick={{ fill: ink(0.6), fontSize: "0.75rem" }} tickLine={false} axisLine={false} allowDecimals={false} domain={[0, maxDau]} width={32} />
                     <RTooltip
-                      contentStyle={{ background: "#18181b", border: "0.0625rem solid #3f3f46", borderRadius: "0.75rem", color: "#fafafa", fontSize: "0.8125rem" }}
-                      labelStyle={{ color: "rgba(255,255,255,0.7)" }}
+                      contentStyle={{ background: bento ? "#fff" : "#18181b", border: bento ? "0.0625rem solid rgba(17,17,20,0.08)" : "0.0625rem solid #3f3f46", borderRadius: "0.75rem", color: bento ? "#111114" : "#fafafa", fontSize: "0.8125rem" }}
+                      labelStyle={{ color: ink(0.7) }}
                       formatter={(v: number) => [`${v} active`, "DAU"]}
                     />
                     <Area type="monotone" dataKey="dau" stroke="#38bdf8" strokeWidth={2} fill="url(#dauFill)" />

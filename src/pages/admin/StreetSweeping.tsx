@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAdminTheme, adminInk } from "@/hooks/useAdminTheme";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -52,6 +53,8 @@ const TONE: Record<Tone, string> = {
 };
 
 function StreetDiagram({ carSide, dangerSide }: { carSide: CurbSide | null; dangerSide: CurbSide | null }) {
+  const { bento } = useAdminTheme();
+  const ink = (a: number) => adminInk(bento, a);
   // Top-down view of N Kings Rd (north is up). The car snaps to whichever curb it's parked on:
   // far left = west curb (swept Mondays), far right = east curb (swept Tuesdays).
   const W = 240;
@@ -69,10 +72,10 @@ function StreetDiagram({ carSide, dangerSide }: { carSide: CurbSide | null; dang
     const hot = dangerSide === side;
     return (
       <g>
-        <text x={x} y={H / 2 - 4} textAnchor={anchor} fontSize="11" fontWeight={500} fill="rgba(255,255,255,0.75)">
+        <text x={x} y={H / 2 - 4} textAnchor={anchor} fontSize="11" fontWeight={500} fill={ink(0.75)}>
           {side === "west" ? "West" : "East"}
         </text>
-        <text x={x} y={H / 2 + 11} textAnchor={anchor} fontSize="10" fill={hot ? "#fca5a5" : "rgba(255,255,255,0.4)"}>
+        <text x={x} y={H / 2 + 11} textAnchor={anchor} fontSize="10" fill={hot ? "#fca5a5" : ink(0.4)}>
           {side === "west" ? "Mon" : "Tue"} 8–10
         </text>
       </g>
@@ -97,13 +100,13 @@ function StreetDiagram({ carSide, dangerSide }: { carSide: CurbSide | null; dang
         </clipPath>
       </defs>
       <g clipPath="url(#kings-road)">
-        <rect x={road.x} y={road.y} width={road.w} height={road.h} fill="rgba(255,255,255,0.05)" />
+        <rect x={road.x} y={road.y} width={road.w} height={road.h} fill={ink(0.05)} />
         <rect x={road.x} y={road.y} width={road.w / 2} height={road.h} fill={laneTint("west")} />
         <rect x={mid} y={road.y} width={road.w / 2} height={road.h} fill={laneTint("east")} />
       </g>
       {/* curbs */}
-      <line x1={road.x} y1={road.y} x2={road.x} y2={road.y + road.h} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeLinecap="round" />
-      <line x1={road.x + road.w} y1={road.y} x2={road.x + road.w} y2={road.y + road.h} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeLinecap="round" />
+      <line x1={road.x} y1={road.y} x2={road.x} y2={road.y + road.h} stroke={ink(0.35)} strokeWidth={2} strokeLinecap="round" />
+      <line x1={road.x + road.w} y1={road.y} x2={road.x + road.w} y2={road.y + road.h} stroke={ink(0.35)} strokeWidth={2} strokeLinecap="round" />
       {/* center line */}
       <line x1={mid} y1={road.y + 6} x2={mid} y2={road.y + road.h - 6} stroke="rgba(250,204,21,0.45)" strokeWidth={1.5} strokeDasharray="7 6" />
       {label("west")}
@@ -115,7 +118,7 @@ function StreetDiagram({ carSide, dangerSide }: { carSide: CurbSide | null; dang
           <rect x={carX + 3} y={carY + car.h - 11} width={car.w - 6} height={6} rx={2} fill="rgba(0,0,0,0.25)" />
         </g>
       ) : (
-        <text x={mid} y={H / 2 + 4} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.4)">Not on block</text>
+        <text x={mid} y={H / 2 + 4} textAnchor="middle" fontSize="10" fill={ink(0.4)}>Not on block</text>
       )}
     </svg>
   );

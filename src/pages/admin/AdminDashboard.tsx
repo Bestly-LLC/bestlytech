@@ -372,7 +372,10 @@ function StatusChip({ label, source, to, render }: {
   );
 }
 
-function WeekItem({ source, to, label, render }: {
+const WEEK_TONES = ["bento-lime", "bento-peach", "bento-lavender", "bento-sky"] as const;
+
+function WeekItem({ source, to, label, render, tone = "bento-lime" }: {
+  tone?: (typeof WEEK_TONES)[number];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   source: Source<any>;
   to: string;
@@ -381,22 +384,22 @@ function WeekItem({ source, to, label, render }: {
 }) {
   if (source.loading) {
     return (
-      <li className="flex items-baseline gap-2 py-1">
+      <li className="flex items-baseline gap-2 py-1 bento:rounded-[1.75rem] bento:bg-[#fff] bento:p-5 bento:min-h-[8.5rem]">
         <Skeleton className="h-7 w-8 bg-white/[0.06]" />
         <Skeleton className="h-4 w-36 bg-white/[0.04]" />
       </li>
     );
   }
   if (source.error) {
-    return <li className="py-1"><LoadError label={label} source={source} /></li>;
+    return <li className="py-1 bento:rounded-[1.75rem] bento:bg-[#fff] bento:p-5"><LoadError label={label} source={source} /></li>;
   }
   const { value, text, extra } = render();
   return (
-    <li>
-      <Link to={to} className={cn("group inline-flex items-baseline gap-2 rounded-md py-1 pr-1", focusRing)}>
-        <span className="text-2xl font-medium tabular-nums text-white">{value.toLocaleString()}</span>
-        <span className="text-sm text-white/70 group-hover:text-white transition-colors">{text}</span>
-        {extra && <span className="text-sm text-white/55">{extra}</span>}
+    <li className="bento:flex">
+      <Link to={to} className={cn("group inline-flex items-baseline gap-2 rounded-md py-1 pr-1 bento-tile bento:flex bento:w-full bento:flex-col bento:items-start bento:justify-between bento:gap-3 bento:p-5 bento:min-h-[8.5rem] bento:transition-transform bento:hover:-translate-y-0.5", tone, focusRing)}>
+        <span className="text-2xl font-medium tabular-nums text-white bento:order-2 bento:text-5xl bento:font-bold bento:tracking-[-0.04em] bento:leading-none">{value.toLocaleString()}</span>
+        <span className="text-sm text-white/70 group-hover:text-white transition-colors bento:order-1 bento:text-[0.8125rem] bento:font-semibold bento:uppercase bento:tracking-wide bento:text-white/80">{text}</span>
+        {extra && <span className="text-sm text-white/55 bento:order-3 bento:text-xs bento:text-white/70">{extra}</span>}
       </Link>
     </li>
   );
@@ -681,7 +684,7 @@ export default function AdminDashboard() {
         <SectionTitle id="week-title" aside={<p className="text-xs text-white/55">New = last 7 days</p>}>
           This week
         </SectionTitle>
-        <ul className="flex flex-col gap-y-1 sm:flex-row sm:flex-wrap sm:gap-x-8">
+        <ul className="flex flex-col gap-y-1 sm:flex-row sm:flex-wrap sm:gap-x-8 bento:grid bento:grid-cols-1 sm:bento:grid-cols-2 xl:bento:grid-cols-4 bento:gap-4 sm:bento:gap-4">
           <WeekItem
             source={deals}
             to="/admin/cloud"
@@ -703,18 +706,21 @@ export default function AdminDashboard() {
             source={newLeads}
             to="/admin/cloud"
             label="new leads"
+            tone="bento-peach"
             render={() => ({ value: newLeads.data ?? 0, text: plural(newLeads.data ?? 0, "new Cloud lead", "new Cloud leads") })}
           />
           <WeekItem
             source={paidSubs}
             to="/admin/cookie-yeti/subscribers"
             label="paid subscribers"
+            tone="bento-lavender"
             render={() => ({ value: paidSubs.data ?? 0, text: plural(paidSubs.data ?? 0, "paid Cookie Yeti subscriber", "paid Cookie Yeti subscribers") })}
           />
           <WeekItem
             source={waitlist}
             to="/admin/waitlist"
             label="waitlist signups"
+            tone="bento-sky"
             render={() => ({ value: waitlist.data ?? 0, text: plural(waitlist.data ?? 0, "new waitlist signup", "new waitlist signups") })}
           />
         </ul>

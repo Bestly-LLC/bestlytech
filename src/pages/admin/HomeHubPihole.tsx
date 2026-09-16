@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useAdminTheme, adminInk } from "@/hooks/useAdminTheme";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { ActionMenu } from "@/components/admin/ActionMenu";
@@ -108,6 +109,8 @@ function DomainList({ title, rows, search, onSearch, emptyLabel }: {
 }
 
 export default function HomeHubPihole() {
+  const { bento } = useAdminTheme();
+  const ink = (a: number) => adminInk(bento, a);
   const [stats, setStats] = useState<PiholeStats | null>(null);
   const [agent, setAgent] = useState<AgentState | null>(null);
   const [commands, setCommands] = useState<HomeHubCommand[]>([]);
@@ -344,11 +347,11 @@ export default function HomeHubPihole() {
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={hourlyChart}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "rgba(255,255,255,0.6)" }} tickLine={false} axisLine={false} interval={3} />
-                    <YAxis tick={{ fontSize: 11, fill: "rgba(255,255,255,0.6)" }} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={{ background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, fontSize: 12, color: "#fff" }} />
-                    <Legend wrapperStyle={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={ink(0.06)} />
+                    <XAxis dataKey="hour" tick={{ fontSize: 11, fill: ink(0.6) }} tickLine={false} axisLine={false} interval={3} />
+                    <YAxis tick={{ fontSize: 11, fill: ink(0.6) }} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={{ background: bento ? "#fff" : "#111", border: `1px solid ${ink(0.1)}`, borderRadius: 12, fontSize: 12, color: bento ? "#111114" : "#fff" }} />
+                    <Legend wrapperStyle={{ fontSize: 12, color: ink(0.7) }} />
                     <Line type="monotone" dataKey="permitted" stroke="#4ade80" strokeWidth={2} dot={false} name="Permitted" />
                     <Line type="monotone" dataKey="blocked" stroke="#f87171" strokeWidth={2} strokeDasharray="5 3" dot={false} name="Blocked" />
                   </LineChart>
