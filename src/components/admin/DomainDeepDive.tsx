@@ -508,7 +508,7 @@ export function DomainDeepDive({
                 {missedReport ? "This report is already resolved." : "No user has reported this domain."} AI runs only
                 work on open reports.{" "}
                 <Link
-                  to="/admin/cookie-yeti/community"
+                  to="/admin/cookie-yeti/analytics?tab=community"
                   className="inline-flex items-center gap-1 text-white/80 underline underline-offset-2 hover:text-white"
                   onClick={() => onOpenChange(false)}
                 >

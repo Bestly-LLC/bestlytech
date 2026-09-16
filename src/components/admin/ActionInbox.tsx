@@ -144,7 +144,7 @@ export function ActionInbox() {
         detail: sys.down_systems!.slice(0, 3).join(" · "),
         ageMs: sys.updated_at ? now - new Date(sys.updated_at).getTime() : 0,
         // check-system-health watches the Cookie Yeti AI generator and cron, which live on the CY ops page.
-        href: "/admin/cookie-yeti/ops",
+        href: "/admin/cookie-yeti/analytics?tab=operations",
       });
     }
 

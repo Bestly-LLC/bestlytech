@@ -14,11 +14,8 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/submissions": "Marketplace Intake",
   "/admin/settings": "Settings",
   "/admin/cookie-yeti": "CY Command Center",
-  "/admin/cookie-yeti/ops": "CY Operations",
-  "/admin/cookie-yeti/analytics": "Product Analytics",
-  "/admin/cookie-yeti/subscribers": "Subscribers",
-  "/admin/cookie-yeti/granted": "Granted Access",
-  "/admin/cookie-yeti/community": "Community Learning",
+  "/admin/cookie-yeti/subscribers": "CY Subscribers",
+  "/admin/cookie-yeti/analytics": "CY Analytics",
   "/admin/home-hub": "Home Hub",
   "/admin/home-hub/pihole": "Pi-hole",
   "/admin/street-sweeping": "Street Sweeping",
@@ -26,8 +23,6 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/hires": "Hire Requests",
   "/admin/waitlist": "Waitlist",
   "/admin/cloud": "Cloud Deals",
-  "/admin/cookie-yeti/domains": "All Domains",
-  "/admin/cookie-yeti/autofix": "Auto-Fix",
 };
 
 /** ui/sidebar.tsx saves the desktop open/collapsed state in this cookie; read it back on load. */

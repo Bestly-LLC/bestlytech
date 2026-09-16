@@ -4,9 +4,14 @@ interface PageHeaderProps {
   title: string;
   description?: string;
   actions?: ReactNode;
+  /** Inside a section tab (SectionTabs): drop the title block, keep the actions as a compact row. */
+  embedded?: boolean;
 }
 
-export function PageHeader({ title, description, actions }: PageHeaderProps) {
+export function PageHeader({ title, description, actions, embedded }: PageHeaderProps) {
+  if (embedded) {
+    return actions ? <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div> : null;
+  }
   return (
     <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4">
       <div>

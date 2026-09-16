@@ -5,17 +5,12 @@ import {
   BarChart3,
   Snowflake,
   Users,
-  ShieldCheck,
-  Brain,
-  Globe,
   Mail,
   Briefcase,
   ListChecks,
   Server,
   Shield,
   Cloud,
-  Activity,
-  Sparkles,
   Car,
   Mic,
 } from "lucide-react";
@@ -57,15 +52,12 @@ const workItems = [
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 
+// Three tabbed sections (tabs in ?tab=): Command Center = Overview/Auto-Fix/Domains,
+// Subscribers = Subscribers/Granted Access, Analytics = Product/Operations/Community Learning.
 const cookieYetiItems = [
   { title: "Command Center", url: "/admin/cookie-yeti", icon: Snowflake },
-  { title: "All Domains", url: "/admin/cookie-yeti/domains", icon: Globe },
   { title: "Subscribers", url: "/admin/cookie-yeti/subscribers", icon: Users, countKey: "cySubscribers" as CountKeys },
-  { title: "Granted Access", url: "/admin/cookie-yeti/granted", icon: ShieldCheck },
-  { title: "Operations", url: "/admin/cookie-yeti/ops", icon: Activity },
-  { title: "Auto-Fix", url: "/admin/cookie-yeti/autofix", icon: Sparkles },
-  { title: "Product Analytics", url: "/admin/cookie-yeti/analytics", icon: BarChart3 },
-  { title: "Community", url: "/admin/cookie-yeti/community", icon: Brain },
+  { title: "Analytics", url: "/admin/cookie-yeti/analytics", icon: BarChart3 },
 ];
 
 const homeHubItems = [
