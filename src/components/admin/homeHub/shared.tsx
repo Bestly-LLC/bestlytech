@@ -135,7 +135,7 @@ export function useCommand(onDone?: () => void) {
 
 export const AGENT_UPGRADE_PROMPT = `Upgrade the Bestly Home Hub agent on bestly-pi to ${SNAPSHOT_AGENT_VERSION}.
 1. In the bestlytech repo, pull main.
-2. scp -r scripts/home-hub-agent bestly-pi-lan:/tmp/ && ssh bestly-pi-lan 'sudo /tmp/home-hub-agent/install.sh'
+2. scp -r scripts/home-hub-agent bestly-pi-lan:/tmp/ && ssh bestly-pi-lan 'sudo bash /tmp/home-hub-agent/install.sh'
    (install.sh keeps the existing /etc/bestly/home-hub-agent.json and restarts the service.)
 3. Check journalctl -u bestly-home-hub-agent -n 30 shows "agent ${SNAPSHOT_AGENT_VERSION} starting" and "secret backup: ...".
 4. In Supabase project rcqfqhguwpmaarseifqg confirm home_hub_agent_state.version = '${SNAPSHOT_AGENT_VERSION}' and rows for homeassistant, homebridge and host in home_hub_snapshots within 5 minutes.

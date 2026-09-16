@@ -127,8 +127,8 @@ That keeps the web password out of the agent config entirely.
 ## Installing on the Pi
 
 ```bash
-scp -r scripts/home-hub-agent pi@192.168.1.211:/tmp/
-ssh pi@192.168.1.211 'sudo /tmp/home-hub-agent/install.sh'
+scp -r scripts/home-hub-agent bestly-pi-lan:/tmp/
+ssh bestly-pi-lan 'sudo bash /tmp/home-hub-agent/install.sh'
 ```
 
 The config at `/etc/bestly/home-hub-agent.json` needs `agent_key`. The Pi can fetch it
