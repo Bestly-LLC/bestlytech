@@ -5,7 +5,7 @@
 // on the LAN polls this function, executes locally, and posts the result back.
 // Nothing in the browser ever touches the LAN.
 //
-// Auth: shared secret in x-api-key (HOME_HUB_AGENT_KEY). Not the anon key.
+// Auth: shared secret in x-api-key, held in Vault. Not the anon key.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -19,6 +19,39 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+
+// The command contract (docs/home-hub-agent.md). Anything else is failed here and never reaches
+// the Pi. Each validator returns an error message, or null when the payload is fine.
+type Payload = Record<string, unknown>;
+const none = () => null;
+const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
+  pihole: {
+    enable: none,
+    disable: (p) => {
+      const s = p.seconds;
+      if (s === undefined || s === null) return null;
+      return typeof s === "number" && Number.isInteger(s) && s >= 0 && s <= 86_400
+        ? null
+        : "seconds must be a whole number from 0 to 86400";
+    },
+    update_gravity: none,
+  },
+  homebridge: { restart: none },
+  homeassistant: {
+    toggle_automation: (p) =>
+      typeof p.automation_id === "string" && p.automation_id && typeof p.enabled === "boolean"
+        ? null
+        : "toggle_automation needs automation_id (string) and enabled (boolean)",
+  },
+};
+
+function validate(c: { target: string; action: string; payload: unknown }): string | null {
+  const check = ALLOWED[c.target]?.[c.action];
+  if (!check) return `Not an allowed command: ${c.target}.${c.action}`;
+  const payload = c.payload ?? {};
+  if (typeof payload !== "object" || Array.isArray(payload)) return "payload must be an object";
+  return check(payload as Payload);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -80,7 +113,20 @@ Deno.serve(async (req) => {
     if (selErr) return json({ error: selErr.message }, 500);
     if (!pending?.length) return json({ commands: [] });
 
-    const ids = pending.map((c) => c.id);
+    // Refuse anything outside the contract before the agent ever sees it.
+    const valid: string[] = [];
+    for (const c of pending) {
+      const problem = validate(c);
+      if (!problem) { valid.push(c.id); continue; }
+      await supabase
+        .from("home_hub_commands")
+        .update({ status: "failed", error: `Rejected by the server: ${problem}`, completed_at: new Date().toISOString() })
+        .eq("id", c.id)
+        .eq("status", "pending");
+    }
+    if (!valid.length) return json({ commands: [] });
+
+    const ids = valid;
     const { data: claimed, error: claimErr } = await supabase
       .from("home_hub_commands")
       .update({ status: "running", claimed_at: new Date().toISOString() })
