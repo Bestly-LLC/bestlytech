@@ -59,6 +59,18 @@
       #boot-splash.is-admin .mark{width:112px;height:112px;animation:none}
       #boot-splash img{width:84px;height:84px}
       #boot-splash.is-admin img{width:112px;height:112px}
+      /* Admin side-eye mark (AdminMark.tsx + boot splash). One 3.2s glance: settle, look left, look right, blink. */
+      .am-st{fill:none;stroke:currentColor;stroke-width:5.5;stroke-linecap:round;stroke-linejoin:round}
+      .am-fl{fill:currentColor}
+      .am-look,.am-lidL,.am-lidR{transform-box:view-box;animation-duration:3.2s;animation-iteration-count:infinite;animation-delay:var(--am-delay,0ms)}
+      .am-look{animation-name:am-look;animation-timing-function:cubic-bezier(.45,1.5,.5,1)}
+      .am-lidL,.am-lidR{animation-name:am-lid;animation-timing-function:cubic-bezier(.4,1.35,.5,1)}
+      .am-lidL{transform-origin:19px 42px}.am-lidR{transform-origin:53px 42px}
+      @keyframes am-look{0%,8%{transform:translate(0,0)}14%{transform:translate(0,1.5px)}22%,42%{transform:translate(-5.4px,3px)}52%,72%{transform:translate(5.4px,3px)}82%,100%{transform:translate(0,0)}}
+      @keyframes am-lid{0%,6%{transform:translateY(-13px) rotate(0)}14%,18%{transform:translateY(-2.5px) rotate(0)}24%,42%{transform:translateY(-.8px) rotate(-9deg)}52%{transform:translateY(-2.5px) rotate(0)}58%,72%{transform:translateY(-.8px) rotate(9deg)}82%{transform:translateY(-15px) rotate(0)}87%{transform:translateY(-13px) rotate(0)}91%{transform:translateY(14px) rotate(0)}95%,100%{transform:translateY(-13px) rotate(0)}}
+      .am-still .am-look,.am-still .am-lidL,.am-still .am-lidR{animation:none}
+      .am-still .am-lidL,.am-still .am-lidR{transform:translateY(-13px)}
+      @media (prefers-reduced-motion:reduce){.am-look,.am-lidL,.am-lidR{animation:none}.am-lidL,.am-lidR{transform:translateY(-.8px) rotate(-9deg)}.am-look{transform:translate(-5.4px,3px)}}
       @keyframes boot-breathe{0%,100%{opacity:.55;transform:scale(.96)}50%{opacity:1;transform:scale(1)}}
       @media (prefers-reduced-motion:reduce){#boot-splash .mark{animation:none}}
     </style>
@@ -69,7 +81,18 @@
     <script>
       if (location.pathname.indexOf("/admin") === 0) {
         document.getElementById("boot-splash").className = "is-admin";
-        document.querySelector("#boot-splash img").src = "/admin-mark.svg";
+        // Inline the side-eye mark (no network wait, no flash of the marketing logo). Same markup
+        // and classes as AdminMark.tsx, so React's loaders pick up the glance mid-cycle.
+        document.querySelector("#boot-splash .mark").innerHTML =
+          '<svg viewBox="0 0 72 72" style="width:112px;height:112px;color:#fff" aria-hidden="true">' +
+          '<defs><mask id="bm" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72"><rect width="72" height="72" fill="#fff"/><circle cx="19" cy="44" r="10.3"/><circle cx="53" cy="44" r="10.3"/></mask>' +
+          '<clipPath id="bcl"><circle cx="19" cy="44" r="10.7"/></clipPath><clipPath id="bcr"><circle cx="53" cy="44" r="10.7"/></clipPath>' +
+          '<mask id="bpm" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72"><rect width="72" height="72" fill="#fff"/><g class="am-lidL"><rect x="0" y="10" width="40" height="34.8"/></g><g class="am-lidR"><rect x="32" y="10" width="40" height="34.8"/></g></mask></defs>' +
+          '<g mask="url(#bm)"><path class="am-st" d="M9 37L13.5 21Q14 18 17 18H21Q24 18 24.5 21L29 37M43 37L47.5 21Q48 18 51 18H55Q58 18 58.5 21L63 37"/><path class="am-st" d="M25.5 27H46.5M30 42H42"/></g>' +
+          '<circle class="am-st" cx="19" cy="44" r="13"/><circle class="am-st" cx="53" cy="44" r="13"/>' +
+          '<g mask="url(#bpm)"><g class="am-look"><circle class="am-fl" cx="19" cy="44" r="4.8"/><circle class="am-fl" cx="53" cy="44" r="4.8"/></g></g>' +
+          '<g clip-path="url(#bcl)"><g class="am-lidL"><rect class="am-fl" x="0" y="10" width="40" height="32"/></g></g>' +
+          '<g clip-path="url(#bcr)"><g class="am-lidR"><rect class="am-fl" x="32" y="10" width="40" height="32"/></g></g></svg>';
         document.querySelectorAll('link[rel="icon"],link[rel="apple-touch-icon"]').forEach(function (l) {
           l.setAttribute("data-site-href", l.getAttribute("href"));
           l.href = l.rel === "apple-touch-icon" ? "/admin-apple-touch-icon.png" : l.type === "image/x-icon" ? "/admin-favicon.ico" : "/admin-favicon-512.png";
