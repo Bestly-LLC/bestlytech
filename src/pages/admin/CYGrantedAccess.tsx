@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -57,8 +58,10 @@ async function revokeGrants(rows: Grant[]): Promise<{ revoked: number; error?: s
   return { revoked };
 }
 
-function friendlyInsertError(err: { code?: string; message: string }): string {
+function friendlyInsertError(err: { code?: string; message: string; hint?: string | null }): string {
   if (err.code === "23505") return "That email already has granted access.";
+  // Raised by the sync trigger when the email already pays through Stripe.
+  if (err.code === "P0001") return err.hint ? `${err.message} ${err.hint}` : err.message;
   if (err.code === "42P10") {
     return "The database trigger that syncs grants to subscriptions is broken (ON CONFLICT mismatch). Nothing was saved. A migration fix is pending.";
   }
@@ -69,7 +72,9 @@ export default function CYGrantedAccess() {
   const [data, setData] = useState<Grant[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  // Subscribers links here with ?q=<email> to revoke a comp row.
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Grant dialog
@@ -118,12 +123,30 @@ export default function CYGrantedAccess() {
       .from("granted_access")
       .insert({ email: clean, granted_by: "admin", reason: reason.trim() || null })
       .select("id");
-    setGranting(false);
     if (error || !inserted?.length) {
+      setGranting(false);
       toast.error("Couldn't grant access", { description: error ? friendlyInsertError(error) : "No row was created." });
       return;
     }
-    toast.success(`Premium access granted to ${clean}`);
+    // The grant row alone doesn't give premium; check-entitlement reads subscriptions.
+    // Confirm the trigger really left an active comp subscription for this email.
+    const { data: sub, error: subErr } = await supabase
+      .from("subscriptions")
+      .select("status, plan, stripe_customer_id")
+      .eq("email", clean)
+      .maybeSingle();
+    setGranting(false);
+    if (subErr) {
+      toast.warning(`Grant saved for ${clean}, but we couldn't confirm premium`, { description: `${subErr.message}. Check Subscribers.` });
+    } else if (!sub) {
+      toast.error(`Grant saved for ${clean}, but no subscription was created`, { description: "They won't get premium. Revoke the grant and try again, or check the database logs." });
+    } else if (sub.status !== "active") {
+      toast.error(`Grant saved for ${clean}, but their subscription is ${String(sub.status).replace(/_/g, " ")}`, { description: "They won't get premium. Check Subscribers." });
+    } else if (!sub.stripe_customer_id?.startsWith("granted_")) {
+      toast.info(`${clean} already has an active ${sub.plan} Stripe subscription`, { description: "The grant was saved; their paid subscription is unchanged." });
+    } else {
+      toast.success(`Premium access granted to ${clean}`, { description: "Active lifetime comp subscription confirmed." });
+    }
     setEmail("");
     setReason("");
     setGrantOpen(false);

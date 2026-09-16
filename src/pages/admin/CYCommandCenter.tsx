@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  Globe, Sparkles, AlertTriangle, Inbox, Activity, ChevronRight, RefreshCw, CheckCircle2, ArrowRight,
+  Globe, Sparkles, AlertTriangle, Inbox, Activity, ChevronRight, RefreshCw, CheckCircle2, ArrowRight, PanelRightOpen, RotateCcw,
 } from "lucide-react";
+import { ActionMenu } from "@/components/admin/ActionMenu";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { EmptyState } from "@/components/admin/EmptyState";
-import { DomainDeepDive, useCyLiveRefresh } from "@/components/admin/DomainDeepDive";
+import { DomainDeepDive, retryRenderForDomain, runAiForDomain, useCyLiveRefresh } from "@/components/admin/DomainDeepDive";
 
 // ── helpers ───────────────────────────────────────────────
 function relTime(iso?: string | null): string {
@@ -225,11 +226,11 @@ export default function CYCommandCenter() {
         ) : (
           <ul className="divide-y divide-white/[0.04]">
             {needs.slice(0, 8).map((r) => (
-              <li key={r.id}>
+              <li key={r.id} className="flex items-center pr-3">
                 <button
                   type="button"
                   onClick={() => openDomain(r.domain)}
-                  className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-white/[0.025] focus-visible:outline-none focus-visible:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/30 transition-colors group"
+                  className="min-w-0 flex-1 flex items-center gap-3 px-5 py-3 text-left hover:bg-white/[0.025] focus-visible:outline-none focus-visible:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/30 transition-colors group"
                 >
                   <span className="text-sm font-medium text-white truncate flex-1 group-hover:text-cyan-300 transition-colors">{r.domain}</span>
                   <span className="hidden sm:inline text-[0.6875rem] px-2 py-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-300 shrink-0">
@@ -239,6 +240,16 @@ export default function CYCommandCenter() {
                   <span className="hidden sm:inline text-xs text-white/55 shrink-0 w-20 text-right">{relTime(r.last_reported)}</span>
                   <ChevronRight className="h-4 w-4 text-white/30 group-hover:text-white/60 transition-colors shrink-0" aria-hidden="true" />
                 </button>
+                <ActionMenu
+                  label={`Actions for ${r.domain}`}
+                  items={[
+                    { label: "Open details", icon: PanelRightOpen, onSelect: () => openDomain(r.domain) },
+                    ...((r.render_attempts ?? 0) >= 3
+                      ? [{ label: "Retry render", icon: RotateCcw, onSelect: async () => { if (await retryRenderForDomain(r.domain)) loadData(); } }]
+                      : []),
+                    { label: "Re-run AI", icon: Sparkles, onSelect: async () => { if (await runAiForDomain(r.domain)) loadData(); } },
+                  ]}
+                />
               </li>
             ))}
           </ul>

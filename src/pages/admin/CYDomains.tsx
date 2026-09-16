@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/admin/EmptyState";
 import { ExportButton } from "@/components/admin/ExportButton";
 import { DomainDeepDive } from "@/components/admin/DomainDeepDive";
 import { cn } from "@/lib/utils";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 type DomainRow = {
   domain: string;
@@ -63,6 +64,7 @@ export default function CYDomains() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<DomainRow[]>([]);
+  const [truncated, setTruncated] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | keyof typeof STATUS>("all");
   const [sortKey, setSortKey] = useState<SortKey>("reports");
@@ -74,8 +76,11 @@ export default function CYDomains() {
 
   const fetchAll = useCallback(async () => {
     const [patternsRes, reportsRes] = await Promise.all([
-      supabase.from("cookie_patterns").select("domain, confidence, success_count, is_active").limit(10000),
-      supabase.from("missed_banner_reports").select("domain, report_count, resolved, last_reported").limit(10000),
+      // Paged: .limit(10000) was silently capped at 1,000 rows by PostgREST.
+      fetchAllRows<{ domain: string; confidence: number; success_count: number; is_active: boolean }>((from, to) =>
+        supabase.from("cookie_patterns").select("domain, confidence, success_count, is_active").order("id").range(from, to)),
+      fetchAllRows<{ domain: string; report_count: number; resolved: boolean; last_reported: string | null }>((from, to) =>
+        supabase.from("missed_banner_reports").select("domain, report_count, resolved, last_reported").order("id").range(from, to)),
     ]);
     const firstErr = patternsRes.error || reportsRes.error;
     if (firstErr) {
@@ -86,6 +91,7 @@ export default function CYDomains() {
       return;
     }
     setError(null);
+    setTruncated(patternsRes.truncated || reportsRes.truncated);
 
     const map = new Map<string, DomainRow>();
     const ensure = (domain: string): DomainRow => {
@@ -248,7 +254,7 @@ export default function CYDomains() {
             placeholder="Search domains"
             className="h-9 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
           />
-          <span className="text-xs text-white/55 shrink-0 tabular-nums">{filtered.length} domains</span>
+          <span className="text-xs text-white/55 shrink-0 tabular-nums">{filtered.length} domains{truncated ? " · first 50,000 rows only" : ""}</span>
         </div>
 
         {loading ? (

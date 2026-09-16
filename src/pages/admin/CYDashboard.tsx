@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,7 +12,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { SystemPulse } from "@/components/admin/SystemPulse";
 import { PipelineHealthRing } from "@/components/admin/PipelineHealthRing";
 import { PatternCoverageGrid } from "@/components/admin/PatternCoverageGrid";
-import { DomainDeepDive, isRealAiAttempt, useCyLiveRefresh } from "@/components/admin/DomainDeepDive";
+import { DomainDeepDive, useCyLiveRefresh } from "@/components/admin/DomainDeepDive";
+
+type OpsStats = {
+  ai_attempts: number;
+  ai_successes: number;
+  ai_breakdown: { status: string; count: number }[];
+  patterns_fixed: number;
+};
 
 /**
  * Operations — the pipeline engine room.
@@ -35,7 +42,7 @@ export default function CYDashboard() {
   const [fixCount, setFixCount] = useState(0);
   const [deviceCount, setDeviceCount] = useState(0);
   const [pushCount, setPushCount] = useState(0);
-  const [aiStatuses, setAiStatuses] = useState<string[]>([]);
+  const [aiStats, setAiStats] = useState<Pick<OpsStats, "ai_attempts" | "ai_successes" | "ai_breakdown">>({ ai_attempts: 0, ai_successes: 0, ai_breakdown: [] });
   const [domainCoverage, setDomainCoverage] = useState<any[]>([]);
 
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
@@ -51,15 +58,15 @@ export default function CYDashboard() {
       supabase.from("cookie_patterns").select("id", { count: "exact", head: true }),
       supabase.from("cookie_patterns").select("id", { count: "exact", head: true }).eq("is_active", true),
       supabase.from("dismissal_reports").select("id", { count: "exact", head: true }).gte("created_at", since),
-      // Real fixes only — the maintenance job writes a '_system' heartbeat row every run.
-      supabase.from("pattern_fix_log").select("id", { count: "exact", head: true }).eq("success", true).neq("domain", "_system").gte("created_at", since),
+      // AI attempts (one per domain per day, real AI outcomes only) and distinct patterns fixed,
+      // aggregated server-side: the raw log rows were capped at 1,000 and repeated every 3 hours.
+      supabase.rpc("cy_operations_stats" as any, { p_days: WINDOW_DAYS }),
       supabase.from("device_registrations").select("id", { count: "exact", head: true }),
       supabase.from("device_tokens").select("id", { count: "exact", head: true }),
-      supabase.from("ai_generation_log").select("status").gte("created_at", since).limit(5000),
-      supabase.rpc("get_top_domains" as any, { p_limit: 50 }),
+      supabase.rpc("get_top_domains" as any, { p_limit: 50, p_order: "reports" }),
       supabase.from("missed_banner_reports").select("id", { count: "exact", head: true }).eq("resolved", false),
     ]);
-    const [pAll, pActive, dCount, fixes, devices, push, aiLogs, topDomains, open] = results;
+    const [pAll, pActive, dCount, ops, devices, push, topDomains, open] = results;
 
     const firstErr = results.find((r) => r.error)?.error;
     setError(firstErr ? firstErr.message : null);
@@ -68,10 +75,13 @@ export default function CYDashboard() {
     if (!pAll.error) setPatternCount(pAll.count ?? 0);
     if (!pActive.error) setActivePatternCount(pActive.count ?? 0);
     if (!dCount.error) setDismissalCount(dCount.count ?? 0);
-    if (!fixes.error) setFixCount(fixes.count ?? 0);
+    if (!ops.error && ops.data) {
+      const o = ops.data as unknown as OpsStats;
+      setFixCount(Number(o.patterns_fixed) || 0);
+      setAiStats({ ai_attempts: Number(o.ai_attempts) || 0, ai_successes: Number(o.ai_successes) || 0, ai_breakdown: o.ai_breakdown ?? [] });
+    }
     if (!devices.error) setDeviceCount(devices.count ?? 0);
     if (!push.error) setPushCount(push.count ?? 0);
-    if (!aiLogs.error) setAiStatuses(((aiLogs.data as any[]) || []).map((l) => l.status || "unknown"));
     if (!topDomains.error) setDomainCoverage((topDomains.data as any[]) || []);
     if (!open.error) setOpenReports(open.count ?? 0);
     setLoading(false);
@@ -80,19 +90,9 @@ export default function CYDashboard() {
   useEffect(() => { loadData(); }, [loadData]);
   useCyLiveRefresh(["cookie_patterns", "missed_banner_reports"], loadData, 3000);
 
-  // Heartbeat / skip rows are bookkeeping, not attempts — counting them made the
-  // success rate and donut meaningless.
-  const { breakdown, attempts, successRate } = useMemo(() => {
-    const real = aiStatuses.filter(isRealAiAttempt);
-    const map = new Map<string, number>();
-    real.forEach((s) => map.set(s, (map.get(s) || 0) + 1));
-    const ok = real.filter((s) => s.startsWith("success")).length;
-    return {
-      breakdown: Array.from(map.entries()).map(([status, count]) => ({ status, count })).sort((a, b) => b.count - a.count),
-      attempts: real.length,
-      successRate: real.length ? (ok / real.length) * 100 : 0,
-    };
-  }, [aiStatuses]);
+  const breakdown = aiStats.ai_breakdown;
+  const attempts = aiStats.ai_attempts;
+  const successRate = attempts ? (aiStats.ai_successes / attempts) * 100 : 0;
 
   const [refreshing, setRefreshing] = useState(false);
   const refresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
@@ -161,8 +161,8 @@ export default function CYDashboard() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard label="Active patterns" value={activePatternCount} icon={Cookie} iconBg="bg-violet-500/10" iconColor="text-violet-400" subtitle={`${patternCount.toLocaleString()} total`} />
-          <StatCard label={`AI success · ${WINDOW_DAYS}d`} value={attempts ? `${successRate.toFixed(0)}%` : "—"} icon={Cpu} iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle={`${attempts.toLocaleString()} real attempts`} tooltip="Excludes heartbeat and already-covered rows the generator logs when it has nothing to do." />
-          <StatCard label={`Auto fixes · ${WINDOW_DAYS}d`} value={fixCount} icon={Zap} iconBg="bg-amber-500/10" iconColor="text-amber-400" subtitle="patterns repaired" />
+          <StatCard label={`AI success · ${WINDOW_DAYS}d`} value={attempts ? `${successRate.toFixed(0)}%` : "—"} icon={Cpu} iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle={`${attempts.toLocaleString()} domain-days attempted`} tooltip="Real AI generator outcomes only, counted once per domain per day. Excludes dismissal consensus, skips (including no HTML) and retry bookkeeping." />
+          <StatCard label={`Auto fixes · ${WINDOW_DAYS}d`} value={fixCount} icon={Zap} iconBg="bg-amber-500/10" iconColor="text-amber-400" subtitle="distinct patterns changed" tooltip="Distinct patterns the maintenance job changed (deactivated, deleted, confidence lowered) or reports it resolved. Repeat runs on the same pattern count once." />
           <StatCard label={`Dismissals · ${WINDOW_DAYS}d`} value={dismissalCount} icon={CheckCircle2} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle="banners users closed" />
           <StatCard label="Devices" value={deviceCount} icon={Smartphone} subtitle={`${pushCount.toLocaleString()} with push`} />
         </div>

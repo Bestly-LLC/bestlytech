@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -11,12 +11,13 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, Copy, Download, KeyRound, PanelRightOpen, RefreshCw, Search, Users, Webhook,
+  AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, Copy, Download, KeyRound, PanelRightOpen, RefreshCw, Search, ShieldCheck, Users, Webhook,
 } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { ActionMenu } from "@/components/admin/ActionMenu";
 import { downloadCsv } from "@/components/admin/ExportButton";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 const EXPORT_COLUMNS = [
   { key: "email", label: "Email" },
@@ -29,6 +30,7 @@ const EXPORT_COLUMNS = [
 ];
 
 const PAGE_SIZE = 20;
+const MAX_SUBSCRIBERS = 20000;
 
 /** Rows created by the granted_access trigger, not by Stripe. */
 const isComp = (r: { stripe_customer_id?: string | null }) => !!r.stripe_customer_id?.startsWith("granted_");
@@ -57,10 +59,16 @@ export default function CYSubscribers() {
   const [planFilter, setPlanFilter] = useState("all");
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<any>(null);
+  const [truncated, setTruncated] = useState(false);
+  const navigate = useNavigate();
 
   const loadAll = useCallback(async () => {
     const [subs, codes, hooks] = await Promise.all([
-      supabase.from("subscriptions").select("*").order("created_at", { ascending: false }),
+      // Paged: a plain select stops at 1,000 rows without saying so.
+      fetchAllRows<any>(
+        (from, to) => supabase.from("subscriptions").select("*").order("created_at", { ascending: false }).order("id").range(from, to),
+        { maxRows: MAX_SUBSCRIBERS },
+      ),
       supabase
         .from("activation_codes")
         .select("id, email, code, platform, active, activated_at, last_verified, expires_at, created_at")
@@ -73,7 +81,7 @@ export default function CYSubscribers() {
         .limit(50),
     ]);
     const errs: string[] = [];
-    if (subs.error) errs.push(`Subscriptions: ${subs.error.message}`); else setData(subs.data || []);
+    if (subs.error) errs.push(`Subscriptions: ${subs.error.message}`); else { setData(subs.data); setTruncated(subs.truncated); }
     if (codes.error) errs.push(`Activation codes: ${codes.error.message}`); else setActivationCodes(codes.data || []);
     if (hooks.error) errs.push(`Webhook log: ${hooks.error.message}`); else setWebhookEvents(hooks.data || []);
     setErrors(errs);
@@ -178,7 +186,7 @@ export default function CYSubscribers() {
               </SelectContent>
             </Select>
             {compCount > 0 && (
-              <p className="text-xs text-white/55 sm:ml-auto">{compCount} of {data.length} are comp rows from Granted Access</p>
+              <p className="text-xs text-white/55 sm:ml-auto">{compCount} of {data.length} are comp rows. Revoke them from Granted Access.</p>
             )}
           </div>
 
@@ -221,6 +229,9 @@ export default function CYSubscribers() {
                         items={[
                           { label: "View details", icon: PanelRightOpen, onSelect: () => setSelected(r) },
                           { label: "Copy email", icon: Copy, onSelect: () => copy(r.email, "Email") },
+                          ...(isComp(r)
+                            ? [{ group: "Comp access", label: "Manage or revoke in Granted Access", icon: ShieldCheck, onSelect: () => navigate(`/admin/cookie-yeti/granted?q=${encodeURIComponent(r.email)}`) }]
+                            : []),
                           ...(r.stripe_customer_id && !isComp(r)
                             ? [{ label: "Copy Stripe customer ID", icon: Copy, onSelect: () => copy(r.stripe_customer_id, "Customer ID") }]
                             : []),
@@ -244,6 +255,10 @@ export default function CYSubscribers() {
               </TableBody>
             </Table>
           </div>
+
+          {truncated && (
+            <p className="text-xs text-amber-300" role="status">Showing the newest {MAX_SUBSCRIBERS.toLocaleString()} subscriptions only. Export and counts cover those rows.</p>
+          )}
 
           {totalPages > 1 && (
             <nav className="flex items-center justify-center gap-3" aria-label="Pagination">
@@ -308,7 +323,16 @@ export default function CYSubscribers() {
           <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
             <p className="px-5 pt-4 pb-2 text-xs text-white/55">Latest 50 Stripe webhook events received.</p>
             {webhookEvents.length === 0 ? (
-              <EmptyState compact icon={Webhook} title="No webhook events yet" description="Stripe events appear here once a checkout or subscription change happens." />
+              <div role="alert" className="m-4 flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
+                <AlertTriangle className="h-5 w-5 text-amber-300 shrink-0 mt-0.5" aria-hidden="true" />
+                <div className="min-w-0 text-sm">
+                  <p className="font-medium text-amber-200">No Stripe events have ever been received. Check the webhook endpoint in Stripe.</p>
+                  <p className="text-amber-200/75 text-xs mt-0.5 break-words">
+                    The stripe-webhook function logs every event it accepts here, so checkouts, renewals and cancellations are not reaching it.
+                    Stripe should send to <code className="px-1 rounded bg-white/10">/functions/v1/stripe-webhook</code> on this Supabase project, signed with the same secret as <code className="px-1 rounded bg-white/10">STRIPE_WEBHOOK_SECRET</code>.
+                  </p>
+                </div>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>

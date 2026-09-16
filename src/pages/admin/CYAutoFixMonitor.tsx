@@ -8,10 +8,10 @@ import { StatCard } from "@/components/admin/StatCard";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { ActionMenu } from "@/components/admin/ActionMenu";
 import {
-  DomainDeepDive, markDomainResolved, runAiForDomain, useCyLiveRefresh,
+  DomainDeepDive, markDomainResolved, retryRenderForDomain, runAiForDomain, useCyLiveRefresh,
 } from "@/components/admin/DomainDeepDive";
 import {
-  Sparkles, AlertTriangle, CheckCircle2, Clock, RefreshCw, ShieldX, Globe, CheckCheck, ExternalLink, PanelRightOpen,
+  Sparkles, AlertTriangle, CheckCircle2, Clock, RefreshCw, ShieldX, Globe, CheckCheck, ExternalLink, PanelRightOpen, RotateCcw,
 } from "lucide-react";
 
 type Health = {
@@ -162,7 +162,7 @@ export default function CYAutoFixMonitor() {
           <div className="text-sm">
             <p className="font-medium text-amber-200">{needs} domain{needs === 1 ? "" : "s"} need a look</p>
             <p className="text-amber-200/75 text-xs mt-0.5">
-              These used up their automatic render and AI attempts. Everything else is still self-fixing.
+              These used up their automatic render or AI attempts. Use Retry render or Re-run AI from the row menu.
             </p>
           </div>
         </div>
@@ -269,6 +269,9 @@ export default function CYAutoFixMonitor() {
                         label={`Actions for ${r.domain}`}
                         items={[
                           { label: "Open details", icon: PanelRightOpen, onSelect: () => openDomain(r.domain) },
+                          ...((r.render_attempts ?? 0) >= 3
+                            ? [{ label: "Retry render", icon: RotateCcw, onSelect: async () => { if (await retryRenderForDomain(r.domain, renderConfigured)) loadData(); } }]
+                            : []),
                           { label: "Re-run AI", icon: Sparkles, onSelect: async () => { if (await runAiForDomain(r.domain)) loadData(); } },
                           { label: "Open site", icon: ExternalLink, onSelect: () => { window.open(`https://${r.domain}`, "_blank", "noopener,noreferrer"); } },
                           { group: "Resolve", label: "Mark resolved", icon: CheckCheck, onSelect: async () => { if (await markDomainResolved(r.domain)) loadData(); } },

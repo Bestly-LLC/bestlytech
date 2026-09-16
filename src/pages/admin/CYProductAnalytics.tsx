@@ -24,19 +24,24 @@ type Conversion = {
   installs: number; paywall_viewed: number; upgrade_started: number; upgrade_completed: number;
   install_to_pro_rate: number; paywall_to_pro_rate: number;
 };
+type EventActivity = { event: string; users: number; events_in_window: number; last_at: string | null };
 type PlatformRow = {
   platform: string; active_users: number; installs: number; activated: number;
   limit_hits: number; upgrades: number; dau: number;
 };
 
-const FUNNEL_STEPS: { key: keyof Funnel; label: string }[] = [
+// Real order a user goes through (checked against live counts: 52 installs, 39 enabled, 23 onboarded,
+// 2 first dismiss). daily_limit_hit is not a step everyone passes, so it isn't in the funnel.
+type FunnelKey = "install" | "extension_enabled" | "onboarding_complete" | "first_dismiss" | "upgrade_started" | "upgrade_completed";
+const FUNNEL_STEPS: { key: FunnelKey; label: string }[] = [
   { key: "install", label: "Install" },
-  { key: "onboarding_complete", label: "Onboarding complete" },
   { key: "extension_enabled", label: "Extension enabled" },
+  { key: "onboarding_complete", label: "Onboarding complete" },
   { key: "first_dismiss", label: "First dismiss (activation)" },
-  { key: "daily_limit_hit", label: "Daily limit hit" },
+  { key: "upgrade_started", label: "Upgrade started" },
   { key: "upgrade_completed", label: "Upgraded to Pro" },
 ];
+const ACTIVITY_DAYS = 30;
 
 const PLATFORM_META: Record<string, { label: string; icon: any }> = {
   ios: { label: "iOS", icon: Smartphone },
@@ -53,14 +58,16 @@ export default function CYProductAnalytics() {
   const [dau, setDau] = useState<DauPoint[]>([]);
   const [conversion, setConversion] = useState<Conversion | null>(null);
   const [platforms, setPlatforms] = useState<PlatformRow[]>([]);
+  const [activity, setActivity] = useState<Map<string, EventActivity> | null>(null);
 
   const loadData = useCallback(async () => {
     setError(null);
-    const [f, d, c, p] = await Promise.all([
+    const [f, d, c, p, a] = await Promise.all([
       supabase.rpc("cy_funnel" as any),
       supabase.rpc("cy_dau" as any, { days: 30 }),
       supabase.rpc("cy_conversion" as any),
       supabase.rpc("cy_platform_breakdown" as any),
+      supabase.rpc("cy_event_activity" as any, { p_days: ACTIVITY_DAYS }),
     ]);
 
     // Any RPC error → surface an explicit error state (never fake-green zeros).
@@ -74,6 +81,8 @@ export default function CYProductAnalytics() {
       setConversion((c.data as unknown as Conversion) ?? null);
       setPlatforms((p.data as unknown as PlatformRow[]) ?? []);
     }
+    // Optional: without it the funnel just can't flag events that stopped arriving.
+    if (!a.error) setActivity(new Map(((a.data as unknown as EventActivity[]) ?? []).map((e) => [e.event, e])));
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -96,6 +105,9 @@ export default function CYProductAnalytics() {
   const hasAnyData = (funnel?.install ?? 0) > 0 || totalEvents > 0 || platforms.length > 0;
   const refresh = () => { setRefreshing(true); loadData(); };
   const installBase = funnel?.install ?? 0;
+  const stepValue = (key: FunnelKey): number =>
+    key === "upgrade_started" ? conversion?.upgrade_started ?? 0 : funnel?.[key] ?? 0;
+  const notSent = (key: FunnelKey) => !!activity && !(activity.get(key)?.events_in_window);
   const maxDau = Math.max(1, ...dau.map((x) => x.dau));
 
   return (
@@ -164,18 +176,28 @@ export default function CYProductAnalytics() {
             <h2 className="text-sm font-medium text-white mb-4">Activation funnel</h2>
             <div className="space-y-2.5">
               {FUNNEL_STEPS.map((step, i) => {
-                const val = funnel?.[step.key] ?? 0;
-                const pctOfInstall = installBase > 0 ? Math.round((val / installBase) * 100) : 0;
-                const prev = i === 0 ? val : (funnel?.[FUNNEL_STEPS[i - 1].key] ?? 0);
-                const stepConv = prev > 0 ? Math.round((val / prev) * 100) : 0;
+                const val = stepValue(step.key);
+                const pctOfInstall = installBase > 0 ? Math.min(100, Math.round((val / installBase) * 100)) : 0;
+                const prev = i === 0 ? val : stepValue(FUNNEL_STEPS[i - 1].key);
+                // Events are sent independently, so a later step can outnumber the one before it.
+                // Never show a step conversion over 100%; fall back to % of installs only.
+                const stepConv = prev > 0 && val <= prev ? Math.round((val / prev) * 100) : null;
+                const stale = notSent(step.key);
                 return (
                   <div key={step.key}>
                     <div className="flex items-center justify-between text-sm mb-1">
-                      <span className="text-white/80">{step.label}</span>
+                      <span className="text-white/80">
+                        {step.label}
+                        {stale && (
+                          <span className="ml-2 inline-block rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[0.6875rem] text-amber-300 whitespace-nowrap">
+                            not being sent · none in {ACTIVITY_DAYS}d
+                          </span>
+                        )}
+                      </span>
                       <span className="text-white/60 tabular-nums text-xs sm:text-sm">
                         <span className="text-white/90">{val.toLocaleString()}</span>
                         <span> · {pctOfInstall}% of installs</span>
-                        {i > 0 && <span className="hidden sm:inline"> · {stepConv}% from previous step</span>}
+                        {i > 0 && stepConv !== null && <span className="hidden sm:inline"> · {stepConv}% from previous step</span>}
                       </span>
                     </div>
                     <div
