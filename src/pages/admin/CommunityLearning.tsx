@@ -168,7 +168,7 @@ function healthLabel(score: number) {
   return "Poor";
 }
 
-export default function CommunityLearning() {
+export default function CommunityLearning({ embedded = false }: { embedded?: boolean } = {}) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("pipeline");
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -620,7 +620,7 @@ export default function CommunityLearning() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div><Skeleton className="h-7 w-56" /><Skeleton className="h-4 w-80 mt-2" /></div>
+        {!embedded && <div><Skeleton className="h-7 w-56" /><Skeleton className="h-4 w-80 mt-2" /></div>}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
@@ -635,7 +635,7 @@ export default function CommunityLearning() {
   if (!overview) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Community Learning" />
+        <PageHeader embedded={embedded} title="Community Learning" />
         <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-500/30 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
           <span>Couldn't load community data{loadErrors.length ? `: ${loadErrors[0]}` : "."}</span>
           <Button size="sm" variant="outline" onClick={handleRefresh} disabled={refreshing}>
@@ -708,6 +708,7 @@ export default function CommunityLearning() {
   return (
     <div className="space-y-6">
       <PageHeader
+        embedded={embedded}
         title="Community Learning"
         description="Cookie Yeti patterns learned from user reports, AI and dismissal consensus"
         actions={

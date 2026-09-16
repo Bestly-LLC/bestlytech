@@ -50,7 +50,7 @@ const PLATFORM_META: Record<string, { label: string; icon: any }> = {
   safari: { label: "Safari", icon: Compass },
 };
 
-export default function CYProductAnalytics() {
+export default function CYProductAnalytics({ embedded = false }: { embedded?: boolean } = {}) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export default function CYProductAnalytics() {
   if (loading) {
     return (
       <div className="space-y-8 max-w-6xl">
-        <div><Skeleton className="h-9 w-56" /><Skeleton className="h-4 w-96 mt-3" /></div>
+        {!embedded && <div><Skeleton className="h-9 w-56" /><Skeleton className="h-4 w-96 mt-3" /></div>}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
         </div>
@@ -113,6 +113,7 @@ export default function CYProductAnalytics() {
   return (
     <div className="space-y-8 max-w-6xl">
       <PageHeader
+        embedded={embedded}
         title="Product Analytics"
         description="Privacy-first product funnel, activation, and Free→Pro conversion — anonymous aggregates only, no PII."
         actions={

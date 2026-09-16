@@ -46,7 +46,7 @@ async function copy(value: string, what: string) {
   }
 }
 
-export default function CYSubscribers() {
+export default function CYSubscribers({ embedded = false }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<any[]>([]);
   const [activationCodes, setActivationCodes] = useState<any[]>([]);
   const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
@@ -114,7 +114,7 @@ export default function CYSubscribers() {
   if (loading) {
     return (
       <div className="space-y-6 max-w-6xl" aria-busy="true">
-        <div><Skeleton className="h-9 w-40" /><Skeleton className="h-4 w-64 mt-3" /></div>
+        {!embedded && <div><Skeleton className="h-9 w-40" /><Skeleton className="h-4 w-64 mt-3" /></div>}
         <Skeleton className="h-10 w-96" />
         <Skeleton className="h-80 rounded-2xl" />
       </div>
@@ -124,12 +124,13 @@ export default function CYSubscribers() {
   return (
     <div className="space-y-6 max-w-6xl">
       <PageHeader
+        embedded={embedded}
         title="Subscribers"
         description="Cookie Yeti subscriptions, extension activations and the Stripe webhook log."
         actions={
           <>
             <Button asChild variant="outline" size="sm" className="h-9 gap-1.5 border-white/10 text-white/80 hover:text-white hover:bg-white/5">
-              <Link to="/admin/cookie-yeti/granted">Granted access <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" /></Link>
+              <Link to="/admin/cookie-yeti/subscribers?tab=granted">Granted access <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" /></Link>
             </Button>
             <ActionMenu
               label="More actions"
@@ -230,7 +231,7 @@ export default function CYSubscribers() {
                           { label: "View details", icon: PanelRightOpen, onSelect: () => setSelected(r) },
                           { label: "Copy email", icon: Copy, onSelect: () => copy(r.email, "Email") },
                           ...(isComp(r)
-                            ? [{ group: "Comp access", label: "Manage or revoke in Granted Access", icon: ShieldCheck, onSelect: () => navigate(`/admin/cookie-yeti/granted?q=${encodeURIComponent(r.email)}`) }]
+                            ? [{ group: "Comp access", label: "Manage or revoke in Granted Access", icon: ShieldCheck, onSelect: () => navigate(`/admin/cookie-yeti/subscribers?tab=granted&q=${encodeURIComponent(r.email)}`) }]
                             : []),
                           ...(r.stripe_customer_id && !isComp(r)
                             ? [{ label: "Copy Stripe customer ID", icon: Copy, onSelect: () => copy(r.stripe_customer_id, "Customer ID") }]
