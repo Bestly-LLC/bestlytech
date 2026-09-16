@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -26,16 +26,37 @@ export function useAdminAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  // Set when the role check itself failed (network, RPC error) and we have no earlier answer.
+  // It is not "you are not an admin"; the UI should offer Retry rather than Access Denied.
+  const [roleError, setRoleError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  // Last known answer for a user id, so a failed re-check (e.g. on token refresh) never
+  // flips a signed-in admin to Access Denied.
+  const known = useRef<{ userId: string; isAdmin: boolean } | null>(null);
 
   const checkAdmin = useCallback(async (userId: string) => {
+    if (known.current && known.current.userId !== userId) known.current = null;
+    setChecking(true);
     try {
-      const { data } = await supabase.rpc("has_role", {
+      const { data, error } = await supabase.rpc("has_role", {
         _user_id: userId,
         _role: "admin",
       });
+      if (error) throw error;
+      known.current = { userId, isAdmin: !!data };
       setIsAdmin(!!data);
-    } catch {
-      setIsAdmin(false);
+      setRoleError(null);
+    } catch (e) {
+      console.error("Admin role check failed", e);
+      if (known.current) {
+        // Keep the previous answer.
+        setIsAdmin(known.current.isAdmin);
+      } else {
+        setIsAdmin(false);
+        setRoleError(e instanceof Error ? e.message : (e as { message?: string })?.message || "Couldn't check admin access");
+      }
+    } finally {
+      setChecking(false);
     }
   }, []);
 
@@ -64,16 +85,20 @@ export function useAdminAuth() {
     // 2. Listen for subsequent auth changes (including OAuth completion)
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
+        // A token refresh doesn't change roles; don't re-check (and risk a transient failure).
+        if (event === "TOKEN_REFRESHED" && known.current?.userId === u.id) return;
         checkAdmin(u.id).finally(() => {
           if (mounted) setLoading(false);
         });
       } else {
+        known.current = null;
         setIsAdmin(false);
+        setRoleError(null);
         // Now safe to mark loading done — OAuth either failed or user signed out
         setLoading(false);
       }
@@ -106,5 +131,10 @@ export function useAdminAuth() {
     await supabase.auth.signOut();
   };
 
-  return { user, loading, isAdmin, signIn, signOut };
+  const recheck = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) await checkAdmin(session.user.id);
+  }, [checkAdmin]);
+
+  return { user, loading, isAdmin, roleError, checking, recheck, signIn, signOut };
 }
