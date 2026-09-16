@@ -14,7 +14,7 @@ import { CommandPalette, OPEN_ADMIN_PALETTE_EVENT } from "./CommandPalette";
 import { NotificationBell } from "./NotificationBell";
 
 const BREADCRUMB_MAP: Record<string, string> = {
-  "/admin": "Dashboard",
+  "/admin": "Command Center",
   "/admin/submissions": "Marketplace Intake",
   "/admin/settings": "Settings",
   "/admin/leads": "Leads",
@@ -27,6 +27,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/contacts": "Contacts",
   "/admin/hires": "Hire Requests",
   "/admin/waitlist": "Waitlist",
+  "/admin/meetings": "Meetings",
   "/admin/cloud": "Cloud Deals",
 };
 
