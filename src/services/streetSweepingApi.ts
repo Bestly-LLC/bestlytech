@@ -69,6 +69,44 @@ export const setSkipDates = (dates: string[]) =>
 export const acknowledgeToday = () => call<{ ok: boolean; confirmation_sent: boolean }>("admin_bluesteel_sweep_ack");
 export const sendTestAlert = () => call<number>("admin_bluesteel_sweep_test");
 
+/* ───────── where the car is (and whether we still believe it) ───────── */
+
+/** Checks run every 30 min on a sweep morning, so a reading older than this is history, not "now". */
+export const CAR_FRESH_MS = 2 * 60 * 60 * 1000;
+/** Old enough that "it might still be parked there" is worth a heads-up, but not a fact. */
+export const CAR_RECENT_MS = 18 * 60 * 60 * 1000;
+
+export type CarStatus =
+  | "on_sweep_curb"   // parked on the curb that gets swept next
+  | "on_safe_curb"    // parked on the other curb
+  | "off_street"      // the check found it, and it isn't on Kings Rd
+  | "stale"           // we have a reading, but it's too old to call it current
+  | "unknown";        // nothing has ever reported a position
+
+export interface CarPlacement {
+  status: CarStatus;
+  /** Curb from the last reading (null when the car wasn't on the street). */
+  side: CurbSide | null;
+  ageMs: number | null;
+  ranAt: string | null;
+  /** True while the reading is recent enough to act on. */
+  fresh: boolean;
+}
+
+export function carPlacement(
+  last: SweepState["last_location"] | null | undefined,
+  dangerSide: CurbSide | null,
+  now: number = Date.now(),
+): CarPlacement {
+  if (!last) return { status: "unknown", side: null, ageMs: null, ranAt: null, fresh: false };
+  const ageMs = now - new Date(last.ran_at).getTime();
+  const fresh = ageMs < CAR_FRESH_MS;
+  const base = { side: last.side ?? null, ageMs, ranAt: last.ran_at, fresh };
+  if (!fresh) return { ...base, status: "stale" };
+  if (!last.side || last.outcome === "not_on_street") return { ...base, side: null, status: "off_street" };
+  return { ...base, status: last.side === dangerSide ? "on_sweep_curb" : "on_safe_curb" };
+}
+
 /* ───────── schedule helpers (all in America/Los_Angeles) ───────── */
 
 export const LA_TZ = "America/Los_Angeles";
