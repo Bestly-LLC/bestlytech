@@ -11,7 +11,7 @@ import { pollInterval } from "@/lib/polling";
 import { fetchSystemHealth, failingSystems, healthHeadlineStatus, type SystemHealth } from "@/lib/systemHealth";
 import { fetchAgentState, fetchPiholeStats, isAgentOnline, STATS_STALE_MS } from "@/services/homeHubApi";
 import {
-  fetchSweepState, fmtDay, laNowMinutes, upcomingSweepDays, weekdayOf, LA_TZ, SWEEP_DAYS,
+  fetchSweepState, fmtDay, laNowMinutes, upcomingSweepDays, weekdayOf, LA_TZ, SWEEP_DAYS, carPlacement,
   type SweepState,
 } from "@/services/streetSweepingApi";
 
@@ -257,8 +257,12 @@ function sweepSummary(s: SweepState): { tone: Tone; word: string; need: Need | n
   const next = upcomingSweepDays(today, s.config.skip_dates, 6).find((d) => !d.skipped);
   if (!next) return { tone: "warn", word: "All sweeps skipped", need: null };
   const day = fmtDay(next.date, { weekday: "short" });
-  if (s.last_location?.side && s.last_location.side === next.side) {
-    return { tone: "warn", word: `Car on ${next.side} curb · ${day}`, need: null };
+  // Only warn from a reading recent enough to still be true; older than that it's history.
+  const place = carPlacement(s.last_location, next.side);
+  if (place.side && place.side === next.side) {
+    return place.fresh
+      ? { tone: "warn", word: `Car on ${next.side} curb · ${day}`, need: null }
+      : { tone: "ok", word: `Next ${day} · last seen ${next.side} curb`, need: null };
   }
   return { tone: "ok", word: `Next ${day} · alerts on`, need: null };
 }

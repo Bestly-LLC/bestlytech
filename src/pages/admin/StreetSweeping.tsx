@@ -6,13 +6,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Car, CalendarDays, BellRing, CheckCircle2, RefreshCw, Send, AlertTriangle, BellOff, Info } from "lucide-react";
+import { Car, CalendarDays, BellRing, CheckCircle2, RefreshCw, Send, AlertTriangle, BellOff, Info, Clock3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pollInterval } from "@/lib/polling";
 import {
   SweepState,
   SweepOutcome,
   CurbSide,
+  CarStatus,
+  carPlacement,
   fetchSweepState,
   setAlertsEnabled,
   setSkipDates,
@@ -52,77 +54,189 @@ const TONE: Record<Tone, string> = {
   neutral: "border-white/[0.06] bg-white/[0.03]",
 };
 
-function StreetDiagram({ carSide, dangerSide }: { carSide: CurbSide | null; dangerSide: CurbSide | null }) {
+/* ───────── the block, drawn ─────────
+ * Overhead view of N Kings Rd, north up. West curb is swept Mondays, east curb Tuesdays.
+ * Four states, and none of them is ever told by colour alone — the caption under the drawing
+ * says the same thing in words:
+ *   on_sweep_curb  car sits in the hatched lane that gets swept next
+ *   on_safe_curb   car sits in the other lane
+ *   off_street     the block is drawn empty and the car sits outside it
+ *   stale/unknown  no claim about now: a ghost car where it was last seen, or an empty slot
+ */
+function CarGlyph({ x, y, tone, paper, ghost }: { x: number; y: number; tone: string; paper: string; ghost?: boolean }) {
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <rect x={0} y={0} width={28} height={56} rx={9}
+        fill={ghost ? paper : tone}
+        stroke={ghost ? tone : "none"}
+        strokeWidth={ghost ? 2 : 0}
+        strokeDasharray={ghost ? "5 4" : undefined}
+        opacity={ghost ? 0.9 : 1} />
+      {!ghost && (
+        <>
+          <rect x={5} y={8} width={18} height={12} rx={4} fill="rgba(255,255,255,0.78)" />
+          <rect x={5} y={36} width={18} height={10} rx={4} fill="rgba(255,255,255,0.58)" />
+        </>
+      )}
+      {ghost && <text x={14} y={34} textAnchor="middle" fontSize="13" fill={tone}>?</text>}
+    </g>
+  );
+}
+
+function StreetDiagram({
+  status,
+  side,
+  dangerSide,
+}: {
+  status: CarStatus;
+  side: CurbSide | null;
+  dangerSide: CurbSide | null;
+}) {
   const { bento } = useAdminTheme();
   const ink = (a: number) => adminInk(bento, a);
-  // Top-down view of N Kings Rd (north is up). The car snaps to whichever curb it's parked on:
-  // far left = west curb (swept Mondays), far right = east curb (swept Tuesdays).
-  const W = 240;
-  const H = 108;
-  const road = { x: 60, y: 6, w: 120, h: 96 };
-  const mid = road.x + road.w / 2;
-  const car = { w: 20, h: 38 };
-  const carX = carSide === "west" ? road.x + 5 : carSide === "east" ? road.x + road.w - 5 - car.w : null;
-  const carY = road.y + (road.h - car.h) / 2;
-  const danger = carSide !== null && carSide === dangerSide;
-  const laneTint = (side: CurbSide) => (dangerSide === side ? "rgba(248,113,113,0.14)" : "transparent");
-  const label = (side: CurbSide) => {
-    const x = side === "west" ? road.x - 10 : road.x + road.w + 10;
-    const anchor = side === "west" ? "end" : "start";
-    const hot = dangerSide === side;
-    return (
-      <g>
-        <text x={x} y={H / 2 - 4} textAnchor={anchor} fontSize="11" fontWeight={500} fill={ink(0.75)}>
-          {side === "west" ? "West" : "East"}
-        </text>
-        <text x={x} y={H / 2 + 11} textAnchor={anchor} fontSize="10" fill={hot ? "#fca5a5" : ink(0.4)}>
-          {side === "west" ? "Mon" : "Tue"} 8–10
-        </text>
-      </g>
-    );
-  };
+  const W = 340;
+  const H = 186;
+  const road = { x: 34, y: 8, w: 200, h: 130 };
+  const laneW = 46;
+  const elsewhere = { x: 262, y: 8, w: 66, h: 130 };
+  const laneX = (s: CurbSide) => (s === "west" ? road.x + 6 : road.x + road.w - 6 - laneW);
+  const carX = (s: CurbSide) => laneX(s) + (laneW - 28) / 2;
+  const carY = road.y + (road.h - 56) / 2;
+
+  const sweepFill = bento ? "#FFE3D3" : "rgba(248,113,113,0.12)";
+  const safeFill = bento ? "#ECF8D2" : "rgba(74,222,128,0.09)";
+  const hatch = bento ? "rgba(178,58,22,0.22)" : "rgba(248,113,113,0.3)";
+  const carDanger = bento ? "#D93A1E" : "#f87171";
+  const carSafe = bento ? "#111114" : "#c7d2fe";
+  const paper = bento ? "#FFFFFF" : "#0b0b0d";
+
+  const onStreet = status === "on_sweep_curb" || status === "on_safe_curb";
+  const ghostOnStreet = status === "stale" && !!side;
+  const carTone = status === "on_sweep_curb" ? carDanger : carSafe;
+  const emptyBlock = status === "unknown" || (status === "stale" && !side);
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="w-full max-w-[18.75rem] h-auto mx-auto block"
-      role="img"
-      aria-label={
-        carSide
-          ? `Blue Steel is parked on the ${carSide} curb of North Kings Road${danger ? ", the next side to be swept" : ""}`
-          : "Blue Steel isn't parked on this block"
-      }
-    >
-      {/* road + lane tints, clipped to one rounded shape so the lanes meet cleanly at the center line */}
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[21rem] h-auto mx-auto block" role="img" aria-label={DIAGRAM_ALT[status](side)}>
       <defs>
+        {/* Hatching, not just colour, marks the curb that gets swept next. */}
+        <pattern id="sweep-hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="10" stroke={hatch} strokeWidth="2.5" />
+        </pattern>
         <clipPath id="kings-road">
-          <rect x={road.x} y={road.y} width={road.w} height={road.h} rx={6} />
+          <rect x={road.x} y={road.y} width={road.w} height={road.h} rx={12} />
         </clipPath>
       </defs>
+
+      {/* sidewalks */}
+      <rect x={8} y={road.y} width={20} height={road.h} rx={7} fill={ink(0.05)} />
+      <rect x={road.x + road.w + 6} y={road.y} width={20} height={road.h} rx={7} fill={ink(0.05)} />
+
+      {/* the block */}
       <g clipPath="url(#kings-road)">
         <rect x={road.x} y={road.y} width={road.w} height={road.h} fill={ink(0.05)} />
-        <rect x={road.x} y={road.y} width={road.w / 2} height={road.h} fill={laneTint("west")} />
-        <rect x={mid} y={road.y} width={road.w / 2} height={road.h} fill={laneTint("east")} />
+        {(["west", "east"] as CurbSide[]).map((s) => (
+          <g key={s}>
+            <rect x={laneX(s)} y={road.y} width={laneW} height={road.h} fill={dangerSide === s ? sweepFill : safeFill} />
+            {dangerSide === s && <rect x={laneX(s)} y={road.y} width={laneW} height={road.h} fill="url(#sweep-hatch)" />}
+          </g>
+        ))}
       </g>
-      {/* curbs */}
-      <line x1={road.x} y1={road.y} x2={road.x} y2={road.y + road.h} stroke={ink(0.35)} strokeWidth={2} strokeLinecap="round" />
-      <line x1={road.x + road.w} y1={road.y} x2={road.x + road.w} y2={road.y + road.h} stroke={ink(0.35)} strokeWidth={2} strokeLinecap="round" />
-      {/* center line */}
-      <line x1={mid} y1={road.y + 6} x2={mid} y2={road.y + road.h - 6} stroke="rgba(250,204,21,0.45)" strokeWidth={1.5} strokeDasharray="7 6" />
-      {label("west")}
-      {label("east")}
-      {carX !== null ? (
-        <g>
-          <rect x={carX} y={carY} width={car.w} height={car.h} rx={6} fill={danger ? "#f87171" : "#818cf8"} />
-          <rect x={carX + 3} y={carY + 6} width={car.w - 6} height={8} rx={2} fill="rgba(0,0,0,0.35)" />
-          <rect x={carX + 3} y={carY + car.h - 11} width={car.w - 6} height={6} rx={2} fill="rgba(0,0,0,0.25)" />
-        </g>
-      ) : (
-        <text x={mid} y={H / 2 + 4} textAnchor="middle" fontSize="10" fill={ink(0.4)}>Not on block</text>
+      <rect x={road.x} y={road.y} width={road.w} height={road.h} rx={12} fill="none" stroke={ink(0.13)} strokeWidth={1.5} />
+      <line
+        x1={road.x + road.w / 2} y1={road.y + 12} x2={road.x + road.w / 2} y2={road.y + road.h - 12}
+        stroke={bento ? "rgba(202,138,4,0.5)" : "rgba(250,204,21,0.4)"} strokeWidth={2} strokeDasharray="9 8" strokeLinecap="round"
+      />
+
+      {/* off-block bay: only drawn when that's where the car is */}
+      {status === "off_street" && (
+        <>
+          <rect x={elsewhere.x} y={elsewhere.y} width={elsewhere.w} height={elsewhere.h} rx={12}
+            fill="none" stroke={ink(0.18)} strokeWidth={1.5} strokeDasharray="6 6" />
+          <CarGlyph x={elsewhere.x + (elsewhere.w - 28) / 2} y={carY} tone={carSafe} paper={paper} />
+          <text x={elsewhere.x + elsewhere.w / 2} y={elsewhere.y + elsewhere.h + 16} textAnchor="middle" fontSize="10.5" fontWeight={600} fill={ink(0.6)}>
+            Elsewhere
+          </text>
+        </>
       )}
+
+      {/* the car */}
+      {(onStreet || ghostOnStreet) && side && (
+        <CarGlyph x={carX(side)} y={carY} tone={carTone} paper={paper} ghost={!onStreet} />
+      )}
+      {emptyBlock && (
+        <g>
+          <rect x={road.x + road.w / 2 - 44} y={road.y + road.h / 2 - 13} width={88} height={26} rx={13} fill={paper} stroke={ink(0.12)} />
+          <text x={road.x + road.w / 2} y={road.y + road.h / 2 + 4} textAnchor="middle" fontSize="11.5" fill={ink(0.5)}>
+            no reading
+          </text>
+        </g>
+      )}
+
+      {/* curb labels */}
+      {(["west", "east"] as CurbSide[]).map((s) => {
+        const hot = dangerSide === s;
+        return (
+          <g key={s}>
+            <text x={laneX(s) + laneW / 2} y={road.y + road.h + 16} textAnchor="middle" fontSize="11" fontWeight={600} fill={ink(0.75)}>
+              {s === "west" ? "West" : "East"}
+            </text>
+            <text x={laneX(s) + laneW / 2} y={road.y + road.h + 29} textAnchor="middle" fontSize="10"
+              fill={hot ? (bento ? "#B23A16" : "#fca5a5") : ink(0.42)}>
+              {hot ? "swept next" : s === "west" ? "Mon 8–10" : "Tue 8–10"}
+            </text>
+          </g>
+        );
+      })}
+      <text x={road.x + road.w / 2} y={H - 6} textAnchor="middle" fontSize="9.5" fontWeight={600} fill={ink(0.38)} letterSpacing="0.08em">
+        N KINGS RD
+      </text>
     </svg>
   );
 }
+
+const CAR_VALUE: Record<CarStatus, (side: CurbSide | null) => string> = {
+  on_sweep_curb: (side) => `${cap(side ?? "")} curb`,
+  on_safe_curb: (side) => `${cap(side ?? "")} curb`,
+  off_street: () => "Off Kings Rd",
+  stale: () => "Not checked",
+  unknown: () => "Unknown",
+};
+
+const PLACEMENT_HEADLINE: Record<CarStatus, (side: CurbSide | null) => string> = {
+  on_sweep_curb: (side) => `On the ${side} curb — the side swept next`,
+  on_safe_curb: (side) => `On the ${side} curb — the safe side`,
+  off_street: () => "Not parked on Kings Rd",
+  stale: (side) => (side ? `Last seen on the ${side} curb` : "Position is out of date"),
+  unknown: () => "Never checked",
+};
+
+const PLACEMENT_TEXT: Record<CarStatus, string> = {
+  on_sweep_curb: "text-red-300",
+  on_safe_curb: "text-emerald-300",
+  off_street: "text-white/80",
+  stale: "text-white/70",
+  unknown: "text-white/70",
+};
+
+const PLACEMENT_DETAIL: Record<CarStatus, (side: CurbSide | null, danger: CurbSide | null, ranAt: string | null) => string> = {
+  on_sweep_curb: () => "Move it before 8am or it's a $75 ticket.",
+  on_safe_curb: (_s, danger) => (danger ? `The ${danger} curb is the one being swept.` : "Nothing to do."),
+  off_street: () => "The last check found it away from the block, so no alert is coming.",
+  stale: (side, _d, ranAt) => side
+    ? `Checks only run Monday and Tuesday mornings, so this is where it sat on ${ranAt ? fmtLA(ranAt, { weekday: "long", month: "short", day: "numeric" }) : "the last check"} — not where it is now.`
+    : "The car is only read during a sweeping check. Nothing recent to show.",
+  unknown: () => "The first check will fill this in on the next sweep morning.",
+};
+
+const DIAGRAM_ALT: Record<CarStatus, (side: CurbSide | null) => string> = {
+  on_sweep_curb: (side) => `Blue Steel is parked on the ${side} curb of North Kings Road, the side being swept next`,
+  on_safe_curb: (side) => `Blue Steel is parked on the ${side} curb of North Kings Road, the side that isn't swept next`,
+  off_street: () => "Blue Steel isn't parked on North Kings Road",
+  stale: (side) => side
+    ? `Blue Steel was last seen on the ${side} curb of North Kings Road; there has been no check since`
+    : "No recent reading of where Blue Steel is parked",
+  unknown: () => "No reading of where Blue Steel is parked yet",
+};
 
 export default function StreetSweeping() {
   const [state, setState] = useState<SweepState | null>(null);
@@ -233,7 +347,7 @@ export default function StreetSweeping() {
       headline = `${cap(todaySide!)} curb is swept today, 8–10am`;
       detail = nowMin < 415 ? "First check at 6:55am." : "Waiting on the next check.";
     } else if (next) {
-      const carOnNextSide = car?.side && car.side === next.side;
+      const carOnNextSide = !!car?.side && car.side === next.side;
       tone = carOnNextSide ? "warn" : "neutral";
       headline = `Next sweep ${fmtDay(next.date, { weekday: "long", month: "short", day: "numeric" })}: ${next.side} curb`;
       detail = carOnNextSide
@@ -245,7 +359,9 @@ export default function StreetSweeping() {
     }
 
     const dangerSide: CurbSide | null = inWindowToday ? todaySide : next?.side ?? null;
-    return { today, todaySide, days, next, car, tone, headline, detail, dangerSide, inWindowToday };
+    // Where the car is — and whether the reading is recent enough to say "is" instead of "was".
+    const placement = carPlacement(car, dangerSide);
+    return { today, todaySide, days, next, car, tone, headline, detail, dangerSide, inWindowToday, placement };
   }, [state]);
 
   const toggleSkip = (date: string) => {
@@ -325,10 +441,14 @@ export default function StreetSweeping() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               label="Car"
-              value={derived.car?.side ? `${cap(derived.car.side)} curb` : derived.car ? "Off Kings" : "Unknown"}
-              subtitle={derived.car ? `seen ${ago(derived.car.ran_at)}` : "no reading yet"}
+              value={CAR_VALUE[derived.placement.status](derived.placement.side)}
+              subtitle={derived.placement.ranAt
+                ? derived.placement.status === "stale"
+                  ? `${derived.placement.side ? `${derived.placement.side} curb ` : ""}${ago(derived.placement.ranAt)}, no check since`
+                  : `checked ${ago(derived.placement.ranAt)}`
+                : "no reading yet"}
               icon={Car}
-              tooltip="Last reading from a sweeping check. The car isn't polled between checks."
+              tooltip="The car is only read during a sweeping check (every 30 min, Mon and Tue mornings). Between checks this is history, not live."
             />
             <StatCard
               label="Next sweep"
@@ -362,16 +482,41 @@ export default function StreetSweeping() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Street */}
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-white">Where it's parked</h3>
-                {derived.car && (
-                  <span className="text-xs text-white/50">{fmtLA(derived.car.ran_at)}</span>
-                )}
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-white">Where it's parked</h3>
+                  <p className={cn("text-[0.9375rem] font-medium mt-0.5", PLACEMENT_TEXT[derived.placement.status])}>
+                    {PLACEMENT_HEADLINE[derived.placement.status](derived.placement.side)}
+                  </p>
+                </div>
+                <span className={cn(
+                  "shrink-0 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.6875rem]",
+                  derived.placement.fresh
+                    ? "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-300"
+                    : "border-white/10 bg-white/[0.05] text-white/60",
+                )}>
+                  {derived.placement.fresh ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : <Clock3 className="h-3 w-3" aria-hidden />}
+                  {derived.placement.ranAt ? (derived.placement.fresh ? "Current" : `Last check ${ago(derived.placement.ranAt)}`) : "Never checked"}
+                </span>
               </div>
-              <StreetDiagram carSide={derived.car?.side ?? null} dangerSide={derived.dangerSide} />
-              <p className="text-xs text-white/55 mt-3 text-center">
-                Red = next curb swept. {derived.car?.side ? `Parked on the ${derived.car.side} curb.` : ""}
+              <StreetDiagram status={derived.placement.status} side={derived.placement.side} dangerSide={derived.dangerSide} />
+              <p className="text-xs text-white/55 mt-2 text-center">
+                {PLACEMENT_DETAIL[derived.placement.status](derived.placement.side, derived.dangerSide, derived.placement.ranAt)}
               </p>
+              <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[0.6875rem] text-white/55">
+                <li className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-[3px] bg-red-400/70 border border-red-400/40" aria-hidden />
+                  Hatched = swept next{derived.dangerSide ? ` (${derived.dangerSide})` : ""}
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-400/50 border border-emerald-400/30" aria-hidden />
+                  Safe curb
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-3.5 rounded-[3px] bg-white/70" aria-hidden />
+                  Blue Steel
+                </li>
+              </ul>
             </div>
 
             {/* Skip days */}
