@@ -6,7 +6,9 @@
 /e2e
 /nextcloud-talk-transcripts
 /cloudflare-workers
-/docs
+/docs/*
+# The release prompt is imported by the admin (CYReleaseTracker), so the build needs it.
+!/docs/cookie-yeti-extension
 /supabase
 /*.command
 /*.timestamp-*.mjs
