@@ -12,6 +12,7 @@ import { useDeployRefresh } from "@/hooks/useDeployRefresh";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CommandPalette, OPEN_ADMIN_PALETTE_EVENT } from "./CommandPalette";
 import { NotificationBell } from "./NotificationBell";
+import { Scout } from "./Scout";
 
 const BREADCRUMB_MAP: Record<string, string> = {
   "/admin": "Command Center",
@@ -160,6 +161,7 @@ export function AdminLayout() {
               <Outlet />
             </main>
             <CommandPalette />
+            <Scout />
           </div>
         </div>
       </SidebarProvider>
