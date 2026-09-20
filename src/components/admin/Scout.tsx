@@ -19,7 +19,7 @@ import {
  *
  * The thinking happens in the admin-chat edge function: it holds the tools
  * (the queue, read-only SQL, repo read and commit, jobs for the Mac agent),
- * checks the admin role against the caller''s own JWT, and writes every tool run
+ * checks the admin role against the caller's own JWT, and writes every tool run
  * to admin_chat_actions. This component is the window, not the brain.
  *
  * Colours: `white` and `black` are variable-backed in this repo (tailwind.config
@@ -213,7 +213,7 @@ export function Scout() {
 
       const id = (data as { thread_id?: string })?.thread_id ?? threadId;
       if (error) {
-        setMsgs((m) => [...m, { role: "assistant", body: `I couldn''t reach the server: ${error.message}` }]);
+        setMsgs((m) => [...m, { role: "assistant", body: `I couldn't reach the server: ${error.message}` }]);
       } else if (id) {
         setThreadId(id);
         await loadThread(id);
