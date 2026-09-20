@@ -3,20 +3,50 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AlertTriangle,
-  Mail,
-  Briefcase,
-  FileText,
   AlertCircle,
-  MailX,
+  Activity,
+  Bell,
+  Clapperboard,
+  Cookie,
+  Mail,
+  MessageSquare,
+  Package,
+  Home,
+  ShieldCheck,
   Sparkles,
   ChevronRight,
   RefreshCw,
+  Check,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+/**
+ * Everything waiting on the operator, from one server-side rule set.
+ *
+ * This used to fan out six queries from the browser and only knew about contacts,
+ * hire requests, intakes, missed banners and failed emails - so Cookie Yeti releases,
+ * Studio previews, client asks, a stalled mail runner and low stock never showed up
+ * here at all. public.admin_today() now owns the rules: it returns only rows a human
+ * has to act on, collapses backlogs into a single card, and ranks them. Adding a
+ * source is a change to that function, not to this component.
+ */
+
 type Severity = "critical" | "urgent" | "stale" | "info";
+
+interface TodayRow {
+  key: string;
+  source: string;
+  severity: string;
+  title: string;
+  detail: string | null;
+  action_label: string | null;
+  url: string | null;
+  since: string | null;
+  item_count: number | null;
+  rank: number;
+}
 
 interface ActionItem {
   id: string;
@@ -25,16 +55,15 @@ interface ActionItem {
   title: string;
   detail?: string;
   ageMs: number;
-  /** Where to go to deal with it. Omitted when there is no admin page for it yet. */
   href?: string;
+  external?: boolean;
+  count?: number;
+  /** Cards that resolve with a tap rather than a visit. */
+  done?: boolean;
+  doneLabel?: string;
 }
 
-const severityRank: Record<Severity, number> = {
-  critical: 0,
-  urgent: 1,
-  stale: 2,
-  info: 3,
-};
+const severityRank: Record<Severity, number> = { critical: 0, urgent: 1, stale: 2, info: 3 };
 
 const severityDot: Record<Severity, string> = {
   critical: "bg-red-500 shadow-[0_0_0.75rem_rgba(239,68,68,0.6)]",
@@ -50,8 +79,6 @@ const severityWord: Record<Severity, string> = {
   info: "FYI",
 };
 
-const COLLAPSED_COUNT = 8;
-
 const severityIconColor: Record<Severity, string> = {
   critical: "text-red-400",
   urgent: "text-amber-400",
@@ -59,8 +86,29 @@ const severityIconColor: Record<Severity, string> = {
   info: "text-white/55",
 };
 
-const STALE_INTAKE_DAYS = 5;
-const RECENT_FAIL_HOURS = 24;
+/** admin_today() severities -> the four this panel shows. */
+const severityFromRow: Record<string, Severity> = {
+  blocked: "critical",
+  critical: "critical",
+  error: "critical",
+  warning: "urgent",
+  todo: "stale",
+  info: "info",
+};
+
+const sourceIcon: Record<string, typeof AlertTriangle> = {
+  "Cookie Yeti": Cookie,
+  Uptime: Activity,
+  "Home Hub": Home,
+  Studio: Clapperboard,
+  "Client asks": MessageSquare,
+  Mail: Mail,
+  Shop: Package,
+  Claims: ShieldCheck,
+  Alerts: Bell,
+};
+
+const COLLAPSED_COUNT = 8;
 
 function timeAgo(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -78,137 +126,38 @@ export function ActionInbox() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [working, setWorking] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const now = Date.now();
-    const recentFailCutoff = new Date(now - RECENT_FAIL_HOURS * 3600_000).toISOString();
-    const staleIntakeCutoff = new Date(now - STALE_INTAKE_DAYS * 86400_000).toISOString();
+    // admin_today / admin_today_done are newer than the generated Supabase types;
+    // the cast goes away next time types are regenerated.
+    const { data, error: rpcError } = await (supabase.rpc as any)("admin_today");
 
-    const [sysRes, contactsRes, hiresRes, intakesRes, missedRes, failedEmailsRes] = await Promise.all([
-      supabase.from("system_alert_state").select("*").eq("id", 1).maybeSingle(),
-      supabase
-        .from("contact_submissions")
-        .select("id, name, subject, message, created_at")
-        .eq("status", "new")
-        .order("created_at", { ascending: false })
-        .limit(20),
-      // hire_requests has no `role` column — selecting it made this query fail, so hire requests
-      // never reached the inbox. project_type is the closest real field.
-      supabase
-        .from("hire_requests")
-        .select("id, name, company, project_type, created_at")
-        .eq("status", "new")
-        .order("created_at", { ascending: false })
-        .limit(20),
-      supabase
-        .from("seller_intakes")
-        .select("id, business_legal_name, status, updated_at, created_at")
-        .in("status", ["Submitted", "In Review"])
-        .lt("updated_at", staleIntakeCutoff)
-        .order("updated_at", { ascending: true })
-        .limit(20),
-      supabase
-        .from("missed_banner_reports")
-        .select("id, domain, created_at")
-        .eq("resolved", false)
-        .order("created_at", { ascending: false })
-        .limit(20),
-      supabase
-        .from("email_send_log")
-        .select("id, recipient_email, error_message, created_at")
-        .eq("status", "failed")
-        .gte("created_at", recentFailCutoff)
-        .order("created_at", { ascending: false })
-        .limit(20),
-    ]);
-
-    const failures = [
-      ["system alerts", sysRes.error],
-      ["contacts", contactsRes.error],
-      ["hire requests", hiresRes.error],
-      ["intakes", intakesRes.error],
-      ["missed banner reports", missedRes.error],
-      ["email log", failedEmailsRes.error],
-    ].filter(([, e]) => e) as [string, { message: string }][];
-    setError(failures.length ? `Couldn't check ${failures.map(([n]) => n).join(", ")}.` : null);
-
-    const out: ActionItem[] = [];
-
-    const sys = sysRes.data as { is_down?: boolean; down_systems?: string[]; updated_at?: string } | null;
-    if (sys?.is_down && (sys.down_systems?.length ?? 0) > 0) {
-      out.push({
-        id: "sys-alert",
-        severity: "critical",
-        icon: AlertTriangle,
-        title: `${sys.down_systems!.length} system${sys.down_systems!.length === 1 ? "" : "s"} down`,
-        detail: sys.down_systems!.slice(0, 3).join(" · "),
-        ageMs: sys.updated_at ? now - new Date(sys.updated_at).getTime() : 0,
-        // check-system-health watches the Cookie Yeti AI generator and cron, which live on the CY ops page.
-        href: "/admin/cookie-yeti/analytics?tab=operations",
-      });
+    if (rpcError) {
+      setError("Couldn't load the queue.");
+      setLoading(false);
+      return;
     }
+    setError(null);
 
-    (contactsRes.data ?? []).forEach((c: any) => {
-      const ageMs = c.created_at ? now - new Date(c.created_at).getTime() : 0;
-      const text = c.subject || c.message || "";
-      out.push({
-        id: `contact-${c.id}`,
-        severity: ageMs > 24 * 3600_000 ? "stale" : "urgent",
-        icon: Mail,
-        title: `New contact from ${c.name || "someone"}`,
-        detail: text.slice(0, 80) + (text.length > 80 ? "…" : ""),
-        ageMs,
-        href: "/admin/contacts",
-      });
-    });
+    const now = Date.now();
+    const rows = (data ?? []) as TodayRow[];
 
-    (hiresRes.data ?? []).forEach((h: any) => {
-      const ageMs = h.created_at ? now - new Date(h.created_at).getTime() : 0;
-      out.push({
-        id: `hire-${h.id}`,
-        severity: ageMs > 24 * 3600_000 ? "stale" : "urgent",
-        icon: Briefcase,
-        title: `Hire request from ${h.name || "someone"}${h.company ? ` (${h.company})` : ""}`,
-        detail: h.project_type || undefined,
-        ageMs,
-        href: "/admin/hires",
-      });
-    });
-
-    (intakesRes.data ?? []).forEach((i: any) => {
-      const ageMs = i.updated_at ? now - new Date(i.updated_at).getTime() : 0;
-      out.push({
-        id: `intake-${i.id}`,
-        severity: "stale",
-        icon: FileText,
-        title: `Intake stalled: ${i.business_legal_name || "Unnamed"}`,
-        detail: `${i.status} · no change for ${timeAgo(ageMs).replace(" ago", "")}`,
-        ageMs,
-        href: `/admin/submissions/${i.id}`,
-      });
-    });
-
-    (missedRes.data ?? []).slice(0, 5).forEach((m: any) => {
-      out.push({
-        id: `missed-${m.id}`,
-        severity: "info",
-        icon: AlertCircle,
-        title: `Missed banner report: ${m.domain || "unknown"}`,
-        ageMs: m.created_at ? now - new Date(m.created_at).getTime() : 0,
-        href: "/admin/cookie-yeti",
-      });
-    });
-
-    (failedEmailsRes.data ?? []).slice(0, 3).forEach((e: any) => {
-      out.push({
-        id: `email-${e.id}`,
-        severity: "urgent",
-        icon: MailX,
-        title: `Email failed to ${e.recipient_email || "unknown recipient"}`,
-        detail: (e.error_message || "").slice(0, 80),
-        ageMs: e.created_at ? now - new Date(e.created_at).getTime() : 0,
-        // No email-log page exists yet; this used to link back to /admin (the page you're on).
-      });
+    const out: ActionItem[] = rows.map((r) => {
+      const count = r.item_count ?? 1;
+      return {
+        id: r.key,
+        severity: severityFromRow[r.severity] ?? "info",
+        icon: sourceIcon[r.source] ?? AlertCircle,
+        title: r.title,
+        detail: r.detail || undefined,
+        ageMs: r.since ? now - new Date(r.since).getTime() : 0,
+        href: r.url || undefined,
+        external: !!r.url && /^https?:/i.test(r.url),
+        count: count > 1 ? count : undefined,
+        done: r.key.startsWith("cy:") || r.key.startsWith("bell:"),
+        doneLabel: r.action_label || "Done",
+      };
     });
 
     out.sort((a, b) => {
@@ -234,12 +183,26 @@ export function ActionInbox() {
     };
   }, [load]);
 
+  const markDone = useCallback(
+    async (key: string) => {
+      setWorking(key);
+      const { error: rpcError } = await (supabase.rpc as any)("admin_today_done", { p_key: key });
+      if (rpcError) {
+        setError("That didn't go through. Try again.");
+      } else {
+        setItems((prev) => prev.filter((i) => i.id !== key));
+      }
+      setWorking(null);
+      load();
+    },
+    [load],
+  );
+
   const summary = useMemo(() => {
     const critical = items.filter((i) => i.severity === "critical").length;
     const urgent = items.filter((i) => i.severity === "urgent").length;
     const stale = items.filter((i) => i.severity === "stale").length;
-    const total = items.length;
-    return { critical, urgent, stale, total };
+    return { critical, urgent, stale, total: items.length };
   }, [items]);
 
   if (loading) {
@@ -258,7 +221,7 @@ export function ActionInbox() {
   const errorBar = error && (
     <div role="alert" className="flex items-center gap-3 px-5 py-2.5 border-b border-amber-500/20 bg-amber-500/[0.06]">
       <AlertTriangle className="h-4 w-4 text-amber-300 shrink-0" aria-hidden />
-      <p className="text-xs text-amber-100 flex-1">{error} The list below may be incomplete.</p>
+      <p className="text-xs text-amber-100 flex-1">{error}</p>
       <Button
         size="sm"
         variant="outline"
@@ -279,11 +242,13 @@ export function ActionInbox() {
             <Sparkles className="h-5 w-5 text-emerald-400" aria-hidden />
           </div>
           <div>
-            <h3 className="text-[0.9375rem] font-semibold text-white">{error ? "Nothing found" : "Inbox zero"}</h3>
+            <h3 className="text-[0.9375rem] font-semibold text-white">
+              {error ? "Nothing found" : "Nothing needs you"}
+            </h3>
             <p className="text-xs text-white/60 mt-0.5">
               {error
-                ? "No items came back from the sources that loaded."
-                : "Nothing waiting on you. No system alerts, unanswered requests or stalled intakes."}
+                ? "The queue didn't load, so this may not be the whole picture."
+                : "Every queue is clear - releases, Studio, client asks, mail, stock and uptime."}
             </p>
           </div>
         </div>
@@ -298,10 +263,15 @@ export function ActionInbox() {
   const hidden = items.length - COLLAPSED_COUNT;
 
   return (
-    <section aria-labelledby="action-inbox-title" className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+    <section
+      aria-labelledby="action-inbox-title"
+      className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden"
+    >
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
         <div>
-          <h3 id="action-inbox-title" className="text-[0.9375rem] font-semibold text-white">Needs you</h3>
+          <h3 id="action-inbox-title" className="text-[0.9375rem] font-semibold text-white">
+            Needs you
+          </h3>
           <p className={cn("text-xs mt-0.5 font-medium", headlineColor)}>
             {summary.total} {summary.total === 1 ? "item" : "items"}
             {summary.critical > 0 && ` · ${summary.critical} critical`}
@@ -309,6 +279,15 @@ export function ActionInbox() {
             {summary.stale > 0 && ` · ${summary.stale} waiting`}
           </p>
         </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-9 text-xs text-white/60 hover:text-white hover:bg-white/5"
+          onClick={() => load()}
+          aria-label="Refresh the queue"
+        >
+          <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+        </Button>
       </div>
       {errorBar}
       <ul className="divide-y divide-white/[0.04]">
@@ -325,19 +304,60 @@ export function ActionInbox() {
                 </p>
                 {item.detail && <p className="text-xs text-white/60 truncate mt-0.5">{item.detail}</p>}
               </div>
+              {item.count && (
+                <span className="text-[0.6875rem] text-white/60 tabular-nums shrink-0 rounded-full border border-white/10 px-2 py-0.5">
+                  {item.count}
+                </span>
+              )}
               <span className="text-xs text-white/55 tabular-nums shrink-0">{timeAgo(item.ageMs)}</span>
             </>
           );
+
+          if (item.done) {
+            return (
+              <li key={item.id} className="flex items-center gap-3 px-5 py-3">
+                {body}
+                <Button
+                  size="sm"
+                  className="h-9 shrink-0 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
+                  disabled={working === item.id}
+                  onClick={() => markDone(item.id)}
+                >
+                  <Check className="h-3.5 w-3.5 mr-1.5" aria-hidden />
+                  {working === item.id ? "..." : item.doneLabel}
+                </Button>
+              </li>
+            );
+          }
+
           return (
             <li key={item.id}>
               {item.href ? (
-                <Link
-                  to={item.href}
-                  className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                >
-                  {body}
-                  <ChevronRight className="h-4 w-4 text-white/40 group-hover:text-white/70 transition-colors shrink-0" aria-hidden />
-                </Link>
+                item.external ? (
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    {body}
+                    <ChevronRight
+                      className="h-4 w-4 text-white/40 group-hover:text-white/70 transition-colors shrink-0"
+                      aria-hidden
+                    />
+                  </a>
+                ) : (
+                  <Link
+                    to={item.href}
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    {body}
+                    <ChevronRight
+                      className="h-4 w-4 text-white/40 group-hover:text-white/70 transition-colors shrink-0"
+                      aria-hidden
+                    />
+                  </Link>
+                )
               ) : (
                 <div className="flex items-center gap-3 px-5 py-3 pr-12">{body}</div>
               )}
