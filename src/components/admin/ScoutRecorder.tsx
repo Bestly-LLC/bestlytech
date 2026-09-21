@@ -22,6 +22,7 @@ export interface RecorderState {
   stage: string | null;
   known_voices: string[];
   seconds_since: number | null;
+  info?: { notetaker?: { status: string; room: string | null; names: string[] } } | null;
 }
 
 export interface RecentRecording {
@@ -207,7 +208,18 @@ export function RecorderBar({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold tabular-nums text-white">Recording {clock(state.started_at, now)}</p>
           <p className="truncate text-xs text-white/50">
-            {state.roster.length ? `You, ${listNames(state.roster)}` : "Names not set"}
+            {(() => {
+              const nt = state.info?.notetaker;
+              if (nt?.status === "in call")
+                return nt.names.length
+                  ? `Notetaker hears ${nt.names.join(", ")} · names are exact`
+                  : `Notetaker is in ${nt.room ?? "the Talk call"} · names are exact`;
+              if (nt?.status === "no talk call")
+                return state.roster.length
+                  ? `You, ${listNames(state.roster)} · no Talk call, names by voice`
+                  : "No Talk call found · names by voice";
+              return state.roster.length ? `You, ${listNames(state.roster)}` : "Names come from Talk when the notetaker joins";
+            })()}
           </p>
         </div>
         <Button
@@ -337,7 +349,7 @@ export function RecorderBar({
             </Button>
           </div>
           <p className="text-[0.6875rem] leading-snug text-white/45">
-            New names are learned from their voice after the call. Let everyone know you're recording.
+            On a Talk call, Scout (notetaker) joins and gets everyone's name right. Names here are only needed for other calls. Let everyone know you're recording.
           </p>
           <Button
             onClick={() => act("start", picked)}

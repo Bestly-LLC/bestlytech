@@ -14,3 +14,16 @@ Copies of what runs in `~/MeetingRec` on the Mac mini. The live files are there,
   the model can't tell two voices apart (it separates a man and a woman easily, two similar voices hardly at all).
 - `stop_app.applescript` — source of `Stop & Transcribe.app` (wrapped in a 3h AppleEvent timeout;
   the old one threw -1712 on long calls).
+
+## Notetaker (exact names on Talk calls)
+
+- `notetaker/notetaker.js` — while a recording runs, the agent finds the Talk room with a live
+  call, adds the Nextcloud user `scout-notetaker` ("Scout (notetaker)") to it, and runs this in
+  headless Chrome (playwright-core, system Chrome). Talk sends every person's audio to every
+  participant as a separate stream, so it records one track per person, named from Talk's tiles.
+  Password is in the Mac keychain (`nextcloud-notetaker`). It leaves and is removed from the room
+  when the recording stops.
+- `talk_tracks.py` — transcribes each person's track, shifts it onto the recording clock, merges
+  with Jared's mic. `stop.sh` uses it when the notetaker was in the call and falls back to
+  `name_speakers.py` otherwise (Zoom, phone, one-to-one Talk rooms).
+- `notetaker/tester.js` — a fake guest (Chrome fake mic, optional audio file) for testing.
