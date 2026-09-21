@@ -85,3 +85,9 @@ project_id = "keowunrxpxlbgebujbao"
     verify_jwt = false
   [functions.meetings-archive]
     verify_jwt = true
+
+[functions.admin-chat]
+    verify_jwt = false
+
+[functions.meeting-recorder]
+    verify_jwt = false

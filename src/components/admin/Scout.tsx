@@ -13,6 +13,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecording } from "./ScoutRecorder";
 
 /**
  * Scout - the assistant that lives in the corner of the admin.
@@ -138,6 +139,8 @@ export function Scout() {
   const [waiting, setWaiting] = useState(0);
   const [bubble, setBubble] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const { state: rec, latest: lastCall, refresh: refreshRec } = useRecorder(open);
+  const recNow = useNow(rec?.status === "recording");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -194,7 +197,7 @@ export function Scout() {
   }, []);
 
   const send = useCallback(
-    async (body: string, replacing?: string | null) => {
+    async (body: string, replacing?: string | null, fresh?: boolean) => {
       const asked = body.trim();
       if (!asked || busy) return;
 
@@ -203,15 +206,19 @@ export function Scout() {
         setEditing(null);
       }
 
-      setMsgs((m) => [...m, { role: "user", body: asked }]);
+      if (fresh) {
+        setTitle(null);
+        setEditing(null);
+      }
+      setMsgs((m) => [...(fresh ? [] : m), { role: "user", body: asked }]);
       setText("");
       setBusy(true);
 
       const { data, error } = await supabase.functions.invoke("admin-chat", {
-        body: { body: asked, thread_id: threadId },
+        body: { body: asked, thread_id: fresh ? null : threadId },
       });
 
-      const id = (data as { thread_id?: string })?.thread_id ?? threadId;
+      const id = (data as { thread_id?: string })?.thread_id ?? (fresh ? null : threadId);
       if (error) {
         setMsgs((m) => [...m, { role: "assistant", body: `I couldn't reach the server: ${error.message}` }]);
       } else if (id) {
@@ -266,6 +273,13 @@ export function Scout() {
     setView("chat");
   };
 
+  const debrief = (r: RecentRecording) => {
+    const who = r.roster.length ? ` with ${listNames(r.roster)}` : "";
+    send(`Debrief my call${who} (${r.name}): the decisions, who owes what, and the follow-ups.`, null, true);
+  };
+
+  const recording = rec?.status === "recording";
+
   const mood: Mood = busy ? "think" : waiting > 0 && !open ? "alert" : "idle";
 
   if (!open) {
@@ -297,6 +311,12 @@ export function Scout() {
         >
           <Scoutie mood={mood} className="h-[1.15rem] w-[1.55rem]" />
           Scout
+          {recording && (
+            <span className="ml-0.5 flex items-center gap-1.5 rounded-full bg-red-500 px-2 py-0.5 text-[0.6875rem] font-bold tabular-nums text-white">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" aria-hidden />
+              REC {clock(rec?.started_at ?? null, recNow)}
+            </span>
+          )}
           {waiting > 0 && (
             <span className="ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[0.6875rem] font-bold text-white">
               {waiting}
@@ -342,7 +362,7 @@ export function Scout() {
                 ? `${threads.length} conversation${threads.length === 1 ? "" : "s"}`
                 : busy
                   ? "thinking it through"
-                  : "reads the data, changes the site"}
+                  : recording ? "recording your call" : "reads the data, changes the site"}
             </p>
           </div>
 
@@ -460,6 +480,8 @@ export function Scout() {
             </ul>
           </div>
         ) : (
+          <>
+          <RecorderBar state={rec} latest={lastCall} refresh={refreshRec} onDebrief={debrief} />
           <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {msgs.length === 0 && (
               <>
@@ -543,6 +565,7 @@ export function Scout() {
               </p>
             )}
           </div>
+          </>
         )}
 
         {view === "chat" && (

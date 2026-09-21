@@ -1,0 +1,624 @@
+// admin-chat — Scout, the assistant inside bestly.tech/admin.
+//
+// Rules, in order of how much trouble breaking them causes:
+//  1. It can never do more than the person typing can. The caller must hold the
+//     admin role; the check happens here, against their JWT.
+//  2. Anything with consequences needs a yes first. Those tools carry a
+//     `confirmed` flag the model may only set after Jared agreed.
+//  3. Every tool run lands in admin_chat_actions; commits also in
+//     admin_site_changes, Mac jobs in mac_commands, Pi jobs in home_hub_commands,
+//     recorder jobs in meeting_recorder_commands.
+//  4. A commit is watched to the end and reverted if the build fails.
+//
+// v6: Scout can action anything that has a machine behind it —
+//   pi_command   the Home Hub agent on bestly-pi (Nextcloud, Homebridge, Home Assistant, Pi-hole, itself)
+//   clear_alerts bulk-read the admin bell
+//   resolve_incident  close a monitor incident that is over
+//   db_write     one guarded INSERT/UPDATE/DELETE (admin_sql_write refuses system schemas, missing WHERE, >5000 rows)
+// v7: the call recorder on the Mac mini —
+//   recorder            start / stop / status (agent ~/MeetingRec/agent.py, launchd tech.bestly.meetingrec-agent)
+//   meeting_transcript  read a finished call's transcript for a debrief (meeting_recordings)
+// The only things left for Jared are the ones that physically need him: a password, a device in his hand.
+//
+// Stability notes, all of them learned the hard way:
+//  - verify_jwt is OFF because with it on the CORS preflight (which carries no
+//    Authorization header) is 401'd by the platform and the browser reports
+//    "Failed to send a request to the Edge Function". Auth is done below.
+//  - watchBuild and the Pi wait are capped so a turn cannot approach the wall clock.
+//  - The model call retries ONCE on 429 and 5xx.
+
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
+const MAX_TURNS = 10;
+const BUILD_POLLS = 10;          // ~65s of watching; builds here take ~35s
+const PI_WAIT_MS = 60_000;       // how long to wait for the Pi to report back inside one turn
+const REC_WAIT_MS = 20_000;      // how long to wait for the Mac mini to pick up a recorder job
+const REPOS: Record<string, string> = { site: "Bestly-LLC/bestlytech", hoku: "Bestly-LLC/hoku-clean" };
+const WATCHABLE = new Set(["Bestly-LLC/bestlytech"]);
+const RESULT_CAP: Record<string, number> = { meeting_transcript: 160_000 };
+
+// Mirrors the allowlist in the home-hub-agent function. Read-only actions run without a yes.
+const PI_ACTIONS: Record<string, string[]> = {
+  nextcloud: ["status", "restart"],
+  homebridge: ["restart", "refresh"],
+  homeassistant: ["refresh", "toggle_automation"],
+  pihole: ["enable", "disable", "update_gravity"],
+  agent: ["test_alert", "run_maintenance"],
+};
+const PI_READ_ONLY = new Set(["nextcloud.status", "homebridge.refresh", "homeassistant.refresh"]);
+
+const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function cleanKey(raw: string | undefined): string {
+  if (!raw) return "";
+  const m = raw.match(/sk-ant-[A-Za-z0-9_\-]{20,}/);
+  return (m ? m[0] : raw).trim();
+}
+
+const TOOLS = [
+  {
+    name: "today",
+    description: "The operator queue: everything currently waiting on Jared, ranked. Call this before answering anything about what needs him or what is stuck.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "incidents",
+    description: "What the monitor currently has open across the estate (uptime, Mac agent, mail, scheduled jobs, notifications, deploys, Scout) plus open Home Hub issues from the Pi. Each carries what was already tried and, where it could not be fixed, what needs Jared. Resolved incidents are history, not problems.",
+    input_schema: { type: "object", properties: { include_resolved: { type: "boolean" } } },
+  },
+  {
+    name: "run_sql",
+    description: "Read the Bestly database. One SELECT or WITH statement, capped at 200 rows. Use it for any question about the business. Never guess a number you could read.",
+    input_schema: { type: "object", properties: { query: { type: "string" }, limit: { type: "number" } }, required: ["query"] },
+  },
+  {
+    name: "db_write",
+    description:
+      "Change data: exactly one INSERT, UPDATE or DELETE on the public schema. UPDATE/DELETE need a WHERE; system schemas are refused; over 5000 rows is refused. " +
+      "Add RETURNING to see what changed. Read the rows with run_sql first so you know what you are touching. Requires confirmed:true after Jared said yes.",
+    input_schema: { type: "object", properties: { query: { type: "string" }, confirmed: { type: "boolean" } }, required: ["query", "confirmed"] },
+  },
+  {
+    name: "pi_command",
+    description:
+      "Run a job on bestly-pi through the Home Hub agent and wait up to a minute for the answer. " +
+      "nextcloud: status (full diagnosis) | restart (heal ladder: compose up, finish a pending occ upgrade, restart proxy, tunnel, app). " +
+      "homebridge: restart | refresh. homeassistant: refresh | toggle_automation {automation_id, enabled}. " +
+      "pihole: enable | disable {seconds} | update_gravity. agent: test_alert | run_maintenance {steps}. " +
+      "status and refresh need no yes; everything else requires confirmed:true after Jared said yes.",
+    input_schema: {
+      type: "object",
+      properties: {
+        target: { type: "string", enum: Object.keys(PI_ACTIONS) },
+        action: { type: "string" },
+        payload: { type: "object" },
+        confirmed: { type: "boolean" },
+      },
+      required: ["target", "action"],
+    },
+  },
+  {
+    name: "clear_alerts",
+    description:
+      "Mark admin bell alerts read in bulk. Filter by severity ('warning','success','info'), a text match on title/body/key, and/or older_than_minutes. " +
+      "No filter clears every unread alert. Requires confirmed:true after Jared said yes.",
+    input_schema: {
+      type: "object",
+      properties: { severity: { type: "string" }, match: { type: "string" }, older_than_minutes: { type: "number" }, confirmed: { type: "boolean" } },
+      required: ["confirmed"],
+    },
+  },
+  {
+    name: "resolve_incident",
+    description: "Close a monitor incident by key when it is over (the check passes again, or Jared says it is handled). The monitor re-opens it by itself if it recurs.",
+    input_schema: { type: "object", properties: { key: { type: "string" }, note: { type: "string" } }, required: ["key"] },
+  },
+  {
+    name: "list_files",
+    description: "List a directory in a repo. repo is 'site' (Bestly-LLC/bestlytech: bestly.tech and the /admin dashboard, Vite + React + TS + Tailwind + shadcn) or 'hoku'.",
+    input_schema: { type: "object", properties: { repo: { type: "string", enum: ["site", "hoku"] }, path: { type: "string" } }, required: ["path"] },
+  },
+  {
+    name: "read_file",
+    description: "Read one file from a repo. Always read a file before you change it. Never write a file whose current contents you have not seen.",
+    input_schema: { type: "object", properties: { repo: { type: "string", enum: ["site", "hoku"] }, path: { type: "string" } }, required: ["path"] },
+  },
+  {
+    name: "commit_files",
+    description:
+      "Commit whole files to main and watch the deploy through. Send the COMPLETE new contents of each file, never a diff. " +
+      "On a green build it reports the site is live; on a failed build it AUTOMATICALLY REVERTS the files and says so, " +
+      "so main is never left broken. Requires confirmed:true after Jared has said yes.",
+    input_schema: {
+      type: "object",
+      properties: {
+        repo: { type: "string", enum: ["site", "hoku"] },
+        message: { type: "string" },
+        files: { type: "array", items: { type: "object", properties: { path: { type: "string" }, content: { type: "string" } }, required: ["path", "content"] } },
+        confirmed: { type: "boolean" },
+      },
+      required: ["message", "files", "confirmed"],
+    },
+  },
+  {
+    name: "mac_command",
+    description:
+      "Give the agent on Jared's MacBook Air a job. That machine is the only one that can reach IMAP. mail_drain runs every pending mail action; " +
+      "restart_mail restarts the agent; ping checks it is alive; run_named runs a script already in ~/.bestly. Picked up within five minutes of the Mac being awake. " +
+      "Requires confirmed:true after Jared has said yes.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["mail_drain", "restart_mail", "run_named", "ping"] },
+        payload: { type: "object" },
+        confirmed: { type: "boolean" },
+      },
+      required: ["action", "confirmed"],
+    },
+  },
+  {
+    name: "recorder",
+    description:
+      "The call recorder on the Mac mini (records the call audio and Jared's mic, then transcribes and names the speakers). " +
+      "status: is it idle, recording, or transcribing. start {roster: names of everyone on the call besides Jared, e.g. ['eli','cooper']}: " +
+      "starts recording. stop: stops and transcribes (takes a few minutes; the transcript then lands in meeting_recordings). " +
+      "Start and stop only when Jared asked for exactly that in this message - his asking is the yes. New names are fine: the recorder learns their voice.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["status", "start", "stop"] },
+        roster: { type: "array", items: { type: "string" } },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "meeting_transcript",
+    description:
+      "Read a recorded call's transcript, for a debrief or any question about what was said. name is the recording (meeting-YYYYMMDD-HHMM); " +
+      "leave it out for the latest call. list:true returns the recent calls instead. JARED lines are his own mic and always right; " +
+      "a name ending in ? was a guess from the voice, so check it against the context.",
+    input_schema: { type: "object", properties: { name: { type: "string" }, list: { type: "boolean" } } },
+  },
+  {
+    name: "mark_done",
+    description: "Clear one card off the queue: a Cookie Yeti release waiting on Jared ('cy:mac') or an unread alert ('bell:<uuid>'). Only when he plainly asks, or once the thing it asked for is done.",
+    input_schema: { type: "object", properties: { key: { type: "string" } }, required: ["key"] },
+  },
+];
+
+const SYSTEM = (today: unknown, mac: unknown, incidents: unknown, unread: unknown, recorder: unknown) => `
+You are Scout, the assistant inside Jared Best's Bestly admin console at bestly.tech/admin. Your name is Scout; never call yourself anything else.
+
+Jared runs Bestly LLC: Cookie Yeti (a Safari and Chrome cookie-banner extension), HOKU, InventoryProof, SchoolPilot, Bestly Studio (studio.bestly.tech), a small shop, a Home Hub on a Raspberry Pi (bestly-pi: Nextcloud at cloud.bestly.tech, Home Assistant, Homebridge, Pi-hole), and a Turo fleet. He is the only operator.
+
+# The queue, read a moment ago
+${JSON.stringify(today)}
+rank 0 is stopped and needs him, 1 is broken, 2 is slipping, 3 is waiting on a decision.
+
+# Open incidents, from the monitor
+${JSON.stringify(incidents)}
+The monitor runs every five minutes, fixes what it can by itself, and pushes to his phone over ntfy when it cannot. Only OPEN incidents are problems. Anything resolved is history: never report it as a current problem or a "warning worth a look".
+
+# Unread admin alerts
+${JSON.stringify(unread)}
+
+# The Mac agent
+${JSON.stringify(mac)}
+It runs on his MacBook Air and polls every five minutes while the Mac is awake. Quiet for hours almost always means the lid is closed; queued mail work runs by itself when he next opens it. Say that in one line; do not treat it as an outage or ask him to do anything about it.
+
+# The call recorder on the Mac mini
+${JSON.stringify(recorder)}
+There is a Record a call button at the top of this chat, so he can also do it himself. When he asks you to record, start it with the recorder tool and the names he gave. When a call is done, the button offers a Debrief.
+
+# Debriefing a call
+Read it with meeting_transcript. Then, in plain text: first the decisions (only what was actually agreed, not ideas floated), then each commitment as "Name: what, by when" (only a deadline if one was said), then open questions. Keep it tight; he can ask for more. Never invent something that was not said. If a speaker name has a ?, work out who it was from the context before you attribute anything to them.
+
+# What you can do yourself
+- Read anything: today, incidents, run_sql, meeting_transcript.
+- Fix data: db_write (one guarded INSERT/UPDATE/DELETE).
+- Fix the Pi: pi_command (Nextcloud diagnose and heal, Homebridge, Home Assistant, Pi-hole, the agent).
+- Tidy up: clear_alerts, resolve_incident, mark_done.
+- Change bestly.tech and the admin: list_files, read_file, commit_files (watched, auto-reverted on a failed build).
+- Give the Mac work: mac_command. Record calls on the Mac mini: recorder.
+
+# Doing, not describing
+Your job is to clear his plate, not to hand him a to-do list. For every item: if a tool can do it, propose it in one line and, on his yes, do it and report the result. Batch them: "I can do these three - say yes and I'll run all of them." Cleanup (stale alerts, incidents that are over, cards whose job is done) you may do without asking and just report.
+Only hand Jared something when it physically needs him: typing a password, a device in his hand, a decision only he can make. When you do, say it is the one thing you cannot do and why, give the single exact step, and nothing else.
+Known one: accepting the Xcode licence needs sudo on his Mac, which needs his password - Apple does not allow it any other way. That is the only true blocker for the Cookie Yeti Mac and iOS builds.
+
+# How to change code
+Read the file first, every time. Keep the change small. Send the complete new file. Never put a key, token or password into a file. When a commit comes back reverted, say so plainly, say what the build complained about, and work out the actual fix - never resend the same thing hoping for a different build.
+
+# How to behave
+- Lead with the answer. He has ADHD: no preamble, no recap, no "I'd be happy to". Under 70 words unless he asked for detail (a debrief may run longer, but stays tight).
+- Plain text. The chat renders no markdown - no asterisks, no headings, no bullet characters. A list is one short line per item.
+- One question at most, and only when you genuinely cannot proceed.
+- Never invent a number, a file name, a function or a commit. If you do not know, read it or say so.
+`.trim();
+
+async function gitCall(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { data: rid, error } = await db.rpc("admin_git_call", { p_body: body });
+  if (error) return { ok: false, error: error.message };
+  for (let i = 0; i < 30; i++) {
+    await sleep(i === 0 ? 900 : 700);
+    const { data: ans } = await db.rpc("admin_git_poll", { p_request_id: rid });
+    if (ans) {
+      const a = ans as Record<string, any>;
+      return a.ok ? (a.body as Record<string, unknown>) : { ok: false, error: a.error ?? JSON.stringify(a.body) };
+    }
+  }
+  return { ok: false, error: "GitHub did not answer in time" };
+}
+
+// Vercel reports build results as GitHub commit statuses, and bestlytech is
+// public, so this needs no token.
+async function watchBuild(repo: string, sha: string) {
+  if (!WATCHABLE.has(repo)) return { state: "unwatchable", note: "private repo, build not visible without a token" };
+  for (let i = 0; i < BUILD_POLLS; i++) {
+    await sleep(i === 0 ? 9000 : 6000);
+    let j: any;
+    try {
+      const r = await fetch(`https://api.github.com/repos/${repo}/commits/${sha}/status`, {
+        headers: { "User-Agent": "bestly-admin-chat", Accept: "application/vnd.github+json" },
+      });
+      if (!r.ok) continue;
+      j = await r.json();
+    } catch { continue; }
+    const url = j?.statuses?.[0]?.target_url ?? null;
+    if (j?.state === "success") return { state: "success", url };
+    if (j?.state === "failure" || j?.state === "error") return { state: "failed", url };
+  }
+  return { state: "timeout", note: "still building when I stopped watching" };
+}
+
+async function piCommand(args: Record<string, any>): Promise<Record<string, unknown>> {
+  const target = String(args.target ?? "");
+  const action = String(args.action ?? "");
+  if (!PI_ACTIONS[target]?.includes(action)) {
+    return { ok: false, error: `not an allowed Pi command: ${target}.${action}`, allowed: PI_ACTIONS };
+  }
+  if (!PI_READ_ONLY.has(`${target}.${action}`) && !args.confirmed) {
+    return { ok: false, error: "not_confirmed", hint: "Ask him first, then call again." };
+  }
+  // Don't stack a second heal on one that is still running.
+  const { data: busy } = await db.from("home_hub_commands").select("id, status, created_at")
+    .eq("target", target).eq("action", action).in("status", ["pending", "running"]).limit(1);
+  let id: string;
+  if (busy?.length) {
+    id = busy[0].id;
+  } else {
+    const { data, error } = await db.from("home_hub_commands")
+      .insert({ target, action, payload: args.payload ?? {} }).select("id").single();
+    if (error) return { ok: false, error: error.message };
+    id = data.id;
+  }
+  const until = Date.now() + PI_WAIT_MS;
+  while (Date.now() < until) {
+    await sleep(4000);
+    const { data: row } = await db.from("home_hub_commands").select("status, result, error").eq("id", id).single();
+    if (row && (row.status === "done" || row.status === "failed" || row.status === "expired")) {
+      return { ok: row.status === "done", id, status: row.status, result: row.result, error: row.error };
+    }
+  }
+  const { data: st } = await db.from("home_hub_agent_state").select("last_seen_at, version").limit(1);
+  return {
+    ok: true, id, status: "still_running", agent: st?.[0] ?? null,
+    note: "The Pi has it but has not finished within a minute (a heal can take several). It carries on by itself; the result lands in home_hub_commands and the monitor closes the incident when it is fixed.",
+  };
+}
+
+async function recorderStatus() {
+  const { data } = await db.from("meeting_recorder_status").select("*").maybeSingle();
+  if (!data) return { status: "unknown" };
+  const offline = data.seconds_since == null || data.seconds_since > 30;
+  return {
+    status: offline ? "offline" : data.status,
+    recording_since: data.status === "recording" ? data.started_at : null,
+    names: data.roster,
+    stage: data.stage,
+    known_voices: data.known_voices,
+    last_heard_seconds_ago: data.seconds_since,
+  };
+}
+
+function cleanName(n: unknown): string {
+  return String(n ?? "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9 -]/g, "").trim().replace(/\s+/g, "-").slice(0, 32);
+}
+
+async function recorderCommand(args: Record<string, any>): Promise<Record<string, unknown>> {
+  const action = String(args.action ?? "status");
+  const now = await recorderStatus();
+  if (action === "status") return { ok: true, ...now };
+  if (now.status === "offline") return { ok: false, error: "The Mac mini is not answering (asleep or off), so it cannot record right now.", ...now };
+  if (action === "start" && now.status !== "idle") return { ok: false, error: `The recorder is ${now.status}.`, ...now };
+  if (action === "stop" && now.status !== "recording") return { ok: false, error: "Nothing is recording.", ...now };
+  if (action !== "start" && action !== "stop") return { ok: false, error: `unknown recorder action ${action}` };
+
+  const payload = action === "start"
+    ? { roster: [...new Set((Array.isArray(args.roster) ? args.roster : []).map(cleanName).filter((n: string) => n && n !== "jared"))] }
+    : {};
+  const { data, error } = await db.from("meeting_recorder_commands").insert({ action, payload, requested_by: "scout-chat" }).select("id").single();
+  if (error) return { ok: false, error: error.message };
+
+  const until = Date.now() + REC_WAIT_MS;
+  while (Date.now() < until) {
+    await sleep(2000);
+    const { data: row } = await db.from("meeting_recorder_commands").select("status, result, error").eq("id", data.id).single();
+    if (action === "start" && row && (row.status === "done" || row.status === "failed")) {
+      return { ok: row.status === "done", status: row.status, result: row.result, error: row.error };
+    }
+    if (action === "stop" && row && row.status !== "pending") {
+      return { ok: true, status: "transcribing", note: "Stopped. Transcribing now; it takes a few minutes and the Debrief button appears when it is done." };
+    }
+  }
+  return { ok: true, status: "queued", note: "The Mac mini has not picked it up yet; it will within seconds if it is awake." };
+}
+
+async function meetingTranscript(args: Record<string, any>): Promise<Record<string, unknown>> {
+  if (args.list) {
+    const { data, error } = await db.from("meeting_recordings")
+      .select("name, started_at, stopped_at, roster, line_count, debriefed_at")
+      .order("started_at", { ascending: false, nullsFirst: false }).limit(15);
+    return error ? { ok: false, error: error.message } : { ok: true, recordings: data };
+  }
+  let q = db.from("meeting_recordings").select("id, name, started_at, stopped_at, roster, speakers, transcript, line_count");
+  q = args.name ? q.eq("name", String(args.name)) : q.order("started_at", { ascending: false, nullsFirst: false });
+  const { data, error } = await q.limit(1);
+  if (error) return { ok: false, error: error.message };
+  if (!data?.length) return { ok: false, error: "no recording found" };
+  const r = data[0];
+  await db.from("meeting_recordings").update({ debriefed_at: new Date().toISOString() }).eq("id", r.id);
+  const text = String(r.transcript ?? "");
+  const MAX = 150_000;
+  return {
+    ok: true, name: r.name, started_at: r.started_at, stopped_at: r.stopped_at, roster: r.roster, speakers: r.speakers,
+    lines: r.line_count, truncated: text.length > MAX,
+    transcript: text.length > MAX ? text.slice(0, MAX / 2) + "\n[... middle of the call cut for length ...]\n" + text.slice(-MAX / 2) : text,
+  };
+}
+
+async function runTool(name: string, args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
+  let out: Record<string, unknown>;
+  const repo = REPOS[args.repo ?? "site"] ?? REPOS.site;
+
+  switch (name) {
+    case "today": {
+      const { data, error } = await db.rpc("admin_today");
+      out = error ? { ok: false, error: error.message } : { ok: true, queue: data };
+      break;
+    }
+    case "incidents": {
+      let q = db.from("monitor_issues").select("key, status, severity, title, body, area, needs_jared, self_healed, heal_attempts, occurrences, opened_at, resolved_at");
+      if (!args.include_resolved) q = q.eq("status", "open");
+      const [{ data, error }, { data: hub }] = await Promise.all([
+        q.order("severity", { ascending: false }).limit(50),
+        db.from("home_hub_issues").select("*").eq("status", "open").limit(20),
+      ]);
+      out = error ? { ok: false, error: error.message } : { ok: true, incidents: data, home_hub_issues: hub ?? [] };
+      break;
+    }
+    case "run_sql": {
+      const { data, error } = await db.rpc("admin_sql_read", { p_query: String(args.query ?? ""), p_limit: args.limit ?? 100 });
+      out = error ? { ok: false, error: error.message } : { ok: true, rows: data };
+      break;
+    }
+    case "db_write": {
+      if (!args.confirmed) { out = { ok: false, error: "not_confirmed", hint: "Ask him first, then call again." }; break; }
+      const { data, error } = await db.rpc("admin_sql_write", { p_query: String(args.query ?? "") });
+      out = error ? { ok: false, error: error.message } : (data as Record<string, unknown>);
+      break;
+    }
+    case "pi_command": {
+      out = await piCommand(args);
+      break;
+    }
+    case "clear_alerts": {
+      if (!args.confirmed) { out = { ok: false, error: "not_confirmed", hint: "Ask him first, then call again." }; break; }
+      const { data, error } = await db.rpc("admin_clear_alerts", {
+        p_severity: args.severity ?? null, p_match: args.match ?? null,
+        p_older_than_minutes: typeof args.older_than_minutes === "number" ? Math.round(args.older_than_minutes) : null,
+      });
+      out = error ? { ok: false, error: error.message } : (data as Record<string, unknown>);
+      break;
+    }
+    case "resolve_incident": {
+      const key = String(args.key ?? "");
+      const { data, error } = await db.from("monitor_issues")
+        .update({ status: "resolved", resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("key", key).eq("status", "open").select("key, title");
+      out = error ? { ok: false, error: error.message }
+        : (data?.length ? { ok: true, resolved: data, note: args.note ?? null } : { ok: false, error: `no open incident with key ${key}` });
+      break;
+    }
+    case "list_files": {
+      const r = await gitCall({ action: "list", repo, path: String(args.path ?? "") });
+      out = (r as any).ok === false ? r : { ok: true, items: ((r as any).items ?? []).map((f: any) => `${f.type} ${f.path}`) };
+      break;
+    }
+    case "read_file": {
+      const r = await gitCall({ action: "get", repo, path: String(args.path ?? "") });
+      out = (r as any).ok === false ? r : { ok: true, path: (r as any).path, content: (r as any).content };
+      break;
+    }
+    case "commit_files": {
+      if (!args.confirmed) { out = { ok: false, error: "not_confirmed", hint: "Ask him first, then call again." }; break; }
+      const files = Array.isArray(args.files) ? args.files : [];
+      if (!files.length) { out = { ok: false, error: "no files given" }; break; }
+
+      const before: { path: string; content: string | null }[] = [];
+      for (const f of files) {
+        const g = await gitCall({ action: "get", repo, path: f.path });
+        before.push({ path: f.path, content: (g as any).ok === false ? null : ((g as any).content ?? null) });
+      }
+
+      const res = await gitCall({ action: "commit", repo, message: String(args.message ?? "update"), files });
+      if ((res as any).ok === false) { out = res; break; }
+
+      const sha = String((res as any).commit ?? "");
+      const build = await watchBuild(repo, sha);
+
+      if (build.state === "failed") {
+        const restore = before.filter((b) => b.content !== null).map((b) => ({ path: b.path, content: b.content as string }));
+        const remove = before.filter((b) => b.content === null).map((b) => ({ path: b.path, delete: true }));
+        const undo = await gitCall({
+          action: "commit", repo,
+          message: `revert: build failed for ${sha.slice(0, 7)}\n\nPut back automatically by Scout so main is not left broken.`,
+          files: [...restore, ...remove],
+        });
+        out = {
+          ok: false, error: "build_failed", commit: sha, build_url: (build as any).url,
+          reverted: (undo as any).ok !== false, revert_commit: (undo as any).commit ?? null,
+          note: "The build failed and the files were put back. Work out what broke before trying again.",
+        };
+      } else {
+        out = { ok: true, commit: sha, url: (res as any).url, build: build.state, build_url: (build as any).url ?? null,
+                note: build.state === "timeout" ? "Committed. The build was still running when I stopped watching - check it shortly." : undefined };
+      }
+      break;
+    }
+    case "mac_command": {
+      if (!args.confirmed) { out = { ok: false, error: "not_confirmed", hint: "Ask him first, then call again." }; break; }
+      const { data, error } = await db.rpc("mac_queue_command", { p_action: String(args.action ?? ""), p_payload: args.payload ?? {} });
+      out = error ? { ok: false, error: error.message } : { ok: true, queued: data, note: "The Mac picks this up within five minutes of being awake." };
+      break;
+    }
+    case "recorder": {
+      out = await recorderCommand(args);
+      break;
+    }
+    case "meeting_transcript": {
+      out = await meetingTranscript(args);
+      break;
+    }
+    case "mark_done": {
+      const { data, error } = await db.rpc("admin_today_done", { p_key: String(args.key ?? "") });
+      out = error ? { ok: false, error: error.message } : { ok: true, cleared: data };
+      break;
+    }
+    default:
+      out = { ok: false, error: `unknown tool ${name}` };
+  }
+
+  // Transcripts are long and private; log that one was read, not the text.
+  const logged = name === "meeting_transcript" && (out as any).transcript
+    ? { ...out, transcript: `[${String((out as any).transcript).length} chars]` }
+    : out;
+  await db.from("admin_chat_actions").insert({ thread_id: threadId, tool: name, args, result: logged, ok: (out as any)?.ok !== false });
+  return out;
+}
+
+async function ask(messages: any[], system: string, apiKey: string) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: MODEL, max_tokens: 4000, system, tools: TOOLS, messages }),
+    });
+    if (r.ok) return await r.json();
+
+    const retryable = r.status === 429 || r.status >= 500;
+    const j = await r.json().catch(() => ({}));
+    if (retryable && attempt === 0) {
+      const wait = Number(r.headers.get("retry-after")) * 1000 || 2000;
+      await sleep(Math.min(wait, 6000));
+      continue;
+    }
+    const why = String((j as any)?.error?.message ?? JSON.stringify(j)).slice(0, 300).replace(/sk-ant-[A-Za-z0-9_\-]+/g, "sk-ant-…");
+    throw new Error(`anthropic ${r.status}: ${why}`);
+  }
+  throw new Error("anthropic: retries exhausted");
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
+  if (req.method !== "POST") return J({ ok: false, error: "POST only" }, 405);
+
+  let body: Record<string, any> = {};
+  try { body = await req.json(); } catch { return J({ ok: false, error: "json body required" }, 400); }
+
+  const auth = req.headers.get("Authorization") ?? "";
+  const jwt = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!jwt) return J({ ok: false, error: "unauthorized" }, 401);
+
+  const { data: who, error: whoErr } = await db.auth.getUser(jwt);
+  const uid = who?.user?.id;
+  if (whoErr || !uid) return J({ ok: false, error: "unauthorized" }, 401);
+
+  const { data: isAdmin, error: roleErr } = await db.rpc("has_role", { _user_id: uid, _role: "admin" });
+  if (roleErr || !isAdmin) return J({ ok: false, error: "admin only" }, 403);
+
+  const text = String(body.body ?? "").trim();
+  if (!text) return J({ ok: false, error: "body required" }, 400);
+  if (text.length > 6000) return J({ ok: false, error: "that is too long for one message" }, 400);
+
+  let threadId = body.thread_id ? String(body.thread_id) : "";
+  if (!threadId) {
+    const { data, error } = await db.from("admin_chat_threads").insert({ user_id: uid, title: text.slice(0, 70) }).select("id").single();
+    if (error) return J({ ok: false, error: error.message }, 500);
+    threadId = data.id;
+  }
+  await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "user", body: text });
+
+  const apiKey = cleanKey(Deno.env.get("ANTHROPIC_API_KEY"));
+  if (!apiKey) {
+    const why = "No Anthropic key is set on this project, so I cannot answer here yet. Your message is saved.";
+    await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
+    return J({ ok: true, thread_id: threadId, reply: why, degraded: true });
+  }
+
+  const { data: hist } = await db.from("admin_chat_messages").select("role,body").eq("thread_id", threadId).order("created_at").limit(40);
+  const messages: any[] = (hist ?? []).map((m: any) => ({ role: m.role, content: m.body }));
+
+  const [{ data: today }, { data: mac }, { data: inc }, { data: bell }, recorder] = await Promise.all([
+    db.rpc("admin_today"),
+    db.rpc("mac_agent_health"),
+    db.from("monitor_issues").select("key, severity, title, needs_jared, self_healed").eq("status", "open").limit(30),
+    db.from("admin_notifications").select("severity").is("read_at", null).limit(1000),
+    recorderStatus().catch(() => ({ status: "unknown" })),
+  ]);
+  const unread: Record<string, number> = {};
+  for (const n of (bell ?? []) as { severity: string }[]) unread[n.severity] = (unread[n.severity] ?? 0) + 1;
+  const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder);
+
+  const used: string[] = [];
+  let reply = "";
+  try {
+    for (let turn = 0; turn < MAX_TURNS; turn++) {
+      const res = await ask(messages, system, apiKey);
+      const calls = (res.content ?? []).filter((c: any) => c.type === "tool_use");
+      const said = (res.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n").trim();
+      if (!calls.length) { reply = said; break; }
+      messages.push({ role: "assistant", content: res.content });
+      const results = [];
+      for (const c of calls) {
+        used.push(c.name);
+        let out: Record<string, unknown>;
+        try { out = await runTool(c.name, c.input ?? {}, threadId); }
+        catch (e) { out = { ok: false, error: `tool crashed: ${(e as Error).message}` }; }
+        results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out).slice(0, RESULT_CAP[c.name] ?? 20000) });
+      }
+      messages.push({ role: "user", content: results });
+      if (turn === MAX_TURNS - 1) reply = said || "I got part-way through that and ran out of steps. Tell me which bit to finish.";
+    }
+  } catch (e) {
+    const why = `I could not reach the model: ${(e as Error).message}`.replace(/sk-ant-[A-Za-z0-9_\-]+/g, "sk-ant-…");
+    await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
+    return J({ ok: false, error: (e as Error).message, thread_id: threadId, reply: why }, 200);
+  }
+
+  if (!reply) reply = "Done.";
+  await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
+  await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
+
+  return J({ ok: true, thread_id: threadId, reply, tools: used });
+});
