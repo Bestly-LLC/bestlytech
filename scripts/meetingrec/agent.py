@@ -11,10 +11,10 @@ matter which way the call was recorded.
 
 Standard library only: it runs on the system python3.
 """
-import base64, json, os, re, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
+import base64, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -27,7 +27,22 @@ NT_DIR = f"{HOME}/notetaker"
 TALK_API = "https://cloud.bestly.tech/ocs/v2.php/apps/spreed/api/v4"
 BOT_USER = "scout-notetaker"
 # The notetaker: joins the Talk call and records each person on their own track.
-nt = {"proc": None, "name": None, "room": None, "title": None, "next_try": 0, "status": "off"}
+nt = {"proc": None, "name": None, "room": None, "title": None, "next_try": 0, "status": "off", "fails": 0}
+
+# Self-healing. The notetaker drives Talk's web page, so a Talk update can break it.
+#  - code sync: the scripts below are pulled from the repo (main) every 10 minutes,
+#    so a fix Scout commits reaches this Mac without anyone touching it.
+#  - self-test: a fake guest + the notetaker in a throwaway room, run when Talk's
+#    version changes, after every code update, daily, and whenever Scout asks.
+#  - a failed self-test after an update rolls the update back and blocks that version.
+#  - every failure lands in the monitor (recorder.notetaker) with the diagnostics
+#    Scout needs to write the fix.
+RAW = "https://raw.githubusercontent.com/Bestly-LLC/bestlytech/main/scripts/meetingrec/"
+SYNC = {"notetaker/notetaker.js": f"{HOME}/notetaker/notetaker.js",
+        "notetaker/tester.js": f"{HOME}/notetaker/tester.js",
+        "talk_tracks.py": f"{HOME}/talk_tracks.py"}
+BAD = f"{HOME}/.bad-versions"
+heal = {"next_sync": 0, "next_version_check": 0, "selftest": None, "last": None, "verify_after_update": False}
 START_APPS = [os.path.expanduser(p) for p in (
     "~/Desktop/Start Recording.app", "~/Applications/Start Recording.app", "/Applications/Start Recording.app")]
 
@@ -114,7 +129,8 @@ def talk(method, path, data=None):
 def active_room():
     """The Talk room with a call going on - the one Jared is in, if we can tell."""
     rooms = talk("GET", "/room")
-    live = [r for r in rooms if r.get("hasCall")]
+    live = [r for r in rooms if r.get("hasCall") and r["token"] != heal.get("test_room")
+            and r.get("displayName") != "Scout self-test"]
     mine = [r for r in live if (r.get("participantFlags") or 0) > 0]
     pick = mine or (live if len(live) == 1 else [])
     if not pick:
@@ -147,8 +163,21 @@ def notetaker_tick():
     """While a recording runs, get the notetaker into the Talk call and keep it there."""
     name = read(f"{HOME}/.current")
     if nt["proc"] and nt["proc"].poll() is not None:
-        log("notetaker exited", nt["proc"].returncode)
+        code = nt["proc"].returncode
+        log("notetaker exited", code)
         nt["proc"] = None
+        out = f"{REC}/{nt['name']}-talk"
+        if code != 0:
+            nt["fails"] += 1
+            health("notetaker", "problem", "Notetaker dropped out of a live call",
+                   f"Exit {code} on {nt['title']} (try {nt['fails']} of 3). This call falls back to voice matching "
+                   "if it can't rejoin.\nTo fix: scripts/meetingrec/notetaker/notetaker.js in the site repo, then run "
+                   "the recorder self-test.\n" + diag_text(out))
+            if nt["fails"] >= 3:
+                nt["status"] = "gave up"
+                nt["next_try"] = time.time() + 10 ** 9
+        elif notetaker_names(nt["name"]):
+            health("notetaker", "resolved", "Notetaker worked on a live call", nt["title"] or "", "info")
         if not recording_pid() and nt["room"]:
             remove_bot(nt["room"])
             nt.update(room=None, status="done")
@@ -158,7 +187,7 @@ def notetaker_tick():
             open(f"{REC}/{nt['name']}-talk/STOP", "w").close()
         return
     if nt["name"] != name:
-        nt.update(name=name, room=None, title=None, next_try=0, status="looking")
+        nt.update(name=name, room=None, title=None, next_try=0, status="looking", fails=0)
     if nt["proc"] or time.time() < nt["next_try"] or not os.path.exists(f"{NT_DIR}/notetaker.js"):
         return
     nt["next_try"] = time.time() + 15
@@ -188,11 +217,214 @@ def notetaker_tick():
     log("notetaker joining", token, title)
 
 
+def health(key, kind, title="", body="", severity="warning", healed=False):
+    try:
+        call({"op": "health", "key": key, "kind": kind, "title": title, "body": body[:3900],
+              "severity": severity, "healed": healed})
+    except Exception as e:  # noqa: BLE001
+        log("health report failed", e)
+
+
+def sha(path):
+    try:
+        return hashlib.sha256(open(path, "rb").read()).hexdigest()[:12]
+    except OSError:
+        return None
+
+
+def diag_text(out):
+    parts = []
+    for f in ("diag.json", "notetaker.log", "stderr.log"):
+        t = read(f"{out}/{f}")
+        if t:
+            parts.append(f"--- {f}\n" + t[-1500:])
+    return "\n".join(parts)
+
+
+def talk_version():
+    pw = subprocess.run(["security", "find-generic-password", "-s", "nextcloud-meetingrec", "-a", "jared", "-w"],
+                        capture_output=True, text=True).stdout.strip()
+    req = urllib.request.Request("https://cloud.bestly.tech/ocs/v2.php/cloud/capabilities", headers={
+        "OCS-APIRequest": "true", "Accept": "application/json",
+        "Authorization": "Basic " + base64.b64encode(f"jared:{pw}".encode()).decode()})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        caps = json.loads(r.read().decode())["ocs"]["data"]["capabilities"]
+    return caps.get("spreed", {}).get("version") or ""
+
+
+def sync_code():
+    """Pull the notetaker scripts from the repo. Returns True if anything changed."""
+    bad = set(read(BAD).split())
+    changed = []
+    for rel, dest in SYNC.items():
+        try:
+            with urllib.request.urlopen(RAW + rel + f"?t={int(time.time())}", timeout=20) as r:
+                new = r.read()
+        except Exception as e:  # noqa: BLE001
+            log("sync fetch failed", rel, e)
+            continue
+        h = hashlib.sha256(new).hexdigest()[:12]
+        if h == sha(dest) or h in bad:
+            continue
+        tmp = dest + ".incoming"
+        open(tmp, "wb").write(new)
+        check = ([NODE, "--check", tmp] if dest.endswith(".js") else ["python3", "-m", "py_compile", tmp])
+        if subprocess.run(check, capture_output=True).returncode != 0:
+            log("sync rejected (does not parse)", rel, h)
+            os.remove(tmp)
+            continue
+        if os.path.exists(dest):
+            shutil.copy2(dest, dest + ".last-good")
+        os.replace(tmp, dest)
+        changed.append((rel, h))
+        log("synced", rel, h)
+    if changed:
+        heal["updated"] = changed
+    return bool(changed)
+
+
+def rollback():
+    for rel, h in heal.get("updated", []):
+        dest = SYNC[rel]
+        if os.path.exists(dest + ".last-good"):
+            shutil.copy2(dest + ".last-good", dest)
+        with open(BAD, "a") as f:
+            f.write(h + "\n")
+        log("rolled back", rel, "blocked", h)
+    heal["updated"] = []
+
+
+def run_selftest(reason):
+    """Fake guest joins a throwaway Talk room; the notetaker must hear it, by name."""
+    heal["selftest"] = {"status": "running", "reason": reason, "at": datetime.now(timezone.utc).isoformat()}
+    out = f"/tmp/scout-selftest-{int(time.time())}"
+    token, tester, bot, step, ok = None, None, None, "create room", False
+    wav = f"{HOME}/notetaker/canary.wav"
+    try:
+        if not os.path.exists(wav):
+            subprocess.run(["say", "-o", "/tmp/canary.aiff", "This is the Scout canary check. Testing one two three."], check=True)
+            subprocess.run([f"{HOME}/bin/ffmpeg", "-loglevel", "error", "-y", "-i", "/tmp/canary.aiff", "-ar", "48000", "-ac", "1", wav], check=True)
+        token = talk("POST", "/room", {"roomType": 3, "roomName": "Scout self-test"})["token"]
+        heal["test_room"] = token
+        talk("POST", f"/room/{token}/participants", {"newParticipant": BOT_USER, "source": "users"})
+        step = "test guest starts a call"
+        tlog = open(f"{out}-tester.log", "w")
+        tester = subprocess.Popen([NODE, f"{HOME}/notetaker/tester.js", token, "Canary Check", "150", wav],
+                                  cwd=f"{HOME}/notetaker", stdout=tlog, stderr=tlog)
+        for _ in range(60):
+            time.sleep(1)
+            if "in call" in read(f"{out}-tester.log"):
+                break
+        if "in call" not in read(f"{out}-tester.log"):
+            raise RuntimeError("the fake guest couldn't get into a call")
+        step = "notetaker joins and records"
+        os.makedirs(out, exist_ok=True)
+        bot = subprocess.Popen([NODE, f"{HOME}/notetaker/notetaker.js", token, out], cwd=f"{HOME}/notetaker",
+                               stdout=subprocess.DEVNULL, stderr=open(f"{out}/stderr.log", "w"))
+        named = False
+        for _ in range(75):
+            time.sleep(1)
+            if bot.poll() is not None:
+                raise RuntimeError(f"notetaker quit (exit {bot.returncode})")
+            try:
+                m = json.load(open(f"{out}/manifest.json"))
+                t = [x for x in m.get("tracks", []) if x.get("name") == "Canary Check"
+                     and os.path.getsize(f"{out}/{x['file']}") > 15000]
+                if t:
+                    named = True
+                    break
+            except (OSError, ValueError):
+                pass
+        if not named:
+            raise RuntimeError("no track named 'Canary Check' after 75s")
+        step = "stop cleanly"
+        open(f"{out}/STOP", "w").close()
+        bot.wait(timeout=40)
+        step = "transcribe the track"
+        m = json.load(open(f"{out}/manifest.json"))
+        f = [x for x in m["tracks"] if x.get("name") == "Canary Check"][0]["file"]
+        subprocess.run([f"{HOME}/bin/ffmpeg", "-loglevel", "error", "-y", "-i", f"{out}/{f}", "-ac", "1", "-c:a", "aac", f"{out}/c.m4a"])
+        text = subprocess.run([f"{HOME}/bin/talkscribe", f"{out}/c.m4a", "X"], capture_output=True, text=True).stdout.lower()
+        if "canary" not in text and "scout" not in text:
+            raise RuntimeError("recorded the guest but the audio was not the test phrase: " + text[:120])
+        ok = True
+    except Exception as e:  # noqa: BLE001
+        err = f"failed at '{step}': {e}"
+    finally:
+        for p in (bot, tester):
+            if p and p.poll() is None:
+                p.terminate()
+                try:
+                    p.wait(timeout=15)
+                except Exception:  # noqa: BLE001
+                    p.kill()
+        if token:
+            try:
+                talk("DELETE", f"/room/{token}")
+            except Exception:  # noqa: BLE001
+                pass
+        heal["test_room"] = None
+    try:
+        tv = talk_version()
+    except Exception:  # noqa: BLE001
+        tv = "?"
+    if ok:
+        heal["selftest"] = {"status": "passed", "reason": reason, "at": datetime.now(timezone.utc).isoformat(), "talk": tv}
+        health("notetaker", "resolved", "Notetaker self-test passed", f"Talk {tv}, reason: {reason}", "info")
+        heal["updated"] = []
+        log("selftest passed", reason)
+        return True
+    detail = diag_text(out)
+    rolled = ""
+    if heal.get("updated"):
+        rollback()
+        rolled = " The update that caused it was rolled back and blocked."
+    heal["selftest"] = {"status": "failed", "reason": reason, "at": datetime.now(timezone.utc).isoformat(), "talk": tv, "error": err}
+    health("notetaker", "problem", "Notetaker can't join Talk calls",
+           f"Self-test ({reason}) {err}.{rolled} Talk version {tv}. notetaker.js {sha(SYNC['notetaker/notetaker.js'])}.\n"
+           "Until it's fixed, recordings fall back to voice matching.\n"
+           "To fix: edit scripts/meetingrec/notetaker/notetaker.js in the site repo (the page selectors in the join "
+           "section or WHO), commit to main, then run the recorder self-test. The Mac pulls main within 10 minutes.\n"
+           + detail, "warning")
+    log("selftest failed", err)
+    return False
+
+
+def heal_tick():
+    """Idle-time upkeep: code sync, Talk version watch, daily self-test."""
+    if recording_pid() or busy["stage"] or (heal["selftest"] or {}).get("status") == "running":
+        return
+    now = time.time()
+    reason = None
+    if now >= heal["next_sync"]:
+        heal["next_sync"] = now + 600
+        if sync_code():
+            reason = "code updated from the repo"
+    if not reason and now >= heal["next_version_check"]:
+        heal["next_version_check"] = now + 3600
+        try:
+            v = talk_version()
+            old = read(f"{HOME}/.talk-version")
+            if v and v != old:
+                open(f"{HOME}/.talk-version", "w").write(v)
+                if old:
+                    reason = f"Talk updated {old} -> {v}"
+        except Exception as e:  # noqa: BLE001
+            log("version check failed", e)
+    last = (heal["selftest"] or {}).get("at")
+    if not reason and datetime.now().hour == 4 and (not last or now - datetime.fromisoformat(last).timestamp() > 20 * 3600):
+        reason = "daily check"
+    if reason:
+        threading.Thread(target=run_selftest, args=(reason,), daemon=True).start()
+
+
 def snapshot():
     name = read(f"{HOME}/.current") or None
     roster = roster_list(read(f"{HOME}/.roster"))
     s = {"version": VERSION, "known_voices": known_voices(), "info": {"host": os.uname().nodename}}
-    if name and (nt["proc"] or nt["status"] in ("no talk call", "talk unreachable", "looking")) and recording_pid():
+    if heal["selftest"]:
+        s["info"]["selftest"] = heal["selftest"]
+    if name and (nt["proc"] or nt["status"] in ("no talk call", "talk unreachable", "looking", "gave up")) and recording_pid():
         s["info"]["notetaker"] = {"status": nt["status"], "room": nt["title"], "names": notetaker_names(name)}
     if busy["stage"] or stop_running_elsewhere():
         s.update(status="transcribing", current_name=name, roster=roster,
@@ -326,6 +558,16 @@ def handle(cmd):
         except Exception as e:  # noqa: BLE001
             ok, result, err = False, None, str(e)
         call({"op": "result", "command_id": cid, "ok": ok, "result": result, "error": err})
+    elif action == "selftest":
+        if recording_pid() or busy["stage"]:
+            call({"op": "result", "command_id": cid, "ok": False, "error": "Busy recording; try when idle."})
+            return
+        def go():
+            sync_code()
+            ok = run_selftest("asked for by Scout")
+            call({"op": "result", "command_id": cid, "ok": ok, "result": heal["selftest"],
+                  "error": None if ok else (heal["selftest"] or {}).get("error")})
+        threading.Thread(target=go, daemon=True).start()
     elif action == "stop":
         if not recording_pid():
             call({"op": "result", "command_id": cid, "ok": False, "error": "Nothing is recording."})
@@ -343,8 +585,9 @@ def main():
         try:
             try:
                 notetaker_tick()
+                heal_tick()
             except Exception as e:  # noqa: BLE001
-                log("notetaker tick failed", e)
+                log("notetaker/heal tick failed", e)
             r = call({"op": "poll", "state": snapshot()})
             if r.get("command"):
                 handle(r["command"])

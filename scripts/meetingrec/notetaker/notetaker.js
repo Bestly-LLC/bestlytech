@@ -116,7 +116,7 @@ const WHO = () => {
       node = node.parentElement;
       if (!node) break;
       const n = node.querySelector(
-        ".participant-name, .nameIndicator, [class*=name-indicator], [class*=nameIndicator], .bottom-bar__nameIndicator, [class*=participant-name]",
+        ".participant-name, .nameIndicator, [class*=name-indicator], [class*=nameIndicator], .bottom-bar__nameIndicator, [class*=participant-name], [class*=displayName], [class*=display-name], [class*=user-name], [class*=username]",
       );
       if (n && n.textContent.trim()) name = n.textContent.trim();
     }
@@ -124,6 +124,8 @@ const WHO = () => {
   }
   return out;
 };
+
+let diag = async (what) => fs.writeFileSync(path.join(outDir, "diag.json"), JSON.stringify({ what }));
 
 async function main() {
   const pw = execSync(`security find-generic-password -s nextcloud-notetaker -a ${USER} -w`).toString().trim();
@@ -141,6 +143,23 @@ async function main() {
     ],
   });
   const page = ctx.pages()[0] || (await ctx.newPage());
+  // Everything someone (or Scout) needs to fix a break, in one place.
+  diag = async (what) => {
+    try {
+      const info = await page.evaluate(() => ({
+        url: location.href,
+        title: document.title,
+        buttons: [...document.querySelectorAll("button")].map((b) => (b.getAttribute("aria-label") || b.innerText || "").trim()).filter(Boolean).slice(0, 80),
+        dialogs: [...document.querySelectorAll("[role=dialog]")].map((d) => d.innerText.slice(0, 300)),
+        mediaEls: document.querySelectorAll("video, audio").length,
+      }));
+      await page.screenshot({ path: path.join(outDir, "diag.png") }).catch(() => {});
+      fs.writeFileSync(path.join(outDir, "diag.json"), JSON.stringify({ what, at: new Date().toISOString(), ...info }, null, 1));
+      log("DIAG", what);
+    } catch (e) {
+      fs.writeFileSync(path.join(outDir, "diag.json"), JSON.stringify({ what, error: e.message }));
+    }
+  };
 
   await page.exposeFunction("__ntStart", (id, streamId, t0) => {
     counter += 1;
@@ -171,24 +190,44 @@ async function main() {
     await page.waitForURL(/\/call\//, { timeout: 30000 });
   }
 
-  // Close any welcome dialog, then join.
+  // Join. Talk's page changes between versions, so try several ways and
+  // check we really are in the call (a Leave call button) before going on.
+  const inCall = async () => (await page.getByRole("button", { name: /leave call|end call/i }).count()) > 0;
+  const clearOverlays = async () => {
+    await page.keyboard.press("Escape").catch(() => {});
+    await page.evaluate(() => document.querySelectorAll("#firstrunwizard, .first-run-wizard").forEach((e) => e.remove())).catch(() => {});
+  };
+  const strategies = [
+    ["button.join-call", () => page.locator("button.join-call").first()],
+    ["role join/start call", () => page.getByRole("button", { name: /^(join call|start call)$/i }).first()],
+    ["text join/start call", () => page.locator("button", { hasText: /join call|start call/i }).first()],
+  ];
   await page.waitForTimeout(3000);
-  await page.keyboard.press("Escape").catch(() => {});
-  await page.evaluate(() => document.querySelectorAll("#firstrunwizard").forEach((e) => e.remove()));
-  const joinBtn = page.locator("button.join-call").first();
-  await joinBtn.waitFor({ timeout: 30000 });
-  await joinBtn.click();
-  log("clicked join");
-  // Talk may show a device check dialog with its own join button.
-  await page.waitForTimeout(2500);
-  const confirm = page.getByRole("button", { name: /^(join call|start call)$/i });
-  if (await confirm.count()) {
-    await confirm.last().click().catch(() => {});
-    log("confirmed join in media dialog");
+  for (let attempt = 0; attempt < 3 && !(await inCall()); attempt++) {
+    await clearOverlays();
+    for (const [how, get] of strategies) {
+      const b = get();
+      if (!(await b.count().catch(() => 0))) continue;
+      await b.click({ timeout: 8000 }).catch(() => {});
+      log("tried join:", how);
+      await page.waitForTimeout(2500);
+      // a device-check dialog may need its own confirm
+      const dlg = page.locator(".modal-container, [role=dialog]").getByRole("button", { name: /join call|start call/i });
+      if (await dlg.count().catch(() => 0)) {
+        await dlg.last().click({ timeout: 8000 }).catch(() => {});
+        log("confirmed in dialog");
+        await page.waitForTimeout(3000);
+      }
+      if (await inCall()) break;
+    }
+    if (!(await inCall())) await page.waitForTimeout(5000);
   }
-  await page.waitForTimeout(3000);
+  if (!(await inCall())) {
+    await diag("could not join the call");
+    process.exit(3);
+  }
   // Mute our own (silent) mic and camera if Talk turned them on.
-  for (const label of [/mute audio/i, /disable video/i]) {
+  for (const label of [/mute audio/i, /disable video/i, /turn off camera/i]) {
     const b = page.getByRole("button", { name: label });
     if (await b.count()) await b.first().click().catch(() => {});
   }
@@ -221,6 +260,7 @@ async function main() {
   process.on("SIGTERM", () => stop("SIGTERM"));
 
   let debugDumped = false;
+  let namingWarned = false;
   while (!stopping) {
     try {
       const who = await page.evaluate(WHO);
@@ -228,6 +268,11 @@ async function main() {
         if (tracks[id]) tracks[id].names[name] = (tracks[id].names[name] || 0) + 1;
       }
       writeManifest();
+      const unnamed = Object.values(tracks).filter((t) => !Object.keys(t.names).length && Date.now() - t.t0 > 30000);
+      if (unnamed.length && !namingWarned) {
+        namingWarned = true;
+        await diag(`${unnamed.length} track(s) have no name from the page after 30s`);
+      }
       if (DEBUG && !debugDumped && Object.keys(tracks).length) {
         debugDumped = true;
         const html = await page.evaluate(() =>
@@ -247,8 +292,9 @@ async function main() {
   }
 }
 
-main().catch((e) => {
+main().catch(async (e) => {
   log("fatal", e.stack || e.message);
+  await diag("crashed: " + e.message).catch(() => {});
   writeManifest();
   process.exit(1);
 });
