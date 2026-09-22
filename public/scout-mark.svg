@@ -1,52 +1,81 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2B6E63"/>
-      <stop offset="1" stop-color="#17443E"/>
+    <linearGradient id="bg" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#31796C"/><stop offset="1" stop-color="#143C37"/>
     </linearGradient>
-    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFE7C7"/>
-      <stop offset="1" stop-color="#F6C98E"/>
+    <linearGradient id="barrel" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#E9A961"/><stop offset="0.28" stop-color="#FFE0B4"/>
+      <stop offset="0.72" stop-color="#FBCD93"/><stop offset="1" stop-color="#D9924D"/>
     </linearGradient>
-    <linearGradient id="lens" x1="0.2" y1="0" x2="0.8" y2="1">
-      <stop offset="0" stop-color="#EAF7FF"/>
-      <stop offset="0.55" stop-color="#8FD3F4"/>
-      <stop offset="1" stop-color="#4AA8D8"/>
+    <linearGradient id="cap" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#C87F3F"/><stop offset="0.35" stop-color="#F2B877"/>
+      <stop offset="1" stop-color="#B96F33"/>
     </linearGradient>
+    <radialGradient id="lens" cx="0.35" cy="0.3" r="0.85">
+      <stop offset="0" stop-color="#F4FBFF"/><stop offset="0.35" stop-color="#9FDCF7"/>
+      <stop offset="0.75" stop-color="#3E9AD0"/><stop offset="1" stop-color="#1D5C8A"/>
+    </radialGradient>
+    <linearGradient id="strapG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FD3C7"/><stop offset="1" stop-color="#4EA396"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#06211E" flood-opacity="0.45"/>
+    </filter>
   </defs>
 
-  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="120" fill="url(#bg)"/>
+  <circle cx="256" cy="286" r="196" fill="#ffffff" opacity="0.05"/>
 
-  <!-- friendly arched brows: raised and rounded, never angled inward -->
-  <g stroke="#FFE7C7" stroke-width="17" stroke-linecap="round" fill="none" opacity="0.92">
-    <path d="M124 146 q42 -34 84 -4"/>
-    <path d="M304 142 q42 -30 84 4"/>
+  <g filter="url(#soft)">
+    <!-- eyepieces (top, narrower) -->
+    <rect x="124" y="160" width="96" height="60" rx="26" fill="url(#cap)"/>
+    <rect x="292" y="160" width="96" height="60" rx="26" fill="url(#cap)"/>
+
+    <!-- barrels, flaring wider toward the lenses -->
+    <path d="M132 198 h80 a18 18 0 0 1 18 14 l16 86 a72 72 0 0 1 -150 0 l16 -86 a18 18 0 0 1 18 -14 z" fill="url(#barrel)"/>
+    <path d="M300 198 h80 a18 18 0 0 1 18 14 l16 86 a72 72 0 0 1 -150 0 l16 -86 a18 18 0 0 1 18 -14 z" fill="url(#barrel)"/>
+
+    <g fill="#B87D3C" opacity="0.35">
+      <rect x="132" y="216" width="80" height="10" rx="5"/>
+      <rect x="300" y="216" width="80" height="10" rx="5"/>
+    </g>
+
+    <!-- centre hinge + focus wheel -->
+    <rect x="216" y="214" width="80" height="112" rx="26" fill="url(#cap)"/>
+    <g>
+      <rect x="230" y="236" width="52" height="66" rx="20" fill="#9B5C26"/>
+      <g stroke="#E8A863" stroke-width="7" stroke-linecap="round">
+        <path d="M238 254 h36"/><path d="M238 272 h36"/><path d="M238 290 h36"/>
+      </g>
+    </g>
+
+    <!-- lens housings -->
+    <circle cx="164" cy="312" r="72" fill="url(#barrel)"/>
+    <circle cx="348" cy="312" r="72" fill="url(#barrel)"/>
+    <circle cx="164" cy="312" r="60" fill="#12403A"/>
+    <circle cx="348" cy="312" r="60" fill="#12403A"/>
+    <circle cx="164" cy="312" r="50" fill="url(#lens)"/>
+    <circle cx="348" cy="312" r="50" fill="url(#lens)"/>
+
+    <!-- catchlights, up and to the left: reads as looking happy -->
+    <circle cx="144" cy="292" r="17" fill="#fff" opacity="0.95"/>
+    <circle cx="328" cy="292" r="17" fill="#fff" opacity="0.95"/>
+    <circle cx="182" cy="334" r="8.5" fill="#fff" opacity="0.6"/>
+    <circle cx="366" cy="334" r="8.5" fill="#fff" opacity="0.6"/>
+
+    <!-- top rim light so the barrels read round, not flat -->
+    <g stroke="#FFF3DF" stroke-width="9" stroke-linecap="round" fill="none" opacity="0.55">
+      <path d="M146 214 q22 -8 44 0"/>
+      <path d="M314 214 q22 -8 44 0"/>
+    </g>
   </g>
 
-  <!-- barrels -->
-  <g>
-    <rect x="96" y="190" width="132" height="180" rx="56" fill="url(#body)"/>
-    <rect x="284" y="190" width="132" height="180" rx="56" fill="url(#body)"/>
-    <!-- bridge -->
-    <rect x="212" y="236" width="88" height="48" rx="24" fill="#E7B172"/>
-    <!-- eyepiece caps -->
-    <rect x="112" y="178" width="100" height="40" rx="20" fill="#E7B172"/>
-    <rect x="300" y="178" width="100" height="40" rx="20" fill="#E7B172"/>
+  <!-- happy brows sitting just above the eyepieces -->
+  <g stroke="#CFEFE6" stroke-width="18" stroke-linecap="round" fill="none">
+    <path d="M126 136 q50 -32 100 -6"/>
+    <path d="M286 130 q50 -26 100 6"/>
   </g>
 
-  <!-- lenses: big and round, the friendly part -->
-  <g>
-    <circle cx="162" cy="316" r="52" fill="#17443E"/>
-    <circle cx="350" cy="316" r="52" fill="#17443E"/>
-    <circle cx="162" cy="316" r="43" fill="url(#lens)"/>
-    <circle cx="350" cy="316" r="43" fill="url(#lens)"/>
-    <!-- warm catchlights, tilted up = happy -->
-    <circle cx="146" cy="300" r="14" fill="#FFFFFF" opacity="0.92"/>
-    <circle cx="334" cy="300" r="14" fill="#FFFFFF" opacity="0.92"/>
-    <circle cx="176" cy="332" r="7" fill="#FFFFFF" opacity="0.55"/>
-    <circle cx="364" cy="332" r="7" fill="#FFFFFF" opacity="0.55"/>
-  </g>
-
-  <!-- small smile under the bridge -->
-  <path d="M222 404 q34 30 68 0" stroke="#FFE7C7" stroke-width="15" stroke-linecap="round" fill="none" opacity="0.9"/>
+  <!-- smile, close enough to belong to the face -->
+  <path d="M212 412 q44 36 88 0" stroke="#CFEFE6" stroke-width="17" stroke-linecap="round" fill="none"/>
 </svg>
