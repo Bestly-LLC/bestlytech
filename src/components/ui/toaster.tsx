@@ -1,5 +1,6 @@
 import { useToast } from "@/hooks/use-toast";
-import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
+import { Toast, ToastAction, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
+import { copyForClaude } from "@/lib/copyForClaude";
 
 export function Toaster() {
   const { toasts } = useToast();
@@ -13,7 +14,14 @@ export function Toaster() {
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && <ToastDescription>{description}</ToastDescription>}
             </div>
-            {action}
+            {action ?? (props.variant === "destructive" && (
+              <ToastAction
+                altText="Copy this error"
+                onClick={(e) => { e.preventDefault(); copyForClaude(String(title ?? "Error"), typeof description === "string" ? description : null, { Type: "error" }); }}
+              >
+                Copy
+              </ToastAction>
+            ))}
             <ToastClose />
           </Toast>
         );

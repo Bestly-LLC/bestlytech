@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { AdminMark } from "@/components/AdminMark";
+import { BookOpen, GripVertical } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
@@ -75,6 +76,7 @@ const turoItems = [
 // read-only cache; this is the copy we own.
 const opsItems = [
   { title: "Claude Skills", url: "/admin/skills", icon: BookMarked },
+  { title: "Scout's playbook", url: "/admin/playbook", icon: BookOpen },
 ];
 
 
@@ -95,6 +97,24 @@ export const ADMIN_NAV_SECTIONS = [
 const COUNT_MIN_INTERVAL_MS = 15_000;
 const COUNT_POLL_MS = 60_000;
 
+/* Section order: dragged by the grip next to each section label, remembered in this browser. */
+const ORDER_KEY = "bestly-admin-nav-order";
+function readOrder(): string[] {
+  try { const v = JSON.parse(localStorage.getItem(ORDER_KEY) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function orderedSections(order: string[]) {
+  const rank = (l: string) => { const i = order.indexOf(l); return i < 0 ? 999 + ADMIN_NAV_SECTIONS.findIndex((s) => s.label === l) : i; };
+  return [...ADMIN_NAV_SECTIONS].sort((a, b) => rank(a.label) - rank(b.label));
+}
+
+/* Attention dots: anything waiting (admin_today) or unread in the bell points at a page. */
+type Level = "red" | "amber" | "blue";
+const LEVEL_RANK: Record<Level, number> = { red: 3, amber: 2, blue: 1 };
+function pathOf(url: string | null | undefined) {
+  if (!url || !url.startsWith("/admin")) return null;
+  return url.split(/[?#]/)[0].replace(/\/$/, "") || "/admin";
+}
+
 export function AdminSidebar() {
   const { state, isMobile, setOpenMobile } = useSidebar();
   const { bento } = useAdminTheme();
@@ -104,6 +124,11 @@ export function AdminSidebar() {
   const currentPath = location.pathname;
   // A key is missing until its count loads. A failed count keeps its last value instead of reading 0.
   const [counts, setCounts] = useState<Partial<Record<CountKeys, number>>>({});
+  const [attention, setAttention] = useState<Record<string, { level: Level; n: number; why: string }>>({});
+  const [order, setOrder] = useState<string[]>(() => (typeof window === "undefined" ? [] : readOrder()));
+  const sections = orderedSections(order);
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [dragging, setDragging] = useState<string | null>(null);
   const lastFetchRef = useRef(0);
   const inFlightRef = useRef(false);
 
@@ -121,6 +146,24 @@ export function AdminSidebar() {
         supabase.from("contact_submissions").select("id", head).eq("status", "new"),
         supabase.from("subscriptions").select("id", head).eq("status", "active"),
       ]);
+      const [{ data: queue }, { data: bell }] = await Promise.all([
+        supabase.rpc("admin_today" as never),
+        supabase.from("admin_notifications" as never).select("url, severity, title").is("read_at", null).limit(300),
+      ]);
+      const att: Record<string, { level: Level; n: number; why: string }> = {};
+      const bump = (url: string | null | undefined, level: Level, why: string) => {
+        const p = pathOf(url);
+        if (!p) return;
+        const cur = att[p];
+        att[p] = { level: cur && LEVEL_RANK[cur.level] >= LEVEL_RANK[level] ? cur.level : level, n: (cur?.n ?? 0) + 1, why: cur?.why ?? why };
+      };
+      for (const q of ((queue ?? []) as unknown as { url: string; severity: string; rank: number; title: string }[])) {
+        bump(q.url, q.rank <= 1 || q.severity === "blocked" ? "red" : q.severity === "warning" ? "amber" : "blue", q.title);
+      }
+      for (const b of ((bell ?? []) as unknown as { url: string | null; severity: string; title: string }[])) {
+        if (b.severity === "warning" || b.severity === "critical" || b.severity === "error") bump(b.url, b.severity === "warning" ? "amber" : "red", b.title);
+      }
+      setAttention(att);
       const keys: CountKeys[] = ["leads", "contacts", "cySubscribers"];
       setCounts((prev) => {
         const next = { ...prev };
@@ -178,6 +221,52 @@ export function AdminSidebar() {
     try { await openHokuAdmin(); } finally { setHokuBusy(false); }
   };
 
+  const saveOrder = (next: string[]) => {
+    setOrder(next);
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+  };
+  const move = (label: string, delta: number) => {
+    const labels = sections.map((s) => s.label);
+    const i = labels.indexOf(label), j = i + delta;
+    if (i < 0 || j < 0 || j >= labels.length) return;
+    [labels[i], labels[j]] = [labels[j], labels[i]];
+    saveOrder(labels);
+  };
+  // Pointer drag (mouse, pen and touch): the section follows the pointer past its neighbours' midpoints.
+  const startDrag = (label: string) => (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setDragging(label);
+    const onMove = (ev: PointerEvent) => {
+      const labels = orderedSections(readOrderFrom()).map((s) => s.label);
+      const from = labels.indexOf(label);
+      let to = from;
+      labels.forEach((l, idx) => {
+        const r = sectionRefs.current[l]?.getBoundingClientRect();
+        if (!r || l === label) return;
+        const mid = r.top + r.height / 2;
+        if (idx < from && ev.clientY < mid) to = Math.min(to, idx);
+        if (idx > from && ev.clientY > mid) to = Math.max(to, idx);
+      });
+      if (to !== from) {
+        labels.splice(to, 0, labels.splice(from, 1)[0]);
+        saveOrder(labels);
+        latest = labels;
+      }
+    };
+    let latest: string[] | null = null;
+    const readOrderFrom = () => latest ?? readOrder();
+    const onUp = () => {
+      setDragging(null);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
   const renderItem = (item: { title: string; url: string; icon: any; countKey?: CountKeys; sso?: boolean }) => {
     if (item.sso) {
       return (
@@ -203,6 +292,12 @@ export function AdminSidebar() {
     }
     const active = isActive(item.url);
     const count = item.countKey ? counts[item.countKey] ?? 0 : 0;
+    // A page gets a dot when something waiting points at it (the home page only for its own items).
+    const hits = Object.entries(attention).filter(([p]) => (item.url === "/admin" ? p === "/admin" : p === item.url || p.startsWith(item.url + "/")));
+    const dot = hits.length
+      ? { level: hits.reduce<Level>((l, [, v]) => (LEVEL_RANK[v.level] > LEVEL_RANK[l] ? v.level : l), "blue"), n: hits.reduce((n, [, v]) => n + v.n, 0), why: hits[0][1].why }
+      : null;
+    const dotClass = dot ? (dot.level === "red" ? "bg-red-500" : dot.level === "amber" ? "bg-amber-400" : "bg-sky-400") : "";
     return (
       <SidebarMenuItem key={item.title}>
         <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
@@ -219,10 +314,21 @@ export function AdminSidebar() {
                 : "text-white/55 hover:text-white hover:bg-white/[0.05] bento:text-white/70"
             )}
           >
-            <item.icon className="h-[1.125rem] w-[1.125rem] shrink-0" />
+            <span className="relative shrink-0">
+              <item.icon className="h-[1.125rem] w-[1.125rem]" />
+              {dot && collapsed && <span className={cn("absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2 ring-[#0a0a0a] bento:ring-[#fff]", dotClass)} aria-hidden />}
+            </span>
             {!collapsed && (
-              <span className="flex-1 flex items-center justify-between">
-                {item.title}
+              <span className="flex-1 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  {item.title}
+                  {dot && (
+                    <span title={`${dot.n} need${dot.n === 1 ? "s" : ""} attention: ${dot.why}`} className={cn("relative inline-flex h-2 w-2 rounded-full", dotClass)}>
+                      {dot.level === "red" && <span className={cn("absolute inset-0 animate-ping rounded-full opacity-60 motion-reduce:hidden", dotClass)} />}
+                      <span className="sr-only">{dot.n} need attention</span>
+                    </span>
+                  )}
+                </span>
                 {count > 0 && (
                   <span className={cn("h-5 min-w-5 px-1.5 text-[0.625rem] font-medium tabular-nums bg-white/10 text-white/60 rounded-full inline-flex items-center justify-center", active && "bento:bg-[rgba(255,255,255,0.18)] bento:text-[#fff]")}>
                     {count}
@@ -255,12 +361,31 @@ export function AdminSidebar() {
           {renderItem(dashboardItem)}
         </SidebarMenu>
 
-        {ADMIN_NAV_SECTIONS.map((section) => (
-          <div key={section.label}>
+        {sections.map((section) => (
+          <div
+            key={section.label}
+            ref={(el) => { sectionRefs.current[section.label] = el; }}
+            className={cn("transition-[opacity,transform] duration-150", dragging === section.label && "scale-[0.98] opacity-60")}
+          >
             <div className="mx-3 my-2 h-px bg-white/[0.06] bento:bg-transparent bento:my-1" />
             <SidebarGroup>
-              <SidebarGroupLabel className="text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
-                {section.label}
+              <SidebarGroupLabel className="group/label flex items-center justify-between text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
+                <span>{section.label}</span>
+                {!collapsed && (
+                  <button
+                    type="button"
+                    onPointerDown={startDrag(section.label)}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowUp") { e.preventDefault(); move(section.label, -1); }
+                      if (e.key === "ArrowDown") { e.preventDefault(); move(section.label, 1); }
+                    }}
+                    aria-label={`Move ${section.label} section (drag, or use the arrow keys)`}
+                    title="Drag to move"
+                    className="-mr-1 grid h-6 w-6 cursor-grab touch-none place-items-center rounded-md text-white/30 opacity-60 transition hover:bg-white/[0.06] hover:text-white/70 focus-visible:opacity-100 active:cursor-grabbing group-hover/label:opacity-100 md:opacity-0"
+                  >
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>{section.items.map(renderItem)}</SidebarMenu>

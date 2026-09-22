@@ -54,10 +54,7 @@ function Shell({ children, right }: { children: ReactNode; right?: ReactNode }) 
       <div className="mx-auto w-full max-w-2xl px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
         <header className="flex h-14 items-center justify-between">
           <span className="flex items-center gap-2 text-[0.95rem] font-semibold tracking-tight">
-            <span className="flex items-center -space-x-1" aria-hidden>
-              <AdminMark watchCursor className="h-7 w-7" />
-              <PartnerMark watchCursor className="h-7 w-7" />
-            </span>
+            <AdminMark watchCursor className="h-7 w-7" />
             Bestly <span className="text-white/45">· Partner</span>
           </span>
           {right}

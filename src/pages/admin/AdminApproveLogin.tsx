@@ -22,6 +22,38 @@ type Lookup = { code: string; status: string; created_at: string; expires_at: st
 const CODE_LEN = 8;
 const clip = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
+type Res = { ok: boolean; status: number; data: Record<string, any> | null; error: string | null };
+
+/** Calls admin-device-login with a fresh session; on 401 refreshes once and retries. Returns the real server error. */
+async function callLogin(body: Record<string, unknown>): Promise<Res> {
+  const once = async (): Promise<Res> => {
+    const { data, error } = await supabase.functions.invoke("admin-device-login", { body });
+    if (!error) return { ok: !!data?.ok, status: 200, data, error: data?.ok ? null : data?.error ?? "That didn't work." };
+    const ctx = (error as { context?: Response }).context;
+    let status = 0;
+    let msg: string | null = error.message ?? null;
+    if (ctx && typeof ctx.status === "number") {
+      status = ctx.status;
+      try {
+        const j = await ctx.clone().json();
+        msg = j?.error ?? j?.message ?? msg;
+      } catch {
+        /* not json */
+      }
+    }
+    return { ok: false, status, data: null, error: msg };
+  };
+  const { data: s } = await supabase.auth.getSession();
+  if (!s.session) return { ok: false, status: 401, data: null, error: null };
+  let r = await once();
+  if (r.status === 401) {
+    const { error } = await supabase.auth.refreshSession();
+    if (error) return r;
+    r = await once();
+  }
+  return r;
+}
+
 function describe(ua: string | null) {
   if (!ua) return { name: "Unknown browser", Icon: Monitor };
   const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Mac OS X/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows PC" : /Android/.test(ua) ? "Android" : /Linux/.test(ua) ? "Linux" : "";
@@ -129,6 +161,8 @@ export default function AdminApproveLogin() {
   const [msg, setMsg] = useState<string | null>(null);
   const [shake, setShake] = useState(0);
   const [done, setDone] = useState<"approved" | "denied" | null>(null);
+  const [signedOut, setSignedOut] = useState(false);
+  const back = `/admin/login?next=${encodeURIComponent(`/admin/approve?code=${code}`)}`;
 
   const complete = code.length === CODE_LEN;
   // Arrived through a QR or link: the code wasn't typed from the screen, so the number must be.
@@ -138,17 +172,21 @@ export default function AdminApproveLogin() {
   useEffect(() => {
     setReq(null);
     setMsg(null);
+    setSignedOut(false);
     if (!complete) return;
     let gone = false;
     setLooking(true);
     (async () => {
-      const { data, error } = await supabase.functions.invoke("admin-device-login", { body: { op: "lookup", code } });
+      const r = await callLogin({ op: "lookup", code });
       if (gone) return;
       setLooking(false);
-      if (error || !data?.ok) {
-        setMsg(data?.error ?? "No sign-in request with that code. Check the other screen.");
+      if (r.status === 401) {
+        setSignedOut(true);
+        setMsg("This phone's admin sign-in expired. Sign in here first, then you'll come right back to this code.");
+      } else if (!r.ok) {
+        setMsg(r.status >= 500 ? `${r.error ?? "Server error"} (error ${r.status})` : r.error ?? "No sign-in request with that code. Start a new one on the other screen.");
         setShake((n) => n + 1);
-      } else setReq(data.request as Lookup);
+      } else setReq(r.data!.request as Lookup);
     })();
     return () => {
       gone = true;
@@ -160,10 +198,15 @@ export default function AdminApproveLogin() {
     setMsg(null);
     const body: Record<string, unknown> = { op: "decide", code, approve };
     if (approve && needsNumber) body.match = Number(num);
-    const { data, error } = await supabase.functions.invoke("admin-device-login", { body });
+    const r = await callLogin(body);
     setBusy(null);
-    if (error || !data?.ok) {
-      setMsg(data?.error ?? error?.message ?? "That didn't work. Try again.");
+    if (r.status === 401) {
+      setSignedOut(true);
+      setMsg("This phone's admin sign-in expired. Sign in here first, then you'll come right back to this code.");
+      return;
+    }
+    if (!r.ok) {
+      setMsg(r.error ?? "That didn't work. Try again.");
       setShake((n) => n + 1);
       if (approve && needsNumber) setNum("");
       return;
@@ -222,7 +265,9 @@ export default function AdminApproveLogin() {
               </h1>
               {!req && (
                 <p className="mx-auto mt-2 max-w-[19rem] text-[1.0625rem] leading-relaxed text-white/60">
-                  {needsNumber ? "Check the code matches the other screen." : "Type the code shown on the screen you want to sign in."}
+                  {needsNumber
+                    ? "The 8-character code came in from the QR. Next you'll type the 2-digit number shown on the other screen."
+                    : "Type the 8-character code shown on the screen you want to sign in."}
                 </p>
               )}
             </header>
@@ -276,7 +321,8 @@ export default function AdminApproveLogin() {
 
                 {req.live && needsNumber && (
                   <div className="pt-2 text-center">
-                    <p className="text-[1.0625rem] font-medium">Type the number on the other screen</p>
+                    <p className="text-[1.0625rem] font-medium">Now type the 2-digit number</p>
+                    <p className="mt-1 text-[0.9375rem] text-white/55">It's the big number on the other screen, next to the QR.</p>
                     <div className="mt-3">
                       <CodeCells value={num} length={2} numeric onChange={setNum} label="Two-digit number from the other screen" autoFocus />
                     </div>
@@ -304,6 +350,13 @@ export default function AdminApproveLogin() {
             className="approve-press flex h-[3.25rem] w-full items-center justify-center rounded-2xl bg-white text-[1.0625rem] font-semibold text-black"
           >
             Done
+          </Link>
+        ) : signedOut ? (
+          <Link
+            to={back}
+            className="approve-press flex h-[3.25rem] w-full items-center justify-center rounded-2xl bg-white text-[1.0625rem] font-semibold text-black"
+          >
+            Sign in on this phone
           </Link>
         ) : (
           <>

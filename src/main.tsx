@@ -1,6 +1,9 @@
 import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "next-themes";
 import App from "./App.tsx";
+import { installCopyableToasts } from "./lib/copyableToasts";
+
+installCopyableToasts();
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // ── Self-heal stale-chunk errors after a deploy ─────────────────────────────

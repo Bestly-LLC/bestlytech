@@ -6,9 +6,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, CircleDollarSign, Cloud, FileSignature, ListChecks, Mail,
-  Rocket, Snowflake, Store, Wrench, Binoculars, type LucideIcon,
+  Rocket, Snowflake, Store, Wrench, Binoculars, Check, Copy, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { copyForClaude } from "@/lib/copyForClaude";
 
 /*
  * Header bell: admin_notifications, filled by database triggers (new leads from each funnel,
@@ -57,6 +58,7 @@ function ago(iso: string) {
 export function NotificationBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   const [items, setItems] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -169,7 +171,20 @@ export function NotificationBell() {
                 const k = kindMeta(n.kind);
                 const Icon = k.icon;
                 return (
-                  <li key={n.id}>
+                  <li key={n.id} className="group/row relative">
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const ok = await copyForClaude(n.title, n.body, { Type: `${k.label} (${n.severity})`, Sent: new Date(n.created_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }), Link: n.url });
+                        if (ok) { setCopied(n.id); setTimeout(() => setCopied((c) => (c === n.id ? null : c)), 1400); }
+                      }}
+                      aria-label="Copy this alert"
+                      title="Copy to paste to Claude"
+                      className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-[#111114]/80 text-white/60 opacity-100 transition hover:text-white md:opacity-0 md:group-hover/row:opacity-100 focus-visible:opacity-100 bento:bg-white/90"
+                    >
+                      {copied === n.id ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                    </button>
                     <button type="button" onClick={() => go(n)}
                       className={cn("w-full text-left flex gap-3 px-4 py-3 border-b border-white/[0.05] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:bg-white/[0.06]",
                         !n.read_at && "bg-white/[0.025]")}>
