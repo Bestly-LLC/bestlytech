@@ -43,7 +43,7 @@ const laDay = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_An
 const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
 const btn = "inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80";
 const ghost = cn(btn, "text-white/70 hover:bg-white/[0.06] hover:text-white");
-const solid = cn(btn, "bg-white text-black hover:bg-white/90 bento:bg-[#111114] bento:text-white");
+const solid = cn(btn, "bg-white text-black hover:bg-white/90 bento:bg-[#111114] bento:text-[#fff]");
 
 function isExternal(url: string) {
   return /^https?:\/\//.test(url);

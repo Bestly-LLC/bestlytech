@@ -96,3 +96,6 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.scout-daily]
   verify_jwt = false
+
+[functions.partner-admin]
+  verify_jwt = false

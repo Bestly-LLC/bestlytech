@@ -10,6 +10,7 @@ import {
   Shield,
   Car,
   Mic,
+  Handshake,
   House, Boxes, KeyRound, BookMarked,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -44,6 +45,7 @@ const workItems = [
   { title: "Contacts", url: "/admin/contacts", icon: Mail, countKey: "contacts" as CountKeys },
   { title: "Waitlist", url: "/admin/waitlist", icon: ListChecks },
   { title: "Meetings", url: "/admin/meetings", icon: Mic },
+  { title: "Partners", url: "/admin/partners", icon: Handshake },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 

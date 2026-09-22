@@ -74,6 +74,9 @@ const CookieYetiSubscribers = lazy(() => import("./pages/admin/CookieYetiSubscri
 const CookieYetiAnalytics = lazy(() => import("./pages/admin/CookieYetiAnalytics"));
 const AdminContacts = lazy(() => import("./pages/admin/AdminContacts"));
 const AdminMeetings = lazy(() => import("./pages/admin/AdminMeetings"));
+const AdminPartners = lazy(() => import("./pages/admin/AdminPartners"));
+const PartnerPortal = lazy(() => import("./pages/partner/PartnerPortal"));
+const PartnerWelcome = lazy(() => import("./pages/partner/PartnerPortal").then((m) => ({ default: m.PartnerWelcome })));
 const AdminWaitlist = lazy(() => import("./pages/admin/AdminWaitlist"));
 const CloudDealDetail = lazy(() => import("./pages/admin/CloudDealDetail"));
 const CloudDiscoveryBrief = lazy(() => import("./pages/admin/CloudDiscoveryBrief"));
@@ -164,6 +167,10 @@ const App = () => (
                 <Route path="/voice-to-claude" element={<VoiceToClaude />} />
                 <Route path="/cookie-yeti/transparency" element={<CookieYetiDashboard />} />
 
+                {/* Partner portal (Eli): its own sign-in, sees only what RLS allows a partner */}
+                <Route path="/partner" element={<PartnerPortal />} />
+                <Route path="/partner/welcome" element={<PartnerWelcome />} />
+
                 {/* Admin Routes */}
                 <Route path="/admin/login" element={<AdminLogin />} />
                 <Route path="/admin/approve" element={<AdminRoute><AdminApproveLogin /></AdminRoute>} />
@@ -178,6 +185,7 @@ const App = () => (
                   <Route path="hires" element={<TabRedirect to="/admin/leads" tab="hire" />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
                   <Route path="meetings" element={<AdminMeetings />} />
+                  <Route path="partners" element={<AdminPartners />} />
                   <Route path="cloud" element={<TabRedirect to="/admin/leads" tab="cloud" />} />
                   <Route path="cloud/:id" element={<CloudDealDetail />} />
                   <Route path="cloud/:id/brief-pdf" element={<CloudDiscoveryBrief />} />
