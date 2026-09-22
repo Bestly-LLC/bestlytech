@@ -166,6 +166,7 @@ const App = () => (
 
                 {/* Admin Routes */}
                 <Route path="/admin/login" element={<AdminLogin />} />
+                <Route path="/admin/approve" element={<AdminRoute><AdminApproveLogin /></AdminRoute>} />
                 <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
                   <Route index element={<AdminDashboard />} />
                   <Route path="leads" element={<AdminLeads />} />
@@ -197,7 +198,6 @@ const App = () => (
                   <Route path="home-hub/access" element={<HomeHubAccess />} />
                   <Route path="street-sweeping" element={<StreetSweeping />} />
                   <Route path="skills" element={<AdminSkills />} />
-                  <Route path="approve" element={<AdminApproveLogin />} />
                   <Route path="*" element={<AdminNotFound />} />
                 </Route>
 

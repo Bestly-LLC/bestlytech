@@ -311,7 +311,13 @@ export function Scout() {
 
       const id = (data as { thread_id?: string })?.thread_id ?? (fresh ? null : threadId);
       if (error) {
-        setMsgs((m) => [...m, { role: "assistant", body: `I couldn't reach the server: ${error.message}` }]);
+        const status = (error as { context?: { status?: number } })?.context?.status;
+        const body = status === 504 || status === 546
+          ? "That one ran too long and got cut off. Say \"keep going\" and I'll pick it up, or ask for a smaller piece."
+          : status === 401 || status === 403
+            ? "Your sign-in expired. Refresh the page and sign in again."
+            : "I couldn't reach the server just now. Try again in a moment.";
+        setMsgs((m) => [...m, { role: "assistant", body }]);
       } else if (id) {
         setThreadId(id);
         await loadThread(id);

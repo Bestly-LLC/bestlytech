@@ -35,6 +35,10 @@
 //    "Failed to send a request to the Edge Function". Auth is done below.
 //  - watchBuild and the Pi wait are capped so a turn cannot approach the wall clock.
 //  - The model call retries ONCE on 429 and 5xx.
+//  - v10: the platform kills a reply at 150s. Every reply now has a 118s budget: slow tools stop
+//    at 110s, and when time or steps run out Scout answers with what it has (no tools) instead of
+//    dying. History is the LAST 30 messages (it used to be the first 40, so long threads never saw
+//    the newest ask and kept redoing old work until they timed out).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -45,7 +49,10 @@ const PI_WAIT_MS = 60_000;       // how long to wait for the Pi to report back i
 const REC_WAIT_MS = 20_000;      // how long to wait for the Mac mini to pick up a recorder job
 const REPOS: Record<string, string> = { site: "Bestly-LLC/bestlytech", hoku: "Bestly-LLC/hoku-clean" };
 const WATCHABLE = new Set(["Bestly-LLC/bestlytech"]);
-const RESULT_CAP: Record<string, number> = { meeting_transcript: 160_000 };
+const RESULT_CAP: Record<string, number> = { meeting_transcript: 100_000 };
+// The platform kills the function at 150s wall clock. Wrap up well before that.
+const BUDGET_MS = 118_000;
+const WRAP_MS = 28_000;         // leave this much for a final no-tools answer
 
 // Mirrors the allowlist in the home-hub-agent function. Read-only actions run without a yes.
 const PI_ACTIONS: Record<string, string[]> = {
@@ -66,6 +73,9 @@ const CORS = {
 };
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Per-request cut-off for slow tools, so one tool cannot run the reply past the platform limit.
+let toolDeadline = Infinity;
+const timeUp = () => Date.now() > toolDeadline;
 
 function cleanKey(raw: string | undefined): string {
   if (!raw) return "";
@@ -313,7 +323,7 @@ Read the file first, every time. Keep the change small. Send the complete new fi
 async function gitCall(body: Record<string, unknown>): Promise<Record<string, unknown>> {
   const { data: rid, error } = await db.rpc("admin_git_call", { p_body: body });
   if (error) return { ok: false, error: error.message };
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 30 && !timeUp(); i++) {
     await sleep(i === 0 ? 900 : 700);
     const { data: ans } = await db.rpc("admin_git_poll", { p_request_id: rid });
     if (ans) {
@@ -328,7 +338,7 @@ async function gitCall(body: Record<string, unknown>): Promise<Record<string, un
 // public, so this needs no token.
 async function watchBuild(repo: string, sha: string) {
   if (!WATCHABLE.has(repo)) return { state: "unwatchable", note: "private repo, build not visible without a token" };
-  for (let i = 0; i < BUILD_POLLS; i++) {
+  for (let i = 0; i < BUILD_POLLS && !timeUp(); i++) {
     await sleep(i === 0 ? 9000 : 6000);
     let j: any;
     try {
@@ -367,7 +377,7 @@ async function piCommand(args: Record<string, any>): Promise<Record<string, unkn
     id = data.id;
   }
   const until = Date.now() + PI_WAIT_MS;
-  while (Date.now() < until) {
+  while (Date.now() < until && !timeUp()) {
     await sleep(4000);
     const { data: row } = await db.from("home_hub_commands").select("status, result, error").eq("id", id).single();
     if (row && (row.status === "done" || row.status === "failed" || row.status === "expired")) {
@@ -408,7 +418,7 @@ async function recorderCommand(args: Record<string, any>): Promise<Record<string
     const { data, error } = await db.from("meeting_recorder_commands").insert({ action: "selftest", payload: {}, requested_by: "scout-chat" }).select("id").single();
     if (error) return { ok: false, error: error.message };
     const until = Date.now() + 110_000;
-    while (Date.now() < until) {
+    while (Date.now() < until && !timeUp()) {
       await sleep(4000);
       const { data: row } = await db.from("meeting_recorder_commands").select("status, result, error").eq("id", data.id).single();
       if (row && (row.status === "done" || row.status === "failed")) {
@@ -429,7 +439,7 @@ async function recorderCommand(args: Record<string, any>): Promise<Record<string
   if (error) return { ok: false, error: error.message };
 
   const until = Date.now() + REC_WAIT_MS;
-  while (Date.now() < until) {
+  while (Date.now() < until && !timeUp()) {
     await sleep(2000);
     const { data: row } = await db.from("meeting_recorder_commands").select("status, result, error").eq("id", data.id).single();
     if (action === "start" && row && (row.status === "done" || row.status === "failed")) {
@@ -457,7 +467,7 @@ async function meetingTranscript(args: Record<string, any>): Promise<Record<stri
   const r = data[0];
   await db.from("meeting_recordings").update({ debriefed_at: new Date().toISOString() }).eq("id", r.id);
   const text = String(r.transcript ?? "");
-  const MAX = 150_000;
+  const MAX = 90_000;
   return {
     ok: true, name: r.name, started_at: r.started_at, stopped_at: r.stopped_at, roster: r.roster, speakers: r.speakers,
     lines: r.line_count, truncated: text.length > MAX,
@@ -634,12 +644,16 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
   return out;
 }
 
-async function ask(messages: any[], system: string, apiKey: string) {
+async function ask(messages: any[], system: string, apiKey: string, opts: { timeoutMs?: number; noTools?: boolean } = {}) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 4000, system, tools: TOOLS, messages }),
+      body: JSON.stringify({
+        model: MODEL, max_tokens: opts.noTools ? 1500 : 4000, system, tools: TOOLS, messages,
+        ...(opts.noTools ? { tool_choice: { type: "none" } } : {}),
+      }),
+      signal: opts.timeoutMs ? AbortSignal.timeout(Math.max(3000, opts.timeoutMs)) : undefined,
     });
     if (r.ok) return await r.json();
 
@@ -659,6 +673,8 @@ async function ask(messages: any[], system: string, apiKey: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return J({ ok: false, error: "POST only" }, 405);
+  const started = Date.now();
+  toolDeadline = started + BUDGET_MS - 8_000;
 
   let body: Record<string, any> = {};
   try { body = await req.json(); } catch { return J({ ok: false, error: "json body required" }, 400); }
@@ -693,8 +709,19 @@ Deno.serve(async (req) => {
     return J({ ok: true, thread_id: threadId, reply: why, degraded: true });
   }
 
-  const { data: hist } = await db.from("admin_chat_messages").select("role,body").eq("thread_id", threadId).order("created_at").limit(40);
-  const messages: any[] = (hist ?? []).map((m: any) => ({ role: m.role, content: m.body }));
+  // The LAST 30 messages (newest first, then flipped), so the newest ask is always what the model answers.
+  const { data: hist } = await db.from("admin_chat_messages").select("role,body").eq("thread_id", threadId)
+    .order("created_at", { ascending: false }).limit(30);
+  const messages: any[] = [];
+  for (const m of (hist ?? []).reverse() as { role: string; body: string }[]) {
+    const role = m.role === "assistant" ? "assistant" : "user";
+    const body = String(m.body ?? "").slice(0, 8000) || "(empty)";
+    if (!messages.length && role !== "user") continue;          // must open on a user turn
+    const last = messages[messages.length - 1];
+    if (last && last.role === role) last.content += "\n\n" + body; // unanswered retries fold together
+    else messages.push({ role, content: body });
+  }
+  if (!messages.length) messages.push({ role: "user", content: text });
 
   const page = body.page && typeof body.page === "object"
     ? {
@@ -721,9 +748,23 @@ Deno.serve(async (req) => {
 
   const used: string[] = [];
   let reply = "";
+  const left = () => BUDGET_MS - (Date.now() - started);
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const res = await ask(messages, system, apiKey);
+      if (turn > 0 && (left() < WRAP_MS || turn === MAX_TURNS - 1)) {
+        // Out of time or steps: answer with what is already known, no more tools.
+        const nudge = { type: "text", text: "(Scout: this reply is out of time or steps. Without calling tools, tell Jared plainly what you found and did so far, and what is left. He can say 'keep going'.)" };
+        const tail = messages[messages.length - 1];
+        if (tail?.role === "user" && Array.isArray(tail.content)) tail.content.push(nudge);
+        else messages.push({ role: "user", content: [nudge] });
+        try {
+          const fin = await ask(messages, system, apiKey, { noTools: true, timeoutMs: left() + 20_000 });
+          reply = (fin.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n").trim();
+        } catch { /* fall through to the plain note */ }
+        if (!reply) reply = `I ran long on that (${used.length} steps: ${[...new Set(used)].join(", ") || "none"}). Say "keep going" and I will pick it up.`;
+        break;
+      }
+      const res = await ask(messages, system, apiKey, { timeoutMs: left() });
       const calls = (res.content ?? []).filter((c: any) => c.type === "tool_use");
       const said = (res.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n").trim();
       if (!calls.length) { reply = said; break; }
@@ -737,9 +778,14 @@ Deno.serve(async (req) => {
         results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out).slice(0, RESULT_CAP[c.name] ?? 20000) });
       }
       messages.push({ role: "user", content: results });
-      if (turn === MAX_TURNS - 1) reply = said || "I got part-way through that and ran out of steps. Tell me which bit to finish.";
     }
   } catch (e) {
+    const err = e as Error;
+    if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+      const why = `I ran long on that (${used.length} steps). Say "keep going" and I will pick it up, or ask for a smaller piece.`;
+      await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
+      return J({ ok: true, thread_id: threadId, reply: why, tools: used, partial: true });
+    }
     const why = `I could not reach the model: ${(e as Error).message}`.replace(/sk-ant-[A-Za-z0-9_\-]+/g, "sk-ant-…");
     await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
     return J({ ok: false, error: (e as Error).message, thread_id: threadId, reply: why }, 200);
