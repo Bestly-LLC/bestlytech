@@ -143,7 +143,7 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
           <button type="button" onClick={retry} disabled={busy}
             className="inline-flex h-10 items-center gap-1.5 rounded-full border border-white/10 px-4 text-sm font-medium text-white/80 hover:bg-white/[0.06] disabled:opacity-50 bento:border-black/10 bento:text-black/75">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RotateCw className="h-4 w-4" aria-hidden />}
-            {busy ? "Trying (up to 2 min)…" : "Try the ladder again now"}
+            {busy ? "Starting…" : "Try the ladder again now"}
           </button>
           {err && <span className="text-sm text-rose-300">{err}</span>}
         </div>

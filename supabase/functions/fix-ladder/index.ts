@@ -8,7 +8,8 @@
 //   4 claude   nobody could fix it: the incident carries a ready-to-paste prompt for Claude.
 //
 // Runs every 10 minutes (cron fix-ladder) and on "Try again now" from the alert pane (admin JWT).
-// At most one Scout call per tick and one per incident episode, so the paid rung can't run away.
+// At most one Scout run starts per tick and one per incident episode (plus "Try again"), so the
+// paid rung can't run away. Scout runs in the background and is read on the next tick.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
@@ -23,13 +24,14 @@ const J = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, 
 
 const AUTO_GRACE_MIN = 15;     // built-in heals get this long before any AI is spent
 const FREE_AI_WAIT_MIN = 8;    // how long the Mac mini gets to answer
-const SCOUT_BUDGET_MS = 125_000;
+const SCOUT_WAIT_MIN = 6;      // a Scout run is capped near 2.5 min; after this it is lost
 
 type Issue = {
   key: string; status: string; severity: string; title: string; body: string | null; area: string | null;
   needs_jared: string | null; heal_attempts: number; occurrences: number; opened_at: string;
   fix_stage: string; fix_log: { at: string; by: string; text: string; ok: boolean | null }[];
   ai_diagnosis: string | null; scout_ask: string | null; claude_prompt: string | null; fix_next_at: string | null;
+  scout_thread: string | null; scout_started_at: string | null;
 };
 
 async function isService(jwt: string) {
@@ -115,8 +117,8 @@ FIX: the smallest fix, concretely (SQL, file, or command).
 RISK: low / medium / high, and why in a few words.`;
 }
 
-async function scout(i: Issue, ctx: string): Promise<{ verdict: "FIXED" | "NEEDS_YES" | "STUCK"; line: string; reply: string }> {
-  const text = `Autopilot fix attempt. Jared is not here; the fix ladder sent you.
+function scoutAsk(i: Issue, ctx: string) {
+  return `Autopilot fix attempt. Jared is not here; the fix ladder sent you.
 Incident ${i.key}: ${i.title}
 What the monitor says: ${i.body ?? "-"}
 Monitor's hint: ${i.needs_jared ?? "-"}
@@ -125,19 +127,39 @@ ${i.ai_diagnosis ? `\nThe free local model's read (may be wrong, verify it):\n${
 ${ctx}
 
 Find the root cause with your tools and fix it if you can do that without Jared's yes. Anything that needs his yes will be refused, so don't try it; describe it instead.
-If you fix it, save what worked with learn so next time is instant.
+If you fix it, save what worked with learn so next time is instant. Keep it to a few tool calls.
 End your reply with exactly ONE of these as the last line:
 FIXED: <what you did, one line Jared will read>
 NEEDS_YES: <the exact single action you'd take with his yes, one line>
-STUCK: <why, one line>`;
-  const ctl = AbortSignal.timeout(SCOUT_BUDGET_MS);
-  const r = await fetch(`${URL_}/functions/v1/admin-chat`, {
-    method: "POST", signal: ctl,
+STUCK: <why, one line>`.slice(0, 5900);
+}
+
+// Scout runs in the background (a turn can take ~2 minutes, longer than this function may wait):
+// open its thread, send the ask, and read the answer from the thread on a later tick.
+async function scoutStart(i: Issue, ctx: string) {
+  const { data: adm } = await db.from("user_roles").select("user_id").eq("role", "admin").order("user_id").limit(1).maybeSingle();
+  const { data: th, error } = await db.from("admin_chat_threads")
+    .insert({ user_id: (adm as any)?.user_id, title: `Autopilot: ${i.title}`.slice(0, 70) }).select("id").single();
+  if (error) throw new Error(error.message);
+  await db.from("monitor_issues").update({ scout_thread: th.id, scout_started_at: new Date().toISOString(), fix_next_at: later(3) }).eq("key", i.key);
+  const run = fetch(`${URL_}/functions/v1/admin-chat`, {
+    method: "POST",
     headers: { Authorization: `Bearer ${SERVICE}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ body: text, autopilot: true, title: `Autopilot: ${i.title}`.slice(0, 70) }),
-  });
-  const out = await r.json().catch(() => ({}));
-  const reply = String(out.reply ?? out.error ?? `HTTP ${r.status}`);
+    body: JSON.stringify({ body: scoutAsk(i, ctx), autopilot: true, thread_id: th.id }),
+  }).then((r) => r.text()).catch(() => "");
+  // deno-lint-ignore no-explicit-any
+  const rt = (globalThis as any).EdgeRuntime;
+  if (rt?.waitUntil) rt.waitUntil(run); else await Promise.race([run, new Promise((r) => setTimeout(r, 3000))]);
+}
+
+async function scoutRead(i: Issue): Promise<{ verdict: "FIXED" | "NEEDS_YES" | "STUCK"; line: string; reply: string } | null> {
+  const { data } = await db.from("admin_chat_messages").select("body, created_at").eq("thread_id", i.scout_thread!)
+    .eq("role", "assistant").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const reply = (data as any)?.body as string | undefined;
+  if (!reply) {
+    if (mins(i.scout_started_at) < SCOUT_WAIT_MIN) return null;
+    return { verdict: "STUCK", line: "Scout didn't answer in time.", reply: "" };
+  }
   const last = [...reply.matchAll(/^(FIXED|NEEDS_YES|STUCK):\s*(.+)$/gm)].pop();
   if (!last) return { verdict: "STUCK", line: reply.split("\n").filter(Boolean).pop()?.slice(0, 300) ?? "No clear answer.", reply };
   return { verdict: last[1] as any, line: last[2].trim(), reply };
@@ -213,17 +235,20 @@ async function climb(i: Issue, opts: { scoutOk: boolean; force: boolean }): Prom
   }
 
   if (i.fix_stage === "scout") {
-    const scoutTries = (i.fix_log ?? []).filter((l) => l.by === "scout").length;
-    if (scoutTries > 0) {
+    const lastScout = [...(i.fix_log ?? [])].reverse().find((l) => l.by === "scout");
+    if (lastScout?.ok === true && i.scout_started_at && lastScout.at >= i.scout_started_at) {
       // Scout already said it fixed it, and it is still open: it didn't stick.
       await log(i.key, "scout", "Scout's fix didn't stick (the check still fails).", false);
       await setStage(i.key, { fix_stage: "claude", claude_prompt: claudePrompt(i, ctx) });
       return "claude: scout fix did not stick";
     }
-    if (!opts.scoutOk) return "scout: next tick";
-    let res;
-    try { res = await scout(i, ctx); }
-    catch (e) { res = { verdict: "STUCK" as const, line: `Scout couldn't finish (${(e as Error).message}).`, reply: "" }; }
+    if (!i.scout_thread) {
+      if (!opts.scoutOk) return "scout: next tick";
+      try { await scoutStart(i, ctx); return "scout: started"; }
+      catch (e) { await log(i.key, "scout", `Couldn't start Scout (${(e as Error).message}).`, false); return "scout: start failed"; }
+    }
+    const res = await scoutRead(i);
+    if (!res) { await setStage(i.key, { fix_next_at: later(2) }); return "scout: running"; }
     if (res.verdict === "FIXED") {
       await log(i.key, "scout", res.line, true);
       // If Scout closed the incident itself, the "Fixed" card went out before this note existed.
@@ -268,12 +293,9 @@ Deno.serve(async (req) => {
       const { data: i } = await db.from("monitor_issues").select("*").eq("key", key).eq("status", "open").maybeSingle();
       if (!i) return J({ ok: true, result: "already fixed" });
       await log(key, "you", "You asked the ladder to try again.", null);
-      await db.from("monitor_issues").update({ fix_stage: "auto", fix_next_at: new Date().toISOString() }).eq("key", key);
+      await db.from("monitor_issues").update({ fix_stage: "auto", fix_next_at: new Date().toISOString(), scout_thread: null, scout_started_at: null }).eq("key", key);
       const { data: fresh } = await db.from("monitor_issues").select("*").eq("key", key).single();
-      // Scout gets its try again: drop earlier scout lines from what this run counts.
-      const f = fresh as Issue;
-      f.fix_log = (f.fix_log ?? []).filter((l) => l.by !== "scout");
-      return J({ ok: true, result: await climb(f, { scoutOk: true, force: true }) });
+      return J({ ok: true, result: await climb(fresh as Issue, { scoutOk: true, force: true }) });
     }
 
     // tick: every open incident whose turn it is. One Scout call per tick.
@@ -284,7 +306,7 @@ Deno.serve(async (req) => {
     for (const i of (open ?? []) as Issue[]) {
       if (i.fix_next_at && new Date(i.fix_next_at).getTime() > Date.now()) { out[i.key] = "later"; continue; }
       const r = await climb(i, { scoutOk, force: false });
-      if (r.startsWith("scout:") && r !== "scout: next tick") scoutOk = false;
+      if (r === "scout: started") scoutOk = false;
       if (r === "needs_yes" || r === "claude") scoutOk = false;
       out[i.key] = r;
     }
