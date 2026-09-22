@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Apple, Chrome, Copy, Hand, Laptop, Loader2, Rocket } from "lucide-react";
 import { CopyText, CopyButton } from "@/components/CopyText";
+import { copyText } from "@/lib/copyForClaude";
 import releasePrompt from "../../../docs/cookie-yeti-extension/RELEASE-PROMPT.md?raw";
 
 type Status = "not_started" | "building" | "uploaded" | "in_review" | "approved" | "live" | "rejected" | "blocked";
@@ -75,8 +76,9 @@ export function CYReleaseTracker() {
   };
 
   const copyPrompt = async () => {
-    try { await navigator.clipboard.writeText(releasePrompt); toast.success("Release prompt copied"); }
-    catch { toast.error("Couldn't copy. Open docs/cookie-yeti-extension/RELEASE-PROMPT.md instead."); }
+    const ok = await copyText(releasePrompt);
+    if (ok) toast.success("Release prompt copied");
+    else toast.error("Clipboard blocked — try selecting the text manually.");
   };
 
   return (
