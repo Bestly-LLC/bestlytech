@@ -316,49 +316,54 @@ Deno.serve(async (req) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: "bad_day" }, 400);
     if (!/^meeting-\d{8}-\d{4}$/.test(id)) return json({ error: "bad_id" }, 400);
 
-    // List everything in the day folder and match files that belong to this meeting.
-    const propfindUrl = `${NC_BASE}/${ARCHIVE}/${day}/`;
+    // List everything in the day folder so we know exactly what is there.
     const all = await propfind(`${ARCHIVE}/${day}/`, auth);
     const files = all.filter(
       (f) => !f.isDir && (f.name.startsWith(id + "-") || f.name.startsWith(id + ".")),
     );
 
-    // Nothing matched — try sub-folder or return diagnostic.
+    // If no flat files found, check for a same-named sub-folder and DELETE it
+    // as a single recursive WebDAV DELETE (Nextcloud supports this).
     if (!files.length) {
       const asDir = all.find((f) => f.isDir && f.name === id);
       if (asDir) {
-        const url = `${NC_BASE}/${ARCHIVE}/${day}/${encodeURIComponent(id)}/`;
+        const url = `${NC_BASE}/${ARCHIVE}/${day}/${encodeURIComponent(id)}`;
         const res = await fetch(url, { method: "DELETE", headers: { Authorization: auth } });
+        const ncBody = await res.text().catch(() => "");
         if (!res.ok && res.status !== 404) {
-          const body2 = await res.text().catch(() => "");
-          return json({ error: "delete_failed", status: res.status, detail: body2 }, 502);
+          return json({ error: "delete_failed", status: res.status, ncBody, url }, 502);
         }
-        return json({ ok: true, deleted: 1 });
+        return json({ ok: true, deleted: 1, via: "folder" });
       }
+      // Nothing at all — return a full diagnostic so we can see what IS there.
       return json(
         {
           error: "not_found",
-          message: `No files found for ${id} in ${day}.`,
-          propfindUrl,
-          allFiles: all.map((f) => ({ name: f.name, isDir: f.isDir })),
+          message: `No files or folder found for ${id} in ${day}.`,
+          lookedFor: [id + "-", id + ".", id],
+          allEntries: all.map((f) => ({ name: f.name, isDir: f.isDir })),
         },
         404,
       );
     }
 
-    // Delete each file individually and capture the NC response body on failure.
+    // Delete each matched file and capture the full NC response body on failure.
     const results = await Promise.all(
       files.map(async (f) => {
         const url = `${NC_BASE}/${ARCHIVE}/${day}/${encodeURIComponent(f.name)}`;
         const res = await fetch(url, { method: "DELETE", headers: { Authorization: auth } });
         const ok = res.ok || res.status === 404;
-        const detail = ok ? null : await res.text().catch(() => "");
-        return { file: f.name, url, ok, status: res.status, detail };
+        const ncBody = ok ? null : await res.text().catch(() => "");
+        return { file: f.name, url, ok, status: res.status, ncBody };
       }),
     );
     const failed = results.filter((r) => !r.ok);
-    if (failed.length) return json({ error: "delete_failed", details: failed }, 502);
-    return json({ ok: true, deleted: results.length });
+    if (failed.length) {
+      // Surface the real Nextcloud error — this is what tells us if it is a
+      // permission problem, a path mismatch, or something else entirely.
+      return json({ error: "delete_failed", details: failed }, 502);
+    }
+    return json({ ok: true, deleted: results.length, files: files.map((f) => f.name) });
   }
 
   return json({ error: "unknown_op" }, 400);

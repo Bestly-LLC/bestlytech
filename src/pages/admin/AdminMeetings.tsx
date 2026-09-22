@@ -211,14 +211,24 @@ export default function AdminMeetings() {
     // supabase.functions.invoke puts non-2xx bodies in `error.context`;
     // parse the JSON there so we can show the real message.
     if (error || data?.error) {
+      // supabase.functions.invoke puts non-2xx JSON in error.context (object or string).
+      // Walk every possible location so we always surface the real NC error.
       let desc = data?.message ?? data?.error ?? error?.message ?? "Unknown error";
-      if (!data && error?.context) {
+      const ctx = error?.context;
+      if (ctx) {
         try {
-          const ctx = typeof error.context === "string" ? JSON.parse(error.context) : error.context;
-          desc = ctx?.message ?? ctx?.error ?? desc;
+          const parsed = typeof ctx === "string" ? JSON.parse(ctx) : ctx;
+          // data?.details is an array of per-file failures from the edge function
+          const firstFail = Array.isArray(parsed?.details) ? parsed.details[0] : null;
+          desc = parsed?.message ?? parsed?.error ?? firstFail?.ncBody ?? firstFail?.status ?? desc;
         } catch { /* ignore */ }
       }
-      toast({ title: "Delete failed", description: desc, variant: "destructive" });
+      // Also check if data itself has details (non-2xx body was parsed by invoke)
+      if (data?.details?.length) {
+        const f = data.details[0];
+        desc = f?.ncBody ?? f?.status ?? desc;
+      }
+      toast({ title: "Delete failed", description: String(desc), variant: "destructive" });
       return;
     }
     setRows((prev) => prev.filter((r) => r.id !== deleteTarget.id));
