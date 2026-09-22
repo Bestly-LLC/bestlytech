@@ -80,8 +80,8 @@ SB_HEAD = {
 }
 
 
-def sb(method, path, **kw):
-    r = requests.request(method, f"{SB_URL}/rest/v1/{path}", headers=SB_HEAD, timeout=30, **kw)
+def sb(method, path, headers=None, **kw):
+    r = requests.request(method, f"{SB_URL}/rest/v1/{path}", headers={**SB_HEAD, **(headers or {})}, timeout=30, **kw)
     r.raise_for_status()
     return r.json() if r.text.strip() else None
 
@@ -104,7 +104,8 @@ def notify(title, body, priority="default"):
         requests.post(
             f"https://ntfy.sh/{NTFY}",
             data=body.encode("utf-8"),
-            headers={"Title": title, "Priority": priority, "Tags": "car"},
+            # HTTP headers must be ASCII: an em dash here broke every ntfy alert.
+            headers={"Title": title.replace("\u2014", "-").encode("ascii", "replace").decode(), "Priority": priority, "Tags": "car"},
             timeout=15,
         )
     except Exception as exc:
