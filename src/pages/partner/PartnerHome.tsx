@@ -65,6 +65,21 @@ const SHORTCUTS = [
   { id: "calendar", opens: "calendar" as const, label: "Calendar", sub: "What's booked", tone: "from-rose-400 to-pink-600 text-pink-600" },
 ];
 
+// The three things Jared and Eli are building together. Live links, not screenshots -
+// Eli sends these to Rohit and to investors, so they go straight to the real thing.
+const PROJECTS = [
+  { name: "Vesta", sub: "Women-only social + well-being", with: "with Eli and Rohit", links: [
+    { label: "Framework", href: "https://vesta.bestly.tech" },
+    { label: "Beta", href: "https://app.bestly.tech" },
+  ], tone: "from-rose-400/20 to-fuchsia-500/10" },
+  { name: "InventoryProof", sub: "Proof-of-inventory for resellers", with: "", links: [
+    { label: "Open", href: "https://www.inventoryproof.com" },
+  ], tone: "from-sky-400/20 to-indigo-500/10" },
+  { name: "HOKU", sub: "Clean, refillable home care", with: "", links: [
+    { label: "Open", href: "https://hoku-clean.com" },
+  ], tone: "from-emerald-400/20 to-teal-500/10" },
+];
+
 export type CloudView = "talk" | "board" | "cloud" | "calendar" | null;
 
 const STAGE: Record<number, string> = { 3: "Discovery", 4: "SOW + deposit", 5: "Tech intake", 6: "Provisioning", 7: "Install", 8: "Live" };
@@ -553,6 +568,30 @@ function HomeTab(props: {
           )}
         </Panel>
       </div>
+
+      {/* Projects */}
+      <section>
+        <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-white/45">Our projects</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {PROJECTS.map((p) => (
+            <div key={p.name} className={cn(card, "relative overflow-hidden p-4")}>
+              <span aria-hidden className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br", p.tone)} />
+              <div className="relative">
+                <p className="text-[1.05rem] font-semibold leading-tight">{p.name}</p>
+                <p className="mt-0.5 text-xs text-white/55 bento:text-[#55525c]">{p.sub}{p.with ? ` \u00b7 ${p.with}` : ""}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {p.links.map((l) => (
+                    <a key={l.label} href={l.href} target="_blank" rel="noreferrer"
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white/[0.09] px-3 text-sm font-medium text-white transition hover:bg-white/[0.16] active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
+                      {l.label} <ExternalLink className="h-3.5 w-3.5 opacity-70" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Shortcuts */}
       <section>

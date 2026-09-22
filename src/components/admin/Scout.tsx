@@ -251,9 +251,49 @@ export function Scout() {
     };
   }, []);
 
+  // The log sits at the bottom, the way a chat should: new answers push up, and it
+  // stays pinned while Scout is still typing. Scroll up to read something and it lets
+  // go; come back to the bottom and it takes over again.
+  const stick = useRef(true);
+  const pin = useCallback((smooth = false) => {
+    const el = logRef.current;
+    if (!el || !stick.current) return;
+    requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+    });
+  }, []);
+
   useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [msgs, busy, view, jobs]);
+    const el = logRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    // Streaming answers grow the log without a re-render we can see, so watch the box itself.
+    const ro = new ResizeObserver(() => pin());
+    for (const child of Array.from(el.children)) ro.observe(child);
+    const mo = new MutationObserver(() => {
+      for (const child of Array.from(el.children)) ro.observe(child);
+      pin();
+    });
+    mo.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [view, open, pin]);
+
+  // A new message or a fresh open always goes to the bottom, whatever was scrolled before.
+  useEffect(() => {
+    stick.current = true;
+    pin();
+  }, [threadId, open, view, pin]);
+
+  useEffect(() => {
+    pin();
+  }, [msgs, busy, jobs, pin]);
 
   useEffect(() => {
     if (open && view === "chat") inputRef.current?.focus();
