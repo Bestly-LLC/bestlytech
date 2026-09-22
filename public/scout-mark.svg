@@ -5,18 +5,12 @@
   </style>
   <rect width="72" height="72" rx="36" fill="#000"/>
   <defs>
-    <mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
-      <rect width="72" height="72" fill="#fff"/>
-      <circle cx="19" cy="44" r="10.3"/>
-      <circle cx="53" cy="44" r="10.3"/>
-    </mask>
     <clipPath id="cl"><circle cx="19" cy="44" r="10.7"/></clipPath>
     <clipPath id="cr"><circle cx="53" cy="44" r="10.7"/></clipPath>
   </defs>
-  <g mask="url(#m)">
-    <path class="am-st" d="M9 37L13.5 21Q14 18 17 18H21Q24 18 24.5 21L29 37M43 37L47.5 21Q48 18 51 18H55Q58 18 58.5 21L63 37"/>
-    <path class="am-st" d="M25.5 27H46.5M30 42H42"/>
-  </g>
+  <path class="am-st" d="M9.54 35.09L13.5 21Q14 18 17 18H21Q24 18 24.5 21L28.46 35.09"/>
+  <path class="am-st" d="M62.46 35.09L58.5 21Q58 18 55 18H51Q48 18 47.5 21L43.54 35.09"/>
+  <path class="am-st" d="M25.5 27H46.5M31.85 42H40.15"/>
   <circle class="am-st" cx="19" cy="44" r="13"/>
   <circle class="am-st" cx="53" cy="44" r="13"/>
   <circle class="am-fl" cx="19" cy="44" r="4.8"/>
