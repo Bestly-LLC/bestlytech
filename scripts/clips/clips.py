@@ -13,7 +13,7 @@ Standard library only. Key in ~/PartnerAI/.key (Vault: partner_ai_worker_key).
 import json, os, re, subprocess, time, traceback, urllib.error, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 HOME = os.path.expanduser("~")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
 ANON = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6"
@@ -150,13 +150,25 @@ def work(clip):
         except OSError: pass
 
 
+BLOCKED = set()          # folders macOS won't let a launchd job read (TCC), logged once each
+
+
 def sweep():
     """New audio dropped into the watched folders (AirDrop lands in Downloads)."""
     known = seen()
     for folder in WATCH:
-        if not os.path.isdir(folder):
+        if not os.path.isdir(folder) or folder in BLOCKED:
             continue
-        for name in os.listdir(folder):
+        # ~/Downloads and ~/Desktop are TCC-protected: a launchd job can't read them until
+        # /usr/bin/python3 has Full Disk Access. Say so once, keep watching everything else.
+        try:
+            names = os.listdir(folder)
+        except PermissionError:
+            BLOCKED.add(folder)
+            log(f"no permission to read {folder} - give /usr/bin/python3 Full Disk Access "
+                "(System Settings > Privacy & Security), or drop clips in ~/BestlyClips/inbox")
+            continue
+        for name in names:
             p = os.path.join(folder, name)
             if p in known or not name.lower().endswith(KINDS) or name.startswith(SKIP) or name.startswith("."):
                 continue
