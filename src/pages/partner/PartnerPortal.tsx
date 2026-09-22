@@ -18,6 +18,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { TranscriptBubbles, CopyTranscriptButton } from "@/components/admin/TranscriptBubbles";
 import { cn } from "@/lib/utils";
+import { AdminMark } from "@/components/AdminMark";
+import { PartnerMark } from "@/components/PartnerMark";
 
 interface Partner { id: string; name: string; email: string; roster_name: string }
 interface Meeting {
@@ -51,12 +53,37 @@ function Shell({ children, right }: { children: ReactNode; right?: ReactNode }) 
     <div className={cn("admin-shell min-h-dvh text-white", bento ? "admin-bento bg-[#F3F2EE]" : "bg-black")}>
       <div className="mx-auto w-full max-w-2xl px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
         <header className="flex h-14 items-center justify-between">
-          <span className="text-[0.95rem] font-semibold tracking-tight">Bestly <span className="text-white/45">· Partner</span></span>
+          <span className="flex items-center gap-2 text-[0.95rem] font-semibold tracking-tight">
+            <span className="flex items-center -space-x-1" aria-hidden>
+              <AdminMark watchCursor className="h-7 w-7" />
+              <PartnerMark watchCursor className="h-7 w-7" />
+            </span>
+            Bestly <span className="text-white/45">· Partner</span>
+          </span>
           {right}
         </header>
         {children}
       </div>
     </div>
+  );
+}
+
+/** The pair: Jared's binoculars spot it, the partner's compass steers it. Both watch the cursor. */
+function Duo() {
+  return (
+    <figure className="flex flex-col items-center">
+      <div className="flex items-end gap-5">
+        <div className="flex flex-col items-center gap-1.5">
+          <AdminMark watchCursor label="Binoculars" className="h-20 w-20" />
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-white/40">Spot</span>
+        </div>
+        <div className="flex flex-col items-center gap-1.5">
+          <PartnerMark watchCursor label="Compass" className="h-20 w-20" />
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-white/40">Steer</span>
+        </div>
+      </div>
+      <figcaption className="mt-3 text-sm text-white/50">Jared spots it. You steer it.</figcaption>
+    </figure>
   );
 }
 
@@ -77,8 +104,9 @@ function SignIn() {
   };
   return (
     <Shell>
-      <div className="mx-auto mt-10 max-w-sm">
-        <h1 className="text-[1.9rem] font-bold leading-tight tracking-tight">Sign in</h1>
+      <div className="mx-auto mt-8 max-w-sm">
+        <Duo />
+        <h1 className="mt-8 text-[1.9rem] font-bold leading-tight tracking-tight">Sign in</h1>
         <p className="mt-2 text-[0.975rem] text-white/60">Calls, to-dos and the pipeline you share with Jared.</p>
         <form onSubmit={submit} className="mt-8 space-y-3">
           <input className={input} type="email" autoComplete="username" inputMode="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -149,7 +177,8 @@ export function PartnerWelcome() {
         )}
         {stage === "password" && (
           <>
-            <h1 className="text-[1.9rem] font-bold leading-tight tracking-tight">Welcome{name ? `, ${name}` : ""}</h1>
+            <Duo />
+            <h1 className="mt-8 text-[1.9rem] font-bold leading-tight tracking-tight">Welcome{name ? `, ${name}` : ""}</h1>
             <p className="mt-2 text-[0.975rem] text-white/60">Choose a password so you can sign in any time. Your phone's password manager can save it.</p>
             <form onSubmit={save} className="mt-8 space-y-3">
               <input className={input} type="password" autoComplete="new-password" placeholder="New password (10+ characters)" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus />
@@ -236,7 +265,10 @@ function Home({ session }: { session: Session }) {
       {admin && !partner && (
         <p className="mb-4 rounded-2xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200 bento:text-amber-800">Preview: you're signed in as the admin, so you see every call. Eli sees only the calls he was on.</p>
       )}
-      <h1 className="mt-2 text-[2rem] font-bold leading-tight tracking-tight">Hi {first}</h1>
+      <div className="mt-2 flex items-center gap-3">
+        <PartnerMark watchCursor label="Compass" className="h-12 w-12 shrink-0" />
+        <h1 className="text-[2rem] font-bold leading-tight tracking-tight">Hi {first}</h1>
+      </div>
       <p className="mt-1 text-[0.975rem] text-white/55">
         {mine.length ? `${mine.length} to-do${mine.length === 1 ? "" : "s"} on you` : "Nothing on you right now"}
         {meetings?.length ? ` · ${meetings.length} call${meetings.length === 1 ? "" : "s"}` : ""}

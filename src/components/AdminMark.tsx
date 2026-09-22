@@ -17,13 +17,13 @@ const STARE_RADIUS_PX = 150;
 /** How far the pupils can travel inside the lenses (SVG units, same as the glance keyframes). */
 const PUPIL_REACH = { x: 5.4, y: 3.6 };
 
-type Stare = { x: number; y: number } | null;
+export type Stare = { x: number; y: number; a?: number } | null;
 
 /**
  * Pupils follow the pointer while it is within STARE_RADIUS_PX of the mark. Outside that, the
  * normal glance animation runs. Mouse/pen only (touch has no hover), one rAF per frame.
  */
-function useStare(ref: React.RefObject<SVGSVGElement>, enabled: boolean): Stare {
+export function useStare(ref: React.RefObject<SVGSVGElement>, enabled: boolean, reach = PUPIL_REACH, eyeLine = 0.61): Stare {
   const [stare, setStare] = useState<Stare>(null);
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
@@ -34,14 +34,14 @@ function useStare(ref: React.RefObject<SVGSVGElement>, enabled: boolean): Stare 
       const el = ref.current;
       if (!el || !last) return;
       const r = el.getBoundingClientRect();
-      const cx = r.left + r.width / 2, cy = r.top + r.height * 0.61; // eye line (y=44 of 72)
+      const cx = r.left + r.width / 2, cy = r.top + r.height * eyeLine; // eye line (y=44 of 72 here)
       const dx = last.clientX - cx, dy = last.clientY - cy;
       const d = Math.hypot(dx, dy);
       if (d > STARE_RADIUS_PX) { setStare((s) => (s ? null : s)); return; }
       // Full reach once the cursor is a few mark-widths away; gentler right on top of it.
       const k = Math.min(1, d / Math.max(24, r.width * 1.2));
       const nx = d ? dx / d : 0, ny = d ? dy / d : 0;
-      setStare({ x: +(nx * PUPIL_REACH.x * k).toFixed(2), y: +(ny * PUPIL_REACH.y * k).toFixed(2) });
+      setStare({ x: +(nx * reach.x * k).toFixed(2), y: +(ny * reach.y * k).toFixed(2), a: Math.round((Math.atan2(dy, dx) * 180) / Math.PI) });
     };
     const onMove = (e: PointerEvent) => {
       if (e.pointerType === "touch") return;
@@ -58,7 +58,7 @@ function useStare(ref: React.RefObject<SVGSVGElement>, enabled: boolean): Stare 
       window.removeEventListener("blur", onLeave);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [enabled, ref]);
+  }, [enabled, ref, reach.x, reach.y, eyeLine]);
   return stare;
 }
 

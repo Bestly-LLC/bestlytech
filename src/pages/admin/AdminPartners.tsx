@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { PartnerMark } from "@/components/PartnerMark";
 
 interface Row {
   id: string; name: string; email: string; roster_name: string; link_sent_at: string | null; meetings: number;
@@ -77,9 +78,12 @@ export default function AdminPartners() {
         return (
           <section key={p.id} className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-white">{p.name}</h2>
-                <p className="text-sm text-white/55">{p.email}</p>
+              <div className="flex items-center gap-3">
+                <PartnerMark watchCursor className="h-11 w-11 shrink-0" />
+                <div>
+                  <h2 className="text-lg font-semibold text-white">{p.name}</h2>
+                  <p className="text-sm text-white/55">{p.email}</p>
+                </div>
               </div>
               <span className={cn("rounded-full px-3 py-1 text-xs font-semibold",
                 p.user?.disabled ? "bg-red-500/15 text-red-300 bento:text-red-700" : p.user?.last_sign_in_at ? "bg-emerald-500/15 text-emerald-300 bento:text-emerald-700" : "bg-white/[0.08] text-white/70")}>
