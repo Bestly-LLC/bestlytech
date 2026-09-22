@@ -125,7 +125,7 @@ export function PartnerHome({ session }: { session: Session }) {
   const [preview, setPreview] = useState<PreviewFile | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
-  const notifs = usePartnerNotifs();
+  const notifs = usePartnerNotifs(new URLSearchParams(window.location.search).get("as")?.toLowerCase() || null);
   const { next: nextMtg } = useNextMeeting();
   useEffect(() => {
     const on = async (e: Event) => {

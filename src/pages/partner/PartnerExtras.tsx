@@ -17,17 +17,18 @@ const STUDIO = "https://studio.bestly.tech";
 
 interface Notif { id: string; kind: string; subject: string | null; body: string | null; link: string | null; at: string; unread: boolean }
 
-export function usePartnerNotifs() {
+/** asRoster: the admin viewing a partner's screen sees that partner's Studio bell (read-only). */
+export function usePartnerNotifs(asRoster?: string | null) {
   const [items, setItems] = useState<Notif[]>([]);
   const [unread, setUnread] = useState(0);
   const [linked, setLinked] = useState(true);
   const load = useCallback(async () => {
-    const { data } = await supabase.rpc("partner_studio_notifications" as never);
+    const { data } = await supabase.rpc("partner_studio_notifications" as never, (asRoster ? { p_roster: asRoster } : {}) as never);
     const d = (data ?? {}) as { ok?: boolean; unread?: number; items?: Notif[] };
     setLinked(d.ok !== false);
     setItems(d.items ?? []);
     setUnread(d.unread ?? 0);
-  }, []);
+  }, [asRoster]);
   useEffect(() => {
     load();
     const t = window.setInterval(() => { if (!document.hidden) load(); }, 60_000);
@@ -38,8 +39,8 @@ export function usePartnerNotifs() {
   const markSeen = useCallback(async () => {
     setUnread(0);
     setItems((xs) => xs.map((x) => ({ ...x, unread: false })));
-    await supabase.rpc("partner_studio_seen" as never);
-  }, []);
+    if (!asRoster) await supabase.rpc("partner_studio_seen" as never);  // viewing as him never clears his bell
+  }, [asRoster]);
   return { items, unread, linked, markSeen, reload: load };
 }
 
