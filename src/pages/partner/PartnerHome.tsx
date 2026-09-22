@@ -125,7 +125,9 @@ export function PartnerHome({ session }: { session: Session }) {
   const [preview, setPreview] = useState<PreviewFile | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
-  const notifs = usePartnerNotifs(new URLSearchParams(window.location.search).get("as")?.toLowerCase() || null);
+  // Read once: switching tabs rewrites the address, and "view as" must survive that.
+  const [asParam] = useState(() => new URLSearchParams(window.location.search).get("as")?.toLowerCase() || null);
+  const notifs = usePartnerNotifs(asParam);
   const { next: nextMtg } = useNextMeeting();
   useEffect(() => {
     const on = async (e: Event) => {
@@ -140,7 +142,7 @@ export function PartnerHome({ session }: { session: Session }) {
 
   const setTab = useCallback((t: Tab) => {
     setTabState(t); setOpenCall(null); setOpenMail(null);
-    window.history.replaceState(null, "", t === "home" ? window.location.pathname : `#${t}`);
+    window.history.replaceState(null, "", window.location.pathname + window.location.search + (t === "home" ? "" : `#${t}`));
     window.scrollTo({ top: 0 });
   }, []);
   useEffect(() => {
@@ -160,7 +162,7 @@ export function PartnerHome({ session }: { session: Session }) {
     // Admin "view as": /partner?as=eli shows exactly that partner's screen, using the same
     // filters his row rules apply (his calls, his to-dos, the mail sent to him).
     let asPartner: Partner | null = null;
-    const asRoster = isAdmin ? new URLSearchParams(window.location.search).get("as")?.toLowerCase() : null;
+    const asRoster = isAdmin ? asParam : null;
     if (asRoster && !p) {
       const { data: ap } = await supabase.from("partners" as never).select("id, name, email, roster_name, call_url").eq("roster_name", asRoster).maybeSingle();
       asPartner = (ap as unknown as Partner) ?? null;
@@ -192,7 +194,7 @@ export function PartnerHome({ session }: { session: Session }) {
     setTodos(items);
     setPipe((pl as any) ?? null);
     setMail((ml ?? []) as unknown as MailRow[]);
-  }, [session.user.id]);
+  }, [session.user.id, asParam]);
   useEffect(() => { load(); }, [load]);
 
   const me = partner?.roster_name ?? (admin ? "jared" : "");
