@@ -9,6 +9,7 @@ import {
   Server,
   Shield,
   Car,
+  AudioLines,
   Mic,
   Handshake,
   House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck,
@@ -47,6 +48,7 @@ const workItems = [
   { title: "Contacts", url: "/admin/contacts", icon: Mail, countKey: "contacts" as CountKeys },
   { title: "Waitlist", url: "/admin/waitlist", icon: ListChecks },
   { title: "Meetings", url: "/admin/meetings", icon: Mic },
+  { title: "Clips", url: "/admin/clips", icon: AudioLines },
   { title: "Partners", url: "/admin/partners", icon: Handshake },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];

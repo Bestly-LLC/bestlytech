@@ -75,6 +75,7 @@ const CookieYetiSubscribers = lazy(() => import("./pages/admin/CookieYetiSubscri
 const CookieYetiAnalytics = lazy(() => import("./pages/admin/CookieYetiAnalytics"));
 const AdminContacts = lazy(() => import("./pages/admin/AdminContacts"));
 const AdminMeetings = lazy(() => import("./pages/admin/AdminMeetings"));
+const AdminClips = lazy(() => import("./pages/admin/AdminClips"));
 const AdminPartners = lazy(() => import("./pages/admin/AdminPartners"));
 const AdminTuro = lazy(() => import("./pages/admin/AdminTuro"));
 const AdminPlaybook = lazy(() => import("./pages/admin/AdminPlaybook"));
@@ -191,6 +192,7 @@ const App = () => {
                   <Route path="hires" element={<TabRedirect to="/admin/leads" tab="hire" />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
                   <Route path="meetings" element={<AdminMeetings />} />
+                  <Route path="clips" element={<AdminClips />} />
                   <Route path="partners" element={<AdminPartners />} />
                   <Route path="cloud" element={<TabRedirect to="/admin/leads" tab="cloud" />} />
                   <Route path="cloud/:id" element={<CloudDealDetail />} />
