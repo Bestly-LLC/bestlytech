@@ -5,15 +5,16 @@
  * Runs are done by Claude: two scheduled tasks (7:05am, 7:12pm LA) drive Jared's own Chrome,
  * where Turo is signed in, and write here. Headless runners are retired (Cloudflare blocks them).
  * This page is the control panel: pause/resume and a note for the next run (turo_settings),
- * plan and history, and the breadcrumbs any Claude reads to get back to normal
- * (bestly_memory area 'turo' via turo_breadcrumbs()).
+ * price trends (us vs Edgar vs market vs Turo's dynamic price), the price manager, and run history.
+ * The runbook Claude follows lives in bestly_private_memory area 'turo' (kept off this page on purpose).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Car, CheckCircle2, ChevronDown, ExternalLink, Pause, Play, Send } from "lucide-react";
+import { AlertTriangle, Car, CheckCircle2, ExternalLink, Pause, Play, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { cn } from "@/lib/utils";
+import { Competitors, PriceManager, TuroTrends, type CompPrice, type SeriesRow, type Target } from "@/components/admin/turo/TuroTrends";
 
 interface Run {
   id: string; ran_at: string; runner: string; mode: string; market_base: number | null; host_net: number | null;
@@ -21,13 +22,11 @@ interface Run {
   gates: { gate: string; result: string; detail: string }[] | null; notes: string | null;
 }
 interface Settings { paused: boolean; pause_reason: string | null; note_for_claude: string | null; note_set_at: string | null }
-interface Crumb { key: string; kind: string; title: string; body: string; updated_at: string }
 interface Day { run_id: string; date: string; lead: number | null; floor: number | null; cur: number | null; proposed: number | null; applied: number | null; verified: boolean | null; status: string; gate: string | null; reason: string | null }
 
 const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
 const money = (n: number | null | undefined) => (n == null ? "–" : `$${Math.round(Number(n))}`);
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" });
-const dayLabel = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 const MODE: Record<string, { label: string; tone: string }> = {
   applied: { label: "Prices written", tone: "text-emerald-300 bento:text-emerald-700" },
   "propose-only": { label: "Proposed only", tone: "text-amber-300 bento:text-amber-700" },
@@ -38,20 +37,26 @@ export default function AdminTuro() {
   const [runs, setRuns] = useState<Run[] | null>(null);
   const [days, setDays] = useState<Day[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [crumbs, setCrumbs] = useState<Crumb[]>([]);
+  const [series, setSeries] = useState<SeriesRow[] | null>(null);
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [comp, setComp] = useState<CompPrice[]>([]);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const [{ data: r }, { data: st }, { data: bc }] = await Promise.all([
+    const [{ data: r }, { data: st }, { data: ps }, { data: tg }, { data: cp }] = await Promise.all([
       supabase.from("turo_runs" as never).select("*").order("ran_at", { ascending: false }).limit(30),
       supabase.from("turo_settings" as never).select("*").eq("id", 1).maybeSingle(),
-      supabase.rpc("turo_breadcrumbs" as never),
+      supabase.from("turo_price_series" as never).select("day, series, value").limit(5000),
+      supabase.from("turo_watch_targets" as never).select("*").eq("active", true).order("chart", { ascending: false }),
+      supabase.from("turo_competitor_prices" as never).select("*").order("observed_at", { ascending: false }).limit(200),
     ]);
     const list = (r ?? []) as unknown as Run[];
     setRuns(list);
     setSettings((st as unknown as Settings) ?? null);
-    setCrumbs(((bc ?? []) as unknown) as Crumb[]);
+    setSeries((ps ?? []) as unknown as SeriesRow[]);
+    setTargets((tg ?? []) as unknown as Target[]);
+    setComp((cp ?? []) as unknown as CompPrice[]);
     const ids = list.slice(0, 10).map((x) => x.id);
     if (ids.length) {
       const { data: d } = await supabase.from("turo_day_prices" as never).select("*").in("run_id", ids).order("date");
@@ -74,8 +79,8 @@ export default function AdminTuro() {
   const hoursSince = last ? (Date.now() - Date.parse(last.ran_at)) / 3600e3 : null;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 pb-8">
-      <PageHeader title="Turo Watch" description="Blue Steel · Tesla Model 3 · twice-daily pricing against nearby Model 3s." />
+    <div className="mx-auto max-w-4xl space-y-6 pb-8">
+      <PageHeader title="Turo Watch" description="Blue Steel · Tesla Model 3 · twice-daily pricing against nearby Model 3s and Edgar." />
 
       {/* Status + controls */}
       {(() => {
@@ -145,47 +150,12 @@ export default function AdminTuro() {
         </section>
       )}
 
-      {/* Plan */}
-      <section>
-        <h2 className="mb-2.5 flex items-center justify-between px-1 text-xs font-semibold uppercase tracking-widest text-white/55">
-          <span>Price plan</span>
-          {lastPlanRun && <span className="normal-case tracking-normal text-white/40">from the run on {when(lastPlanRun.ran_at)}</span>}
-        </h2>
-        {plan.length === 0 ? (
-          <p className={cn(card, "px-5 py-4 text-white/60")}>No plan yet.</p>
-        ) : (
-          <div className={cn(card, "overflow-hidden")}>
-            <table className="w-full text-sm">
-              <thead className="text-xs text-white/45">
-                <tr className="border-b border-white/[0.06]">
-                  <th className="px-4 py-2.5 text-left font-medium">Day</th>
-                  <th className="px-2 py-2.5 text-right font-medium">Was</th>
-                  <th className="px-2 py-2.5 text-right font-medium">Plan</th>
-                  <th className="px-2 py-2.5 text-right font-medium">Floor</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.05]">
-                {plan.map((d) => {
-                  const past = d.date < new Date().toISOString().slice(0, 10);
-                  return (
-                    <tr key={d.date} className={cn(past && "opacity-45")} title={d.reason ?? ""}>
-                      <td className="px-4 py-2.5 text-white">{dayLabel(d.date)}</td>
-                      <td className="px-2 py-2.5 text-right tabular-nums text-white/60">{money(d.cur)}</td>
-                      <td className="px-2 py-2.5 text-right font-semibold tabular-nums text-white">{money(d.applied ?? d.proposed)}</td>
-                      <td className="px-2 py-2.5 text-right tabular-nums text-white/45">{money(d.floor)}</td>
-                      <td className="px-4 py-2.5 text-right text-xs">
-                        {d.status === "applied" ? <span className="inline-flex items-center gap-1 text-emerald-300 bento:text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Set</span>
-                          : <span className="text-white/50">{d.status === "blocked" ? "Not set" : d.status}</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <TuroTrends rows={series} />
+
+      <PriceManager rows={series} plan={plan} marketBase={lastPlanRun?.market_base ?? runs?.find((x) => x.market_base != null)?.market_base ?? null}
+        paused={!!settings?.paused} canWrite={last?.mode === "applied"} />
+
+      <Competitors targets={targets} prices={comp} />
 
       {/* History */}
       <section>
@@ -213,26 +183,6 @@ export default function AdminTuro() {
         )}
       </section>
 
-      {/* Breadcrumbs */}
-      <section>
-        <h2 className="mb-2.5 px-1 text-xs font-semibold uppercase tracking-widest text-white/55">Breadcrumbs · what Claude reads to get back on track</h2>
-        <ul className={cn(card, "divide-y divide-white/[0.06] overflow-hidden")}>
-          {crumbs.map((c) => (
-            <li key={c.key}>
-              <details className="group">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 sm:px-5">
-                  <span className="min-w-0">
-                    <span className="block truncate text-[0.95rem] text-white">{c.title}</span>
-                    <span className="text-xs text-white/40">turo/{c.key} · updated {when(c.updated_at)}</span>
-                  </span>
-                  <ChevronDown className="h-4 w-4 shrink-0 text-white/40 transition-transform group-open:rotate-180" />
-                </summary>
-                <pre className="whitespace-pre-wrap px-4 pb-4 font-sans text-sm leading-relaxed text-white/70 sm:px-5">{c.body}</pre>
-              </details>
-            </li>
-          ))}
-        </ul>
-      </section>
     </div>
   );
 }
