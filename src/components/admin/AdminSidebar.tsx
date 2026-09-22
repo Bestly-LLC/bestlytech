@@ -67,8 +67,8 @@ const homeHubItems = [
 ];
 
 const turoItems = [
-  { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Car },
   { title: "Turo Watch", url: "/admin/turo", icon: Car },
+  { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Car },
 ];
 
 // Backup of the account's Claude skills. The copies a session sees on disk are a
