@@ -5,12 +5,16 @@ Answers questions from the /partner "Ask" tab with the local model in Ollama, so
 nothing: no paid API. Polls partner_ai_claim every 2s (Postgres RPC, not an edge function, so
 polling is free), streams the answer back with partner_ai_write, and the portal shows it live.
 
+1.2: also the free rung of the admin fix ladder. When no partner question waits, it claims a
+fix_ai_jobs row (fix_ai_claim), reads the incident with the same local model and writes back a
+short CAUSE / CHECK / FIX / RISK diagnosis (fix_ai_write). It never acts; Scout and Jared do.
+
 Standard library only. Key in ~/PartnerAI/.key (also in Supabase Vault as partner_ai_worker_key).
 """
 import json, os, re, time, traceback, urllib.error, urllib.request
 from datetime import datetime
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 HOME = os.path.expanduser("~/PartnerAI")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co/rest/v1/rpc/"
 ANON = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6"
@@ -115,6 +119,18 @@ def answer(job):
     log("answered", reply_id, f"{len(final)} chars in {time.time() - started:.1f}s")
 
 
+def diagnose(job):
+    body = json.dumps({"model": MODEL, "stream": False, "think": False,
+                       "messages": [{"role": "user", "content": job["prompt"]}],
+                       "options": {"temperature": 0.2, "num_ctx": 8192}}).encode()
+    req = urllib.request.Request(f"{OLLAMA}/api/chat", data=body, headers={"Content-Type": "application/json"})
+    started = time.time()
+    with urllib.request.urlopen(req, timeout=240) as r:
+        text = clean((json.loads(r.read()).get("message") or {}).get("content", ""))
+    rpc("fix_ai_write", {"p_key": KEY, "p_id": job["id"], "p_answer": text or "No read on this one.", "p_error": None})
+    log("diagnosed", job["id"], f"{len(text)} chars in {time.time() - started:.1f}s")
+
+
 def clean(t):
     t = re.sub(r"<think>.*?(</think>|$)", "", t, flags=re.S)
     return t.strip()
@@ -133,6 +149,15 @@ def main():
                 except Exception as e:  # model down, timeout: tell the asker, don't hang
                     log("answer failed", repr(e), traceback.format_exc()[-800:])
                     try: write(job["reply_id"], "", error="The assistant hit a snag on this one. Try again in a minute.")
+                    except Exception: pass
+                continue
+            fix = rpc("fix_ai_claim", {"p_key": KEY})
+            if fix:
+                try:
+                    diagnose(fix)
+                except Exception as e:
+                    log("diagnose failed", repr(e))
+                    try: rpc("fix_ai_write", {"p_key": KEY, "p_id": fix["id"], "p_answer": None, "p_error": repr(e)[:300]})
                     except Exception: pass
                 continue
         except urllib.error.HTTPError as e:

@@ -5,6 +5,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { askScout } from "@/components/admin/scoutBus";
 import { CopyText } from "@/components/CopyText";
 import { formatForClaude } from "@/lib/copyForClaude";
+import { FixLadder } from "@/components/admin/FixLadder";
 
 export type PaneAlert = {
   id: string;
@@ -15,6 +16,7 @@ export type PaneAlert = {
   body: string | null;
   url: string | null;
   severity: string;
+  entity_key?: string | null;
 };
 
 /**
@@ -96,6 +98,10 @@ export function AlertPane({ alert, onClose }: { alert: PaneAlert | null; onClose
             </button>
           )}
         </div>
+
+        {alert.kind === "monitor" && alert.entity_key?.startsWith("monitor:") && (
+          <FixLadder issueKey={alert.entity_key.slice(8)} about={about} onClose={onClose} />
+        )}
 
         <div className="border-t border-white/[0.06] px-5 py-4">
           <p className="flex items-center gap-1.5 text-sm font-semibold"><Binoculars className="h-4 w-4" aria-hidden /> Give Scout the next move</p>

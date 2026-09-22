@@ -27,6 +27,7 @@ type Notification = {
   url: string | null;
   severity: "info" | "success" | "warning";
   read_at: string | null;
+  entity_key?: string | null;
 };
 
 const KIND: Record<string, { icon: LucideIcon; tint: string; label: string }> = {
@@ -40,6 +41,7 @@ const KIND: Record<string, { icon: LucideIcon; tint: string; label: string }> = 
   contact_new: { icon: Mail, tint: "bg-indigo-400/15 text-indigo-300", label: "Message" },
   waitlist_new: { icon: ListChecks, tint: "bg-white/10 text-white/70", label: "Waitlist" },
   cy_needs_you: { icon: Snowflake, tint: "bg-cyan-400/15 text-cyan-300", label: "Cookie Yeti" },
+  monitor: { icon: Wrench, tint: "bg-rose-400/15 text-rose-300", label: "Monitor" },
   scout: { icon: Binoculars, tint: "bg-white/10 text-white", label: "Scout" },
   "scout.push": { icon: Binoculars, tint: "bg-amber-400/15 text-amber-300", label: "Scout · sent to your phone" },
 };
@@ -66,7 +68,7 @@ export function NotificationBell() {
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from("admin_notifications" as any)
-      .select("id, created_at, kind, title, body, url, severity, read_at")
+      .select("id, created_at, kind, title, body, url, severity, read_at, entity_key")
       .order("created_at", { ascending: false })
       .limit(50);
     if (error) { setLoadError(error.message); return; }

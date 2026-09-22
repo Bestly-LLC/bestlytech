@@ -39,6 +39,13 @@
 //    at 110s, and when time or steps run out Scout answers with what it has (no tools) instead of
 //    dying. History is the LAST 30 messages (it used to be the first 40, so long threads never saw
 //    the newest ask and kept redoing old work until they timed out).
+//  - v12: self-learning. Every failed tool call comes back with the lessons that match it
+//    (scout_lessons), plus the real columns when run_sql guessed wrong. When Scout finds what
+//    works it saves it with learn; a nightly reflect (scout-daily) mines the day for more.
+//    Lessons that keep failing retire themselves (scout_lesson_used).
+//  - v13: autopilot. fix-ladder calls with the service key + autopilot:true when an incident
+//    outlived the self-heals and the free model. Anything needing a yes is refused in code and
+//    comes back as NEEDS_YES, which Jared approves with one tap from the alert pane.
 //  - v11: commit_files takes edits ({path, old, new}); a tool call cut off at the output limit
 //    is refused instead of run half-empty (it used to arrive as "no files given", 9 times).
 
@@ -255,13 +262,29 @@ const TOOLS = [
     input_schema: { type: "object", properties: { name: { type: "string" }, list: { type: "boolean" } } },
   },
   {
+    name: "learn",
+    description:
+      "Save a lesson for next time, when something failed and you found what works (or Jared taught you something about a tool, table or project). " +
+      "Be specific and reusable: scope like tool:run_sql, table:cloud_leads, project:studio, mac, pi, deploy. Don't save one-off facts or anything secret.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scope: { type: "string" }, title: { type: "string", description: "under 60 characters" },
+        when: { type: "string", description: "when this applies, e.g. the error you saw" },
+        do: { type: "string", description: "what works" }, avoid: { type: "string", description: "what not to repeat" },
+        taught_by_jared: { type: "boolean", description: "true when Jared told you this (\"remember...\")" },
+      },
+      required: ["scope", "title", "when", "do"],
+    },
+  },
+  {
     name: "mark_done",
     description: "Clear one card off the queue: a Cookie Yeti release waiting on Jared ('cy:mac') or an unread alert ('bell:<uuid>'). Only when he plainly asks, or once the thing it asked for is done.",
     input_schema: { type: "object", properties: { key: { type: "string" } }, required: ["key"] },
   },
 ];
 
-const SYSTEM = (today: unknown, mac: unknown, incidents: unknown, unread: unknown, recorder: unknown, jobs: unknown, page: unknown) => `
+const SYSTEM = (today: unknown, mac: unknown, incidents: unknown, unread: unknown, recorder: unknown, jobs: unknown, page: unknown, lessons: string) => `
 You are Scout, the assistant inside Jared Best's Bestly admin console at bestly.tech/admin. Your name is Scout; never call yourself anything else.
 
 Jared runs Bestly LLC: Cookie Yeti (a Safari and Chrome cookie-banner extension), HOKU, InventoryProof, SchoolPilot, Bestly Studio (studio.bestly.tech), a small shop, a Home Hub on a Raspberry Pi (bestly-pi: Nextcloud at cloud.bestly.tech, Home Assistant, Homebridge, Pi-hole), and a Turo fleet. He is the only operator.
@@ -314,6 +337,12 @@ Read it with meeting_transcript. Then, in plain text: first the decisions (only 
 Your job is to clear his plate, not to hand him a to-do list. For every item: if a tool can do it, propose it in one line and, on his yes, do it and report the result. Batch them: "I can do these three - say yes and I'll run all of them." Cleanup (stale alerts, incidents that are over, cards whose job is done) you may do without asking and just report.
 Only hand Jared something when it physically needs him: typing a password, a device in his hand, a decision only he can make. When you do, say it is the one thing you cannot do and why, give the single exact step, and nothing else.
 Known one: accepting the Xcode licence needs sudo on his Mac, which needs his password - Apple does not allow it any other way. That is the only true blocker for the Cookie Yeti Mac and iOS builds.
+
+# What you have learned (scout_lessons, best first)
+${lessons || "Nothing yet."}
+
+# Healing yourself
+When a tool fails, the result comes back with "lessons" (what worked before in the same spot) and, for run_sql, the real columns. Use them: change your approach, never repeat the exact call that failed. When a different approach works after a failure, call learn once with what worked, so next time is right first time. If you are stuck after two different tries, say plainly what you tried and what you need. When Jared says "remember" about how to do something (a tool, table, project or preference for how work gets done), save it with learn and taught_by_jared: true.
 
 # How to change code
 Read the file first, every time. Keep the change small. Use commit_files edits (exact old snippet -> new), not whole files; a large file does not fit in one reply. Never put a key, token or password into a file. When a commit comes back reverted, say so plainly, say what the build complained about, and work out the actual fix - never resend the same thing hoping for a different build.
@@ -654,6 +683,18 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
       out = await meetingTranscript(args);
       break;
     }
+    case "learn": {
+      const row = {
+        scope: String(args.scope ?? "").toLowerCase().slice(0, 60), title: String(args.title ?? "").slice(0, 90),
+        when_text: String(args.when ?? "").slice(0, 400), do_text: String(args.do ?? "").slice(0, 800),
+        avoid_text: args.avoid ? String(args.avoid).slice(0, 400) : null, source: args.taught_by_jared ? "jared" : "scout", updated_at: new Date().toISOString(),
+        signature: String(args.when ?? "").toLowerCase().slice(0, 200), active: true,
+      };
+      if (!row.scope || !row.title || !row.when_text || !row.do_text) { out = { ok: false, error: "scope, title, when and do are required" }; break; }
+      const { error } = await db.from("scout_lessons").upsert(row, { onConflict: "scope,title" });
+      out = error ? { ok: false, error: error.message } : { ok: true, saved: `${row.scope}: ${row.title}` };
+      break;
+    }
     case "mark_done": {
       const { data, error } = await db.rpc("admin_today_done", { p_key: String(args.key ?? "") });
       out = error ? { ok: false, error: error.message } : { ok: true, cleared: data };
@@ -669,6 +710,41 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
     : out;
   await db.from("admin_chat_actions").insert({ thread_id: threadId, tool: name, args, result: logged, ok: (out as any)?.ok !== false });
   return out;
+}
+
+/**
+ * A failed tool call comes back with what worked before in the same spot (scout_lessons),
+ * and for run_sql, the table's real columns, so the next try is informed instead of a guess.
+ */
+async function heal(tool: string, args: Record<string, any>, out: Record<string, unknown>, shownFor: Record<string, string[]>) {
+  const err = String((out as any).error ?? (out as any).hint ?? "");
+  const extra: Record<string, unknown> = {};
+  try {
+    const { data: lessons } = await db.rpc("scout_lessons_for", { p_scope: `tool:${tool}`, p_text: `${err} ${JSON.stringify(args).slice(0, 400)}`, p_limit: 4 });
+    if (lessons?.length) {
+      extra.lessons = (lessons as any[]).map((l) => ({ scope: l.scope, when: l.when_text, do: l.do_text, avoid: l.avoid_text ?? undefined, record: `${l.wins} worked / ${l.losses} not` }));
+      shownFor[tool] = (lessons as any[]).map((l) => l.id);
+    }
+    if (tool === "run_sql" && /column|relation|does not exist/i.test(err)) {
+      const q = String(args.query ?? "");
+      const tables = [...new Set([...q.matchAll(/\b(?:from|join)\s+(?:public\.)?([a-z_][a-z0-9_]*)/gi)].map((m) => m[1].toLowerCase()))].slice(0, 4);
+      if (tables.length) {
+        const { data: cols } = await db.rpc("admin_sql_read", {
+          p_query: `select table_name, string_agg(column_name, ', ' order by ordinal_position) as columns from information_schema.columns where table_schema = 'public' and table_name in (${tables.map((t) => `'${t.replace(/'/g, "")}'`).join(",")}) group by table_name`,
+          p_limit: 10,
+        });
+        extra.real_columns = cols ?? [];
+        if (!(cols as any[])?.length) {
+          const { data: like } = await db.rpc("admin_sql_read", {
+            p_query: `select table_name from information_schema.tables where table_schema = 'public' and (${tables.map((t) => `table_name ilike '%${t.replace(/[^a-z0-9_]/g, "").slice(0, 12)}%'`).join(" or ")}) limit 15`,
+            p_limit: 15,
+          });
+          extra.similar_tables = like ?? [];
+        }
+      }
+    }
+  } catch { /* healing is best effort */ }
+  return Object.keys(extra).length ? { ...out, ...extra, heal: "Use these before trying again. If you find what works, call learn." } : out;
 }
 
 async function ask(messages: any[], system: string, apiKey: string, opts: { timeoutMs?: number; noTools?: boolean } = {}) {
@@ -697,6 +773,9 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
   throw new Error("anthropic: retries exhausted");
 }
 
+// Tools autopilot never runs even without a confirmed flag: they reach Jared or a machine.
+const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "db_write", "clear_alerts"]);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return J({ ok: false, error: "POST only" }, 405);
@@ -710,12 +789,21 @@ Deno.serve(async (req) => {
   const jwt = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!jwt) return J({ ok: false, error: "unauthorized" }, 401);
 
-  const { data: who, error: whoErr } = await db.auth.getUser(jwt);
-  const uid = who?.user?.id;
-  if (whoErr || !uid) return J({ ok: false, error: "unauthorized" }, 401);
-
-  const { data: isAdmin, error: roleErr } = await db.rpc("has_role", { _user_id: uid, _role: "admin" });
-  if (roleErr || !isAdmin) return J({ ok: false, error: "admin only" }, 403);
+  // v13 autopilot: the fix ladder (service key only) runs Scout as the admin with no one watching.
+  // Nothing that needs a yes can run on autopilot; that is enforced below, not left to the model.
+  const autopilot = body.autopilot === true && jwt === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  let uid: string | undefined;
+  if (autopilot) {
+    const { data: adm } = await db.from("user_roles").select("user_id").eq("role", "admin").order("user_id").limit(1).maybeSingle();
+    uid = (adm as any)?.user_id;
+    if (!uid) return J({ ok: false, error: "no admin to act as" }, 500);
+  } else {
+    const { data: who, error: whoErr } = await db.auth.getUser(jwt);
+    uid = who?.user?.id;
+    if (whoErr || !uid) return J({ ok: false, error: "unauthorized" }, 401);
+    const { data: isAdmin, error: roleErr } = await db.rpc("has_role", { _user_id: uid, _role: "admin" });
+    if (roleErr || !isAdmin) return J({ ok: false, error: "admin only" }, 403);
+  }
 
   const text = String(body.body ?? "").trim();
   if (!text) return J({ ok: false, error: "body required" }, 400);
@@ -723,7 +811,7 @@ Deno.serve(async (req) => {
 
   let threadId = body.thread_id ? String(body.thread_id) : "";
   if (!threadId) {
-    const { data, error } = await db.from("admin_chat_threads").insert({ user_id: uid, title: text.slice(0, 70) }).select("id").single();
+    const { data, error } = await db.from("admin_chat_threads").insert({ user_id: uid, title: (autopilot && body.title ? String(body.title) : text).slice(0, 70) }).select("id").single();
     if (error) return J({ ok: false, error: error.message }, 500);
     threadId = data.id;
   }
@@ -759,7 +847,7 @@ Deno.serve(async (req) => {
       }
     : null;
 
-  const [{ data: today }, { data: mac }, { data: inc }, { data: bell }, recorder, { data: jobRows }] = await Promise.all([
+  const [{ data: today }, { data: mac }, { data: inc }, { data: bell }, recorder, { data: jobRows }, { data: lessonRows }] = await Promise.all([
     db.rpc("admin_today"),
     db.rpc("mac_agent_health"),
     db.from("monitor_issues").select("key, severity, title, needs_jared, self_healed").eq("status", "open").limit(30),
@@ -767,13 +855,17 @@ Deno.serve(async (req) => {
     recorderStatus().catch(() => ({ status: "unknown" })),
     db.from("mac_jobs").select("id, title, status, exit_code, created_at, finished_at, output")
       .order("created_at", { ascending: false }).limit(5),
+    db.from("scout_lessons").select("scope, title, do_text, wins, losses").eq("active", true)
+      .order("wins", { ascending: false }).order("updated_at", { ascending: false }).limit(30),
   ]);
+  const lessonsDigest = ((lessonRows ?? []) as any[]).map((l) => `[${l.scope}] ${l.title}: ${l.do_text}`.slice(0, 260)).join("\n");
   const jobs = (jobRows ?? []).map((j: any) => ({ ...j, output: String(j.output ?? "").slice(-1500) }));
   const unread: Record<string, number> = {};
   for (const n of (bell ?? []) as { severity: string }[]) unread[n.severity] = (unread[n.severity] ?? 0) + 1;
-  const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder, jobs, page ?? "unknown");
+  const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder, jobs, page ?? "unknown", lessonsDigest);
 
   const used: string[] = [];
+  const shownFor: Record<string, string[]> = {};
   let reply = "";
   const left = () => BUDGET_MS - (Date.now() - started);
   try {
@@ -806,8 +898,20 @@ Deno.serve(async (req) => {
           results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out) });
           continue;
         }
+        if (autopilot && ((c.input as any)?.confirmed === true || AUTOPILOT_NEVER.has(c.name))) {
+          out = { ok: false, error: "needs_yes", hint: "Autopilot: Jared is not here, so nothing that needs his yes runs (and no Mac jobs or phone pushes). Don't retry it. Finish your reply and make the last line NEEDS_YES: <this exact action, one line>." };
+          results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out) });
+          continue;
+        }
         try { out = await runTool(c.name, c.input ?? {}, threadId); }
         catch (e) { out = { ok: false, error: `tool crashed: ${(e as Error).message}` }; }
+        const failed = (out as any)?.ok === false;
+        // Score the lessons shown after this tool's last failure: did the next try work?
+        if (shownFor[c.name]?.length) {
+          await db.rpc("scout_lesson_used", { p_ids: shownFor[c.name], p_worked: !failed });
+          delete shownFor[c.name];
+        }
+        if (failed && c.name !== "learn") out = await heal(c.name, c.input ?? {}, out, shownFor);
         results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out).slice(0, RESULT_CAP[c.name] ?? 20000) });
       }
       messages.push({ role: "user", content: results });
