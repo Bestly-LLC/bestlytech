@@ -204,6 +204,7 @@ export default function AdminMeetings() {
           : r,
       ),
     );
+    await supabase.rpc("admin_meeting_rename" as never, { p_old: renameTarget.id, p_new: newId } as never);
     setRenameTarget(null);
     toast({ title: "Renamed", description: `${renameTarget.id} → ${newId}` });
   };
@@ -238,9 +239,14 @@ export default function AdminMeetings() {
       toast({ title: "Delete failed", description: String(desc), variant: "destructive" });
       return;
     }
+    // The archive files are gone; take the copy the partner portal reads with them (and the
+    // to-dos made from that call), and tombstone it so the Mac sync cannot bring it back.
+    const { error: dbErr } = await supabase.rpc("admin_meeting_forget" as never, { p_name: deleteTarget.id } as never);
     setRows((prev) => prev.filter((r) => r.id !== deleteTarget.id));
     setDeleteTarget(null);
-    toast({ title: "Deleted", description: deleteTarget.id });
+    toast(dbErr
+      ? { title: "Deleted from the archive", description: `The portal copy is still there: ${dbErr.message}`, variant: "destructive" }
+      : { title: "Deleted", description: `${deleteTarget.id} — archive, portal and its to-dos` });
   };
 
   const debriefMeeting = (m: Meeting) => {

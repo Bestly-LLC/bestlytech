@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { ART } from "./partnerArt";
 import { DocPreview, type PreviewFile } from "@/components/DocPreview";
 import { FileThumb } from "./FileThumb";
+import { BoardSheet, CalendarSheet, CloudSheet, TalkSheet, useTalkUnread } from "./PartnerCloud";
 import { BellButton, BellSheet, ConnectClaude, useNextMeeting, usePartnerNotifs, whenLabel, type NextEvent } from "./PartnerExtras";
 import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState } from "./PartnerScout";
 
@@ -53,13 +54,17 @@ const TABS: { id: Tab; label: string; icon: typeof HomeIcon }[] = [
   { id: "files", label: "Files", icon: FilesIcon },
 ];
 
+// Studio signs him in with his own passkey; everything on cloud.bestly.tech opens inside the
+// portal instead (partner-nc signs in as his seat), so he never needs a Nextcloud login.
 const SHORTCUTS = [
   { id: "studio", href: "https://studio.bestly.tech", label: "Studio", sub: "Review queue", tone: "from-violet-500 to-fuchsia-500 text-violet-600" },
-  { id: "ops", href: "https://cloud.bestly.tech/apps/deck/board/2", label: "Ops board", sub: "What's moving", tone: "from-amber-400 to-orange-500 text-orange-600" },
-  { id: "talk", href: "https://cloud.bestly.tech/apps/spreed", label: "Talk", sub: "Chat with Jared", tone: "from-sky-400 to-blue-600 text-blue-600" },
-  { id: "files", href: "https://cloud.bestly.tech/apps/files", label: "Cloud files", sub: "Shared folders", tone: "from-emerald-400 to-teal-600 text-teal-600" },
-  { id: "calendar", href: "https://cloud.bestly.tech/apps/calendar", label: "Calendar", sub: "What's booked", tone: "from-rose-400 to-pink-600 text-pink-600" },
+  { id: "talk", opens: "talk" as const, label: "Talk", sub: "Chat with Jared", tone: "from-sky-400 to-blue-600 text-blue-600" },
+  { id: "ops", opens: "board" as const, label: "Ops board", sub: "What's moving", tone: "from-amber-400 to-orange-500 text-orange-600" },
+  { id: "files", opens: "cloud" as const, label: "Cloud files", sub: "Your folders", tone: "from-emerald-400 to-teal-600 text-teal-600" },
+  { id: "calendar", opens: "calendar" as const, label: "Calendar", sub: "What's booked", tone: "from-rose-400 to-pink-600 text-pink-600" },
 ];
+
+export type CloudView = "talk" | "board" | "cloud" | "calendar" | null;
 
 const STAGE: Record<number, string> = { 3: "Discovery", 4: "SOW + deposit", 5: "Tech intake", 6: "Provisioning", 7: "Install", 8: "Live" };
 const card = "rounded-[1.5rem] border border-white/[0.07] bg-white/[0.035] bento:border-transparent bento:bg-[#fff] bento:shadow-[0_1px_2px_rgba(17,17,20,0.04)]";
@@ -124,6 +129,8 @@ export function PartnerHome({ session }: { session: Session }) {
   const [askDraft, setAskDraft] = useState<string | undefined>();
   const [preview, setPreview] = useState<PreviewFile | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
+  const [cloud, setCloud] = useState<CloudView>(null);
+  const talkUnread = useTalkUnread(!!partner);
   const [bellOpen, setBellOpen] = useState(false);
   // Read once: switching tabs rewrites the address, and "view as" must survive that.
   const [asParam] = useState(() => new URLSearchParams(window.location.search).get("as")?.toLowerCase() || null);
@@ -323,7 +330,7 @@ export function PartnerHome({ session }: { session: Session }) {
           )}
 
           {tab === "home" && (
-            <HomeTab first={first} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
+            <HomeTab first={first} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} openCloud={setCloud} talkUnread={talkUnread} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
               files={files} pipe={pipe} go={setTab} openCall={(m) => { setTab("calls"); setOpenCall(m); }}
               openMail={(m) => { setTab("mail"); setOpenMail(m); }} ask={askScout} scout={scout} />
           )}
@@ -335,6 +342,10 @@ export function PartnerHome({ session }: { session: Session }) {
       </main>
 
       <DocPreview file={preview} onClose={() => setPreview(null)} />
+      <TalkSheet open={cloud === "talk"} onOpenChange={(o) => !o && setCloud(null)} />
+      <BoardSheet open={cloud === "board"} onOpenChange={(o) => !o && setCloud(null)} />
+      <CloudSheet open={cloud === "cloud"} onOpenChange={(o) => !o && setCloud(null)} />
+      <CalendarSheet open={cloud === "calendar"} onOpenChange={(o) => !o && setCloud(null)} />
       <ConnectClaude open={connectOpen} onOpenChange={setConnectOpen} />
       <BellSheet notifs={notifs} open={bellOpen} onOpenChange={setBellOpen} />
       {tab !== "scout" && <ScoutAlert scout={scout} open={() => setTab("scout")} />}
@@ -360,11 +371,11 @@ export function PartnerHome({ session }: { session: Session }) {
 /* ───────── Home ───────── */
 
 function HomeTab(props: {
-  first: string; callUrl: string; joinUrl: string; nextMtg: NextEvent | null; studioUnread: number; onConnect: () => void; mine: Todo[]; done: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
+  first: string; callUrl: string; joinUrl: string; nextMtg: NextEvent | null; studioUnread: number; onConnect: () => void; openCloud: (v: CloudView) => void; talkUnread: number; mine: Todo[]; done: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
   meetings: Meeting[] | null; mail: MailRow[] | null; files: (Att & { mail: MailRow })[]; pipe: { deals: any[]; leads: any[] } | null;
   go: (t: Tab) => void; openCall: (m: Meeting) => void; openMail: (m: MailRow) => void; ask: (q?: string) => void; scout: ScoutState;
 }) {
-  const { first, callUrl, joinUrl, nextMtg, studioUnread, onConnect, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
+  const { first, callUrl, joinUrl, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
   const [q, setQ] = useState("");
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", ...PT });
   const deals = pipe?.deals.length ?? 0;
@@ -546,7 +557,12 @@ function HomeTab(props: {
         <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-white/45">Shortcuts</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Tile href={callUrl} art="call" label="Our call" sub="Jump into the room" tone="from-emerald-400 to-green-600 text-green-700" />
-          {SHORTCUTS.map((s) => <Tile key={s.id} href={s.href} art={s.id} label={s.label} sub={s.sub} tone={s.tone} badge={s.id === "studio" ? studioUnread : 0} />)}
+          {SHORTCUTS.map((s) => (
+            <Tile key={s.id} art={s.id} label={s.label} sub={s.sub} tone={s.tone}
+              href={"href" in s ? (s as { href: string }).href : undefined}
+              onClick={"opens" in s ? () => openCloud((s as { opens: CloudView }).opens) : undefined}
+              badge={s.id === "studio" ? studioUnread : s.id === "talk" ? talkUnread : 0} />
+          ))}
           <button onClick={onConnect}
             className="group relative flex aspect-[5/4] flex-col justify-between overflow-hidden rounded-[1.4rem] bg-gradient-to-br from-orange-400 to-amber-600 p-4 text-left text-orange-700 shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 active:scale-[0.98]">
             <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15" />
@@ -562,10 +578,12 @@ function HomeTab(props: {
   );
 }
 
-function Tile({ href, art, label, sub, tone, badge = 0 }: { href: string; art: string; label: string; sub: string; tone: string; badge?: number }) {
+function Tile({ href, onClick, art, label, sub, tone, badge = 0 }: { href?: string; onClick?: () => void; art: string; label: string; sub: string; tone: string; badge?: number }) {
+  const Box = (onClick ? "button" : "a") as any;
+  const props = onClick ? { type: "button", onClick } : { href, target: "_blank", rel: "noreferrer" };
   return (
-    <a href={href} target="_blank" rel="noreferrer"
-      className={cn("group relative flex aspect-[5/4] flex-col justify-between overflow-hidden rounded-[1.4rem] bg-gradient-to-br p-4 shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-14px_rgba(0,0,0,0.7)] active:scale-[0.98]", tone)}>
+    <Box {...props}
+      className={cn("group relative flex aspect-[5/4] w-full flex-col justify-between overflow-hidden rounded-[1.4rem] bg-gradient-to-br p-4 text-left shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-14px_rgba(0,0,0,0.7)] active:scale-[0.98]", tone)}>
       <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15" />
       {badge > 0 && <span className="absolute right-3 top-3 min-w-[22px] rounded-full bg-red-500 px-1.5 text-center text-xs font-bold leading-[22px] text-[#fff] shadow">{badge}</span>}
       <span className="relative transition group-hover:scale-105">{ART[art]}</span>
@@ -573,7 +591,7 @@ function Tile({ href, art, label, sub, tone, badge = 0 }: { href: string; art: s
         <span className="block text-[0.975rem] font-semibold leading-tight text-[#fff]">{label}</span>
         <span className="block text-xs text-[#fff] opacity-80">{sub}</span>
       </span>
-    </a>
+    </Box>
   );
 }
 
@@ -648,9 +666,26 @@ function DoneList({ done, tick }: { done: Todo[]; tick: (t: Todo, s: "done" | "o
 
 /* ───────── Calls ───────── */
 
+
+/**
+ * Search that behaves the way people expect: type any words, in any order, in any case, with or
+ * without accents and punctuation ("O'Brien" finds obrien, "sep 17" finds Sep 17). Every word has
+ * to appear somewhere in the thing, not all in one field.
+ */
+const norm = (v: unknown) => String(v ?? "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+function hit(q: string, ...fields: unknown[]) {
+  const words = norm(q).split(" ").filter(Boolean);
+  if (!words.length) return true;
+  const hay = " " + fields.map(norm).join(" ") + " ";
+  return words.every((w) => hay.includes(w));
+}
+/** Everything worth searching about a call: when it was, who was on it, and what came out of it. */
+const callText = (m: Meeting) => [meetingDate(m), new Date(m.started_at ?? 0).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", ...PT }),
+  (m.people ?? []).join(" "), m.name, m.summary ? JSON.stringify(m.summary) : ""].join(" ");
+
 function CallsTab({ meetings, open }: { meetings: Meeting[] | null; open: (m: Meeting) => void }) {
   const [q, setQ] = useState("");
-  const shown = (meetings ?? []).filter((m) => !q.trim() || `${meetingDate(m)} ${m.summary?.summary ?? ""} ${(m.summary?.decisions ?? []).join(" ")}`.toLowerCase().includes(q.toLowerCase()));
+  const shown = (meetings ?? []).filter((m) => hit(q, callText(m)));
   return (
     <div>
       <TabHead title="Calls" sub="Every call you were on, with what was decided." q={q} setQ={setQ} placeholder="Search calls" />
@@ -741,7 +776,9 @@ function AskAbout({ onClick, label }: { onClick: () => void; label: string }) {
 
 function MailTab({ mail, open, setOpen, onAsk }: { mail: MailRow[] | null; open: MailRow | null; setOpen: (m: MailRow | null) => void; onAsk: (q: string) => void }) {
   const [q, setQ] = useState("");
-  const shown = (mail ?? []).filter((m) => !q.trim() || `${m.subject ?? ""} ${m.body_text ?? ""} ${m.attachments.map((a) => a.name).join(" ")}`.toLowerCase().includes(q.toLowerCase()));
+  const shown = (mail ?? []).filter((m) => hit(q, m.subject, m.body_text, m.attachments.map((a) => a.name).join(" "),
+    m.links.map((l) => `${l.kind} ${l.url}`).join(" "), m.to_addrs.join(" "), m.cc_addrs.join(" "),
+    m.sent_at ? new Date(m.sent_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", ...PT }) : ""));
   useEffect(() => { if (!open && shown.length && window.matchMedia("(min-width: 1024px)").matches) setOpen(shown[0]); }, [open, shown, setOpen]);
 
   const list = (
@@ -827,8 +864,9 @@ function MailView({ m, onBack, onAsk }: { m: MailRow; onBack: () => void; onAsk:
 
 function FilesTab({ files, docs, openMail }: { files: (Att & { mail: MailRow })[]; docs: (DocLink & { mail: MailRow })[]; openMail: (m: MailRow) => void }) {
   const [q, setQ] = useState("");
-  const f = files.filter((a) => !q.trim() || `${a.name} ${a.mail.subject ?? ""}`.toLowerCase().includes(q.toLowerCase()));
-  const d = docs.filter((l) => !q.trim() || `${l.kind} ${l.url} ${l.mail.subject ?? ""}`.toLowerCase().includes(q.toLowerCase()));
+  const f = files.filter((a) => hit(q, a.name, a.type, a.mail.subject, a.mail.body_text,
+    a.mail.sent_at ? new Date(a.mail.sent_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", ...PT }) : ""));
+  const d = docs.filter((l) => hit(q, l.kind, l.url, l.mail.subject, l.mail.body_text));
   return (
     <div>
       <TabHead title="Files" sub="Everything Jared has sent you: attachments and linked docs." q={q} setQ={setQ} placeholder="Search files" />
