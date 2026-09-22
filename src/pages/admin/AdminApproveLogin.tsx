@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { AdminMark } from "@/components/AdminMark";
+import { AdminMark, SIGNIN_STARE_RADIUS_PX } from "@/components/AdminMark";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { Check, Laptop, Loader2, ShieldX, Smartphone, Monitor } from "lucide-react";
 
@@ -259,7 +259,7 @@ export default function AdminApproveLogin() {
           <>
             {/* Collapses once the request is found, so the next step sits above the keyboard */}
             <header className={cn("text-center transition-[padding] duration-300", req ? "pt-2" : "pt-6")}>
-              {!req && <AdminMark label="Bestly Admin" className="mx-auto h-12 w-12" />}
+              {!req && <AdminMark label="Bestly Admin" stareRadius={SIGNIN_STARE_RADIUS_PX} className="mx-auto h-12 w-12" />}
               <h1 className={cn("font-semibold leading-tight tracking-tight", req ? "text-[1.25rem]" : "mt-5 text-[1.75rem]")}>
                 Sign in another screen
               </h1>

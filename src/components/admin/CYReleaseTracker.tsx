@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Apple, Chrome, Copy, Hand, Laptop, Loader2, Rocket } from "lucide-react";
+import { CopyText, CopyButton } from "@/components/CopyText";
 import releasePrompt from "../../../docs/cookie-yeti-extension/RELEASE-PROMPT.md?raw";
 
 type Status = "not_started" | "building" | "uploaded" | "in_review" | "approved" | "live" | "rejected" | "blocked";
@@ -85,12 +86,18 @@ export function CYReleaseTracker() {
           <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-white">
             <Rocket className="h-4 w-4 text-white/60" aria-hidden />Extension release: click-loop fail-safe
           </h2>
+          {ask ? (
+            <div className="mt-1 text-sm text-white/80">
+              <strong className="text-amber-200">Your turn:</strong>
+              <CopyText text={ask.needs_jared ?? ""} className="mt-1" />
+            </div>
+          ) : (
           <p className="text-sm text-white/65 mt-1">
-            {ask ? <><strong className="text-amber-200">Your turn:</strong> {ask.needs_jared}</>
-              : notStarted ? <><strong className="text-white/90">Next step:</strong> copy the prompt and paste it into Claude on your Mac. It does the rest.</>
+            {notStarted ? <><strong className="text-white/90">Next step:</strong> copy the prompt and paste it into Claude on your Mac. It does the rest.</>
               : allLive ? "Live everywhere."
               : "Claude on your Mac is working through it. Updates show here and in the bell."}
           </p>
+          )}
         </div>
         {ask ? (
           <Button size="sm" onClick={() => done(ask)} disabled={clearing === ask.channel}>
@@ -117,9 +124,12 @@ export function CYReleaseTracker() {
               <div className="mt-2 h-1 rounded-full bg-white/[0.06] overflow-hidden" aria-hidden>
                 <div className={`h-full ${r.status === "rejected" || r.status === "blocked" ? "bg-red-400" : "bg-green-400"}`} style={{ width: `${(s.step / 5) * 100}%` }} />
               </div>
-              <p className="text-xs text-white/60 mt-2 break-words">
-                {r.version ? `v${r.version} · ` : ""}{r.detail ?? ""}
-              </p>
+              <div className="mt-2 flex items-start gap-2">
+                <p className="min-w-0 flex-1 text-xs text-white/60 break-words">
+                  {r.version ? `v${r.version} · ` : ""}{r.detail ?? ""}
+                </p>
+                {r.detail && <CopyButton text={r.detail} label="Copy" className="h-7 px-2.5 text-[11px]" />}
+              </div>
               {r.store_url && <a href={r.store_url} target="_blank" rel="noreferrer" className="text-xs text-sky-300 hover:underline mt-1 inline-block">Open in store console</a>}
             </li>
           );

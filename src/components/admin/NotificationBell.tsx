@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { AlertPane, type PaneAlert } from "@/components/admin/AlertPane";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -56,12 +56,12 @@ function ago(iso: string) {
 }
 
 export function NotificationBell() {
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [items, setItems] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pane, setPane] = useState<PaneAlert | null>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -81,8 +81,9 @@ export function NotificationBell() {
       setItems((xs) => xs.map((x) => (x.id === n.id ? { ...x, read_at: at } : x)));
       await supabase.from("admin_notifications" as any).update({ read_at: at } as any).eq("id", n.id).select("id");
     }
-    if (n.url) navigate(n.url);
-  }, [navigate]);
+    // Open the alert in a reading pane with suggested next moves for Scout (it has a link to the page).
+    setPane({ ...n, kindLabel: kindMeta(n.kind).label });
+  }, []);
 
   useEffect(() => {
     load();
@@ -207,6 +208,7 @@ export function NotificationBell() {
           )}
         </div>
       </PopoverContent>
+      <AlertPane alert={pane} onClose={() => setPane(null)} />
     </Popover>
   );
 }

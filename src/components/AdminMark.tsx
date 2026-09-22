@@ -13,7 +13,9 @@ import { cn } from "@/lib/utils";
 export const ADMIN_MARK_PERIOD_MS = 3200;
 
 /** How close the cursor must be before the mark stops glancing and stares at it (~1.5 inches). */
-const STARE_RADIUS_PX = 150;
+export const STARE_RADIUS_PX = 150;
+/** Sign-in screens: the mark is the only thing on the page, so it notices you from further off (~4 inches). */
+export const SIGNIN_STARE_RADIUS_PX = 384;
 /** How far the pupils can travel inside the lenses (SVG units, same as the glance keyframes). */
 const PUPIL_REACH = { x: 5.4, y: 3.6 };
 
@@ -23,7 +25,7 @@ export type Stare = { x: number; y: number; a?: number } | null;
  * Pupils follow the pointer while it is within STARE_RADIUS_PX of the mark. Outside that, the
  * normal glance animation runs. Mouse/pen only (touch has no hover), one rAF per frame.
  */
-export function useStare(ref: React.RefObject<SVGSVGElement>, enabled: boolean, reach = PUPIL_REACH, eyeLine = 0.61): Stare {
+export function useStare(ref: React.RefObject<SVGSVGElement>, enabled: boolean, reach = PUPIL_REACH, eyeLine = 0.61, radius = STARE_RADIUS_PX): Stare {
   const [stare, setStare] = useState<Stare>(null);
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
@@ -37,7 +39,7 @@ export function useStare(ref: React.RefObject<SVGSVGElement>, enabled: boolean, 
       const cx = r.left + r.width / 2, cy = r.top + r.height * eyeLine; // eye line (y=44 of 72 here)
       const dx = last.clientX - cx, dy = last.clientY - cy;
       const d = Math.hypot(dx, dy);
-      if (d > STARE_RADIUS_PX) { setStare((s) => (s ? null : s)); return; }
+      if (d > radius) { setStare((s) => (s ? null : s)); return; }
       // Full reach once the cursor is a few mark-widths away; gentler right on top of it.
       const k = Math.min(1, d / Math.max(24, r.width * 1.2));
       const nx = d ? dx / d : 0, ny = d ? dy / d : 0;
@@ -58,7 +60,7 @@ export function useStare(ref: React.RefObject<SVGSVGElement>, enabled: boolean, 
       window.removeEventListener("blur", onLeave);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [enabled, ref, reach.x, reach.y, eyeLine]);
+  }, [enabled, ref, reach.x, reach.y, eyeLine, radius]);
   return stare;
 }
 
@@ -66,16 +68,19 @@ export function AdminMark({
   className,
   label,
   animated = true,
-  watchCursor = false,
+  watchCursor = true,
+  stareRadius = STARE_RADIUS_PX,
 }: {
   className?: string;
   label?: string;
   animated?: boolean;
-  /** Stare at the pointer when it comes within ~1.5 inches. */
+  /** Stare at the pointer when it comes near (on by default, everywhere). */
   watchCursor?: boolean;
+  /** How close, in CSS px, before it stares. ~96px per inch. */
+  stareRadius?: number;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const stare = useStare(svgRef, watchCursor);
+  const stare = useStare(svgRef, watchCursor, PUPIL_REACH, 0.61, stareRadius);
   const uid = useId().replace(/:/g, "");
   // Negative delay = "already this far into the cycle", so remounts continue instead of restarting.
   const delay = useMemo(

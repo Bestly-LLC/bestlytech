@@ -16,7 +16,11 @@ export function formatForClaude(title: string, body?: string | null, extra?: Rec
 }
 
 export async function copyForClaude(title: string, body?: string | null, extra?: Record<string, string | null | undefined>) {
-  const text = formatForClaude(title, body, extra);
+  return copyText(formatForClaude(title, body, extra));
+}
+
+/** Copy plain text, with a textarea fallback for older Safari / blocked clipboard. */
+export async function copyText(text: string) {
   try {
     await navigator.clipboard.writeText(text);
     return true;

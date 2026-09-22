@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+import { AdminMark } from "@/components/AdminMark";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { TranscriptBubbles, CopyTranscriptButton } from "@/components/admin/TranscriptBubbles";
 import { StatCard } from "@/components/admin/StatCard";
@@ -124,9 +125,14 @@ function ParticipantList({ m }: { m: Meeting }) {
   );
 }
 
+const MEETINGS_CACHE = "bestly-meetings-cache";
+
 export default function AdminMeetings() {
   const { toast } = useToast();
-  const [rows, setRows] = useState<Meeting[]>([]);
+  // Last list, shown instantly while the fresh one comes from Nextcloud (that's the slow part).
+  const [rows, setRows] = useState<Meeting[]>(() => {
+    try { return JSON.parse(localStorage.getItem(MEETINGS_CACHE) ?? "[]") as Meeting[]; } catch { return []; }
+  });
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -160,6 +166,7 @@ export default function AdminMeetings() {
       setRows([]);
     } else {
       setRows(data?.meetings ?? []);
+      try { localStorage.setItem(MEETINGS_CACHE, JSON.stringify(data?.meetings ?? [])); } catch { /* full or private */ }
     }
     setLoading(false);
   }, []);
@@ -344,11 +351,10 @@ export default function AdminMeetings() {
         className="max-w-sm bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/25"
       />
 
-      {loading ? (
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-2xl bg-white/[0.04]" />
-          ))}
+      {loading && rows.length === 0 ? (
+        <div role="status" className="flex min-h-[45vh] flex-col items-center justify-center gap-3">
+          <AdminMark className="h-24 w-24" />
+          <p className="text-sm text-white/50">Fetching meetings from Nextcloud…</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-10 text-center">

@@ -18,7 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { TranscriptBubbles, CopyTranscriptButton } from "@/components/admin/TranscriptBubbles";
 import { cn } from "@/lib/utils";
-import { AdminMark } from "@/components/AdminMark";
+import { AdminMark, SIGNIN_STARE_RADIUS_PX } from "@/components/AdminMark";
 import { PartnerMark } from "@/components/PartnerMark";
 
 interface Partner { id: string; name: string; email: string; roster_name: string }
@@ -54,7 +54,7 @@ function Shell({ children, right }: { children: ReactNode; right?: ReactNode }) 
       <div className="mx-auto w-full max-w-2xl px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
         <header className="flex h-14 items-center justify-between">
           <span className="flex items-center gap-2 text-[0.95rem] font-semibold tracking-tight">
-            <AdminMark watchCursor className="h-7 w-7" />
+            <AdminMark className="h-7 w-7" />
             Bestly <span className="text-white/45">· Partner</span>
           </span>
           {right}
@@ -65,17 +65,17 @@ function Shell({ children, right }: { children: ReactNode; right?: ReactNode }) 
   );
 }
 
-/** The pair: Jared's binoculars spot it, the partner's compass steers it. Both watch the cursor. */
+/** The pair: Jared's binoculars spot it, the partner's globe steers it. Both watch the cursor. */
 function Duo() {
   return (
     <figure className="flex flex-col items-center">
       <div className="flex items-end gap-5">
         <div className="flex flex-col items-center gap-1.5">
-          <AdminMark watchCursor label="Binoculars" className="h-20 w-20" />
+          <AdminMark stareRadius={SIGNIN_STARE_RADIUS_PX} label="Binoculars" className="h-20 w-20" />
           <span className="text-[11px] font-semibold uppercase tracking-widest text-white/40">Spot</span>
         </div>
         <div className="flex flex-col items-center gap-1.5">
-          <PartnerMark watchCursor label="Compass" className="h-20 w-20" />
+          <PartnerMark watchCursor stareRadius={SIGNIN_STARE_RADIUS_PX} label="Globe" className="h-20 w-20" />
           <span className="text-[11px] font-semibold uppercase tracking-widest text-white/40">Steer</span>
         </div>
       </div>
@@ -263,7 +263,7 @@ function Home({ session }: { session: Session }) {
         <p className="mb-4 rounded-2xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200 bento:text-amber-800">Preview: you're signed in as the admin, so you see every call. Eli sees only the calls he was on.</p>
       )}
       <div className="mt-2 flex items-center gap-3">
-        <PartnerMark watchCursor label="Compass" className="h-12 w-12 shrink-0" />
+        <PartnerMark watchCursor label="Globe" className="h-12 w-12 shrink-0" />
         <h1 className="text-[2rem] font-bold leading-tight tracking-tight">Hi {first}</h1>
       </div>
       <p className="mt-1 text-[0.975rem] text-white/55">

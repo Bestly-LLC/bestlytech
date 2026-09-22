@@ -7,7 +7,8 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Fingerprint } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { AdminMark } from "@/components/AdminMark";
+import { AdminMark, SIGNIN_STARE_RADIUS_PX } from "@/components/AdminMark";
+import { rememberNext } from "@/lib/adminNext";
 import { BrandLoader } from "@/components/BrandLoader";
 import { useAdminFavicon } from "@/hooks/useAdminFavicon";
 import { AdminAccessDenied } from "@/components/admin/AdminAccessDenied";
@@ -92,7 +93,13 @@ export default function AdminLogin() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    const { error } = await signIn(email, password);
+    // No "@" means a username: look up which admin email it belongs to.
+    let login = email.trim();
+    if (!login.includes("@")) {
+      const { data } = await supabase.rpc("admin_login_email" as never, { p_username: login } as never);
+      login = (data as unknown as string | null) ?? login;
+    }
+    const { error } = await signIn(login, password);
     setSubmitting(false);
 
     if (error) {
@@ -109,6 +116,7 @@ export default function AdminLogin() {
 
   const handleAppleSignIn = async () => {
     setOauthLoading(true);
+    rememberNext(next); // Apple sends us back to /admin; AdminRoute picks this up and finishes the trip
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "apple",
@@ -277,11 +285,16 @@ export default function AdminLogin() {
         {/* Header */}
         <div className="text-center space-y-3">
           <div className="flex justify-center">
-            <AdminMark label="Bestly Admin" className="h-20 w-20" />
+            <AdminMark label="Bestly Admin" stareRadius={SIGNIN_STARE_RADIUS_PX} className="h-20 w-20" />
           </div>
           <p className="text-[0.8125rem] text-white/55 font-light tracking-wide">
             Bestly Admin
           </p>
+          {next.startsWith("/admin/approve") && (
+            <p className="mx-auto max-w-[18rem] rounded-2xl bg-white/[0.06] px-4 py-3 text-[0.9375rem] leading-snug text-white/80 bento:bg-[#F3F2EE]">
+              Sign in on this phone first. Then you come straight back to approve the other screen.
+            </p>
+          )}
         </div>
 
         {/* Auth Buttons */}
@@ -338,11 +351,14 @@ export default function AdminLogin() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required={showEmail}
-                placeholder="Email"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                placeholder="Username or email"
                 className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[0.9375rem] pb-3 pt-1 placeholder:text-white/45 focus:outline-none focus:border-white/40 transition-colors duration-200"
               />
               <input
@@ -350,6 +366,7 @@ export default function AdminLogin() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required={showEmail}
+                autoComplete="current-password"
                 placeholder="Password"
                 className="w-full bg-transparent border-0 border-b border-white/15 text-white text-[0.9375rem] pb-3 pt-1 placeholder:text-white/45 focus:outline-none focus:border-white/40 transition-colors duration-200"
               />

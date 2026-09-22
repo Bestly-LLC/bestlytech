@@ -5,6 +5,8 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { BrandLoader } from "@/components/BrandLoader";
 import { useAdminFavicon } from "@/hooks/useAdminFavicon";
 import { AdminAccessDenied } from "./AdminAccessDenied";
+import { PasswordSetup } from "./PasswordSetup";
+import { takeNext } from "@/lib/adminNext";
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, isAdmin, roleError, recheck, signOut } = useAdminAuth();
@@ -33,5 +35,9 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
     return <AdminAccessDenied email={user.email} checkFailed={!!roleError} onRetry={recheck} onSignOut={signOut} />;
   }
 
-  return <>{children}</>;
+  // Back from Apple sign-in: finish the trip to where you were headed (e.g. the QR approve page).
+  const pending = takeNext();
+  if (pending && pending !== location.pathname + location.search) return <Navigate to={pending} replace />;
+
+  return <>{children}<PasswordSetup /></>;
 }
