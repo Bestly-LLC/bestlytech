@@ -74,8 +74,7 @@ const CookieYetiCommandCenter = lazy(() => import("./pages/admin/CookieYetiComma
 const CookieYetiSubscribers = lazy(() => import("./pages/admin/CookieYetiSubscribers"));
 const CookieYetiAnalytics = lazy(() => import("./pages/admin/CookieYetiAnalytics"));
 const AdminContacts = lazy(() => import("./pages/admin/AdminContacts"));
-const AdminMeetings = lazy(() => import("./pages/admin/AdminMeetings"));
-const AdminClips = lazy(() => import("./pages/admin/AdminClips"));
+const AdminMeetingsSection = lazy(() => import("./pages/admin/AdminMeetingsSection"));
 const AdminPartners = lazy(() => import("./pages/admin/AdminPartners"));
 const AdminTuro = lazy(() => import("./pages/admin/AdminTuro"));
 const AdminPlaybook = lazy(() => import("./pages/admin/AdminPlaybook"));
@@ -191,8 +190,9 @@ const App = () => {
                   <Route path="contacts" element={<AdminContacts />} />
                   <Route path="hires" element={<TabRedirect to="/admin/leads" tab="hire" />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
-                  <Route path="meetings" element={<AdminMeetings />} />
-                  <Route path="clips" element={<AdminClips />} />
+                  <Route path="meetings" element={<AdminMeetingsSection />} />
+                  {/* Clips used to be its own page; keep the link working. */}
+                  <Route path="clips" element={<Navigate to="/admin/meetings?tab=clips" replace />} />
                   <Route path="partners" element={<AdminPartners />} />
                   <Route path="cloud" element={<TabRedirect to="/admin/leads" tab="cloud" />} />
                   <Route path="cloud/:id" element={<CloudDealDetail />} />

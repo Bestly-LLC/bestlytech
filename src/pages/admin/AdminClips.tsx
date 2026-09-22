@@ -249,7 +249,7 @@ function ClipCard({
   );
 }
 
-export default function AdminClips() {
+export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const [clips, setClips] = useState<Clip[] | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -360,8 +360,9 @@ export default function AdminClips() {
         void upload(Array.from(e.dataTransfer.files));
       }}
     >
-      <AdminMark />
+      {!embedded && <AdminMark />}
       <PageHeader
+        embedded={embedded}
         title="Clips"
         description="AirDrop a recording to the Mac mini, or drop one here. It gets transcribed and summarised on its own."
         actions={

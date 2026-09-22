@@ -127,7 +127,7 @@ function ParticipantList({ m }: { m: Meeting }) {
 
 const MEETINGS_CACHE = "bestly-meetings-cache";
 
-export default function AdminMeetings() {
+export default function AdminMeetings({ embedded }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   // Last list, shown instantly while the fresh one comes from Nextcloud (that's the slow part).
   const [rows, setRows] = useState<Meeting[]>(() => {
@@ -310,6 +310,7 @@ export default function AdminMeetings() {
   return (
     <div className="space-y-6">
       <PageHeader
+        embedded={embedded}
         title="Meetings"
         description="Recorded calls synced from this Mac to Nextcloud. Transcripts are read live from the archive."
         actions={
