@@ -14,7 +14,7 @@ Standard library only: it runs on the system python3.
 import base64, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -40,7 +40,8 @@ nt = {"proc": None, "name": None, "room": None, "title": None, "next_try": 0, "s
 RAW = "https://raw.githubusercontent.com/Bestly-LLC/bestlytech/main/scripts/meetingrec/"
 SYNC = {"notetaker/notetaker.js": f"{HOME}/notetaker/notetaker.js",
         "notetaker/tester.js": f"{HOME}/notetaker/tester.js",
-        "talk_tracks.py": f"{HOME}/talk_tracks.py"}
+        "talk_tracks.py": f"{HOME}/talk_tracks.py",
+        "agent.py": f"{HOME}/agent.py"}
 BAD = f"{HOME}/.bad-versions"
 heal = {"next_sync": 0, "next_version_check": 0, "selftest": None, "last": None, "verify_after_update": False}
 START_APPS = [os.path.expanduser(p) for p in (
@@ -53,6 +54,20 @@ busy = {"stage": None}          # set while this agent is running stop.sh
 JOB_FILE = f"{HOME}/.job-running"
 job = {"id": None}
 lock = threading.Lock()
+
+
+def notify(title, text, subtitle="", sound="Glass"):
+    """A real macOS banner on the mini, not a card in the admin. Jared is at the machine;
+    he should see the recorder start without looking at a browser tab."""
+    def esc(v):
+        return str(v).replace("\\", "\\\\").replace('"', '\\"')
+    script = (f'display notification "{esc(text)}" with title "{esc(title)}"'
+              + (f' subtitle "{esc(subtitle)}"' if subtitle else "")
+              + (f' sound name "{esc(sound)}"' if sound else ""))
+    try:
+        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=10)
+    except Exception as e:  # noqa: BLE001
+        log("notify failed", e)
 
 
 def log(*a):
@@ -475,6 +490,8 @@ def do_start(payload):
     for _ in range(20):
         time.sleep(1)
         if recording_pid():
+            notify("Recording", "Scout is recording this call.",
+                   ", ".join(roster) if roster else name)
             return True, {"name": name, "roster": roster}, None
     tail = read(f"{REC}/{name}.log")[-600:]
     for f in (".pending-name", ".pending-roster"):
@@ -565,6 +582,8 @@ def do_stop(cmd_id):
         call({"op": "result", "command_id": cmd_id, "ok": ok, "result": {"name": name}, "error": err})
     except Exception as e:  # noqa: BLE001
         log("stop report failed", e)
+    notify("Recording stopped", "Transcript is ready in Bestly admin." if ok else (err or "Stop failed."),
+           name, "Glass" if ok else "Basso")
     log("stop", name, "ok" if ok else err)
 
 
