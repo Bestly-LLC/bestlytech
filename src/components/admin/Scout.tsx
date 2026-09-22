@@ -138,8 +138,39 @@ const SCOUT_CSS = `
   90% { transform: translateY(0) rotate(2deg) }
   94% { transform: translateY(-2px) rotate(-1deg) }
 }
-.scout-pop-in { animation: scout-pop-in 220ms cubic-bezier(0.22,1.2,0.36,1) both; }
-@keyframes scout-pop-in { from { opacity: 0; transform: translateY(10px) scale(0.96) } to { opacity: 1; transform: none } }
+.scout-pop-in { transform-origin: bottom right; animation: scout-open 300ms cubic-bezier(0.2,1.15,0.3,1) both; }
+.scout-pop-in.scout-closing { animation: scout-close 170ms cubic-bezier(0.4,0,1,1) both; }
+@keyframes scout-open { from { opacity: 0; transform: translateY(16px) scale(0.88); filter: blur(6px) } 60% { filter: blur(0) } to { opacity: 1; transform: none; filter: none } }
+@keyframes scout-close { to { opacity: 0; transform: translateY(12px) scale(0.92); filter: blur(3px) } }
+.scout-settling { transition: left .34s cubic-bezier(0.2,1,0.3,1), top .34s cubic-bezier(0.2,1,0.3,1), width .34s cubic-bezier(0.2,1,0.3,1), height .34s cubic-bezier(0.2,1,0.3,1); }
+.scout-panel { transition: box-shadow .2s ease, transform .2s ease; }
+.scout-dragging { box-shadow: 0 40px 90px -24px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.12); transform: scale(1.01); }
+.scout-launcher { transition: transform .22s cubic-bezier(0.2,1.3,0.4,1), box-shadow .22s ease; animation: scout-launch 320ms cubic-bezier(0.2,1.3,0.4,1) both; }
+.scout-launcher:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 14px 30px -10px rgba(0,0,0,.45); }
+.scout-launcher:active { transform: scale(0.95); transition-duration: .08s; }
+@keyframes scout-launch { from { opacity: 0; transform: translateY(8px) scale(0.7) } to { opacity: 1; transform: none } }
+.scout-badge-pop { animation: scout-badge 420ms cubic-bezier(0.3,1.7,0.5,1) both; }
+@keyframes scout-badge { from { transform: scale(0.3); opacity: 0 } to { transform: none; opacity: 1 } }
+.scout-msg-user { animation: scout-in-right 280ms cubic-bezier(0.2,1.15,0.3,1) both; transform-origin: right bottom; }
+.scout-msg-bot { animation: scout-in-up 360ms cubic-bezier(0.2,0.9,0.3,1) both; }
+@keyframes scout-in-right { from { opacity: 0; transform: translateX(14px) scale(0.94) } to { opacity: 1; transform: none } }
+@keyframes scout-in-up { from { opacity: 0; transform: translateY(8px); filter: blur(2px) } to { opacity: 1; transform: none; filter: none } }
+.scout-view-fwd { animation: scout-view-fwd 240ms cubic-bezier(0.2,0.9,0.3,1) both; }
+.scout-view-back { animation: scout-view-back 240ms cubic-bezier(0.2,0.9,0.3,1) both; }
+@keyframes scout-view-fwd { from { opacity: 0; transform: translateX(18px) } to { opacity: 1; transform: none } }
+@keyframes scout-view-back { from { opacity: 0; transform: translateX(-18px) } to { opacity: 1; transform: none } }
+.scout-chip { transition: transform .15s ease, border-color .15s ease, color .15s ease, background-color .15s ease; animation: scout-in-up 380ms cubic-bezier(0.2,0.9,0.3,1) both; }
+.scout-chip:hover { transform: translateY(-1px); background-color: rgba(255,255,255,.05); }
+.scout-chip:active { transform: scale(0.96); }
+.scout-press { transition: transform .12s ease, background-color .15s ease, color .15s ease, opacity .15s ease; }
+.scout-press:active { transform: scale(0.9); }
+.scout-card-in { animation: scout-card 340ms cubic-bezier(0.2,1.15,0.3,1) both; }
+@keyframes scout-card { from { opacity: 0; transform: translateY(10px) scale(0.97) } to { opacity: 1; transform: none } }
+.scout-collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s cubic-bezier(0.2,0.9,0.3,1), opacity .2s ease; opacity: 0; }
+.scout-collapse.is-open { grid-template-rows: 1fr; opacity: 1; }
+.scout-collapse > * { overflow: hidden; min-height: 0; }
+.scout-shimmer { background: linear-gradient(90deg, rgba(255,255,255,.35), rgba(255,255,255,.9), rgba(255,255,255,.35)); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: scout-shimmer 1.6s linear infinite; }
+@keyframes scout-shimmer { from { background-position: 200% 0 } to { background-position: -200% 0 } }
 .scout-bubble-in { animation: scout-bubble-in 260ms cubic-bezier(0.22,1.2,0.36,1) both; }
 @keyframes scout-bubble-in { from { opacity: 0; transform: translateY(6px) scale(0.94) } to { opacity: 1; transform: none } }
 .scout-dots span { display: inline-block; animation: scout-dot 1.1s ease-in-out infinite; }
@@ -150,7 +181,10 @@ const SCOUT_CSS = `
 .scout-row:hover .scout-tools, .scout-row:focus-within .scout-tools { opacity: 1; }
 @media (hover: none) { .scout-row .scout-tools { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .scoutie-lids, .scoutie-eyes, .scout-nudge, .scout-pop-in, .scout-bubble-in, .scout-dots span { animation: none !important }
+  .scoutie-lids, .scoutie-eyes, .scout-nudge, .scout-pop-in, .scout-bubble-in, .scout-dots span, .scout-launcher, .scout-badge-pop,
+  .scout-msg-user, .scout-msg-bot, .scout-view-fwd, .scout-view-back, .scout-chip, .scout-card-in, .scout-shimmer { animation: none !important }
+  .scout-settling, .scout-panel, .scout-launcher, .scout-collapse, .scout-chip, .scout-press { transition: none !important }
+  .scout-shimmer { color: inherit; background: none }
 }
 `;
 
@@ -185,6 +219,17 @@ export function Scout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [box, setBox] = useState<Box | null>(() => loadBox());
+  const [closing, setClosing] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [settling, setSettling] = useState(false);
+  const [viewDir, setViewDir] = useState<"fwd" | "back">("fwd");
+  const close = useCallback(() => {
+    setClosing(true);
+    window.setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+    }, 170);
+  }, []);
   const sectionRef = useRef<HTMLElement>(null);
   const { jobs, refresh: refreshJobs } = useMacJobs(threadId, open);
   const pendingJobs = jobs.filter((j) => j.status === "proposed").length;
@@ -218,7 +263,7 @@ export function Scout() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || !open) return;
       if (view === "history") setView("chat");
-      else setOpen(false);
+      else close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -322,12 +367,13 @@ export function Scout() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === "j" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((o) => !o);
+        if (sectionRef.current) close();
+        else setOpen(true);
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [close]);
 
   // Keep a moved window on screen when the browser is resized.
   useEffect(() => {
@@ -357,16 +403,27 @@ export function Scout() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       document.body.style.userSelect = "";
+      setDragging(false);
       saveBox(last);
     };
     document.body.style.userSelect = "none";
+    setDragging(true);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
 
+  // Glide back to the corner, then hand positioning back to CSS.
   const resetBox = () => {
-    setBox(null);
     saveBox(null);
+    if (!box) return;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const w = Math.min(400, vw - 40), h = Math.min(box.h, 608, vh - 96);
+    setSettling(true);
+    setBox({ x: vw - w - 20, y: vh - h - 20, w, h });
+    window.setTimeout(() => {
+      setSettling(false);
+      setBox(null);
+    }, 360);
   };
 
   const jobFinished = useCallback(
@@ -461,8 +518,8 @@ export function Scout() {
           aria-label="Open Scout (Cmd+J)"
           title="Scout (⌘J)"
           className={cn(
-            "fixed bottom-5 right-5 z-40 flex items-center gap-2.5 rounded-full",
-            "px-4 py-2.5 text-sm font-semibold shadow-lg transition-transform hover:scale-105",
+            "scout-launcher fixed bottom-5 right-5 z-40 flex items-center gap-2.5 rounded-full",
+            "px-4 py-2.5 text-sm font-semibold shadow-lg",
             "bg-white text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             needs > 0 && "scout-nudge",
           )}
@@ -476,8 +533,8 @@ export function Scout() {
             </span>
           )}
           {needs > 0 && (
-            <span className={cn(
-              "ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[0.6875rem] font-bold",
+            <span key={needs} className={cn(
+              "scout-badge-pop ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[0.6875rem] font-bold",
               waiting > 0 ? "bg-red-500 text-white" : "bg-amber-400 text-black",
             )}>
               {needs}
@@ -496,7 +553,10 @@ export function Scout() {
         aria-label="Scout"
         style={box ? { left: box.x, top: box.y, width: box.w, height: box.h } : undefined}
         className={cn(
-          "scout-pop-in fixed z-40 flex flex-col overflow-hidden rounded-2xl shadow-2xl",
+          "scout-pop-in scout-panel fixed z-40 flex flex-col overflow-hidden rounded-2xl shadow-2xl",
+          closing && "scout-closing",
+          dragging && "scout-dragging",
+          settling && "scout-settling",
           !box && "bottom-5 right-5 w-[min(25rem,calc(100vw-2.5rem))] max-h-[min(38rem,calc(100vh-6rem))]",
           "border border-white/[0.08] bg-black/95 backdrop-blur-xl",
         )}
@@ -524,7 +584,10 @@ export function Scout() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setView("chat")}
+              onClick={() => {
+                setViewDir("back");
+                setView("chat");
+              }}
               aria-label="Back to the conversation"
               className="h-8 w-8 shrink-0 border-0 text-white/60 hover:bg-white/5 hover:text-white"
             >
@@ -554,7 +617,7 @@ export function Scout() {
               onClick={resetBox}
               aria-label="Put Scout back in the corner"
               title="Put back in the corner"
-              className="h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
+              className="scout-press h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
             >
               <RotateCcw className="h-3.5 w-3.5" />
             </Button>
@@ -566,7 +629,7 @@ export function Scout() {
                 size="icon"
                 onClick={newChat}
                 aria-label="New conversation"
-                className="h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
+                className="scout-press h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -575,10 +638,11 @@ export function Scout() {
                 size="icon"
                 onClick={() => {
                   loadThreads();
+                  setViewDir("fwd");
                   setView("history");
                 }}
                 aria-label="History"
-                className="h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
+                className="scout-press h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
               >
                 <MessagesSquare className="h-4 w-4" />
               </Button>
@@ -588,16 +652,16 @@ export function Scout() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setOpen(false)}
+            onClick={close}
             aria-label="Close Scout"
-            className="h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
+            className="scout-press h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
           >
             <X className="h-4 w-4" />
           </Button>
         </div>
 
         {view === "history" ? (
-          <div className="flex-1 overflow-y-auto p-2">
+          <div key="history" className="scout-view-fwd flex-1 overflow-y-auto p-2">
             {threads.length === 0 && (
               <p className="px-2 py-6 text-center text-sm text-white/50">Nothing here yet.</p>
             )}
@@ -673,21 +737,22 @@ export function Scout() {
             </ul>
           </div>
         ) : (
-          <>
+          <div key="chat" className={cn("flex min-h-0 flex-1 flex-col", viewDir === "back" ? "scout-view-back" : "")}>
           <RecorderBar state={rec} latest={lastCall} refresh={refreshRec} onDebrief={debrief} />
-          <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto scroll-smooth px-4 py-4">
             {msgs.length === 0 && (
               <>
                 <p className="text-sm text-white/80">
                   I can read anything in the database, change the site, and run jobs on the Mac mini (you tap Run). I know which page you're on. What do you need?
                 </p>
                 <div className="flex flex-wrap gap-1.5 pt-1">
-                  {OPENERS.map((o) => (
+                  {OPENERS.map((o, n) => (
                     <button
                       key={o}
                       type="button"
                       onClick={() => send(o)}
-                      className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/70 transition-colors hover:border-white/30 hover:text-white"
+                      style={{ animationDelay: `${80 + n * 60}ms` }}
+                      className="scout-chip rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:border-white/30 hover:text-white"
                     >
                       {o}
                     </button>
@@ -697,7 +762,7 @@ export function Scout() {
             )}
 
             {msgs.map((m, i) => (
-              <div key={m.id ?? i} className="scout-row group">
+              <div key={i} className={cn("scout-row group", m.role === "user" ? "scout-msg-user" : "scout-msg-bot")}>
                 {m.role === "user" ? (
                   <div className="flex items-start justify-end gap-1">
                     <span className="scout-tools flex shrink-0 gap-0.5 pt-1">
@@ -750,9 +815,9 @@ export function Scout() {
             <ScoutJobs jobs={jobs} refresh={refreshJobs} onFinished={jobFinished} />
 
             {busy && (
-              <p className="flex items-center gap-2 text-sm text-white/50" aria-live="polite">
+              <p className="scout-msg-bot flex items-center gap-2 text-sm text-white/50" aria-live="polite">
                 <Scoutie mood="think" className="h-[1.15rem] w-[1.55rem] shrink-0 text-white/60" />
-                <span className="scout-dots">
+                <span className="scout-dots scout-shimmer">
                   Scout is working<span>.</span>
                   <span>.</span>
                   <span>.</span>
@@ -760,7 +825,7 @@ export function Scout() {
               </p>
             )}
           </div>
-          </>
+          </div>
         )}
 
         {view === "chat" && (
@@ -795,14 +860,14 @@ export function Scout() {
                   }
                 }}
                 placeholder="Ask, or say what to change..."
-                className="max-h-28 min-h-[2.375rem] flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="max-h-28 min-h-[2.375rem] flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-white/40 focus:border-white/25 focus:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
               <Button
                 size="icon"
                 onClick={() => send(text, editing)}
                 disabled={busy || !text.trim()}
                 aria-label="Send to Scout"
-                className="h-[2.375rem] w-[2.375rem] shrink-0 bg-white text-black hover:bg-white/90"
+                className="scout-press h-[2.375rem] w-[2.375rem] shrink-0 bg-white text-black transition-opacity hover:bg-white/90 disabled:opacity-40"
               >
                 <CornerDownLeft className="h-4 w-4" />
               </Button>

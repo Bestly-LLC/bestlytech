@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Play, X, ChevronDown, ChevronRight, Terminal, Check, AlertTriangle, Loader2 } from "lucide-react";
+import { Play, X, ChevronRight, Terminal, Check, AlertTriangle, Loader2 } from "lucide-react";
 
 /**
  * Run cards for shell jobs Scout wants to run on the Mac mini.
@@ -93,7 +93,7 @@ function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run:
 
   return (
     <div className={cn(
-      "rounded-xl border p-3 text-white",
+      "scout-card-in rounded-xl border p-3 text-white transition-[border-color,background-color] duration-500",
       job.status === "proposed" ? "border-amber-400/40 bg-amber-400/[0.06]" : "border-white/10 bg-white/[0.03]",
     )}>
       <div className="flex items-start gap-2">
@@ -118,18 +118,20 @@ function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run:
 
       <button type="button" onClick={() => setShowScript((v) => !v)}
         className="mt-2 flex items-center gap-1 text-[0.6875rem] text-white/50 hover:text-white">
-        {showScript ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        <ChevronRight className={cn("h-3 w-3 transition-transform duration-200", showScript && "rotate-90")} />
         {showScript ? "Hide script" : "Show script"}{job.cwd ? ` · in ${job.cwd}` : ""}
       </button>
-      {showScript && (
-        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/60 p-2 font-mono text-[0.6875rem] leading-relaxed text-emerald-200/90">
-          {job.script}
-        </pre>
-      )}
+      <div className={cn("scout-collapse", showScript && "is-open")}>
+        <div>
+          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/60 p-2 font-mono text-[0.6875rem] leading-relaxed text-emerald-200/90">
+            {job.script}
+          </pre>
+        </div>
+      </div>
 
       {(job.output || live) && job.status !== "proposed" && (
         <pre ref={outRef}
-          className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/70 p-2 font-mono text-[0.6875rem] leading-relaxed text-white/80">
+          className="scout-card-in mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/70 p-2 font-mono text-[0.6875rem] leading-relaxed text-white/80">
           {job.output || "waiting for output..."}
         </pre>
       )}
@@ -139,11 +141,11 @@ function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run:
       {job.status === "proposed" && (
         <div className="mt-2.5 flex gap-2">
           <Button size="sm" disabled={working} onClick={() => decide(true)}
-            className="h-8 flex-1 bg-white text-black hover:bg-white/90">
+            className="scout-press h-8 flex-1 bg-white text-black hover:bg-white/90">
             <Play className="mr-1.5 h-3.5 w-3.5" /> Run on Mac mini
           </Button>
           <Button size="sm" variant="ghost" disabled={working} onClick={() => decide(false)}
-            className="h-8 border border-white/15 text-white/70 hover:bg-white/5 hover:text-white">
+            className="scout-press h-8 border border-white/15 text-white/70 hover:bg-white/5 hover:text-white">
             <X className="mr-1 h-3.5 w-3.5" /> No
           </Button>
         </div>
