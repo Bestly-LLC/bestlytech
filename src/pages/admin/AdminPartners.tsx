@@ -58,7 +58,7 @@ export default function AdminPartners() {
     try { await navigator.clipboard.writeText(url); toast.success("Link copied"); } catch { toast.error("Could not copy"); }
   };
   const share = async (p: Row, url: string) => {
-    const text = `Here's your Bestly partner login: ${url}\nIt works once, for an hour. You'll pick a password.`;
+    const text = `Here's your Bestly partner login: ${url}\nIt's yours for 7 days and you can tap it more than once. You'll pick a password.`;
     if (navigator.share) { try { await navigator.share({ text }); return; } catch { /* cancelled */ } }
     copy(url);
   };
@@ -115,10 +115,10 @@ export default function AdminPartners() {
                 <p className="break-all font-mono text-xs text-white/70">{url}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button className={cn(btn, "min-h-[40px] bg-white/[0.08] text-white")} onClick={() => copy(url)}><Copy className="h-4 w-4" /> Copy</button>
-                  <a className={cn(btn, "min-h-[40px] bg-white/[0.08] text-white")} href={`sms:&body=${encodeURIComponent(`Here's your Bestly partner login: ${url} (works once, for an hour)`)}`}><MessageSquare className="h-4 w-4" /> Text it</a>
+                  <a className={cn(btn, "min-h-[40px] bg-white/[0.08] text-white")} href={`sms:&body=${encodeURIComponent(`Here's your Bestly partner login: ${url} (good for 7 days)`)}`}><MessageSquare className="h-4 w-4" /> Text it</a>
                   <button className={cn(btn, "min-h-[40px] bg-white/[0.08] text-white")} onClick={() => share(p, url)}><Share2 className="h-4 w-4" /> Share</button>
                 </div>
-                <p className="mt-2 text-xs text-white/45">Works once, for an hour. On first open they choose a password.</p>
+                <p className="mt-2 text-xs text-white/45">Good for 7 days, and it can be opened more than once. On first open they choose a password. Making a new link replaces this one.</p>
               </div>
             )}
           </section>

@@ -6,8 +6,12 @@
 //   op disable {partner_id} turns their access off (the login is kept, but blocked)
 //   op enable  {partner_id}
 //
-// Admin JWT only. The link carries a single-use token_hash that the /partner/welcome
-// page trades for a session (supabase.auth.verifyOtp), then the partner sets a password.
+// Admin JWT only, except op claim (the partner's own browser).
+//
+// The link carries a CLAIM CODE, not an auth token: /partner/welcome trades the code for a fresh
+// one-time token at the moment he clicks (op claim), then for a session, then he sets a password.
+// It used to carry the token itself, and generating a second link quietly invalidated the first —
+// so a link made a minute earlier came back "expired".
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -18,20 +22,41 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+const sha256 = async (v: string) =>
+  [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+const code40 = () => {
+  const a = new Uint8Array(24); crypto.getRandomValues(a);
+  return [...a].map((b) => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
+};
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return J({ ok: false, error: "POST only" }, 405);
 
+  let body: Record<string, any> = {};
+  try { body = await req.json(); } catch { /* empty */ }
+
+  // The partner's own browser: swap the claim code in his link for a fresh sign-in token.
+  if (body.op === "claim") {
+    const code = String(body.code ?? "").trim();
+    if (code.length < 16) return J({ ok: false, error: "bad_code" }, 400);
+    const hash = await sha256(code);
+    const { data: row } = await db.from("partners").select("id, email, name, claim_expires_at").eq("claim_hash", hash).maybeSingle();
+    if (!row) return J({ ok: false, error: "unknown_link" }, 404);
+    if (row.claim_expires_at && Date.parse(row.claim_expires_at) < Date.now()) return J({ ok: false, error: "expired" }, 410);
+    const { data: link, error } = await db.auth.admin.generateLink({ type: "magiclink", email: row.email });
+    const token = link?.properties?.hashed_token || "";
+    if (error || !token) return J({ ok: false, error: error?.message ?? "no token" }, 500);
+    await db.from("partners").update({ claim_used_at: new Date().toISOString() }).eq("id", row.id);
+    return J({ ok: true, token, email: row.email, name: row.name });
+  }
+
   const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
   const { data: who } = await db.auth.getUser(jwt);
   if (!who?.user) return J({ ok: false, error: "unauthorized" }, 401);
   const { data: isAdmin } = await db.rpc("has_role", { _user_id: who.user.id, _role: "admin" });
   if (!isAdmin) return J({ ok: false, error: "admin only" }, 403);
-
-  let body: Record<string, any> = {};
-  try { body = await req.json(); } catch { /* empty */ }
 
   if (body.op === "list") {
     const { data: rows } = await db.from("partners").select("*").order("created_at");
@@ -69,14 +94,17 @@ Deno.serve(async (req) => {
       await db.from("partners").update({ user_id: userId }).eq("id", p.id);
       await db.from("user_roles").upsert({ user_id: userId, role: "partner" }, { onConflict: "user_id,role", ignoreDuplicates: true });
     }
-    const { data: link, error } = await db.auth.admin.generateLink({ type: "magiclink", email: p.email });
-    if (error) return J({ ok: false, error: error.message });
-    const action = link?.properties?.action_link ?? "";
-    const token = link?.properties?.hashed_token || (action ? new URL(action).searchParams.get("token") : "") || "";
-    if (!token) return J({ ok: false, error: "no token came back" });
-    await db.from("partners").update({ link_sent_at: new Date().toISOString() }).eq("id", p.id);
-    const url = `${SITE}/partner/welcome#t=${encodeURIComponent(token)}&e=${encodeURIComponent(p.email)}`;
-    return J({ ok: true, url, expires_in_minutes: 60 });
+    // A claim code, good for 7 days and usable more than once (people tap a text twice). The
+    // real sign-in token is minted when he opens it, so a newer link never breaks an older one.
+    const code = code40();
+    const { error: saveErr } = await db.from("partners").update({
+      claim_hash: await sha256(code),
+      claim_expires_at: new Date(Date.now() + 7 * 864e5).toISOString(),
+      claim_used_at: null,
+      link_sent_at: new Date().toISOString(),
+    }).eq("id", p.id);
+    if (saveErr) return J({ ok: false, error: saveErr.message });
+    return J({ ok: true, url: `${SITE}/partner/welcome?c=${code}`, expires_in_minutes: 7 * 24 * 60 });
   }
 
   if (body.op === "disable" || body.op === "enable") {

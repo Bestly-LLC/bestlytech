@@ -111,17 +111,29 @@ export function PartnerWelcome() {
 
   useEffect(() => {
     const h = new URLSearchParams(window.location.hash.slice(1));
-    const t = h.get("t");
-    history.replaceState(null, "", "/partner/welcome"); // the token is single-use; don't leave it in the address bar
+    const q = new URLSearchParams(window.location.search);
+    const code = q.get("c") ?? h.get("c");          // the new link: a claim code, good for a week
+    const t = q.get("t") ?? h.get("t");             // the old link: a one-time token
+    history.replaceState(null, "", "/partner/welcome");  // keep the secret out of the address bar
     (async () => {
-      if (t) {
+      const finish = async (token: string) => {
         await supabase.auth.signOut({ scope: "local" });
-        const { data, error } = await supabase.auth.verifyOtp({ token_hash: t, type: "magiclink" });
-        if (error || !data.session) { setStage("bad"); return; }
+        const { data, error } = await supabase.auth.verifyOtp({ token_hash: token, type: "magiclink" });
+        if (error || !data.session) return false;
         setName(String(data.user?.user_metadata?.name ?? ""));
         setStage("password");
+        return true;
+      };
+      if (code) {
+        // The sign-in token is minted now, on this tap, so an older link can never be stale.
+        const { data, error } = await supabase.functions.invoke("partner-admin", { body: { op: "claim", code } });
+        const token = (data as { token?: string } | null)?.token;
+        if (!error && token && (await finish(token))) return;
+        setName(String((data as { name?: string } | null)?.name ?? ""));
+        setStage("bad");
         return;
       }
+      if (t) { if (await finish(t)) return; setStage("bad"); return; }
       const { data } = await supabase.auth.getSession();
       if (data.session) { setName(String(data.session.user.user_metadata?.name ?? "")); setStage("password"); }
       else setStage("bad");
@@ -144,8 +156,8 @@ export function PartnerWelcome() {
         {stage === "checking" && <p className="flex items-center gap-2 text-white/60"><Loader2 className="h-5 w-5 animate-spin" /> Signing you in…</p>}
         {stage === "bad" && (
           <>
-            <h1 className="text-[1.9rem] font-bold leading-tight tracking-tight">This link has expired</h1>
-            <p className="mt-2 text-[0.975rem] text-white/60">Sign-in links work once, for an hour. Ask Jared for a new one, or sign in with your password.</p>
+            <h1 className="text-[1.9rem] font-bold leading-tight tracking-tight">This link doesn't work</h1>
+            <p className="mt-2 text-[0.975rem] text-white/60">It may have been replaced by a newer one. Ask Jared to send the latest link, or sign in with your password.</p>
             <button className={cn(btnSolid, "mt-8")} onClick={() => nav("/partner", { replace: true })}>Go to sign in</button>
           </>
         )}
