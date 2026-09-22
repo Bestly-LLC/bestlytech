@@ -37,6 +37,10 @@ export interface RecentRecording {
 }
 
 const OFFLINE_AFTER_S = 30;
+// While a call is being recorded or transcribed the Mac is busy and its heartbeat can skip a few
+// beats. Calling that "offline" made a live recording vanish from the screen mid-call, so a busy
+// recorder gets three minutes of silence before we stop believing it.
+const OFFLINE_AFTER_BUSY_S = 180;
 
 const pretty = (n: string) =>
   n
@@ -76,7 +80,8 @@ export function useRecorder(active: boolean) {
     ]);
     if (s) {
       const row = s as any;
-      const offline = row.seconds_since == null || row.seconds_since > OFFLINE_AFTER_S;
+      const busyNow = row.status === "recording" || row.status === "transcribing";
+      const offline = row.seconds_since == null || row.seconds_since > (busyNow ? OFFLINE_AFTER_BUSY_S : OFFLINE_AFTER_S);
       setState({ ...row, status: offline ? "offline" : row.status } as RecorderState);
     }
     setLatest(((r ?? []) as any[])[0] ?? null);
@@ -368,5 +373,46 @@ export function RecorderBar({
 
       {err && <p className="mt-2 text-xs text-red-400">{err}</p>}
     </div>
+  );
+}
+
+
+/**
+ * The live pill in the admin header: while the Mac mini is recording or transcribing, every admin
+ * page shows it, with the running clock and one tap to stop. The full bar lives in Scout, which is
+ * where it used to live alone — so a call that outlasted the window being open looked like it had
+ * stopped recording.
+ */
+export function RecordingPill() {
+  const { state, refresh } = useRecorder(false);
+  const [stopping, setStopping] = useState(false);
+  const now = useNow(state?.status === "recording");
+  if (!state || (state.status !== "recording" && state.status !== "transcribing")) return null;
+
+  if (state.status === "transcribing") {
+    return (
+      <span className="hidden items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-white/70 sm:inline-flex bento:bg-black/5 bento:text-black/70" aria-live="polite">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Transcribing
+      </span>
+    );
+  }
+  const stop = async () => {
+    setStopping(true);
+    await supabase.functions.invoke("meeting-recorder", { body: { op: "stop" } });
+    setStopping(false);
+    refresh();
+  };
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 py-1 pl-2.5 pr-1 text-xs font-semibold text-red-300 bento:bg-red-500/10 bento:text-red-700" aria-live="polite">
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+      </span>
+      <span className="tabular-nums">{clock(state.started_at, now)}</span>
+      <button type="button" onClick={stop} disabled={stopping}
+        className="ml-0.5 inline-flex h-6 items-center gap-1 rounded-full bg-white px-2 text-[11px] font-semibold text-black disabled:opacity-50 bento:bg-[#111114] bento:text-[#fff]">
+        {stopping ? <Loader2 className="h-3 w-3 animate-spin" /> : <Square className="h-2.5 w-2.5 fill-current" />} Stop
+      </button>
+    </span>
   );
 }
