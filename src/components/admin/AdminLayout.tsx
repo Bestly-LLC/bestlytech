@@ -28,6 +28,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/home-hub/homebridge": "Homebridge",
   "/admin/home-hub/access": "Access backup",
   "/admin/street-sweeping": "Street Sweeping",
+  "/admin/security": "Security",
   "/admin/contacts": "Contacts",
   "/admin/hires": "Hire Requests",
   "/admin/waitlist": "Waitlist",

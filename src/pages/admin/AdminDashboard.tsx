@@ -15,6 +15,7 @@ import {
   fetchSweepState, fmtDay, laNowMinutes, upcomingSweepDays, weekdayOf, LA_TZ, SWEEP_DAYS, carPlacement,
   type SweepState,
 } from "@/services/streetSweepingApi";
+import { fetchLatestRun, runHeadline } from "@/services/securityAuditApi";
 
 /**
  * Admin home ("Today"). Answer first, one list of what needs action, a row of status chips,
@@ -424,6 +425,7 @@ export default function AdminDashboard() {
   const health = useSource<SystemHealth>(fetchSystemHealth, true);
   const homeHub = useSource(loadHomeHub, true);
   const cy = useSource(loadCyHealth, true);
+  const security = useSource(fetchLatestRun, true);
   const newLeads = useSource(loadNewLeads);
   const paidSubs = useSource(loadPaidSubs);
   const waitlist = useSource(loadWaitlist);
@@ -431,7 +433,7 @@ export default function AdminDashboard() {
   const [showRecent, setShowRecent] = useState(false);
   const [activityKey, setActivityKey] = useState(0);
 
-  const all = [contacts, hires, intakes, emails, cloudLeads, deals, sweep, health, homeHub, cy, newLeads, paidSubs, waitlist];
+  const all = [contacts, hires, intakes, emails, cloudLeads, deals, sweep, health, homeHub, cy, security, newLeads, paidSubs, waitlist];
   const refreshAll = async () => {
     setActivityKey((k) => k + 1);
     await Promise.all(all.map((s) => s.reload()));
@@ -463,6 +465,16 @@ export default function AdminDashboard() {
       why: `The health check flagged ${names.slice(0, 3).join(", ")}.`,
       // check-system-health watches the Cookie Yeti AI generator and cron, which live on the CY ops page.
       href: "/admin/cookie-yeti/analytics?tab=operations",
+    });
+  }
+  if (security.data && security.data.open_red > 0) {
+    const n = security.data.open_red;
+    needs.push({
+      id: "security-red",
+      urgent: true,
+      title: `${n} red security ${plural(n, "finding", "findings")}`,
+      why: security.data.summary?.slice(0, 140) || "Found by the nightly audit. Open it for the proposed fix.",
+      href: "/admin/security",
     });
   }
   if (cloudLeads.data && cloudLeads.data.count > 0) {
@@ -684,6 +696,7 @@ export default function AdminDashboard() {
           <StatusChip label="Home Hub" source={homeHub} to="/admin/home-hub" render={homeHubChip} />
           <StatusChip label="Street Sweeping" source={sweep} to="/admin/street-sweeping" render={sweepChip} />
           <StatusChip label="Cookie Yeti" source={cy} to="/admin/cookie-yeti" render={cyChip} />
+          <StatusChip label="Security" source={security} to="/admin/security" render={() => runHeadline(security.data ?? null)} />
         </ul>
       </section>
 

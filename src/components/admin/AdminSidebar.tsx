@@ -9,11 +9,9 @@ import {
   Server,
   Shield,
   Car,
-  Navigation,
-  Brush,
   Mic,
   Handshake,
-  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink,
+  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -70,13 +68,14 @@ const homeHubItems = [
 ];
 
 const turoItems = [
-  { title: "Turo Watch", url: "/admin/turo", icon: Navigation },
-  { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Brush },
+  { title: "Turo Watch", url: "/admin/turo", icon: Car },
+  { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Car },
 ];
 
 // Backup of the account's Claude skills. The copies a session sees on disk are a
 // read-only cache; this is the copy we own.
 const opsItems = [
+  { title: "Security", url: "/admin/security", icon: ShieldCheck },
   { title: "Claude Skills", url: "/admin/skills", icon: BookMarked },
   { title: "Scout's playbook", url: "/admin/playbook", icon: BookOpen },
 ];

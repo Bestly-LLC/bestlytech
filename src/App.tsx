@@ -90,6 +90,7 @@ const HomeHubHomeAssistant = lazy(() => import("./pages/admin/HomeHubHomeAssista
 const HomeHubHomebridge = lazy(() => import("./pages/admin/HomeHubHomebridge"));
 const HomeHubAccess = lazy(() => import("./pages/admin/HomeHubAccess"));
 const StreetSweeping = lazy(() => import("./pages/admin/StreetSweeping"));
+const Security = lazy(() => import("./pages/admin/Security"));
 const AdminSkills = lazy(() => import("./pages/admin/AdminSkills"));
 const AdminNotFound = lazy(() => import("./pages/admin/AdminNotFound"));
 
@@ -207,6 +208,7 @@ const App = () => (
                   <Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
                   <Route path="home-hub/access" element={<HomeHubAccess />} />
                   <Route path="street-sweeping" element={<StreetSweeping />} />
+                  <Route path="security" element={<Security />} />
                   <Route path="turo" element={<AdminTuro />} />
                   <Route path="playbook" element={<AdminPlaybook />} />
                   <Route path="skills" element={<AdminSkills />} />
