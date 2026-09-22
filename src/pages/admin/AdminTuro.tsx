@@ -88,19 +88,23 @@ export default function AdminTuro() {
 
       {/* Status + controls */}
       {(() => {
-        const signedOut = !!last && /401|403|session|signed out|expired/i.test(`${last.notes ?? ""} ${JSON.stringify(last.gates ?? [])}`) && last.mode !== "applied";
+        const lastText = last ? `${last.notes ?? ""} ${JSON.stringify(last.gates ?? [])}` : "";
+        // The run's own browser link failing is not the same as Turo being signed out: say which one.
+        const noBrowser = !!last && last.mode !== "applied" && /no claude in chrome|no browser tools|bridge down/i.test(lastText);
+        const signedOut = !!last && !noBrowser && /401|403|signed out|expired/i.test(lastText) && last.mode !== "applied";
         const stale = hoursSince != null && hoursSince > 14;
         return (
           <section className={cn(card, "space-y-4 p-5")}>
             <div className="flex items-start gap-3">
-              {settings?.paused || signedOut || stale
+              {settings?.paused || signedOut || noBrowser || stale
                 ? <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300 bento:text-amber-600" />
                 : <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300 bento:text-emerald-600" />}
               <div className="space-y-1.5 text-[0.95rem] text-white/80">
                 <p className="font-semibold text-white">
-                  {settings?.paused ? "Paused: runs compute prices but write nothing." : signedOut ? `The last run (${when(last!.ran_at)}) couldn't reach Turo: it looked signed out then.` : stale ? "No run in over 14 hours." : "Running normally."}
+                  {settings?.paused ? "Paused: runs compute prices but write nothing." : noBrowser ? "The scheduled run couldn't reach your Chrome, so it couldn't check Turo." : signedOut ? `The last run (${when(last!.ran_at)}) couldn't reach Turo: it looked signed out then.` : stale ? "No run in over 14 hours." : "Running normally."}
                 </p>
                 <p>Claude runs it at 7:05am and 7:12pm in your own Chrome on the Mac mini, then reports here and to your phone.</p>
+                {noBrowser && <p className="text-white/60">Fix, once: in the Claude desktop app on the Mac mini, open Scheduled tasks, open "Turo Watch 7:05am" and "Turo Watch 7:12pm", and turn on "Require this computer". Runs then happen on the Mac with your Chrome.</p>}
                 {signedOut && <p className="text-white/60">If you're signed in to turo.com in Chrome now, nothing to do: the next run checks again and this clears.</p>}
                 {settings?.paused && settings.pause_reason && <p className="text-white/60">Why: {settings.pause_reason}</p>}
               </div>
