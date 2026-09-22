@@ -14,11 +14,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
-  ArrowLeft, ArrowRight, Check, ChevronRight, Eye, ExternalLink, FileArchive, FileImage, FileSpreadsheet, FileText,
+  ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, Eye, ExternalLink, FileArchive, FileImage, FileSpreadsheet, FileText,
   Files as FilesIcon, Home as HomeIcon, Inbox, LayoutGrid, Link2, Loader2, LogOut, Mail, Mic, Paperclip, Presentation,
   Bell, Binoculars, Plug, Search, Users, Video,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { TranscriptBubbles, CopyTranscriptButton } from "@/components/admin/TranscriptBubbles";
 import { CopyButton } from "@/components/CopyText";
@@ -27,6 +28,7 @@ import { PartnerMark } from "@/components/PartnerMark";
 import { cn } from "@/lib/utils";
 import { ART } from "./partnerArt";
 import { DocPreview, type PreviewFile } from "@/components/DocPreview";
+import { FileThumb } from "./FileThumb";
 import { BellButton, BellSheet, ConnectClaude, useNextMeeting, usePartnerNotifs, whenLabel, type NextEvent } from "./PartnerExtras";
 import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState } from "./PartnerScout";
 
@@ -37,7 +39,7 @@ export interface Meeting {
   id: string; name: string; started_at: string | null; stopped_at: string | null; people: string[];
   summary: { summary?: string; decisions?: string[]; questions?: string[] } | null;
 }
-interface Todo { id: string; title: string; status: string; url: string | null; action: Record<string, any> }
+interface Todo { id: string; title: string; status: string; url: string | null; action: Record<string, any>; done_at?: string | null }
 interface Att { name: string; size: number; type: string | null; path: string | null; skipped?: string }
 interface DocLink { url: string; kind: string }
 interface MailRow { id: string; subject: string | null; sent_at: string | null; to_addrs: string[]; cc_addrs: string[]; body_text: string | null; links: DocLink[]; attachments: Att[] }
@@ -169,7 +171,7 @@ export function PartnerHome({ session }: { session: Session }) {
     const [{ data: m }, { data: t }, { data: pl }, { data: ml }] = await Promise.all([
       supabase.from("meeting_recordings" as never).select("id, name, started_at, stopped_at, people, summary")
         .order("started_at", { ascending: false, nullsFirst: false }).limit(60),
-      supabase.from("scout_daily" as never).select("id, title, status, url, action").eq("kind", "call")
+      supabase.from("scout_daily" as never).select("id, title, status, url, action, done_at").eq("kind", "call")
         .order("created_at", { ascending: false }).limit(100),
       supabase.rpc("partner_pipeline" as never),
       (() => {
@@ -196,10 +198,20 @@ export function PartnerHome({ session }: { session: Session }) {
   const me = partner?.roster_name ?? (admin ? "jared" : "");
   const mine = todos.filter((t) => String(t.action?.owner ?? "").toLowerCase() === me && t.status === "open");
   const jareds = todos.filter((t) => String(t.action?.owner ?? "").toLowerCase() === "jared" && t.status === "open" && me !== "jared");
-  const tick = async (t: Todo, status: "done" | "open") => {
-    setTodos((all) => all.map((x) => (x.id === t.id ? { ...x, status } : x)));
+  // Completed to-dos stay recoverable: newest first under "Done", and every tick offers Undo.
+  const done = todos.filter((t) => String(t.action?.owner ?? "").toLowerCase() === me && t.status === "done")
+    .sort((a, b) => String(b.done_at ?? "").localeCompare(String(a.done_at ?? "")));
+  const tick = async (t: Todo, status: "done" | "open", quiet = false) => {
+    const at = status === "done" ? new Date().toISOString() : null;
+    setTodos((all) => all.map((x) => (x.id === t.id ? { ...x, status, done_at: at } : x)));
     const { error } = await supabase.rpc("partner_task_set" as never, { p_id: t.id, p_status: status } as never);
-    if (error) load();
+    if (error) { toast.error("Couldn't save that", { description: error.message }); load(); return; }
+    if (!quiet) {
+      toast(status === "done" ? "Marked done" : "Back on your list", {
+        description: t.title,
+        action: { label: "Undo", onClick: () => tick(t, status === "done" ? "open" : "done", true) },
+      });
+    }
   };
   const signOut = () => supabase.auth.signOut();
   const callUrl = partner?.call_url ?? "https://cloud.bestly.tech/call/sm33w3fu";
@@ -309,7 +321,7 @@ export function PartnerHome({ session }: { session: Session }) {
           )}
 
           {tab === "home" && (
-            <HomeTab first={first} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} mine={mine} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
+            <HomeTab first={first} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
               files={files} pipe={pipe} go={setTab} openCall={(m) => { setTab("calls"); setOpenCall(m); }}
               openMail={(m) => { setTab("mail"); setOpenMail(m); }} ask={askScout} scout={scout} />
           )}
@@ -346,11 +358,11 @@ export function PartnerHome({ session }: { session: Session }) {
 /* ───────── Home ───────── */
 
 function HomeTab(props: {
-  first: string; callUrl: string; joinUrl: string; nextMtg: NextEvent | null; studioUnread: number; onConnect: () => void; mine: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
+  first: string; callUrl: string; joinUrl: string; nextMtg: NextEvent | null; studioUnread: number; onConnect: () => void; mine: Todo[]; done: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
   meetings: Meeting[] | null; mail: MailRow[] | null; files: (Att & { mail: MailRow })[]; pipe: { deals: any[]; leads: any[] } | null;
   go: (t: Tab) => void; openCall: (m: Meeting) => void; openMail: (m: MailRow) => void; ask: (q?: string) => void; scout: ScoutState;
 }) {
-  const { first, callUrl, joinUrl, nextMtg, studioUnread, onConnect, mine, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
+  const { first, callUrl, joinUrl, nextMtg, studioUnread, onConnect, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
   const [q, setQ] = useState("");
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", ...PT });
   const deals = pipe?.deals.length ?? 0;
@@ -425,6 +437,7 @@ function HomeTab(props: {
               ))}
             </ul>
           )}
+          {done.length > 0 && <DoneList done={done} tick={tick} />}
           {jareds.length > 0 && (
             <div className="mt-4 rounded-2xl bg-white/[0.035] p-4 bento:bg-[#F3F2EE]">
               <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-white/45"><Users className="h-3.5 w-3.5" /> Jared is on</p>
@@ -582,7 +595,7 @@ function FileRow({ a }: { a: Att & { mail?: MailRow } }) {
     <li>
       <button onClick={() => openFile(a)}
         className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-white/[0.05]">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.07] bento:bg-[#F3F2EE]"><Icon className="h-[18px] w-[18px] text-white/70" /></span>
+        <FileThumb name={a.name} type={a.type} path={a.path} Icon={Icon} className="h-14 w-14 rounded-lg" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{a.name}</span>
           <span className="block text-xs text-white/45">{a.skipped ? "Too large to copy here, see the email" : size(a.size)}{a.mail ? ` · ${day(a.mail.sent_at)}` : ""}</span>
@@ -590,6 +603,44 @@ function FileRow({ a }: { a: Att & { mail?: MailRow } }) {
         {a.path && <Eye className="h-4 w-4 shrink-0 text-white/35" />}
       </button>
     </li>
+  );
+}
+
+/** Finished to-dos: collapsed by default, tap the green check to put one back on the list. */
+function DoneList({ done, tick }: { done: Todo[]; tick: (t: Todo, s: "done" | "open") => void }) {
+  const [open, setOpen] = useState(false);
+  const [all, setAll] = useState(false);
+  const shown = all ? done : done.slice(0, 8);
+  return (
+    <div className="mt-3 border-t border-white/[0.06] pt-3 bento:border-black/5">
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
+        className="flex min-h-[40px] w-full items-center gap-1.5 text-left text-sm font-medium text-white/55 hover:text-white">
+        <ChevronDown className={cn("h-4 w-4 transition-transform", !open && "-rotate-90")} />
+        Done ({done.length})
+      </button>
+      {open && (
+        <ul className="divide-y divide-white/[0.05]">
+          {shown.map((t) => (
+            <li key={t.id} className="flex items-start gap-3 py-2.5">
+              <button aria-label="Not done, put it back" title="Put it back on my list" onClick={() => tick(t, "open")}
+                className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-500 text-[#fff] transition hover:bg-white/20 active:scale-90">
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <div className="min-w-0">
+                <p className="text-[0.95rem] text-white/50 line-through decoration-white/30">{t.title}</p>
+                <p className="mt-0.5 text-xs text-white/35">
+                  {t.done_at ? `Done ${new Date(t.done_at).toLocaleDateString("en-US", { month: "short", day: "numeric", ...PT })}` : "Done"}
+                  {t.action?.meeting ? ` · ${String(t.action.meeting)}` : ""}
+                </p>
+              </div>
+            </li>
+          ))}
+          {done.length > shown.length && (
+            <li className="pt-2"><button onClick={() => setAll(true)} className="text-sm font-medium text-[#0A84FF]">Show all {done.length}</button></li>
+          )}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -786,8 +837,8 @@ function FilesTab({ files, docs, openMail }: { files: (Att & { mail: MailRow })[
             const Icon = fileIcon(a);
             return (
               <div key={i} className={cn(card, "flex flex-col p-4")}>
-                <button onClick={() => openFile(a)} className="flex items-start gap-3 text-left">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/[0.07] bento:bg-[#F3F2EE]"><Icon className="h-5 w-5 text-white/75" /></span>
+                <button onClick={() => openFile(a)} className="flex flex-col gap-3 text-left">
+                  <FileThumb name={a.name} type={a.type} path={a.path} Icon={Icon} className="aspect-[4/3] w-full rounded-xl" />
                   <span className="min-w-0">
                     <span className="line-clamp-2 break-words text-[0.95rem] font-medium">{a.name}</span>
                     <span className="mt-0.5 block text-xs text-white/45">{a.skipped ? "Too large to copy here" : size(a.size)}</span>
