@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 import { PageHeader } from "@/components/admin/PageHeader";
+import { TranscriptBubbles, CopyTranscriptButton } from "@/components/admin/TranscriptBubbles";
 import { StatCard } from "@/components/admin/StatCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -508,7 +509,7 @@ export default function AdminMeetings() {
       </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+        <DialogContent className="max-w-2xl max-h-[90dvh] flex flex-col p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>
               {active ? fmtDate(active.startedAt, active.day) : "Transcript"}
@@ -518,8 +519,9 @@ export default function AdminMeetings() {
                 </span>
               )}
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              {active?.transcriptFile}
+            <DialogDescription className="flex items-center justify-between gap-3 text-xs">
+              <span className="truncate">{active?.transcriptFile}</span>
+              <CopyTranscriptButton text={text ?? ""} className="shrink-0" />
             </DialogDescription>
           </DialogHeader>
 
@@ -541,9 +543,7 @@ export default function AdminMeetings() {
                 ))}
               </div>
             ) : (
-              <pre className="text-xs text-white/70 whitespace-pre-wrap font-mono leading-relaxed">
-                {text}
-              </pre>
+              <TranscriptBubbles text={text ?? ""} />
             )}
           </div>
         </DialogContent>

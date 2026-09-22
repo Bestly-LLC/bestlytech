@@ -93,3 +93,6 @@ project_id = "keowunrxpxlbgebujbao"
     verify_jwt = false
   [functions.admin-device-login]
     verify_jwt = false
+
+[functions.scout-daily]
+  verify_jwt = false
