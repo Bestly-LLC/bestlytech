@@ -14,7 +14,7 @@ Standard library only: it runs on the system python3.
 import base64, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -696,6 +696,53 @@ def orphan_job():
         log("orphan job report failed", e)
 
 
+# ── Supabase watchdog ────────────────────────────────────────────────────────
+# Everything that watches Bestly - the monitors, the fix ladder, the alert bell -
+# lives inside Supabase, so when Supabase itself goes down nothing is left to
+# notice. This Mac is the only thing outside it that talks to it every three
+# seconds, so it is the watchdog. ntfy is a different service on a different
+# network path, which is the whole point: it still works when the database does not.
+NTFY = "https://ntfy.sh/bestly-sysalert-7q2k9mx4"
+down = {"since": None, "told": 0}
+DOWN_AFTER_S = 180          # a blip is not an outage
+REMIND_EVERY_S = 900
+
+
+def ntfy(title, body, priority="urgent", tags="rotating_light"):
+    try:
+        req = urllib.request.Request(NTFY, data=body.encode(), method="POST",
+                                     headers={"Title": title, "Priority": priority, "Tags": tags})
+        urllib.request.urlopen(req, timeout=10).read()
+    except Exception as e:  # noqa: BLE001
+        log("ntfy failed", e)
+
+
+def watch_backend(ok):
+    """Called after every poll. Shouts, by a route that does not touch Supabase."""
+    now = time.time()
+    if ok:
+        if down["since"] and now - down["since"] >= DOWN_AFTER_S:
+            mins = int((now - down["since"]) / 60)
+            notify("Bestly is back", f"Supabase answered again after {mins} min.", "", "Glass")
+            ntfy("Bestly is back", f"Supabase answered again after {mins} minutes.", "default", "white_check_mark")
+        down.update(since=None, told=0)
+        return
+    if down["since"] is None:
+        down["since"] = now
+        return
+    out = now - down["since"]
+    if out < DOWN_AFTER_S or now - down["told"] < REMIND_EVERY_S:
+        return
+    down["told"] = now
+    mins = int(out / 60)
+    msg = (f"Supabase has not answered for {mins} minutes. The admin dashboard, the partner "
+           "portal and every scheduled job are down with it.\n\n"
+           "Fix: Supabase dashboard > Project Settings > General > Restart project.")
+    log("BACKEND DOWN", f"{mins} min")
+    notify("Bestly backend is down", f"Supabase unreachable for {mins} min. Restart the project.", "", "Basso")
+    ntfy(f"Bestly backend down {mins} min", msg)
+
+
 def main():
     log("agent", VERSION, "up")
     orphan_job()
@@ -709,6 +756,7 @@ def main():
             except Exception as e:  # noqa: BLE001
                 log("notetaker/heal tick failed", e)
             r = call({"op": "poll", "state": snapshot(), "can_run_jobs": job["id"] is None})
+            watch_backend(True)
             if r.get("job") and job["id"] is None:
                 job["id"] = r["job"]["id"]
                 threading.Thread(target=run_job, args=(r["job"],), daemon=True).start()
@@ -720,6 +768,7 @@ def main():
                 threading.Thread(target=sweep_transcripts, daemon=True).start()
         except Exception as e:  # noqa: BLE001
             log("poll error", e)
+            watch_backend(False)
             if "--debug" in sys.argv:
                 traceback.print_exc()
             time.sleep(10)

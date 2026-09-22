@@ -77,43 +77,47 @@ export function CommandHero() {
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_14rem]">
-        <div className={cn(card, "p-5")}>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-white"><Check className="h-4 w-4 text-white/50" /> Your to-dos from calls</h3>
-          {todos === null ? <div className="mt-3 h-16 animate-pulse rounded-xl bg-white/[0.04]" /> : todos.length === 0 ? (
-            <p className="mt-2 text-sm text-white/50">All clear.</p>
-          ) : (
-            <ul className="mt-2 divide-y divide-white/[0.06]">
-              {todos.slice(0, 8).map((t) => (
-                <li key={t.id} className="flex items-start gap-3 py-2.5">
-                  <button aria-label="Mark done" onClick={() => tick(t)}
-                    className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 border-white/25 text-transparent transition hover:border-emerald-400 hover:text-emerald-400 active:scale-90">
-                    <Check className="h-3.5 w-3.5" />
-                  </button>
-                  <div className="min-w-0">
-                    <p className="text-[0.95rem] text-white">{t.title}</p>
-                    <p className="text-xs text-white/45">{t.action?.due ? `Due ${t.action.due} · ` : ""}{String(t.action?.meeting ?? "")}</p>
-                  </div>
-                </li>
-              ))}
-              {todos.length > 8 && <li className="pt-2 text-xs text-white/45">+{todos.length - 8} more below in From calls</li>}
-            </ul>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-1">
-          <Quick onClick={openScout} icon={Binoculars} label="Ask Scout" tone="from-slate-700 to-slate-900" />
-          <Quick href="https://cloud.bestly.tech/apps/spreed" icon={MessagesSquare} label="Talk" tone="from-sky-400 to-blue-600" />
-          <Quick href="https://studio.bestly.tech" icon={ExternalLink} label="Studio" tone="from-violet-500 to-fuchsia-500" />
-          <Quick to="/partner" icon={Users} label="Eli's portal" tone="from-emerald-400 to-teal-600" />
-        </div>
+      {/* One tight row, not a tall column of stretched buttons beside the to-dos. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Quick onClick={openScout} icon={Binoculars} label="Ask Scout" tone="from-slate-700 to-slate-900" />
+        <Quick href="https://cloud.bestly.tech/apps/spreed" icon={MessagesSquare} label="Talk" tone="from-sky-400 to-blue-600" />
+        <Quick href="https://studio.bestly.tech" icon={ExternalLink} label="Studio" tone="from-violet-500 to-fuchsia-500" />
+        <Quick to="/partner" icon={Users} label="Eli's portal" tone="from-emerald-400 to-teal-600" />
+      </div>
+
+      <div className={cn(card, "p-5")}>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-white"><Check className="h-4 w-4 text-white/50" /> Your to-dos from calls</h3>
+        {todos === null ? <div className="mt-3 h-16 animate-pulse rounded-xl bg-white/[0.04]" /> : todos.length === 0 ? (
+          <p className="mt-2 text-sm text-white/50">All clear.</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-white/[0.06]">
+            {todos.slice(0, 8).map((t) => (
+              <li key={t.id} className="flex items-start gap-3 py-2.5">
+                <button aria-label="Mark done" onClick={() => tick(t)}
+                  className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 border-white/25 text-transparent transition hover:border-emerald-400 hover:text-emerald-400 active:scale-90">
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+                <div className="min-w-0">
+                  <p className="text-[0.95rem] text-white">{t.title}</p>
+                  <p className="text-xs text-white/45">{t.action?.due ? `Due ${t.action.due} · ` : ""}{String(t.action?.meeting ?? "")}</p>
+                </div>
+              </li>
+            ))}
+            {todos.length > 8 && <li className="pt-2 text-xs text-white/45">+{todos.length - 8} more below in From calls</li>}
+          </ul>
+        )}
       </div>
     </section>
   );
 }
 
 function Quick({ href, to, onClick, icon: Icon, label, tone }: { href?: string; to?: string; onClick?: () => void; icon: typeof Video; label: string; tone: string }) {
-  const cls = cn("flex h-12 items-center gap-2.5 rounded-2xl bg-gradient-to-br px-4 text-sm font-semibold text-[#fff] shadow-sm transition active:scale-[0.98]", tone);
-  const inner = <><Icon className="h-4 w-4" />{label}</>;
+  const cls = cn(
+    "flex h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br px-3 text-sm font-semibold text-[#fff]",
+    "shadow-sm transition hover:brightness-110 active:scale-[0.98]",
+    tone,
+  );
+  const inner = <><Icon className="h-4 w-4 shrink-0" /><span className="truncate">{label}</span></>;
   if (to) return <Link to={to} className={cls}>{inner}</Link>;
   if (href) return <a href={href} target="_blank" rel="noreferrer" className={cls}>{inner}</a>;
   return <button onClick={onClick} className={cls}>{inner}</button>;
