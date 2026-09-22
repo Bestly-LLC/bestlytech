@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { AdminMark, SIGNIN_STARE_RADIUS_PX } from "@/components/AdminMark";
 import { PartnerMark } from "@/components/PartnerMark";
 import { PartnerHome } from "./PartnerHome";
-import { addPasskey, passkeysSupported, signInWithPasskey } from "@/lib/passkey";
+import { addPasskey, passkeyCount, passkeysSupported, signInWithPasskey } from "@/lib/passkey";
 
 const card = "rounded-[1.5rem] bg-white/[0.04] border border-white/[0.06] bento:bg-[#fff] bento:border-transparent";
 const btnSolid = "inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 text-[1rem] font-semibold text-black transition active:scale-[0.98] disabled:opacity-50 bento:bg-[#111114] bento:text-[#fff]";
@@ -65,52 +65,47 @@ function Duo() {
 /* ───────── sign in ───────── */
 
 function SignIn() {
-  const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
-  const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  const [email, setEmail] = useState("");
+  const [askEmail, setAskEmail] = useState(false);
+
+  // Passkeys only — no passwords anywhere in the portal. The browser offers whichever passkey it
+  // holds for this site; if it has none to offer, we ask for the email and try that account's.
+  const passkey = async (withEmail?: string) => {
     setBusy(true); setErr("");
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pw });
+    const problem = await signInWithPasskey(withEmail?.trim() || undefined);
     setBusy(false);
-    if (error) setErr(error.message === "Invalid login credentials" ? "That email and password don't match." : error.message);
+    if (!problem || problem === "cancelled") return;
+    if (!withEmail && !askEmail) { setAskEmail(true); setErr(""); return; }
+    setErr(problem.startsWith("No passkey") ? "No passkey on this account yet — ask Jared for a sign-in link." : problem);
   };
-  const [pkBusy, setPkBusy] = useState(false);
-  const passkey = async () => {
-    setPkBusy(true); setErr("");
-    const problem = await signInWithPasskey(email.trim() || undefined);
-    setPkBusy(false);
-    if (problem && problem !== "cancelled") setErr(problem === "That didn't work." ? "No passkey found for this account yet." : problem);
-  };
+
   return (
     <Shell>
       <div className="mx-auto mt-8 max-w-sm">
         <Duo />
         <h1 className="mt-8 text-[1.9rem] font-bold leading-tight tracking-tight">Sign in</h1>
         <p className="mt-2 text-[0.975rem] text-white/60">Calls, to-dos and the pipeline you share with Jared.</p>
-        <form onSubmit={submit} className="mt-8 space-y-3">
-          <input className={input} type="email" autoComplete="username" inputMode="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <div className="relative">
-            <input className={cn(input, "pr-12")} type={show ? "text" : "password"} autoComplete="current-password" placeholder="Password" value={pw} onChange={(e) => setPw(e.target.value)} required />
-            <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? "Hide password" : "Show password"} className="absolute right-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-xl text-white/50">
-              {show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-            </button>
-          </div>
-          {err && <p role="alert" className="text-sm text-red-400 bento:text-red-600">{err}</p>}
-          <button className={btnSolid} disabled={busy}>{busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sign in"}</button>
-        </form>
-        {passkeysSupported() && (
+
+        {!passkeysSupported() ? (
+          <p className="mt-8 rounded-2xl bg-amber-500/10 p-4 text-[0.95rem] text-amber-200 bento:text-amber-800">
+            This browser can't do Face ID or passkeys. Open bestly.tech/partner on your phone, or ask Jared for a sign-in link.
+          </p>
+        ) : (
           <>
-            <div className="my-5 flex items-center gap-3 text-xs text-white/35"><span className="h-px flex-1 bg-white/10" />or<span className="h-px flex-1 bg-white/10" /></div>
-            <button type="button" onClick={passkey} disabled={pkBusy}
-              className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl border border-white/15 px-5 text-[1rem] font-semibold text-white disabled:opacity-50 bento:border-black/15 bento:text-black">
-              {pkBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Fingerprint className="h-5 w-5" />} Sign in with Face ID or a passkey
+            {askEmail && (
+              <input className={cn(input, "mt-8")} type="email" autoComplete="username webauthn" inputMode="email" placeholder="Your email"
+                value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+            )}
+            {err && <p role="alert" className="mt-4 text-sm text-red-400 bento:text-red-600">{err}</p>}
+            <button type="button" onClick={() => passkey(askEmail ? email : undefined)} disabled={busy || (askEmail && !email.trim())}
+              className={cn(btnSolid, "mt-6 gap-2")}>
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Fingerprint className="h-5 w-5" />} Sign in with Face ID
             </button>
           </>
         )}
-        <p className="mt-6 text-center text-sm text-white/50">First time, or forgot your password? Ask Jared for a sign-in link.</p>
+        <p className="mt-6 text-center text-sm text-white/50">First time, or on a new device? Ask Jared for a sign-in link.</p>
       </div>
     </Shell>
   );
@@ -120,7 +115,7 @@ function SignIn() {
 
 export function PartnerWelcome() {
   const nav = useNavigate();
-  const [stage, setStage] = useState<"checking" | "passkey" | "password" | "bad" | "done">("checking");
+  const [stage, setStage] = useState<"checking" | "passkey" | "bad" | "done">("checking");
   const [name, setName] = useState("");
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
@@ -138,7 +133,7 @@ export function PartnerWelcome() {
         const { data, error } = await supabase.auth.verifyOtp({ token_hash: token, type: "magiclink" });
         if (error || !data.session) return false;
         setName(String(data.user?.user_metadata?.name ?? ""));
-        setStage(passkeysSupported() ? "passkey" : "password");
+        setStage("passkey");
         return true;
       };
       if (code) {
@@ -152,7 +147,7 @@ export function PartnerWelcome() {
       }
       if (t) { if (await finish(t)) return; setStage("bad"); return; }
       const { data } = await supabase.auth.getSession();
-      if (data.session) { setName(String(data.session.user.user_metadata?.name ?? "")); setStage(passkeysSupported() ? "passkey" : "password"); }
+      if (data.session) { setName(String(data.session.user.user_metadata?.name ?? "")); setStage("passkey"); }
       else setStage("bad");
     })();
   }, []);
@@ -167,16 +162,6 @@ export function PartnerWelcome() {
     if (problem !== "cancelled") setErr(problem);
   };
 
-  const save = async (e: FormEvent) => {
-    e.preventDefault();
-    if (pw.length < 10) { setErr("Use at least 10 characters."); return; }
-    setBusy(true); setErr("");
-    const { error } = await supabase.auth.updateUser({ password: pw, data: { password_set: true } });
-    setBusy(false);
-    if (error) setErr(error.message);
-    else nav("/partner", { replace: true });
-  };
-
   return (
     <Shell>
       <div className="mx-auto mt-10 max-w-sm">
@@ -184,7 +169,7 @@ export function PartnerWelcome() {
         {stage === "bad" && (
           <>
             <h1 className="text-[1.9rem] font-bold leading-tight tracking-tight">This link doesn't work</h1>
-            <p className="mt-2 text-[0.975rem] text-white/60">It may have been replaced by a newer one. Ask Jared to send the latest link, or sign in with your password.</p>
+            <p className="mt-2 text-[0.975rem] text-white/60">It may have been replaced by a newer one. Ask Jared to send the latest one.</p>
             <button className={cn(btnSolid, "mt-8")} onClick={() => nav("/partner", { replace: true })}>Go to sign in</button>
           </>
         )}
@@ -197,7 +182,9 @@ export function PartnerWelcome() {
             <button className={cn(btnSolid, "mt-8 gap-2")} onClick={makePasskey} disabled={pkBusy}>
               {pkBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Fingerprint className="h-5 w-5" />} Set up Face ID
             </button>
-            <button className="mt-4 w-full text-center text-sm text-white/50" onClick={() => { setErr(""); setStage("password"); }}>Use a password instead</button>
+            {!passkeysSupported() && (
+              <p className="mt-4 text-sm text-white/50">This browser can't do passkeys. Open this same link on your phone and set it up there.</p>
+            )}
           </>
         )}
         {stage === "done" && (
@@ -206,20 +193,7 @@ export function PartnerWelcome() {
             <h1 className="mt-8 flex items-center gap-2 text-[1.9rem] font-bold leading-tight tracking-tight"><Check className="h-7 w-7 text-emerald-400" /> You're set</h1>
             <p className="mt-2 text-[0.975rem] text-white/60">Next time, open bestly.tech/partner and it's Face ID — no password, no link.</p>
             <button className={cn(btnSolid, "mt-8")} onClick={() => nav("/partner", { replace: true })}>Go to my portal</button>
-            <button className="mt-4 w-full text-center text-sm text-white/50" onClick={() => setStage("password")}>Also set a password</button>
-          </>
-        )}
-        {stage === "password" && (
-          <>
-            <Duo />
-            <h1 className="mt-8 text-[1.9rem] font-bold leading-tight tracking-tight">Welcome{name ? `, ${name}` : ""}</h1>
-            <p className="mt-2 text-[0.975rem] text-white/60">Choose a password so you can sign in any time. Your phone's password manager can save it.</p>
-            <form onSubmit={save} className="mt-8 space-y-3">
-              <input className={input} type="password" autoComplete="new-password" placeholder="New password (10+ characters)" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus />
-              {err && <p role="alert" className="text-sm text-red-400 bento:text-red-600">{err}</p>}
-              <button className={btnSolid} disabled={busy}>{busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Save and continue"}</button>
-            </form>
-            <button className="mt-4 w-full text-center text-sm text-white/50" onClick={() => nav("/partner", { replace: true })}>Skip for now</button>
+
           </>
         )}
       </div>
@@ -231,6 +205,42 @@ export function PartnerWelcome() {
 
 /* ───────── entry ───────── */
 
+/**
+ * Passkeys only: a partner who signs in without one is asked to set it up before anything else.
+ * There is no password to fall back to, so this is the gate to the portal, not a nudge.
+ */
+function PasskeyGate({ session, done }: { session: Session; done: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const first = String(session.user.user_metadata?.name ?? "").split(" ")[0];
+  const add = async () => {
+    setBusy(true); setErr("");
+    const problem = await addPasskey();
+    setBusy(false);
+    if (!problem) { done(); return; }
+    if (problem !== "cancelled") setErr(problem);
+  };
+  return (
+    <Shell>
+      <div className="mx-auto mt-10 max-w-sm">
+        <Duo />
+        <h1 className="mt-8 text-[1.9rem] font-bold leading-tight tracking-tight">One step{first ? `, ${first}` : ""}</h1>
+        <p className="mt-2 text-[0.975rem] text-white/60">
+          Set up Face ID (or your fingerprint) now. It's how you get in from here on — there's no password to remember, and nothing to type.
+        </p>
+        {err && <p role="alert" className="mt-4 text-sm text-red-400 bento:text-red-600">{err}</p>}
+        <button className={cn(btnSolid, "mt-8 gap-2")} onClick={add} disabled={busy || !passkeysSupported()}>
+          {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Fingerprint className="h-5 w-5" />} Set up Face ID
+        </button>
+        {!passkeysSupported() && (
+          <p className="mt-4 text-sm text-white/55">This browser can't do passkeys. Open bestly.tech/partner on your phone and set it up there — then this device works too.</p>
+        )}
+        <button className="mt-6 w-full text-center text-sm text-white/40" onClick={() => supabase.auth.signOut()}>Sign out</button>
+      </div>
+    </Shell>
+  );
+}
+
 export default function PartnerPortal() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const loc = useLocation();
@@ -239,7 +249,19 @@ export default function PartnerPortal() {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
+  // Does this account have a passkey yet? Until it does, the gate is the whole portal.
+  const [keys, setKeys] = useState<number | null>(null);
+  useEffect(() => {
+    if (!session) { setKeys(null); return; }
+    let gone = false;
+    passkeyCount(session.user.id).then((n) => { if (!gone) setKeys(n); }).catch(() => { if (!gone) setKeys(1); });
+    return () => { gone = true; };
+  }, [session?.user.id]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   const key = useMemo(() => loc.pathname, [loc.pathname]);
   if (session === undefined) return <Shell><p className="mt-10 flex items-center gap-2 text-white/60" key={key}><Loader2 className="h-5 w-5 animate-spin" /> Loading…</p></Shell>;
-  return session ? <PartnerHome session={session} /> : <SignIn />;
+  if (!session) return <SignIn />;
+  if (keys === null) return <Shell><p className="mt-10 flex items-center gap-2 text-white/60"><Loader2 className="h-5 w-5 animate-spin" /> Loading…</p></Shell>;
+  if (keys === 0) return <PasskeyGate session={session} done={() => setKeys(1)} />;
+  return <PartnerHome session={session} />;
 }
