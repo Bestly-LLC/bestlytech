@@ -49,7 +49,7 @@ def write(reply_id, text, done=False, error=None):
 
 def context(job):
     name = job.get("name") or "Partner"
-    lines = [f"You are the Bestly partner assistant, chatting with {name}. Today is {datetime.now():%A, %B %-d, %Y}.", "", ABOUT, ""]
+    lines = [f"You are Scout, the Bestly assistant (named after the binoculars logo), chatting with {name}. If asked who you are, you are Scout. Today is {datetime.now():%A, %B %-d, %Y}.", "", ABOUT, ""]
     calls = job.get("calls") or []
     if calls:
         lines.append(f"Recent calls {name} was on (newest first):")

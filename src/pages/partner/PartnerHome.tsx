@@ -3,7 +3,8 @@
  *
  *   Home   greeting, join-the-call, stats, to-dos, recent calls, latest emails, files, pipeline, shortcuts
  *   Calls  every call they were on: summary, decisions, transcript as chat bubbles + Copy
- *   Ask    free AI assistant (local model on Jared's Mac mini), knows their calls, to-dos and pipeline
+ *   Scout  free AI assistant (local model on Jared's Mac mini), knows their calls, to-dos and pipeline.
+ *          Keeps working while they browse; ScoutAlert pops up when an answer lands.
  *   Mail   every email Jared sent them, with attachments and doc links (synced from Jared's Sent folders)
  *   Files  every attachment and linked doc from those emails
  *
@@ -15,7 +16,7 @@ import type { Session } from "@supabase/supabase-js";
 import {
   ArrowLeft, ArrowRight, Check, ChevronRight, Download, ExternalLink, FileArchive, FileImage, FileSpreadsheet, FileText,
   Files as FilesIcon, Home as HomeIcon, Inbox, LayoutGrid, Link2, Loader2, LogOut, Mail, Mic, Paperclip, Presentation,
-  Search, Sparkles, Users, Video,
+  Binoculars, Search, Users, Video,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
@@ -25,7 +26,7 @@ import { AdminMark } from "@/components/AdminMark";
 import { PartnerMark } from "@/components/PartnerMark";
 import { cn } from "@/lib/utils";
 import { ART } from "./partnerArt";
-import { ASK_IDEAS, PartnerAsk } from "./PartnerAsk";
+import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState } from "./PartnerScout";
 
 /* ───────── types + helpers ───────── */
 
@@ -39,11 +40,11 @@ interface Att { name: string; size: number; type: string | null; path: string | 
 interface DocLink { url: string; kind: string }
 interface MailRow { id: string; subject: string | null; sent_at: string | null; to_addrs: string[]; cc_addrs: string[]; body_text: string | null; links: DocLink[]; attachments: Att[] }
 
-type Tab = "home" | "calls" | "ask" | "mail" | "files";
+type Tab = "home" | "calls" | "scout" | "mail" | "files";
 const TABS: { id: Tab; label: string; icon: typeof HomeIcon }[] = [
   { id: "home", label: "Home", icon: HomeIcon },
   { id: "calls", label: "Calls", icon: Mic },
-  { id: "ask", label: "Ask", icon: Sparkles },
+  { id: "scout", label: "Scout", icon: Binoculars },
   { id: "mail", label: "Mail", icon: Inbox },
   { id: "files", label: "Files", icon: FilesIcon },
 ];
@@ -113,7 +114,8 @@ export function PartnerHome({ session }: { session: Session }) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [pipe, setPipe] = useState<{ deals: any[]; leads: any[] } | null>(null);
   const [mail, setMail] = useState<MailRow[] | null>(null);
-  const [tab, setTabState] = useState<Tab>(() => (TABS.some((t) => `#${t.id}` === window.location.hash) ? (window.location.hash.slice(1) as Tab) : "home"));
+  const hashTab = () => { const h = window.location.hash.slice(1); return (h === "ask" ? "scout" : TABS.some((t) => t.id === h) ? h : null) as Tab | null; };
+  const [tab, setTabState] = useState<Tab>(() => hashTab() ?? "home");
   const [openCall, setOpenCall] = useState<Meeting | null>(null);
   const [openMail, setOpenMail] = useState<MailRow | null>(null);
   const [askDraft, setAskDraft] = useState<string | undefined>();
@@ -124,11 +126,12 @@ export function PartnerHome({ session }: { session: Session }) {
     window.scrollTo({ top: 0 });
   }, []);
   useEffect(() => {
-    const onHash = () => { const h = window.location.hash.slice(1) as Tab; if (TABS.some((t) => t.id === h)) setTabState(h); };
+    const onHash = () => { const h = hashTab(); if (h) setTabState(h); };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
-  useEffect(() => { document.title = "Bestly · Partner"; }, []);
+  // Scout lives up here so answers keep arriving (and alert) wherever Eli is in the portal.
+  const scout = usePartnerScout(session.user.id, tab === "scout");
 
   const load = useCallback(async () => {
     const uid = session.user.id;
@@ -171,6 +174,7 @@ export function PartnerHome({ session }: { session: Session }) {
     return (mail ?? []).flatMap((m) => m.links.map((l) => ({ ...l, mail: m }))).filter((l) => (seen.has(l.url) ? false : (seen.add(l.url), true)));
   }, [mail]);
 
+  const askScout = (q?: string) => { setAskDraft(q); setTab("scout"); };
   const shell = cn("admin-shell min-h-dvh text-white", bento ? "admin-bento bg-[#F3F2EE]" : "bg-black");
 
   if (partner === undefined) {
@@ -189,7 +193,8 @@ export function PartnerHome({ session }: { session: Session }) {
     );
   }
 
-  const badge: Partial<Record<Tab, number>> = { home: mine.length || undefined };
+  const badge: Partial<Record<Tab, number>> = { home: mine.length || undefined, scout: scout.unread || undefined };
+  const busy: Partial<Record<Tab, boolean>> = { scout: scout.thinking && tab !== "scout" };
 
   return (
     <div className={shell}>
@@ -205,7 +210,8 @@ export function PartnerHome({ session }: { session: Session }) {
               className={cn("flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium transition",
                 tab === id ? "bg-white/[0.09] text-white bento:bg-[#111114] bento:text-[#fff]" : "text-white/60 hover:bg-white/[0.05] hover:text-white")}>
               <Icon className="h-[18px] w-[18px]" />{label}
-              {badge[id] ? <span className="ml-auto rounded-full bg-[#0A84FF] px-2 text-xs font-semibold text-[#fff]">{badge[id]}</span> : null}
+              {badge[id] ? <span className="ml-auto rounded-full bg-[#0A84FF] px-2 text-xs font-semibold text-[#fff]">{badge[id]}</span>
+                : busy[id] ? <Loader2 className="ml-auto h-4 w-4 animate-spin text-white/45" aria-label="Scout is thinking" /> : null}
             </button>
           ))}
         </nav>
@@ -247,24 +253,27 @@ export function PartnerHome({ session }: { session: Session }) {
           {tab === "home" && (
             <HomeTab first={first} callUrl={callUrl} mine={mine} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
               files={files} pipe={pipe} go={setTab} openCall={(m) => { setTab("calls"); setOpenCall(m); }}
-              openMail={(m) => { setTab("mail"); setOpenMail(m); }} ask={(q) => { setAskDraft(q); setTab("ask"); }} />
+              openMail={(m) => { setTab("mail"); setOpenMail(m); }} ask={askScout} scout={scout} />
           )}
-          {tab === "calls" && (openCall ? <CallView m={openCall} onBack={() => setOpenCall(null)} /> : <CallsTab meetings={meetings} open={setOpenCall} />)}
-          {tab === "ask" && <PartnerAsk userId={session.user.id} name={first} draft={askDraft} onDraftUsed={() => setAskDraft(undefined)} />}
-          {tab === "mail" && <MailTab mail={mail} open={openMail} setOpen={setOpenMail} />}
+          {tab === "calls" && (openCall ? <CallView m={openCall} onBack={() => setOpenCall(null)} onAsk={askScout} /> : <CallsTab meetings={meetings} open={setOpenCall} />)}
+          {tab === "scout" && <PartnerScout scout={scout} name={first} draft={askDraft} onDraftUsed={() => setAskDraft(undefined)} />}
+          {tab === "mail" && <MailTab mail={mail} open={openMail} setOpen={setOpenMail} onAsk={askScout} />}
           {tab === "files" && <FilesTab files={files} docs={docs} openMail={(m) => { setTab("mail"); setOpenMail(m); }} />}
         </div>
       </main>
 
+      {tab !== "scout" && <ScoutAlert scout={scout} open={() => setTab("scout")} />}
+
       {/* Mobile tab bar */}
-      <nav aria-label="Portal" className="fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.08] bg-black/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden bento:border-black/5 bento:bg-[#fff]/85">
+      <nav aria-label="Portal" className="fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.08] bg-black/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden bento:border-black/5 bento:bg-[#fff]/95">
         <div className="mx-auto grid max-w-lg grid-cols-5">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setTab(id)} aria-current={tab === id ? "page" : undefined}
               className={cn("relative flex h-[3.6rem] flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition active:scale-95",
                 tab === id ? "text-[#0A84FF]" : "text-white/50")}>
               <Icon className="h-[22px] w-[22px]" strokeWidth={tab === id ? 2.4 : 2} />{label}
-              {badge[id] ? <span className="absolute right-[22%] top-1.5 min-w-[18px] rounded-full bg-[#0A84FF] px-1 text-[10px] font-bold leading-[18px] text-[#fff]">{badge[id]}</span> : null}
+              {badge[id] ? <span className="absolute right-[22%] top-1.5 min-w-[18px] rounded-full bg-[#0A84FF] px-1 text-[10px] font-bold leading-[18px] text-[#fff]">{badge[id]}</span>
+                : busy[id] ? <span className="absolute right-[27%] top-2 h-2.5 w-2.5 animate-pulse rounded-full bg-[#0A84FF]" aria-label="Scout is thinking" /> : null}
             </button>
           ))}
         </div>
@@ -278,9 +287,9 @@ export function PartnerHome({ session }: { session: Session }) {
 function HomeTab(props: {
   first: string; callUrl: string; mine: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
   meetings: Meeting[] | null; mail: MailRow[] | null; files: (Att & { mail: MailRow })[]; pipe: { deals: any[]; leads: any[] } | null;
-  go: (t: Tab) => void; openCall: (m: Meeting) => void; openMail: (m: MailRow) => void; ask: (q?: string) => void;
+  go: (t: Tab) => void; openCall: (m: Meeting) => void; openMail: (m: MailRow) => void; ask: (q?: string) => void; scout: ScoutState;
 }) {
-  const { first, callUrl, mine, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask } = props;
+  const { first, callUrl, mine, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
   const [q, setQ] = useState("");
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", ...PT });
   const deals = pipe?.deals.length ?? 0;
@@ -316,7 +325,7 @@ function HomeTab(props: {
             </a>
             <button onClick={() => ask()}
               className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/[0.09] px-5 text-[1rem] font-semibold text-white transition hover:bg-white/[0.14] active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
-              <Sparkles className="h-5 w-5" /> Ask the assistant
+              <Binoculars className="h-5 w-5" /> Ask Scout
             </button>
           </div>
         </div>
@@ -361,19 +370,25 @@ function HomeTab(props: {
           )}
         </Panel>
 
-        {/* Ask */}
-        <Panel title="Ask anything" icon={Sparkles} tone="bg-gradient-to-br from-[#0A84FF]/15 to-transparent">
+        {/* Scout */}
+        <Panel title="Ask Scout" icon={Binoculars} tone="bg-gradient-to-br from-[#0A84FF]/15 to-transparent">
+          {(scout.thinking || scout.unread > 0) && (
+            <button onClick={() => go("scout")} className="mb-3 flex w-full items-center gap-2 rounded-xl bg-[#0A84FF]/15 px-3 py-2.5 text-left text-sm font-medium">
+              {scout.unread > 0 ? <><span className="h-2 w-2 rounded-full bg-[#0A84FF]" /> Scout answered. Tap to read.</>
+                : <><Loader2 className="h-4 w-4 animate-spin text-white/60" /> Scout is working on your question…</>}
+            </button>
+          )}
           <form onSubmit={(e) => { e.preventDefault(); ask(q); }} className="flex gap-2">
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="What did we decide about…"
               className="h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-black/30 px-4 text-[16px] text-white outline-none placeholder:text-white/35 focus:border-white/30 bento:border-black/10 bento:bg-[#fff]" />
             <button aria-label="Ask" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#0A84FF] text-[#fff] active:scale-95"><ArrowRight className="h-5 w-5" /></button>
           </form>
           <div className="mt-3 flex flex-col gap-1.5">
-            {ASK_IDEAS.slice(0, 3).map((s) => (
+            {SCOUT_IDEAS.slice(0, 3).map((s) => (
               <button key={s} onClick={() => ask(s)} className="rounded-xl px-3 py-2 text-left text-sm text-white/70 transition hover:bg-white/[0.06] hover:text-white">{s}</button>
             ))}
           </div>
-          <p className="mt-2 px-3 text-xs text-white/40">Free. Runs on Bestly's own computer.</p>
+          <p className="mt-2 px-3 text-xs text-white/40">Free. Scout runs on Bestly's own computer, so give it a minute.</p>
         </Panel>
 
         {/* Recent calls */}
@@ -544,7 +559,7 @@ function TabHead({ title, sub, q, setQ, placeholder }: { title: string; sub: str
   );
 }
 
-export function CallView({ m, onBack }: { m: Meeting; onBack: () => void }) {
+export function CallView({ m, onBack, onAsk }: { m: Meeting; onBack: () => void; onAsk?: (q: string) => void }) {
   const [text, setText] = useState<string | null>(null);
   useEffect(() => {
     supabase.from("meeting_recordings" as never).select("transcript").eq("id", m.id).maybeSingle()
@@ -559,6 +574,7 @@ export function CallView({ m, onBack }: { m: Meeting; onBack: () => void }) {
       </button>
       <h1 className="mt-1 text-[1.6rem] font-bold leading-tight tracking-tight">{meetingDate(m)}</h1>
       <p className="mt-1 text-sm text-white/55">{["Jared", ...m.people.map(cap)].join(", ")}{minutes(m) ? ` · ${minutes(m)} min` : ""}</p>
+      {onAsk && <AskAbout onClick={() => onAsk(`About our call on ${meetingDate(m)}: `)} label="Ask Scout about this call" />}
       {s?.summary && (
         <div className={cn(card, "mt-5 space-y-4 p-5")}>
           <p className="text-[0.975rem] leading-relaxed text-white/85">{s.summary}</p>
@@ -585,9 +601,17 @@ export function CallView({ m, onBack }: { m: Meeting; onBack: () => void }) {
   );
 }
 
+function AskAbout({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button onClick={onClick} className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-full bg-white/[0.07] px-3.5 text-sm font-medium text-white/85 transition hover:bg-white/[0.12] bento:bg-[#F3F2EE]">
+      <Binoculars className="h-4 w-4" /> {label}
+    </button>
+  );
+}
+
 /* ───────── Mail ───────── */
 
-function MailTab({ mail, open, setOpen }: { mail: MailRow[] | null; open: MailRow | null; setOpen: (m: MailRow | null) => void }) {
+function MailTab({ mail, open, setOpen, onAsk }: { mail: MailRow[] | null; open: MailRow | null; setOpen: (m: MailRow | null) => void; onAsk: (q: string) => void }) {
   const [q, setQ] = useState("");
   const shown = (mail ?? []).filter((m) => !q.trim() || `${m.subject ?? ""} ${m.body_text ?? ""} ${m.attachments.map((a) => a.name).join(" ")}`.toLowerCase().includes(q.toLowerCase()));
   useEffect(() => { if (!open && shown.length && window.matchMedia("(min-width: 1024px)").matches) setOpen(shown[0]); }, [open, shown, setOpen]);
@@ -631,13 +655,13 @@ function MailTab({ mail, open, setOpen }: { mail: MailRow[] | null; open: MailRo
       </div>
       <div className="lg:grid lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-5">
         <div className={cn(open && "hidden lg:block")}>{list}</div>
-        {open ? <MailView m={open} onBack={() => setOpen(null)} /> : <div className="hidden lg:block" />}
+        {open ? <MailView m={open} onBack={() => setOpen(null)} onAsk={onAsk} /> : <div className="hidden lg:block" />}
       </div>
     </div>
   );
 }
 
-function MailView({ m, onBack }: { m: MailRow; onBack: () => void }) {
+function MailView({ m, onBack, onAsk }: { m: MailRow; onBack: () => void; onAsk: (q: string) => void }) {
   useEffect(() => { if (!window.matchMedia("(min-width: 1024px)").matches) window.scrollTo(0, 0); }, [m.id]);
   return (
     <article className={cn(card, "p-5 sm:p-7 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto")}>
@@ -652,6 +676,7 @@ function MailView({ m, onBack }: { m: MailRow; onBack: () => void }) {
         From Jared · {m.sent_at ? new Date(m.sent_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", ...PT }) : ""}
         {m.cc_addrs.length ? ` · cc ${m.cc_addrs.join(", ")}` : ""}
       </p>
+      <AskAbout onClick={() => onAsk(`About Jared's email "${m.subject || "(no subject)"}" (${day(m.sent_at)}): `)} label="Ask Scout about this email" />
       {m.attachments.length > 0 && (
         <ul className="mt-4 grid gap-1 sm:grid-cols-2">{m.attachments.map((a, i) => <FileRow key={i} a={a} />)}</ul>
       )}
