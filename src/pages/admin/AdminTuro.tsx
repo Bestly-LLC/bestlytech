@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { cn } from "@/lib/utils";
+import { DemandMeter, type DemandRow } from "@/components/admin/turo/DemandMeter";
 import { Competitors, PriceManager, TuroTrends, type CompPrice, type SeriesRow, type Target } from "@/components/admin/turo/TuroTrends";
 
 interface Run {
@@ -40,16 +41,18 @@ export default function AdminTuro() {
   const [series, setSeries] = useState<SeriesRow[] | null>(null);
   const [targets, setTargets] = useState<Target[]>([]);
   const [comp, setComp] = useState<CompPrice[]>([]);
+  const [demand, setDemand] = useState<DemandRow[] | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const [{ data: r }, { data: st }, { data: ps }, { data: tg }, { data: cp }] = await Promise.all([
+    const [{ data: r }, { data: st }, { data: ps }, { data: tg }, { data: cp }, { data: dm }] = await Promise.all([
       supabase.from("turo_runs" as never).select("*").order("ran_at", { ascending: false }).limit(30),
       supabase.from("turo_settings" as never).select("*").eq("id", 1).maybeSingle(),
       supabase.from("turo_price_series" as never).select("day, series, value").limit(5000),
       supabase.from("turo_watch_targets" as never).select("*").eq("active", true).order("chart", { ascending: false }),
       supabase.from("turo_competitor_prices" as never).select("*").order("observed_at", { ascending: false }).limit(200),
+      supabase.from("turo_demand" as never).select("*").order("observed_at", { ascending: false }).limit(90),
     ]);
     const list = (r ?? []) as unknown as Run[];
     setRuns(list);
@@ -57,6 +60,7 @@ export default function AdminTuro() {
     setSeries((ps ?? []) as unknown as SeriesRow[]);
     setTargets((tg ?? []) as unknown as Target[]);
     setComp((cp ?? []) as unknown as CompPrice[]);
+    setDemand((dm ?? []) as unknown as DemandRow[]);
     const ids = list.slice(0, 10).map((x) => x.id);
     if (ids.length) {
       const { data: d } = await supabase.from("turo_day_prices" as never).select("*").in("run_id", ids).order("date");
@@ -94,10 +98,10 @@ export default function AdminTuro() {
                 : <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300 bento:text-emerald-600" />}
               <div className="space-y-1.5 text-[0.95rem] text-white/80">
                 <p className="font-semibold text-white">
-                  {settings?.paused ? "Paused: runs compute prices but write nothing." : signedOut ? "Turo is signed out in your Chrome." : stale ? "No run in over 14 hours." : "Running normally."}
+                  {settings?.paused ? "Paused: runs compute prices but write nothing." : signedOut ? `The last run (${when(last!.ran_at)}) couldn't reach Turo: it looked signed out then.` : stale ? "No run in over 14 hours." : "Running normally."}
                 </p>
                 <p>Claude runs it at 7:05am and 7:12pm in your own Chrome on the Mac mini, then reports here and to your phone.</p>
-                {signedOut && <p className="text-white/60">Fix: open turo.com in your normal Chrome and sign in once. The next run picks it up.</p>}
+                {signedOut && <p className="text-white/60">If you're signed in to turo.com in Chrome now, nothing to do: the next run checks again and this clears.</p>}
                 {settings?.paused && settings.pause_reason && <p className="text-white/60">Why: {settings.pause_reason}</p>}
               </div>
             </div>
@@ -149,6 +153,8 @@ export default function AdminTuro() {
           ))}
         </section>
       )}
+
+      <DemandMeter rows={demand} />
 
       <TuroTrends rows={series} />
 
