@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B6E63"/>
+      <stop offset="1" stop-color="#17443E"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE7C7"/>
+      <stop offset="1" stop-color="#F6C98E"/>
+    </linearGradient>
+    <linearGradient id="lens" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#EAF7FF"/>
+      <stop offset="0.55" stop-color="#8FD3F4"/>
+      <stop offset="1" stop-color="#4AA8D8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+
+  <!-- friendly arched brows: raised and rounded, never angled inward -->
+  <g stroke="#FFE7C7" stroke-width="17" stroke-linecap="round" fill="none" opacity="0.92">
+    <path d="M124 146 q42 -34 84 -4"/>
+    <path d="M304 142 q42 -30 84 4"/>
+  </g>
+
+  <!-- barrels -->
+  <g>
+    <rect x="96" y="190" width="132" height="180" rx="56" fill="url(#body)"/>
+    <rect x="284" y="190" width="132" height="180" rx="56" fill="url(#body)"/>
+    <!-- bridge -->
+    <rect x="212" y="236" width="88" height="48" rx="24" fill="#E7B172"/>
+    <!-- eyepiece caps -->
+    <rect x="112" y="178" width="100" height="40" rx="20" fill="#E7B172"/>
+    <rect x="300" y="178" width="100" height="40" rx="20" fill="#E7B172"/>
+  </g>
+
+  <!-- lenses: big and round, the friendly part -->
+  <g>
+    <circle cx="162" cy="316" r="52" fill="#17443E"/>
+    <circle cx="350" cy="316" r="52" fill="#17443E"/>
+    <circle cx="162" cy="316" r="43" fill="url(#lens)"/>
+    <circle cx="350" cy="316" r="43" fill="url(#lens)"/>
+    <!-- warm catchlights, tilted up = happy -->
+    <circle cx="146" cy="300" r="14" fill="#FFFFFF" opacity="0.92"/>
+    <circle cx="334" cy="300" r="14" fill="#FFFFFF" opacity="0.92"/>
+    <circle cx="176" cy="332" r="7" fill="#FFFFFF" opacity="0.55"/>
+    <circle cx="364" cy="332" r="7" fill="#FFFFFF" opacity="0.55"/>
+  </g>
+
+  <!-- small smile under the bridge -->
+  <path d="M222 404 q34 30 68 0" stroke="#FFE7C7" stroke-width="15" stroke-linecap="round" fill="none" opacity="0.9"/>
+</svg>
