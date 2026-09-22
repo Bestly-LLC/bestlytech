@@ -91,3 +91,5 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.meeting-recorder]
     verify_jwt = false
+  [functions.admin-device-login]
+    verify_jwt = false

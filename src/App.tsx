@@ -65,6 +65,7 @@ const CookieYetiDashboard = lazy(() => import("./pages/CookieYetiDashboard"));
 import { AdminRoute } from "@/components/admin/AdminRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
+const AdminApproveLogin = lazy(() => import("./pages/admin/AdminApproveLogin"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminSubmissionDetail = lazy(() => import("./pages/admin/AdminSubmissionDetail"));
 // Cookie Yeti: three tabbed sections; each lazy-loads only its active tab's page.
@@ -196,6 +197,7 @@ const App = () => (
                   <Route path="home-hub/access" element={<HomeHubAccess />} />
                   <Route path="street-sweeping" element={<StreetSweeping />} />
                   <Route path="skills" element={<AdminSkills />} />
+                  <Route path="approve" element={<AdminApproveLogin />} />
                   <Route path="*" element={<AdminNotFound />} />
                 </Route>
 

@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
+import { DeviceSignIn } from "@/components/admin/DeviceSignIn";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -67,6 +68,10 @@ export default function AdminLogin() {
   const [showEmail, setShowEmail] = useState(false);
   
   const { toast } = useToast();
+  const [params] = useSearchParams();
+  // Only ever go back inside the admin.
+  const nextRaw = params.get("next") ?? "";
+  const next = nextRaw.startsWith("/admin") && !nextRaw.startsWith("//") ? nextRaw : "/admin";
 
   // `checking` covers the moment right after sign-in, before the role check answers.
   if (loading || (user && checking && !isAdmin)) {
@@ -76,7 +81,7 @@ export default function AdminLogin() {
   }
 
   if (user && isAdmin) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to={next} replace />;
   }
 
   // Signed in but not an admin (or the role check failed): say so instead of showing the form again.
@@ -304,6 +309,9 @@ export default function AdminLogin() {
             <Fingerprint className="h-[1.125rem] w-[1.125rem]" />
             {passkeyLoading ? "Authenticating…" : "Sign in with Passkey"}
           </button>
+
+          {/* For browsers that can't show a passkey or Apple prompt (the Claude app's built-in browser) */}
+          <DeviceSignIn onSignedIn={() => speakWelcome("Jared")} />
         </div>
 
         {/* Collapsible email/password */}
