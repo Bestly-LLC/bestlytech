@@ -123,9 +123,19 @@ export function ConnectClaude({ open, onOpenChange }: { open: boolean; onOpenCha
     setFresh(MCP + (data as { key: string }).key);
     load();
   };
+  // Two taps instead of window.confirm(): the desktop app and some in-app browsers silently
+  // block native dialogs, which made the delete button look dead.
+  const [arming, setArming] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  useEffect(() => { if (!arming) return; const t = window.setTimeout(() => setArming(null), 4000); return () => window.clearTimeout(t); }, [arming]);
   const remove = async (id: string) => {
-    if (!window.confirm("Disconnect this Claude? It stops working right away.")) return;
-    await supabase.rpc("partner_connector_revoke" as never, { p_id: id } as never);
+    if (arming !== id) { setArming(id); return; }
+    setArming(null); setRemoving(id); setErr(null);
+    const { data, error } = await supabase.rpc("partner_connector_revoke" as never, { p_id: id } as never);
+    setRemoving(null);
+    if (error || data === false) { setErr(error?.message ?? "Couldn't remove that one. Refresh and try again."); load(); return; }
+    setConns((cs) => (cs ?? []).filter((c) => c.id !== id));
+    setFresh(null);
     load();
   };
   return (
@@ -166,7 +176,13 @@ export function ConnectClaude({ open, onOpenChange }: { open: boolean; onOpenCha
                   <p className="text-sm font-medium text-white">{c.label}</p>
                   <p className="text-xs text-white/45">Made {new Date(c.created_at).toLocaleDateString()} · {c.last_used_at ? `last used ${ago(c.last_used_at)} ago` : "not used yet"}</p>
                 </div>
-                <button onClick={() => remove(c.id)} aria-label="Disconnect" className="grid h-9 w-9 place-items-center rounded-full text-white/50 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
+                <button onClick={() => remove(c.id)} disabled={removing === c.id}
+                  aria-label={arming === c.id ? "Tap again to disconnect" : "Disconnect"}
+                  className={cn("inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full text-sm font-medium transition disabled:opacity-50",
+                    arming === c.id ? "bg-red-500 px-3.5 text-[#fff]" : "w-9 text-white/50 hover:bg-white/[0.06] hover:text-red-400")}>
+                  {removing === c.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  {arming === c.id && "Remove"}
+                </button>
               </li>
             ))}
           </ul>
