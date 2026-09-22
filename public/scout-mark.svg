@@ -1,19 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72">
   <style>
-    .s{fill:none;stroke:#0d0d0f;stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
-    .f{fill:#0d0d0f}
+    .am-st{fill:none;stroke:#fff;stroke-width:5.5;stroke-linecap:round;stroke-linejoin:round}
+    .am-fl{fill:#fff}
   </style>
-  <rect width="72" height="72" rx="36" fill="#fff"/>
+  <rect width="72" height="72" rx="36" fill="#000"/>
   <defs>
-    <clipPath id="il"><circle cx="21" cy="47" r="11.2"/></clipPath>
-    <clipPath id="ir"><circle cx="51" cy="47" r="11.2"/></clipPath>
+    <mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+      <rect width="72" height="72" fill="#fff"/>
+      <circle cx="19" cy="44" r="10.3"/>
+      <circle cx="53" cy="44" r="10.3"/>
+    </mask>
+    <clipPath id="cl"><circle cx="19" cy="44" r="10.7"/></clipPath>
+    <clipPath id="cr"><circle cx="53" cy="44" r="10.7"/></clipPath>
   </defs>
-  <!-- one continuous body per side: eyepiece, cone, objective -->
-  <path class="s" d="M16.5 16 H25.5 L30.3 36.94 A13.7 13.7 0 1 1 11.7 36.94 Z"/>
-  <path class="s" d="M46.5 16 H55.5 L60.3 36.94 A13.7 13.7 0 1 1 41.7 36.94 Z"/>
-  <path class="s" d="M29 26 H43"/>
-  <circle class="f" cx="21" cy="47" r="5"/>
-  <circle class="f" cx="51" cy="47" r="5"/>
-  <g clip-path="url(#il)"><rect class="f" x="8" y="33" width="26" height="5.6"/></g>
-  <g clip-path="url(#ir)"><rect class="f" x="38" y="33" width="26" height="5.6"/></g>
+  <g mask="url(#m)">
+    <path class="am-st" d="M9 37L13.5 21Q14 18 17 18H21Q24 18 24.5 21L29 37M43 37L47.5 21Q48 18 51 18H55Q58 18 58.5 21L63 37"/>
+    <path class="am-st" d="M25.5 27H46.5M30 42H42"/>
+  </g>
+  <circle class="am-st" cx="19" cy="44" r="13"/>
+  <circle class="am-st" cx="53" cy="44" r="13"/>
+  <circle class="am-fl" cx="19" cy="44" r="4.8"/>
+  <circle class="am-fl" cx="53" cy="44" r="4.8"/>
+  <g clip-path="url(#cl)"><g transform="translate(0 -13)"><rect class="am-fl" x="0" y="10" width="40" height="32"/></g></g>
+  <g clip-path="url(#cr)"><g transform="translate(0 -13)"><rect class="am-fl" x="32" y="10" width="40" height="32"/></g></g>
 </svg>
