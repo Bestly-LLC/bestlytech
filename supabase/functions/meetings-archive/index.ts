@@ -316,10 +316,34 @@ Deno.serve(async (req) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: "bad_day" }, 400);
     if (!/^meeting-\d{8}-\d{4}$/.test(id)) return json({ error: "bad_id" }, 400);
 
-    const files = (await propfind(`${ARCHIVE}/${day}/`, auth)).filter(
-      (f) => !f.isDir && f.name.startsWith(id + "-"),
+    // List everything in the day folder and match files that belong to this
+    // meeting. Accept both the hyphen-prefix form (meeting-YYYYMMDD-HHMM-*)
+    // and the bare form (meeting-YYYYMMDD-HHMM.*) so nothing is left behind.
+    const all = await propfind(`${ARCHIVE}/${day}/`, auth);
+    const files = all.filter(
+      (f) => !f.isDir && (f.name.startsWith(id + "-") || f.name.startsWith(id + ".")),
     );
-    if (!files.length) return json({ error: "not_found" }, 404);
+
+    // Nothing matched via prefix — try an exact folder/meeting ID match as a
+    // last resort (some recorders store the meeting in its own sub-folder).
+    if (!files.length) {
+      // Check whether the entry is a directory named exactly id.
+      const asDir = all.find((f) => f.isDir && f.name === id);
+      if (asDir) {
+        // Delete the whole directory via a single WebDAV DELETE (recursive).
+        const url = `${NC_BASE}/${ARCHIVE}/${day}/${encodeURIComponent(id)}/`;
+        const res = await fetch(url, { method: "DELETE", headers: { Authorization: auth } });
+        if (!res.ok && res.status !== 404) {
+          return json({ error: "delete_failed", details: [{ file: id, ok: false, status: res.status }] }, 502);
+        }
+        return json({ ok: true, deleted: 1 });
+      }
+      // Truly not found — return a helpful message.
+      return json(
+        { error: "not_found", message: `No files found for ${id} in ${day}. Files present: ${all.map((f) => f.name).join(", ") || "(none)"}` },
+        404,
+      );
+    }
 
     const results = await Promise.all(
       files.map(async (f) => {

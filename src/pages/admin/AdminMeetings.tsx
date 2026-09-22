@@ -207,8 +207,17 @@ export default function AdminMeetings() {
       body: { op: "delete", day: deleteTarget.day, id: deleteTarget.id },
     });
     setDeleting(false);
+    // supabase.functions.invoke puts non-2xx bodies in `error.context`;
+    // parse the JSON there so we can show the real message.
     if (error || data?.error) {
-      toast({ title: "Delete failed", description: error?.message ?? data?.error, variant: "destructive" });
+      let desc = data?.message ?? data?.error ?? error?.message ?? "Unknown error";
+      if (!data && error?.context) {
+        try {
+          const ctx = typeof error.context === "string" ? JSON.parse(error.context) : error.context;
+          desc = ctx?.message ?? ctx?.error ?? desc;
+        } catch { /* ignore */ }
+      }
+      toast({ title: "Delete failed", description: desc, variant: "destructive" });
       return;
     }
     setRows((prev) => prev.filter((r) => r.id !== deleteTarget.id));
