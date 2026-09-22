@@ -110,6 +110,7 @@ export function PartnerHome({ session }: { session: Session }) {
   const { bento } = useAdminTheme();
   const [partner, setPartner] = useState<Partner | null | undefined>(undefined);
   const [admin, setAdmin] = useState(false);
+  const [viewAs, setViewAs] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[] | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [pipe, setPipe] = useState<{ deals: any[]; leads: any[] } | null>(null);
@@ -154,7 +155,16 @@ export function PartnerHome({ session }: { session: Session }) {
       supabase.from("partners" as never).select("id, name, email, roster_name, call_url").eq("user_id", uid).maybeSingle(),
       supabase.rpc("has_role" as never, { _user_id: uid, _role: "admin" } as never),
     ]);
-    setPartner((p as unknown as Partner) ?? null);
+    // Admin "view as": /partner?as=eli shows exactly that partner's screen, using the same
+    // filters his row rules apply (his calls, his to-dos, the mail sent to him).
+    let asPartner: Partner | null = null;
+    const asRoster = isAdmin ? new URLSearchParams(window.location.search).get("as")?.toLowerCase() : null;
+    if (asRoster && !p) {
+      const { data: ap } = await supabase.from("partners" as never).select("id, name, email, roster_name, call_url").eq("roster_name", asRoster).maybeSingle();
+      asPartner = (ap as unknown as Partner) ?? null;
+    }
+    setViewAs(!!asPartner);
+    setPartner(((p as unknown as Partner) ?? asPartner) ?? null);
     setAdmin(!!isAdmin);
     const [{ data: m }, { data: t }, { data: pl }, { data: ml }] = await Promise.all([
       supabase.from("meeting_recordings" as never).select("id, name, started_at, stopped_at, people, summary")
@@ -162,11 +172,22 @@ export function PartnerHome({ session }: { session: Session }) {
       supabase.from("scout_daily" as never).select("id, title, status, url, action").eq("kind", "call")
         .order("created_at", { ascending: false }).limit(100),
       supabase.rpc("partner_pipeline" as never),
-      supabase.from("partner_mail" as never).select("id, subject, sent_at, to_addrs, cc_addrs, body_text, links, attachments")
-        .order("sent_at", { ascending: false, nullsFirst: false }).limit(300),
+      (() => {
+        let q = supabase.from("partner_mail" as never).select("id, subject, sent_at, to_addrs, cc_addrs, body_text, links, attachments");
+        if (asPartner) q = q.eq("roster" as never, asPartner.roster_name as never);
+        return q.order("sent_at", { ascending: false, nullsFirst: false }).limit(300);
+      })(),
     ]);
-    setMeetings(((m ?? []) as unknown as Meeting[]).filter((x) => x.people?.length || x.summary));
-    setTodos((t ?? []) as unknown as Todo[]);
+    let meets = ((m ?? []) as unknown as Meeting[]).filter((x) => x.people?.length || x.summary);
+    let items = (t ?? []) as unknown as Todo[];
+    if (asPartner) {
+      const r = asPartner.roster_name;
+      meets = meets.filter((x) => x.people?.includes(r));
+      const seen = new Set(meets.map((x) => String(x.id)));
+      items = items.filter((x) => String(x.action?.owner ?? "").toLowerCase() === r || seen.has(String((x.action as any)?.meeting_id ?? "")));
+    }
+    setMeetings(meets);
+    setTodos(items);
     setPipe((pl as any) ?? null);
     setMail((ml ?? []) as unknown as MailRow[]);
   }, [session.user.id]);
@@ -275,9 +296,15 @@ export function PartnerHome({ session }: { session: Session }) {
           <BellButton notifs={notifs} onClick={() => setBellOpen(true)} />
         </div>
         <div className="mx-auto w-full max-w-6xl px-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">
+          {viewAs && partner && (
+            <p className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-sky-500/10 px-4 py-3 text-sm text-sky-200 bento:text-sky-800">
+              <span>Viewing as {partner.name.split(" ")[0]}: this is his screen. (Scout chats shown are yours.)</span>
+              <a href="/partner" className="font-semibold underline-offset-2 hover:underline">Exit</a>
+            </p>
+          )}
           {admin && !partner && (
             <p className="mb-5 rounded-2xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200 bento:text-amber-800">
-              Preview: you're signed in as the admin, so you see everything. Eli sees only his calls and the emails you sent him.
+              Preview: you're signed in as the admin, so you see everything. <a href="/partner?as=eli" className="font-semibold underline">See exactly what Eli sees</a>
             </p>
           )}
 

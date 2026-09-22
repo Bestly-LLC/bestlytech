@@ -65,7 +65,11 @@ export function DocPreview({ file, onClose }: { file: PreviewFile | null; onClos
 
   return (
     <Dialog open={!!file} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex h-[92dvh] w-[min(64rem,96vw)] max-w-none flex-col gap-0 overflow-hidden rounded-2xl border-white/10 bg-[#111114] p-0 text-white sm:rounded-2xl [&>button]:hidden bento:bg-[#fff]">
+      <DialogContent className={cn(
+        "flex max-w-none flex-col gap-0 overflow-hidden rounded-2xl border border-white/10 bg-[#111114] p-0 text-white shadow-2xl sm:rounded-2xl [&>button]:hidden bento:border-black/10 bento:bg-[#fff]",
+        // Pictures get a window sized to the picture; documents get the tall reader.
+        kind === "image" ? "max-h-[90dvh] w-auto min-w-[min(22rem,94vw)] max-w-[min(64rem,94vw)]" : "h-[92dvh] w-[min(64rem,96vw)]",
+      )}>
         <div className="flex items-center gap-2 border-b border-white/[0.08] px-4 py-3">
           <div className="min-w-0 flex-1">
             <DialogTitle className="truncate text-[0.95rem] font-semibold text-white">{file?.name}</DialogTitle>
@@ -77,14 +81,18 @@ export function DocPreview({ file, onClose }: { file: PreviewFile | null; onClos
               <a href={file.url} download={file.name} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/[0.08] px-3.5 text-sm font-medium text-white hover:bg-white/[0.14] bento:bg-[#F3F2EE]"><Download className="h-4 w-4" /> Download</a>
             </>
           )}
-          <button onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-full text-white/60 hover:bg-white/[0.08]"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} aria-label="Close preview" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.08] text-white hover:bg-white/[0.16] bento:bg-black/5 bento:text-black"><X className="h-5 w-5" /></button>
         </div>
 
-        <div className="relative min-h-0 flex-1 overflow-auto bg-black/40 bento:bg-[#F3F2EE]">
+        <div className={cn("relative min-h-0 overflow-auto bg-black/40 bento:bg-[#F3F2EE]", kind !== "image" && "flex-1")}>
           {!file?.url ? <Centered>This file is too large to copy into the portal. Open the original email.</Centered>
             : state === "error" ? <Centered>Couldn't preview this file. Download it instead.</Centered>
             : kind === "pdf" ? <iframe title={file.name} src={file.url} className="h-full w-full bg-white" />
-            : kind === "image" ? <div className="grid min-h-full place-items-center p-4"><img src={file.url} alt={file.name} className="max-h-[80dvh] max-w-full rounded-lg object-contain" /></div>
+            : kind === "image" ? (
+              <button type="button" onClick={onClose} aria-label="Close preview" className="grid w-full cursor-zoom-out place-items-center p-3">
+                <img src={file.url} alt={file.name} className="max-h-[calc(90dvh-5rem)] max-w-full rounded-lg object-contain" />
+              </button>
+            )
             : kind === "text" ? <pre className="whitespace-pre-wrap break-words p-5 font-mono text-[13px] leading-relaxed text-white/85">{text}</pre>
             : kind === "docx" ? <div ref={docxRef} className="docx-host min-h-full bg-[#e9e9ee] [&_.docx-wrapper]:bg-transparent [&_.docx-wrapper]:p-4" />
             : kind === "sheet" ? (
