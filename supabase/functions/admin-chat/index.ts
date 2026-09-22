@@ -18,6 +18,7 @@
 // v7: the call recorder on the Mac mini —
 //   recorder            start / stop / status (agent ~/MeetingRec/agent.py, launchd tech.bestly.meetingrec-agent)
 //   meeting_transcript  read a finished call's transcript for a debrief (meeting_recordings)
+// v8: recorder selftest, and Scout owns notetaker repairs (incident recorder.notetaker)
 // The only things left for Jared are the ones that physically need him: a password, a device in his hand.
 //
 // Stability notes, all of them learned the hard way:
@@ -171,11 +172,13 @@ const TOOLS = [
       "The call recorder on the Mac mini (records the call audio and Jared's mic, then transcribes and names the speakers). " +
       "status: is it idle, recording, or transcribing. start {roster: names of everyone on the call besides Jared, e.g. ['eli','cooper']}: " +
       "starts recording. stop: stops and transcribes (takes a few minutes; the transcript then lands in meeting_recordings). " +
-      "Start and stop only when Jared asked for exactly that in this message - his asking is the yes. New names are fine: the recorder learns their voice.",
+      "Start and stop only when Jared asked for exactly that in this message - his asking is the yes. New names are fine: the recorder learns their voice. " +
+      "selftest: runs the notetaker self-test on the Mac mini (a fake guest joins a throwaway Talk room and the notetaker must record it by name; ~1 min). " +
+      "It first pulls the latest notetaker code from the repo. No yes needed; run it after committing a notetaker fix.",
     input_schema: {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["status", "start", "stop"] },
+        action: { type: "string", enum: ["status", "start", "stop", "selftest"] },
         roster: { type: "array", items: { type: "string" } },
       },
       required: ["action"],
@@ -219,6 +222,11 @@ It runs on his MacBook Air and polls every five minutes while the Mac is awake. 
 # The call recorder on the Mac mini
 ${JSON.stringify(recorder)}
 There is a Record a call button at the top of this chat, so he can also do it himself. When he asks you to record, start it with the recorder tool and the names he gave. When a call is done, the button offers a Debrief.
+
+# When the notetaker breaks (incident recorder.notetaker)
+The notetaker is a headless Chrome that joins Talk calls as "Scout (notetaker)" and records each person on their own track. A Talk update can move the page's buttons or name labels and break it. The Mac mini runs a self-test on every Talk update, every code change and daily, and opens incident recorder.notetaker with diagnostics (the buttons it could see, dialogs, its log) when it fails. While it is broken, recordings still work but names fall back to voice guessing. Fixing it is your job, not Jared's:
+1. Read the incident body. 2. read_file scripts/meetingrec/notetaker/notetaker.js (join section: the strategies list and the device dialog; naming: the WHO selector list). 3. Propose the smallest change that matches what the diagnostics show, in one line. 4. On his yes, commit_files it. 5. Run recorder selftest. It pulls main first; if the fix passes, the incident resolves by itself. If a self-test fails right after a code update, the Mac rolls that update back and blocks it, so a bad fix cannot stick.
+Never edit agent.py or stop.sh this way; the Mac does not pull those.
 
 # Debriefing a call
 Read it with meeting_transcript. Then, in plain text: first the decisions (only what was actually agreed, not ideas floated), then each commitment as "Name: what, by when" (only a deadline if one was said), then open questions. Keep it tight; he can ask for more. Never invent something that was not said. If a speaker name has a ?, work out who it was from the context before you attribute anything to them.
@@ -339,6 +347,20 @@ async function recorderCommand(args: Record<string, any>): Promise<Record<string
   const action = String(args.action ?? "status");
   const now = await recorderStatus();
   if (action === "status") return { ok: true, ...now };
+  if (action === "selftest") {
+    if (now.status !== "idle") return { ok: false, error: `The recorder is ${now.status}; the self-test runs when it is idle.`, ...now };
+    const { data, error } = await db.from("meeting_recorder_commands").insert({ action: "selftest", payload: {}, requested_by: "scout-chat" }).select("id").single();
+    if (error) return { ok: false, error: error.message };
+    const until = Date.now() + 110_000;
+    while (Date.now() < until) {
+      await sleep(4000);
+      const { data: row } = await db.from("meeting_recorder_commands").select("status, result, error").eq("id", data.id).single();
+      if (row && (row.status === "done" || row.status === "failed")) {
+        return { ok: row.status === "done", passed: row.status === "done", result: row.result, error: row.error };
+      }
+    }
+    return { ok: true, status: "still_running", note: "Still running. The result lands in incidents as recorder.notetaker (resolved if it passed)." };
+  }
   if (now.status === "offline") return { ok: false, error: "The Mac mini is not answering (asleep or off), so it cannot record right now.", ...now };
   if (action === "start" && now.status !== "idle") return { ok: false, error: `The recorder is ${now.status}.`, ...now };
   if (action === "stop" && now.status !== "recording") return { ok: false, error: "Nothing is recording.", ...now };

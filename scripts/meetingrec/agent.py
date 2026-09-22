@@ -266,7 +266,7 @@ def sync_code():
         h = hashlib.sha256(new).hexdigest()[:12]
         if h == sha(dest) or h in bad:
             continue
-        tmp = dest + ".incoming"
+        tmp = dest + ".incoming" + os.path.splitext(dest)[1]   # keep the extension: node --check needs .js
         open(tmp, "wb").write(new)
         check = ([NODE, "--check", tmp] if dest.endswith(".js") else ["python3", "-m", "py_compile", tmp])
         if subprocess.run(check, capture_output=True).returncode != 0:
@@ -294,7 +294,21 @@ def rollback():
     heal["updated"] = []
 
 
-def run_selftest(reason):
+selftest_lock = threading.Lock()
+
+
+def run_selftest(reason, quiet=False):
+    """One at a time: if a self-test is already running, wait for it and use its answer."""
+    if not selftest_lock.acquire(blocking=False):
+        with selftest_lock:
+            return (heal["selftest"] or {}).get("status") == "passed"
+    try:
+        return _run_selftest(reason, quiet)
+    finally:
+        selftest_lock.release()
+
+
+def _run_selftest(reason, quiet=False):
     """Fake guest joins a throwaway Talk room; the notetaker must hear it, by name."""
     heal["selftest"] = {"status": "running", "reason": reason, "at": datetime.now(timezone.utc).isoformat()}
     out = f"/tmp/scout-selftest-{int(time.time())}"
@@ -380,12 +394,12 @@ def run_selftest(reason):
         rollback()
         rolled = " The update that caused it was rolled back and blocked."
     heal["selftest"] = {"status": "failed", "reason": reason, "at": datetime.now(timezone.utc).isoformat(), "talk": tv, "error": err}
-    health("notetaker", "problem", "Notetaker can't join Talk calls",
+    health("notetaker", "problem", "Notetaker can't join Talk calls" + (" (test)" if quiet else ""),
            f"Self-test ({reason}) {err}.{rolled} Talk version {tv}. notetaker.js {sha(SYNC['notetaker/notetaker.js'])}.\n"
            "Until it's fixed, recordings fall back to voice matching.\n"
            "To fix: edit scripts/meetingrec/notetaker/notetaker.js in the site repo (the page selectors in the join "
            "section or WHO), commit to main, then run the recorder self-test. The Mac pulls main within 10 minutes.\n"
-           + detail, "warning")
+           + detail, "warning", healed=quiet)
     log("selftest failed", err)
     return False
 
@@ -564,7 +578,7 @@ def handle(cmd):
             return
         def go():
             sync_code()
-            ok = run_selftest("asked for by Scout")
+            ok = run_selftest("asked for by Scout", quiet=bool((cmd.get("payload") or {}).get("quiet")))
             call({"op": "result", "command_id": cid, "ok": ok, "result": heal["selftest"],
                   "error": None if ok else (heal["selftest"] or {}).get("error")})
         threading.Thread(target=go, daemon=True).start()

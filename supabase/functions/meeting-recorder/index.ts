@@ -2,10 +2,13 @@
 //
 // Two callers, two kinds of auth:
 //   admin (the /admin SPA, Scout)  Supabase JWT + has_role('admin')
-//     op: start {roster[]} | stop | state | transcript {id|name} | recent
+//     op: start {roster[]} | stop | selftest | state | transcript {id|name} | recent
 //   agent (~/MeetingRec/agent.py)   header x-recorder-key, checked against
 //                                    meeting_recorder_state.key_sha256
 //     op: poll {state} | result {command_id, ok, result, error} | ingest {...}
+//         | health {key, kind: problem|resolved, severity, title, body, healed}
+//           -> bestly_raise('recorder.<key>'), so the monitor, the bell, ntfy and
+//              Scout's incident list all see recorder trouble the same way.
 //
 // verify_jwt is OFF for the same reason as admin-chat: with it on, the CORS
 // preflight is 401'd by the platform. Auth is done here, for both callers.
@@ -71,7 +74,7 @@ async function state() {
   };
 }
 
-async function queue(action: "start" | "stop", payload: Record<string, unknown>, by: string) {
+async function queue(action: "start" | "stop" | "selftest", payload: Record<string, unknown>, by: string) {
   // Expire anything the agent never picked up, so a stale click can't fire later.
   await db
     .from("meeting_recorder_commands")
@@ -124,6 +127,14 @@ async function asAdmin(req: Request, body: Record<string, any>) {
       if (!s.online) return J({ ok: false, error: "The Mac mini isn't answering, so it can't stop the recording.", state: s });
       if (s.status !== "recording") return J({ ok: false, error: "Nothing is recording.", state: s });
       const q = await queue("stop", {}, "scout");
+      return J({ ...q, state: await state() });
+    }
+
+    case "selftest": {
+      const s = await state();
+      if (!s.online) return J({ ok: false, error: "The Mac mini isn't answering.", state: s });
+      if (s.status !== "idle") return J({ ok: false, error: `The recorder is ${s.status}; the self-test runs when it's idle.`, state: s });
+      const q = await queue("selftest", {}, String(body.by ?? "scout"));
       return J({ ...q, state: await state() });
     }
 
@@ -206,6 +217,23 @@ async function asAgent(key: string, body: Record<string, any>) {
       })
       .eq("id", String(body.command_id ?? ""));
     return J({ ok: true });
+  }
+
+  if (op === "health") {
+    const key = String(body.key ?? "").replace(/[^a-z0-9._-]/gi, "").slice(0, 60);
+    if (!key) return J({ ok: false, error: "key required" }, 400);
+    const kind = body.kind === "resolved" ? "resolved" : "problem";
+    const { data, error } = await db.rpc("bestly_raise", {
+      p_key: `recorder.${key}`,
+      p_kind: kind,
+      p_severity: String(body.severity ?? (kind === "resolved" ? "info" : "warning")),
+      p_title: String(body.title ?? "").slice(0, 200) || null,
+      p_body: body.body ? String(body.body).slice(0, 4000) : null,
+      p_area: "recorder",
+      p_needs_jared: body.needs_jared ? String(body.needs_jared).slice(0, 300) : null,
+      p_healed: !!body.healed,
+    });
+    return error ? J({ ok: false, error: error.message }, 500) : J({ ok: true, result: data });
   }
 
   if (op === "ingest") {
