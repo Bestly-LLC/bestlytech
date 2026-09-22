@@ -13,6 +13,7 @@ import { PanelLeft, Binoculars } from "lucide-react";
 import { askScout, openScout } from "./scoutBus";
 import { useSidebar } from "@/components/ui/sidebar";
 import { ADMIN_NAV_SECTIONS, dashboardItem } from "./AdminSidebar";
+import { openHokuAdmin } from "@/lib/openHokuAdmin";
 
 /** Fired by the ⌘K button in the admin header. */
 export const OPEN_ADMIN_PALETTE_EVENT = "bestly:open-admin-palette";
@@ -78,7 +79,7 @@ export function CommandPalette() {
               <CommandItem
                 key={item.url}
                 value={`${section.label} ${item.title}`}
-                onSelect={() => runCommand(() => navigate(item.url))}
+                onSelect={() => runCommand(() => ("sso" in item && item.sso ? void openHokuAdmin() : navigate(item.url)))}
               >
                 <item.icon className="mr-2 h-4 w-4" />
                 {item.title}

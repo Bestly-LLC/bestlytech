@@ -11,7 +11,7 @@ import {
   Car,
   Mic,
   Handshake,
-  House, Boxes, KeyRound, BookMarked,
+  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -28,9 +28,10 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { AdminMark } from "@/components/AdminMark";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
+import { openHokuAdmin, HOKU_ADMIN_URL } from "@/lib/openHokuAdmin";
 
 type CountKeys =
   | "leads"
@@ -66,7 +67,6 @@ const homeHubItems = [
 ];
 
 const turoItems = [
-  { title: "Turo Watch", url: "/admin/turo", icon: Car },
   { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Car },
 ];
 
@@ -77,8 +77,14 @@ const opsItems = [
 ];
 
 
+// Signs you straight into the HOKU store admin (see lib/openHokuAdmin).
+const hokuItems = [
+  { title: "HOKU admin", url: HOKU_ADMIN_URL, icon: ShoppingBag, sso: true },
+];
+
 export const ADMIN_NAV_SECTIONS = [
   { label: "Work", items: workItems },
+  { label: "HOKU", items: hokuItems },
   { label: "Cookie Yeti", items: cookieYetiItems },
   { label: "Home Hub", items: homeHubItems },
   { label: "Turo", items: turoItems },
@@ -159,7 +165,41 @@ export function AdminSidebar() {
     return currentPath.startsWith(path);
   };
 
-  const renderItem = (item: { title: string; url: string; icon: any; countKey?: CountKeys }) => {
+  const [hokuBusy, setHokuBusy] = useState(false);
+  // Open the tab synchronously (inside the click) so no popup blocker stops it,
+  // then point it at the signed link once it arrives. If minting fails, the tab
+  // still lands on the HOKU admin, where the passkey login works as before.
+  const onHokuClick = async (e: MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    if (hokuBusy) return;
+    setHokuBusy(true);
+    closeMobile();
+    try { await openHokuAdmin(); } finally { setHokuBusy(false); }
+  };
+
+  const renderItem = (item: { title: string; url: string; icon: any; countKey?: CountKeys; sso?: boolean }) => {
+    if (item.sso) {
+      return (
+        <SidebarMenuItem key={item.title}>
+          <SidebarMenuButton asChild tooltip={item.title}>
+            <a
+              href={item.url}
+              onClick={onHokuClick}
+              aria-busy={hokuBusy}
+              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all relative bento:rounded-full bento:py-2.5 text-white/55 hover:text-white hover:bg-white/[0.05] bento:text-white/70"
+            >
+              <item.icon className="h-[1.125rem] w-[1.125rem] shrink-0" />
+              {!collapsed && (
+                <span className="flex-1 flex items-center justify-between">
+                  {hokuBusy ? "Opening\u2026" : item.title}
+                  <ExternalLink className="h-3.5 w-3.5 text-white/35" aria-hidden />
+                </span>
+              )}
+            </a>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      );
+    }
     const active = isActive(item.url);
     const count = item.countKey ? counts[item.countKey] ?? 0 : 0;
     return (
