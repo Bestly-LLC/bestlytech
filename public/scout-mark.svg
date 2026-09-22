@@ -4,11 +4,16 @@
     .f{fill:#0d0d0f}
   </style>
   <rect width="72" height="72" rx="36" fill="#fff"/>
-  <path class="s" d="M12.5 36.5 V20 Q12.5 14.5 18 14.5 H24 Q29.5 14.5 29.5 20 V36.5"/>
-  <path class="s" d="M42.5 36.5 V20 Q42.5 14.5 48 14.5 H54 Q59.5 14.5 59.5 20 V36.5"/>
-  <path class="s" d="M29.5 23 H42.5"/>
-  <circle class="s" cx="21" cy="47" r="13.5"/>
-  <circle class="s" cx="51" cy="47" r="13.5"/>
+  <defs>
+    <clipPath id="il"><circle cx="21" cy="47" r="11.2"/></clipPath>
+    <clipPath id="ir"><circle cx="51" cy="47" r="11.2"/></clipPath>
+  </defs>
+  <!-- one continuous body per side: eyepiece, cone, objective -->
+  <path class="s" d="M16.5 16 H25.5 L30.3 36.94 A13.7 13.7 0 1 1 11.7 36.94 Z"/>
+  <path class="s" d="M46.5 16 H55.5 L60.3 36.94 A13.7 13.7 0 1 1 41.7 36.94 Z"/>
+  <path class="s" d="M29 26 H43"/>
   <circle class="f" cx="21" cy="47" r="5"/>
   <circle class="f" cx="51" cy="47" r="5"/>
+  <g clip-path="url(#il)"><rect class="f" x="8" y="33" width="26" height="5.6"/></g>
+  <g clip-path="url(#ir)"><rect class="f" x="38" y="33" width="26" height="5.6"/></g>
 </svg>
