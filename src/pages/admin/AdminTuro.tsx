@@ -2,13 +2,15 @@
  * /admin/turo — Turo Watch for Blue Steel (Tesla Model 3, vehicle 2522178).
  * Reads turo_runs / turo_day_prices / turo_comps, written by scripts/turo_watch.py.
  *
- * The runner lives on the Mac mini (~/TuroWatch, launchd tech.bestly.turo-watch) but its
- * schedule is OFF: Turo's Cloudflare blocks automated browsers, and we do not work around
- * bot protection. Until there is an allowed way in, a run is a person (or Claude in Jared's
- * own Chrome) and this page shows what the last run saw and proposed.
+ * Runs are done by Claude: two scheduled tasks (7:05am, 7:12pm LA) drive Jared's own Chrome,
+ * where Turo is signed in, and write here. Headless runners are retired (Cloudflare blocks them).
+ * This page is the control panel: pause/resume and a note for the next run (turo_settings),
+ * plan and history, and the breadcrumbs any Claude reads to get back to normal
+ * (bestly_memory area 'turo' via turo_breadcrumbs()).
  */
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Car, CheckCircle2, ExternalLink } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Car, CheckCircle2, ChevronDown, ExternalLink, Pause, Play, Send } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { cn } from "@/lib/utils";
@@ -18,6 +20,8 @@ interface Run {
   comp_n: number | null; ceiling: number | null; days_written: number; days_verified: number; days_blocked: number;
   gates: { gate: string; result: string; detail: string }[] | null; notes: string | null;
 }
+interface Settings { paused: boolean; pause_reason: string | null; note_for_claude: string | null; note_set_at: string | null }
+interface Crumb { key: string; kind: string; title: string; body: string; updated_at: string }
 interface Day { run_id: string; date: string; lead: number | null; floor: number | null; cur: number | null; proposed: number | null; applied: number | null; verified: boolean | null; status: string; gate: string | null; reason: string | null }
 
 const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
@@ -33,19 +37,35 @@ const MODE: Record<string, { label: string; tone: string }> = {
 export default function AdminTuro() {
   const [runs, setRuns] = useState<Run[] | null>(null);
   const [days, setDays] = useState<Day[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [crumbs, setCrumbs] = useState<Crumb[]>([]);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const { data: r } = await supabase.from("turo_runs" as never).select("*").order("ran_at", { ascending: false }).limit(30);
-      const list = (r ?? []) as unknown as Run[];
-      setRuns(list);
-      const withPlan = list.slice(0, 10).map((x) => x.id);
-      if (withPlan.length) {
-        const { data: d } = await supabase.from("turo_day_prices" as never).select("*").in("run_id", withPlan).order("date");
-        setDays((d ?? []) as unknown as Day[]);
-      }
-    })();
+  const load = useCallback(async () => {
+    const [{ data: r }, { data: st }, { data: bc }] = await Promise.all([
+      supabase.from("turo_runs" as never).select("*").order("ran_at", { ascending: false }).limit(30),
+      supabase.from("turo_settings" as never).select("*").eq("id", 1).maybeSingle(),
+      supabase.rpc("turo_breadcrumbs" as never),
+    ]);
+    const list = (r ?? []) as unknown as Run[];
+    setRuns(list);
+    setSettings((st as unknown as Settings) ?? null);
+    setCrumbs(((bc ?? []) as unknown) as Crumb[]);
+    const ids = list.slice(0, 10).map((x) => x.id);
+    if (ids.length) {
+      const { data: d } = await supabase.from("turo_day_prices" as never).select("*").in("run_id", ids).order("date");
+      setDays((d ?? []) as unknown as Day[]);
+    }
   }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const save = async (args: { p_paused?: boolean; p_reason?: string | null; p_note?: string }, msg: string) => {
+    setSaving(true);
+    const { error } = await supabase.rpc("turo_settings_set" as never, args as never);
+    setSaving(false);
+    if (error) toast.error(error.message); else { toast.success(msg); load(); }
+  };
 
   const last = runs?.[0];
   const lastPlanRun = useMemo(() => runs?.find((r) => days.some((d) => d.run_id === r.id && d.proposed != null)), [runs, days]);
@@ -57,22 +77,55 @@ export default function AdminTuro() {
     <div className="mx-auto max-w-3xl space-y-6 pb-8">
       <PageHeader title="Turo Watch" description="Blue Steel · Tesla Model 3 · twice-daily pricing against nearby Model 3s." />
 
-      {/* Status */}
-      <section className={cn(card, "space-y-3 p-5")}>
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300 bento:text-amber-600" />
-          <div className="space-y-1.5 text-[0.95rem] text-white/80">
-            <p className="font-semibold text-white">Automatic runs are paused.</p>
-            <p>Turo's security service blocks automated browsers, including the Mac mini runner. We don't work around that, since it could flag your account.</p>
-            <p className="text-white/60">Until there's an allowed way in, price from the plan below in the Turo app. Your last automatic write was {lastWrite ? when(lastWrite.ran_at) : "never"}.</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <a href="https://turo.com/us/en/trips/calendar" target="_blank" rel="noreferrer" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-white px-4 text-sm font-medium text-black bento:bg-[#111114] bento:text-[#fff]">
-            Open Turo calendar <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        </div>
-      </section>
+      {/* Status + controls */}
+      {(() => {
+        const signedOut = !!last && /401|403|session|signed out|expired/i.test(`${last.notes ?? ""} ${JSON.stringify(last.gates ?? [])}`) && last.mode !== "applied";
+        const stale = hoursSince != null && hoursSince > 14;
+        return (
+          <section className={cn(card, "space-y-4 p-5")}>
+            <div className="flex items-start gap-3">
+              {settings?.paused || signedOut || stale
+                ? <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300 bento:text-amber-600" />
+                : <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300 bento:text-emerald-600" />}
+              <div className="space-y-1.5 text-[0.95rem] text-white/80">
+                <p className="font-semibold text-white">
+                  {settings?.paused ? "Paused: runs compute prices but write nothing." : signedOut ? "Turo is signed out in your Chrome." : stale ? "No run in over 14 hours." : "Running normally."}
+                </p>
+                <p>Claude runs it at 7:05am and 7:12pm in your own Chrome on the Mac mini, then reports here and to your phone.</p>
+                {signedOut && <p className="text-white/60">Fix: open turo.com in your normal Chrome and sign in once. The next run picks it up.</p>}
+                {settings?.paused && settings.pause_reason && <p className="text-white/60">Why: {settings.pause_reason}</p>}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {settings?.paused ? (
+                <button disabled={saving} onClick={() => save({ p_paused: false }, "Resumed")} className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-white px-4 text-sm font-medium text-black bento:bg-[#111114] bento:text-[#fff]"><Play className="h-4 w-4" /> Resume pricing</button>
+              ) : (
+                <button disabled={saving} onClick={() => save({ p_paused: true, p_reason: "Paused from the admin" }, "Paused")} className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-white/[0.08] px-4 text-sm font-medium text-white"><Pause className="h-4 w-4" /> Pause pricing</button>
+              )}
+              <a href="https://turo.com/us/en/trips/calendar" target="_blank" rel="noreferrer" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-white/[0.08] px-4 text-sm font-medium text-white">
+                Open Turo <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </div>
+            <div className="border-t border-white/[0.06] pt-4">
+              <label htmlFor="turo-note" className="text-xs font-semibold uppercase tracking-widest text-white/50">Note for the next run</label>
+              {settings?.note_for_claude ? (
+                <div className="mt-2 flex items-start justify-between gap-3 rounded-xl bg-white/[0.04] p-3 bento:bg-[var(--bento-well)]">
+                  <p className="text-[0.95rem] text-white/85">{settings.note_for_claude}</p>
+                  <button className="shrink-0 text-xs text-white/50 underline" onClick={() => save({ p_note: "" }, "Note cleared")}>Clear</button>
+                </div>
+              ) : (
+                <div className="mt-2 flex gap-2">
+                  <input id="turo-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. hold Saturday at $120, or skip writing this weekend"
+                    className="h-11 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[16px] text-white outline-none placeholder:text-white/35 bento:bg-[var(--bento-well)] bento:border-black/5" />
+                  <button disabled={saving || !note.trim()} onClick={() => { save({ p_note: note }, "Claude will read it next run"); setNote(""); }}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-white px-4 text-sm font-medium text-black disabled:opacity-40 bento:bg-[#111114] bento:text-[#fff]"><Send className="h-4 w-4" /> Save</button>
+                </div>
+              )}
+              <p className="mt-1.5 text-xs text-white/45">Claude reads it at the start of the next run, follows it, then clears it.</p>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Headline numbers */}
       {last && (
@@ -158,6 +211,27 @@ export default function AdminTuro() {
             })}
           </ul>
         )}
+      </section>
+
+      {/* Breadcrumbs */}
+      <section>
+        <h2 className="mb-2.5 px-1 text-xs font-semibold uppercase tracking-widest text-white/55">Breadcrumbs · what Claude reads to get back on track</h2>
+        <ul className={cn(card, "divide-y divide-white/[0.06] overflow-hidden")}>
+          {crumbs.map((c) => (
+            <li key={c.key}>
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 sm:px-5">
+                  <span className="min-w-0">
+                    <span className="block truncate text-[0.95rem] text-white">{c.title}</span>
+                    <span className="text-xs text-white/40">turo/{c.key} · updated {when(c.updated_at)}</span>
+                  </span>
+                  <ChevronDown className="h-4 w-4 shrink-0 text-white/40 transition-transform group-open:rotate-180" />
+                </summary>
+                <pre className="whitespace-pre-wrap px-4 pb-4 font-sans text-sm leading-relaxed text-white/70 sm:px-5">{c.body}</pre>
+              </details>
+            </li>
+          ))}
+        </ul>
       </section>
     </div>
   );
