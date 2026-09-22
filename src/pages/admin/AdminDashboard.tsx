@@ -6,6 +6,7 @@ import { ActionMenu } from "@/components/admin/ActionMenu";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { ActivityFeed } from "@/components/admin/ActivityFeed";
 import { ScoutToday } from "@/components/admin/ScoutToday";
+import { CommandHero } from "@/components/admin/CommandHero";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { pollInterval } from "@/lib/polling";
@@ -604,7 +605,10 @@ export default function AdminDashboard() {
         }
       />
 
-      {/* 0 ─ What Scout prepared for today */}
+      {/* 0 ─ At a glance: join the next meeting, to-dos from calls, quick actions */}
+      <CommandHero />
+
+      {/* 1 ─ What Scout prepared for today */}
       <ScoutToday />
 
       {/* 1 ─ Everything else waiting */}

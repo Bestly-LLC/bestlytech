@@ -10,7 +10,7 @@ Standard library only. Key in ~/PartnerAI/.key (also in Supabase Vault as partne
 import json, os, re, time, traceback, urllib.error, urllib.request
 from datetime import datetime
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 HOME = os.path.expanduser("~/PartnerAI")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co/rest/v1/rpc/"
 ANON = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6"
@@ -67,6 +67,14 @@ def context(job):
         for t in todos:
             lines.append(f"- [{(t.get('owner') or '?').title()}] {t.get('title')}" + (f" (due {t['due']})" if t.get("due") else ""))
         lines.append("")
+    emails = job.get("emails") or []
+    if emails:
+        lines.append("Recent emails Jared sent them (newest first):")
+        for e in emails:
+            files = ", ".join(e.get("files") or [])
+            lines.append(f"- {(e.get('date') or '')[:10]} \"{e.get('subject') or '(no subject)'}\"" + (f" (attached: {files})" if files else ""))
+            if e.get("text"): lines.append("  " + " ".join(e["text"].split())[:400])
+        lines.append("")
     p = job.get("pipeline") or {}
     if p.get("deals") or p.get("leads"):
         lines.append("In-House Cloud pipeline:")
@@ -75,7 +83,7 @@ def context(job):
         lines.append("")
     lines.append(
         "How to answer: short, clear and friendly, like a sharp colleague texting back. Lead with the answer. "
-        "Use the calls, to-dos and pipeline above when they're relevant and say which call a fact came from. "
+        "Use the calls, emails, to-dos and pipeline above when they're relevant and say which call a fact came from. "
         "If something isn't in them, say you don't know rather than guessing, and suggest asking Jared. "
         "Never invent numbers, prices, dates or commitments. You can't send messages, change anything or see "
         "anything beyond what's above; you can draft emails, messages, outlines and ideas for them to use. "

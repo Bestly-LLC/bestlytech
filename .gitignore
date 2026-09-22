@@ -74,3 +74,4 @@ social/comment-scout/*.md
 
 # Local timestamped backups made before edits (not part of the project)
 .backups/
+__pycache__/

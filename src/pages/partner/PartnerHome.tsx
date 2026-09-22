@@ -14,9 +14,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
-  ArrowLeft, ArrowRight, Check, ChevronRight, Download, ExternalLink, FileArchive, FileImage, FileSpreadsheet, FileText,
+  ArrowLeft, ArrowRight, Check, ChevronRight, Eye, ExternalLink, FileArchive, FileImage, FileSpreadsheet, FileText,
   Files as FilesIcon, Home as HomeIcon, Inbox, LayoutGrid, Link2, Loader2, LogOut, Mail, Mic, Paperclip, Presentation,
-  Binoculars, Search, Users, Video,
+  Bell, Binoculars, Plug, Search, Users, Video,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
@@ -26,6 +26,8 @@ import { AdminMark } from "@/components/AdminMark";
 import { PartnerMark } from "@/components/PartnerMark";
 import { cn } from "@/lib/utils";
 import { ART } from "./partnerArt";
+import { DocPreview, type PreviewFile } from "@/components/DocPreview";
+import { BellButton, BellSheet, ConnectClaude, useNextMeeting, usePartnerNotifs, whenLabel, type NextEvent } from "./PartnerExtras";
 import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState } from "./PartnerScout";
 
 /* ───────── types + helpers ───────── */
@@ -89,11 +91,9 @@ function fileIcon(a: Att) {
   return FileText;
 }
 
-async function openFile(a: Att) {
-  if (!a.path) return;
-  const w = window.open("", "_blank");
-  const { data } = await supabase.storage.from("partner-files").createSignedUrl(a.path, 300, { download: false });
-  if (data?.signedUrl) { if (w) w.location.href = data.signedUrl; else window.location.href = data.signedUrl; } else w?.close();
+/** Open an attachment in the in-site previewer (PartnerHome listens for this). */
+function openFile(a: Att) {
+  window.dispatchEvent(new CustomEvent<Att>("partner-preview", { detail: a }));
 }
 
 /** Plain text with clickable links. */
@@ -119,6 +119,21 @@ export function PartnerHome({ session }: { session: Session }) {
   const [openCall, setOpenCall] = useState<Meeting | null>(null);
   const [openMail, setOpenMail] = useState<MailRow | null>(null);
   const [askDraft, setAskDraft] = useState<string | undefined>();
+  const [preview, setPreview] = useState<PreviewFile | null>(null);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const notifs = usePartnerNotifs();
+  const { next: nextMtg } = useNextMeeting();
+  useEffect(() => {
+    const on = async (e: Event) => {
+      const a = (e as CustomEvent<Att>).detail;
+      if (!a.path) { setPreview({ name: a.name, type: a.type, url: null }); return; }
+      const { data } = await supabase.storage.from("partner-files").createSignedUrl(a.path, 1800);
+      setPreview({ name: a.name, type: a.type, url: data?.signedUrl ?? null });
+    };
+    window.addEventListener("partner-preview", on);
+    return () => window.removeEventListener("partner-preview", on);
+  }, []);
 
   const setTab = useCallback((t: Tab) => {
     setTabState(t); setOpenCall(null); setOpenMail(null);
@@ -167,6 +182,8 @@ export function PartnerHome({ session }: { session: Session }) {
   };
   const signOut = () => supabase.auth.signOut();
   const callUrl = partner?.call_url ?? "https://cloud.bestly.tech/call/sm33w3fu";
+  // The next meeting on the calendar with Eli, if there is one; else his standing room.
+  const joinUrl = nextMtg?.join_url ?? callUrl;
   const first = (partner?.name ?? "Jared").split(" ")[0];
   const files = useMemo(() => (mail ?? []).flatMap((m) => m.attachments.map((a) => ({ ...a, mail: m }))), [mail]);
   const docs = useMemo(() => {
@@ -215,10 +232,20 @@ export function PartnerHome({ session }: { session: Session }) {
             </button>
           ))}
         </nav>
+        <div className="mt-6 space-y-1 border-t border-white/[0.06] pt-4 bento:border-black/5">
+          <button onClick={() => setBellOpen(true)} className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
+            <Bell className="h-[18px] w-[18px]" /> Studio
+            {notifs.unread > 0 && <span className="ml-auto rounded-full bg-red-500 px-2 text-xs font-semibold text-[#fff]">{notifs.unread}</span>}
+          </button>
+          <button onClick={() => setConnectOpen(true)} className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
+            <Plug className="h-[18px] w-[18px]" /> Connect my Claude
+          </button>
+        </div>
         <div className="mt-auto space-y-2">
-          <a href={callUrl} target="_blank" rel="noreferrer"
-            className="flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-[0.95rem] font-semibold text-[#fff] transition hover:bg-emerald-400 active:scale-[0.98]">
-            <Video className="h-[18px] w-[18px]" /> Join our call
+          <a href={joinUrl} target="_blank" rel="noreferrer"
+            className="flex min-h-11 flex-col items-center justify-center rounded-xl bg-emerald-500 px-3 py-2 text-center text-[0.95rem] font-semibold text-[#fff] transition hover:bg-emerald-400 active:scale-[0.98]">
+            <span className="flex items-center gap-2"><Video className="h-[18px] w-[18px]" /> {nextMtg ? "Join next meeting" : "Join our call"}</span>
+            {nextMtg && <span className="text-xs font-medium opacity-85">{whenLabel(nextMtg.start)}</span>}
           </a>
           <button onClick={signOut} className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-sm text-white/50 hover:bg-white/[0.05] hover:text-white">
             <LogOut className="h-4 w-4" /> Sign out
@@ -233,7 +260,8 @@ export function PartnerHome({ session }: { session: Session }) {
             <AdminMark className="h-7 w-7" /> Bestly <span className="text-white/45">· Partner</span>
           </span>
           <div className="flex items-center gap-1">
-            <a href={callUrl} target="_blank" rel="noreferrer" aria-label="Join our call"
+            <BellButton notifs={notifs} onClick={() => setBellOpen(true)} />
+            <a href={joinUrl} target="_blank" rel="noreferrer" aria-label={nextMtg ? `Join next meeting, ${whenLabel(nextMtg.start)}` : "Join our call"}
               className="inline-flex h-9 items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 text-sm font-semibold text-[#fff] active:scale-95">
               <Video className="h-4 w-4" /> Call
             </a>
@@ -243,6 +271,9 @@ export function PartnerHome({ session }: { session: Session }) {
           </div>
         </header>
 
+        <div className="fixed right-6 top-5 z-20 hidden rounded-full bg-black/40 backdrop-blur lg:block bento:bg-[#fff]/80">
+          <BellButton notifs={notifs} onClick={() => setBellOpen(true)} />
+        </div>
         <div className="mx-auto w-full max-w-6xl px-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">
           {admin && !partner && (
             <p className="mb-5 rounded-2xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200 bento:text-amber-800">
@@ -251,7 +282,7 @@ export function PartnerHome({ session }: { session: Session }) {
           )}
 
           {tab === "home" && (
-            <HomeTab first={first} callUrl={callUrl} mine={mine} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
+            <HomeTab first={first} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} mine={mine} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
               files={files} pipe={pipe} go={setTab} openCall={(m) => { setTab("calls"); setOpenCall(m); }}
               openMail={(m) => { setTab("mail"); setOpenMail(m); }} ask={askScout} scout={scout} />
           )}
@@ -262,6 +293,9 @@ export function PartnerHome({ session }: { session: Session }) {
         </div>
       </main>
 
+      <DocPreview file={preview} onClose={() => setPreview(null)} />
+      <ConnectClaude open={connectOpen} onOpenChange={setConnectOpen} />
+      <BellSheet notifs={notifs} open={bellOpen} onOpenChange={setBellOpen} />
       {tab !== "scout" && <ScoutAlert scout={scout} open={() => setTab("scout")} />}
 
       {/* Mobile tab bar */}
@@ -285,11 +319,11 @@ export function PartnerHome({ session }: { session: Session }) {
 /* ───────── Home ───────── */
 
 function HomeTab(props: {
-  first: string; callUrl: string; mine: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
+  first: string; callUrl: string; joinUrl: string; nextMtg: NextEvent | null; studioUnread: number; onConnect: () => void; mine: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
   meetings: Meeting[] | null; mail: MailRow[] | null; files: (Att & { mail: MailRow })[]; pipe: { deals: any[]; leads: any[] } | null;
   go: (t: Tab) => void; openCall: (m: Meeting) => void; openMail: (m: MailRow) => void; ask: (q?: string) => void; scout: ScoutState;
 }) {
-  const { first, callUrl, mine, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
+  const { first, callUrl, joinUrl, nextMtg, studioUnread, onConnect, mine, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
   const [q, setQ] = useState("");
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", ...PT });
   const deals = pipe?.deals.length ?? 0;
@@ -319,9 +353,13 @@ function HomeTab(props: {
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
-            <a href={callUrl} target="_blank" rel="noreferrer"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 text-[1rem] font-semibold text-[#fff] shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)] transition hover:bg-emerald-400 active:scale-[0.98]">
-              <Video className="h-5 w-5" /> Join our call
+            <a href={joinUrl} target="_blank" rel="noreferrer"
+              className="inline-flex min-h-12 items-center justify-center gap-2.5 rounded-2xl bg-emerald-500 px-5 py-2 text-[#fff] shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)] transition hover:bg-emerald-400 active:scale-[0.98]">
+              <Video className="h-5 w-5 shrink-0" />
+              <span className="text-left leading-tight">
+                <span className="block text-[1rem] font-semibold">{nextMtg ? "Join next meeting" : "Join our call"}</span>
+                {nextMtg && <span className="block text-xs font-medium opacity-90">{whenLabel(nextMtg.start)} · {nextMtg.title}</span>}
+              </span>
             </a>
             <button onClick={() => ask()}
               className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/[0.09] px-5 text-[1rem] font-semibold text-white transition hover:bg-white/[0.14] active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
@@ -466,18 +504,28 @@ function HomeTab(props: {
         <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-white/45">Shortcuts</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Tile href={callUrl} art="call" label="Our call" sub="Jump into the room" tone="from-emerald-400 to-green-600 text-green-700" />
-          {SHORTCUTS.map((s) => <Tile key={s.id} href={s.href} art={s.id} label={s.label} sub={s.sub} tone={s.tone} />)}
+          {SHORTCUTS.map((s) => <Tile key={s.id} href={s.href} art={s.id} label={s.label} sub={s.sub} tone={s.tone} badge={s.id === "studio" ? studioUnread : 0} />)}
+          <button onClick={onConnect}
+            className="group relative flex aspect-[5/4] flex-col justify-between overflow-hidden rounded-[1.4rem] bg-gradient-to-br from-orange-400 to-amber-600 p-4 text-left text-orange-700 shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 active:scale-[0.98]">
+            <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15" />
+            <span className="relative transition group-hover:scale-105">{ART.claude}</span>
+            <span className="relative">
+              <span className="block text-[0.975rem] font-semibold leading-tight text-[#fff]">Connect my Claude</span>
+              <span className="block text-xs text-[#fff] opacity-80">Use this portal from Claude</span>
+            </span>
+          </button>
         </div>
       </section>
     </div>
   );
 }
 
-function Tile({ href, art, label, sub, tone }: { href: string; art: string; label: string; sub: string; tone: string }) {
+function Tile({ href, art, label, sub, tone, badge = 0 }: { href: string; art: string; label: string; sub: string; tone: string; badge?: number }) {
   return (
     <a href={href} target="_blank" rel="noreferrer"
       className={cn("group relative flex aspect-[5/4] flex-col justify-between overflow-hidden rounded-[1.4rem] bg-gradient-to-br p-4 shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-14px_rgba(0,0,0,0.7)] active:scale-[0.98]", tone)}>
       <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15" />
+      {badge > 0 && <span className="absolute right-3 top-3 min-w-[22px] rounded-full bg-red-500 px-1.5 text-center text-xs font-bold leading-[22px] text-[#fff] shadow">{badge}</span>}
       <span className="relative transition group-hover:scale-105">{ART[art]}</span>
       <span className="relative">
         <span className="block text-[0.975rem] font-semibold leading-tight text-[#fff]">{label}</span>
@@ -505,14 +553,14 @@ function FileRow({ a }: { a: Att & { mail?: MailRow } }) {
   const Icon = fileIcon(a);
   return (
     <li>
-      <button onClick={() => openFile(a)} disabled={!a.path}
-        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-white/[0.05] disabled:opacity-60">
+      <button onClick={() => openFile(a)}
+        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-white/[0.05]">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.07] bento:bg-[#F3F2EE]"><Icon className="h-[18px] w-[18px] text-white/70" /></span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{a.name}</span>
           <span className="block text-xs text-white/45">{a.skipped ? "Too large to copy here, see the email" : size(a.size)}{a.mail ? ` · ${day(a.mail.sent_at)}` : ""}</span>
         </span>
-        {a.path && <Download className="h-4 w-4 shrink-0 text-white/35" />}
+        {a.path && <Eye className="h-4 w-4 shrink-0 text-white/35" />}
       </button>
     </li>
   );
@@ -711,7 +759,7 @@ function FilesTab({ files, docs, openMail }: { files: (Att & { mail: MailRow })[
             const Icon = fileIcon(a);
             return (
               <div key={i} className={cn(card, "flex flex-col p-4")}>
-                <button onClick={() => openFile(a)} disabled={!a.path} className="flex items-start gap-3 text-left disabled:opacity-60">
+                <button onClick={() => openFile(a)} className="flex items-start gap-3 text-left">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/[0.07] bento:bg-[#F3F2EE]"><Icon className="h-5 w-5 text-white/75" /></span>
                   <span className="min-w-0">
                     <span className="line-clamp-2 break-words text-[0.95rem] font-medium">{a.name}</span>

@@ -71,6 +71,17 @@ export const ART: Record<string, ReactNode> = {
       <path d="M14 39h18" stroke="currentColor" strokeWidth="3" strokeOpacity=".35" />
     </Svg>
   ),
+  // Connect my Claude: a plug meeting a socket, with a spark
+  claude: (
+    <Svg>
+      <rect x="8" y="24" width="22" height="18" rx="6" fill={W} />
+      <path d="M30 29h7M30 37h7" stroke={W} strokeWidth="4" />
+      <rect x="37" y="22" width="19" height="22" rx="6" fill={W} fillOpacity=".6" />
+      <path d="M14 42v8M24 42v8" stroke={W} strokeWidth="4" />
+      <path d="M47 8l2.2 5.8L55 16l-5.8 2.2L47 24l-2.2-5.8L39 16l5.8-2.2z" fill={W} />
+      <circle cx="19" cy="33" r="3" fill="currentColor" />
+    </Svg>
+  ),
   // Mail (used for empty states)
   mail: (
     <Svg>
