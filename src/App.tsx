@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
+import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -104,7 +105,9 @@ function TabRedirect({ to, tab }: { to: string; tab: string }) {
 
 const queryClient = new QueryClient();
 
-const App = () => (
+const App = () => {
+  useAppUpdate();
+  return (
   <HelmetProvider>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -223,6 +226,7 @@ const App = () => (
       </TooltipProvider>
     </QueryClientProvider>
   </HelmetProvider>
-);
+  );
+};
 
 export default App;
