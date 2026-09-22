@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 import { AdminMark } from "@/components/AdminMark";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -55,6 +56,20 @@ type Clip = {
   created_at: string;
   done_at: string | null;
 };
+
+/**
+ * The same "in progress" treatment Studio uses on a row Spark is working on:
+ * grey slashes behind it, moving slowly, so it reads as busy from across the room.
+ */
+const HATCH_CSS = `
+.clip-busy {
+  background-image: repeating-linear-gradient(-45deg, transparent 0 9px, rgba(255,255,255,0.07) 9px 12px);
+  background-size: 34px 34px;
+  animation: clip-hatch 2.4s linear infinite;
+}
+@keyframes clip-hatch { to { background-position: 34px 0 } }
+@media (prefers-reduced-motion: reduce) { .clip-busy { animation-duration: 9s } }
+`;
 
 const AUDIO_EXT = new Set(["m4a", "mp4", "mp3", "wav", "aac", "caf", "amr", "ogg", "opus", "flac", "aiff"]);
 
@@ -137,7 +152,12 @@ function ClipCard({
   const dur = fmtSecs(clip.seconds);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:p-5 space-y-4">
+    <div
+      className={cn(
+        "rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:p-5 space-y-4",
+        (clip.status === "new" || clip.status === "working") && "clip-busy",
+      )}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-white font-medium leading-snug break-words">{title}</h3>
@@ -360,6 +380,7 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
         void upload(Array.from(e.dataTransfer.files));
       }}
     >
+      <style>{HATCH_CSS}</style>
       {!embedded && <AdminMark />}
       <PageHeader
         embedded={embedded}
@@ -397,11 +418,18 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
         }}
       />
 
-      {!!uploading.length && (
-        <div className="flex items-center gap-2 text-sm text-white/60">
-          <Loader2 className="h-4 w-4 animate-spin" /> Uploading {uploading.join(", ")}
+      {uploading.map((name) => (
+        <div key={name} className="clip-busy rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-white font-medium">{name}</p>
+              <p className="mt-1 text-xs text-white/45">Uploading</p>
+            </div>
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-white/50" />
+          </div>
+          <div className="mt-4 h-10 rounded-lg bg-white/[0.04]" />
         </div>
-      )}
+      ))}
 
       {clips === null ? (
         <div className="space-y-3">
