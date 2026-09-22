@@ -1,81 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <style>
+    .am-st{fill:none;stroke:#0d0d0f;stroke-width:5.5;stroke-linecap:round;stroke-linejoin:round}
+    .am-fl{fill:#0d0d0f}
+  </style>
+  <rect width="512" height="512" rx="256" fill="#ffffff"/>
   <defs>
-    <linearGradient id="bg" x1="0.2" y1="0" x2="0.8" y2="1">
-      <stop offset="0" stop-color="#31796C"/><stop offset="1" stop-color="#143C37"/>
-    </linearGradient>
-    <linearGradient id="barrel" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#E9A961"/><stop offset="0.28" stop-color="#FFE0B4"/>
-      <stop offset="0.72" stop-color="#FBCD93"/><stop offset="1" stop-color="#D9924D"/>
-    </linearGradient>
-    <linearGradient id="cap" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#C87F3F"/><stop offset="0.35" stop-color="#F2B877"/>
-      <stop offset="1" stop-color="#B96F33"/>
-    </linearGradient>
-    <radialGradient id="lens" cx="0.35" cy="0.3" r="0.85">
-      <stop offset="0" stop-color="#F4FBFF"/><stop offset="0.35" stop-color="#9FDCF7"/>
-      <stop offset="0.75" stop-color="#3E9AD0"/><stop offset="1" stop-color="#1D5C8A"/>
-    </radialGradient>
-    <linearGradient id="strapG" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#8FD3C7"/><stop offset="1" stop-color="#4EA396"/>
-    </linearGradient>
-    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#06211E" flood-opacity="0.45"/>
-    </filter>
+    <mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+      <rect width="72" height="72" fill="#fff"/>
+      <circle cx="19" cy="44" r="10.3"/>
+      <circle cx="53" cy="44" r="10.3"/>
+    </mask>
+    <clipPath id="cl"><circle cx="19" cy="44" r="10.7"/></clipPath>
+    <clipPath id="cr"><circle cx="53" cy="44" r="10.7"/></clipPath>
   </defs>
-
-  <rect width="512" height="512" rx="120" fill="url(#bg)"/>
-  <circle cx="256" cy="286" r="196" fill="#ffffff" opacity="0.05"/>
-
-  <g filter="url(#soft)">
-    <!-- eyepieces (top, narrower) -->
-    <rect x="124" y="160" width="96" height="60" rx="26" fill="url(#cap)"/>
-    <rect x="292" y="160" width="96" height="60" rx="26" fill="url(#cap)"/>
-
-    <!-- barrels, flaring wider toward the lenses -->
-    <path d="M132 198 h80 a18 18 0 0 1 18 14 l16 86 a72 72 0 0 1 -150 0 l16 -86 a18 18 0 0 1 18 -14 z" fill="url(#barrel)"/>
-    <path d="M300 198 h80 a18 18 0 0 1 18 14 l16 86 a72 72 0 0 1 -150 0 l16 -86 a18 18 0 0 1 18 -14 z" fill="url(#barrel)"/>
-
-    <g fill="#B87D3C" opacity="0.35">
-      <rect x="132" y="216" width="80" height="10" rx="5"/>
-      <rect x="300" y="216" width="80" height="10" rx="5"/>
+  <g transform="translate(56 48) scale(5.55)">
+    <g mask="url(#m)">
+      <path class="am-st" d="M9 37L13.5 21Q14 18 17 18H21Q24 18 24.5 21L29 37M43 37L47.5 21Q48 18 51 18H55Q58 18 58.5 21L63 37"/>
+      <path class="am-st" d="M25.5 27H46.5M30 42H42"/>
     </g>
-
-    <!-- centre hinge + focus wheel -->
-    <rect x="216" y="214" width="80" height="112" rx="26" fill="url(#cap)"/>
-    <g>
-      <rect x="230" y="236" width="52" height="66" rx="20" fill="#9B5C26"/>
-      <g stroke="#E8A863" stroke-width="7" stroke-linecap="round">
-        <path d="M238 254 h36"/><path d="M238 272 h36"/><path d="M238 290 h36"/>
-      </g>
-    </g>
-
-    <!-- lens housings -->
-    <circle cx="164" cy="312" r="72" fill="url(#barrel)"/>
-    <circle cx="348" cy="312" r="72" fill="url(#barrel)"/>
-    <circle cx="164" cy="312" r="60" fill="#12403A"/>
-    <circle cx="348" cy="312" r="60" fill="#12403A"/>
-    <circle cx="164" cy="312" r="50" fill="url(#lens)"/>
-    <circle cx="348" cy="312" r="50" fill="url(#lens)"/>
-
-    <!-- catchlights, up and to the left: reads as looking happy -->
-    <circle cx="144" cy="292" r="17" fill="#fff" opacity="0.95"/>
-    <circle cx="328" cy="292" r="17" fill="#fff" opacity="0.95"/>
-    <circle cx="182" cy="334" r="8.5" fill="#fff" opacity="0.6"/>
-    <circle cx="366" cy="334" r="8.5" fill="#fff" opacity="0.6"/>
-
-    <!-- top rim light so the barrels read round, not flat -->
-    <g stroke="#FFF3DF" stroke-width="9" stroke-linecap="round" fill="none" opacity="0.55">
-      <path d="M146 214 q22 -8 44 0"/>
-      <path d="M314 214 q22 -8 44 0"/>
-    </g>
+    <circle class="am-st" cx="19" cy="44" r="13"/>
+    <circle class="am-st" cx="53" cy="44" r="13"/>
+    <circle class="am-fl" cx="19" cy="44" r="4.8"/>
+    <circle class="am-fl" cx="53" cy="44" r="4.8"/>
+    <g clip-path="url(#cl)"><rect class="am-fl" x="0" y="-2" width="40" height="32"/></g>
+    <g clip-path="url(#cr)"><rect class="am-fl" x="32" y="-2" width="40" height="32"/></g>
   </g>
-
-  <!-- happy brows sitting just above the eyepieces -->
-  <g stroke="#CFEFE6" stroke-width="18" stroke-linecap="round" fill="none">
-    <path d="M126 136 q50 -32 100 -6"/>
-    <path d="M286 130 q50 -26 100 6"/>
-  </g>
-
-  <!-- smile, close enough to belong to the face -->
-  <path d="M212 412 q44 36 88 0" stroke="#CFEFE6" stroke-width="17" stroke-linecap="round" fill="none"/>
 </svg>
