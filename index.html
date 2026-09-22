@@ -70,6 +70,9 @@
       @keyframes am-look{0%,8%{transform:translate(0,0)}14%{transform:translate(0,1.5px)}22%,42%{transform:translate(-5.4px,3px)}52%,72%{transform:translate(5.4px,3px)}82%,100%{transform:translate(0,0)}}
       @keyframes am-lid{0%,6%{transform:translateY(-13px) rotate(0)}14%,18%{transform:translateY(-2.5px) rotate(0)}24%,42%{transform:translateY(-.8px) rotate(-9deg)}52%{transform:translateY(-2.5px) rotate(0)}58%,72%{transform:translateY(-.8px) rotate(9deg)}82%{transform:translateY(-15px) rotate(0)}87%{transform:translateY(-13px) rotate(0)}91%{transform:translateY(14px) rotate(0)}95%,100%{transform:translateY(-13px) rotate(0)}}
       .am-still .am-look,.am-still .am-lidL,.am-still .am-lidR{animation:none}
+      /* Staring at the cursor (AdminMark watchCursor): JS sets the transforms, eased so the eyes glide. */
+      .am-watching .am-look,.am-watching .am-lidL,.am-watching .am-lidR{animation:none;transition:transform .18s cubic-bezier(.2,.8,.2,1)}
+      @media (prefers-reduced-motion:reduce){.am-watching .am-look,.am-watching .am-lidL,.am-watching .am-lidR{transition:none}}
       .am-still .am-lidL,.am-still .am-lidR{transform:translateY(-13px)}
       @media (prefers-reduced-motion:reduce){.am-look,.am-lidL,.am-lidR{animation:none}.am-lidL,.am-lidR{transform:translateY(-.8px) rotate(-9deg)}.am-look{transform:translate(-5.4px,3px)}}
       @keyframes boot-breathe{0%,100%{opacity:.55;transform:scale(.96)}50%{opacity:1;transform:scale(1)}}

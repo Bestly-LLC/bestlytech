@@ -245,7 +245,7 @@ export function AdminSidebar() {
           aria-label="Bestly Admin home"
           className={cn("flex items-center gap-2.5 rounded-lg py-1.5", collapsed ? "justify-center px-0" : "px-2")}
         >
-          <AdminMark className={cn("shrink-0", collapsed ? "h-7 w-7" : "h-8 w-8")} />
+          <AdminMark watchCursor className={cn("shrink-0", collapsed ? "h-7 w-7" : "h-8 w-8")} />
           {!collapsed && <span className="text-[0.9375rem] font-semibold tracking-tight text-white">Bestly Admin</span>}
         </Link>
       </SidebarHeader>
