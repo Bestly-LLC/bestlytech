@@ -39,6 +39,8 @@
 //    at 110s, and when time or steps run out Scout answers with what it has (no tools) instead of
 //    dying. History is the LAST 30 messages (it used to be the first 40, so long threads never saw
 //    the newest ask and kept redoing old work until they timed out).
+//  - v11: commit_files takes edits ({path, old, new}); a tool call cut off at the output limit
+//    is refused instead of run half-empty (it used to arrive as "no files given", 9 times).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -154,7 +156,9 @@ const TOOLS = [
   {
     name: "commit_files",
     description:
-      "Commit whole files to main and watch the deploy through. Send the COMPLETE new contents of each file, never a diff. " +
+      "Commit changes to main and watch the deploy through. PREFER edits: a list of {path, old, new} where old is an exact, unique snippet of the current file " +
+      "(read it first) and new replaces it; several edits per file are fine. Use files (the COMPLETE contents) only for new or very small files - " +
+      "a whole large file will not fit in one reply and gets cut off. " +
       "On a green build it reports the site is live; on a failed build it AUTOMATICALLY REVERTS the files and says so, " +
       "so main is never left broken. Requires confirmed:true after Jared has said yes.",
     input_schema: {
@@ -162,10 +166,11 @@ const TOOLS = [
       properties: {
         repo: { type: "string", enum: ["site", "hoku"] },
         message: { type: "string" },
+        edits: { type: "array", items: { type: "object", properties: { path: { type: "string" }, old: { type: "string" }, new: { type: "string" } }, required: ["path", "old", "new"] } },
         files: { type: "array", items: { type: "object", properties: { path: { type: "string" }, content: { type: "string" } }, required: ["path", "content"] } },
         confirmed: { type: "boolean" },
       },
-      required: ["message", "files", "confirmed"],
+      required: ["message", "confirmed"],
     },
   },
   {
@@ -311,7 +316,7 @@ Only hand Jared something when it physically needs him: typing a password, a dev
 Known one: accepting the Xcode licence needs sudo on his Mac, which needs his password - Apple does not allow it any other way. That is the only true blocker for the Cookie Yeti Mac and iOS builds.
 
 # How to change code
-Read the file first, every time. Keep the change small. Send the complete new file. Never put a key, token or password into a file. When a commit comes back reverted, say so plainly, say what the build complained about, and work out the actual fix - never resend the same thing hoping for a different build.
+Read the file first, every time. Keep the change small. Use commit_files edits (exact old snippet -> new), not whole files; a large file does not fit in one reply. Never put a key, token or password into a file. When a commit comes back reverted, say so plainly, say what the build complained about, and work out the actual fix - never resend the same thing hoping for a different build.
 
 # How to behave
 - Lead with the answer. He has ADHD: no preamble, no recap, no "I'd be happy to". Under 70 words unless he asked for detail (a debrief may run longer, but stays tight).
@@ -567,14 +572,36 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
     }
     case "commit_files": {
       if (!args.confirmed) { out = { ok: false, error: "not_confirmed", hint: "Ask him first, then call again." }; break; }
-      const files = Array.isArray(args.files) ? args.files : [];
-      if (!files.length) { out = { ok: false, error: "no files given" }; break; }
+      const files: { path: string; content: string }[] = Array.isArray(args.files) ? [...args.files] : [];
+      const edits: { path: string; old: string; new: string }[] = Array.isArray(args.edits) ? args.edits : [];
+      if (!files.length && !edits.length) {
+        out = { ok: false, error: "no files or edits given", hint: "If you sent a whole large file it was cut off at your output limit. Send edits: small {path, old, new} snippets." };
+        break;
+      }
 
       const before: { path: string; content: string | null }[] = [];
-      for (const f of files) {
-        const g = await gitCall({ action: "get", repo, path: f.path });
-        before.push({ path: f.path, content: (g as any).ok === false ? null : ((g as any).content ?? null) });
+      const current = async (path: string) => {
+        const had = before.find((b) => b.path === path);
+        if (had) return had.content;
+        const g = await gitCall({ action: "get", repo, path });
+        const content = (g as any).ok === false ? null : ((g as any).content ?? null);
+        before.push({ path, content });
+        return content;
+      };
+      for (const f of files) await current(f.path);
+
+      // Edits apply to the file as it is on main (or to a full file sent in the same call).
+      let editErr = "";
+      for (const e of edits) {
+        const inFiles = files.find((f) => f.path === e.path);
+        const base = inFiles ? inFiles.content : await current(e.path);
+        if (base == null) { editErr = `${e.path} does not exist; send it in files instead`; break; }
+        const n = base.split(String(e.old)).length - 1;
+        if (n !== 1) { editErr = `${e.path}: old snippet found ${n} times (must be exactly once). Read the file again and quote a longer, exact snippet.`; break; }
+        const next = base.replace(String(e.old), () => String(e.new));
+        if (inFiles) inFiles.content = next; else files.push({ path: e.path, content: next });
       }
+      if (editErr) { out = { ok: false, error: editErr }; break; }
 
       const res = await gitCall({ action: "commit", repo, message: String(args.message ?? "update"), files });
       if ((res as any).ok === false) { out = res; break; }
@@ -650,7 +677,7 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
-        model: MODEL, max_tokens: opts.noTools ? 1500 : 4000, system, tools: TOOLS, messages,
+        model: MODEL, max_tokens: opts.noTools ? 1500 : 8000, system, tools: TOOLS, messages,
         ...(opts.noTools ? { tool_choice: { type: "none" } } : {}),
       }),
       signal: opts.timeoutMs ? AbortSignal.timeout(Math.max(3000, opts.timeoutMs)) : undefined,
@@ -773,6 +800,12 @@ Deno.serve(async (req) => {
       for (const c of calls) {
         used.push(c.name);
         let out: Record<string, unknown>;
+        if (res.stop_reason === "max_tokens" && c === calls[calls.length - 1]) {
+          // The reply ran out of room mid tool call, so its input is incomplete. Never run a half call.
+          out = { ok: false, error: "cut_off", hint: "This call was cut off at your output limit, so it was not run. Send much smaller pieces (commit_files edits, not whole files)." };
+          results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out) });
+          continue;
+        }
         try { out = await runTool(c.name, c.input ?? {}, threadId); }
         catch (e) { out = { ok: false, error: `tool crashed: ${(e as Error).message}` }; }
         results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out).slice(0, RESULT_CAP[c.name] ?? 20000) });
