@@ -9,7 +9,7 @@
  * The runbook Claude follows lives in bestly_private_memory area 'turo' (kept off this page on purpose).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Car, CheckCircle2, ExternalLink, Pause, Play, Send } from "lucide-react";
+import { AlertTriangle, Navigation, CheckCircle2, ExternalLink, Pause, Play, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -177,7 +177,7 @@ export default function AdminTuro() {
               return (
                 <li key={r.id} className="px-4 py-3 sm:px-5">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-2 text-[0.95rem] text-white"><Car className="h-4 w-4 text-white/40" /> {when(r.ran_at)}</span>
+                    <span className="flex items-center gap-2 text-[0.95rem] text-white"><Navigation className="h-4 w-4 text-white/40" /> {when(r.ran_at)}</span>
                     <span className={cn("text-xs font-semibold", MODE[r.mode]?.tone ?? "text-white/60")}>{MODE[r.mode]?.label ?? r.mode}</span>
                   </div>
                   <p className="mt-1 text-xs text-white/50">
