@@ -66,6 +66,7 @@ const homeHubItems = [
 ];
 
 const turoItems = [
+  { title: "Turo Watch", url: "/admin/turo", icon: Car },
   { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Car },
 ];
 

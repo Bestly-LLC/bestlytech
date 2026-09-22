@@ -75,6 +75,7 @@ const CookieYetiAnalytics = lazy(() => import("./pages/admin/CookieYetiAnalytics
 const AdminContacts = lazy(() => import("./pages/admin/AdminContacts"));
 const AdminMeetings = lazy(() => import("./pages/admin/AdminMeetings"));
 const AdminPartners = lazy(() => import("./pages/admin/AdminPartners"));
+const AdminTuro = lazy(() => import("./pages/admin/AdminTuro"));
 const PartnerPortal = lazy(() => import("./pages/partner/PartnerPortal"));
 const PartnerWelcome = lazy(() => import("./pages/partner/PartnerPortal").then((m) => ({ default: m.PartnerWelcome })));
 const AdminWaitlist = lazy(() => import("./pages/admin/AdminWaitlist"));
@@ -205,6 +206,7 @@ const App = () => (
                   <Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
                   <Route path="home-hub/access" element={<HomeHubAccess />} />
                   <Route path="street-sweeping" element={<StreetSweeping />} />
+                  <Route path="turo" element={<AdminTuro />} />
                   <Route path="skills" element={<AdminSkills />} />
                   <Route path="*" element={<AdminNotFound />} />
                 </Route>
