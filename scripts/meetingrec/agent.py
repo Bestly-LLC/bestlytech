@@ -14,7 +14,7 @@ Standard library only: it runs on the system python3.
 import base64, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -47,6 +47,11 @@ START_APPS = [os.path.expanduser(p) for p in (
     "~/Desktop/Start Recording.app", "~/Applications/Start Recording.app", "/Applications/Start Recording.app")]
 
 busy = {"stage": None}          # set while this agent is running stop.sh
+# Shell jobs from Scout. Scout proposes, Jared taps Run in the admin, the server
+# hands the approved job over with a poll. One at a time; output streams back
+# every couple of seconds, and a Cancel in the admin kills the whole process group.
+JOB_FILE = f"{HOME}/.job-running"
+job = {"id": None}
 lock = threading.Lock()
 
 
@@ -435,7 +440,7 @@ def heal_tick():
 def snapshot():
     name = read(f"{HOME}/.current") or None
     roster = roster_list(read(f"{HOME}/.roster"))
-    s = {"version": VERSION, "known_voices": known_voices(), "info": {"host": os.uname().nodename}}
+    s = {"version": VERSION, "known_voices": known_voices(), "info": {"host": os.uname().nodename, "job": job["id"]}}
     if heal["selftest"]:
         s["info"]["selftest"] = heal["selftest"]
     if name and (nt["proc"] or nt["status"] in ("no talk call", "talk unreachable", "looking", "gave up")) and recording_pid():
@@ -591,8 +596,90 @@ def handle(cmd):
         call({"op": "result", "command_id": cid, "ok": False, "error": f"unknown action {action}"})
 
 
+def run_job(j):
+    jid = j["id"]
+    job["id"] = jid
+    with open(JOB_FILE, "w") as f:
+        f.write(jid)
+    out, code, err = [], None, None
+    cwd = os.path.expanduser(j.get("cwd") or "~")
+    timeout = int(j.get("timeout_s") or 300)
+    log("job", jid, "start:", j.get("title"))
+
+    def text():
+        return "".join(out)
+
+    try:
+        if not os.path.isdir(cwd):
+            raise RuntimeError(f"no such folder: {cwd}")
+        env = dict(os.environ, BESTLY_JOB_ID=jid, TERM="dumb")
+        p = subprocess.Popen(["/bin/zsh", "-l", "-c", j["script"]], cwd=cwd, env=env,
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                             start_new_session=True)
+
+        def pump():
+            for raw in iter(p.stdout.readline, b""):
+                out.append(raw.decode("utf-8", "replace"))
+        t = threading.Thread(target=pump, daemon=True)
+        t.start()
+        deadline, last_push = time.time() + timeout, 0
+        while p.poll() is None:
+            time.sleep(0.5)
+            if time.time() - last_push >= 2:
+                last_push = time.time()
+                try:
+                    if call({"op": "job_output", "id": jid, "output": text()}).get("cancel"):
+                        os.killpg(p.pid, signal.SIGTERM)
+                        time.sleep(2)
+                        if p.poll() is None:
+                            os.killpg(p.pid, signal.SIGKILL)
+                        err = "cancelled from the admin"
+                        break
+                except Exception as e:  # noqa: BLE001
+                    log("job output push failed", e)
+            if time.time() > deadline:
+                os.killpg(p.pid, signal.SIGTERM)
+                time.sleep(2)
+                if p.poll() is None:
+                    os.killpg(p.pid, signal.SIGKILL)
+                err = f"timed out after {timeout}s"
+                break
+        p.wait()
+        t.join(3)
+        code = p.returncode
+    except Exception as e:  # noqa: BLE001
+        err = str(e)
+    for attempt in range(5):
+        try:
+            call({"op": "job_done", "id": jid, "exit_code": code, "output": text(), "error": err})
+            break
+        except Exception as e:  # noqa: BLE001
+            log("job_done failed", e)
+            time.sleep(3 * (attempt + 1))
+    log("job", jid, "exit", code, err or "")
+    job["id"] = None
+    try:
+        os.remove(JOB_FILE)
+    except OSError:
+        pass
+
+
+def orphan_job():
+    """A job that was running when this agent last stopped (a restart, a reboot) is over."""
+    jid = read(JOB_FILE).strip()
+    if not jid:
+        return
+    try:
+        call({"op": "job_done", "id": jid, "exit_code": None, "output": "",
+              "error": "the agent restarted while this was running (fine if the job restarted it)"})
+        os.remove(JOB_FILE)
+    except Exception as e:  # noqa: BLE001
+        log("orphan job report failed", e)
+
+
 def main():
     log("agent", VERSION, "up")
+    orphan_job()
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     last_sweep = 0
     while True:
@@ -602,7 +689,10 @@ def main():
                 heal_tick()
             except Exception as e:  # noqa: BLE001
                 log("notetaker/heal tick failed", e)
-            r = call({"op": "poll", "state": snapshot()})
+            r = call({"op": "poll", "state": snapshot(), "can_run_jobs": job["id"] is None})
+            if r.get("job") and job["id"] is None:
+                job["id"] = r["job"]["id"]
+                threading.Thread(target=run_job, args=(r["job"],), daemon=True).start()
             if r.get("command"):
                 handle(r["command"])
                 continue            # poll again right away so Scout sees the change

@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, CircleDollarSign, Cloud, FileSignature, ListChecks, Mail,
-  Rocket, Snowflake, Store, Wrench, type LucideIcon,
+  Rocket, Snowflake, Store, Wrench, Binoculars, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +39,8 @@ const KIND: Record<string, { icon: LucideIcon; tint: string; label: string }> = 
   contact_new: { icon: Mail, tint: "bg-indigo-400/15 text-indigo-300", label: "Message" },
   waitlist_new: { icon: ListChecks, tint: "bg-white/10 text-white/70", label: "Waitlist" },
   cy_needs_you: { icon: Snowflake, tint: "bg-cyan-400/15 text-cyan-300", label: "Cookie Yeti" },
+  scout: { icon: Binoculars, tint: "bg-white/10 text-white", label: "Scout" },
+  "scout.push": { icon: Binoculars, tint: "bg-amber-400/15 text-amber-300", label: "Scout · sent to your phone" },
 };
 const kindMeta = (k: string) => KIND[k] ?? { icon: AlertTriangle, tint: "bg-white/10 text-white/70", label: "Update" };
 

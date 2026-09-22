@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,8 +13,11 @@ import {
   Trash2,
   Copy,
   Check,
+  RotateCcw,
 } from "lucide-react";
 import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecording } from "./ScoutRecorder";
+import { ScoutJobs, useMacJobs, type MacJob } from "./ScoutJobs";
+import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
 
 /**
  * Scout - the assistant that lives in the corner of the admin.
@@ -47,9 +51,45 @@ type Mood = "idle" | "think" | "alert";
 
 const OPENERS = [
   "What needs me most right now?",
-  "Is the Mac agent alive?",
-  "What changed on the site this week?",
+  "What's on this page that needs me?",
+  "Check the Mac mini is healthy",
 ];
+
+/* Where Scout sits. Dragging the header moves it, the corner grips resize it,
+ * double-clicking the header puts it back. Remembered per browser; on phones it
+ * always docks (there is no room to move it). */
+type Box = { x: number; y: number; w: number; h: number };
+const BOX_KEY = "scout.box.v1";
+const canMove = () => typeof window !== "undefined" && window.innerWidth >= 640;
+function clampBox(b: Box): Box {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const w = Math.min(Math.max(b.w, 320), vw - 16);
+  const h = Math.min(Math.max(b.h, 340), vh - 16);
+  return { w, h, x: Math.min(Math.max(b.x, 8), vw - w - 8), y: Math.min(Math.max(b.y, 8), vh - h - 8) };
+}
+function loadBox(): Box | null {
+  try {
+    const b = JSON.parse(localStorage.getItem(BOX_KEY) ?? "null");
+    return b && typeof b.w === "number" && canMove() ? clampBox(b) : null;
+  } catch {
+    return null;
+  }
+}
+function saveBox(b: Box | null) {
+  try {
+    if (b) localStorage.setItem(BOX_KEY, JSON.stringify(b));
+    else localStorage.removeItem(BOX_KEY);
+  } catch {
+    /* private window: it just won't be remembered */
+  }
+}
+
+/* What Jared is looking at, so "this" means something to Scout. */
+function pageContext(path: string, about?: string) {
+  const main = document.querySelector("main");
+  const heading = main?.querySelector("h1, h2")?.textContent?.trim() ?? "";
+  return { path, title: document.title, heading: heading.slice(0, 200), about: about?.slice(0, 1500) };
+}
 
 function Scoutie({ mood, className }: { mood: Mood; className?: string }) {
   return (
@@ -142,6 +182,12 @@ export function Scout() {
   const { state: rec, latest: lastCall, refresh: refreshRec } = useRecorder(open);
   const recNow = useNow(rec?.status === "recording");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [box, setBox] = useState<Box | null>(() => loadBox());
+  const sectionRef = useRef<HTMLElement>(null);
+  const { jobs, refresh: refreshJobs } = useMacJobs(threadId, open);
+  const pendingJobs = jobs.filter((j) => j.status === "proposed").length;
 
   useEffect(() => {
     let gone = false;
@@ -162,7 +208,7 @@ export function Scout() {
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [msgs, busy, view]);
+  }, [msgs, busy, view, jobs]);
 
   useEffect(() => {
     if (open && view === "chat") inputRef.current?.focus();
@@ -197,7 +243,7 @@ export function Scout() {
   }, []);
 
   const send = useCallback(
-    async (body: string, replacing?: string | null, fresh?: boolean) => {
+    async (body: string, replacing?: string | null, fresh?: boolean, about?: string) => {
       const asked = body.trim();
       if (!asked || busy) return;
 
@@ -215,7 +261,7 @@ export function Scout() {
       setBusy(true);
 
       const { data, error } = await supabase.functions.invoke("admin-chat", {
-        body: { body: asked, thread_id: fresh ? null : threadId },
+        body: { body: asked, thread_id: fresh ? null : threadId, page: pageContext(location.pathname + location.search, about) },
       });
 
       const id = (data as { thread_id?: string })?.thread_id ?? (fresh ? null : threadId);
@@ -227,9 +273,110 @@ export function Scout() {
       }
 
       setBusy(false);
+      refreshJobs();
       inputRef.current?.focus();
     },
-    [busy, threadId, loadThread],
+    [busy, threadId, loadThread, location.pathname, location.search, refreshJobs],
+  );
+
+  // Other parts of the admin open Scout or hand it a question (scoutBus.ts).
+  const pendingAsk = useRef<ScoutAsk | null>(null);
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      const d = (e as CustomEvent<ScoutAsk>).detail;
+      if (!d?.text) return;
+      setOpen(true);
+      setView("chat");
+      pendingAsk.current = d;
+      setTimeout(() => {
+        const a = pendingAsk.current;
+        pendingAsk.current = null;
+        if (a) send(a.text, null, a.fresh !== false, a.about);
+      }, 0);
+    };
+    const onOpen = () => {
+      setOpen(true);
+      setView("chat");
+    };
+    window.addEventListener(SCOUT_ASK_EVENT, onAsk);
+    window.addEventListener(SCOUT_OPEN_EVENT, onOpen);
+    return () => {
+      window.removeEventListener(SCOUT_ASK_EVENT, onAsk);
+      window.removeEventListener(SCOUT_OPEN_EVENT, onOpen);
+    };
+  }, [send]);
+
+  // A push or bell item links to ?scout=open: open Scout and tidy the URL.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    if (q.get("scout") !== "open") return;
+    setOpen(true);
+    setView("chat");
+    q.delete("scout");
+    const rest = q.toString();
+    navigate(location.pathname + (rest ? `?${rest}` : ""), { replace: true });
+  }, [location.search, location.pathname, navigate]);
+
+  // Cmd/Ctrl+J toggles Scout from anywhere in the admin.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "j" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setOpen((o) => !o);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Keep a moved window on screen when the browser is resized.
+  useEffect(() => {
+    const onResize = () => setBox((b) => (b && canMove() ? clampBox(b) : null));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const startDrag = (e: ReactPointerEvent, mode: "move" | "nw" | "se") => {
+    if (!canMove() || e.button !== 0 || !sectionRef.current) return;
+    if (mode === "move" && (e.target as HTMLElement).closest("button, input, a")) return;
+    e.preventDefault();
+    const r = sectionRef.current.getBoundingClientRect();
+    const start = { x: r.left, y: r.top, w: r.width, h: r.height };
+    const px = e.clientX, py = e.clientY;
+    let last: Box = start;
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - px, dy = ev.clientY - py;
+      const next =
+        mode === "move" ? { ...start, x: start.x + dx, y: start.y + dy }
+        : mode === "se" ? { ...start, w: start.w + dx, h: start.h + dy }
+        : { x: start.x + dx, y: start.y + dy, w: start.w - dx, h: start.h - dy };
+      last = clampBox(next);
+      setBox(last);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.style.userSelect = "";
+      saveBox(last);
+    };
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  const resetBox = () => {
+    setBox(null);
+    saveBox(null);
+  };
+
+  const jobFinished = useCallback(
+    (j: MacJob) => {
+      if (j.thread_id && j.thread_id !== threadId) return;
+      send(
+        `The Mac mini job "${j.title}" ${j.status === "done" ? "finished" : "failed"}${j.exit_code !== null ? ` (exit ${j.exit_code})` : ""}. Read the output and tell me if it worked and what's next.`,
+      );
+    },
+    [send, threadId],
   );
 
   const startEdit = (m: Msg) => {
@@ -280,12 +427,22 @@ export function Scout() {
 
   const recording = rec?.status === "recording";
 
-  const mood: Mood = busy ? "think" : waiting > 0 && !open ? "alert" : "idle";
+  const needs = waiting + pendingJobs;
+  const mood: Mood = busy ? "think" : needs > 0 && !open ? "alert" : "idle";
 
   if (!open) {
     return (
       <>
         <style>{SCOUT_CSS}</style>
+        {!bubble && pendingJobs > 0 && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="scout-bubble-in fixed bottom-[4.5rem] right-5 z-40 max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
+          >
+            {pendingJobs === 1 ? "I have a Mac job ready. Tap Run?" : `${pendingJobs} Mac jobs are waiting for you.`}
+          </button>
+        )}
         {bubble && (
           <button
             type="button"
@@ -301,12 +458,13 @@ export function Scout() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="Open Scout"
+          aria-label="Open Scout (Cmd+J)"
+          title="Scout (⌘J)"
           className={cn(
             "fixed bottom-5 right-5 z-40 flex items-center gap-2.5 rounded-full",
             "px-4 py-2.5 text-sm font-semibold shadow-lg transition-transform hover:scale-105",
             "bg-white text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            waiting > 0 && "scout-nudge",
+            needs > 0 && "scout-nudge",
           )}
         >
           <Scoutie mood={mood} className="h-[1.15rem] w-[1.55rem]" />
@@ -317,9 +475,12 @@ export function Scout() {
               REC {clock(rec?.started_at ?? null, recNow)}
             </span>
           )}
-          {waiting > 0 && (
-            <span className="ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[0.6875rem] font-bold text-white">
-              {waiting}
+          {needs > 0 && (
+            <span className={cn(
+              "ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[0.6875rem] font-bold",
+              waiting > 0 ? "bg-red-500 text-white" : "bg-amber-400 text-black",
+            )}>
+              {needs}
             </span>
           )}
         </button>
@@ -331,14 +492,34 @@ export function Scout() {
     <>
       <style>{SCOUT_CSS}</style>
       <section
+        ref={sectionRef}
         aria-label="Scout"
+        style={box ? { left: box.x, top: box.y, width: box.w, height: box.h } : undefined}
         className={cn(
-          "scout-pop-in fixed bottom-5 right-5 z-40 flex flex-col overflow-hidden rounded-2xl shadow-2xl",
-          "w-[min(25rem,calc(100vw-2.5rem))] max-h-[min(38rem,calc(100vh-6rem))]",
+          "scout-pop-in fixed z-40 flex flex-col overflow-hidden rounded-2xl shadow-2xl",
+          !box && "bottom-5 right-5 w-[min(25rem,calc(100vw-2.5rem))] max-h-[min(38rem,calc(100vh-6rem))]",
           "border border-white/[0.08] bg-black/95 backdrop-blur-xl",
         )}
       >
-        <div className="flex items-center gap-1.5 border-b border-white/[0.06] px-2.5 py-2.5">
+        <div
+          aria-hidden
+          onPointerDown={(e) => startDrag(e, "nw")}
+          title="Drag to resize"
+          className="absolute left-0 top-0 z-10 hidden h-4 w-4 cursor-nwse-resize sm:block"
+        />
+        <div
+          aria-hidden
+          onPointerDown={(e) => startDrag(e, "se")}
+          title="Drag to resize"
+          className="absolute bottom-0 right-0 z-10 hidden h-4 w-4 cursor-nwse-resize sm:block"
+        >
+          <svg viewBox="0 0 10 10" className="absolute bottom-1 right-1 h-2.5 w-2.5 text-white/30"><path d="M9 1L1 9M9 5L5 9" stroke="currentColor" strokeWidth="1.2" /></svg>
+        </div>
+        <div
+          onPointerDown={(e) => startDrag(e, "move")}
+          onDoubleClick={resetBox}
+          className="flex cursor-default items-center gap-1.5 border-b border-white/[0.06] px-2.5 py-2.5 sm:cursor-grab sm:active:cursor-grabbing"
+        >
           {view === "history" ? (
             <Button
               variant="ghost"
@@ -362,10 +543,22 @@ export function Scout() {
                 ? `${threads.length} conversation${threads.length === 1 ? "" : "s"}`
                 : busy
                   ? "thinking it through"
-                  : recording ? "recording your call" : "reads the data, changes the site"}
+                  : recording ? "recording your call" : pendingJobs ? "a Mac job is waiting for you" : "reads the data, fixes things, runs the Mac"}
             </p>
           </div>
 
+          {box && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={resetBox}
+              aria-label="Put Scout back in the corner"
+              title="Put back in the corner"
+              className="h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </Button>
+          )}
           {view === "chat" && (
             <>
               <Button
@@ -486,7 +679,7 @@ export function Scout() {
             {msgs.length === 0 && (
               <>
                 <p className="text-sm text-white/80">
-                  I can read anything in the database, change the site, and give your Mac jobs. What do you need?
+                  I can read anything in the database, change the site, and run jobs on the Mac mini (you tap Run). I know which page you're on. What do you need?
                 </p>
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {OPENERS.map((o) => (
@@ -553,6 +746,8 @@ export function Scout() {
                 )}
               </div>
             ))}
+
+            <ScoutJobs jobs={jobs} refresh={refreshJobs} onFinished={jobFinished} />
 
             {busy && (
               <p className="flex items-center gap-2 text-sm text-white/50" aria-live="polite">

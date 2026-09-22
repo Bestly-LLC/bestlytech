@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { AlertTriangle, CircleAlert, Info, Sparkles, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AskScoutButton } from "./AskScoutButton";
 
 interface SmartAlertsProps {
   unresolvedReports: Array<{
@@ -186,6 +187,11 @@ export function SmartAlerts({
                     {insight.description}
                   </p>
                 </div>
+
+                <AskScoutButton
+                  question={`${insight.title}. Why is this happening, and can you fix it?`}
+                  about={`${insight.title} | ${insight.description}`}
+                />
 
                 {/* Action button */}
                 {insight.action && (

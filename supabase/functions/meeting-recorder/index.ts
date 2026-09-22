@@ -9,6 +9,9 @@
 //         | health {key, kind: problem|resolved, severity, title, body, healed}
 //           -> bestly_raise('recorder.<key>'), so the monitor, the bell, ntfy and
 //              Scout's incident list all see recorder trouble the same way.
+//         | job_output {id, output} -> {cancel} | job_done {id, exit_code, output, error}
+//   Every poll also hands over one approved mac_jobs row (a shell job Jared
+//   tapped Run on). Scout can only propose those; see the mac_jobs migration.
 //
 // verify_jwt is OFF for the same reason as admin-chat: with it on, the CORS
 // preflight is 401'd by the platform. Auth is done here, for both callers.
@@ -94,6 +97,33 @@ async function queue(action: "start" | "stop" | "selftest", payload: Record<stri
     .select("id")
     .single();
   return error ? { ok: false, error: error.message } : { ok: true, id: data.id };
+}
+
+const JOB_OUT_MAX = 290_000;
+const clip = (s: unknown) => {
+  const t = String(s ?? "");
+  return t.length > JOB_OUT_MAX ? "[... start cut ...]\n" + t.slice(-JOB_OUT_MAX) : t;
+};
+
+// One approved job at a time. Proposals nobody tapped within an hour expire,
+// and an approval the Mac never picked up within 10 minutes does too.
+async function claimJob() {
+  const now = new Date().toISOString();
+  await db.from("mac_jobs").update({ status: "expired", finished_at: now })
+    .eq("status", "proposed").lt("created_at", new Date(Date.now() - 3600_000).toISOString());
+  await db.from("mac_jobs").update({ status: "expired", finished_at: now })
+    .eq("status", "approved").lt("approved_at", new Date(Date.now() - 600_000).toISOString());
+  // A job the Mac lost track of (it never reported back) cannot hold the queue forever.
+  await db.from("mac_jobs").update({ status: "failed", finished_at: now })
+    .eq("status", "running").lt("started_at", new Date(Date.now() - 3720_000).toISOString());
+  const { data: busy } = await db.from("mac_jobs").select("id").eq("status", "running").limit(1);
+  if (busy?.length) return null;
+  const { data: next } = await db.from("mac_jobs").select("id").eq("status", "approved").order("approved_at").limit(1);
+  if (!next?.length) return null;
+  const { data: claimed } = await db.from("mac_jobs")
+    .update({ status: "running", started_at: now }).eq("id", next[0].id).eq("status", "approved")
+    .select("id, title, script, cwd, timeout_s");
+  return claimed?.[0] ?? null;
 }
 
 async function asAdmin(req: Request, body: Record<string, any>) {
@@ -191,11 +221,12 @@ async function asAgent(key: string, body: Record<string, any>) {
       .eq("status", "pending")
       .order("created_at")
       .limit(1);
-    if (!cmd?.length) return J({ ok: true, command: null });
+    const job = body.can_run_jobs ? await claimJob() : null;
+    if (!cmd?.length) return J({ ok: true, command: null, job });
     const c = cmd[0];
     if (Date.now() - new Date(c.created_at).getTime() > 2 * 60_000) {
       await db.from("meeting_recorder_commands").update({ status: "expired", completed_at: now }).eq("id", c.id);
-      return J({ ok: true, command: null });
+      return J({ ok: true, command: null, job });
     }
     const { data: claimed } = await db
       .from("meeting_recorder_commands")
@@ -203,7 +234,23 @@ async function asAgent(key: string, body: Record<string, any>) {
       .eq("id", c.id)
       .eq("status", "pending")
       .select("id, action, payload");
-    return J({ ok: true, command: claimed?.[0] ?? null });
+    return J({ ok: true, command: claimed?.[0] ?? null, job });
+  }
+
+  if (op === "job_output" || op === "job_done") {
+    const id = String(body.id ?? "");
+    const { data: j } = await db.from("mac_jobs").select("status").eq("id", id).single();
+    if (!j) return J({ ok: false, error: "no such job" }, 404);
+    const patch: Record<string, unknown> = { output: clip(body.output) };
+    if (op === "job_done") {
+      patch.exit_code = typeof body.exit_code === "number" ? body.exit_code : null;
+      patch.finished_at = now;
+      if (body.error) patch.output = clip(`${body.output ?? ""}\n[agent] ${String(body.error).slice(0, 2000)}`);
+      if (j.status === "running") patch.status = body.exit_code === 0 && !body.error ? "done" : "failed";
+    }
+    if (j.status !== "running" && j.status !== "cancelled") return J({ ok: true, cancel: true });
+    await db.from("mac_jobs").update(patch).eq("id", id);
+    return J({ ok: true, cancel: j.status === "cancelled" });
   }
 
   if (op === "result") {

@@ -21,6 +21,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { AskScoutButton } from "./AskScoutButton";
 
 /**
  * Everything waiting on the operator, from one server-side rule set.
@@ -326,12 +327,25 @@ export function ActionInbox() {
                   <Check className="h-3.5 w-3.5 mr-1.5" aria-hidden />
                   {working === item.id ? "..." : item.doneLabel}
                 </Button>
+                <AskScoutButton
+                  question={`Help me with this: ${item.title}. What's going on, and can you handle it?`}
+                  about={[item.title, item.detail].filter(Boolean).join(" | ")}
+                  className="-mr-2"
+                />
               </li>
             );
           }
 
+          const ask = (
+            <AskScoutButton
+              question={`Help me with this: ${item.title}. What's going on, and can you fix it?`}
+              about={[item.title, item.detail, item.href].filter(Boolean).join(" | ")}
+              className="mr-2 self-center"
+            />
+          );
           return (
-            <li key={item.id}>
+            <li key={item.id} className="flex items-stretch">
+              <div className="min-w-0 flex-1">
               {item.href ? (
                 item.external ? (
                   <a
@@ -359,8 +373,10 @@ export function ActionInbox() {
                   </Link>
                 )
               ) : (
-                <div className="flex items-center gap-3 px-5 py-3 pr-12">{body}</div>
+                <div className="flex items-center gap-3 px-5 py-3">{body}</div>
               )}
+              </div>
+              {ask}
             </li>
           );
         })}

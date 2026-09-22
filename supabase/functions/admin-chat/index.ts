@@ -19,6 +19,14 @@
 //   recorder            start / stop / status (agent ~/MeetingRec/agent.py, launchd tech.bestly.meetingrec-agent)
 //   meeting_transcript  read a finished call's transcript for a debrief (meeting_recordings)
 // v8: recorder selftest, and Scout owns notetaker repairs (incident recorder.notetaker)
+// v9: mac_run — any shell job on the Mac mini. Scout only PROPOSES (mac_jobs row,
+//     status proposed); Jared taps Run in the Scout window, which approves it with
+//     his own session. The table's trigger refuses any other approval path, so no
+//     prompt can make Scout run something on its own. Scout also knows which admin
+//     page Jared is looking at (body.page).
+//     notify — Scout can reach him outside the chat: the admin bell, and a phone
+//     push (ntfy, quiet hours kept, capped at 6 an hour in scout_notify()).
+//     Proposed Mac jobs push by themselves (trigger), and a 9am digest lists what waits.
 // The only things left for Jared are the ones that physically need him: a password, a device in his hand.
 //
 // Stability notes, all of them learned the hard way:
@@ -167,6 +175,45 @@ const TOOLS = [
     },
   },
   {
+    name: "mac_run",
+    description:
+      "Run a shell job on the Mac mini (the always-on Mac: call recorder in ~/MeetingRec, repo at ~/Developer/bestlytech, Homebrew, git with push access, node, python3). " +
+      "action propose: puts a Run card in front of Jared showing the exact script. Nothing runs until he taps Run; you cannot approve it. " +
+      "Say in one line what it does and that the Run button is up. Do not ask him to type yes. action get: read a job's status and output (latest if no id). " +
+      "Scripts run in zsh -l as Jared's user under launchd: no sudo, no GUI prompts, and macOS privacy may block Desktop/Documents/Downloads. Default timeout 300s.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["propose", "get"] },
+        title: { type: "string", description: "3-8 words, what the job does" },
+        why: { type: "string", description: "one line: why this fixes or checks the thing" },
+        script: { type: "string", description: "the exact zsh script; set -e is not added for you" },
+        cwd: { type: "string", description: "working directory, default ~" },
+        timeout_s: { type: "number" },
+        id: { type: "string" },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "notify",
+    description:
+      "Tell Jared something outside this chat: it lands in the admin bell, and with push:true also on his phone. " +
+      "Use it for what he must not miss after he closes this window: a decision only he can make, work you left pending on him, " +
+      "something important you found (an outage, money, a customer waiting), or a reminder he asked for. Not for things you just told him in the chat, " +
+      "and never for routine updates. Proposed Mac jobs already notify him by themselves. Title under 80 characters, plain words.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        body: { type: "string" },
+        severity: { type: "string", enum: ["info", "warning", "critical"] },
+        push: { type: "boolean", description: "also buzz his phone. Only for things that need him today." },
+      },
+      required: ["title"],
+    },
+  },
+  {
     name: "recorder",
     description:
       "The call recorder on the Mac mini (records the call audio and Jared's mic, then transcribes and names the speakers). " +
@@ -199,7 +246,7 @@ const TOOLS = [
   },
 ];
 
-const SYSTEM = (today: unknown, mac: unknown, incidents: unknown, unread: unknown, recorder: unknown) => `
+const SYSTEM = (today: unknown, mac: unknown, incidents: unknown, unread: unknown, recorder: unknown, jobs: unknown, page: unknown) => `
 You are Scout, the assistant inside Jared Best's Bestly admin console at bestly.tech/admin. Your name is Scout; never call yourself anything else.
 
 Jared runs Bestly LLC: Cookie Yeti (a Safari and Chrome cookie-banner extension), HOKU, InventoryProof, SchoolPilot, Bestly Studio (studio.bestly.tech), a small shop, a Home Hub on a Raspberry Pi (bestly-pi: Nextcloud at cloud.bestly.tech, Home Assistant, Homebridge, Pi-hole), and a Turo fleet. He is the only operator.
@@ -223,6 +270,14 @@ It runs on his MacBook Air and polls every five minutes while the Mac is awake. 
 ${JSON.stringify(recorder)}
 There is a Record a call button at the top of this chat, so he can also do it himself. When he asks you to record, start it with the recorder tool and the names he gave. When a call is done, the button offers a Debrief.
 
+# Jobs on the Mac mini (mac_run), newest first
+${JSON.stringify(jobs)}
+The Mac mini is always on and can do almost anything a terminal can: git pull/push the repos, npm and builds, brew, restart launchd agents (launchctl kickstart -k gui/$(id -u)/<label>), read logs, curl, python. When a fix or a check needs a real machine, write the script and propose it with mac_run. Keep scripts short, idempotent and safe to re-run; print what they did. Never put a secret in a script. Never delete outside a project folder or ~/MeetingRec/recordings. When a job finishes, Jared's window tells you; read the output (mac_run get) and say in one line whether it worked, then the next step.
+
+# Where Jared is right now
+${JSON.stringify(page)}
+That is the admin page open behind this chat. When he says "this", "here" or "this page", he means it. Use it to pick the right data without asking.
+
 # When the notetaker breaks (incident recorder.notetaker)
 The notetaker is a headless Chrome that joins Talk calls as "Scout (notetaker)" and records each person on their own track. A Talk update can move the page's buttons or name labels and break it. The Mac mini runs a self-test on every Talk update, every code change and daily, and opens incident recorder.notetaker with diagnostics (the buttons it could see, dialogs, its log) when it fails. While it is broken, recordings still work but names fall back to voice guessing. Fixing it is your job, not Jared's:
 1. Read the incident body. 2. read_file scripts/meetingrec/notetaker/notetaker.js (join section: the strategies list and the device dialog; naming: the WHO selector list). 3. Propose the smallest change that matches what the diagnostics show, in one line. 4. On his yes, commit_files it. 5. Run recorder selftest. It pulls main first; if the fix passes, the incident resolves by itself. If a self-test fails right after a code update, the Mac rolls that update back and blocks it, so a bad fix cannot stick.
@@ -236,8 +291,9 @@ Read it with meeting_transcript. Then, in plain text: first the decisions (only 
 - Fix data: db_write (one guarded INSERT/UPDATE/DELETE).
 - Fix the Pi: pi_command (Nextcloud diagnose and heal, Homebridge, Home Assistant, Pi-hole, the agent).
 - Tidy up: clear_alerts, resolve_incident, mark_done.
+- Reach him later: notify (bell, and his phone with push). When you leave something waiting on him, or find something he must act on, notify him before you finish, in one line.
 - Change bestly.tech and the admin: list_files, read_file, commit_files (watched, auto-reverted on a failed build).
-- Give the Mac work: mac_command. Record calls on the Mac mini: recorder.
+- Give the MacBook Air mail work: mac_command. Run anything on the Mac mini: mac_run (he taps Run). Record calls on the Mac mini: recorder.
 
 # Doing, not describing
 Your job is to clear his plate, not to hand him a to-do list. For every item: if a tool can do it, propose it in one line and, on his yes, do it and report the result. Batch them: "I can do these three - say yes and I'll run all of them." Cleanup (stale alerts, incidents that are over, cards whose job is done) you may do without asking and just report.
@@ -409,6 +465,33 @@ async function meetingTranscript(args: Record<string, any>): Promise<Record<stri
   };
 }
 
+async function macRun(args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
+  if (args.action === "get") {
+    let q = db.from("mac_jobs").select("id, title, status, exit_code, created_at, started_at, finished_at, output");
+    q = args.id ? q.eq("id", String(args.id)) : q.eq("thread_id", threadId).order("created_at", { ascending: false });
+    const { data, error } = await q.limit(1);
+    if (error) return { ok: false, error: error.message };
+    if (!data?.length) return { ok: false, error: "no job found" };
+    const j = data[0] as Record<string, any>;
+    const out = String(j.output ?? "");
+    return { ok: true, ...j, output: out.length > 30_000 ? "[... start cut ...]\n" + out.slice(-30_000) : out };
+  }
+  if (args.action !== "propose") return { ok: false, error: "action must be propose or get" };
+  const script = String(args.script ?? "").trim();
+  const title = String(args.title ?? "").trim().slice(0, 120);
+  if (!script || !title) return { ok: false, error: "title and script are required" };
+  const timeout = Math.min(3600, Math.max(5, Math.round(Number(args.timeout_s) || 300)));
+  // A new proposal in the same chat replaces the one he has not tapped yet.
+  await db.from("mac_jobs").update({ status: "cancelled", finished_at: new Date().toISOString() })
+    .eq("thread_id", threadId).eq("status", "proposed");
+  const { data, error } = await db.from("mac_jobs").insert({
+    title, script, why: args.why ? String(args.why).slice(0, 1000) : null,
+    cwd: args.cwd ? String(args.cwd).slice(0, 500) : null, timeout_s: timeout, thread_id: threadId,
+  }).select("id").single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, id: data.id, status: "proposed", note: "The Run card is on his screen now. It expires in an hour." };
+}
+
 async function runTool(name: string, args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
   let out: Record<string, unknown>;
   const repo = REPOS[args.repo ?? "site"] ?? REPOS.site;
@@ -514,6 +597,18 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
       out = error ? { ok: false, error: error.message } : { ok: true, queued: data, note: "The Mac picks this up within five minutes of being awake." };
       break;
     }
+    case "notify": {
+      const { data, error } = await db.rpc("scout_notify", {
+        p_title: String(args.title ?? "").slice(0, 200), p_body: args.body ? String(args.body).slice(0, 500) : null,
+        p_severity: String(args.severity ?? "info"), p_push: !!args.push, p_url: "/admin?scout=open", p_dedupe: null,
+      });
+      out = error ? { ok: false, error: error.message } : (data as Record<string, unknown>);
+      break;
+    }
+    case "mac_run": {
+      out = await macRun(args, threadId);
+      break;
+    }
     case "recorder": {
       out = await recorderCommand(args);
       break;
@@ -601,16 +696,28 @@ Deno.serve(async (req) => {
   const { data: hist } = await db.from("admin_chat_messages").select("role,body").eq("thread_id", threadId).order("created_at").limit(40);
   const messages: any[] = (hist ?? []).map((m: any) => ({ role: m.role, content: m.body }));
 
-  const [{ data: today }, { data: mac }, { data: inc }, { data: bell }, recorder] = await Promise.all([
+  const page = body.page && typeof body.page === "object"
+    ? {
+        path: String(body.page.path ?? "").slice(0, 200),
+        title: String(body.page.title ?? "").slice(0, 200),
+        heading: String(body.page.heading ?? "").slice(0, 200),
+        about: body.page.about ? String(body.page.about).slice(0, 1500) : undefined,
+      }
+    : null;
+
+  const [{ data: today }, { data: mac }, { data: inc }, { data: bell }, recorder, { data: jobRows }] = await Promise.all([
     db.rpc("admin_today"),
     db.rpc("mac_agent_health"),
     db.from("monitor_issues").select("key, severity, title, needs_jared, self_healed").eq("status", "open").limit(30),
     db.from("admin_notifications").select("severity").is("read_at", null).limit(1000),
     recorderStatus().catch(() => ({ status: "unknown" })),
+    db.from("mac_jobs").select("id, title, status, exit_code, created_at, finished_at, output")
+      .order("created_at", { ascending: false }).limit(5),
   ]);
+  const jobs = (jobRows ?? []).map((j: any) => ({ ...j, output: String(j.output ?? "").slice(-1500) }));
   const unread: Record<string, number> = {};
   for (const n of (bell ?? []) as { severity: string }[]) unread[n.severity] = (unread[n.severity] ?? 0) + 1;
-  const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder);
+  const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder, jobs, page ?? "unknown");
 
   const used: string[] = [];
   let reply = "";
@@ -642,5 +749,6 @@ Deno.serve(async (req) => {
   await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
   await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
 
-  return J({ ok: true, thread_id: threadId, reply, tools: used });
+  const { data: proposed } = await db.from("mac_jobs").select("id").eq("thread_id", threadId).eq("status", "proposed").limit(1);
+  return J({ ok: true, thread_id: threadId, reply, tools: used, job_id: proposed?.[0]?.id ?? null });
 });
