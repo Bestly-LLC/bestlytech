@@ -16,7 +16,7 @@ import type { Session } from "@supabase/supabase-js";
 import {
   ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, Eye, ExternalLink, FileArchive, FileImage, FileSpreadsheet, FileText,
   Files as FilesIcon, Home as HomeIcon, Inbox, LayoutGrid, Link2, Loader2, LogOut, Mail, Mic, Paperclip, Presentation,
-  Bell, Binoculars, Plug, Search, Users, Video,
+  Bell, Binoculars, Fingerprint, Plug, Search, Users, Video,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { ART } from "./partnerArt";
 import { DocPreview, type PreviewFile } from "@/components/DocPreview";
 import { FileThumb } from "./FileThumb";
+import { addPasskey, passkeyCount, passkeysSupported } from "@/lib/passkey";
 import { BoardSheet, CalendarSheet, CloudSheet, TalkSheet, useTalkUnread } from "./PartnerCloud";
 import { BellButton, BellSheet, ConnectClaude, useNextMeeting, usePartnerNotifs, whenLabel, type NextEvent } from "./PartnerExtras";
 import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState } from "./PartnerScout";
@@ -289,6 +290,7 @@ export function PartnerHome({ session }: { session: Session }) {
             <span className="flex items-center gap-2"><Video className="h-[18px] w-[18px]" /> {nextMtg ? "Join next meeting" : "Join our call"}</span>
             {nextMtg && <span className="text-xs font-medium opacity-85">{whenLabel(nextMtg.start)}</span>}
           </a>
+          <PasskeyRow userId={session.user.id} />
           <button onClick={signOut} className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-sm text-white/50 hover:bg-white/[0.05] hover:text-white">
             <LogOut className="h-4 w-4" /> Sign out
           </button>
@@ -661,6 +663,30 @@ function DoneList({ done, tick }: { done: Todo[]; tick: (t: Todo, s: "done" | "o
         </ul>
       )}
     </div>
+  );
+}
+
+/** Face ID / fingerprint for next time. Shown until this account has one. */
+function PasskeyRow({ userId }: { userId: string }) {
+  const [has, setHas] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { passkeyCount(userId).then(setHas).catch(() => setHas(0)); }, [userId]);
+  if (!passkeysSupported() || has === null) return null;
+  const add = async () => {
+    setBusy(true);
+    const problem = await addPasskey();
+    setBusy(false);
+    if (!problem) { setHas((n) => (n ?? 0) + 1); toast.success("Face ID is set up. Next time, no password."); }
+    else if (problem !== "cancelled") toast.error(problem);
+  };
+  if (has > 0) {
+    return <p className="flex h-10 items-center gap-2 px-3 text-sm text-white/40"><Fingerprint className="h-4 w-4" /> Face ID is on</p>;
+  }
+  return (
+    <button onClick={add} disabled={busy}
+      className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-sm font-medium text-white/80 hover:bg-white/[0.05] hover:text-white disabled:opacity-50">
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Fingerprint className="h-4 w-4" />} Set up Face ID
+    </button>
   );
 }
 

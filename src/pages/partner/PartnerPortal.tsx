@@ -9,13 +9,14 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Check, Eye, EyeOff, Fingerprint, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { cn } from "@/lib/utils";
 import { AdminMark, SIGNIN_STARE_RADIUS_PX } from "@/components/AdminMark";
 import { PartnerMark } from "@/components/PartnerMark";
 import { PartnerHome } from "./PartnerHome";
+import { addPasskey, passkeysSupported, signInWithPasskey } from "@/lib/passkey";
 
 const card = "rounded-[1.5rem] bg-white/[0.04] border border-white/[0.06] bento:bg-[#fff] bento:border-transparent";
 const btnSolid = "inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 text-[1rem] font-semibold text-black transition active:scale-[0.98] disabled:opacity-50 bento:bg-[#111114] bento:text-[#fff]";
@@ -76,6 +77,13 @@ function SignIn() {
     setBusy(false);
     if (error) setErr(error.message === "Invalid login credentials" ? "That email and password don't match." : error.message);
   };
+  const [pkBusy, setPkBusy] = useState(false);
+  const passkey = async () => {
+    setPkBusy(true); setErr("");
+    const problem = await signInWithPasskey(email.trim() || undefined);
+    setPkBusy(false);
+    if (problem && problem !== "cancelled") setErr(problem === "That didn't work." ? "No passkey found for this account yet." : problem);
+  };
   return (
     <Shell>
       <div className="mx-auto mt-8 max-w-sm">
@@ -93,6 +101,15 @@ function SignIn() {
           {err && <p role="alert" className="text-sm text-red-400 bento:text-red-600">{err}</p>}
           <button className={btnSolid} disabled={busy}>{busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sign in"}</button>
         </form>
+        {passkeysSupported() && (
+          <>
+            <div className="my-5 flex items-center gap-3 text-xs text-white/35"><span className="h-px flex-1 bg-white/10" />or<span className="h-px flex-1 bg-white/10" /></div>
+            <button type="button" onClick={passkey} disabled={pkBusy}
+              className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl border border-white/15 px-5 text-[1rem] font-semibold text-white disabled:opacity-50 bento:border-black/15 bento:text-black">
+              {pkBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Fingerprint className="h-5 w-5" />} Sign in with Face ID or a passkey
+            </button>
+          </>
+        )}
         <p className="mt-6 text-center text-sm text-white/50">First time, or forgot your password? Ask Jared for a sign-in link.</p>
       </div>
     </Shell>
@@ -103,7 +120,7 @@ function SignIn() {
 
 export function PartnerWelcome() {
   const nav = useNavigate();
-  const [stage, setStage] = useState<"checking" | "password" | "bad">("checking");
+  const [stage, setStage] = useState<"checking" | "passkey" | "password" | "bad" | "done">("checking");
   const [name, setName] = useState("");
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
@@ -121,7 +138,7 @@ export function PartnerWelcome() {
         const { data, error } = await supabase.auth.verifyOtp({ token_hash: token, type: "magiclink" });
         if (error || !data.session) return false;
         setName(String(data.user?.user_metadata?.name ?? ""));
-        setStage("password");
+        setStage(passkeysSupported() ? "passkey" : "password");
         return true;
       };
       if (code) {
@@ -135,10 +152,20 @@ export function PartnerWelcome() {
       }
       if (t) { if (await finish(t)) return; setStage("bad"); return; }
       const { data } = await supabase.auth.getSession();
-      if (data.session) { setName(String(data.session.user.user_metadata?.name ?? "")); setStage("password"); }
+      if (data.session) { setName(String(data.session.user.user_metadata?.name ?? "")); setStage(passkeysSupported() ? "passkey" : "password"); }
       else setStage("bad");
     })();
   }, []);
+
+  // Face ID / Touch ID / Windows Hello first: nothing to remember, nothing to type next time.
+  const [pkBusy, setPkBusy] = useState(false);
+  const makePasskey = async () => {
+    setPkBusy(true); setErr("");
+    const problem = await addPasskey();
+    setPkBusy(false);
+    if (!problem) { setStage("done"); return; }
+    if (problem !== "cancelled") setErr(problem);
+  };
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -159,6 +186,27 @@ export function PartnerWelcome() {
             <h1 className="text-[1.9rem] font-bold leading-tight tracking-tight">This link doesn't work</h1>
             <p className="mt-2 text-[0.975rem] text-white/60">It may have been replaced by a newer one. Ask Jared to send the latest link, or sign in with your password.</p>
             <button className={cn(btnSolid, "mt-8")} onClick={() => nav("/partner", { replace: true })}>Go to sign in</button>
+          </>
+        )}
+        {stage === "passkey" && (
+          <>
+            <Duo />
+            <h1 className="mt-8 text-[1.9rem] font-bold leading-tight tracking-tight">Welcome{name ? `, ${name}` : ""}</h1>
+            <p className="mt-2 text-[0.975rem] text-white/60">Set up Face ID (or your fingerprint) so next time you just look at your phone. No password to remember.</p>
+            {err && <p role="alert" className="mt-4 text-sm text-red-400 bento:text-red-600">{err}</p>}
+            <button className={cn(btnSolid, "mt-8 gap-2")} onClick={makePasskey} disabled={pkBusy}>
+              {pkBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Fingerprint className="h-5 w-5" />} Set up Face ID
+            </button>
+            <button className="mt-4 w-full text-center text-sm text-white/50" onClick={() => { setErr(""); setStage("password"); }}>Use a password instead</button>
+          </>
+        )}
+        {stage === "done" && (
+          <>
+            <Duo />
+            <h1 className="mt-8 flex items-center gap-2 text-[1.9rem] font-bold leading-tight tracking-tight"><Check className="h-7 w-7 text-emerald-400" /> You're set</h1>
+            <p className="mt-2 text-[0.975rem] text-white/60">Next time, open bestly.tech/partner and it's Face ID — no password, no link.</p>
+            <button className={cn(btnSolid, "mt-8")} onClick={() => nav("/partner", { replace: true })}>Go to my portal</button>
+            <button className="mt-4 w-full text-center text-sm text-white/50" onClick={() => setStage("password")}>Also set a password</button>
           </>
         )}
         {stage === "password" && (

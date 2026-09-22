@@ -312,14 +312,14 @@ Deno.serve(async (req) => {
         return errorResponse("Invalid signature. Your passkey may need to be re-registered.");
       }
 
-      // Verify admin role
-      const { data: hasAdmin } = await supabaseAdmin.rpc("has_role", {
-        _user_id: storedCred.user_id,
-        _role: "admin",
-      });
+      // Who may sign in with a passkey: an admin, or a partner with a portal login (Eli).
+      const [{ data: hasAdmin }, { data: partnerRow }] = await Promise.all([
+        supabaseAdmin.rpc("has_role", { _user_id: storedCred.user_id, _role: "admin" }),
+        supabaseAdmin.from("partners").select("id").eq("user_id", storedCred.user_id).maybeSingle(),
+      ]);
 
-      if (!hasAdmin) {
-        return errorResponse("Not an admin");
+      if (!hasAdmin && !partnerRow) {
+        return errorResponse("This account can't sign in here.");
       }
 
       // Update counter only when it increases.
