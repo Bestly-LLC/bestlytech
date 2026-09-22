@@ -277,5 +277,61 @@ Deno.serve(async (req) => {
     return json({ day, file, text, ...parseTranscript(text) });
   }
 
+  // --- 3c. rename: WebDAV MOVE the folder (renames the whole meeting) ---
+  if (op === "rename") {
+    const day = String(body.day ?? "");
+    const oldId = String(body.oldId ?? "");
+    const newId = String(body.newId ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: "bad_day" }, 400);
+    if (!/^meeting-\d{8}-\d{4}$/.test(oldId) || !/^meeting-\d{8}-\d{4}$/.test(newId))
+      return json({ error: "bad_id" }, 400);
+
+    // Rename every file in the day folder whose name starts with oldId.
+    const files = (await propfind(`${ARCHIVE}/${day}/`, auth)).filter(
+      (f) => !f.isDir && f.name.startsWith(oldId + "-"),
+    );
+    if (!files.length) return json({ error: "not_found" }, 404);
+
+    const results = await Promise.all(
+      files.map(async (f) => {
+        const newName = newId + f.name.slice(oldId.length);
+        const src = `${NC_BASE}/${ARCHIVE}/${day}/${encodeURIComponent(f.name)}`;
+        const dest = `${NC_BASE}/${ARCHIVE}/${day}/${encodeURIComponent(newName)}`;
+        const res = await fetch(src, {
+          method: "MOVE",
+          headers: { Authorization: auth, Destination: dest, Overwrite: "F" },
+        });
+        return { file: f.name, ok: res.ok, status: res.status };
+      }),
+    );
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length) return json({ error: "move_failed", details: failed }, 502);
+    return json({ ok: true, renamed: results.length });
+  }
+
+  // --- 3d. delete: WebDAV DELETE every file in the meeting ---
+  if (op === "delete") {
+    const day = String(body.day ?? "");
+    const id = String(body.id ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: "bad_day" }, 400);
+    if (!/^meeting-\d{8}-\d{4}$/.test(id)) return json({ error: "bad_id" }, 400);
+
+    const files = (await propfind(`${ARCHIVE}/${day}/`, auth)).filter(
+      (f) => !f.isDir && f.name.startsWith(id + "-"),
+    );
+    if (!files.length) return json({ error: "not_found" }, 404);
+
+    const results = await Promise.all(
+      files.map(async (f) => {
+        const url = `${NC_BASE}/${ARCHIVE}/${day}/${encodeURIComponent(f.name)}`;
+        const res = await fetch(url, { method: "DELETE", headers: { Authorization: auth } });
+        return { file: f.name, ok: res.ok || res.status === 404, status: res.status };
+      }),
+    );
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length) return json({ error: "delete_failed", details: failed }, 502);
+    return json({ ok: true, deleted: results.length });
+  }
+
   return json({ error: "unknown_op" }, 400);
 });

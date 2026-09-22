@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -12,17 +12,29 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertTriangle,
   Clock,
   FileText,
   Mic,
+  MoreHorizontal,
+  Pencil,
   RefreshCw,
+  Trash2,
   Users,
   Calendar,
+  MessageSquare,
 } from "lucide-react";
 
 type Speaker = { name: string; lines: number; share: number };
@@ -118,10 +130,20 @@ export default function AdminMeetings() {
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
 
+  // transcript dialog
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<Meeting | null>(null);
   const [text, setText] = useState<string | null>(null);
   const [textLoading, setTextLoading] = useState(false);
+
+  // rename dialog
+  const [renameTarget, setRenameTarget] = useState<Meeting | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
+
+  // delete dialog
+  const [deleteTarget, setDeleteTarget] = useState<Meeting | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,6 +166,70 @@ export default function AdminMeetings() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const startRename = (m: Meeting) => {
+    setRenameTarget(m);
+    setRenameValue(m.id);
+  };
+
+  const commitRename = async () => {
+    if (!renameTarget) return;
+    const newId = renameValue.trim();
+    if (!newId || newId === renameTarget.id) { setRenameTarget(null); return; }
+    if (!/^meeting-\d{8}-\d{4}$/.test(newId)) {
+      toast({ title: "Invalid ID", description: "Format must be meeting-YYYYMMDD-HHMM", variant: "destructive" });
+      return;
+    }
+    setRenaming(true);
+    const { data, error } = await supabase.functions.invoke("meetings-archive", {
+      body: { op: "rename", day: renameTarget.day, oldId: renameTarget.id, newId },
+    });
+    setRenaming(false);
+    if (error || data?.error) {
+      toast({ title: "Rename failed", description: error?.message ?? data?.error, variant: "destructive" });
+      return;
+    }
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === renameTarget.id
+          ? { ...r, id: newId, transcriptFile: r.transcriptFile?.replace(renameTarget.id, newId) ?? null }
+          : r,
+      ),
+    );
+    setRenameTarget(null);
+    toast({ title: "Renamed", description: `${renameTarget.id} → ${newId}` });
+  };
+
+  const commitDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const { data, error } = await supabase.functions.invoke("meetings-archive", {
+      body: { op: "delete", day: deleteTarget.day, id: deleteTarget.id },
+    });
+    setDeleting(false);
+    if (error || data?.error) {
+      toast({ title: "Delete failed", description: error?.message ?? data?.error, variant: "destructive" });
+      return;
+    }
+    setRows((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+    setDeleteTarget(null);
+    toast({ title: "Deleted", description: deleteTarget.id });
+  };
+
+  const debriefMeeting = (m: Meeting) => {
+    const msg = `Debrief my call ${m.id}: the decisions, who owes what, and the follow-ups.`;
+    // Post into the Scout chat input if possible, else copy to clipboard.
+    const input = document.querySelector<HTMLTextAreaElement>("[data-scout-input]");
+    if (input) {
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+      nativeSetter?.call(input, msg);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.focus();
+    } else {
+      navigator.clipboard.writeText(msg).catch(() => {});
+      toast({ title: "Copied to clipboard", description: "Paste into Scout to debrief." });
+    }
+  };
 
   const openTranscript = async (m: Meeting) => {
     if (!m.transcriptFile) return;
@@ -311,7 +397,7 @@ export default function AdminMeetings() {
                   </p>
                 </div>
 
-                <div className="shrink-0">
+                <div className="shrink-0 flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -322,12 +408,95 @@ export default function AdminMeetings() {
                     <FileText className="h-4 w-4 mr-2" />
                     Read transcript
                   </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-white/40 hover:text-white hover:bg-white/[0.06]"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem
+                        disabled={!m.transcriptFile}
+                        onClick={() => openTranscript(m)}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Read transcript
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => debriefMeeting(m)}>
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Debrief with Scout
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => startRename(m)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-red-400 focus:text-red-400"
+                        onClick={() => setDeleteTarget(m)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Rename dialog */}
+      <Dialog open={!!renameTarget} onOpenChange={(o) => { if (!o) setRenameTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename meeting</DialogTitle>
+            <DialogDescription className="text-xs">
+              Must stay in meeting-YYYYMMDD-HHMM format. All files in the archive are moved.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") commitRename(); }}
+            className="bg-white/[0.03] border-white/[0.08] text-white"
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRenameTarget(null)} disabled={renaming}>
+              Cancel
+            </Button>
+            <Button onClick={commitRename} disabled={renaming}>
+              {renaming ? "Renaming…" : "Rename"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete meeting?</DialogTitle>
+            <DialogDescription>
+              This permanently removes all files for {deleteTarget?.id} from Nextcloud. There is no undo.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={commitDelete} disabled={deleting}>
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
