@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Smartphone, RefreshCw, Loader2, Check } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -8,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
  * on a device where he is already signed in (bestly.tech/admin/approve), taps
  * Approve, and this browser gets a one-time session. See admin-device-login.
  */
-type Req = { id: string; code: string; secret: string; expires_at: string };
+type Req = { id: string; code: string; secret: string; expires_at: string; match: number };
 
 export function DeviceSignIn({ onSignedIn }: { onSignedIn: () => void }) {
   const [req, setReq] = useState<Req | null>(null);
@@ -88,10 +89,22 @@ export function DeviceSignIn({ onSignedIn }: { onSignedIn: () => void }) {
       )}
       {state === "waiting" && req && (
         <>
-          <p className="text-xs text-white/60">On your phone, open</p>
-          <p className="mt-0.5 text-sm font-semibold">bestly.tech/admin/approve</p>
-          <p className="mt-1 text-xs text-white/60">and type this code (a push is on its way too)</p>
-          <p className="mt-4 select-all font-mono text-[2rem] font-semibold tracking-[0.18em]">{req.code}</p>
+          <p className="text-sm font-medium">Scan with your phone's camera</p>
+          <div className="mx-auto mt-3 w-fit rounded-xl bg-white p-3">
+            <QRCodeSVG
+              value={`${window.location.origin}/admin/approve?code=${encodeURIComponent(req.code)}`}
+              size={168}
+              level="M"
+              bgColor="#ffffff"
+              fgColor="#000000"
+              aria-label="QR code to approve this sign-in on your phone"
+            />
+          </div>
+          <p className="mt-4 text-xs text-white/60">Then type this number on your phone</p>
+          <p className="mt-1 font-mono text-[2.5rem] font-semibold leading-none tracking-[0.12em]">{req.match}</p>
+          <p className="mt-4 text-[0.6875rem] text-white/45">
+            No camera? Open bestly.tech/admin/approve and type <span className="select-all font-mono text-white/70">{req.code}</span>
+          </p>
           <p className="mt-3 flex items-center justify-center gap-2 text-xs text-white/50">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Waiting for your OK · {mins}:{secs}
           </p>

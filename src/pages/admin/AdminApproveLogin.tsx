@@ -20,13 +20,17 @@ function browserName(ua: string | null) {
 
 export default function AdminApproveLogin() {
   const [params] = useSearchParams();
-  const [code, setCode] = useState(params.get("code") ?? "");
+  const linked = params.get("code") ?? "";
+  const [code, setCode] = useState(linked);
+  const [num, setNum] = useState("");
   const [req, setReq] = useState<Lookup | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [done, setDone] = useState<"approved" | "denied" | null>(null);
 
   const clean = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  // Arrived through a QR or link: the code wasn't typed from the screen, so the number must be.
+  const needsNumber = !!linked && clean === linked.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
   useEffect(() => {
     setReq(null);
@@ -46,7 +50,9 @@ export default function AdminApproveLogin() {
 
   const decide = async (approve: boolean) => {
     setBusy(true);
-    const { data, error } = await supabase.functions.invoke("admin-device-login", { body: { op: "decide", code: clean, approve } });
+    const body: Record<string, unknown> = { op: "decide", code: clean, approve };
+    if (approve && needsNumber) body.match = Number(num);
+    const { data, error } = await supabase.functions.invoke("admin-device-login", { body });
     setBusy(false);
     if (error || !data?.ok) setMsg(data?.error ?? error?.message ?? "That didn't work.");
     else setDone(approve ? "approved" : "denied");
@@ -72,7 +78,7 @@ export default function AdminApproveLogin() {
       ) : (
         <>
           <input
-            autoFocus
+            autoFocus={!linked}
             inputMode="text"
             autoCapitalize="characters"
             autoComplete="one-time-code"
@@ -99,9 +105,24 @@ export default function AdminApproveLogin() {
                   </p>
                 </div>
               </div>
+              {req.live && needsNumber && (
+                <label className="mt-5 block">
+                  <span className="text-sm text-white/80">Type the number shown on the other screen</span>
+                  <input
+                    autoFocus
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={2}
+                    value={num}
+                    onChange={(e) => setNum(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                    aria-label="Number on the other screen"
+                    className="mt-2 w-24 rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2.5 text-center font-mono text-2xl tracking-[0.2em] text-white focus:border-white/35 focus:outline-none"
+                  />
+                </label>
+              )}
               {req.live ? (
                 <div className="mt-5 flex gap-2">
-                  <Button disabled={busy} onClick={() => decide(true)} className="h-11 flex-1 bg-white text-black hover:bg-white/90">
+                  <Button disabled={busy || (needsNumber && num.length !== 2)} onClick={() => decide(true)} className="h-11 flex-1 bg-white text-black hover:bg-white/90">
                     Approve
                   </Button>
                   <Button disabled={busy} variant="ghost" onClick={() => decide(false)} className="h-11 border border-white/15 text-white/70 hover:bg-white/5">

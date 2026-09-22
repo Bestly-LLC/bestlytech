@@ -6,6 +6,10 @@
 //   op poll {id, secret} every 2s        op decide {code, approve}
 //   ... approved -> one-time token_hash -> supabase.auth.verifyOtp() -> signed in
 //
+// QR: the new browser shows a QR of /admin/approve?code=... plus a 2-digit number.
+// A scanned (pre-filled) code must be approved by typing that number (1 in 90 to guess,
+// and a wrong number blocks the request), so a forwarded link can't be approved blind.
+//
 // The code alone is worthless: only the browser holding the secret can collect
 // the session, only once, within 5 minutes, and only after an admin approved it
 // with their own session. Same token_hash handoff webauthn-authenticate uses.
@@ -66,16 +70,17 @@ Deno.serve(async (req) => {
       if ((count ?? 0) >= 20) return J({ ok: false, error: "Too many sign-in requests. Try again in a few minutes." }, 429);
       const secret = [...crypto.getRandomValues(new Uint8Array(32))].map((x) => x.toString(16).padStart(2, "0")).join("");
       const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;
+      const match_num = 10 + (crypto.getRandomValues(new Uint8Array(1))[0] % 90);
       for (let i = 0; i < 5; i++) {
         const code = makeCode();
         const { data, error } = await db.from("admin_device_logins").insert({
-          code, secret_sha256: await sha256(secret),
+          code, secret_sha256: await sha256(secret), match_num,
           user_agent: String(req.headers.get("user-agent") ?? "").slice(0, 300), ip,
         }).select("id, code, expires_at").single();
         if (!error) {
           // One phone push per burst, so a stranger can't spam it. The approve page still needs the code.
           if (!body.silent && (count ?? 0) < 3) await db.rpc("admin_login_push");
-          return J({ ok: true, id: data.id, code: data.code, secret, expires_at: data.expires_at });
+          return J({ ok: true, id: data.id, code: data.code, secret, expires_at: data.expires_at, match: match_num });
         }
       }
       return J({ ok: false, error: "Could not make a code. Try again." }, 500);
@@ -107,13 +112,21 @@ Deno.serve(async (req) => {
       if (!admin) return J({ ok: false, error: "Sign in on this device first." }, 401);
       const code = normCode(body.code);
       if (!code) return J({ ok: false, error: "That code should be 8 letters and numbers." }, 400);
-      const { data: row } = await db.from("admin_device_logins").select("id, code, status, created_at, expires_at, user_agent, ip")
+      const { data: row } = await db.from("admin_device_logins").select("id, code, status, created_at, expires_at, user_agent, ip, match_num")
         .eq("code", code).maybeSingle();
       if (!row) return J({ ok: false, error: "No sign-in request with that code." }, 404);
       const live = row.status === "pending" && new Date(row.expires_at) > now;
-      if (op === "lookup") return J({ ok: true, request: { ...row, live } });
+      if (op === "lookup") {
+        const { match_num: _hidden, ...pub } = row; // never sent: the approver has to read it off the other screen
+        return J({ ok: true, request: { ...pub, live } });
+      }
       if (!live) return J({ ok: false, error: `That request is ${row.status === "pending" ? "expired" : row.status}. Start again on the other browser.` }, 409);
       const approve = !!body.approve;
+      // A pick that doesn't match means this screen isn't the one asking: refuse it for good.
+      if (approve && body.match !== undefined && Number(body.match) !== row.match_num) {
+        await db.from("admin_device_logins").update({ status: "denied", approved_at: now.toISOString() }).eq("id", row.id).eq("status", "pending");
+        return J({ ok: false, error: "That number doesn't match the other screen, so the request was blocked. Start again there." }, 409);
+      }
       await db.from("admin_device_logins").update({
         status: approve ? "approved" : "denied", approved_by: approve ? admin.id : null, approved_at: now.toISOString(),
       }).eq("id", row.id).eq("status", "pending");
