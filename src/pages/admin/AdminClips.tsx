@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { startClipUpload, subscribeClipUploads, dismissUpload, CLIPS_CHANGED, type ClipUpload } from "./clipUploads";
 
 import { AdminMark } from "@/components/AdminMark";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -273,7 +274,7 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const [clips, setClips] = useState<Clip[] | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [uploading, setUploading] = useState<string[]>([]);
+  const [uploading, setUploading] = useState<ClipUpload[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -293,6 +294,15 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
     void load();
   }, [load]);
 
+  useEffect(() => subscribeClipUploads((u) => setUploading(u.filter((x) => x.status !== "done"))), []);
+
+  // A finished upload inserts its row from outside React; pick it up straight away.
+  useEffect(() => {
+    const on = () => void load();
+    window.addEventListener(CLIPS_CHANGED, on);
+    return () => window.removeEventListener(CLIPS_CHANGED, on);
+  }, [load]);
+
   // While anything is still being worked on, keep checking - the Mac writes back out of band.
   const pending = useMemo(() => (clips ?? []).filter((c) => c.status === "new" || c.status === "working").length, [clips]);
   useEffect(() => {
@@ -302,44 +312,14 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
   }, [pending, load]);
 
   const upload = useCallback(
-    async (files: File[]) => {
+    (files: File[]) => {
       const good = files.filter((f) => AUDIO_EXT.has((f.name.split(".").pop() ?? "").toLowerCase()));
       const bad = files.length - good.length;
       if (bad) toast({ title: `Skipped ${bad} file${bad > 1 ? "s" : ""}`, description: "Audio files only." });
-      if (!good.length) return;
-
-      setUploading((u) => [...u, ...good.map((f) => f.name)]);
-      for (const f of good) {
-        try {
-          const clean = f.name.replace(/[^\w.\- ]+/g, "").slice(-120) || "clip.m4a";
-          const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-          const path = `upload/${stamp}-${clean}`;
-          const { error: upErr } = await supabase.storage
-            .from("voice-clips")
-            .upload(path, f, { contentType: f.type || "audio/mp4", upsert: false });
-          if (upErr) throw upErr;
-          const { error: insErr } = await supabase.from("voice_clips").insert({
-            title: clean.replace(/\.[^.]+$/, ""),
-            path,
-            bytes: f.size,
-            source: "upload",
-            recorded_at: f.lastModified ? new Date(f.lastModified).toISOString() : null,
-          });
-          if (insErr) throw insErr;
-        } catch (e) {
-          toast({
-            title: `Upload failed: ${f.name}`,
-            description: e instanceof Error ? e.message : String(e),
-            variant: "destructive",
-          });
-        } finally {
-          setUploading((u) => u.filter((n) => n !== f.name));
-        }
-      }
-      await load();
-      toast({ title: "Queued", description: "The Mac mini will transcribe and summarise it." });
+      // Handed to the module-level queue: it keeps going if this page unmounts.
+      for (const f of good) void startClipUpload(f);
     },
-    [load, toast],
+    [toast],
   );
 
   const remove = useCallback(
@@ -418,16 +398,41 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
         }}
       />
 
-      {uploading.map((name) => (
-        <div key={name} className="clip-busy rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+      {uploading.map((u) => (
+        <div
+          key={u.id}
+          className={cn(
+            "rounded-xl border p-4 sm:p-5",
+            u.status === "error" ? "border-red-500/25 bg-red-500/[0.06]" : "clip-busy border-white/10 bg-white/[0.03]",
+          )}
+        >
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate text-white font-medium">{name}</p>
-              <p className="mt-1 text-xs text-white/45">Uploading</p>
+              <p className="truncate font-medium text-white">{u.name}</p>
+              <p className="mt-1 text-xs text-white/45">
+                {u.status === "error"
+                  ? `Upload failed - ${u.error ?? "unknown"}`
+                  : u.status === "saving"
+                    ? "Saving"
+                    : `Uploading ${fmtBytes(u.sent)} of ${fmtBytes(u.bytes)}`}
+              </p>
             </div>
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-white/50" />
+            {u.status === "error" ? (
+              <Button size="sm" variant="ghost" className="text-white/50" onClick={() => dismissUpload(u.id)}>
+                Dismiss
+              </Button>
+            ) : (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-white/50" />
+            )}
           </div>
-          <div className="mt-4 h-10 rounded-lg bg-white/[0.04]" />
+          {u.status !== "error" && (
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+              <div
+                className="h-full rounded-full bg-[#0A84FF] transition-[width] duration-200"
+                style={{ width: `${Math.round((u.pct ?? 0) * 100)}%` }}
+              />
+            </div>
+          )}
         </div>
       ))}
 

@@ -151,7 +151,7 @@ export function PartnerHome({ session }: { session: Session }) {
   // Read once: switching tabs rewrites the address, and "view as" must survive that.
   const [asParam] = useState(() => new URLSearchParams(window.location.search).get("as")?.toLowerCase() || null);
   const notifs = usePartnerNotifs(asParam);
-  const { next: nextMtg } = useNextMeeting();
+  const { next: nextMtg, events: upcoming } = useNextMeeting();
   useEffect(() => {
     const on = async (e: Event) => {
       const a = (e as CustomEvent<Att>).detail;
@@ -351,7 +351,7 @@ export function PartnerHome({ session }: { session: Session }) {
               files={files} pipe={pipe} go={setTab} openCall={(m) => { setTab("calls"); setOpenCall(m); }}
               openMail={(m) => { setTab("mail"); setOpenMail(m); }} ask={askScout} scout={scout} />
           )}
-          {tab === "calls" && (openCall ? <CallView m={openCall} onBack={() => setOpenCall(null)} onAsk={askScout} /> : <CallsTab meetings={meetings} open={setOpenCall} />)}
+          {tab === "calls" && (openCall ? <CallView m={openCall} onBack={() => setOpenCall(null)} onAsk={askScout} /> : <CallsTab meetings={meetings} open={setOpenCall} upcoming={upcoming} />)}
           {tab === "scout" && <PartnerScout scout={scout} name={first} draft={askDraft} onDraftUsed={() => setAskDraft(undefined)} />}
           {tab === "mail" && <MailTab mail={mail} open={openMail} setOpen={setOpenMail} onAsk={askScout} />}
           {tab === "files" && <FilesTab files={files} docs={docs} openMail={(m) => { setTab("mail"); setOpenMail(m); }} />}
@@ -745,15 +745,43 @@ function hit(q: string, ...fields: unknown[]) {
   return words.every((w) => hay.includes(w));
 }
 /** Everything worth searching about a call: when it was, who was on it, and what came out of it. */
+/** "Tue, Sep 29 at 11:00 AM" - whenLabel is for things happening imminently. */
+const longWhen = (iso: string) =>
+  new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...PT });
+
 const callText = (m: Meeting) => [meetingDate(m), new Date(m.started_at ?? 0).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", ...PT }),
   (m.people ?? []).join(" "), m.name, m.summary ? JSON.stringify(m.summary) : ""].join(" ");
 
-function CallsTab({ meetings, open }: { meetings: Meeting[] | null; open: (m: Meeting) => void }) {
+function CallsTab({ meetings, open, upcoming = [] }: { meetings: Meeting[] | null; open: (m: Meeting) => void; upcoming?: NextEvent[] }) {
   const [q, setQ] = useState("");
   const shown = (meetings ?? []).filter((m) => hit(q, callText(m)));
+  // Anything booked on Jared's calendar that you are on, so a call is here before it happens.
+  const booked = upcoming.filter((e) => hit(q, e.title, e.start));
   return (
     <div>
-      <TabHead title="Calls" sub="Every call you were on, with what was decided." q={q} setQ={setQ} placeholder="Search calls" />
+      <TabHead title="Calls" sub="What's booked, and every call you were on." q={q} setQ={setQ} placeholder="Search calls" />
+
+      {!!booked.length && (
+        <div className="mb-7">
+          <h3 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-white/45">Coming up</h3>
+          <ul className="space-y-2">
+            {booked.map((e, i) => (
+              <li key={i} className={cn(card, "flex flex-wrap items-center justify-between gap-3 px-4 py-3")}>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{e.title}</p>
+                  <p className="mt-0.5 text-xs text-white/50">{longWhen(e.start)}</p>
+                </div>
+                {e.join_url && (
+                  <a href={e.join_url} target="_blank" rel="noreferrer"
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 text-sm font-semibold text-[#fff] transition hover:bg-emerald-400">
+                    <Video className="h-4 w-4" /> Join
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {meetings === null ? <Skeleton /> : shown.length === 0 ? <Muted>{meetings.length ? "No calls match." : "No calls yet."}</Muted> : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((m) => (

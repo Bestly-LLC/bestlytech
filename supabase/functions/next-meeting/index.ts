@@ -99,7 +99,18 @@ Deno.serve(async (req) => {
 
   let list = events.filter((e) => Date.parse(e.end ?? e.start) > Date.now() - 15 * 60e3).sort((a, b) => a.start.localeCompare(b.start));
   if (!isAdmin && partner) {
-    const keys = [partner.email?.toLowerCase(), partner.name?.toLowerCase().split(" ")[0], partner.roster_name].filter(Boolean) as string[];
+    // Match on anything that identifies him in the event: the address he was invited at,
+    // his full name, either half of it, and his roster handle. A call he is on shows up
+    // whether Jared invited "Eli", "Eli Cooper" or eli.cooper@bdcuniversal.com.
+    const name = partner.name?.toLowerCase().trim() ?? "";
+    const email = partner.email?.toLowerCase() ?? "";
+    const keys = [
+      email,
+      email.split("@")[0],
+      name,
+      ...name.split(/\s+/),
+      partner.roster_name?.toLowerCase(),
+    ].filter((k): k is string => !!k && k.length > 2);
     list = list.filter((e) => keys.some((k) => e.text.includes(k)));
   }
   const clean = list.slice(0, 12).map(({ text: _t, ...e }) => e);

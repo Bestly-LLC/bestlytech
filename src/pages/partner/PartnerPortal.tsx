@@ -13,6 +13,7 @@ import { Check, Eye, EyeOff, Fingerprint, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { cn } from "@/lib/utils";
+import { BrandLoader } from "@/components/BrandLoader";
 import { AdminMark, SIGNIN_STARE_RADIUS_PX } from "@/components/AdminMark";
 import { PartnerMark } from "@/components/PartnerMark";
 import { PartnerHome } from "./PartnerHome";
@@ -259,9 +260,9 @@ export default function PartnerPortal() {
   }, [session?.user.id]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const key = useMemo(() => loc.pathname, [loc.pathname]);
-  if (session === undefined) return <Shell><p className="mt-10 flex items-center gap-2 text-white/60" key={key}><Loader2 className="h-5 w-5 animate-spin" /> Loading…</p></Shell>;
+  if (session === undefined) return <Shell><div key={key}><BrandLoader tone="dark" label="Loading your portal" /></div></Shell>;
   if (!session) return <SignIn />;
-  if (keys === null) return <Shell><p className="mt-10 flex items-center gap-2 text-white/60"><Loader2 className="h-5 w-5 animate-spin" /> Loading…</p></Shell>;
+  if (keys === null) return <Shell><BrandLoader tone="dark" label="Loading your portal" /></Shell>;
   if (keys === 0) return <PasskeyGate session={session} done={() => setKeys(1)} />;
   return <PartnerHome session={session} />;
 }

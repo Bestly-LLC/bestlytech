@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { CommandPalette, OPEN_ADMIN_PALETTE_EVENT } from "./CommandPalette";
 import { NotificationBell } from "./NotificationBell";
 import { RecordingPill } from "./ScoutRecorder";
+import { ClipActivity } from "./ClipActivity";
 import { Scout } from "./Scout";
 
 const BREADCRUMB_MAP: Record<string, string> = {
@@ -133,6 +134,7 @@ export function AdminLayout() {
                   </TooltipTrigger>
                   <TooltipContent>{bento ? "Dark theme" : "Light theme"}</TooltipContent>
                 </Tooltip>
+                <ClipActivity />
                 <RecordingPill />
                 <NotificationBell />
                 <Tooltip>
