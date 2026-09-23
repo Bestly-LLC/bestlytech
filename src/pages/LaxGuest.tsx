@@ -397,7 +397,7 @@ export default function LaxGuest() {
               style={{ background: "linear-gradient(135deg, rgba(122,46,158,0.35), rgba(43,26,115,0.6))" }}>
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Who made this page?</p>
               <p className="mt-1 text-lg font-semibold text-white">Bestly built it. We can build one for you.</p>
-              <p className="mt-1.5 text-[15px] leading-relaxed text-white/75">We make websites, apps, and tools for small businesses. Like this page: live car info, A/C buttons, and a door pass right in your phone.</p>
+              <p className="mt-1.5 text-[15px] leading-relaxed text-white/75">We make websites, apps, and tools for small businesses. Like this page: live car info, A/C buttons, and a lobby door pass right in your phone.</p>
               <span className="mt-4 inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-[15px] font-semibold text-[#1A1140]">Tell us what you need <ArrowRight className="h-4 w-4" aria-hidden /></span>
               <span className="mt-3 block text-[12px] text-white/45">bestly.tech · Los Angeles</span>
             </a>
