@@ -227,7 +227,7 @@ export default function LaxGuest() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-md px-5 pb-36 pt-5">
+      <main className="mx-auto max-w-md px-5 pb-48 pt-5">
         {!pub ? (
           <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-white/60" /></div>
         ) : !pub.ok ? (
@@ -386,8 +386,7 @@ export default function LaxGuest() {
               )}
             
             </TripSheet>
-            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} />
-            {!sheet && <AskButton onOpen={() => openSheet("ask")} />}
+            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} />
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
 
             <p className="mt-10 text-center text-sm text-white/50">Questions? Tap Ask a question, or message your host in the Turo app.</p>

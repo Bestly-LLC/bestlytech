@@ -15,13 +15,13 @@ const rpc = (fn: string, args?: Record<string, unknown>) =>
 
 const SUGGEST = ["Where do I catch the shuttle?", "How hot is the car right now?", "How do I unlock the Tesla?", "How do I return the car?", "The QR code won't scan"];
 
-/** Floating luggage-tag button that opens the helper. Sits just above the Pickup / Return bar. */
+/** Slim button in the bottom bar, above the Pickup / Return tags. */
 export function AskButton({ onOpen }: { onOpen: () => void }) {
   return (
     <button type="button" onClick={onOpen}
-      className="fixed right-4 z-40 flex h-11 items-center gap-2 rounded-full bg-[#EDE7FF] pl-3 pr-4 text-[15px] font-bold text-[#1A1140] shadow-lg shadow-black/40 ring-2 ring-[#1A1140]/20 active:scale-95 motion-reduce:transition-none"
-      style={{ bottom: "calc(max(10px, env(safe-area-inset-bottom)) + 84px)" }}>
-      <MessageCircleQuestion className="h-5 w-5" aria-hidden /> Ask a question
+      className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white/[0.08] text-[15px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98] motion-reduce:transition-none">
+      <MessageCircleQuestion className="h-[18px] w-[18px]" style={{ color: PEACH }} aria-hidden /> Ask a question
+      <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#1A1140]" style={{ background: PEACH }}>Free</span>
     </button>
   );
 }

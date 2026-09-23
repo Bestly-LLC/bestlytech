@@ -42,12 +42,13 @@ function Tag({ which, active, onClick }: { which: Which; active: boolean; onClic
   );
 }
 
-export function TagBar({ open, onOpen }: { open: Which | null; onOpen: (w: Which) => void }) {
+export function TagBar({ open, onOpen, top }: { open: Which | null; onOpen: (w: Which) => void; top?: ReactNode }) {
   return (
     <nav aria-label="Trip steps" className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#140c33]/90 backdrop-blur-md"
       style={{ paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
       {/* luggage strap across the bar */}
       <div aria-hidden className="h-[3px] w-full" style={{ background: `repeating-linear-gradient(90deg, ${PEACH}55 0 10px, transparent 10px 16px)` }} />
+      {top && <div className="mx-auto max-w-md px-4 pt-2.5">{top}</div>}
       <div className="mx-auto flex max-w-md gap-3 px-4 pt-2.5">
         <Tag which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} />
         <Tag which="return" active={open === "return"} onClick={() => onOpen("return")} />
