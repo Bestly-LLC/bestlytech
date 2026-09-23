@@ -17,8 +17,9 @@ import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 
 type CodeRow = { id: string; payload: string; valid_month: string; note: string | null; created_at: string; is_this_month?: boolean };
+type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string };
 type State = {
-  slug: string; month_now: string; current: CodeRow | null; history: CodeRow[];
+  slug: string; guide: Guide; month_now: string; current: CodeRow | null; history: CodeRow[];
   wallet_devices: number; last_push: { at: string; detail: { devices?: number; sent?: number; failed?: number } } | null;
 };
 
@@ -51,6 +52,51 @@ async function readQr(file: Blob): Promise<string | null> {
   const { data, error } = await supabase.functions.invoke("wallet-pass", { body: { op: "decode", png } });
   if (error) throw new Error(error.message);
   return (data as { payload?: string | null })?.payload ?? null;
+}
+
+const GUIDE_FIELDS: { key: keyof Guide; label: string; hint?: string }[] = [
+  { key: "spot", label: "Your space (this trip)", hint: "e.g. 214. Leave blank and the page says you'll text it." },
+  { key: "garage", label: "Garage address" },
+  { key: "level", label: "Level" },
+  { key: "shuttle", label: "Shuttle" },
+  { key: "after_hours", label: "After-hours shuttle phone" },
+  { key: "car", label: "Car" },
+];
+
+/** The pickup guide guests see (garage, level, space, shuttle, after-hours number). Prefilled; edit any time. */
+function GuideCard({ guide, onSaved }: { guide: Guide; onSaved: () => void }) {
+  const [g, setG] = useState<Guide>(guide);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setG(guide), [guide]);
+  const dirty = GUIDE_FIELDS.some(({ key }) => (g[key] ?? "") !== (guide[key] ?? ""));
+  const save = async () => {
+    setSaving(true);
+    const { error } = await rpc("lax_pass_set_guide", { p_guide: g });
+    setSaving(false);
+    if (error) toast.error(error.message); else { toast.success("Guide updated. The guest page and saved passes show it now."); onSaved(); }
+  };
+  return (
+    <div className={cn(card, "space-y-4")}>
+      <div>
+        <p className="text-sm font-medium text-white bento:text-neutral-900">Pickup guide</p>
+        <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Shows on the guest page and the back of the Wallet pass. Already filled in; change the space per trip.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {GUIDE_FIELDS.map(({ key, label, hint }) => (
+          <label key={key} className={cn("block text-sm", key === "spot" && "sm:col-span-2")}>
+            <span className="text-white/60 bento:text-neutral-600">{label}</span>
+            <input value={g[key] ?? ""} onChange={(e) => setG({ ...g, [key]: e.target.value })} maxLength={120}
+              className="mt-1 w-full rounded-lg border border-white/10 bg-transparent px-2.5 py-2 text-white bento:border-neutral-200 bento:text-neutral-900" />
+            {hint && <span className="mt-1 block text-xs text-white/40 bento:text-neutral-400">{hint}</span>}
+          </label>
+        ))}
+      </div>
+      <button type="button" onClick={save} disabled={!dirty || saving}
+        className="inline-flex items-center gap-2 rounded-full bg-violet-500 px-5 py-2 text-sm font-medium text-white hover:bg-violet-400 disabled:opacity-40">
+        {saving && <Loader2 className="h-4 w-4 animate-spin" />} Save guide
+      </button>
+    </div>
+  );
 }
 
 export default function LaxPass() {
@@ -112,7 +158,7 @@ export default function LaxPass() {
   };
 
   const link = st ? `${SITE}/lax/${st.slug}` : "";
-  const message = `Parking at LAX: open this link and add the pass to your Apple or Google Wallet. Show the QR code at the Park My Share lot. ${link}`;
+  const message = `Getting your Tesla at LAX: everything you need is on this page — shuttle steps, the garage, and your QR code (add it to your Apple or Google Wallet). ${link}`;
   const cur = st?.current;
   const missing = st && (!cur || !cur.is_this_month);
 
@@ -189,6 +235,8 @@ export default function LaxPass() {
           </div>
         </div>
       )}
+
+      {st && <GuideCard guide={st.guide ?? {}} onSaved={load} />}
 
       {/* Guest link */}
       {st && (
