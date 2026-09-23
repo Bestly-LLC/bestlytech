@@ -3,8 +3,10 @@ import { ThemeProvider } from "next-themes";
 import App from "./App.tsx";
 import { installCopyableToasts } from "./lib/copyableToasts";
 import { installTwelveHourClock } from "./lib/twelveHourClock";
+import { installCspWatch } from "./lib/cspWatch";
 
 installTwelveHourClock();
+installCspWatch();
 installCopyableToasts();
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
