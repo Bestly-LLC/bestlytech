@@ -223,21 +223,34 @@ export function Scout() {
   // On a phone Scout is the whole screen: the draggable box, the resize grips and the
   // saved position are desktop furniture and get ignored rather than shrunk.
   const phone = useIsMobile();
-  // iOS slides the keyboard over a fixed panel rather than resizing the page, so the
-  // composer ends up underneath it. visualViewport is the only thing that knows how
-  // much screen is actually left; the sheet takes its height from that.
-  const [kb, setKb] = useState(0);
+  // A `fixed; inset-0` sheet is laid out against the LAYOUT viewport. iOS never resizes
+  // that for the keyboard, and when it auto-zooms or pans it moves the VISUAL viewport
+  // underneath instead - so the sheet ends up wider than the screen and shoved sideways,
+  // which is exactly what it was doing. Pin the sheet to the visual viewport instead:
+  // that rectangle is, by definition, what the person can actually see.
+  const [vv, setVv] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!phone || !vv || !open) return;
-    const on = () => setKb(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    const v = window.visualViewport;
+    if (!phone || !open) return setVv(null);
+    if (!v) return;
+    const on = () => setVv({ top: v.offsetTop, left: v.offsetLeft, width: v.width, height: v.height });
     on();
-    vv.addEventListener("resize", on);
-    vv.addEventListener("scroll", on);
+    v.addEventListener("resize", on);
+    v.addEventListener("scroll", on);
     return () => {
-      vv.removeEventListener("resize", on);
-      vv.removeEventListener("scroll", on);
-      setKb(0);
+      v.removeEventListener("resize", on);
+      v.removeEventListener("scroll", on);
+      setVv(null);
+    };
+  }, [phone, open]);
+
+  // While the sheet is up, the page behind it must not scroll or rubber-band.
+  useEffect(() => {
+    if (!phone || !open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
     };
   }, [phone, open]);
   const [closing, setClosing] = useState(false);
@@ -317,8 +330,8 @@ export function Scout() {
   }, [msgs, busy, jobs, pin]);
 
   useEffect(() => {
-    if (open && view === "chat") inputRef.current?.focus();
-  }, [open, view]);
+    if (open && view === "chat" && !phone) inputRef.current?.focus();
+  }, [open, view, phone]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -618,14 +631,14 @@ export function Scout() {
       <section
         ref={sectionRef}
         aria-label="Scout"
-        style={box && !phone ? { left: box.x, top: box.y, width: box.w, height: box.h } : phone && kb ? { bottom: kb } : undefined}
+        style={box && !phone ? { left: box.x, top: box.y, width: box.w, height: box.h } : phone && vv ? vv : undefined}
         className={cn(
           "scout-pop-in scout-panel fixed z-40 flex flex-col overflow-hidden rounded-2xl shadow-2xl",
           closing && "scout-closing",
           dragging && "scout-dragging",
           settling && "scout-settling",
           phone
-            ? "inset-0 rounded-none pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]"
+            ? "inset-0 max-w-[100vw] overflow-x-hidden rounded-none border-0"
             : !box && "bottom-5 right-5 w-[min(25rem,calc(100vw-2.5rem))] max-h-[min(38rem,calc(100vh-6rem))]",
           "border border-white/[0.08] bg-black/95 backdrop-blur-xl",
         )}
@@ -647,7 +660,10 @@ export function Scout() {
         <div
           onPointerDown={(e) => !phone && startDrag(e, "move")}
           onDoubleClick={resetBox}
-          className="flex cursor-default items-center gap-1.5 border-b border-white/[0.06] px-2.5 py-2 sm:cursor-grab sm:active:cursor-grabbing"
+          className={cn(
+            "flex cursor-default items-center gap-1.5 border-b border-white/[0.06] px-2.5 py-2 sm:cursor-grab sm:active:cursor-grabbing",
+            phone && "pt-[max(0.5rem,env(safe-area-inset-top))]",
+          )}
         >
           {view === "history" ? (
             <Button
@@ -898,7 +914,7 @@ export function Scout() {
         )}
 
         {view === "chat" && (
-          <div className="border-t border-white/[0.06] p-3">
+          <div className={cn("border-t border-white/[0.06] p-3", phone && "pb-[max(0.75rem,env(safe-area-inset-bottom))]")}>
             {editing && (
               <div className="mb-2 flex items-center gap-2 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-xs text-white/70">
                 <Pencil className="h-3 w-3 shrink-0" aria-hidden />
