@@ -620,10 +620,11 @@ const FREE_FACTS = `Facts about the admin you may use:
 - Failed voice-clip uploads on the Clips page are reported to Scout as an incident and clear with a "Fixed" alert when the next upload works.
 - Auto-run (Scout does things without asking) and Paid AI switches sit at the top of the Scout panel.`;
 
-/** Paid AI said "credit balance too low" in the last 6 hours (the bell card it leaves behind). */
+/** Paid AI said "credit balance too low" in the last day and hasn't worked since (the unread bell card). */
 async function paidOutOfCredit(): Promise<boolean> {
-  const since = new Date(Date.now() - 6 * 3600_000).toISOString();
-  const { data } = await db.from("admin_notifications").select("id").like("dedupe_key", "scout.credit:%").gte("created_at", since).limit(1);
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const { data } = await db.from("admin_notifications").select("id").like("dedupe_key", "scout.credit:%")
+    .is("read_at", null).gte("created_at", since).limit(1);
   return !!data?.length;
 }
 
@@ -1124,6 +1125,8 @@ Deno.serve(async (req) => {
   }
 
   if (!reply) reply = "Done.";
+  // Paid AI answered, so any "out of credit" card is stale: clear it so Scout offers paid AI again.
+  await db.from("admin_notifications").update({ read_at: new Date().toISOString() }).like("dedupe_key", "scout.credit:%").is("read_at", null);
   await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
   await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
 
