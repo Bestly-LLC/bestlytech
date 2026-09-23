@@ -256,6 +256,7 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil }: { dem
       <p className="mt-2 min-h-[1.25rem] text-[12px] leading-snug text-emerald-300" aria-live="polite">{done}</p>
       <p className="text-[11px] leading-snug text-white/55">
         {demo ? "Preview only. Not connected to the car yet."
+          : lockedUntil === "pending" ? "Turns on when your Tesla phone key is connected, or 1 hour before pickup."
           : lockedUntil ? <>Turns on <b className="text-white/80">{fmtWhen(lockedUntil)}</b>, or as soon as your phone key is connected.</>
           : "Works until your trip ends."}
       </p>
@@ -285,8 +286,6 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
         )}
         {(demo || onClimate || lockedUntil) ? (
           <ClimateControls demo={demo} onAction={onClimate} compact lockedUntil={lockedUntil} />
-        ) : !trip ? (
-          <p className="mt-auto pt-3 text-[12px] leading-snug text-white/60">A/C buttons are on your personal trip link from your host.</p>
         ) : null}
       </div>
     );

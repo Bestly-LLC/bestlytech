@@ -129,15 +129,21 @@ export default function LaxGuest() {
   }, [slug, token]);
 
   // Car buttons: queue the command, then wait for the Mac mini helper to send it (signed) and report back.
-  const reload = () => rpc("lax_guest_public", { p_token: token }).then(({ data }) => data && setPub(data as Pub));
+  // Personal link acts for its own trip; the shared Turo link acts for the trip happening now (unlocked by the guest's phone key).
+  const reload = () => (token ? rpc("lax_guest_public", { p_token: token }) : rpc("lax_pass_public", { p_slug: slug }))
+    .then(({ data }) => data && setPub(data as Pub));
   const carCommand = async (action: ClimateAction | "refresh") => {
-    const { data, error } = await rpc("lax_guest_car_command", { p_token: token, p_action: action });
+    const { data, error } = token
+      ? await rpc("lax_guest_car_command", { p_token: token, p_action: action })
+      : await rpc("lax_shared_car_command", { p_slug: slug, p_action: action });
     const r = data as { ok: boolean; id?: number; error?: string; cached?: boolean } | null;
     if (error || !r?.ok) throw new Error(r?.error ?? error?.message ?? "Couldn't reach the car");
     if (!r.id) return;
     for (let i = 0; i < 40; i++) {
       await new Promise((res) => setTimeout(res, 3000));
-      const { data: j } = await rpc("lax_guest_car_job", { p_token: token, p_id: r.id });
+      const { data: j } = token
+        ? await rpc("lax_guest_car_job", { p_token: token, p_id: r.id })
+        : await rpc("lax_shared_car_job", { p_slug: slug, p_id: r.id });
       const job = j as { status: string; result?: { error?: string } } | null;
       if (job?.status === "done") { reload(); return; }
       if (job?.status === "failed") throw new Error(job.result?.error ?? "The car didn't respond");
@@ -147,11 +153,11 @@ export default function LaxGuest() {
   // Controls open but no fresh reading yet: ask for one (never wakes the car).
   const refreshed = useRef(false);
   useEffect(() => {
-    if (!token || !pub?.controls || pub.car || refreshed.current) return;
+    if (!pub?.controls || pub.car || refreshed.current) return;
     refreshed.current = true;
     carCommand("refresh").catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pub?.controls, pub?.car, token]);
+  }, [pub?.controls, pub?.car, token, slug]);
 
   const g = pub?.guide ?? {};
   const garage = g.garage || "5730 W 98th St, LA 90045";
@@ -226,7 +232,7 @@ export default function LaxGuest() {
             {pub.trip || pub.car ? (
               <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
                 <WeatherCard trip={pub.trip ?? null} compact />
-                <CarCard trip={pub.trip ?? null} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && !demoSoon && pub.controls ? carCommand : undefined} lockedUntil={demoSoon ?? (!demoCar && pub.controls_state === "soon" ? pub.controls_opens_at ?? null : null)} />
+                <CarCard trip={pub.trip ?? null} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && !demoSoon && pub.controls ? carCommand : undefined} lockedUntil={demoSoon ?? (demoCar || pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending")} />
               </div>
             ) : (
               <div className="mt-2.5"><WeatherCard trip={null} /></div>
