@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Binoculars, CalendarClock, Check, ExternalLink, MessagesSquare, Users, Video } from "lucide-react";
+import { Bell, Binoculars, CalendarClock, Check, ExternalLink, MessagesSquare, Users, Video, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { openScout } from "@/components/admin/scoutBus";
 import { AdminMark } from "@/components/AdminMark";
@@ -14,6 +14,39 @@ import { useNextMeeting, whenLabel } from "@/pages/partner/PartnerExtras";
 import { cn } from "@/lib/utils";
 
 interface Todo { id: string; title: string; status: string; action: Record<string, any> }
+
+function NotifBanner() {
+  const [perm, setPerm] = useState<NotificationPermission | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    if (typeof Notification === "undefined") return;
+    setPerm(Notification.permission);
+  }, []);
+  if (dismissed || perm !== "default") return null;
+  const request = async () => {
+    const result = await Notification.requestPermission();
+    setPerm(result);
+  };
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm">
+      <Bell className="h-4 w-4 shrink-0 text-amber-300" aria-hidden />
+      <span className="flex-1 text-amber-100">Enable browser notifications so Scout can reach you even when this tab is in the background.</span>
+      <button
+        onClick={request}
+        className="shrink-0 rounded-xl bg-amber-400 px-3 py-1.5 text-xs font-semibold text-amber-950 transition hover:bg-amber-300 active:scale-[0.97]"
+      >
+        Enable
+      </button>
+      <button
+        onClick={() => setDismissed(true)}
+        aria-label="Dismiss"
+        className="shrink-0 rounded-full p-1 text-amber-300 hover:bg-white/10 transition"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
 const card = "rounded-[1.5rem] border border-white/[0.07] bg-white/[0.03] bento:border-transparent bento:bg-[#fff]";
 const PT = { timeZone: "America/Los_Angeles" } as const;
 
@@ -39,6 +72,7 @@ export function CommandHero() {
 
   return (
     <section className="space-y-4" aria-label="Today at a glance">
+      <NotifBanner />
       <div className={cn(card, "relative overflow-hidden p-5 sm:p-6")}>
         <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#0A84FF]/15 blur-3xl" />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
