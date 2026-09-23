@@ -16,6 +16,9 @@ import { Binoculars, Check, ChevronDown, Clock3, Copy, ExternalLink, Mail, MoreH
 import { supabase } from "@/integrations/supabase/client";
 import { askScout } from "@/components/admin/scoutBus";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
 type Status = "open" | "done" | "snoozed" | "dismissed" | "handed";
@@ -254,27 +257,25 @@ export function ScoutToday() {
 }
 
 function RunMenu({ running, onRun }: { running: string | null; onRun: (j: "morning" | "drafts" | "wrap") => void }) {
-  const [open, setOpen] = useState(false);
+  // This was a hand-rolled absolute panel with a fixed-inset backdrop. Inside the
+  // dashboard's grid it rendered as an empty black box - wrong stacking context in
+  // dark mode, invisible white-on-white text in light. The shared menu is portalled
+  // and themed, so it behaves the same everywhere.
   return (
-    <div className="relative">
-      <button className={cn(ghost, "px-2.5")} aria-label="Run Scout now" onClick={() => setOpen((o) => !o)}>
-        {running ? <RefreshCw className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-50 mt-1 w-56 overflow-hidden rounded-xl border border-white/10 bg-[#111114] p-1 shadow-2xl bento:border-black/5 bento:bg-white">
-            {([["morning", "Re-pick today's 3"], ["drafts", "Check mail for replies"], ["wrap", "Write today's wrap"]] as const).map(([j, label]) => (
-              <button key={j} disabled={!!running}
-                className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm text-white/85 hover:bg-white/[0.06]"
-                onClick={() => { setOpen(false); onRun(j); }}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className={cn(ghost, "px-2.5")} aria-label="Run Scout now">
+          {running ? <RefreshCw className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        {([["morning", "Re-pick today's 3"], ["drafts", "Check mail for replies"], ["wrap", "Write today's wrap"]] as const).map(([j, label]) => (
+          <DropdownMenuItem key={j} disabled={!!running} onSelect={() => onRun(j)}>
+            {label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

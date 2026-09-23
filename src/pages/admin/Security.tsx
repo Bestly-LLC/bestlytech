@@ -6,6 +6,8 @@ import { CopyText } from "@/components/CopyText";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { askScout } from "@/components/admin/scoutBus";
+import { Binoculars } from "lucide-react";
 import { pollInterval } from "@/lib/polling";
 import {
   fetchFindings, fetchLog, fetchRuns, runHeadline, setFindingStatus,
@@ -58,6 +60,17 @@ const ACTION_LABEL: Record<string, string> = {
 const pill = "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold";
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80";
 
+/** Everything Scout needs to actually fix it, not just be told about it. */
+function findingContext(f: SecurityFinding) {
+  return [
+    `${f.severity.toUpperCase()}: ${f.title}`,
+    `asset: ${f.asset} · layer: ${f.layer} · check: ${f.key}`,
+    `open ${f.nights_open} night${f.nights_open === 1 ? "" : "s"}`,
+    f.detail ? `\ndetail:\n${f.detail}` : "",
+    f.proposed_fix ? `\nproposed fix:\n${f.proposed_fix}` : "",
+  ].filter(Boolean).join("\n");
+}
+
 function FindingRow({ f, onChange }: { f: SecurityFinding; onChange: () => void }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -100,6 +113,20 @@ function FindingRow({ f, onChange }: { f: SecurityFinding; onChange: () => void 
         </span>
         <ChevronDown className={cn("mt-1 h-4 w-4 shrink-0 text-white/40 transition-transform", open && "rotate-180")} aria-hidden />
       </button>
+
+      {/* The proposed fix used to be a command to copy and run yourself. One tap hands
+          the whole finding to Scout instead, which is the point of having Scout. */}
+      {f.status === "open" && (
+        <div className="mt-2 pl-8">
+          <button
+            type="button"
+            onClick={() => askScout(`Fix this security finding for me.`, { about: findingContext(f) })}
+            className={cn("inline-flex h-9 items-center gap-1.5 rounded-full bg-white/[0.08] px-3.5 text-[13px] font-medium text-white hover:bg-white/[0.14]", focusRing)}
+          >
+            <Binoculars className="h-4 w-4" /> Scout fixes it
+          </button>
+        </div>
+      )}
       {open && (
         <div className="mt-3 space-y-3 pl-8">
           {f.detail && <p className="text-sm text-white/75 whitespace-pre-wrap">{f.detail}</p>}
@@ -206,6 +233,24 @@ export default function Security() {
                 ) : "No run yet."}
               </p>
               {latest?.summary && <p className="mt-2 text-sm text-white/75">{latest.summary}</p>}
+
+              {/* Self-managing is the goal: the whole open list goes to Scout in one tap,
+                  and only what genuinely needs a judgement call comes back to you. */}
+              {open.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    askScout(
+                      `Work through these ${open.length} open security findings. Fix what you can on your own, and only come back to me for the ones that actually need a decision.`,
+                      { about: open.map(findingContext).join("\n\n---\n\n") },
+                    )
+                  }
+                  className={cn("mt-3 inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90", focusRing)}
+                >
+                  <Binoculars className="h-4 w-4" />
+                  Scout works the {open.length === 1 ? "finding" : `${open.length} findings`}
+                </button>
+              )}
             </div>
           </div>
         </section>
