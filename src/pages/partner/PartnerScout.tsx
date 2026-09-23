@@ -14,6 +14,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
 import { AdminMark } from "@/components/AdminMark";
 import { cn } from "@/lib/utils";
+import { playNotifySound } from "@/lib/notifySound";
+import { showLocalNotification, registerServiceWorker } from "@/lib/webPush";
+import { useStickToBottom } from "@/lib/useStickToBottom";
 
 export interface ScoutMsg { id: string; role: "user" | "assistant"; content: string; status: "pending" | "working" | "done" | "error"; reply_to: string | null; created_at: string; updated_at?: string }
 
@@ -71,7 +74,7 @@ export function usePartnerScout(userId: string, viewing: boolean) {
     load();
     const ch = supabase.channel(`partner-scout-${userId}`)
       .on("postgres_changes" as never, { event: "*", schema: "public", table: "partner_chat", filter: `user_id=eq.${userId}` } as never,
-        (p: { eventType: string; new: ScoutMsg & { thread_id?: string }; old: { id: string } }) => {
+        (p: { eventType: string; new: ScoutMsg & { thread_id?: string }; old: { id: string; status?: string } }) => {
           setMsgs((cur) => {
             const list = cur ?? [];
             if (p.eventType === "DELETE") return list.filter((m) => m.id !== p.old.id);
@@ -80,7 +83,10 @@ export function usePartnerScout(userId: string, viewing: boolean) {
             const next = list.slice(); next[i] = { ...list[i], ...p.new }; return next;
           });
           const lookingAtIt = viewingRef.current && !document.hidden && p.new.thread_id === activeRef.current;
-          if (p.eventType === "UPDATE" && p.new.role === "assistant" && (p.new.status === "done" || p.new.status === "error") && !lookingAtIt) {
+          const finished = p.eventType === "UPDATE" && p.new.role === "assistant" && (p.new.status === "done" || p.new.status === "error")
+            && p.old?.status !== p.new.status;
+          if (finished) playNotifySound(); // same sound as Scout in the admin, every time an answer lands
+          if (finished && !lookingAtIt) {
             setAlert(p.new);
             notify(p.new);
           }
@@ -155,7 +161,6 @@ export function usePartnerScout(userId: string, viewing: boolean) {
     const row = data as unknown as ScoutMsg & { thread_id: string };
     setMsgs((cur) => (cur?.some((m) => m.id === row.id) ? cur : [...(cur ?? []), row]));
     if (row.thread_id && row.thread_id !== activeRef.current) setActive(row.thread_id);
-    askNotifyPermission();
     return { error: null };
   }, [setActive]);
   const rename = useCallback(async (id: string, title: string) => {
@@ -177,18 +182,22 @@ export function usePartnerScout(userId: string, viewing: boolean) {
 }
 export type ScoutState = ReturnType<typeof usePartnerScout>;
 
-/** Ask once, the first time he sends something, so a finished answer can reach him in another tab/app. */
-function askNotifyPermission() {
+/**
+ * Ask for notification permission. Must run synchronously inside a click: Safari silently
+ * ignores a request made after an await, which is why the old "ask after send" never showed.
+ */
+export function askNotifyPermission(): Promise<NotificationPermission | "unsupported"> {
   try {
-    if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {});
-  } catch { /* iOS Safari outside a home-screen app has no Notification */ }
+    if (!("Notification" in window)) return Promise.resolve("unsupported");
+    if (Notification.permission !== "default") return Promise.resolve(Notification.permission);
+    registerServiceWorker();
+    return Notification.requestPermission();
+  } catch { return Promise.resolve("unsupported"); } /* iOS Safari outside a home-screen app has no Notification */
 }
+/** An OS notification when an answer lands and he isn't looking at it (other tab, other app, other chat). */
 function notify(m: ScoutMsg) {
-  try {
-    if (!("Notification" in window) || Notification.permission !== "granted" || !document.hidden) return;
-    const n = new Notification("Scout answered", { body: m.content.slice(0, 140), icon: "/favicon.ico", tag: "partner-scout" });
-    n.onclick = () => { window.focus(); window.location.hash = "scout"; n.close(); };
-  } catch { /* ok */ }
+  const failed = m.status === "error";
+  showLocalNotification(failed ? "Scout hit a snag" : "Scout answered", (m.content || "").slice(0, 140), "/partner#scout", "partner-scout");
 }
 
 /* ───────── the floating "Scout answered" alert ───────── */
@@ -244,41 +253,33 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
   const [editing, setEditing] = useState<string | null>(null);
   const [below, setBelow] = useState(false); // new content arrived while scrolled up
   const box = useRef<HTMLTextAreaElement>(null);
-  const end = useRef<HTMLDivElement>(null);
-  const pinned = useRef(true); // true while the reader is at (or near) the bottom
+  const listRef = useRef<HTMLDivElement>(null);
   const [perm, setPerm] = useState(() => ("Notification" in window ? Notification.permission : "unsupported"));
   const current = threads.find((t) => t.id === active);
 
   useEffect(() => { if (draft) { setText(draft); onDraftUsed?.(); box.current?.focus(); } }, [draft, onDraftUsed]);
   useEffect(() => { const el = box.current; if (!el) return; el.style.height = "0px"; el.style.height = `${Math.min(el.scrollHeight, 180)}px`; }, [text]);
 
-  // Only follow new text when the reader is already at the bottom. Scrolling up to read stays put.
-  useEffect(() => {
-    const onScroll = () => {
-      const gap = document.documentElement.scrollHeight - (window.scrollY + window.innerHeight);
-      pinned.current = gap < 160;
-      if (pinned.current) setBelow(false);
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  // Opens at the newest message and stays there while Scout thinks and types. Only Eli
+  // scrolling up unpins it (useStickToBottom explains why earlier fixes kept jumping).
+  const { atBottom, jump: toNewest, isStuck } = useStickToBottom("window", active ?? "new", listRef);
   const last = msgs?.[msgs.length - 1];
   useEffect(() => {
     if (!msgs?.length) return;
-    if (pinned.current) end.current?.scrollIntoView({ block: "end" });
-    else setBelow(true);
+    if (!isStuck()) setBelow(true);
   }, [msgs?.length, last?.content, last?.status]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { pinned.current = true; setBelow(false); requestAnimationFrame(() => end.current?.scrollIntoView({ block: "end" })); }, [active]);
-  const jump = () => { pinned.current = true; setBelow(false); end.current?.scrollIntoView({ behavior: "smooth", block: "end" }); };
+  useEffect(() => { if (atBottom) setBelow(false); }, [atBottom]);
+  const jump = () => { setBelow(false); toNewest(); };
 
   const send = async (q = text) => {
     if (!q.trim() || sending) return;
+    const permAsk = askNotifyPermission(); // first, while we still have the click
     setSending(true); setErr(null);
-    pinned.current = true;
+    jump();
     const { error } = await scout.send(q);
+    permAsk.then((p) => { if (p !== "unsupported") setPerm(p); });
     setSending(false);
     if (error) setErr(error); else setText("");
-    if ("Notification" in window) setTimeout(() => setPerm(Notification.permission), 1500);
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
@@ -341,6 +342,12 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
             </div>
           </div>
           <div className="flex shrink-0 gap-1">
+            {perm === "default" && (
+              <button onClick={() => askNotifyPermission().then((p) => { if (p !== "unsupported") setPerm(p); })}
+                className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-sm text-white/70 hover:bg-white/[0.06]" title="Get a notification when Scout answers">
+                <Bell className="h-4 w-4" /> <span className="hidden sm:inline">Notify me</span>
+              </button>
+            )}
             <button onClick={() => setListOpen(true)} className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-sm text-white/70 hover:bg-white/[0.06] lg:hidden">
               <MessagesSquare className="h-4 w-4" /> Chats{threads.length ? ` ${threads.length}` : ""}
             </button>
@@ -355,11 +362,11 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
         {thinkingHere && (
           <p className="mt-4 rounded-2xl bg-[#0A84FF]/10 px-4 py-3 text-sm text-white/75">
             Scout takes a minute on bigger questions. Feel free to look around or start another chat: you'll get an alert when the answer is ready.
-            {perm === "default" && <button onClick={() => Notification.requestPermission().then(setPerm)} className="ml-1 inline-flex items-center gap-1 font-semibold text-[#5AB0FF] bento:text-[#0A6FD8]"><Bell className="h-3.5 w-3.5" />Also notify me outside this page</button>}
+            {perm === "default" && <button onClick={() => askNotifyPermission().then((p) => { if (p !== "unsupported") setPerm(p); })} className="ml-1 inline-flex items-center gap-1 font-semibold text-[#5AB0FF] bento:text-[#0A6FD8]"><Bell className="h-3.5 w-3.5" />Also notify me outside this page</button>}
           </p>
         )}
 
-        <div className="mt-6 min-h-[40vh] space-y-3" aria-live="polite">
+        <div ref={listRef} className="mt-6 min-h-[40vh] space-y-3" aria-live="polite">
           {msgs === null ? (
             <div className="grid place-items-center py-16"><Loader2 className="h-6 w-6 animate-spin text-white/40" /></div>
           ) : msgs.length === 0 ? (
@@ -408,7 +415,6 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
               </div>
             </div>
           )}
-          <div ref={end} />
         </div>
 
         <form onSubmit={(e) => { e.preventDefault(); send(); }} className="sticky bottom-[calc(5.25rem+env(safe-area-inset-bottom))] mt-6 lg:bottom-6">

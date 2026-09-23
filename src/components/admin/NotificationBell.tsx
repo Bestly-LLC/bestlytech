@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copyForClaude } from "@/lib/copyForClaude";
+import { enablePush, disablePush, sendTestPush, syncPushOnLoad, type PushState } from "@/lib/webPush";
 
 /*
  * Header bell: admin_notifications, filled by database triggers (new leads from each funnel,
@@ -65,6 +66,27 @@ export function NotificationBell() {
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pane, setPane] = useState<PaneAlert | null>(null);
+  // Desktop alerts (Web Push): the worker registers on every admin load; turning it on needs a click.
+  const [push, setPush] = useState<PushState | "busy">("off");
+  useEffect(() => { syncPushOnLoad().then(setPush); }, []);
+  const togglePush = async () => {
+    const was = push;
+    setPush("busy");
+    try {
+      const next = was === "on" ? await disablePush() : await enablePush();
+      setPush(next);
+      if (next === "on" && was !== "on") toast.success("Desktop alerts are on", { description: "Scout's alerts now pop up even when this tab is closed." });
+      if (next === "denied") toast.error("Notifications are blocked for bestly.tech", { description: "Allow them in the browser's site settings, then try again." });
+    } catch (e) {
+      setPush(was);
+      toast.error("Couldn't turn on desktop alerts", { description: (e as Error).message });
+    }
+  };
+  const testPush = async () => {
+    const r = await sendTestPush();
+    if (!r) toast.error("Test alert didn't send");
+    else toast(`Test sent to ${r.sent} browser${r.sent === 1 ? "" : "s"}`, { description: r.failed ? `${r.failed} failed` : "It should pop up outside the browser." });
+  };
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -152,6 +174,23 @@ export function NotificationBell() {
             <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" /> Mark all read
           </button>
         </div>
+        {push !== "unsupported" && (
+          <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg bg-white/[0.04] px-3 py-2 text-xs">
+            <Bell className="h-3.5 w-3.5 flex-none text-white/55" aria-hidden="true" />
+            <span className="flex-1 text-white/70">
+              {push === "on" ? "Desktop alerts on" : push === "denied" ? "Desktop alerts blocked in browser settings" : "Desktop alerts off"}
+            </span>
+            {push === "on" && (
+              <button type="button" onClick={testPush} className="h-7 rounded-md px-2 text-white/65 hover:text-white">Test</button>
+            )}
+            {push !== "denied" && (
+              <button type="button" onClick={togglePush} disabled={push === "busy"}
+                className={cn("h-7 rounded-md px-2.5 font-medium disabled:opacity-50", push === "on" ? "text-white/55 hover:text-white" : "bg-white text-black")}>
+                {push === "on" ? "Turn off" : push === "busy" ? "…" : "Turn on"}
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex gap-1 px-3 pb-2" role="group" aria-label="Show">
           {(["all", "unread"] as const).map((f) => (
             <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}

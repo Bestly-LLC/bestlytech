@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { playNotifySound } from "@/lib/notifySound";
+import { useStickToBottom } from "@/lib/useStickToBottom";
 import {
   X,
   CornerDownLeft,
@@ -17,7 +18,6 @@ import {
   Check,
   RotateCcw,
 } from "lucide-react";
-import { CopyBlock } from "@/components/CopyText";
 import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecording } from "./ScoutRecorder";
 import { ScoutJobs, useMacJobs, type MacJob } from "./ScoutJobs";
 import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
@@ -104,25 +104,6 @@ function pageContext(path: string, about?: string) {
  * no "reply with yes" - which is the whole point.
  */
 const OPTION_LINE = /\n?^\s*OPTIONS?\s*:\s*(.+?)\s*$/im;
-
-// Regex that matches a fenced code block: ```optional-lang\ncontent\n```
-const FENCE_RE = /```[^\n]*\n([\s\S]*?)```/g;
-
-/**
- * Splits a Scout message body into alternating plain-text and code-block segments.
- * Returns an array of {kind:'text'|'code', content:string}.
- */
-export function splitFences(body: string): Array<{ kind: "text" | "code"; content: string }> {
-  const parts: Array<{ kind: "text" | "code"; content: string }> = [];
-  let last = 0;
-  for (const m of body.matchAll(FENCE_RE)) {
-    if (m.index! > last) parts.push({ kind: "text", content: body.slice(last, m.index) });
-    parts.push({ kind: "code", content: m[1].trimEnd() });
-    last = m.index! + m[0].length;
-  }
-  if (last < body.length) parts.push({ kind: "text", content: body.slice(last) });
-  return parts;
-}
 
 export function splitOptions(body: string): { text: string; options: string[] } {
   const m = body.match(OPTION_LINE);
@@ -330,49 +311,9 @@ export function Scout() {
     };
   }, []);
 
-  // The log sits at the bottom, the way a chat should: new answers push up, and it
-  // stays pinned while Scout is still typing. Scroll up to read something and it lets
-  // go; come back to the bottom and it takes over again.
-  const stick = useRef(true);
-  const pin = useCallback((smooth = false) => {
-    const el = logRef.current;
-    if (!el || !stick.current) return;
-    requestAnimationFrame(() => {
-      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
-    });
-  }, []);
-
-  useEffect(() => {
-    const el = logRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    // Streaming answers grow the log without a re-render we can see, so watch the box itself.
-    const ro = new ResizeObserver(() => pin());
-    for (const child of Array.from(el.children)) ro.observe(child);
-    const mo = new MutationObserver(() => {
-      for (const child of Array.from(el.children)) ro.observe(child);
-      pin();
-    });
-    mo.observe(el, { childList: true, subtree: true, characterData: true });
-    return () => {
-      el.removeEventListener("scroll", onScroll);
-      ro.disconnect();
-      mo.disconnect();
-    };
-  }, [view, open, pin]);
-
-  // A new message or a fresh open always goes to the bottom, whatever was scrolled before.
-  useEffect(() => {
-    stick.current = true;
-    pin();
-  }, [threadId, open, view, pin]);
-
-  useEffect(() => {
-    pin();
-  }, [msgs, busy, jobs, pin]);
+  // The log sits at the bottom, the way a chat should, and only the reader can unpin it
+  // (see useStickToBottom for why layout reflows used to throw it back up the page).
+  const { jump: toNewest } = useStickToBottom(logRef, `${open}:${view}:${threadId ?? "new"}`);
 
   useEffect(() => {
     if (open && view === "chat" && !phone) inputRef.current?.focus();
@@ -422,6 +363,7 @@ export function Scout() {
       }
       setMsgs((m) => [...(fresh ? [] : m), { role: "user", body: asked }]);
       setText("");
+      requestAnimationFrame(toNewest); // you just asked: follow the answer
       setBusy(true);
 
       const { data, error } = await supabase.functions.invoke("admin-chat", {
@@ -447,7 +389,7 @@ export function Scout() {
       refreshJobs();
       inputRef.current?.focus();
     },
-    [busy, threadId, loadThread, location.pathname, location.search, refreshJobs],
+    [busy, threadId, loadThread, location.pathname, location.search, refreshJobs, toNewest],
   );
 
   // Other parts of the admin open Scout or hand it a question (scoutBus.ts).
@@ -870,7 +812,7 @@ export function Scout() {
         ) : (
           <div key="chat" className={cn("flex min-h-0 flex-1 flex-col", viewDir === "back" ? "scout-view-back" : "")}>
           <RecorderBar state={rec} latest={lastCall} refresh={refreshRec} onDebrief={debrief} />
-          <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto overscroll-contain scroll-smooth px-3 py-4 sm:px-4">
+          <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4">
             {msgs.length === 0 && (
               <>
                 <p className="text-sm text-white/80">
