@@ -64,7 +64,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = "1.4.0"
+VERSION = "1.5.2"
 CONFIG_PATH = os.environ.get("HOME_HUB_AGENT_CONFIG", "/etc/bestly/home-hub-agent.json")
 STATE_DIR = os.environ.get("HOME_HUB_AGENT_STATE", "/var/lib/bestly-home-hub")
 STATE_PATH = os.path.join(STATE_DIR, "state.json")
@@ -276,7 +276,7 @@ def do_homeassistant(cfg, action, payload):
             raise RuntimeError(err or "Home Assistant snapshot failed")
         return {"message": "Home Assistant snapshot refreshed."}
     if action == "ecoflow":
-        return do_ecoflow(ha, payload.get("mode") or "status")
+        return do_ecoflow(ha, payload.get("mode") or "status", payload.get("level"))
     if action != "toggle_automation":
         raise RuntimeError(f"Unknown homeassistant action: {action}")
     entity = payload.get("automation_id")
@@ -342,7 +342,7 @@ def ecoflow_status(ha):
     }
 
 
-def do_ecoflow(ha, mode):
+def do_ecoflow(ha, mode, level=None):
     if mode not in ("full", "storage", "status"):
         raise RuntimeError(f"Unknown ecoflow mode: {mode}")
     done = []
@@ -360,6 +360,19 @@ def do_ecoflow(ha, mode):
                 done.append(f"set {st['max_charge_entity']} to 100")
             else:
                 done.append("no max-charge setting found on the DELTA 2 (it may be offline)")
+        else:
+            # 1.5.2: the all-clear automation does not lower the charge limit by itself (seen 2026-09-23:
+            # it stayed at 100%), so set it here: the level saved when the emergency started, else 50%.
+            st = ecoflow_status(ha)
+            try:
+                lvl = max(20, min(100, int(level or 50)))
+            except (TypeError, ValueError):
+                lvl = 50
+            if st.get("max_charge_entity"):
+                _ha(ha, "/api/services/number/set_value", {"entity_id": st["max_charge_entity"], "value": lvl})
+                done.append(f"set {st['max_charge_entity']} to {lvl}")
+            else:
+                done.append("no max-charge setting found on the DELTA 2 (it may be offline)")
         time.sleep(4)
     st = ecoflow_status(ha)
     st["done"] = done
@@ -367,7 +380,7 @@ def do_ecoflow(ha, mode):
         st["message"] = ("Charging the DELTA 2 to 100%." if st.get("online") else
                          "Asked the DELTA 2 to charge to 100%, but it looks offline. Check it's plugged in and on Wi-Fi.")
     elif mode == "storage":
-        st["message"] = "DELTA 2 set back to its storage level."
+        st["message"] = f"DELTA 2 set back to its storage level ({st.get('max_charge')}%)."
     return st
 
 
@@ -1806,7 +1819,669 @@ def confirm_update(cfg):
     emit(cfg, "agent.updated", "info", "success", f"Home Hub agent updated to {VERSION}", f"From {pu.get('from', '?')}.")
 
 
-EXECUTORS = {"nextcloud": do_nextcloud, "pihole": do_pihole, "homeassistant": do_homeassistant, "homebridge": do_homebridge, "agent": do_agent}
+# ── network (agent >= 1.5.0) ─────────────────────────────────────────────────
+# Read-only LAN / internet diagnosis for Scout, plus Pi-hole allow-listing and a
+# five-minute network sample so intermittent drops leave a trail. Everything here
+# is best effort: a missing tool (iw, curl) or an unanswered probe is reported,
+# never raised, so a diagnosis always comes back with what it could see.
+
+import concurrent.futures as _cf
+
+DOMAIN_RE = re.compile(r"^(?=.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$", re.I)
+MATCH_RE = re.compile(r"^[A-Za-z0-9 ._:@-]{1,64}$")
+HOST_RE = re.compile(r"^[A-Za-z0-9.:-]{1,253}$")
+PIHOLE_DB = "/etc/pihole/pihole-FTL.db"
+# Pi-hole v6 query status codes that mean "blocked".
+BLOCKED_STATUS = (1, 4, 5, 6, 7, 8, 9, 10, 11, 15, 16, 18)
+STATUS_NAMES = {0: "unknown", 1: "blocked (gravity)", 2: "forwarded", 3: "cached", 4: "blocked (regex)",
+                5: "blocked (exact deny)", 6: "blocked upstream", 7: "blocked upstream (0.0.0.0)",
+                8: "blocked upstream (NXDOMAIN)", 9: "blocked (gravity CNAME)", 10: "blocked (regex CNAME)",
+                11: "blocked (deny CNAME)", 12: "retried", 13: "retried (ignored)", 14: "already forwarded",
+                15: "blocked (database busy)", 16: "blocked (special domain)", 17: "cached (stale)",
+                18: "blocked upstream (EDE 15)"}
+NET_SAMPLE_EVERY = 300
+
+
+def _gateway():
+    out = _sh("ip -4 route show default", timeout=5)
+    m = re.search(r"default via (\S+) dev (\S+)", out)
+    return (m.group(1), m.group(2)) if m else (None, None)
+
+
+def _ping(host, count=10, interval=0.2, timeout=2):
+    if not host or not HOST_RE.match(host):
+        return {"host": host, "ok": False, "error": "bad host"}
+    rc, out = sh(["ping", "-n", "-c", str(count), "-i", str(interval), "-W", str(timeout), host],
+                 timeout=count * (interval + timeout) + 5)
+    res = {"host": host, "sent": count}
+    m = re.search(r"(\d+) received", out)
+    res["received"] = int(m.group(1)) if m else 0
+    m = re.search(r"([\d.]+)% packet loss", out)
+    res["loss_pct"] = float(m.group(1)) if m else 100.0
+    m = re.search(r"= ([\d.]+)/([\d.]+)/([\d.]+)/([\d.]+) ms", out)
+    if m:
+        res.update({"min_ms": float(m.group(1)), "avg_ms": float(m.group(2)),
+                    "max_ms": float(m.group(3)), "jitter_ms": float(m.group(4))})
+    res["ok"] = res["received"] > 0
+    if not res["ok"]:
+        res["detail"] = out[-200:]
+    return res
+
+
+def _dns(server, name, qtype=1, timeout=3):
+    """One raw DNS query. Returns rcode, the A/AAAA answers and the time it took."""
+    tid = random.randint(0, 0xFFFF)
+    q = struct.pack(">HHHHHH", tid, 0x0100, 1, 0, 0, 0)
+    q += b"".join(bytes([len(p)]) + p.encode() for p in name.strip(".").split(".")) + b"\x00"
+    q += struct.pack(">HH", qtype, 1)
+    t0 = time.time()
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(timeout)
+            s.sendto(q, (server, 53))
+            data, _ = s.recvfrom(4096)
+    except Exception as exc:
+        return {"server": server, "ok": False, "error": f"no answer ({exc.__class__.__name__})",
+                "ms": round((time.time() - t0) * 1000)}
+    ms = round((time.time() - t0) * 1000)
+    rtid, flags, qd, an = struct.unpack(">HHHH", data[:8])
+    rcode = flags & 0xF
+    answers = []
+    try:
+        i = 12
+        for _ in range(qd):  # skip question
+            while data[i] != 0:
+                if data[i] & 0xC0 == 0xC0:
+                    i += 1
+                    break
+                i += data[i] + 1
+            i += 5
+        for _ in range(an):
+            if data[i] & 0xC0 == 0xC0:
+                i += 2
+            else:
+                while data[i] != 0:
+                    i += data[i] + 1
+                i += 1
+            rtype, _cls, _ttl, rdlen = struct.unpack(">HHIH", data[i:i + 10])
+            i += 10
+            rd = data[i:i + rdlen]
+            i += rdlen
+            if rtype == 1 and rdlen == 4:
+                answers.append(socket.inet_ntoa(rd))
+            elif rtype == 28 and rdlen == 16:
+                answers.append(socket.inet_ntop(socket.AF_INET6, rd))
+    except Exception:
+        pass
+    rc_name = {0: "ok", 2: "SERVFAIL", 3: "NXDOMAIN", 5: "REFUSED"}.get(rcode, str(rcode))
+    blocked = rcode == 3 or any(a in ("0.0.0.0", "::") for a in answers)
+    return {"server": server, "ok": rcode in (0, 3), "rcode": rc_name, "answers": answers[:6],
+            "looks_blocked": blocked, "ms": ms}
+
+
+def _tcp(host, port, timeout=5):
+    t0 = time.time()
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return {"host": host, "port": port, "ok": True, "ms": round((time.time() - t0) * 1000)}
+    except Exception as exc:
+        return {"host": host, "port": port, "ok": False, "error": str(exc)[:120],
+                "ms": round((time.time() - t0) * 1000)}
+
+
+def _speed(bytes_=15_000_000):
+    if not shutil.which("curl"):
+        return {"ok": False, "error": "curl not installed"}
+    rc, out = sh(["curl", "-s", "-A", "Mozilla/5.0 (bestly-home-hub)", "-o", "/dev/null", "-m", "20", "-w", "%{http_code} %{speed_download} %{time_total}",
+                  f"https://speed.cloudflare.com/__down?bytes={bytes_}"], timeout=25)
+    parts = out.split()
+    if rc != 0 or len(parts) < 3:
+        return {"ok": False, "error": out[-160:] or f"curl exited {rc}"}
+    return {"ok": parts[0] == "200", "down_mbps": round(float(parts[1]) * 8 / 1e6, 1),
+            "seconds": round(float(parts[2]), 1), "bytes": bytes_}
+
+
+def _link():
+    out = {"interfaces": _sh("ip -br addr", timeout=5).splitlines()[:10]}
+    _, dev = _gateway()
+    out["default_dev"] = dev
+    if dev and dev.startswith("wl"):
+        out["wifi_link"] = _sh(f"iw dev {dev} link", timeout=5)[:600]
+    elif dev and shutil.which("ethtool"):
+        sp = _sh(f"ethtool {dev} 2>/dev/null | grep -E 'Speed|Duplex|Link detected'", timeout=5)
+        out["ethernet"] = sp[:300]
+    return out
+
+
+def _wifi_scan():
+    """What Wi-Fi the Pi can hear: SSIDs, bands, channels, signal. Needs a wlan interface."""
+    devs = [l.split()[1] for l in _sh("iw dev", timeout=5).splitlines() if l.strip().startswith("Interface")]
+    if not devs:
+        return {"ok": False, "error": "no Wi-Fi interface on the Pi"}
+    dev = devs[0]
+    sudo = "sudo -n " if os.geteuid() != 0 else ""
+    _sh(f"{sudo}ip link set {dev} up", timeout=5)
+    rc, out = sh(f"{sudo}iw dev {dev} scan", timeout=25)
+    if rc != 0:
+        return {"ok": False, "error": out[-200:]}
+    nets, cur = [], None
+    for line in out.splitlines():
+        s = line.strip()
+        if line.startswith("BSS "):
+            cur = {"bssid": line.split()[1][:17]}
+            nets.append(cur)
+        elif cur is None:
+            continue
+        elif s.startswith("freq:"):
+            try:
+                f = float(s.split()[1])
+                cur["mhz"] = int(f)
+                cur["band"] = "2.4 GHz" if f < 3000 else ("5 GHz" if f < 5925 else "6 GHz")
+            except Exception:
+                pass
+        elif s.startswith("signal:"):
+            try:
+                cur["dbm"] = float(s.split()[1])
+            except Exception:
+                pass
+        elif s.startswith("SSID:"):
+            cur["ssid"] = s[5:].strip() or "(hidden)"
+        elif s.startswith("* primary channel:") or s.startswith("DS Parameter set: channel"):
+            cur["channel"] = int(re.findall(r"\d+", s)[-1])
+    nets.sort(key=lambda n: -n.get("dbm", -200))
+    by_chan = {}
+    for n in nets:
+        if n.get("band") == "2.4 GHz" and n.get("channel"):
+            by_chan[n["channel"]] = by_chan.get(n["channel"], 0) + 1
+    return {"ok": True, "interface": dev, "networks": nets[:30], "count": len(nets),
+            "busy_2g_channels": dict(sorted(by_chan.items(), key=lambda kv: -kv[1])[:6])}
+
+
+def _router_probe(gw):
+    """Identify the router and read its WAN state over UPnP (no password needed)."""
+    out = {"gateway": gw}
+    for scheme in ("http", "https"):
+        try:
+            req = urllib.request.Request(f"{scheme}://{gw}/", headers={"User-Agent": "bestly-home-hub"})
+            ctx = ssl._create_unverified_context() if scheme == "https" else None
+            with urllib.request.urlopen(req, timeout=5, context=ctx) as r:
+                body = r.read(20000).decode("utf-8", "replace")
+                t = re.search(r"<title>(.*?)</title>", body, re.I | re.S)
+                out[f"{scheme}_ui"] = {"status": r.status, "server": r.headers.get("Server"),
+                                       "title": (t.group(1).strip()[:80] if t else None)}
+        except urllib.error.HTTPError as e:
+            out[f"{scheme}_ui"] = {"status": e.code, "server": e.headers.get("Server") if e.headers else None}
+        except Exception as exc:
+            out[f"{scheme}_ui"] = {"error": str(exc)[:100]}
+    # UPnP IGD discovery
+    loc = None
+    try:
+        msg = ("M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\n"
+               "ST: urn:schemas-upnp-org:device:InternetGatewayDevice:1\r\n\r\n").encode()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as s:
+            s.settimeout(3)
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+            s.sendto(msg, ("239.255.255.250", 1900))
+            end = time.time() + 3
+            while time.time() < end:
+                try:
+                    data, addr = s.recvfrom(4096)
+                except socket.timeout:
+                    break
+                m = re.search(rb"(?im)^location:\s*(\S+)", data)
+                if m and addr[0] == gw:
+                    loc = m.group(1).decode()
+                    break
+    except Exception as exc:
+        out["upnp"] = {"error": str(exc)[:100]}
+    if not loc:
+        out.setdefault("upnp", {"found": False, "note": "No UPnP gateway answered (UPnP may be off on the router)."})
+        return out
+    up = {"found": True, "location": loc}
+    try:
+        with urllib.request.urlopen(loc, timeout=5) as r:
+            xml = r.read(200000).decode("utf-8", "replace")
+        for tag in ("manufacturer", "modelName", "modelNumber", "friendlyName"):
+            m = re.search(rf"<{tag}>(.*?)</{tag}>", xml, re.S)
+            if m:
+                up[tag] = m.group(1).strip()[:80]
+        svc = None
+        for st in ("WANIPConnection", "WANPPPConnection"):
+            m = re.search(rf"<serviceType>(urn:schemas-upnp-org:service:{st}:\d)</serviceType>.*?<controlURL>(.*?)</controlURL>", xml, re.S)
+            if m:
+                svc = (m.group(1), urllib.parse.urljoin(loc, m.group(2).strip()))
+                break
+        if svc:
+            def soap(action):
+                body = (f'<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+                        f's:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>'
+                        f'<u:{action} xmlns:u="{svc[0]}"/></s:Body></s:Envelope>').encode()
+                req = urllib.request.Request(svc[1], data=body, headers={
+                    "Content-Type": 'text/xml; charset="utf-8"', "SOAPAction": f'"{svc[0]}#{action}"'})
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    return r.read(20000).decode("utf-8", "replace")
+            try:
+                x = soap("GetStatusInfo")
+                for tag in ("NewConnectionStatus", "NewUptime", "NewLastConnectionError"):
+                    m = re.search(rf"<{tag}>(.*?)</{tag}>", x)
+                    if m:
+                        up[tag[3:]] = m.group(1)
+                if up.get("Uptime", "").isdigit():
+                    up["wan_uptime_hours"] = round(int(up["Uptime"]) / 3600, 1)
+            except Exception as exc:
+                up["status_error"] = str(exc)[:100]
+            try:
+                m = re.search(r"<NewExternalIPAddress>(.*?)</NewExternalIPAddress>", soap("GetExternalIPAddress"))
+                if m:
+                    up["external_ip"] = m.group(1)
+            except Exception:
+                pass
+    except Exception as exc:
+        up["error"] = str(exc)[:120]
+    out["upnp"] = up
+    return out
+
+
+def _ftl_sql(sql, timeout=40):
+    """Read-only query against Pi-hole's long-term database. Returns a list of dicts."""
+    if os.geteuid() == 0:
+        import sqlite3
+        con = sqlite3.connect(f"file:{PIHOLE_DB}?mode=ro", uri=True, timeout=10)
+        try:
+            con.row_factory = sqlite3.Row
+            return [dict(r) for r in con.execute(sql).fetchall()]
+        finally:
+            con.close()
+    rc, out = sh(["sudo", "-n", "pihole-FTL", "sqlite3", "-readonly", "-json", PIHOLE_DB, sql], timeout=timeout)
+    if rc != 0:
+        rc, out = sh(["sudo", "-n", "pihole-FTL", "sqlite3", "-json", PIHOLE_DB, sql], timeout=timeout)
+    if rc != 0:
+        raise RuntimeError(f"Pi-hole database read failed: {out[-200:]}")
+    out = out.strip()
+    return json.loads(out) if out.startswith("[") else []
+
+
+def _q(s):
+    return "'" + str(s).replace("'", "''") + "'"
+
+
+def _devices(match=None, limit=60):
+    where = ""
+    if match:
+        m = _q(f"%{match}%")
+        where = (f"WHERE n.hwaddr LIKE {m} OR n.macVendor LIKE {m} OR a.ip LIKE {m} OR a.name LIKE {m}")
+    rows = _ftl_sql(
+        "SELECT n.hwaddr AS mac, n.macVendor AS vendor, n.interface AS iface, n.numQueries AS queries, "
+        "datetime(n.lastQuery,'unixepoch','localtime') AS last_query, "
+        "datetime(n.firstSeen,'unixepoch','localtime') AS first_seen, "
+        "group_concat(DISTINCT a.ip) AS ips, group_concat(DISTINCT a.name) AS names "
+        f"FROM network n LEFT JOIN network_addresses a ON a.network_id = n.id {where} "
+        f"GROUP BY n.id ORDER BY n.lastQuery DESC LIMIT {int(limit)}")
+    neigh = {}
+    for line in _sh("ip neigh", timeout=5).splitlines():
+        p = line.split()
+        if len(p) >= 5 and "lladdr" in p:
+            neigh[p[p.index("lladdr") + 1].lower()] = {"ip": p[0], "state": p[-1]}
+    for r in rows:
+        nb = neigh.get(str(r.get("mac") or "").lower())
+        if nb:
+            r["arp"] = nb
+    return rows
+
+
+def _domain_activity(match, hours=24, client=None):
+    m = _q(f"%{match}%")
+    cl = f"AND client = {_q(client)}" if client else ""
+    return _ftl_sql(
+        "SELECT domain, client, status, count(*) AS n, datetime(max(timestamp),'unixepoch','localtime') AS last "
+        f"FROM queries WHERE timestamp > strftime('%s','now') - {int(hours) * 3600} AND domain LIKE {m} {cl} "
+        "GROUP BY domain, client, status ORDER BY n DESC LIMIT 80")
+
+
+def _blocked(minutes=60, client=None, match=None):
+    cl = f"AND client = {_q(client)}" if client else ""
+    dm = f"AND domain LIKE {_q('%' + match + '%')}" if match else ""
+    st = ",".join(str(s) for s in BLOCKED_STATUS)
+    return _ftl_sql(
+        "SELECT domain, client, count(*) AS n, datetime(max(timestamp),'unixepoch','localtime') AS last "
+        f"FROM queries WHERE timestamp > strftime('%s','now') - {int(minutes) * 60} AND status IN ({st}) {cl} {dm} "
+        "GROUP BY domain, client ORDER BY n DESC LIMIT 80")
+
+
+def _client_summary(client, minutes=120):
+    st = ",".join(str(s) for s in BLOCKED_STATUS)
+    top = _ftl_sql(
+        "SELECT domain, status, count(*) AS n, datetime(max(timestamp),'unixepoch','localtime') AS last, "
+        "round(avg(reply_time)*1000) AS avg_reply_ms "
+        f"FROM queries WHERE client = {_q(client)} AND timestamp > strftime('%s','now') - {int(minutes) * 60} "
+        "GROUP BY domain, status ORDER BY n DESC LIMIT 40")
+    tot = _ftl_sql(
+        f"SELECT count(*) AS total, sum(status IN ({st})) AS blocked FROM queries "
+        f"WHERE client = {_q(client)} AND timestamp > strftime('%s','now') - {int(minutes) * 60}")
+    return {"window_minutes": minutes, "totals": tot[0] if tot else {}, "domains": top}
+
+
+def _label_status(rows):
+    for r in rows or []:
+        if "status" in r:
+            try:
+                r["status"] = STATUS_NAMES.get(int(r["status"]), str(r["status"]))
+            except Exception:
+                pass
+    return rows
+
+
+def _safe(fn, *a, **kw):
+    try:
+        return fn(*a, **kw)
+    except Exception as exc:
+        return {"ok": False, "error": f"{exc.__class__.__name__}: {str(exc)[:200]}"}
+
+
+def _clean_match(payload, key="match"):
+    v = payload.get(key)
+    if v is None or v == "":
+        return None
+    v = str(v).strip()
+    if not MATCH_RE.match(v):
+        raise RuntimeError(f"{key} may only contain letters, digits, spaces and . _ : @ -")
+    return v
+
+
+def network_diagnose(cfg, payload):
+    gw, dev = _gateway()
+    name = str(payload.get("host") or "www.google.com").strip().lower()
+    if not DOMAIN_RE.match(name):
+        raise RuntimeError("host must be a domain name")
+    with _cf.ThreadPoolExecutor(max_workers=8) as ex:
+        jobs = {
+            "gateway_ping": ex.submit(_ping, gw, 20, 0.2) if gw else None,
+            "internet_ping": ex.submit(_ping, "one.one.one.one", 20, 0.2),
+            "dns_pihole": ex.submit(_dns, "127.0.0.1", name),
+            "dns_router": ex.submit(_dns, gw, name) if gw else None,
+            "dns_cloudflare": ex.submit(_dns, "1.1.1.1", name),
+            "https": ex.submit(_tcp, name, 443),
+            "speed": ex.submit(_speed) if payload.get("speed", True) else None,
+            "router": ex.submit(_router_probe, gw) if gw else None,
+            "wifi": ex.submit(_wifi_scan) if payload.get("wifi", True) else None,
+        }
+        res = {k: _safe(f.result, timeout=45) if f else None for k, f in jobs.items()}
+    res["pi"] = {"gateway": gw, "dev": dev, "link": _safe(_link), "pihole": _safe(lambda: pihole_ok()[1])}
+    res["tested_domain"] = name
+    try:
+        clients = _ftl_sql(
+            "SELECT count(DISTINCT client) AS clients, count(*) AS queries, "
+            f"sum(status IN ({','.join(str(s) for s in BLOCKED_STATUS)})) AS blocked, "
+            "round(avg(reply_time)*1000) AS avg_reply_ms "
+            "FROM queries WHERE timestamp > strftime('%s','now') - 3600")
+        res["pihole_last_hour"] = clients[0] if clients else {}
+    except Exception as exc:
+        res["pihole_last_hour"] = {"error": str(exc)[:200]}
+    match = _clean_match(payload)
+    if match:
+        res["device"] = _safe(network_find_device, cfg, {"match": match})
+        res["lan_match"] = _safe(_lan_scan, match)
+    # One-line verdicts so Scout (and Jared) can read the answer at a glance.
+    v = []
+    gp, ip = res.get("gateway_ping") or {}, res.get("internet_ping") or {}
+    def _pv(p, label, ms_limit):
+        if not p:
+            return
+        if p.get("received", 0) == 0:
+            v.append(f"{label}: no replies at all.")
+        elif (p.get("loss_pct") or 0) > 2 or (p.get("avg_ms") or 0) > ms_limit or (p.get("max_ms") or 0) > ms_limit * 10:
+            v.append(f"{label} is unhealthy: {p.get('loss_pct')}% loss, {p.get('avg_ms')} ms avg, {p.get('max_ms')} ms worst.")
+    _pv(gp, "Pi → router", 20)
+    _pv(ip, "Internet", 80)
+    if (res.get("dns_pihole") or {}).get("looks_blocked"):
+        v.append(f"Pi-hole blocks {name}.")
+    if not (res.get("dns_pihole") or {}).get("ok"):
+        v.append("Pi-hole is not answering DNS.")
+    if (res.get("dns_pihole") or {}).get("ms", 0) > 300:
+        v.append("Pi-hole DNS is slow.")
+    sp = res.get("speed") or {}
+    if sp.get("ok") and sp.get("down_mbps", 999) < 25:
+        v.append(f"Download is slow ({sp['down_mbps']} Mbps).")
+    res["verdicts"] = v or ["Router, internet and DNS all look healthy from the Pi."]
+    return res
+
+
+def network_find_device(cfg, payload):
+    match = _clean_match(payload)
+    devs = _devices(match, limit=20 if match else 80)
+    out = {"match": match, "lan": _safe(_lan_scan, match), "pihole_clients": devs}
+    if match and devs:
+        for d in devs[:3]:
+            ip = (d.get("ips") or "").split(",")[0]
+            if ip and "." in ip:
+                d["ping"] = _ping(ip, 20, 0.2)
+                d["dns_activity"] = _safe(lambda: _label_status(_client_summary(ip).get("domains")))
+                d["blocked_last_2h"] = _safe(_blocked, 120, ip)
+    return out
+
+
+def network_domain(cfg, payload):
+    match = _clean_match(payload)
+    if not match:
+        raise RuntimeError("domain needs match (part of a domain name, e.g. spinn)")
+    hours = max(1, min(int(payload.get("hours", 24) or 24), 168))
+    rows = _label_status(_domain_activity(match, hours))
+    out = {"match": match, "hours": hours, "rows": rows}
+    names = sorted({r["domain"] for r in rows})[:5]
+    out["resolve_now"] = {n: _dns("127.0.0.1", n) for n in names if DOMAIN_RE.match(n)}
+    return out
+
+
+def _dns_name(data, i):
+    """Decode a (possibly compressed) DNS name at offset i. Returns (name, next_offset)."""
+    labels, jumped, end, hops = [], False, i, 0
+    while hops < 40:
+        hops += 1
+        n = data[i]
+        if n == 0:
+            i += 1
+            break
+        if n & 0xC0 == 0xC0:
+            if not jumped:
+                end = i + 2
+            i = ((n & 0x3F) << 8) | data[i + 1]
+            jumped = True
+            continue
+        labels.append(data[i + 1:i + 1 + n].decode("utf-8", "replace"))
+        i += n + 1
+    return ".".join(labels), (end if jumped else i)
+
+
+def _ptr(server, ip, timeout=2):
+    """Reverse-lookup one IPv4 address. The router answers with the DHCP hostname a device gave it."""
+    name = ".".join(reversed(ip.split("."))) + ".in-addr.arpa"
+    tid = random.randint(0, 0xFFFF)
+    q = struct.pack(">HHHHHH", tid, 0x0100, 1, 0, 0, 0)
+    q += b"".join(bytes([len(p)]) + p.encode() for p in name.split(".")) + b"\x00" + struct.pack(">HH", 12, 1)
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(timeout)
+            s.sendto(q, (server, 53))
+            data, _ = s.recvfrom(2048)
+        _, flags, qd, an = struct.unpack(">HHHH", data[:8])
+        if flags & 0xF or not an:
+            return None
+        i = 12
+        for _ in range(qd):
+            _, i = _dns_name(data, i)
+            i += 4
+        _, i = _dns_name(data, i)
+        rtype = struct.unpack(">H", data[i:i + 2])[0]
+        i += 10
+        if rtype != 12:
+            return None
+        host, _ = _dns_name(data, i)
+        return host or None
+    except Exception:
+        return None
+
+
+def _mac_vendors(macs):
+    prefixes = sorted({m[:8] for m in macs if len(m) >= 8})
+    if not prefixes:
+        return {}
+    sql = "SELECT mac, vendor FROM macvendor WHERE mac IN (" + ",".join(_q(p) for p in prefixes) + ")"
+    db = "/etc/pihole/macvendor.db"
+    try:
+        if os.geteuid() == 0:
+            import sqlite3
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+            try:
+                rows = con.execute(sql).fetchall()
+            finally:
+                con.close()
+            return {m: v for m, v in rows}
+        rc, out = sh(["sudo", "-n", "pihole-FTL", "sqlite3", "-json", db, sql], timeout=20)
+        if rc == 0 and out.strip().startswith("["):
+            return {r["mac"]: r["vendor"] for r in json.loads(out)}
+    except Exception:
+        pass
+    return {}
+
+
+def _lan_scan(match=None):
+    """Every device on the home LAN right now: IP, MAC, maker, the name the router knows it by, ping."""
+    gw, _ = _gateway()
+    ip = _private_lan_ip()
+    if not ip or not gw:
+        raise RuntimeError("The Pi has no LAN address")
+    base = ".".join(ip.split(".")[:3])
+
+    def probe(n):
+        h = f"{base}.{n}"
+        rc, out = sh(["ping", "-n", "-c", "2", "-i", "0.2", "-W", "1", h], timeout=5)
+        m = re.search(r"= [\d.]+/([\d.]+)/", out)
+        return h, rc == 0, (float(m.group(1)) if m else None)
+
+    with _cf.ThreadPoolExecutor(max_workers=64) as ex:
+        pings = {h: (ok, ms) for h, ok, ms in ex.map(probe, range(1, 255))}
+    neigh = {}
+    for line in _sh("ip -4 neigh", timeout=5).splitlines():
+        p = line.split()
+        if "lladdr" in p and p[0].startswith(base + "."):
+            neigh[p[0]] = p[p.index("lladdr") + 1].lower()
+    hosts = sorted(set(neigh) | {h for h, (ok, _) in pings.items() if ok}, key=lambda h: int(h.rsplit(".", 1)[1]))
+    vendors = _mac_vendors(neigh.values())
+    with _cf.ThreadPoolExecutor(max_workers=32) as ex:
+        names = dict(zip(hosts, ex.map(lambda h: _ptr(gw, h), hosts)))
+    devices = []
+    for h in hosts:
+        mac = neigh.get(h)
+        ok, ms = pings.get(h, (False, None))
+        d = {"ip": h, "mac": mac, "name": names.get(h), "answers_ping": ok, "ping_ms": ms}
+        if h == ip:
+            d["name"] = d["name"] or "bestly-pi (this Pi)"
+        if mac:
+            d["vendor"] = vendors.get(mac[:8])
+            if not d["vendor"] and int(mac[1], 16) & 2:
+                d["vendor"] = "private address (a phone, tablet or laptop hiding its real MAC)"
+        devices.append(d)
+    if match:
+        ml = match.lower()
+        devices = [d for d in devices if ml in " ".join(str(v) for v in d.values()).lower()]
+    return {"subnet": f"{base}.0/24", "gateway": gw, "count": len(devices), "devices": devices,
+            "note": "Names come from the router's DHCP table. Some smart devices ignore ping but still show here from ARP."}
+
+
+def do_network(cfg, action, payload):
+    if action == "diagnose":
+        return network_diagnose(cfg, payload)
+    if action == "find_device":
+        return network_find_device(cfg, payload)
+    if action == "domain":
+        return network_domain(cfg, payload)
+    if action == "ping":
+        host = str(payload.get("host") or "").strip()
+        n = max(1, min(int(payload.get("count", 20) or 20), 100))
+        return _ping(host, n, 0.2)
+    if action == "dns":
+        name = str(payload.get("host") or "").strip().lower()
+        if not DOMAIN_RE.match(name):
+            raise RuntimeError("host must be a domain name")
+        gw, _ = _gateway()
+        return {"pihole": _dns("127.0.0.1", name), "router": _dns(gw, name) if gw else None,
+                "cloudflare": _dns("1.1.1.1", name)}
+    if action == "scan":
+        return _lan_scan(_clean_match(payload))
+    if action == "wifi_scan":
+        return _wifi_scan()
+    if action == "speed":
+        return _speed()
+    if action == "history":
+        return {"note": "Samples are in the home_hub_network_samples table (every 5 minutes)."}
+    raise RuntimeError(f"Unknown network action: {action}")
+
+
+def do_router(cfg, action, payload):
+    gw, _ = _gateway()
+    if action == "probe":
+        return _router_probe(gw)
+    raise RuntimeError(f"Unknown router action: {action}")
+
+
+def do_pihole_ext(cfg, action, payload):
+    sudo = ["sudo", "-n"] if os.geteuid() != 0 else []
+    if action == "recent_blocked":
+        minutes = max(5, min(int(payload.get("minutes", 60) or 60), 1440))
+        client = _clean_match(payload, "client")
+        match = _clean_match(payload)
+        return {"minutes": minutes, "rows": _blocked(minutes, client, match)}
+    if action in ("allow", "unallow"):
+        dom = str(payload.get("domain") or "").strip().lower()
+        if not DOMAIN_RE.match(dom):
+            raise RuntimeError("domain must be a plain domain name")
+        cmds = ([sudo + ["pihole", "allow", dom, "--comment", "Added by Scout"], sudo + ["pihole", "allow", dom]]
+                if action == "allow" else
+                [sudo + ["pihole", "allow", "remove", dom], sudo + ["pihole", "allow", "-d", dom]])
+        last = ""
+        for c in cmds:
+            rc, out = sh(c, timeout=60)
+            if rc == 0:
+                return {"output": out[-800:], "resolve_now": _dns("127.0.0.1", dom)}
+            last = out
+        raise RuntimeError(f"pihole {action} failed: {last[-300:]}")
+    return do_pihole(cfg, action, payload)
+
+
+def _net_sample(cfg):
+    gw, _ = _gateway()
+    g = _ping(gw, 10, 0.2) if gw else {}
+    i = _ping("one.one.one.one", 10, 0.2)
+    d = _dns("127.0.0.1", "www.apple.com")
+    wan = {}
+    try:
+        up = _router_probe(gw).get("upnp", {}) if gw and (time.time() - STATE.get("net_router_at", 0) > 1800) else {}
+        if up.get("found"):
+            wan = {"status": up.get("ConnectionStatus"), "uptime_s": int(up["Uptime"]) if str(up.get("Uptime", "")).isdigit() else None,
+                   "external_ip": up.get("external_ip")}
+            STATE["net_router_at"] = time.time()
+    except Exception:
+        pass
+    call_edge(cfg, {"op": "net_sample", "agent": cfg.get("agent_name", "home-hub"), "sample": {
+        "gateway": gw, "gw_loss_pct": g.get("loss_pct"), "gw_avg_ms": g.get("avg_ms"), "gw_max_ms": g.get("max_ms"),
+        "inet_loss_pct": i.get("loss_pct"), "inet_avg_ms": i.get("avg_ms"), "inet_max_ms": i.get("max_ms"),
+        "dns_ms": d.get("ms"), "dns_ok": d.get("ok"),
+        "wan_status": wan.get("status"), "wan_uptime_s": wan.get("uptime_s"), "external_ip": wan.get("external_ip"),
+    }})
+
+
+def net_watch():
+    """Every five minutes: ping the router and the internet, time a DNS lookup, post one row."""
+    time.sleep(30)
+    while True:
+        try:
+            _net_sample(load_config())
+        except Exception as exc:
+            log(f"network sample failed: {exc}")
+        time.sleep(NET_SAMPLE_EVERY)
+
+
+EXECUTORS = {"network": do_network, "router": do_router, "nextcloud": do_nextcloud, "pihole": do_pihole_ext, "homeassistant": do_homeassistant, "homebridge": do_homebridge, "agent": do_agent}
 
 
 def run_command(cfg, cmd):
@@ -1839,6 +2514,7 @@ def main():
     log(f"Bestly Home Hub agent {VERSION} starting as '{agent}', polling every {period}s")
     check_update_outcome(cfg)
     threading.Thread(target=watchdog, daemon=True, name="watchdog").start()
+    threading.Thread(target=net_watch, daemon=True, name="net_watch").start()
 
     config_mtime = None
     last_snap = {"homeassistant": 0.0, "homebridge": 0.0, "host": 0.0}
@@ -1868,7 +2544,7 @@ def main():
             resp = call_edge(cfg, {
                 "op": "poll", "agent": agent, "max": 5, "version": VERSION,
                 "info": {"host": os.uname().nodename,
-                         "features": ["snapshots", "backup_secrets", "self_update", "self_managing"]},
+                         "features": ["snapshots", "backup_secrets", "self_update", "self_managing", "network"]},
             })
             polled = True
             for cmd in resp.get("commands", []):
