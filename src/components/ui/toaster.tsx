@@ -2,7 +2,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Toast, ToastAction, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
 import { copyForClaude } from "@/lib/copyForClaude";
 
-export function Toaster() {
+export function Toaster({ viewportClassName }: { viewportClassName?: string } = {}) {
   const { toasts } = useToast();
 
   return (
@@ -26,7 +26,7 @@ export function Toaster() {
           </Toast>
         );
       })}
-      <ToastViewport />
+      <ToastViewport className={viewportClassName} />
     </ToastProvider>
   );
 }
