@@ -131,7 +131,32 @@ def check_host(host):
                     evidence={"final_url": final, "status": r.status_code, "text_sha256": hashlib.sha256(text.encode()).hexdigest(),
                               "title": (re.search(r"<title>(.*?)</title>", body, re.S) or [None, ""])[1][:120]}))
 
+def certspotter_not_after(domain):
+    """Fallback CT source when crt.sh is down or 404s (it did for eldoraluxe.com on 2026-09-22)."""
+    r = get("https://api.certspotter.com/v1/issuances",
+            params={"domain": domain, "include_subdomains": "false", "expand": "dns_names"}, timeout=40)
+    r.raise_for_status()
+    ends = [dt.datetime.fromisoformat(c["not_after"].replace("Z", "+00:00")).replace(tzinfo=None)
+            for c in r.json() if domain in (c.get("dns_names") or []) and c.get("not_after")]
+    return max(ends) if ends else None
+
+def cert_result(domain, latest, source):
+    days = (latest - dt.datetime.utcnow()).days
+    ev = {"not_after": latest.isoformat(), "days": days, "source": source}
+    if days < 7:
+        add(f"tls:{domain}:expiry", "red", "Websites", domain, "tls_expiry", f"{domain}: certificate expires in {days} days", fix="Check the Vercel/Cloudflare certificate auto-renewal.", evidence=ev)
+    elif days < 14:
+        add(f"tls:{domain}:expiry", "yellow", "Websites", domain, "tls_expiry", f"{domain}: certificate expires in {days} days", evidence=ev)
+    else:
+        add(f"tls:{domain}:expiry", "pass", "Websites", domain, "tls_expiry", evidence=ev)
+
 def check_cert(domain):
+    try:
+        latest = certspotter_not_after(domain)
+        if latest:
+            cert_result(domain, latest, "certspotter"); return
+    except Exception:
+        pass  # fall through to crt.sh
     try:
         import time
         for attempt in range(4):
@@ -142,24 +167,22 @@ def check_cert(domain):
         certs = [c for c in r.json() if domain in (c.get("name_value") or "").split("\n")]
         if not certs:
             add(f"tls:{domain}:expiry", "skip", "Websites", domain, "tls_expiry", detail="no unexpired certificate found in CT logs"); return
-        latest = max(dt.datetime.fromisoformat(c["not_after"]) for c in certs)
-        days = (latest - dt.datetime.utcnow()).days
-        if days < 7:
-            add(f"tls:{domain}:expiry", "red", "Websites", domain, "tls_expiry", f"{domain}: certificate expires in {days} days", fix="Check the Vercel/Cloudflare certificate auto-renewal.", evidence={"not_after": latest.isoformat()})
-        elif days < 14:
-            add(f"tls:{domain}:expiry", "yellow", "Websites", domain, "tls_expiry", f"{domain}: certificate expires in {days} days", evidence={"not_after": latest.isoformat()})
-        else:
-            add(f"tls:{domain}:expiry", "pass", "Websites", domain, "tls_expiry", evidence={"not_after": latest.isoformat(), "days": days})
+        cert_result(domain, max(dt.datetime.fromisoformat(c["not_after"]) for c in certs), "crt.sh")
     except Exception as e:
-        add(f"tls:{domain}:expiry", "skip", "Websites", domain, "tls_expiry", detail=f"crt.sh: {str(e)[:150]}")
+        add(f"tls:{domain}:expiry", "skip", "Websites", domain, "tls_expiry", detail=f"certspotter and crt.sh both failed: {str(e)[:150]}")
 
 def check_mail(domain, sends_mail):
     try:
         txt = doh(domain, "TXT")
         spf = [t for t in txt if t.lower().startswith("v=spf1")]
         dm = [t for t in doh(f"_dmarc.{domain}", "TXT") if t.lower().startswith("v=dmarc1")]
+        mx = doh(domain, "MX")
     except Exception as e:
         add(f"dns:{domain}:email_auth", "skip", "DNS / email", domain, "email_auth", detail=str(e)[:200]); return
+    # A domain with mailboxes (MX) or an SPF that authorises a sender DOES send mail. Telling it to
+    # publish -all / p=reject would break its email (the 2026-09-22 audit said exactly that for
+    # hoascope.com, parentiq.io and goldenhourgardendesign.com, which all have mail).
+    sends_mail = sends_mail or bool(mx) or any(re.search(r"\b(include|a|mx|ip4|ip6):?", s.split(" ", 1)[-1]) for s in spf)
     problems, sev = [], "yellow"
     if not spf:
         problems.append("no SPF record"); sev = "red" if sends_mail else sev
@@ -168,7 +191,8 @@ def check_mail(domain, sends_mail):
     elif re.search(r"\bp=none\b", dm[0], re.I):
         problems.append("DMARC is p=none (monitor only)")
     if problems:
-        fix = ("Add TXT `_dmarc." + domain + "` = `v=DMARC1; p=quarantine; rua=mailto:jared@bestly.tech`" if sends_mail
+        fix = ("This domain has email, so keep its SPF and tighten DMARC: TXT `_dmarc." + domain + "` = `v=DMARC1; p=quarantine; adkim=r; aspf=r`"
+               + ("" if spf else " and add the SPF record your mail provider gives you") if sends_mail
                else "This domain doesn't send mail: publish `v=spf1 -all` and `_dmarc` = `v=DMARC1; p=reject` so nobody can spoof it.")
         add(f"dns:{domain}:email_auth", sev, "DNS / email", domain, "email_auth",
             f"{domain}: {', '.join(problems)}", "Someone could send email that appears to come from this domain.", fix,

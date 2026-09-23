@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, Clock3, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { CopyText } from "@/components/CopyText";
+import { CopyButton, CopyText } from "@/components/CopyText";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -71,6 +71,25 @@ function findingContext(f: SecurityFinding) {
   ].filter(Boolean).join("\n");
 }
 
+/** A self-contained prompt to paste into Claude (desktop or Code) to fix one or more findings. */
+function fixPrompt(fs: SecurityFinding[]) {
+  const many = fs.length > 1;
+  return [
+    many
+      ? `Fix these ${fs.length} open security findings from the Bestly nightly audit (bestly.tech/admin/security).`
+      : "Fix this open security finding from the Bestly nightly audit (bestly.tech/admin/security).",
+    "",
+    "How to work:",
+    "- Read bestly_memory first (Supabase project rcqfqhguwpmaarseifqg; start with house/security-audit and security/conventions).",
+    "- Fix it for real, then verify from the outside (headers with curl -I, DNS with dig, advisors with get_advisors).",
+    "- Never break a live site: test what a change touches before shipping it. Secrets go only to Supabase Vault, never into code or chat.",
+    "- If a step needs a decision or a login only I have, do everything around it and tell me the one step in plain words.",
+    "- When one is fixed, run: select security_finding_set_status('<id>', 'fixed', '<what you did>');",
+    "",
+    ...fs.map((f) => `id ${f.id}\n${findingContext(f)}`).join("\n\n---\n\n").split("\n"),
+  ].join("\n");
+}
+
 function FindingRow({ f, onChange }: { f: SecurityFinding; onChange: () => void }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -125,6 +144,8 @@ function FindingRow({ f, onChange }: { f: SecurityFinding; onChange: () => void 
           >
             <Binoculars className="h-4 w-4" /> Scout fixes it
           </button>
+          <CopyButton text={fixPrompt([f])} label="Copy fix prompt"
+            className={cn("ml-2 inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium text-white/75 hover:bg-white/[0.06]", focusRing)} />
         </div>
       )}
       {open && (
@@ -250,6 +271,10 @@ export default function Security() {
                   <Binoculars className="h-4 w-4" />
                   Scout works the {open.length === 1 ? "finding" : `${open.length} findings`}
                 </button>
+              )}
+              {open.length > 0 && (
+                <CopyButton text={fixPrompt(open)} label={`Copy fix prompt for all ${open.length}`}
+                  className={cn("ml-2 mt-3 inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white/80 hover:bg-white/[0.08]", focusRing)} />
               )}
             </div>
           </div>
