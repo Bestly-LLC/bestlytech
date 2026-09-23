@@ -13,7 +13,7 @@ Standard library only. Key in ~/PartnerAI/.key (Vault: partner_ai_worker_key).
 import json, os, re, subprocess, time, traceback, urllib.error, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.3.0"   # 1.3: parse talkscribe's 3-column output; a playable copy for parted clips; no silent empties
+VERSION = "1.3.1"   # 1.3: parse talkscribe's 3-column output; a playable copy for parted clips; no silent empties
 # 1.2: big files go up and come down in parts (storage caps one object at 50MB)
 HOME = os.path.expanduser("~")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
@@ -182,7 +182,7 @@ def playable(src, clip):
 def summarise(text):
     """Title plus a few bullets, written by the local model. Costs nothing."""
     prompt = ("Summarise this voice note. Answer as JSON only:\n"
-              '{"title": "under 8 words", "summary": "one or two sentences", '
+              '{"title": "<3 to 7 words naming what it is about>", "summary": "<one or two sentences>", '
               '"points": ["short bullet", "..."], "todos": ["something the speaker said they would do"]}\n'
               "Use only what is said; empty lists are fine.\n\nNOTE:\n" + text[:12000])
     body = json.dumps({"model": MODEL, "stream": False, "think": False, "format": "json",
@@ -195,7 +195,12 @@ def summarise(text):
         j = json.loads(raw)
     except Exception:
         return None
-    return {k: j.get(k) for k in ("title", "summary", "points", "todos") if j.get(k)}
+    out = {k: j.get(k) for k in ("title", "summary", "points", "todos") if j.get(k)}
+    # The small model sometimes copies the instruction instead of writing a title ("under 8 words").
+    t = str(out.get("title") or "").strip()
+    if not t or re.search(r"\bwords?\b|^title$|short title", t, re.I) or len(t.split()) > 10:
+        out.pop("title", None)
+    return out
 
 
 def work(clip):
