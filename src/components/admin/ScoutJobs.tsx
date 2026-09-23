@@ -94,8 +94,14 @@ function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run:
   const live = job.status === "running" || job.status === "approved";
 
   return (
+    // Sized and shaped like the rest of the timeline: the same 2xl radius and the same
+    // max width as a chat bubble, left-aligned with Scout's replies. A Run card is Scout
+    // asking for something, so it should read as part of the conversation rather than as
+    // a separate panel bolted to the bottom of it. The amber border stays - that one
+    // carries meaning (it is the state that needs a tap).
     <div className={cn(
-      "scout-card-in rounded-xl border p-3 text-white transition-[border-color,background-color] duration-500",
+      "scout-card-in max-w-[85%] rounded-2xl rounded-bl-sm border p-3 text-white sm:max-w-[80%]",
+      "transition-[border-color,background-color] duration-500",
       job.status === "proposed" ? "border-amber-400/40 bg-amber-400/[0.06]" : "border-white/10 bg-white/[0.03]",
     )}>
       <div className="flex items-start gap-2">
@@ -104,8 +110,8 @@ function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run:
             : bad ? <AlertTriangle className="h-3.5 w-3.5 text-red-300" /> : <Terminal className="h-3.5 w-3.5" />}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-snug">{job.title}</p>
-          <p className="text-[0.6875rem] text-white/60">
+          <p className="text-[0.9375rem] font-semibold leading-snug sm:text-sm">{job.title}</p>
+          <p className="mt-0.5 text-xs text-white/60">
             {job.status === "proposed" && "Scout wants to do this on your Mac mini. Nothing happens until you tap Yes."}
             {job.status === "approved" && "Starting on your Mac mini…"}
             {job.status === "running" && `Working on it on your Mac mini (started ${ago(job.started_at)})`}
@@ -116,7 +122,7 @@ function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run:
           </p>
         </div>
       </div>
-      {job.why && job.status === "proposed" && <p className="mt-2 text-xs text-white/75">{job.why}</p>}
+      {job.why && job.status === "proposed" && <p className="mt-2 text-[0.9375rem] leading-relaxed text-white/75 sm:text-sm">{job.why}</p>}
 
       <button type="button" onClick={() => setShowScript((v) => !v)}
         className="mt-2 flex items-center gap-1 text-[0.6875rem] text-white/50 hover:text-white">
@@ -190,7 +196,7 @@ export function ScoutJobs({ jobs, refresh, onFinished }: {
 
   if (!jobs.length) return null;
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {jobs.map((j) => (
         <JobCard key={j.id} job={j} onDecided={(id, run) => { if (run) mine.current.add(id); refresh(); }} />
       ))}

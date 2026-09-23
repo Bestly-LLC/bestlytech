@@ -945,18 +945,32 @@ export function Scout() {
                 ) : (
                   <div className="flex items-start gap-1">
                     <div className="min-w-0 flex-1">
-                      <p className="whitespace-pre-wrap break-words text-[0.9375rem] leading-relaxed text-white/90 sm:text-sm">
-                        {splitOptions(m.body).text}
-                      </p>
+                      {/* A fenced block becomes a real copyable box. splitFences and CopyBlock
+                          have been imported and unused since before the chip work - so anything
+                          Scout suggested running showed up as plain text with backticks around
+                          it, which is the one kind of reply you most want to copy. */}
+                      {splitFences(splitOptions(m.body).text).map((part, k) =>
+                        part.kind === "code" ? (
+                          <CopyBlock key={k} text={part.content} className="max-w-[85%] sm:max-w-[80%]" />
+                        ) : part.content.trim() ? (
+                          <p key={k} className="whitespace-pre-wrap break-words text-[0.9375rem] leading-relaxed text-white/90 sm:text-sm">
+                            {part.content.trim()}
+                          </p>
+                        ) : null,
+                      )}
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
                       aria-label="Copy"
-                      onClick={() => {
-                        navigator.clipboard?.writeText(splitOptions(m.body).text);
-                        setCopied(i);
-                        setTimeout(() => setCopied(null), 1200);
+                      onClick={async () => {
+                        // copyText, not navigator.clipboard directly: the raw call rejects in a
+                        // non-secure context and on older Safari, and nothing awaited it, so this
+                        // used to show a tick whether or not anything reached the clipboard.
+                        if (await copyText(splitOptions(m.body).text)) {
+                          setCopied(i);
+                          setTimeout(() => setCopied(null), 1200);
+                        }
                       }}
                       className="scout-tools h-7 w-7 shrink-0 border-0 text-white/40 hover:bg-white/5 hover:text-white"
                     >
