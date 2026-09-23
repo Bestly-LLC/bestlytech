@@ -54,6 +54,11 @@
 //  - v16: "keep going" is his yes. A message that starts with "keep going" runs as if auto-run
 //    were on for that one request (tools skip the yes, Mac jobs start, paid AI OK for the chat).
 //    Out of Anthropic credit: a plain-words reply plus one bell card a day, not the raw 400.
+//  - v17: the free model only classifies (DATA | ACTION | CODE) why it can't answer; Scout words the
+//    reason itself. It used to paste the free model's own sentence, which invented things ("use the
+//    dashboard's alert settings"). The free model also gets a short list of true facts about the
+//    admin (e.g. "Fixed:" alerts already exist), and Scout no longer offers paid AI while it is out
+//    of credit - it says so and keeps the message.
 //  - v13: autopilot. fix-ladder calls with the service key + autopilot:true when an incident
 //    outlived the self-heals and the free model. Anything needing a yes is refused in code and
 //    comes back as NEEDS_YES, which Jared approves with one tap from the alert pane.
@@ -600,6 +605,28 @@ async function macRun(args: Record<string, any>, threadId: string): Promise<Reco
  * v15: try the FREE model on the Mac mini first (fix_ai_jobs, answered in seconds when it is up).
  * It answers only what needs no tools; anything else comes back as a plain-words reason to ask.
  */
+// v17: the free model only CLASSIFIES why it can't answer; Scout says the reason in its own fixed,
+// true words. v15-16 pasted the free model's own one-liner into the ask, and it made things up
+// ("I can't create alerts; use the dashboard's alert settings" - there are no such settings).
+const FREE_WHY: Record<string, string> = {
+  DATA: "It needs your live data, which only the paid AI can read.",
+  ACTION: "It means changing something in Bestly, which only the paid AI can do.",
+  CODE: "It means changing how the admin works (a code change), which only the paid AI can do.",
+};
+
+// What the free model may state as fact (it knows nothing about Bestly otherwise).
+const FREE_FACTS = `Facts about the admin you may use:
+- Problems Scout watches are incidents. When one gets fixed on its own (auto-fix, the free AI or Scout), the bell already shows a "Fixed: <what>" alert saying what fixed it, and a push if it had pushed.
+- Failed voice-clip uploads on the Clips page are reported to Scout as an incident and clear with a "Fixed" alert when the next upload works.
+- Auto-run (Scout does things without asking) and Paid AI switches sit at the top of the Scout panel.`;
+
+/** Paid AI said "credit balance too low" in the last 6 hours (the bell card it leaves behind). */
+async function paidOutOfCredit(): Promise<boolean> {
+  const since = new Date(Date.now() - 6 * 3600_000).toISOString();
+  const { data } = await db.from("admin_notifications").select("id").like("dedupe_key", "scout.credit:%").gte("created_at", since).limit(1);
+  return !!data?.length;
+}
+
 async function freeTry(threadId: string, text: string, page: unknown): Promise<{ answer?: string; why: string }> {
   const { data: st } = await db.from("partner_ai_status").select("seen_at").eq("id", 1).maybeSingle();
   const seen = (st as any)?.seen_at ? Date.parse((st as any).seen_at) : 0;
@@ -608,10 +635,15 @@ async function freeTry(threadId: string, text: string, page: unknown): Promise<{
     .order("created_at", { ascending: false }).limit(7);
   const convo = ((hist ?? []) as any[]).reverse().map((m) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body).slice(0, 600)}`).join("\n");
   const prompt = `You are Scout's free helper inside Jared's Bestly admin dashboard. You have NO access to his database, files, servers or the internet, and you cannot change anything.
-Answer Jared's last message ONLY if you can answer it fully and correctly from general knowledge or the conversation below (for example: explaining a concept, rewording text, a quick calculation).
-If it needs his live data (numbers, leads, orders, alerts, logs, status of anything), or asks to do, fix, check, change, run, send or look something up, do NOT try. Reply with exactly one line:
-NEEDS_TOOLS: <why, in plain words for a non-technical person, max 15 words>
+Answer Jared's last message ONLY if you can answer it fully and correctly from general knowledge, the facts below, or the conversation (for example: explaining a concept, rewording text, a quick calculation).
+Never guess how the admin works or tell him to use settings or pages that are not in the facts.
+If you can't answer, reply with exactly one line and nothing else:
+NEEDS_TOOLS: DATA    (it needs his live numbers, leads, orders, alerts, logs or status)
+NEEDS_TOOLS: ACTION  (it asks to do, fix, run, send, change or look something up)
+NEEDS_TOOLS: CODE    (it asks to build or change a feature, alert, page or behaviour of the admin)
 Otherwise answer in plain text, under 80 words, no markdown.
+
+${FREE_FACTS}
 
 Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}
 Conversation:
@@ -624,8 +656,8 @@ ${convo}`;
     const { data: row } = await db.from("fix_ai_jobs").select("status, answer").eq("id", job.id).maybeSingle();
     if ((row as any)?.status === "done") {
       const a = String((row as any).answer ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-      const m = a.match(/NEEDS_TOOLS:\s*(.+)/i);
-      if (m || !a) return { why: m ? m[1].trim().replace(/\.?$/, ".") : "The free AI couldn't answer it." };
+      const m = a.match(/NEEDS_TOOLS:\s*([A-Z]+)?/i);
+      if (m || !a) return { why: FREE_WHY[(m?.[1] ?? "").toUpperCase()] ?? "The free AI can't do this one." };
       return { answer: a };
     }
   }
@@ -947,6 +979,13 @@ Deno.serve(async (req) => {
       } else {
         const free = await freeTry(threadId, text, body.page);
         if (free.answer) return await say(free.answer, { free: true });
+        // Don't offer a paid run that can't happen: say the real blocker instead.
+        if (await paidOutOfCredit()) {
+          return await say(
+            `${free.why} The paid AI (Claude) is out of credit right now, so I can't do it yet. Your message is saved: top up at console.anthropic.com > Settings > Billing, then say keep going.`,
+            { paid_needed: true, out_of_credit: true },
+          );
+        }
         return await say(
           `I'd need paid AI (Claude) for this. ${free.why} It costs a few cents.\n\nOPTIONS: Yes, use paid AI | No, skip it | Always, stop asking`,
           { paid_needed: true },
