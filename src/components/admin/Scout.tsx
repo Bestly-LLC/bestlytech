@@ -909,24 +909,9 @@ export function Scout() {
           <RecorderBar state={rec} latest={lastCall} refresh={refreshRec} onDebrief={debrief} />
           <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4">
             {msgs.length === 0 && (
-              <>
-                <p className="text-sm text-white/80">
-                  I can read anything in the database, change the site, and run jobs on the Mac mini (you tap Run). I know which page you're on. What do you need?
-                </p>
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {OPENERS.map((o, n) => (
-                    <button
-                      key={o}
-                      type="button"
-                      onClick={() => send(o)}
-                      style={{ animationDelay: `${80 + n * 60}ms` }}
-                      className="scout-chip rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:border-white/30 hover:text-white"
-                    >
-                      {o}
-                    </button>
-                  ))}
-                </div>
-              </>
+              <p className="text-sm text-white/80">
+                I can read anything in the database, change the site, and run jobs on the Mac mini (you tap Run). I know which page you're on. What do you need?
+              </p>
             )}
 
             {msgs.map((m, i) => (
@@ -1000,8 +985,24 @@ export function Scout() {
 
         {view === "chat" && (
           <div className={cn("border-t border-white/[0.06] p-3", phone && "pb-[max(0.75rem,env(safe-area-inset-bottom))]")}>
-            {/* Suggestions sit above the composer rather than under the message, so they are
-                where his thumb already is and they do not scroll away as the reply grows. */}
+            {/* Everything tappable lives here, directly above the composer: the openers on an
+                empty chat, then the reply options. Under the message they ended up wherever
+                the reply happened to end and scrolled away as the conversation grew. */}
+            {!busy && !editing && msgs.length === 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {OPENERS.map((o, n) => (
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() => send(o)}
+                    style={{ animationDelay: `${80 + n * 60}ms` }}
+                    className="scout-chip min-h-9 rounded-full border border-white/15 bg-white/[0.06] px-3.5 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/[0.12] active:scale-[0.97]"
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
+            )}
             {!busy && !editing && (() => {
               const lastBot = [...msgs].reverse().find((m) => m.role !== "user");
               if (!lastBot) return null;
