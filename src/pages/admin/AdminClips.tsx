@@ -340,9 +340,7 @@ function ClipCard({
 export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const [clips, setClips] = useState<Clip[] | null>(null);
-  const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState<ClipUpload[]>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -378,17 +376,6 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
     return () => window.clearInterval(t);
   }, [pending, load]);
 
-  const upload = useCallback(
-    (files: File[]) => {
-      const good = files.filter((f) => AUDIO_EXT.has((f.name.split(".").pop() ?? "").toLowerCase()));
-      const bad = files.length - good.length;
-      if (bad) toast({ title: `Skipped ${bad} file${bad > 1 ? "s" : ""}`, description: "Audio files only." });
-      // Handed to the module-level queue: it keeps going if this page unmounts.
-      for (const f of good) void startClipUpload(f);
-    },
-    [toast],
-  );
-
   const remove = useCallback(
     async (c: Clip) => {
       setClips((all) => (all ?? []).filter((x) => x.id !== c.id));
@@ -423,27 +410,13 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
   );
 
   return (
-    <div
-      className="space-y-6"
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={(e) => {
-        if (e.currentTarget === e.target) setDragging(false);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragging(false);
-        void upload(Array.from(e.dataTransfer.files));
-      }}
-    >
+    <div className="space-y-6">
       <style>{HATCH_CSS}</style>
       {!embedded && <AdminMark />}
       <PageHeader
         embedded={embedded}
         title="Clips"
-        description="AirDrop a recording to the Mac mini, or drop one here. It gets transcribed and summarised on its own."
+        description="Quick voice notes. AirDrop one to the Mac mini and it shows up here, transcribed and summarised. Dropping a file by hand lives in Calls, which files it as a full meeting."
         actions={
           <Button variant="outline" size="sm" className="gap-1.5 border-white/15 bg-white/5" onClick={() => void load()}>
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
@@ -451,30 +424,6 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
         }
       />
 
-      <button
-        type="button"
-        onClick={() => fileRef.current?.click()}
-        className={`w-full rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
-          dragging ? "border-[#c84d2b] bg-[#c84d2b]/10" : "border-white/15 bg-white/[0.02] hover:border-white/30"
-        }`}
-      >
-        <Upload className="mx-auto h-6 w-6 text-white/40" />
-        <p className="mt-3 text-sm text-white/70">
-          {dragging ? "Let go" : "Drop audio here, or click to pick a file"}
-        </p>
-        <p className="mt-1 text-xs text-white/40">m4a, mp3, wav, caf and friends. Any length - big files go up in parts.</p>
-      </button>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="audio/*,.m4a,.caf,.amr,.opus"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          void upload(Array.from(e.target.files ?? []));
-          e.target.value = "";
-        }}
-      />
 
       {uploading.map((u) => (
         <div

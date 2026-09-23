@@ -36,18 +36,27 @@ function json(body: unknown, status = 200) {
   });
 }
 
-type NcEntry = { name: string; size: number; isDir: boolean };
+type NcEntry = { name: string; size: number; isDir: boolean; rel: string };
 
-async function propfind(path: string, auth: string): Promise<NcEntry[]> {
+/**
+ * depth "1" lists one folder. depth "infinity" returns the whole tree in one request,
+ * which is the difference between eleven round trips to a self-hosted Nextcloud and one.
+ * `rel` is the entry's path below the requested folder, so callers can group by day
+ * without asking for each day separately.
+ */
+async function propfind(path: string, auth: string, depth: "1" | "infinity" = "1"): Promise<NcEntry[]> {
   const res = await fetch(`${NC_BASE}/${path}`, {
     method: "PROPFIND",
-    headers: { Authorization: auth, Depth: "1", "Content-Type": "application/xml" },
+    headers: { Authorization: auth, Depth: depth, "Content-Type": "application/xml" },
     body:
       `<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop>` +
       `<d:getcontentlength/><d:resourcetype/></d:prop></d:propfind>`,
   });
   if (!res.ok) return [];
   const xml = await res.text();
+
+  // Everything below this prefix is what `rel` describes.
+  const baseDecoded = decodeURIComponent(new URL(`${NC_BASE}/${path}`).pathname).replace(/\/+$/, "");
 
   const out: NcEntry[] = [];
   // Each <d:response> is one entry; the first is the collection itself.
@@ -62,7 +71,9 @@ async function propfind(path: string, auth: string): Promise<NcEntry[]> {
     const len = b.match(
       /<[a-zA-Z]*:?getcontentlength>(\d+)<\/[a-zA-Z]*:?getcontentlength>/,
     )?.[1];
-    out.push({ name, size: len ? parseInt(len, 10) : 0, isDir });
+    const clean = decoded.replace(/\/+$/, "");
+    const rel = clean.startsWith(baseDecoded) ? clean.slice(baseDecoded.length).replace(/^\/+/, "") : "";
+    out.push({ name, size: len ? parseInt(len, 10) : 0, isDir, rel });
   }
   return out;
 }
@@ -200,15 +211,45 @@ Deno.serve(async (req) => {
 
   // --- 3a. list: enumerate meetings and summarise each transcript ---
   if (op === "list") {
-    const days = (await propfind(`${ARCHIVE}/`, auth)).filter(
-      (e) => e.isDir && /^\d{4}-\d{2}-\d{2}$/.test(e.name),
-    );
+    // One request for the whole tree. Asking per day meant eleven round trips to
+    // Nextcloud, which was most of the wall clock once parsing was cached. Some servers
+    // refuse Depth: infinity, so fall back to walking day by day rather than show nothing.
+    const tree = await propfind(`${ARCHIVE}/`, auth, "infinity");
+    let filesByDay: Record<string, NcEntry[]> = {};
+
+    const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+    for (const e of tree) {
+      if (e.isDir || !e.rel.includes("/")) continue;
+      const [day, ...rest] = e.rel.split("/");
+      if (!isDay(day) || rest.length !== 1) continue;
+      (filesByDay[day] ??= []).push(e);
+    }
+
+    if (Object.keys(filesByDay).length === 0) {
+      const days = (await propfind(`${ARCHIVE}/`, auth)).filter((e) => e.isDir && isDay(e.name));
+      const walked = await Promise.all(
+        days.map(async (d) => [d.name, (await propfind(`${ARCHIVE}/${d.name}/`, auth)).filter((f) => !f.isDir)] as const),
+      );
+      filesByDay = Object.fromEntries(walked);
+    }
+
+    // One cache read covering every transcript, instead of a query per meeting.
+    const wanted: string[] = [];
+    for (const files of Object.values(filesByDay)) {
+      for (const f of files) if (f.name.endsWith("-transcript-named.txt") || f.name.endsWith("-transcript.txt")) wanted.push(f.name);
+    }
+    const cacheByName = new Map<string, { parsed: unknown; size_bytes: number }>();
+    if (wanted.length) {
+      const { data: rows } = await cacheDb
+        .from("meetings_parse_cache")
+        .select("file_name, parsed, size_bytes")
+        .in("file_name", wanted);
+      for (const r of rows ?? []) cacheByName.set(r.file_name as string, r as never);
+    }
 
     const meetings = await Promise.all(
-      days.map(async (day) => {
-        const files = (await propfind(`${ARCHIVE}/${day.name}/`, auth)).filter(
-          (f) => !f.isDir,
-        );
+      Object.entries(filesByDay).map(async ([dayName, files]) => {
+        const day = { name: dayName };
 
         // Group the flat, prefixed files back into meetings.
         const byMeeting: Record<string, NcEntry[]> = {};
@@ -232,11 +273,7 @@ Deno.serve(async (req) => {
 
             let parsed = null;
             if (chosen) {
-              const { data: hit } = await cacheDb
-                .from("meetings_parse_cache")
-                .select("parsed, size_bytes")
-                .eq("file_name", chosen.name)
-                .maybeSingle();
+              const hit = cacheByName.get(chosen.name);
 
               if (hit && Number(hit.size_bytes) === chosen.size) {
                 parsed = hit.parsed;
