@@ -53,18 +53,9 @@ export function DocPreview({ file, onClose }: { file: PreviewFile | null; onClos
           return;
         }
         if (kind === "sheet") {
-          const ExcelJS = await import("exceljs");
-          const wb = new ExcelJS.Workbook();
-          await wb.xlsx.load(buf);
-          const out = wb.worksheets.slice(0, 8).map((ws) => {
-            const rows: string[][] = [];
-            ws.eachRow({ includeEmpty: true }, (row) => {
-              rows.push((row.values as (string | number | null | undefined)[]).slice(1).map((v) => (v == null ? "" : String(v))));
-            });
-            const header = rows[0] ? `<tr>${rows[0].map((c) => `<th>${c}</th>`).join("")}</tr>` : "";
-            const body = rows.slice(1).map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("");
-            return { name: ws.name, html: `<table>${header}${body}</table>` };
-          });
+          const XLSX = await import("xlsx");
+          const wb = XLSX.read(buf, { type: "array" });
+          const out = wb.SheetNames.slice(0, 8).map((n) => ({ name: n, html: XLSX.utils.sheet_to_html(wb.Sheets[n], { header: "", footer: "" }) }));
           if (!gone) { setSheets(out); setState("ready"); }
         }
       } catch { if (!gone) setState("error"); }
