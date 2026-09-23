@@ -15,12 +15,16 @@
 //
 // x-sign: <path> (+ x-parts) with the worker key -> { ok, urls } signed download links. The bucket is
 // admin-only, so the Mac can't read it with the anon key; before v2 it silently never could.
+//
+// x-attach: <clip id> with the worker key, body = a playable copy (<=45MB, audio/mp4 or audio/mpeg)
+// stored at that clip's own path (v3). Parted clips have no object there, so the browser had nothing
+// to stream; now it plays and seeks like a small clip.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info, x-worker-key, x-file-name, x-source, x-recorded-at, x-part, x-parts, x-path, x-total-bytes, x-sign",
+  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info, x-worker-key, x-file-name, x-source, x-recorded-at, x-part, x-parts, x-path, x-total-bytes, x-sign, x-attach",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
@@ -53,6 +57,19 @@ Deno.serve(async (req) => {
     const bad = (data ?? []).find((d) => d.error || !d.signedUrl);
     if (bad) return J({ ok: false, error: `missing ${bad.path}: ${bad.error ?? "no url"}` }, 404);
     return J({ ok: true, urls: (data ?? []).map((d) => d.signedUrl) });
+  }
+
+  const attach = req.headers.get("x-attach");
+  if (attach) {
+    if (!viaWorker) return J({ ok: false, error: "worker key required" }, 401);
+    const { data: clip } = await db.from("voice_clips").select("id, path").eq("id", attach).maybeSingle();
+    if (!clip) return J({ ok: false, error: "no such clip" }, 404);
+    const type = req.headers.get("Content-Type") === "audio/mpeg" ? "audio/mpeg" : "audio/mp4";
+    const body = new Uint8Array(await req.arrayBuffer());
+    if (!body.length || body.length > MAX) return J({ ok: false, error: `playable copy must be 1B-45MB (got ${body.length})` }, 413);
+    const { error: e1 } = await db.storage.from("voice-clips").upload(clip.path, body, { contentType: type, upsert: true });
+    if (e1) return J({ ok: false, error: e1.message }, 500);
+    return J({ ok: true, path: clip.path, bytes: body.length });
   }
 
   const raw = String(req.headers.get("x-file-name") ?? "clip.m4a");

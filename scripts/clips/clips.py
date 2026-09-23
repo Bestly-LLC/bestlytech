@@ -13,7 +13,8 @@ Standard library only. Key in ~/PartnerAI/.key (Vault: partner_ai_worker_key).
 import json, os, re, subprocess, time, traceback, urllib.error, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.2.0"   # 1.2: big files go up and come down in parts (storage caps one object at 50MB)
+VERSION = "1.3.0"   # 1.3: parse talkscribe's 3-column output; a playable copy for parted clips; no silent empties
+# 1.2: big files go up and come down in parts (storage caps one object at 50MB)
 HOME = os.path.expanduser("~")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
 ANON = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6"
@@ -131,7 +132,9 @@ def seconds(path):
 
 
 def transcribe(path):
-    """talkscribe writes TSV: start<TAB>end<TAB>LABEL<TAB>text. Join it into plain lines."""
+    """talkscribe writes TSV: start<TAB>LABEL<TAB>text (older builds: start<TAB>end<TAB>LABEL<TAB>text).
+    Join it into plain lines. 1.2 and earlier only read the 4-column form, so every clip came back
+    as "(no speech found)" - the first column is the start, the LAST is always the text."""
     wav = None
     if not path.lower().endswith((".m4a", ".mp4", ".wav")):
         wav = f"/tmp/clip-{os.getpid()}.m4a"
@@ -144,10 +147,36 @@ def transcribe(path):
     lines = []
     for row in out.splitlines():
         bits = row.split("\t")
-        if len(bits) >= 4 and bits[3].strip():
+        if len(bits) < 3 or not bits[-1].strip():
+            continue
+        try:
             t = int(float(bits[0]))
-            lines.append(f"[{t // 60:02d}:{t % 60:02d}] {bits[3].strip()}")
+        except ValueError:
+            continue
+        lines.append(f"[{t // 60:02d}:{t % 60:02d}] {bits[-1].strip()}")
     return "\n".join(lines)
+
+
+PLAY_MAX = 44 * 1024 * 1024
+
+
+def playable(src, clip):
+    """Parted clips get one small copy at clip['path'] so the browser can stream and seek it
+    (the original stays as parts). Speech-friendly mono AAC, bitrate picked to fit under 44MB."""
+    secs = seconds(src) or 0
+    kbps = 64 if not secs else max(24, min(64, int(PLAY_MAX * 8 / secs / 1000 * 0.9)))
+    out = f"/tmp/clip-play-{clip['id']}.m4a"
+    try:
+        subprocess.run([FFMPEG, "-y", "-i", src, "-vn", "-ac", "1", "-c:a", "aac", "-b:a", f"{kbps}k",
+                        "-movflags", "+faststart", out], capture_output=True, timeout=1800, check=True)
+        if os.path.getsize(out) > PLAY_MAX:
+            raise RuntimeError(f"playable copy still {os.path.getsize(out)} bytes")
+        _post(open(out, "rb").read(), {"Authorization": f"Bearer {ANON}", "x-worker-key": KEY,
+              "x-attach": clip["id"], "Content-Type": "audio/mp4"})
+        log("playable copy", clip["id"], f"{kbps}k", os.path.getsize(out))
+    finally:
+        try: os.remove(out)
+        except OSError: pass
 
 
 def summarise(text):
@@ -174,10 +203,20 @@ def work(clip):
     tmp = f"/tmp/clip-{clip['id']}{os.path.splitext(clip['path'])[1] or '.m4a'}"
     try:
         download(clip["path"], tmp, clip.get("parts"))
+        if clip.get("parts"):
+            try:
+                playable(tmp, clip)
+            except Exception as e:  # playback copy is a nicety; the transcript still matters
+                log("playable copy failed", clip["id"], repr(e))
         text = transcribe(tmp)
+        secs = seconds(tmp)
+        if not text.strip() and (secs or 0) > 90:
+            # Minutes of audio and not one word is a transcriber problem, not silence. Say so,
+            # so clips_watch raises it for Scout instead of it passing as "(no speech found)".
+            raise RuntimeError(f"no words found in {int(secs // 60)} min of audio - the transcriber returned nothing")
         summary = summarise(text) if text.strip() else None
         rpc("clip_write", {"p_key": KEY, "p_id": clip["id"], "p_transcript": text or "(no speech found)",
-                           "p_summary": summary, "p_seconds": seconds(tmp),
+                           "p_summary": summary, "p_seconds": secs,
                            "p_title": (summary or {}).get("title") or clip.get("title")})
         log("done", clip["id"], f"{len(text)} chars")
     except Exception as e:

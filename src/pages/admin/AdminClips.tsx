@@ -167,6 +167,7 @@ function ClipCard({
   onNote: (c: Clip, note: string) => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [noUrl, setNoUrl] = useState(false);
   const [openTranscript, setOpenTranscript] = useState(false);
   const [note, setNote] = useState(clip.note ?? "");
   const [confirmDel, setConfirmDel] = useState(false);
@@ -174,19 +175,23 @@ function ClipCard({
   useEffect(() => setNote(clip.note ?? ""), [clip.note]);
 
   // Signed URL, fetched once the card is on screen. They expire; an hour is plenty for a listen.
+  // Parted clips: the Mac puts a small playable copy at clip.path once it has the parts; until
+  // then (or if that failed) the player stitches the parts in the browser.
   useEffect(() => {
-    if (clip.parts) return;
     let live = true;
+    setNoUrl(false);
     supabase.storage
       .from("voice-clips")
       .createSignedUrl(clip.path, 60 * 60)
       .then(({ data }) => {
-        if (live && data?.signedUrl) setUrl(data.signedUrl);
+        if (!live) return;
+        if (data?.signedUrl) setUrl(data.signedUrl);
+        else setNoUrl(true);
       });
     return () => {
       live = false;
     };
-  }, [clip.path, clip.parts]);
+  }, [clip.path, clip.parts, clip.status]);
 
   const s = clip.summary ?? null;
   const title = s?.title || clip.title || clip.path.split("/").pop() || "Clip";
@@ -230,10 +235,12 @@ function ClipCard({
         </div>
       </div>
 
-      {clip.parts ? (
+      {url ? (
+        <audio controls preload="metadata" src={url} className="w-full h-10" />
+      ) : noUrl && clip.parts ? (
         <PartsPlayer clip={clip} />
-      ) : url ? (
-        <audio controls preload="none" src={url} className="w-full h-10" />
+      ) : noUrl ? (
+        <p className="text-xs text-white/45">The audio file is missing from storage.</p>
       ) : (
         <Skeleton className="h-10 w-full bg-white/5" />
       )}
@@ -367,7 +374,7 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
   const remove = useCallback(
     async (c: Clip) => {
       setClips((all) => (all ?? []).filter((x) => x.id !== c.id));
-      await supabase.storage.from("voice-clips").remove(partPaths(c));
+      await supabase.storage.from("voice-clips").remove(c.parts ? [c.path, ...partPaths(c)] : [c.path]); // parted clips also have a playable copy at path
       const { error } = await supabase.from("voice_clips").delete().eq("id", c.id);
       if (error) {
         toast({ title: "Delete failed", description: error.message, variant: "destructive" });
