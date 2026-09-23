@@ -90,9 +90,9 @@ export function CommandHero() {
         {todos === null ? <div className="mt-3 h-16 animate-pulse rounded-xl bg-white/[0.04]" /> : todos.length === 0 ? (
           <p className="mt-2 text-sm text-white/50">All clear.</p>
         ) : (
-          <ul className="mt-2 divide-y divide-white/[0.06]">
-            {todos.slice(0, 8).map((t) => (
-              <li key={t.id} className="flex items-start gap-3 py-2.5">
+          <ul className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(min(22rem,100%),1fr))] gap-x-6">
+            {todos.slice(0, 12).map((t) => (
+              <li key={t.id} className="flex items-start gap-3 border-b border-white/[0.06] py-2.5">
                 <button aria-label="Mark done" onClick={() => tick(t)}
                   className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 border-white/25 text-transparent transition hover:border-emerald-400 hover:text-emerald-400 active:scale-90">
                   <Check className="h-3.5 w-3.5" />
@@ -103,7 +103,7 @@ export function CommandHero() {
                 </div>
               </li>
             ))}
-            {todos.length > 8 && <li className="pt-2 text-xs text-white/45">+{todos.length - 8} more below in From calls</li>}
+            {todos.length > 12 && <li className="pt-2 text-xs text-white/45">+{todos.length - 12} more below in From calls</li>}
           </ul>
         )}
       </div>

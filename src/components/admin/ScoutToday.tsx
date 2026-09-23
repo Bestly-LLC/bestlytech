@@ -204,12 +204,14 @@ export function ScoutToday() {
       {calls.length > 0 && (
         <section aria-labelledby="calls-title">
           <h2 id="calls-title" className="mb-3 text-xs font-semibold uppercase tracking-widest text-white/55">From your calls · {calls.length}</h2>
-          <ul className={cn(card, "divide-y divide-white/[0.06] overflow-hidden")}>
+          {/* A to-do is one short line; on a wide screen a single column of them is a
+              long thin ribbon. Let them flow into as many columns as fit. */}
+          <ul className={cn(card, "grid grid-cols-[repeat(auto-fit,minmax(min(24rem,100%),1fr))] overflow-hidden")}>
             {calls.map((c) => {
               const owner = String(c.action?.owner ?? "Jared");
               const mine = owner.toLowerCase() === "jared";
               return (
-                <li key={c.id} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+                <li key={c.id} className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3 last:border-b-0 sm:px-5">
                   <button
                     aria-label="Mark done"
                     onClick={() => set(c, "done", "Done")}

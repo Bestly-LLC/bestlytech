@@ -593,7 +593,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-10 pb-8">
+    <div className="mx-auto max-w-[102rem] space-y-8 pb-8">
       <PageHeader
         title="Today"
         description={laTodayLabel()}
@@ -610,6 +610,10 @@ export default function AdminDashboard() {
 
       {/* 1 ─ What Scout prepared for today */}
       <ScoutToday />
+
+      {/* Side by side while there is room for a 26rem column, stacked the moment there
+          isn't. No breakpoint guessing - the browser works it out at every width. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(26rem,100%),1fr))] items-start gap-6 xl:gap-8">
 
       {/* 1 ─ Everything else waiting */}
       <section aria-labelledby="needs-title" aria-busy={needsLoading}>
@@ -750,6 +754,8 @@ export default function AdminDashboard() {
           />
         </ul>
       </section>
+
+      </div>
 
       {/* 4 ─ Recent (collapsed by default; the feed only loads once opened) */}
       <section aria-label="Recent activity">

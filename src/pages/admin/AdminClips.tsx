@@ -451,7 +451,7 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(26rem,100%),1fr))] items-start gap-4">
           {clips.map((c) => (
             <ClipCard key={c.id} clip={c} onDelete={remove} onNote={saveNote} />
           ))}
