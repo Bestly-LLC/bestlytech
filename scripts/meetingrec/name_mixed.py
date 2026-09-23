@@ -193,7 +193,8 @@ for t, txt in rows:
     named.append(f"{stamp} {tag(who(t))}: {txt}")
 
 HOW = {"voice": "matched by voice", "only one left": "the only voice left on the roster", "unknown": "voice not known yet"}
-hdr = ["# One-track recording (uploaded or AirDropped): every voice, Jared's too, is told apart by voice."]
+hdr = ["# One-track recording (uploaded or AirDropped): every voice, Jared's too, is told apart by voice.",
+       "# Quick back-and-forth on one mic can land on the wrong name; read those from context."]
 for nm in sorted(stats, key=lambda k: stats[k]["first"]):
     hdr.append(f"# {nm.upper()}: {HOW[label[nm]['how']]}, {round(stats[nm]['min'], 1)} min")
 if any(l["how"] == "unknown" for l in label.values()):
