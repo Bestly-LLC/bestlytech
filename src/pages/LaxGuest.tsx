@@ -115,6 +115,8 @@ export default function LaxGuest() {
   const plat = useMemo(platform, []);
   // ?demo=car shows the car card with sample data and the climate buttons (preview only, nothing is sent to the car).
   const demoCar = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "car", []);
+  // ?demo=soon previews the greyed-out buttons (before they open).
+  const demoSoon = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "soon" ? new Date(Date.now() + 3 * 3600 * 1000).toISOString() : null, []);
 
   useEffect(() => {
     const load = () => (token
@@ -224,7 +226,7 @@ export default function LaxGuest() {
             {pub.trip || pub.car ? (
               <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
                 <WeatherCard trip={pub.trip ?? null} compact />
-                <CarCard trip={pub.trip ?? null} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && pub.controls ? carCommand : undefined} lockedUntil={!demoCar && pub.controls_state === "soon" ? pub.controls_opens_at ?? null : null} />
+                <CarCard trip={pub.trip ?? null} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && !demoSoon && pub.controls ? carCommand : undefined} lockedUntil={demoSoon ?? (!demoCar && pub.controls_state === "soon" ? pub.controls_opens_at ?? null : null)} />
               </div>
             ) : (
               <div className="mt-2.5"><WeatherCard trip={null} /></div>
