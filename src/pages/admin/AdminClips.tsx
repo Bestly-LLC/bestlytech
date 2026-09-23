@@ -56,7 +56,46 @@ type Clip = {
   recorded_at: string | null;
   created_at: string;
   done_at: string | null;
+  /** Big uploads are stored as <path>.part000, .part001, ...; null = one object at path. */
+  parts?: number | null;
 };
+
+const partPaths = (c: Pick<Clip, "path" | "parts">) =>
+  c.parts ? Array.from({ length: c.parts }, (_, i) => `${c.path}.part${String(i).padStart(3, "0")}`) : [c.path];
+
+const AUDIO_TYPE: Record<string, string> = { mp3: "audio/mpeg", m4a: "audio/mp4", mp4: "audio/mp4", wav: "audio/wav", aac: "audio/aac", ogg: "audio/ogg", opus: "audio/ogg", flac: "audio/flac", caf: "audio/x-caf" };
+
+/** A parted clip plays from its stitched bytes; fetched only when asked (it can be 100MB+). */
+function PartsPlayer({ clip }: { clip: Clip }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => () => { if (src) URL.revokeObjectURL(src); }, [src]);
+  const load = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const blobs: Blob[] = [];
+      for (const p of partPaths(clip)) {
+        const { data, error } = await supabase.storage.from("voice-clips").download(p);
+        if (error || !data) throw new Error(error?.message ?? "missing part");
+        blobs.push(data);
+      }
+      const ext = (clip.path.split(".").pop() ?? "").toLowerCase();
+      setSrc(URL.createObjectURL(new Blob(blobs, { type: AUDIO_TYPE[ext] ?? "audio/mpeg" })));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (src) return <audio controls autoPlay src={src} className="w-full h-10" />;
+  return (
+    <Button variant="outline" size="sm" className="w-full gap-1.5 border-white/15 bg-white/5" disabled={busy} onClick={() => void load()}>
+      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mic className="h-3.5 w-3.5" />}
+      {busy ? `Loading ${fmtBytes(clip.bytes)}` : err ? `Couldn't load (${err}) - try again` : `Play (${fmtBytes(clip.bytes)})`}
+    </Button>
+  );
+}
 
 /**
  * The same "in progress" treatment Studio uses on a row Spark is working on:
@@ -136,6 +175,7 @@ function ClipCard({
 
   // Signed URL, fetched once the card is on screen. They expire; an hour is plenty for a listen.
   useEffect(() => {
+    if (clip.parts) return;
     let live = true;
     supabase.storage
       .from("voice-clips")
@@ -146,7 +186,7 @@ function ClipCard({
     return () => {
       live = false;
     };
-  }, [clip.path]);
+  }, [clip.path, clip.parts]);
 
   const s = clip.summary ?? null;
   const title = s?.title || clip.title || clip.path.split("/").pop() || "Clip";
@@ -190,7 +230,9 @@ function ClipCard({
         </div>
       </div>
 
-      {url ? (
+      {clip.parts ? (
+        <PartsPlayer clip={clip} />
+      ) : url ? (
         <audio controls preload="none" src={url} className="w-full h-10" />
       ) : (
         <Skeleton className="h-10 w-full bg-white/5" />
@@ -325,7 +367,7 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
   const remove = useCallback(
     async (c: Clip) => {
       setClips((all) => (all ?? []).filter((x) => x.id !== c.id));
-      await supabase.storage.from("voice-clips").remove([c.path]);
+      await supabase.storage.from("voice-clips").remove(partPaths(c));
       const { error } = await supabase.from("voice_clips").delete().eq("id", c.id);
       if (error) {
         toast({ title: "Delete failed", description: error.message, variant: "destructive" });
@@ -384,7 +426,7 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
         <p className="mt-3 text-sm text-white/70">
           {dragging ? "Let go" : "Drop audio here, or click to pick a file"}
         </p>
-        <p className="mt-1 text-xs text-white/40">m4a, mp3, wav, caf and friends. Up to 200MB each.</p>
+        <p className="mt-1 text-xs text-white/40">m4a, mp3, wav, caf and friends. Any length - big files go up in parts.</p>
       </button>
       <input
         ref={fileRef}

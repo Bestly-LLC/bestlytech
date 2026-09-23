@@ -13,7 +13,7 @@ Standard library only. Key in ~/PartnerAI/.key (Vault: partner_ai_worker_key).
 import json, os, re, subprocess, time, traceback, urllib.error, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"   # 1.2: big files go up and come down in parts (storage caps one object at 50MB)
 HOME = os.path.expanduser("~")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
 ANON = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6"
@@ -59,25 +59,64 @@ def remember(path):
     json.dump(sorted(s)[-500:], open(SEEN, "w"))
 
 
+PART = 40 * 1024 * 1024      # storage refuses any one object over 50MB, so bigger files go in parts
+
+
+def _post(data, headers, tries=4):
+    last = None
+    for i in range(tries):
+        try:
+            req = urllib.request.Request(f"{SB}/functions/v1/clip-ingest", data=data, method="POST", headers=headers)
+            with urllib.request.urlopen(req, timeout=300) as r:
+                out = json.loads(r.read().decode() or "{}")
+            if not out.get("ok"):
+                raise RuntimeError(out.get("error", "upload failed"))
+            return out
+        except urllib.error.HTTPError as e:
+            last = RuntimeError(f"{e.code} {e.read().decode(errors='replace')[:200]}")
+            if 400 <= e.code < 500 and e.code not in (408, 429):
+                raise last
+        except Exception as e:  # dropped connection, timeout
+            last = e
+        time.sleep(2 * 2 ** i)
+    raise last
+
+
 def upload(path, source="airdrop"):
-    """Send the bytes to clip-ingest; returns the clip id."""
-    data = open(path, "rb").read()
+    """Send the bytes to clip-ingest (in parts when big); returns the clip id."""
+    size = os.path.getsize(path)
     made = datetime.fromtimestamp(os.path.getmtime(path), timezone.utc).isoformat()
-    req = urllib.request.Request(f"{SB}/functions/v1/clip-ingest", data=data, method="POST", headers={
-        "Authorization": f"Bearer {ANON}", "x-worker-key": KEY, "x-file-name": os.path.basename(path),
-        "x-source": source, "x-recorded-at": made, "Content-Type": "application/octet-stream"})
-    with urllib.request.urlopen(req, timeout=300) as r:
-        out = json.loads(r.read().decode() or "{}")
-    if not out.get("ok"):
-        raise RuntimeError(out.get("error", "upload failed"))
+    base = {"Authorization": f"Bearer {ANON}", "x-worker-key": KEY, "x-file-name": os.path.basename(path),
+            "x-source": source, "x-recorded-at": made, "Content-Type": "application/octet-stream"}
+    if size <= PART:
+        return _post(open(path, "rb").read(), base)["id"]
+    n = -(-size // PART)
+    stem = None
+    with open(path, "rb") as f:
+        for i in range(n):
+            h = dict(base, **{"x-part": str(i), "x-parts": str(n), "x-total-bytes": str(size)})
+            if stem:
+                h["x-path"] = stem
+            out = _post(f.read(PART), h)
+            stem = out["path"]
     return out["id"]
 
 
-def download(storage_path, to):
-    req = urllib.request.Request(f"{SB}/storage/v1/object/voice-clips/{urllib.parse.quote(storage_path)}",
-                                 headers={"apikey": ANON, "Authorization": f"Bearer {ANON}"})
-    with urllib.request.urlopen(req, timeout=300) as r, open(to, "wb") as f:
-        f.write(r.read())
+def download(storage_path, to, parts=None):
+    """One object, or <path>.part000.. stitched back into the original bytes."""
+    # The bucket is admin-only: ask clip-ingest (worker key) for signed links, one per part.
+    h = {"Authorization": f"Bearer {ANON}", "x-worker-key": KEY, "x-sign": storage_path}
+    if parts:
+        h["x-parts"] = str(parts)
+    urls = _post(b"", h)["urls"]
+    with open(to, "wb") as f:
+        for url in urls:
+            with urllib.request.urlopen(url, timeout=600) as r:
+                while True:
+                    chunk = r.read(1 << 20)
+                    if not chunk:
+                        break
+                    f.write(chunk)
 
 
 def seconds(path):
@@ -134,7 +173,7 @@ def work(clip):
     """One clip: download, transcribe, summarise, write back."""
     tmp = f"/tmp/clip-{clip['id']}{os.path.splitext(clip['path'])[1] or '.m4a'}"
     try:
-        download(clip["path"], tmp)
+        download(clip["path"], tmp, clip.get("parts"))
         text = transcribe(tmp)
         summary = summarise(text) if text.strip() else None
         rpc("clip_write", {"p_key": KEY, "p_id": clip["id"], "p_transcript": text or "(no speech found)",
