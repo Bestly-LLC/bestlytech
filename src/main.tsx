@@ -2,7 +2,9 @@ import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "next-themes";
 import App from "./App.tsx";
 import { installCopyableToasts } from "./lib/copyableToasts";
+import { installTwelveHourClock } from "./lib/twelveHourClock";
 
+installTwelveHourClock();
 installCopyableToasts();
 import { ErrorBoundary } from "./components/ErrorBoundary";
 

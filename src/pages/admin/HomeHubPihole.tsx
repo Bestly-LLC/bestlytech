@@ -43,6 +43,14 @@ const fmtLATime = (ms: number) => new Intl.DateTimeFormat("en-US", { timeZone: L
  * order. Rotate them so the chart runs oldest to newest and ends on the hour of the snapshot.
  * Labels in any other shape are left as they came.
  */
+/** "13:00" -> "1 PM". Anything not shaped like an hour label passes through. */
+const hour12Label = (v: string) => {
+  const m = /^(\d{1,2}):00$/.exec(String(v));
+  if (!m) return v;
+  const h = Number(m[1]);
+  return `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`;
+};
+
 function chronologicalHours<T extends { hour: string }>(rows: T[], capturedAt: string): T[] {
   const laHour = Number(
     new Intl.DateTimeFormat("en-US", { timeZone: LA_TZ, hour: "2-digit", hourCycle: "h23" }).format(new Date(capturedAt)),
@@ -348,9 +356,9 @@ export default function HomeHubPihole() {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={hourlyChart}>
                     <CartesianGrid strokeDasharray="3 3" stroke={ink(0.06)} />
-                    <XAxis dataKey="hour" tick={{ fontSize: 11, fill: ink(0.6) }} tickLine={false} axisLine={false} interval={3} />
+                    <XAxis dataKey="hour" tickFormatter={hour12Label} tick={{ fontSize: 11, fill: ink(0.6) }} tickLine={false} axisLine={false} interval={3} />
                     <YAxis tick={{ fontSize: 11, fill: ink(0.6) }} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={{ background: bento ? "#fff" : "#111", border: `1px solid ${ink(0.1)}`, borderRadius: 12, fontSize: 12, color: bento ? "#111114" : "#fff" }} />
+                    <Tooltip labelFormatter={(l) => hour12Label(String(l))} contentStyle={{ background: bento ? "#fff" : "#111", border: `1px solid ${ink(0.1)}`, borderRadius: 12, fontSize: 12, color: bento ? "#111114" : "#fff" }} />
                     <Legend wrapperStyle={{ fontSize: 12, color: ink(0.7) }} />
                     <Line type="monotone" dataKey="permitted" stroke="#4ade80" strokeWidth={2} dot={false} name="Permitted" />
                     <Line type="monotone" dataKey="blocked" stroke="#f87171" strokeWidth={2} strokeDasharray="5 3" dot={false} name="Blocked" />
