@@ -92,6 +92,30 @@ function pageContext(path: string, about?: string) {
   return { path, title: document.title, heading: heading.slice(0, 200), about: about?.slice(0, 1500) };
 }
 
+/**
+ * Scout ends a reply that needs a decision with one line:
+ *
+ *   OPTIONS: Do it | Not now | Show me first
+ *
+ * We lift that line out of the text and render it as buttons. Jared taps; the tap is
+ * sent as his next message, exactly as if he had typed it. No copying, no retyping,
+ * no "reply with yes" - which is the whole point.
+ */
+const OPTION_LINE = /\n?^\s*OPTIONS?\s*:\s*(.+?)\s*$/im;
+
+export function splitOptions(body: string): { text: string; options: string[] } {
+  const m = body.match(OPTION_LINE);
+  if (!m) return { text: body, options: [] };
+  const options = m[1]
+    .split("|")
+    .map((o) => o.trim().replace(/^[-*\u2022]\s*/, ""))
+    .filter((o) => o && o.length <= 60)
+    .slice(0, 4);
+  if (!options.length) return { text: body, options: [] };
+  return { text: body.replace(OPTION_LINE, "").trimEnd(), options };
+}
+
+
 function Scoutie({ mood, className }: { mood: Mood; className?: string }) {
   return (
     <svg
@@ -876,15 +900,32 @@ export function Scout() {
                   </div>
                 ) : (
                   <div className="flex items-start gap-1">
-                    <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[0.9375rem] leading-relaxed text-white/90 sm:text-sm">
-                      {m.body}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="whitespace-pre-wrap break-words text-[0.9375rem] leading-relaxed text-white/90 sm:text-sm">
+                        {splitOptions(m.body).text}
+                      </p>
+                      {/* Only the newest reply's options are live - older ones are history. */}
+                      {i === msgs.length - 1 && !busy && !!splitOptions(m.body).options.length && (
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          {splitOptions(m.body).options.map((o) => (
+                            <button
+                              key={o}
+                              type="button"
+                              onClick={() => send(o)}
+                              className="scout-chip min-h-9 rounded-full border border-white/15 bg-white/[0.06] px-3.5 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/[0.12] active:scale-[0.97]"
+                            >
+                              {o}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon"
                       aria-label="Copy"
                       onClick={() => {
-                        navigator.clipboard?.writeText(m.body);
+                        navigator.clipboard?.writeText(splitOptions(m.body).text);
                         setCopied(i);
                         setTimeout(() => setCopied(null), 1200);
                       }}

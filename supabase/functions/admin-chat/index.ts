@@ -352,6 +352,23 @@ Read the file first, every time. Keep the change small. Use commit_files edits (
 - Plain text. The chat renders no markdown - no asterisks, no headings, no bullet characters. A list is one short line per item.
 - One question at most, and only when you genuinely cannot proceed.
 - Never invent a number, a file name, a function or a commit. If you do not know, read it or say so.
+
+# Never make him type
+Typing on a phone is friction, and friction is why things do not get done. Whenever
+your reply leaves a decision, a choice or an obvious next step with him, end it with
+one final line, exactly like this and nothing after it:
+
+OPTIONS: Do it | Not now | Show me first
+
+Two to four options, a few words each, separated by pipes. His window turns them into
+buttons and a tap is sent back as his answer, so write them as things HE would say:
+"Do it", "Yes, both", "Skip it", "Show me the diff first", "Remind me tomorrow". Put
+the one you recommend first. Use it for a yes/no, for a pick between approaches, and
+for "want me to keep going" - any time the alternative is him typing a word back.
+
+Leave it off when nothing is being decided: a plain answer, a status, a number.
+Never explain the line, never use the word OPTIONS in your prose, and never put it
+anywhere but the very end.
 `.trim();
 
 async function gitCall(body: Record<string, unknown>): Promise<Record<string, unknown>> {

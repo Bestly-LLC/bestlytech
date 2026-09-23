@@ -162,9 +162,11 @@ export function ScoutToday() {
                         <Check className="h-4 w-4" /> Done
                       </button>
                       {p.url && <Go url={p.url} className={ghost}>Open <ExternalLink className="h-3.5 w-3.5" /></Go>}
-                      <button className={ghost} aria-label="Hand to Scout" title="Hand to Scout"
+                      {/* Labelled, not a mystery icon: this is the button that means
+                          "you do it", and it should read that way at a glance. */}
+                      <button className={ghost} title="Scout takes this on"
                         onClick={() => { set(p, "handed"); askScout(`Take this off my plate: ${p.title}`, { about: `${p.title}\n${p.why ?? ""}\n${p.url ?? ""}` }); }}>
-                        <Binoculars className="h-4 w-4" />
+                        <Binoculars className="h-4 w-4" /> Scout does it
                       </button>
                       <button className={ghost} aria-label="Tomorrow" title="Move to tomorrow" onClick={() => set(p, "snoozed", "Moved to tomorrow")}>
                         <Clock3 className="h-4 w-4" />
