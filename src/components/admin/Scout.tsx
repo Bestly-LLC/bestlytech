@@ -545,7 +545,7 @@ export function Scout() {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="scout-bubble-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-5 z-40 max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
+            className="scout-bubble-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-5 z-40 hidden md:block max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
           >
             {pendingJobs === 1 ? "I have a Mac job ready. Tap Run?" : `${pendingJobs} Mac jobs are waiting for you.`}
           </button>
@@ -557,7 +557,7 @@ export function Scout() {
               setBubble(false);
               setOpen(true);
             }}
-            className="scout-bubble-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-5 z-40 max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
+            className="scout-bubble-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-5 z-40 hidden md:block max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
           >
             {waiting === 1 ? "One thing needs you. Want the detail?" : `${waiting} things need you. Want the detail?`}
           </button>
@@ -568,7 +568,7 @@ export function Scout() {
           aria-label="Open Scout (Cmd+J)"
           title="Scout (⌘J)"
           className={cn(
-            "scout-launcher fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex items-center gap-2.5 rounded-full",
+            "scout-launcher fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 hidden items-center gap-2.5 rounded-full md:flex",
             "px-4 py-2.5 text-sm font-semibold shadow-lg",
             "bg-white text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             needs > 0 && "scout-nudge",

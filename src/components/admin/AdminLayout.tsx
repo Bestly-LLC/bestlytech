@@ -14,6 +14,11 @@ import { CommandPalette, OPEN_ADMIN_PALETTE_EVENT } from "./CommandPalette";
 import { NotificationBell } from "./NotificationBell";
 import { RecordingPill } from "./ScoutRecorder";
 import { ClipActivity } from "./ClipActivity";
+import { MobileNav } from "./MobileNav";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreVertical } from "lucide-react";
 import { Scout } from "./Scout";
 
 const BREADCRUMB_MAP: Record<string, string> = {
@@ -88,7 +93,7 @@ export function AdminLayout() {
                 <span className="text-[0.8125rem] text-white/50 hidden sm:inline truncate bento:text-sm bento:font-medium bento:text-white/80">{currentLabel}</span>
               </div>
               <div className="flex items-center gap-1 sm:gap-2">
-                <div role="group" aria-label="Text size" className="flex items-center rounded-lg border border-white/[0.08] bg-white/[0.02] bento:rounded-full bento:border-0 bento:shadow-sm">
+                <div role="group" aria-label="Text size" className="hidden sm:flex items-center rounded-lg border border-white/[0.08] bg-white/[0.02] bento:rounded-full bento:border-0 bento:shadow-sm">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button variant="ghost" size="icon" onClick={textSize.smaller} disabled={!textSize.canShrink}
@@ -128,7 +133,7 @@ export function AdminLayout() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={bento ? "Switch to dark theme" : "Switch to light theme"}
-                      className="text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0 bento:rounded-full">
+                      className="hidden sm:inline-flex text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0 bento:rounded-full">
                       {bento ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
                     </Button>
                   </TooltipTrigger>
@@ -139,7 +144,7 @@ export function AdminLayout() {
                 <NotificationBell />
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" asChild className="text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
+                    <Button variant="ghost" size="icon" asChild className="hidden sm:inline-flex text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
                       <Link to="/" aria-label="Go to home page"><Home className="h-4 w-4" /></Link>
                     </Button>
                   </TooltipTrigger>
@@ -154,17 +159,53 @@ export function AdminLayout() {
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out" className="text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
+                    <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out" className="hidden sm:inline-flex text-white/50 hover:text-white hover:bg-white/5 h-8 w-8 border-0">
                       <LogOut className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Logout</TooltipContent>
                 </Tooltip>
+
+                {/* Phone: the header keeps the live things (uploads, recording, bell) and
+                    folds the settings-shaped ones in here, so nothing gets squeezed out. */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label="More" className="sm:hidden h-8 w-8 border-0 text-white/50">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem onSelect={toggleTheme}>
+                      {bento ? <Moon className="mr-2 h-4 w-4" /> : <Sun className="mr-2 h-4 w-4" />}
+                      {bento ? "Dark theme" : "Light theme"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => window.dispatchEvent(new Event(OPEN_ADMIN_PALETTE_EVENT))}>
+                      <Command className="mr-2 h-4 w-4" /> Search everything
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/"><Home className="mr-2 h-4 w-4" /> Main site</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <div className="flex items-center justify-between px-2 py-1.5">
+                      <span className="text-xs text-muted-foreground">Text size</span>
+                      <span className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={textSize.smaller} disabled={!textSize.canShrink} aria-label="Smaller text"><Minus className="h-3.5 w-3.5" /></Button>
+                        <button type="button" onClick={textSize.reset} className="min-w-[2.5rem] text-xs tabular-nums">{textSize.percent}%</button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={textSize.larger} disabled={!textSize.canGrow} aria-label="Larger text"><Plus className="h-3.5 w-3.5" /></Button>
+                      </span>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={signOut}>
+                      <LogOut className="mr-2 h-4 w-4" /> Sign out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </header>
-            <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto bento:pt-2 md:bento:pt-2 lg:bento:pt-2">
+            <main className="flex-1 overflow-auto p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6 lg:p-8 lg:pb-8 bento:pt-2 md:bento:pt-2 lg:bento:pt-2">
               <Outlet />
             </main>
+            <MobileNav />
             <CommandPalette />
             <Scout />
           </div>
