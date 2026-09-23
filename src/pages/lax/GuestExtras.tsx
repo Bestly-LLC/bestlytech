@@ -4,7 +4,7 @@
  * Data comes from lax_guest_public (page) and weatherkit-proxy (Apple WeatherKit, public, cached).
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { BatteryMedium, Car, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSun, Lock, LockOpen, Mail, Moon, Sun, Thermometer, Wind, Zap } from "lucide-react";
+import { Armchair, BatteryMedium, Car, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSun, Flame, Loader2, Lock, LockOpen, Mail, Moon, Power, Snowflake, Sun, Thermometer, Wind, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const PEACH = "#FFB878";
@@ -86,13 +86,13 @@ const sameHour = (a: string, b: string) => Math.abs(+new Date(a) - +new Date(b))
 const rainPct = (p: number) => (p >= 0.3 ? `${Math.round(p * 10) * 10}%` : null);
 
 /** Apple Weather at LAX, laid out like the Weather app: big temp, hourly strip with the pickup hour marked, then pickup/return rows. */
-export function WeatherCard({ trip }: { trip: Trip | null }) {
+export function WeatherCard({ trip, compact = false }: { trip: Trip | null; compact?: boolean }) {
   const [wx, setWx] = useState<Wx | null | "loading">("loading");
   useEffect(() => {
     supabase.functions.invoke("weatherkit-proxy", { body: { lat: 33.947, lon: -118.3816, dataSets: "currentWeather,forecastHourly,forecastDaily" } })
       .then(({ data }) => setWx((data as Wx) ?? null)).catch(() => setWx(null));
   }, []);
-  if (wx === "loading") return <div className="h-[260px] animate-pulse rounded-3xl bg-white/[0.06] motion-reduce:animate-none" aria-label="Loading weather" />;
+  if (wx === "loading") return <div className={`${compact ? "h-full min-h-[220px]" : "h-[260px]"} animate-pulse rounded-3xl bg-white/[0.06] motion-reduce:animate-none`} aria-label="Loading weather" />;
   if (!wx?.currentWeather) return null;
 
   const now = wx.currentWeather;
@@ -116,6 +116,26 @@ export function WeatherCard({ trip }: { trip: Trip | null }) {
   };
   if (pickup) addRow("Pickup", pickup);
   if (ret) addRow("Return", ret);
+
+  if (compact) {
+    const atPickup = rows.find((r) => r.label === "Pickup");
+    return (
+      <section aria-label="Weather at LAX" className={`flex h-full flex-col rounded-3xl bg-gradient-to-b ${sky(now.conditionCode, day)} p-4 text-white shadow-lg shadow-black/20`}>
+        <p className="flex items-center justify-between text-[13px] font-medium"><span>LAX now</span><WxIcon code={now.conditionCode} day={day} className="h-5 w-5" /></p>
+        <p className="mt-1 text-[48px] font-extralight leading-none tracking-tight tabular-nums">{cToF(now.temperature)}°</p>
+        <p className="mt-1 text-[14px] font-medium capitalize text-white/90">{cond(now.conditionCode)}</p>
+        {today && <p className="text-[13px] text-white/75 tabular-nums">H:{cToF(today.temperatureMax)}°&nbsp; L:{cToF(today.temperatureMin)}°</p>}
+        {atPickup && (
+          <div className="mt-auto rounded-2xl bg-black/15 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-white/65">At pickup</p>
+            <p className="flex items-center gap-1.5 text-[17px] font-semibold tabular-nums"><WxIcon code={atPickup.code} day={atPickup.day} className="h-4 w-4" />{atPickup.temp}</p>
+            {atPickup.rain && <p className="text-[12px] font-semibold text-sky-200">{atPickup.rain} rain</p>}
+          </div>
+        )}
+        <a href="https://weatherkit.apple.com/legal-attribution.html" target="_blank" rel="noreferrer" className="mt-2 text-[10px] text-white/55">Apple Weather</a>
+      </section>
+    );
+  }
 
   return (
     <section aria-label="Weather at LAX" className={`overflow-hidden rounded-3xl bg-gradient-to-b ${sky(now.conditionCode, day)} text-white shadow-lg shadow-black/20`}>
@@ -181,12 +201,78 @@ const ago = (iso: string) => {
 };
 
 /** Live car: shown from 1 hour before pickup until the trip ends. */
-export function CarCard({ trip, car }: { trip: Trip; car: CarState | null }) {
+export const DEMO_CAR: CarState = {
+  battery: 82, range: 248, inside_f: 97, outside_f: 84, locked: true, charging: "Disconnected",
+  online: "online", observed_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(), name: "Tesla Model 3",
+};
+
+type ClimateAction = "cool" | "warm" | "seat" | "off";
+const CLIMATE: { id: ClimateAction; label: string; sub: string; icon: typeof Snowflake }[] = [
+  { id: "cool", label: "Cool it down", sub: "A/C to 68°F", icon: Snowflake },
+  { id: "warm", label: "Warm it up", sub: "Heat to 74°F", icon: Flame },
+  { id: "seat", label: "Heated seat", sub: "Driver seat, high", icon: Armchair },
+  { id: "off", label: "Turn off", sub: "Stop climate", icon: Power },
+];
+
+/** Climate buttons. Live mode is wired once Tesla access is connected; demo mode only shows what would happen. */
+function ClimateControls({ demo, onAction, compact = false }: { demo: boolean; onAction?: (a: ClimateAction) => Promise<void>; compact?: boolean }) {
+  const [busy, setBusy] = useState<ClimateAction | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const press = async (a: (typeof CLIMATE)[number]) => {
+    setBusy(a.id); setDone(null);
+    try {
+      if (demo || !onAction) await new Promise((r) => setTimeout(r, 900));
+      else await onAction(a.id);
+      setDone(a.id === "off" ? "Climate is off." : `${a.label}: on. Give it about 10 minutes.`);
+    } catch (e) {
+      setDone(`Couldn't reach the car. ${(e as Error).message ?? ""}`.trim());
+    } finally { setBusy(null); }
+  };
+  return (
+    <div className={compact ? "mt-3" : "mt-4 border-t border-white/10 pt-4"}>
+      {!compact && <p className="text-[13px] font-semibold text-white">Get the car comfortable before you arrive</p>}
+      <div className={compact ? "grid gap-1.5" : "mt-2.5 grid grid-cols-2 gap-2"}>
+        {CLIMATE.map((a) => {
+          const Icon = a.icon;
+          return (
+            <button key={a.id} type="button" onClick={() => press(a)} disabled={busy !== null}
+              className={`flex items-center gap-2.5 rounded-xl bg-white/[0.08] text-left ring-1 ring-white/10 transition active:scale-[0.98] disabled:opacity-60 ${compact ? "min-h-[44px] px-2.5 py-1.5" : "min-h-[56px] px-3 py-2.5"}`}>
+              {busy === a.id ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" style={{ color: PEACH }} /> : <Icon className="h-5 w-5 shrink-0" style={{ color: PEACH }} />}
+              <span><span className="block text-[14px] font-semibold leading-tight text-white">{a.label}</span>{!compact && <span className="block text-[12px] text-white/55">{a.sub}</span>}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 min-h-[1.25rem] text-[12px] leading-snug text-emerald-300" aria-live="polite">{done}</p>
+      <p className="text-[11px] leading-snug text-white/45">{demo ? "Preview only. Not connected to the car yet." : "Works 1 hour before pickup until your trip ends."}</p>
+    </div>
+  );
+}
+
+export function CarCard({ trip, car, demo = false, onClimate, compact = false }: { trip: Trip; car: CarState | null; demo?: boolean; onClimate?: (a: ClimateAction) => Promise<void>; compact?: boolean }) {
+  if (compact) {
+    return (
+      <div className="flex h-full flex-col rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}><Zap className="h-3.5 w-3.5" />Your car</p>
+        {car ? (
+          <>
+            {car.inside_f != null && <p className="mt-1.5 text-[13px] text-white/70">Inside <b className="text-[22px] font-semibold text-white tabular-nums">{Math.round(car.inside_f)}°</b></p>}
+            {car.battery != null && <p className="flex items-center gap-1.5 text-[13px] text-white/70"><BatteryMedium className="h-4 w-4 text-emerald-300" />{car.battery}%{car.range != null && ` · ${Math.round(car.range)} mi`}</p>}
+            {(demo || onClimate) ? <ClimateControls demo={demo} onAction={onClimate} compact /> : <p className="mt-auto text-[12px] text-white/45">Updated {ago(car.observed_at)}</p>}
+          </>
+        ) : (
+          new Date(trip.car_opens_at) > new Date()
+            ? <p className="mt-2 text-[13px] leading-snug text-white/70">Cabin temp and <b className="text-white">A/C controls</b> show up here at <b className="text-white">{fmtWhen(trip.car_opens_at)}</b>, an hour before pickup.</p>
+            : <p className="mt-2 text-[13px] leading-snug text-white/70">Live car info isn't available right now. Message your host in the Turo app if the car is too hot or cold.</p>
+        )}
+      </div>
+    );
+  }
   if (!car) {
     if (new Date(trip.car_opens_at) > new Date()) {
       return (
         <Card label="Your car" icon={<Zap className="h-3.5 w-3.5" />}>
-          <p className="text-[14px] text-white/75">Live battery and cabin temperature show up here at <b className="text-white">{fmtWhen(trip.car_opens_at)}</b>, an hour before pickup.</p>
+          <p className="text-[14px] text-white/75">Live battery, cabin temperature and A/C controls show up here at <b className="text-white">{fmtWhen(trip.car_opens_at)}</b>, an hour before pickup.</p>
         </Card>
       );
     }
@@ -201,6 +287,7 @@ export function CarCard({ trip, car }: { trip: Trip; car: CarState | null }) {
         {car.locked != null && <p className="flex items-center gap-2 text-white/80">{car.locked ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}{car.locked ? "Locked" : "Unlocked"}</p>}
       </div>
       <p className="mt-2 text-[12px] text-white/45">Updated {ago(car.observed_at)}{car.charging && car.charging !== "Disconnected" ? ` · ${car.charging.toLowerCase()}` : ""}</p>
+      {(demo || onClimate) && <ClimateControls demo={demo} onAction={onClimate} />}
     </Card>
   );
 }

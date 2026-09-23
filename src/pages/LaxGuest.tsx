@@ -11,7 +11,7 @@ import { Helmet } from "react-helmet-async";
 import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
 import { Check, Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { CarCard, EmailCard, TripCard, WeatherCard, type CarState, type Trip } from "./lax/GuestExtras";
+import { CarCard, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type Trip } from "./lax/GuestExtras";
 import { renderPassImage } from "./lax/passImage";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
@@ -113,6 +113,8 @@ export default function LaxGuest() {
   const pick = (t: "pickup" | "return") => { setTab(t); try { history.replaceState(null, "", t === "return" ? "#return" : window.location.pathname); } catch { /* ignore */ } };
   const canvasWrap = useRef<HTMLDivElement>(null);
   const plat = useMemo(platform, []);
+  // ?demo=car shows the car card with sample data and the climate buttons (preview only, nothing is sent to the car).
+  const demoCar = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "car", []);
 
   useEffect(() => {
     const load = () => (token
@@ -192,8 +194,16 @@ export default function LaxGuest() {
           <>
             <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Below: how to get there, and the QR code that opens the garage door.</p>
 
-            {pub.trip && <div className="mt-5 space-y-2.5"><TripCard trip={pub.trip} /><CarCard trip={pub.trip} car={pub.car ?? null} /></div>}
-            <div className="mt-2.5"><WeatherCard trip={pub.trip ?? null} /></div>
+            {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} /></div>}
+            {/* Weather next to the car: see how hot it is, then turn on the A/C right there. */}
+            {pub.trip ? (
+              <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
+                <WeatherCard trip={pub.trip} compact />
+                <CarCard trip={pub.trip} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact />
+              </div>
+            ) : (
+              <div className="mt-2.5"><WeatherCard trip={null} /></div>
+            )}
 
             {/* Quick facts */}
             <div className="mt-5 grid grid-cols-2 gap-2.5">
