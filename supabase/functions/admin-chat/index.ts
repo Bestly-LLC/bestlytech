@@ -52,7 +52,7 @@
 //    Otherwise Scout asks, with three buttons: Yes, use paid AI | No, skip it | Always, stop asking.
 //    Autopilot without that OK stops at NEEDS_YES instead of spending.
 //  - v16: "keep going" is his yes. A message that starts with "keep going" runs as if auto-run
-//    were on for that one request (tools skip the yes, Mac jobs start, paid AI OK for the chat).
+//    were on for that one request (tools skip the yes, Mac jobs start). Since v21 it is NOT a yes to paid AI.
 //    Out of Anthropic credit: a plain-words reply plus one bell card a day, not the raw 400.
 //  - v17: the free model only classifies (DATA | ACTION | CODE) why it can't answer; Scout words the
 //    reason itself. It used to paste the free model's own sentence, which invented things ("use the
@@ -64,6 +64,11 @@
 //    message or his last few messages) and moved with todo_set_owner(), which also renames the Deck
 //    card. The paid model gets the same as a tool (todo_owner). The free model may never answer a
 //    request to do something, or claim something was done (it told him "No action needed" 3 times).
+//  - v21: spend guard (after the credit ran out on 2026-09-22 with the Paid AI switch off). "keep going"
+//    no longer counts as a yes to paid AI - only the "Yes, use paid AI" tap does, and that yes lasts one
+//    hour on that chat (paid_ok_until), not forever. Every paid call is logged with its real cost in
+//    ai_spend and stops at the daily chat cap (scout_settings.chat_cap_usd). One chat runs one paid reply
+//    at a time (busy_until): a double-tapped "keep going" used to start two or three runs at once.
 //  - v13: autopilot. fix-ladder calls with the service key + autopilot:true when an incident
 //    outlived the self-heals and the free model. Anything needing a yes is refused in code and
 //    comes back as NEEDS_YES, which Jared approves with one tap from the alert pane.
@@ -962,6 +967,21 @@ async function heal(tool: string, args: Record<string, any>, out: Record<string,
   return Object.keys(extra).length ? { ...out, ...extra, heal: "Use these before trying again. If you find what works, call learn." } : out;
 }
 
+const PRICE: Record<string, [number, number]> = { haiku: [1, 5], sonnet: [3, 15], opus: [15, 75] }; // $ per million in/out
+const priceOf = (m: string) => PRICE[Object.keys(PRICE).find((k) => m.includes(k)) ?? "sonnet"];
+let spendRef: string | null = null;   // the thread this request is for
+let spentNow = 0;                     // what this request has cost so far
+
+async function logSpend(j: any) {
+  const model = String(j?.model ?? MODEL);
+  const [pin, pout] = priceOf(model);
+  const inT = Number(j?.usage?.input_tokens ?? 0) + Number(j?.usage?.cache_creation_input_tokens ?? 0) + Number(j?.usage?.cache_read_input_tokens ?? 0);
+  const outT = Number(j?.usage?.output_tokens ?? 0);
+  const cost = (inT * pin + outT * pout) / 1e6;
+  spentNow += cost;
+  await db.from("ai_spend").insert({ fn: "admin-chat", scope: "chat", job: "chat", model, input_tokens: inT, output_tokens: outT, cost_usd: cost, ref: spendRef });
+}
+
 async function ask(messages: any[], system: string, apiKey: string, opts: { timeoutMs?: number; noTools?: boolean } = {}) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -973,7 +993,7 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
       }),
       signal: opts.timeoutMs ? AbortSignal.timeout(Math.max(3000, opts.timeoutMs)) : undefined,
     });
-    if (r.ok) return await r.json();
+    if (r.ok) { const j = await r.json(); await logSpend(j).catch(() => {}); return j; }
 
     const retryable = r.status === 429 || r.status >= 500;
     const j = await r.json().catch(() => ({}));
@@ -1023,7 +1043,7 @@ Deno.serve(async (req) => {
   // Auto-run applies to chats and, when he has switched it on, to the fix ladder too - except
   // code changes to the live site, which still wait for his tap when nobody is watching.
   const { data: prefs } = await db.rpc("scout_prefs");
-  // "keep going" is his yes for this request: auto-run for this one turn, paid AI OK for the chat.
+  // "keep going" is his yes for this request: auto-run for this one turn. Not a yes to paid AI (v21).
   const keepGoing = !autopilot && /^\s*keep going\b/i.test(String(body.body ?? ""));
   autoRunOn = (prefs as any)?.auto_run === true || keepGoing;
   const paidAlwaysOk = (prefs as any)?.paid_ai_ok === true;
@@ -1052,8 +1072,9 @@ Deno.serve(async (req) => {
 
   // v15: paid AI only with his OK.
   if (!paidAlwaysOk) {
-    const { data: th } = await db.from("admin_chat_threads").select("paid_ok").eq("id", threadId).maybeSingle();
-    let paidOk = (th as any)?.paid_ok === true;
+    // A yes lasts one hour on this chat. "keep going" alone is NOT a yes to spending.
+    const { data: th } = await db.from("admin_chat_threads").select("paid_ok_until").eq("id", threadId).maybeSingle();
+    let paidOk = !!(th as any)?.paid_ok_until && Date.parse((th as any).paid_ok_until) > Date.now();
     const say = async (reply: string, extra: Record<string, unknown> = {}) => {
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
       await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
@@ -1063,8 +1084,8 @@ Deno.serve(async (req) => {
       if (/^always,? stop asking\.?$/i.test(text)) {
         await db.from("scout_settings").update({ paid_ai_ok: true, updated_at: new Date().toISOString(), updated_by: uid }).eq("id", true);
         paidOk = true;
-      } else if (keepGoing || /^yes,? use paid ai\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
-        await db.from("admin_chat_threads").update({ paid_ok: true }).eq("id", threadId);
+      } else if (/^yes,? use paid ai\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
+        await db.from("admin_chat_threads").update({ paid_ok: true, paid_ok_until: new Date(Date.now() + 3600_000).toISOString() }).eq("id", threadId);
         paidOk = true;
       } else if (/^no,? skip it\.?$/i.test(text)) {
         return await say("OK, skipped. Nothing was spent.");
@@ -1076,12 +1097,12 @@ Deno.serve(async (req) => {
         // Don't offer a paid run that can't happen: say the real blocker instead.
         if (await paidOutOfCredit()) {
           return await say(
-            `${free.why} The paid AI (Claude) is out of credit right now, so I can't do it yet. Your message is saved: top up at console.anthropic.com > Settings > Billing, then say keep going.`,
+            `${free.why} The paid AI (Claude) is out of credit right now, so I can't do it yet. Your message is saved: top up at console.anthropic.com > Settings > Billing, then send it again.`,
             { paid_needed: true, out_of_credit: true },
           );
         }
         return await say(
-          `I'd need paid AI (Claude) for this. ${free.why} It costs a few cents.\n\nOPTIONS: Yes, use paid AI | No, skip it | Always, stop asking`,
+          `I'd need paid AI (Claude) for this. ${free.why} A reply costs about 5 to 50 cents; a yes covers this chat for one hour.\n\nOPTIONS: Yes, use paid AI | No, skip it`,
           { paid_needed: true },
         );
       }
@@ -1136,6 +1157,22 @@ Deno.serve(async (req) => {
   const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder, jobs, page ?? "unknown", lessonsDigest)
     + (autoRunOn ? AUTO_RUN_ON : ASK_PLAINLY)
     + (keepGoing ? "\n\n# He said keep going\nThat is his yes for everything the job needs right now. Carry on from where you stopped and do it; don't ask again." : "");
+
+  // Daily chat cap: a runaway guard, even with the Paid AI switch on.
+  const { data: budget } = await db.rpc("ai_budget", { p_scope: "chat" });
+  if ((budget as any)?.ok === false) {
+    const why = `Paid AI hit today's cap ($${Number((budget as any).spent).toFixed(2)} of $${Number((budget as any).cap).toFixed(2)}), so I stopped. It resets at midnight. Your message is saved.`;
+    await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
+    return J({ ok: true, thread_id: threadId, reply: why, capped: true });
+  }
+  // One paid reply per chat at a time.
+  const { data: locked } = await db.from("admin_chat_threads").update({ busy_until: new Date(Date.now() + 150_000).toISOString() })
+    .eq("id", threadId).or(`busy_until.is.null,busy_until.lt.${new Date().toISOString()}`).select("id");
+  if (!locked?.length) {
+    return J({ ok: true, thread_id: threadId, reply: "Still working on your last message. The answer lands here in a moment.", busy: true });
+  }
+  const unlock = () => db.from("admin_chat_threads").update({ busy_until: null }).eq("id", threadId);
+  spendRef = threadId; spentNow = 0;
 
   const used: string[] = [];
   const shownFor: Record<string, string[]> = {};
@@ -1199,21 +1236,24 @@ Deno.serve(async (req) => {
     if (err?.name === "TimeoutError" || err?.name === "AbortError") {
       const why = `I ran long on that (${used.length} steps). Say "keep going" and I will pick it up, or ask for a smaller piece.`;
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
+      await unlock();
       return J({ ok: true, thread_id: threadId, reply: why, tools: used, partial: true });
     }
     if (/credit balance is too low/i.test(String((e as Error).message))) {
       // Out of paid credit: say it in plain words once, and put one card in the bell per day.
-      const why = "My paid AI (Claude) is out of credit, so I can't do this right now. Top it up at console.anthropic.com, Settings, Billing, then say keep going.";
+      const why = "My paid AI (Claude) is out of credit, so I can't do this right now. Top it up at console.anthropic.com, Settings, Billing, then send it again.";
       await db.rpc("admin_notify", {
         p_kind: "scout", p_title: "Scout's paid AI is out of credit", p_body: "Top up at console.anthropic.com > Settings > Billing. Until then Scout can only use the free AI on the Mac mini.",
         p_url: "https://console.anthropic.com/settings/billing", p_entity_key: "scout", p_severity: "warning",
         p_dedupe_key: `scout.credit:${new Date().toISOString().slice(0, 10)}`,
       });
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
+      await unlock();
       return J({ ok: false, error: "out_of_credit", thread_id: threadId, reply: why }, 200);
     }
     const why = `I could not reach the model: ${(e as Error).message}`.replace(/sk-ant-[A-Za-z0-9_\-]+/g, "sk-ant-…");
     await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
+    await unlock();
     return J({ ok: false, error: (e as Error).message, thread_id: threadId, reply: why }, 200);
   }
 
@@ -1224,5 +1264,6 @@ Deno.serve(async (req) => {
   await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
 
   const { data: proposed } = await db.from("mac_jobs").select("id").eq("thread_id", threadId).eq("status", "proposed").limit(1);
-  return J({ ok: true, thread_id: threadId, reply, tools: used, job_id: proposed?.[0]?.id ?? null });
+  await unlock();
+  return J({ ok: true, thread_id: threadId, reply, tools: used, job_id: proposed?.[0]?.id ?? null, cost_usd: Math.round(spentNow * 1000) / 1000 });
 });

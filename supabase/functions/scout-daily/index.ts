@@ -17,7 +17,11 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const MODEL = Deno.env.get("SCOUT_DAILY_MODEL") ?? "claude-sonnet-4-6";
+// v4: background jobs run on the cheapest Claude model, are logged in ai_spend and stop at the daily
+// background cap (scout_settings.background_cap_usd). They used to run on Sonnet with no check at all.
+const MODEL = Deno.env.get("SCOUT_DAILY_MODEL") ?? "claude-haiku-4-5";
+const PRICE: Record<string, [number, number]> = { haiku: [1, 5], sonnet: [3, 15], opus: [15, 75] }; // $ per million in/out
+const priceOf = (m: string) => PRICE[Object.keys(PRICE).find((k) => m.includes(k)) ?? "sonnet"];
 const TZ = "America/Los_Angeles";
 const DECK_BOARD = "Bestly Ops";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -42,9 +46,11 @@ function cleanKey(raw: string | undefined) {
   return (m ? m[0] : raw ?? "").trim();
 }
 
-async function claude(system: string, user: string, maxTokens = 3000): Promise<any> {
+async function claude(system: string, user: string, maxTokens = 3000, job = "background", ref: string | null = null): Promise<any> {
   const key = cleanKey(Deno.env.get("ANTHROPIC_API_KEY"));
   if (!key) throw new Error("no ANTHROPIC_API_KEY");
+  const { data: budget } = await db.rpc("ai_budget", { p_scope: "background" });
+  if ((budget as any)?.ok === false) throw new Error(`daily background AI cap reached ($${(budget as any).spent} of $${(budget as any).cap})`);
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -54,6 +60,10 @@ async function claude(system: string, user: string, maxTokens = 3000): Promise<a
     });
     if (r.ok) {
       const j = await r.json();
+      const [pin, pout] = priceOf(String(j.model ?? MODEL));
+      const inT = Number(j.usage?.input_tokens ?? 0) + Number(j.usage?.cache_creation_input_tokens ?? 0) + Number(j.usage?.cache_read_input_tokens ?? 0);
+      const outT = Number(j.usage?.output_tokens ?? 0);
+      await db.from("ai_spend").insert({ fn: "scout-daily", scope: "background", job, model: String(j.model ?? MODEL), input_tokens: inT, output_tokens: outT, cost_usd: (inT * pin + outT * pout) / 1e6, ref });
       const text = (j.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
       const s = text.indexOf("{"), e = text.lastIndexOf("}");
       if (s < 0 || e < s) throw new Error("model did not return JSON");
@@ -112,7 +122,7 @@ async function morning(day: string) {
         `decision = something only he can decide. quick = under 5 minutes. focus = the one piece of real work that moves the business most. ` +
         `title: an imperative under 70 characters that says exactly what to do. why: one plain line on why today. Use only source_keys from the list. Rank 0 and 1 are broken or stopped things; prefer them.`,
         JSON.stringify(candidates.slice(0, 40)),
-        1500,
+        1500, "morning",
       );
       picks = (out.picks ?? []).filter((p: any) => candidates.some((c) => c.source_key === p.source_key)).slice(0, need);
     } catch (e) {
@@ -163,7 +173,7 @@ async function drafts(day: string) {
     `Skip receipts, automated mail, marketing and anything that needs no answer. For each, write the reply he would send: short, specific to what they asked, ` +
     `no invented facts, dates or promises (use [brackets] for anything he must fill in). Return JSON only: {"drafts":[{"mail_id":"...","why":"one line: what they need","reply":"..."}]}.`,
     JSON.stringify(cands.map((m: any) => ({ mail_id: m.id, from: `${m.from_name ?? ""} <${m.from_addr}>`, to: m.mailbox, subject: m.subject, sent: m.sent_at, body: String(m.body_text ?? "").slice(0, 1800) }))),
-    4000,
+    4000, "drafts",
   );
   let n = 0;
   for (const d of (out.drafts ?? []).slice(0, 5)) {
@@ -247,7 +257,7 @@ async function call(id: string, force = false) {
       `Owner = the person who will DO it, worked out from what is said ("I'll send it" -> the speaker; "can you..." -> the person asked; "Jared will..." -> Jared). ` +
       `Speaker labels can be wrong, especially on one-mic recordings (the header says so): trust what the words say over the label. When it's unclear who will do it, the owner is Jared.`,
       `Call: ${r.name}\nPeople: Jared, ${(r.roster ?? []).join(", ")}\n\n${t}`,
-      2500,
+      2500, "call", id,
     );
   } catch (e) {
     await db.from("meeting_recordings").update({ tasks_at: null }).eq("id", id);
@@ -335,7 +345,7 @@ async function reflect(days = 1) {
     `Return JSON only: {"lessons":[{"scope":"...","title":"<60 chars","when":"...","do":"...","avoid":"... or null","signature":"key words from the error","evidence":["<action or job ids>"]}],"unsolved":[{"scope":"...","problem":"one line"}]}. At most 12 lessons.`,
     JSON.stringify({ actions: a, jobs: (jobs ?? []).map((j: any) => ({ id: j.id, title: j.title, status: j.status, exit: j.exit_code, script: trim(j.script, 500), output_tail: trim(String(j.output ?? "").slice(-500), 500) })),
       incidents: (inc ?? []).map((i: any) => ({ key: i.key, title: i.title, status: i.status, healed: i.self_healed, tries: i.heal_attempts, body: trim(i.body, 300) })) }),
-    4000,
+    4000, "reflect",
   );
 
   let learned = 0;

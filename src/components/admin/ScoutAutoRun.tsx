@@ -6,7 +6,10 @@ import { cn } from "@/lib/utils";
  * Scout's two switches, stored in scout_settings so the server (admin-chat) enforces them:
  * - Auto-run: Scout does what it suggests (runs Mac jobs, changes data, ships fixes) without a tap.
  * - Paid AI without asking: Scout uses Claude (paid) straight away. Off = it tries the free AI on
- *   the Mac mini first and asks before spending.
+ *   the Mac mini first and asks before spending; a yes covers that chat for one hour.
+ * Under them: what paid AI actually cost today (ai_spend), chat and background jobs, against the
+ * daily caps. Background jobs (to-dos from calls, morning picks, reply drafts) run on the cheapest
+ * model and stop at their own cap whatever the switch says.
  */
 
 type Prefs = { auto_run: boolean; paid_ai_ok: boolean };
@@ -79,8 +82,29 @@ function Row({ title, sub, on, onToggle }: { title: string; sub: string; on: boo
   );
 }
 
+type Budget = { spent: number; cap: number };
+function useSpend() {
+  const [b, setB] = useState<{ chat: Budget; background: Budget } | null>(null);
+  useEffect(() => {
+    let live = true;
+    const read = async () => {
+      const [c, g] = await Promise.all([
+        (supabase.rpc as any)("ai_budget", { p_scope: "chat" }),
+        (supabase.rpc as any)("ai_budget", { p_scope: "background" }),
+      ]);
+      if (live && c.data && g.data) setB({ chat: c.data, background: g.data });
+    };
+    read();
+    const t = setInterval(read, 60_000);
+    return () => { live = false; clearInterval(t); };
+  }, []);
+  return b;
+}
+const usd = (n: number) => `$${Number(n || 0).toFixed(2)}`;
+
 export function ScoutAutoRunBar() {
   const { prefs, set } = usePrefs();
+  const spend = useSpend();
   if (!prefs) return null;
   return (
     <div className="border-b border-white/[0.06] px-3 py-1">
@@ -98,6 +122,11 @@ export function ScoutAutoRunBar() {
         on={prefs.paid_ai_ok}
         onToggle={() => set("paid_ai_ok", !prefs.paid_ai_ok)}
       />
+      {spend && (
+        <p className="pb-1.5 text-[0.6875rem] leading-snug text-white/55">
+          Spent today: chat {usd(spend.chat.spent)} of {usd(spend.chat.cap)} cap · background jobs {usd(spend.background.spent)} of {usd(spend.background.cap)} cap
+        </p>
+      )}
     </div>
   );
 }
