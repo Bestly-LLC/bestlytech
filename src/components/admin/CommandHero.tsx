@@ -77,17 +77,22 @@ export function CommandHero() {
       <div className={cn(card, "relative overflow-hidden p-5 sm:p-6")}>
         <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#0A84FF]/15 blur-3xl" />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3.5">
-            <AdminMark className="h-14 w-14 shrink-0" />
-            <div>
-              <h2 className="text-[1.6rem] font-bold leading-tight tracking-tight text-white">{hello}, Jared</h2>
-              <p className="text-sm text-white/55">
-                {todos === null ? "…" : todos.length ? `${todos.length} to-do${todos.length === 1 ? "" : "s"} from calls` : "No call to-dos on you"}
-                {next ? ` · next meeting ${whenLabel(next.start).toLowerCase()}` : ""}
-              </p>
-              <WeatherNow className="mt-1.5" />
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-4">
+            <div className="flex items-center gap-3.5">
+              <AdminMark className="h-14 w-14 shrink-0" />
+              <div>
+                <h2 className="text-[1.6rem] font-bold leading-tight tracking-tight text-white">{hello}, Jared</h2>
+                <p className="text-sm text-white/55">
+                  {todos === null ? "\u2026" : todos.length ? `${todos.length} to-do${todos.length === 1 ? "" : "s"} from calls` : "No call to-dos on you"}
+                  {next ? ` \u00b7 next meeting ${whenLabel(next.start).toLowerCase()}` : ""}
+                </p>
+              </div>
             </div>
+            {/* Beside the greeting, not under it: it is the second thing worth
+                seeing up here, and at this size it reads without stopping. */}
+            <WeatherNow />
           </div>
+
           <a href={joinUrl} target="_blank" rel="noreferrer"
             className="inline-flex min-h-12 items-center gap-2.5 rounded-2xl bg-emerald-500 px-5 py-2 text-[#fff] shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)] transition hover:bg-emerald-400 active:scale-[0.98]">
             <Video className="h-5 w-5 shrink-0" />

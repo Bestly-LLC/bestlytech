@@ -125,6 +125,8 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
               <a
                 key={item.name}
                 href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="relative px-4 py-2 text-sm font-medium transition-colors rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50"
               >
                 {item.name}
@@ -218,6 +220,8 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
                         <a
                           key={item.name}
                           href={item.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           onClick={() => setMobileMenuOpen(false)}
                           className="block rounded-xl px-4 py-3 text-base font-medium transition-all text-muted-foreground hover:bg-accent hover:text-foreground"
                           style={{ animationDelay: `${index * 50}ms` }}

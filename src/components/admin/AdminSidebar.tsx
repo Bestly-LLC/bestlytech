@@ -275,6 +275,8 @@ export function AdminSidebar() {
           <SidebarMenuButton asChild tooltip={item.title}>
             <a
               href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
               onClick={onHokuClick}
               aria-busy={hokuBusy}
               className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all relative bento:rounded-full bento:py-2.5 text-white/55 hover:text-white hover:bg-white/[0.05] bento:text-white/70"
