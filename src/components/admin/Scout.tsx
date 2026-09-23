@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { playNotifySound } from "@/lib/notifySound";
+import { playNotifySound, playSuccessSound } from "@/lib/notifySound";
 import { useStickToBottom } from "@/lib/useStickToBottom";
 import {
   X,
@@ -21,6 +21,7 @@ import {
 import { CopyBlock } from "@/components/CopyText";
 import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecording } from "./ScoutRecorder";
 import { ScoutJobs, useMacJobs, type MacJob } from "./ScoutJobs";
+import { ScoutAutoRunBar } from "./ScoutAutoRun";
 import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
 
 /**
@@ -429,7 +430,7 @@ export function Scout() {
       }
 
       setBusy(false);
-      playNotifySound();          // Scout is done - you can look away until now
+      if (error) playNotifySound(); else playSuccessSound(); // done: the happy pop; a problem: the alert sound
       refreshJobs();
       inputRef.current?.focus();
     },
@@ -723,7 +724,7 @@ export function Scout() {
                 ? `${threads.length} conversation${threads.length === 1 ? "" : "s"}`
                 : busy
                   ? "thinking it through"
-                  : recording ? "recording your call" : pendingJobs ? "a Mac job is waiting for you" : "reads the data, fixes things, runs the Mac"}
+                  : recording ? "recording your call" : pendingJobs ? "waiting for your OK" : "reads the data, fixes things, runs the Mac"}
             </p>
           </div>
 
@@ -776,6 +777,8 @@ export function Scout() {
             <X className="h-4 w-4" />
           </Button>
         </div>
+
+        {view === "chat" && <ScoutAutoRunBar />}
 
         {view === "history" ? (
           <div key="history" className="scout-view-fwd flex-1 overflow-y-auto p-2">

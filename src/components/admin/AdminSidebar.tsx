@@ -384,9 +384,9 @@ export function AdminSidebar() {
                     }}
                     aria-label={`Move ${section.label} section (drag, or use the arrow keys)`}
                     title="Drag to move"
-                    className="-mr-1 grid h-6 w-6 cursor-grab touch-none place-items-center rounded-md text-white/30 opacity-60 transition hover:bg-white/[0.06] hover:text-white/70 focus-visible:opacity-100 active:cursor-grabbing group-hover/label:opacity-100 md:opacity-0"
+                    className="-mr-1 grid h-7 w-7 cursor-grab touch-none place-items-center rounded-md text-white/50 transition hover:bg-white/[0.08] hover:text-white active:cursor-grabbing"
                   >
-                    <GripVertical className="h-3.5 w-3.5" />
+                    <GripVertical className="h-4 w-4" />
                   </button>
                 )}
               </SidebarGroupLabel>

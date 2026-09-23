@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
 import { AdminMark } from "@/components/AdminMark";
 import { cn } from "@/lib/utils";
-import { playNotifySound } from "@/lib/notifySound";
+import { playNotifySound, playSuccessSound } from "@/lib/notifySound";
 import { showLocalNotification, registerServiceWorker, enablePush, syncPushOnLoad } from "@/lib/webPush";
 import { useStickToBottom } from "@/lib/useStickToBottom";
 
@@ -85,7 +85,7 @@ export function usePartnerScout(userId: string, viewing: boolean) {
           const lookingAtIt = viewingRef.current && !document.hidden && p.new.thread_id === activeRef.current;
           const finished = p.eventType === "UPDATE" && p.new.role === "assistant" && (p.new.status === "done" || p.new.status === "error")
             && p.old?.status !== p.new.status;
-          if (finished) playNotifySound(); // same sound as Scout in the admin, every time an answer lands
+          if (finished) (p.new.status === "done" ? playSuccessSound : playNotifySound)(); // same sounds as Scout in the admin
           if (finished && !lookingAtIt) {
             setAlert(p.new);
             notify(p.new);

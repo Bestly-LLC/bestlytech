@@ -78,3 +78,60 @@ export function playNotifySound() {
     /* same */
   }
 }
+
+/*
+ * The "done" sound: Scout finished a job or answered. Kept apart from the alert sound above,
+ * which is for things that need you. Replace public/notify-success.mp3 to change it; until that
+ * file exists, a short bubble pop is synthesised so there is always a happy sound.
+ */
+const SUCCESS_SRC = "/notify-success.mp3";
+let okEl: HTMLAudioElement | null = null;
+let okMissing = false;
+let lastOk = 0;
+
+function bubblePop() {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const pop = (at: number, from: number, to: number) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(from, ctx.currentTime + at);
+      o.frequency.exponentialRampToValueAtTime(to, ctx.currentTime + at + 0.07);
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + at);
+      g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + at + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.11);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + at);
+      o.stop(ctx.currentTime + at + 0.12);
+    };
+    pop(0, 520, 1100);
+    pop(0.09, 700, 1500);
+    setTimeout(() => ctx.close().catch(() => undefined), 500);
+  } catch {
+    /* no audio: fine */
+  }
+}
+
+/** Play the success sound (same mute switch and autoplay rules as the alert sound). */
+export function playSuccessSound() {
+  if (!unlocked || notifySoundMuted()) return;
+  const now = Date.now();
+  if (now - lastOk < MIN_GAP_MS) return;
+  lastOk = now;
+  if (okMissing) { bubblePop(); return; }
+  if (!okEl) {
+    okEl = new Audio(SUCCESS_SRC);
+    okEl.preload = "auto";
+    okEl.volume = 0.6;
+    okEl.addEventListener("error", () => { okMissing = true; }, { once: true });
+  }
+  try {
+    okEl.currentTime = 0;
+    void okEl.play().catch(() => { okMissing = true; bubblePop(); });
+  } catch {
+    bubblePop();
+  }
+}

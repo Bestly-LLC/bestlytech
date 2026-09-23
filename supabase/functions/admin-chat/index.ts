@@ -43,6 +43,14 @@
 //    (scout_lessons), plus the real columns when run_sql guessed wrong. When Scout finds what
 //    works it saves it with learn; a nightly reflect (scout-daily) mines the day for more.
 //    Lessons that keep failing retire themselves (scout_lesson_used).
+//  - v14: auto-run. scout_settings.auto_run (the switch in Scout's header) is Jared's standing
+//    yes: tools that need confirmed:true run without asking, and Mac Run cards start at once
+//    (mac_job_autorun). On autopilot (the fix ladder) it covers everything except commit_files.
+//  - v15: paid AI only with his OK. Unless scout_settings.paid_ai_ok ("Paid AI without asking")
+//    is on, or he already said yes in this chat (admin_chat_threads.paid_ok), a message first goes
+//    to the FREE model on the Mac mini (fix_ai_jobs). If that can answer without tools, it does.
+//    Otherwise Scout asks, with three buttons: Yes, use paid AI | No, skip it | Always, stop asking.
+//    Autopilot without that OK stops at NEEDS_YES instead of spending.
 //  - v13: autopilot. fix-ladder calls with the service key + autopilot:true when an incident
 //    outlived the self-heals and the free model. Anything needing a yes is refused in code and
 //    comes back as NEEDS_YES, which Jared approves with one tap from the alert pane.
@@ -201,7 +209,9 @@ const TOOLS = [
     description:
       "Run a shell job on the Mac mini (the always-on Mac: call recorder in ~/MeetingRec, repo at ~/Developer/bestlytech, Homebrew, git with push access, node, python3). " +
       "action propose: puts a Run card in front of Jared showing the exact script. Nothing runs until he taps Run; you cannot approve it. " +
-      "Say in one line what it does and that the Run button is up. Do not ask him to type yes. action get: read a job's status and output (latest if no id). " +
+      "Say in one line what it does and that the Yes button is up. Do not ask him to type yes. (With auto-run on, it starts by itself; the result says so.) " +
+      "Write title and why for someone who has never seen a terminal: title = what it does for him ('Restart the call recorder'), why = one sentence on what changes after ('Your next call gets recorded again.'). No commands or jargon in either. " +
+      "action get: read a job's status and output (latest if no id). " +
       "Scripts run in zsh -l as Jared's user under launchd: no sudo, no GUI prompts, and macOS privacy may block Desktop/Documents/Downloads. Default timeout 300s.",
     input_schema: {
       type: "object",
@@ -283,6 +293,26 @@ const TOOLS = [
     input_schema: { type: "object", properties: { key: { type: "string" } }, required: ["key"] },
   },
 ];
+
+const AUTO_RUN_ON = `
+
+# Auto-run is ON
+Jared switched on auto-run: he does not want to approve things. Do not ask "should I?" and do not
+offer a "Do it" button for an action - just do it. Mac jobs start by themselves. Tools that normally
+need confirmed:true run as if he said yes. After acting, say in one plain line what you did and what
+changed ("Restarted Homebridge. Your lights respond again."). Still stop and ask only if the step
+would delete something that cannot be brought back.`;
+
+const ASK_PLAINLY = `
+
+# When you need his yes
+Write the question for someone who has never seen this system. First say, in everyday words, what
+will happen and what it changes for him - not the tool, the script or the table. Then ask. One or two
+short sentences, for example:
+  "I'll restart Homebridge on your Pi. Your Home app lights come back in about a minute. Do it?"
+  "I'll delete the 14 old read alerts from your bell. Nothing else changes. OK?"
+Never lead with jargon (commit, db_write, launchctl, RPC). If he wants the detail he taps "Show me first".
+If he seems tired of approving, tell him he can switch on Auto-run at the top of this window.`;
 
 const SYSTEM = (today: unknown, mac: unknown, incidents: unknown, unread: unknown, recorder: unknown, jobs: unknown, page: unknown, lessons: string) => `
 You are Scout, the assistant inside Jared Best's Bestly admin console at bestly.tech/admin. Your name is Scout; never call yourself anything else.
@@ -550,8 +580,51 @@ async function macRun(args: Record<string, any>, threadId: string): Promise<Reco
     cwd: args.cwd ? String(args.cwd).slice(0, 500) : null, timeout_s: timeout, thread_id: threadId,
   }).select("id").single();
   if (error) return { ok: false, error: error.message };
+  if (autoRunOn) {
+    const { data: ar } = await db.rpc("mac_job_autorun", { p_id: data.id });
+    if ((ar as any)?.ok) return { ok: true, id: data.id, status: "approved", note: "Auto-run is on, so it is running on the Mac mini now. Read the result with mac_run get when it finishes." };
+  }
   return { ok: true, id: data.id, status: "proposed", note: "The Run card is on his screen now. It expires in an hour." };
 }
+
+/**
+ * v15: try the FREE model on the Mac mini first (fix_ai_jobs, answered in seconds when it is up).
+ * It answers only what needs no tools; anything else comes back as a plain-words reason to ask.
+ */
+async function freeTry(threadId: string, text: string, page: unknown): Promise<{ answer?: string; why: string }> {
+  const { data: st } = await db.from("partner_ai_status").select("seen_at").eq("id", 1).maybeSingle();
+  const seen = (st as any)?.seen_at ? Date.parse((st as any).seen_at) : 0;
+  if (Date.now() - seen > 3 * 60_000) return { why: "The free AI on your Mac mini isn't answering right now." };
+  const { data: hist } = await db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId)
+    .order("created_at", { ascending: false }).limit(7);
+  const convo = ((hist ?? []) as any[]).reverse().map((m) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body).slice(0, 600)}`).join("\n");
+  const prompt = `You are Scout's free helper inside Jared's Bestly admin dashboard. You have NO access to his database, files, servers or the internet, and you cannot change anything.
+Answer Jared's last message ONLY if you can answer it fully and correctly from general knowledge or the conversation below (for example: explaining a concept, rewording text, a quick calculation).
+If it needs his live data (numbers, leads, orders, alerts, logs, status of anything), or asks to do, fix, check, change, run, send or look something up, do NOT try. Reply with exactly one line:
+NEEDS_TOOLS: <why, in plain words for a non-technical person, max 15 words>
+Otherwise answer in plain text, under 80 words, no markdown.
+
+Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}
+Conversation:
+${convo}`;
+  const { data: job, error } = await db.from("fix_ai_jobs").insert({ issue_key: `scout-chat:${threadId}`, prompt }).select("id").single();
+  if (error || !job) return { why: "The free AI couldn't take it." };
+  const until = Date.now() + 45_000;
+  while (Date.now() < until) {
+    await sleep(1500);
+    const { data: row } = await db.from("fix_ai_jobs").select("status, answer").eq("id", job.id).maybeSingle();
+    if ((row as any)?.status === "done") {
+      const a = String((row as any).answer ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+      const m = a.match(/NEEDS_TOOLS:\s*(.+)/i);
+      if (m || !a) return { why: m ? m[1].trim().replace(/\.?$/, ".") : "The free AI couldn't answer it." };
+      return { answer: a };
+    }
+  }
+  return { why: "The free AI on your Mac mini took too long." };
+}
+
+// Set per request from scout_settings.auto_run.
+let autoRunOn = false;
 
 async function runTool(name: string, args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
   let out: Record<string, unknown>;
@@ -822,6 +895,12 @@ Deno.serve(async (req) => {
     if (roleErr || !isAdmin) return J({ ok: false, error: "admin only" }, 403);
   }
 
+  // Auto-run applies to chats and, when he has switched it on, to the fix ladder too - except
+  // code changes to the live site, which still wait for his tap when nobody is watching.
+  const { data: prefs } = await db.rpc("scout_prefs");
+  autoRunOn = (prefs as any)?.auto_run === true;
+  const paidAlwaysOk = (prefs as any)?.paid_ai_ok === true;
+
   const text = String(body.body ?? "").trim();
   if (!text) return J({ ok: false, error: "body required" }, 400);
   if (text.length > 6000) return J({ ok: false, error: "that is too long for one message" }, 400);
@@ -833,6 +912,37 @@ Deno.serve(async (req) => {
     threadId = data.id;
   }
   await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "user", body: text });
+
+  // v15: paid AI only with his OK.
+  if (!paidAlwaysOk) {
+    const { data: th } = await db.from("admin_chat_threads").select("paid_ok").eq("id", threadId).maybeSingle();
+    let paidOk = (th as any)?.paid_ok === true;
+    const say = async (reply: string, extra: Record<string, unknown> = {}) => {
+      await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
+      await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
+      return J({ ok: true, thread_id: threadId, reply, tools: [], ...extra });
+    };
+    if (!paidOk) {
+      if (/^always,? stop asking\.?$/i.test(text)) {
+        await db.from("scout_settings").update({ paid_ai_ok: true, updated_at: new Date().toISOString(), updated_by: uid }).eq("id", true);
+        paidOk = true;
+      } else if (/^yes,? use paid ai\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
+        await db.from("admin_chat_threads").update({ paid_ok: true }).eq("id", threadId);
+        paidOk = true;
+      } else if (/^no,? skip it\.?$/i.test(text)) {
+        return await say("OK, skipped. Nothing was spent.");
+      } else if (autopilot) {
+        return await say("NEEDS_YES: Let Scout work on this with paid AI (Claude). It costs a few cents.", { paid_needed: true });
+      } else {
+        const free = await freeTry(threadId, text, body.page);
+        if (free.answer) return await say(free.answer, { free: true });
+        return await say(
+          `I'd need paid AI (Claude) for this. ${free.why} It costs a few cents.\n\nOPTIONS: Yes, use paid AI | No, skip it | Always, stop asking`,
+          { paid_needed: true },
+        );
+      }
+    }
+  }
 
   const apiKey = cleanKey(Deno.env.get("ANTHROPIC_API_KEY"));
   if (!apiKey) {
@@ -879,7 +989,8 @@ Deno.serve(async (req) => {
   const jobs = (jobRows ?? []).map((j: any) => ({ ...j, output: String(j.output ?? "").slice(-1500) }));
   const unread: Record<string, number> = {};
   for (const n of (bell ?? []) as { severity: string }[]) unread[n.severity] = (unread[n.severity] ?? 0) + 1;
-  const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder, jobs, page ?? "unknown", lessonsDigest);
+  const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder, jobs, page ?? "unknown", lessonsDigest)
+    + (autoRunOn ? AUTO_RUN_ON : ASK_PLAINLY);
 
   const used: string[] = [];
   const shownFor: Record<string, string[]> = {};
@@ -915,12 +1026,17 @@ Deno.serve(async (req) => {
           results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out) });
           continue;
         }
-        if (autopilot && ((c.input as any)?.confirmed === true || AUTOPILOT_NEVER.has(c.name))) {
-          out = { ok: false, error: "needs_yes", hint: "Autopilot: Jared is not here, so nothing that needs his yes runs (and no Mac jobs or phone pushes). Don't retry it. Finish your reply and make the last line NEEDS_YES: <this exact action, one line>." };
+        const blocked = autopilot && (autoRunOn
+          ? c.name === "commit_files"
+          : ((c.input as any)?.confirmed === true || AUTOPILOT_NEVER.has(c.name)));
+        if (blocked) {
+          out = { ok: false, error: "needs_yes", hint: "Autopilot: Jared is not here, so this waits for his yes. Don't retry it. Finish your reply and make the last line NEEDS_YES: <what you would do and what it changes for him, in everyday words a non-technical person understands, one line, no jargon>." };
           results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out) });
           continue;
         }
-        try { out = await runTool(c.name, c.input ?? {}, threadId); }
+        // Auto-run: his standing yes counts as the yes these tools wait for.
+        const input = autoRunOn ? { ...(c.input ?? {}), confirmed: true } : (c.input ?? {});
+        try { out = await runTool(c.name, input, threadId); }
         catch (e) { out = { ok: false, error: `tool crashed: ${(e as Error).message}` }; }
         const failed = (out as any)?.ok === false;
         // Score the lessons shown after this tool's last failure: did the next try work?

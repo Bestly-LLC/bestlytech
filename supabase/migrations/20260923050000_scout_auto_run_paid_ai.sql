@@ -1,0 +1,6 @@
+-- Scout switches (applied live 2026-09-22 via MCP; recorded here).
+-- scout_settings (singleton): auto_run, paid_ai_ok. admin_chat_threads.paid_ok (yes for this chat).
+-- scout_prefs(), scout_auto_run(), scout_auto_run_set(bool), scout_paid_ai_set(bool) - admin only setters.
+-- mac_job_autorun(id): service role; approves a proposed Mac job only while auto_run is on
+--   (mac_jobs_guard accepts it via the transaction-local setting bestly.mac_autorun).
+-- Full definitions: see the live database (pg_get_functiondef).

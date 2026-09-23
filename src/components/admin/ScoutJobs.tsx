@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useScoutAutoRun } from "./ScoutAutoRun";
 import { Play, X, ChevronRight, Terminal, Check, AlertTriangle, Loader2 } from "lucide-react";
 
 /**
@@ -68,7 +69,8 @@ function ago(iso: string | null) {
 }
 
 function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run: boolean) => void }) {
-  const [showScript, setShowScript] = useState(job.status === "proposed");
+  const [showScript, setShowScript] = useState(false);
+  const { autoRun, setAutoRun } = useScoutAutoRun();
   const [working, setWorking] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const outRef = useRef<HTMLPreElement>(null);
@@ -103,14 +105,14 @@ function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run:
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-snug">{job.title}</p>
-          <p className="text-[0.6875rem] text-white/55">
-            {job.status === "proposed" && "Mac mini · waiting for your OK"}
-            {job.status === "approved" && "Mac mini · starting"}
-            {job.status === "running" && `Mac mini · running ${ago(job.started_at)}`}
-            {done && `Done · exit 0`}
-            {job.status === "failed" && `Failed${job.exit_code !== null ? ` · exit ${job.exit_code}` : ""}`}
-            {job.status === "cancelled" && "Cancelled"}
-            {job.status === "expired" && "Expired - ask Scout again"}
+          <p className="text-[0.6875rem] text-white/60">
+            {job.status === "proposed" && "Scout wants to do this on your Mac mini. Nothing happens until you tap Yes."}
+            {job.status === "approved" && "Starting on your Mac mini…"}
+            {job.status === "running" && `Working on it on your Mac mini (started ${ago(job.started_at)})`}
+            {done && "Done. It worked."}
+            {job.status === "failed" && "It didn't work. Scout will look at why."}
+            {job.status === "cancelled" && "You said no. Nothing was done."}
+            {job.status === "expired" && "Too old to run now. Ask Scout again."}
           </p>
         </div>
       </div>
@@ -119,7 +121,7 @@ function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run:
       <button type="button" onClick={() => setShowScript((v) => !v)}
         className="mt-2 flex items-center gap-1 text-[0.6875rem] text-white/50 hover:text-white">
         <ChevronRight className={cn("h-3 w-3 transition-transform duration-200", showScript && "rotate-90")} />
-        {showScript ? "Hide script" : "Show script"}{job.cwd ? ` · in ${job.cwd}` : ""}
+        {showScript ? "Hide the exact commands" : "Show the exact commands"}
       </button>
       <div className={cn("scout-collapse", showScript && "is-open")}>
         <div>
@@ -142,13 +144,19 @@ function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run:
         <div className="mt-2.5 flex gap-2">
           <Button size="sm" disabled={working} onClick={() => decide(true)}
             className="scout-press h-8 flex-1 bg-white text-black hover:bg-white/90">
-            <Play className="mr-1.5 h-3.5 w-3.5" /> Run on Mac mini
+            <Play className="mr-1.5 h-3.5 w-3.5" /> Yes, do it
           </Button>
           <Button size="sm" variant="ghost" disabled={working} onClick={() => decide(false)}
             className="scout-press h-8 border border-white/15 text-white/70 hover:bg-white/5 hover:text-white">
             <X className="mr-1 h-3.5 w-3.5" /> No
           </Button>
         </div>
+      )}
+      {job.status === "proposed" && autoRun === false && (
+        <button type="button" onClick={() => setAutoRun(true)}
+          className="mt-2 text-[0.6875rem] text-white/50 underline-offset-2 hover:text-white hover:underline">
+          Don't ask me each time: turn on Auto-run
+        </button>
       )}
       {live && (
         <div className="mt-2 flex justify-end">
@@ -165,12 +173,14 @@ export function ScoutJobs({ jobs, refresh, onFinished }: {
   refresh: () => void;
   onFinished: (job: MacJob) => void;
 }) {
-  // Jobs approved from this window; when one finishes, Scout gets told once.
+  // Jobs approved or seen running in this window; when one finishes, Scout gets told once.
   const mine = useRef<Set<string>>(new Set());
   const told = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     for (const j of jobs) {
+      // Seen starting or running in this window (auto-run starts them with no tap): follow it too.
+      if (j.status === "approved" || j.status === "running") mine.current.add(j.id);
       if (mine.current.has(j.id) && !told.current.has(j.id) && ["done", "failed"].includes(j.status)) {
         told.current.add(j.id);
         onFinished(j);

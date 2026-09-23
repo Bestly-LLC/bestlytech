@@ -70,8 +70,8 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
         </div>
       ) : iss.fix_stage === "needs_yes" ? (
         <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4 bento:bg-amber-50">
-          <p className="text-sm font-semibold text-amber-200 bento:text-amber-800">Scout found the fix. It needs your yes.</p>
-          <p className="mt-1 text-[0.9375rem] text-white/85 bento:text-black/80">{iss.scout_ask}</p>
+          <p className="text-sm font-semibold text-amber-200 bento:text-amber-800">Scout knows how to fix this. Tap Yes and it does it for you.</p>
+          <p className="mt-1 text-[0.9375rem] text-white/85 bento:text-black/80">What it will do: {iss.scout_ask}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={() => { askScout(`Yes, do it: ${iss.scout_ask}`, { about }); onClose(); }}
               className="inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-sm font-semibold text-black active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
