@@ -90,15 +90,20 @@
   <body>
     <div id="root"><div id="boot-splash" role="status" aria-label="Loading Bestly"><div class="mark"><img src="/bestly-mark.webp" alt="" width="64" height="64" /></div></div></div>
     <script>
-      if (location.pathname.indexOf("/admin") === 0) {
+      var isAdminPath = location.pathname.indexOf("/admin") === 0;
+      var isPartnerPath = location.pathname.indexOf("/partner") === 0;
+      // The partner portal runs the same dark shell as the admin, so it gets the same splash.
+      // Without this it flashed the light marketing logo before React swapped in the dark
+      // binoculars, which read as three different marks in one load.
+      if (isAdminPath || isPartnerPath) {
         var adminLight = true;
         try { adminLight = localStorage.getItem("bestly-admin-theme") !== "dark"; } catch (e) {}
         document.getElementById("boot-splash").className = adminLight ? "is-admin is-bento" : "is-admin";
-        document.title = "Bestly Admin";
+        if (isAdminPath) document.title = "Bestly Admin";
         // Inline the side-eye mark (no network wait, no flash of the marketing logo). Same markup
         // and classes as AdminMark.tsx, so React's loaders pick up the glance mid-cycle.
         document.querySelector("#boot-splash .mark").innerHTML =
-          '<svg viewBox="0 0 72 72" style="width:112px;height:112px;color:' + (adminLight ? "#111114" : "#fff") + '" aria-hidden="true">' +
+          '<svg class="am-still" viewBox="0 0 72 72" style="width:112px;height:112px;color:' + (adminLight ? "#111114" : "#fff") + '" aria-hidden="true">' +
           '<defs><mask id="bm" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72"><rect width="72" height="72" fill="#fff"/><circle cx="19" cy="44" r="10.3"/><circle cx="53" cy="44" r="10.3"/></mask>' +
           '<clipPath id="bcl"><circle cx="19" cy="44" r="10.7"/></clipPath><clipPath id="bcr"><circle cx="53" cy="44" r="10.7"/></clipPath>' +
           '<mask id="bpm" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72"><rect width="72" height="72" fill="#fff"/><g class="am-lidL"><rect x="0" y="10" width="40" height="34.8"/></g><g class="am-lidR"><rect x="32" y="10" width="40" height="34.8"/></g></mask></defs>' +
@@ -107,16 +112,20 @@
           '<g mask="url(#bpm)"><g class="am-look"><circle class="am-fl" cx="19" cy="44" r="4.8"/><circle class="am-fl" cx="53" cy="44" r="4.8"/></g></g>' +
           '<g clip-path="url(#bcl)"><g class="am-lidL"><rect class="am-fl" x="0" y="10" width="40" height="32"/></g></g>' +
           '<g clip-path="url(#bcr)"><g class="am-lidR"><rect class="am-fl" x="32" y="10" width="40" height="32"/></g></g></svg>';
-        document.querySelectorAll('link[rel="icon"],link[rel="apple-touch-icon"]').forEach(function (l) {
-          l.setAttribute("data-site-href", l.getAttribute("href"));
-          l.href = l.rel === "apple-touch-icon" ? "/admin-apple-touch-icon.png" : l.type === "image/x-icon" ? "/admin-favicon.ico" : "/admin-favicon-512.png";
-        });
-        var mf = document.getElementById("app-manifest");
-        if (mf) mf.href = "/admin.webmanifest";
+        // The dark shell and the mark are shared; the installable-app identity is not.
+        // Partner keeps the Bestly site icons, title and manifest.
         var tc = document.querySelector('meta[name="theme-color"]');
         if (tc) tc.setAttribute("content", adminLight ? "#F3F2EE" : "#000000");
-        var wt = document.querySelector('meta[name="apple-mobile-web-app-title"]');
-        if (wt) wt.setAttribute("content", "Bestly Admin");
+        if (isAdminPath) {
+          document.querySelectorAll('link[rel="icon"],link[rel="apple-touch-icon"]').forEach(function (l) {
+            l.setAttribute("data-site-href", l.getAttribute("href"));
+            l.href = l.rel === "apple-touch-icon" ? "/admin-apple-touch-icon.png" : l.type === "image/x-icon" ? "/admin-favicon.ico" : "/admin-favicon-512.png";
+          });
+          var mf = document.getElementById("app-manifest");
+          if (mf) mf.href = "/admin.webmanifest";
+          var wt = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+          if (wt) wt.setAttribute("content", "Bestly Admin");
+        }
       }
     </script>
     <script type="module" src="/src/main.tsx"></script>
