@@ -13,7 +13,7 @@ import { Check, Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; ready?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; ready?: boolean; google?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -39,6 +39,19 @@ function AppleWalletButton({ href }: { href: string }) {
         <rect x="1" y="12" width="30" height="5" fill="#F0605D" /><path d="M1 15h9a6 6 0 0 0 12 0h9v4a4 4 0 0 1-4 4H5a4 4 0 0 1-4-4z" fill="#1c1c1e" />
       </svg>
       <span className="text-left leading-tight"><span className="block text-[11px] text-white/80">Add to</span><span className="block text-lg font-semibold">Apple Wallet</span></span>
+    </a>
+  );
+}
+
+function GoogleWalletButton({ href }: { href: string }) {
+  return (
+    <a href={href} className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-black text-white shadow-lg shadow-black/30 ring-1 ring-white/15 active:scale-[0.99]">
+      <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden>
+        <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5V9H3z" fill="#4285F4" />
+        <path d="M3 9h18v2.5H3z" fill="#34A853" /><path d="M3 11.5h18V14H3z" fill="#FBBC04" />
+        <path d="M3 14h18v2.5A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z" fill="#EA4335" />
+      </svg>
+      <span className="text-left leading-tight"><span className="block text-[11px] text-white/80">Add to</span><span className="block text-lg font-semibold">Google Wallet</span></span>
     </a>
   );
 }
@@ -180,6 +193,7 @@ export default function LaxGuest() {
                   <div ref={canvasWrap} className="hidden"><QRCodeCanvas value={pub.payload!} size={1024} level="M" marginSize={4} /></div>
                   <div className="mt-4 space-y-3">
                     {plat !== "android" && <AppleWalletButton href={passUrl} />}
+                    {plat !== "apple" && pub.google && <GoogleWalletButton href={`${FN}/google?slug=${encodeURIComponent(slug)}`} />}
                     {plat !== "apple" && (
                       <button type="button" onClick={saveImage}
                         className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white/10 text-base font-semibold ring-1 ring-white/15 active:scale-[0.99]">
@@ -188,7 +202,9 @@ export default function LaxGuest() {
                     )}
                   </div>
                   <p className="mt-3 text-[13px] leading-snug text-white/55">
-                    {plat === "android"
+                    {plat === "android" && pub.google
+                      ? "Adding it to Google Wallet keeps it one tap away at the door. Saving the image works too."
+                      : plat === "android"
                       ? "To keep it in Google Wallet: open Google Wallet, tap Add to Wallet → Everything else → Photo, and pick the saved code."
                       : "Adding it to Wallet keeps it one double-click away at the door. A screenshot works too."}
                   </p>
