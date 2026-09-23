@@ -1,6 +1,6 @@
 # Opusplan: "Check if it's done" button on to-dos
 
-**Status:** plan, not built. Written 2026-09-23.
+**Status:** phase 1 + auto-close BUILT 2026-09-23 (migration `20260923200000_todo_check.sql`, edge fn `todo-check` v1, `ScoutToday.tsx`). Phases 2–3 below still open.
 **Depends on:** `supabase/functions/_shared/free-llm.ts`, owned by the parallel Scout free-LLM plan (`docs/scout-free-llm-opusplan.md`). This feature only *uses* that helper; it never edits it.
 
 ## TL;DR
@@ -95,3 +95,21 @@ Every source has a 4-second timeout. If a source fails, it's listed as "not sear
 1. **Auto-mark done (phase 4)?** Default is no. You tap Mark done.
 2. **iMessage scope:** all chats, or only the people tied to Bestly work?
 3. **Nothing is ever sent as you.** This feature only reads.
+
+## Built 2026-09-23 (Jared: "yes, but let me put it back, thumbs down, self-heal and learn")
+
+- **Auto-close is ON.** Nightly at 10 PM LA (`todo-check-tick` cron, :35 hourly, runs once at hour 22). Closes a to-do only when:
+  verdict done, confidence ≥ `todo_check_settings.threshold` (starts 0.90), ≥2 kinds of evidence, owner is Jared (or a pick),
+  and Jared has never corrected a check on that to-do. The button never auto-closes; it offers **Mark done**.
+- **Put back**: the "Closed by Scout" list on /admin (last 3 days), and on closed picks. `todo_check_feedback(check, 'undo')` reopens it.
+- **Thumbs up / down** on every result. Down asks "What's actually true? (optional)".
+- **Learning**: down or put-back → `todo-check` op learn writes one general rule to `scout_lessons` (scope `todo-check`, source `feedback`);
+  every judge reads the top 12 (wins minus losses). Lessons used in a wrong check get a loss, a right one a win.
+  Prior corrections on the same to-do are passed to the judge too.
+- **Self-tuning**: a put-back on an auto-close raises the threshold +0.02 (max 0.98). >10% put-backs in 30 days → at least 0.93;
+  >30% (and at least 5) → auto-close pauses and Scout pushes an alert. 20+ clean → threshold eases toward 0.85.
+- **Self-healing** (`todo_check_watchdog`, :50 hourly): reruns a missed nightly pass after 11 PM, retries lessons that failed to write,
+  alerts on 5+ errors a day or 2 days without a run. Each evidence source has its own timeout plus one retry; a failed judge degrades to a no-AI read.
+- **Toggle**: the ⋯ menu on "Scout's picks" → "Check which to-dos are done" (sweep) and the auto-close on/off switch.
+- **Judge model**: Haiku under `ai_budget('background')` via a local `llm()` with the same signature as the planned `_shared/free-llm.ts`. Swap when that lands.
+- **Gaps**: only INBOX mail is synced (no Sent folder yet), so "I emailed X" to-dos rely on their reply. iMessage waits on Full Disk Access.
