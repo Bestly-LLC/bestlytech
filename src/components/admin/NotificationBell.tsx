@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { playNotifySound } from "@/lib/notifySound";
 import { AlertPane, type PaneAlert } from "@/components/admin/AlertPane";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -94,6 +95,7 @@ export function NotificationBell() {
       .on("postgres_changes" as any, { event: "INSERT", schema: "public", table: "admin_notifications" }, (payload: any) => {
         const n = payload.new as Notification;
         setItems((xs) => [n, ...xs.filter((x) => x.id !== n.id)].slice(0, 50));
+        playNotifySound();
         toast(n.title, {
           description: n.body ?? undefined,
           action: n.url ? { label: "Open", onClick: () => go(n) } : undefined,

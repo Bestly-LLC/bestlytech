@@ -15,6 +15,9 @@ import { NotificationBell } from "./NotificationBell";
 import { RecordingPill } from "./ScoutRecorder";
 import { ClipActivity } from "./ClipActivity";
 import { MobileNav } from "./MobileNav";
+import { armNotifySound, notifySoundMuted, setNotifySoundMuted, playNotifySound } from "@/lib/notifySound";
+import { useState } from "react";
+import { Volume2, VolumeX } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -53,6 +56,8 @@ function sidebarDefaultOpen(): boolean {
 export function AdminLayout() {
   const { signOut } = useAdminAuth();
   const textSize = useAdminTextSize();
+  useEffect(() => armNotifySound(), []);
+  const [muted, setMuted] = useState(notifySoundMuted());
   const { bento, toggle: toggleTheme } = useAdminTheme();
   useDeployRefresh();
 
@@ -178,6 +183,18 @@ export function AdminLayout() {
                     <DropdownMenuItem onSelect={toggleTheme}>
                       {bento ? <Moon className="mr-2 h-4 w-4" /> : <Sun className="mr-2 h-4 w-4" />}
                       {bento ? "Dark theme" : "Light theme"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        const next = !muted;
+                        setNotifySoundMuted(next);
+                        setMuted(next);
+                        if (!next) playNotifySound();
+                      }}
+                    >
+                      {muted ? <VolumeX className="mr-2 h-4 w-4" /> : <Volume2 className="mr-2 h-4 w-4" />}
+                      {muted ? "Sound off" : "Sound on"}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => window.dispatchEvent(new Event(OPEN_ADMIN_PALETTE_EVENT))}>
                       <Command className="mr-2 h-4 w-4" /> Search everything

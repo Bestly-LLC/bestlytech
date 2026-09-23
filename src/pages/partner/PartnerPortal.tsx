@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { cn } from "@/lib/utils";
 import { BrandLoader } from "@/components/BrandLoader";
+import { armNotifySound } from "@/lib/notifySound";
 import { AdminMark, SIGNIN_STARE_RADIUS_PX } from "@/components/AdminMark";
 import { PartnerMark } from "@/components/PartnerMark";
 import { PartnerHome } from "./PartnerHome";
@@ -258,6 +259,8 @@ export default function PartnerPortal() {
     passkeyCount(session.user.id).then((n) => { if (!gone) setKeys(n); }).catch(() => { if (!gone) setKeys(1); });
     return () => { gone = true; };
   }, [session?.user.id]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => armNotifySound(), []);
 
   const key = useMemo(() => loc.pathname, [loc.pathname]);
   if (session === undefined) return <Shell><div key={key}><BrandLoader tone="dark" label="Loading your portal" /></div></Shell>;

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { playNotifySound } from "@/lib/notifySound";
 import {
   X,
   CornerDownLeft,
@@ -422,6 +423,7 @@ export function Scout() {
       }
 
       setBusy(false);
+      playNotifySound();          // Scout is done - you can look away until now
       refreshJobs();
       inputRef.current?.focus();
     },

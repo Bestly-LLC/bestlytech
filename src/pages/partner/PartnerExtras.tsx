@@ -4,12 +4,13 @@
  *   ConnectClaude    "Connect my Claude": a private connector link for Claude (partner-mcp)
  *   useNextMeeting   the next calendar event with Eli, from Jared's Nextcloud calendar (next-meeting)
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Check, ExternalLink, Link2, Loader2, Plug, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
+import { playNotifySound } from "@/lib/notifySound";
 
 const STUDIO = "https://studio.bestly.tech";
 
@@ -22,12 +23,17 @@ export function usePartnerNotifs(asRoster?: string | null) {
   const [items, setItems] = useState<Notif[]>([]);
   const [unread, setUnread] = useState(0);
   const [linked, setLinked] = useState(true);
+  // Only a rise counts: reloads and marking things read must stay silent.
+  const seen = useRef<number | null>(null);
   const load = useCallback(async () => {
     const { data } = await supabase.rpc("partner_studio_notifications" as never, (asRoster ? { p_roster: asRoster } : {}) as never);
     const d = (data ?? {}) as { ok?: boolean; unread?: number; items?: Notif[] };
     setLinked(d.ok !== false);
     setItems(d.items ?? []);
-    setUnread(d.unread ?? 0);
+    const n = d.unread ?? 0;
+    if (seen.current !== null && n > seen.current && !asRoster) playNotifySound();
+    seen.current = n;
+    setUnread(n);
   }, [asRoster]);
   useEffect(() => {
     load();
