@@ -11,9 +11,10 @@ import { Helmet } from "react-helmet-async";
 import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
 import { Check, Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { CarCard, EmailCard, TripCard, WeatherCard, type CarState, type Trip } from "./lax/GuestExtras";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; ready?: boolean; google?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -105,7 +106,7 @@ function Step({ n, when, title, children }: { n: number; when: string; title: st
 }
 
 export default function LaxGuest() {
-  const { slug = "" } = useParams();
+  const { slug = "", token = "" } = useParams();
   const [pub, setPub] = useState<Pub | null>(null);
   const [tab, setTab] = useState<"pickup" | "return">(() => (typeof window !== "undefined" && window.location.hash === "#return" ? "return" : "pickup"));
   const pick = (t: "pickup" | "return") => { setTab(t); try { history.replaceState(null, "", t === "return" ? "#return" : window.location.pathname); } catch { /* ignore */ } };
@@ -113,8 +114,14 @@ export default function LaxGuest() {
   const plat = useMemo(platform, []);
 
   useEffect(() => {
-    rpc("lax_pass_public", { p_slug: slug }).then(({ data }) => setPub((data as Pub) ?? { ok: false }));
-  }, [slug]);
+    const load = () => (token
+      ? rpc("lax_guest_public", { p_token: token })
+      : rpc("lax_pass_public", { p_slug: slug })).then(({ data }) => setPub((data as Pub) ?? { ok: false }));
+    load();
+    // Keep the live car card fresh while the page is open.
+    const id = token ? window.setInterval(load, 5 * 60 * 1000) : 0;
+    return () => window.clearInterval(id);
+  }, [slug, token]);
 
   const g = pub?.guide ?? {};
   const garage = g.garage || "5730 W 98th St, LA 90045";
@@ -127,7 +134,7 @@ export default function LaxGuest() {
   const thru = pub?.valid_through
     ? new Date(pub.valid_through + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" })
     : "";
-  const passUrl = `${FN}?slug=${encodeURIComponent(slug)}`;
+  const passUrl = token ? `${FN}?t=${encodeURIComponent(token)}` : `${FN}?slug=${encodeURIComponent(slug)}`;
 
   const saveImage = () => {
     const c = canvasWrap.current?.querySelector("canvas");
@@ -154,7 +161,7 @@ export default function LaxGuest() {
       <div className="relative">
         <img src="/wallet/lax/hero.svg" alt="" className="block h-44 w-full object-cover object-[65%_center] sm:h-56" />
         <div className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: PEACH, ...shadow }}>Welcome to LA</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: PEACH, ...shadow }}>{pub?.trip?.first ? `Hi ${pub.trip.first} · welcome to LA` : "Welcome to LA"}</p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={shadow}>Getting your Tesla at LAX</h1>
         </div>
       </div>
@@ -170,6 +177,9 @@ export default function LaxGuest() {
         ) : (
           <>
             <p className="text-[16px] leading-relaxed text-white/80">Skim before you fly, keep it handy on the curb. Questions any time.</p>
+
+            {pub.trip && <div className="mt-5 space-y-2.5"><TripCard trip={pub.trip} /><CarCard trip={pub.trip} car={pub.car ?? null} /></div>}
+            <div className="mt-2.5"><WeatherCard trip={pub.trip ?? null} /></div>
 
             {/* Quick facts */}
             <div className="mt-5 grid grid-cols-2 gap-2.5">
@@ -193,7 +203,7 @@ export default function LaxGuest() {
                   <div ref={canvasWrap} className="hidden"><QRCodeCanvas value={pub.payload!} size={1024} level="M" marginSize={4} /></div>
                   <div className="mt-4 space-y-3">
                     {plat !== "android" && <AppleWalletButton href={passUrl} />}
-                    {plat !== "apple" && pub.google && <GoogleWalletButton href={`${FN}/google?slug=${encodeURIComponent(slug)}`} />}
+                    {plat !== "apple" && pub.google && <GoogleWalletButton href={token ? `${FN}/google?t=${encodeURIComponent(token)}` : `${FN}/google?slug=${encodeURIComponent(slug)}`} />}
                     {plat !== "apple" && (
                       <button type="button" onClick={saveImage}
                         className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white/10 text-base font-semibold ring-1 ring-white/15 active:scale-[0.99]">
@@ -213,6 +223,13 @@ export default function LaxGuest() {
                 <div className="mt-3 rounded-2xl bg-white/[0.06] p-4 text-white/80 ring-1 ring-white/10">Your host will text your QR code the day before your trip.</div>
               )}
             </section>
+
+            {token && pub.trip && (
+              <div className="mt-6"><EmailCard token={token} email={pub.email ?? null} reminderAt={pub.reminder_at ?? null} sentAt={pub.reminder_sent_at ?? null} /></div>
+            )}
+            {pub.trip && pub.ready && pub.code_for_trip_month === false && (
+              <p className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[13px] text-white/70 ring-1 ring-white/10">Your trip is next month. The garage issues a new code on the 1st; this page and your Wallet pass switch to it automatically.</p>
+            )}
 
             {pub.note && (
               <div className="mt-6 rounded-2xl bg-white/[0.06] p-4 ring-1 ring-white/10">

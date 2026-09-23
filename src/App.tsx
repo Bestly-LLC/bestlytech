@@ -171,6 +171,7 @@ const App = () => {
                 {/* Standalone pages (no Header/Footer) */}
                 <Route path="/links" element={<Links />} />
                 <Route path="/lax" element={<LaxGuest />} />
+                <Route path="/lax/t/:token" element={<LaxGuest />} />
                 <Route path="/lax/:slug" element={<LaxGuest />} />
                 <Route path="/unsubscribe" element={<EmailUnsubscribe />} />
                 <Route path="/status" element={<Status />} />
