@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { cn } from "@/lib/utils";
 import { DemandMeter, type DemandRow } from "@/components/admin/turo/DemandMeter";
+import { FleetNow, type Trip, type VehicleState } from "@/components/admin/turo/FleetNow";
 import { Competitors, PriceManager, TuroTrends, type CompPrice, type SeriesRow, type Target } from "@/components/admin/turo/TuroTrends";
 
 interface Run {
@@ -42,18 +43,25 @@ export default function AdminTuro() {
   const [targets, setTargets] = useState<Target[]>([]);
   const [comp, setComp] = useState<CompPrice[]>([]);
   const [demand, setDemand] = useState<DemandRow[] | null>(null);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [vehicle, setVehicle] = useState<VehicleState | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const [{ data: r }, { data: st }, { data: ps }, { data: tg }, { data: cp }, { data: dm }] = await Promise.all([
+    const [{ data: r }, { data: st }, { data: ps }, { data: tg }, { data: cp }, { data: dm }, { data: tp }, { data: vs }] = await Promise.all([
       supabase.from("turo_runs" as never).select("*").order("ran_at", { ascending: false }).limit(30),
       supabase.from("turo_settings" as never).select("*").eq("id", 1).maybeSingle(),
       supabase.from("turo_price_series" as never).select("day, series, value").limit(5000),
       supabase.from("turo_watch_targets" as never).select("*").eq("active", true).order("chart", { ascending: false }),
       supabase.from("turo_competitor_prices" as never).select("*").order("observed_at", { ascending: false }).limit(200),
       supabase.from("turo_demand" as never).select("*").order("observed_at", { ascending: false }).limit(90),
+      // Fleet side: who has the car and what the car is doing. Written by turo-ingest.
+      supabase.from("turo_trips" as never).select("*").order("starts_at", { ascending: true }),
+      supabase.from("turo_vehicle_state" as never).select("*").limit(1).maybeSingle(),
     ]);
+    setTrips((tp ?? []) as unknown as Trip[]);
+    setVehicle((vs as unknown as VehicleState) ?? null);
     const list = (r ?? []) as unknown as Run[];
     setRuns(list);
     setSettings((st as unknown as Settings) ?? null);
@@ -83,8 +91,11 @@ export default function AdminTuro() {
   const hoursSince = last ? (Date.now() - Date.parse(last.ran_at)) / 3600e3 : null;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-8">
-      <PageHeader title="Turo Watch" description="Blue Steel · Tesla Model 3 · twice-daily pricing against nearby Model 3s and Edgar." />
+    <div className="mx-auto max-w-6xl space-y-6 pb-8">
+      <PageHeader title="Turo Watch" description="Blue Steel · Tesla Model 3 · who has it, what it's doing, and what it's priced at." />
+
+      {/* Who has the car right now. Everything below this is pricing. */}
+      <FleetNow trips={trips} vehicle={vehicle} />
 
       {/* Status + controls */}
       {(() => {
