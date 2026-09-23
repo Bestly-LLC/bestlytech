@@ -11,6 +11,7 @@ import { Helmet } from "react-helmet-async";
 import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
 import { Check, Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { TagBar, TripSheet } from "./lax/TripSheet";
 import { CarCard, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type ClimateAction, type Trip } from "./lax/GuestExtras";
 import { renderPassImage } from "./lax/passImage";
 
@@ -109,8 +110,16 @@ function Step({ n, when, title, children }: { n: number; when: string; title: st
 export default function LaxGuest() {
   const { slug = "", token = "" } = useParams();
   const [pub, setPub] = useState<Pub | null>(null);
-  const [tab, setTab] = useState<"pickup" | "return">(() => (typeof window !== "undefined" && window.location.hash === "#return" ? "return" : "pickup"));
-  const pick = (t: "pickup" | "return") => { setTab(t); try { history.replaceState(null, "", t === "return" ? "#return" : window.location.pathname); } catch { /* ignore */ } };
+  // Pickup / Return steps live in a bottom sheet opened from the luggage-tag bar. #pickup / #return deep-link it open.
+  const [sheet, setSheet] = useState<"pickup" | "return" | null>(() => {
+    if (typeof window === "undefined") return null;
+    const h = window.location.hash;
+    return h === "#return" ? "return" : h === "#pickup" ? "pickup" : null;
+  });
+  const openSheet = (t: "pickup" | "return" | null) => {
+    setSheet(t);
+    try { history.replaceState(null, "", t ? `#${t}` : window.location.pathname + window.location.search); } catch { /* ignore */ }
+  };
   const canvasWrap = useRef<HTMLDivElement>(null);
   const plat = useMemo(platform, []);
   // ?demo=car shows the car card with sample data and the climate buttons (preview only, nothing is sent to the car).
@@ -215,7 +224,7 @@ export default function LaxGuest() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-md px-5 pb-16 pt-5">
+      <main className="mx-auto max-w-md px-5 pb-36 pt-5">
         {!pub ? (
           <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-white/60" /></div>
         ) : !pub.ok ? (
@@ -225,7 +234,7 @@ export default function LaxGuest() {
           </div>
         ) : (
           <>
-            <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Below: how to get there, and the QR code that opens the lobby door.</p>
+            <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Your QR code that opens the lobby door is below. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for step-by-step directions.</p>
 
             {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} /></div>}
             {/* Weather next to the car: see how hot it is, then turn on the A/C right there. */}
@@ -295,21 +304,9 @@ export default function LaxGuest() {
               </div>
             )}
 
-            {/* Pickup / Return */}
-            <div className="mt-10 grid grid-cols-2 rounded-2xl bg-white/[0.06] p-1 ring-1 ring-white/10" role="tablist">
-              {(["pickup", "return"] as const).map((t) => (
-                <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => pick(t)}
-                  className={"h-11 rounded-xl text-[15px] font-semibold transition-colors " + (tab === t ? "bg-white text-[#1A1140]" : "text-white/70")}>
-                  {t === "pickup" ? "Pickup" : "Return"}
-                </button>
-              ))}
-            </div>
+            <TripSheet open={sheet === "pickup"} onClose={() => openSheet(null)} kicker="Baggage claim → your car" title="Pickup: plane → shuttle → garage">
 
-            {tab === "pickup" ? (
-            <section className="mt-7">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">Arriving at LAX</p>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight">Pickup. Plane → shuttle → garage.</h2>
-              <p className="mt-2 text-[15px] leading-relaxed text-white/75">About 20 minutes from wheels-down to driving away. Follow the steps in order.</p>
+              <p className="text-[15px] leading-relaxed text-white/75">About 20 minutes from wheels-down to driving away. Follow the steps in order.</p>
 
               <ol className="mt-6 space-y-7">
                 <Step n={1} when="After landing" title="Head to Level 2, then to the curb.">
@@ -328,7 +325,7 @@ export default function LaxGuest() {
                   <Chips items={["Shuttle drop", "Alley", "Lobby door"]} />
                 </Step>
                 <Step n={5} when="At the door" title="Scan your QR code at the lobby door.">
-                  {pub.ready ? <>Your QR code is <a href="#qr" className="underline decoration-white/40 underline-offset-2">at the top of this page</a>. </> : null}
+                  {pub.ready ? <>Your QR code is <a href="#qr" onClick={() => openSheet(null)} className="underline decoration-white/40 underline-offset-2">on the main page</a>. </> : null}
                   Scan at the lobby door, take the elevator to {level}.
                   {g.spot ? <> Your space is <b className="text-white">{level} · {g.spot}</b>.</> : <> I'll text your exact {level} space the day before your trip.</>}
                   <Warn><b className="text-white">{level} only.</b> Please don't park on other levels. If the QR doesn't scan, there's an intercom right next to the door; someone will buzz you in.</Warn>
@@ -347,12 +344,11 @@ export default function LaxGuest() {
               )}
 
               <p className="mt-6 flex items-center gap-2 text-sm text-white/60"><Sun className="h-4 w-4" style={{ color: PEACH }} /> Screen brightness up helps the QR scan on the first try.</p>
-            </section>
-            ) : (
-            <section className="mt-7">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">LAX drop-off</p>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight">Return. Drop the car → catch the shuttle.</h2>
-              <p className="mt-2 text-[15px] leading-relaxed text-white/75">
+            
+            </TripSheet>
+            <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Drop the car → catch your flight" title="Return: car → shuttle → LAX">
+
+              <p className="text-[15px] leading-relaxed text-white/75">
                 Reverse of the morning. The two things to watch: <b className="text-white">which entrance you use</b>, and <b className="text-white">which address you drive to</b>. Get those right and you're done.
               </p>
 
@@ -385,8 +381,9 @@ export default function LaxGuest() {
                   </a>
                 </div>
               )}
-            </section>
-            )}
+            
+            </TripSheet>
+            <TagBar open={sheet} onOpen={openSheet} />
 
             <p className="mt-10 text-center text-sm text-white/50">Questions? Message your host in the Turo app.</p>
           </>
