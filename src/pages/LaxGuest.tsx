@@ -192,7 +192,7 @@ export default function LaxGuest() {
           </div>
         ) : (
           <>
-            <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Below: how to get there, and the QR code that opens the garage door.</p>
+            <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Below: how to get there, and the QR code that opens the lobby door.</p>
 
             {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} /></div>}
             {/* Weather next to the car: see how hot it is, then turn on the A/C right there. */}
@@ -292,7 +292,7 @@ export default function LaxGuest() {
                 </Step>
                 <Step n={4} when="~5 min ride" title="Walk across the alley.">
                   At drop-off, follow the Park My Share signs across the alley to the garage entrance.
-                  <Chips items={["Shuttle drop", "Alley", "Garage door"]} />
+                  <Chips items={["Shuttle drop", "Alley", "Lobby door"]} />
                 </Step>
                 <Step n={5} when="At the door" title="Scan your QR code at the lobby door.">
                   {pub.ready ? <>Your QR code is <a href="#qr" className="underline decoration-white/40 underline-offset-2">at the top of this page</a>. </> : null}

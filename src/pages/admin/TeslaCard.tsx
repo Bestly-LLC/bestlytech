@@ -70,7 +70,7 @@ export function HostPassCard() {
         <Wallet className="mt-0.5 h-4 w-4 text-teal-300 bento:text-teal-600" />
         <div>
           <p className="text-sm font-medium text-white bento:text-neutral-900">My host pass</p>
-          <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Your own garage pass. Add it once on your iPhone. When you save the new code on the 1st, it updates itself.</p>
+          <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Your own lobby door pass. Add it once on your iPhone. When you save the new code on the 1st, it updates itself.</p>
         </div>
       </div>
       <a href={url} className="inline-flex shrink-0 items-center justify-center rounded-full bg-[#fff] px-5 py-2.5 text-sm font-medium text-[#111114] hover:bg-[#e8e8ec] bento:bg-[#111114] bento:text-[#fff] bento:hover:bg-[#2a2a30]">Add my pass to Apple Wallet</a>
