@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { playNotifySound } from "@/lib/notifySound";
+import { reportToScout } from "@/lib/reportToScout";
 
 const STUDIO = "https://studio.bestly.tech";
 
@@ -125,7 +126,7 @@ export function ConnectClaude({ open, onOpenChange }: { open: boolean; onOpenCha
     setBusy(true); setErr(null);
     const { data, error } = await supabase.rpc("partner_connector_create" as never, { p_label: "Claude" } as never);
     setBusy(false);
-    if (error) { setErr(error.message); return; }
+    if (error) { setErr(error.message); reportToScout("connector.create", error.message); return; }
     setFresh(MCP + (data as { key: string }).key);
     load();
   };
@@ -139,7 +140,7 @@ export function ConnectClaude({ open, onOpenChange }: { open: boolean; onOpenCha
     setArming(null); setRemoving(id); setErr(null);
     const { data, error } = await supabase.rpc("partner_connector_revoke" as never, { p_id: id } as never);
     setRemoving(null);
-    if (error || data === false) { setErr(error?.message ?? "Couldn't remove that one. Refresh and try again."); load(); return; }
+    if (error || data === false) { reportToScout("connector.revoke", error?.message ?? "revoke returned false"); setErr(error?.message ?? "Couldn't remove that one. Refresh and try again."); load(); return; }
     setConns((cs) => (cs ?? []).filter((c) => c.id !== id));
     setFresh(null);
     load();

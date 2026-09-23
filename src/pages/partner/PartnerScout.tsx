@@ -15,6 +15,7 @@ import { CopyButton } from "@/components/CopyText";
 import { AdminMark } from "@/components/AdminMark";
 import { cn } from "@/lib/utils";
 import { playNotifySound, playSuccessSound } from "@/lib/notifySound";
+import { reportToScout } from "@/lib/reportToScout";
 import { showLocalNotification, registerServiceWorker, enablePush, syncPushOnLoad } from "@/lib/webPush";
 import { useStickToBottom } from "@/lib/useStickToBottom";
 
@@ -291,7 +292,7 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
     const { error } = await scout.send(q);
     permAsk.then((p) => { if (p !== "unsupported") setPerm(p); });
     setSending(false);
-    if (error) setErr(error); else setText("");
+    if (error) { setErr(error); reportToScout("scout.send", error); } else setText("");
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }

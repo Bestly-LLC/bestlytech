@@ -14,14 +14,17 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/
 import { supabase } from "@/integrations/supabase/client";
 import { DocPreview, kindOf, type PreviewFile } from "@/components/DocPreview";
 import { cn } from "@/lib/utils";
+import { reportToScout } from "@/lib/reportToScout";
 
 const PT = { timeZone: "America/Los_Angeles" } as const;
 const asRoster = () => new URLSearchParams(window.location.search).get("as")?.toLowerCase() || undefined;
 
 export async function nc<T = any>(action: string, body: Record<string, unknown> = {}) {
   const { data, error } = await supabase.functions.invoke("partner-nc", { body: { action, as: asRoster(), ...body } });
-  if (error) return { ok: false, error: error.message } as T & { ok: boolean; error?: string };
-  return data as T & { ok: boolean; error?: string };
+  if (error) { reportToScout(`cloud.${action}`, error.message); return { ok: false, error: error.message } as T & { ok: boolean; error?: string }; }
+  const r = data as T & { ok: boolean; error?: string };
+  if (r && r.ok === false) reportToScout(`cloud.${action}`, r.error ?? "not ok");
+  return r;
 }
 
 function Shell({ title, sub, open, onOpenChange, children }: { title: string; sub: string; open: boolean; onOpenChange: (o: boolean) => void; children: React.ReactNode }) {
