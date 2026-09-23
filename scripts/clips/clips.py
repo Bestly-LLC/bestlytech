@@ -13,7 +13,7 @@ Standard library only. Key in ~/PartnerAI/.key (Vault: partner_ai_worker_key).
 import json, os, re, subprocess, time, traceback, urllib.error, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.4.1"   # 1.4: meetings (kind=meeting, or 10+ min) go through the call recorder's pipeline   # 1.3: parse talkscribe's 3-column output; a playable copy for parted clips; no silent empties
+VERSION = "1.4.2"   # 1.4: meetings (kind=meeting, or 10+ min) go through the call recorder's pipeline   # 1.3: parse talkscribe's 3-column output; a playable copy for parted clips; no silent empties
 # 1.2: big files go up and come down in parts (storage caps one object at 50MB)
 HOME = os.path.expanduser("~")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
@@ -217,11 +217,13 @@ def _iso(v):
 def meeting_name(clip, secs):
     """meeting-YYYYMMDD-HHMM in this Mac's time, from when the recording STARTED (the file time is
     when it ended), bumped a minute at a time until nothing in recordings/ has that name."""
+    # The title can already be a summary title, so the stored file name is searched too (our own
+    # upload stamp "2026-09-23T05-25-57" never matches: its time uses dashes).
     # Recorders put the start in the file name ("2026-09-22 113758.mp3", "20260922_113758.m4a");
     # that beats the file time, which is often when it was copied or uploaded.
     # lookahead so overlapping candidates are all seen; the LAST one is the recorder's own stamp
     found = list(re.finditer(r"(?=(20\d\d)-?(\d\d)-?(\d\d)[ _T]+([01]\d|2[0-3])[:.]?([0-5]\d)(?:[:.]?[0-5]\d)?(?!\d))",
-                             str(clip.get("title") or "")))
+                             f"{clip.get('title') or ''} {os.path.basename(str(clip.get('path') or ''))}"))
     m = found[-1] if found else None
     start = None
     if m:
