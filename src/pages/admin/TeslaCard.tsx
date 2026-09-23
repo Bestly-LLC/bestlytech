@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, KeyRound, Loader2 } from "lucide-react";
+import { CheckCircle2, KeyRound, Loader2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -55,6 +55,25 @@ export function TeslaCard() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Jared's own Wallet pass: blue-hour art, no guest info, same lock-screen suggestions. Add once; it updates itself each month. */
+export function HostPassCard() {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => { rpc("lax_pass_host_url").then(({ data }) => setUrl((data as string) ?? null)); }, []);
+  if (!url) return null;
+  return (
+    <div className={cn(card, "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between")}>
+      <div className="flex items-start gap-3">
+        <Wallet className="mt-0.5 h-4 w-4 text-teal-300 bento:text-teal-600" />
+        <div>
+          <p className="text-sm font-medium text-white bento:text-neutral-900">My host pass</p>
+          <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Your own garage pass. Add it once on your iPhone; the new code lands in it on the 1st, when you save it here.</p>
+        </div>
+      </div>
+      <a href={url} className="inline-flex shrink-0 items-center justify-center rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white ring-1 ring-white/20 hover:bg-neutral-900">Add my pass to Apple Wallet</a>
     </div>
   );
 }
