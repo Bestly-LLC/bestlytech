@@ -24,6 +24,17 @@ const json = (body: unknown, status = 200) =>
 // the Pi. Each validator returns an error message, or null when the payload is fine.
 type Payload = Record<string, unknown>;
 const none = () => null;
+const DOMAIN_RE = /^(?=.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$/i;
+const MATCH_RE = /^[A-Za-z0-9 ._:@-]{1,64}$/;
+const HOST_RE = /^[A-Za-z0-9.:-]{1,253}$/;
+const optMatch = (p: Payload, key = "match") =>
+  p[key] === undefined || p[key] === null || p[key] === "" || (typeof p[key] === "string" && MATCH_RE.test(p[key] as string))
+    ? null
+    : `${key} may only contain letters, digits, spaces and . _ : @ -`;
+const optDomain = (p: Payload, key = "host") =>
+  p[key] === undefined || p[key] === null || p[key] === "" || (typeof p[key] === "string" && DOMAIN_RE.test(p[key] as string))
+    ? null
+    : `${key} must be a domain name`;
 const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
   pihole: {
     enable: none,
@@ -35,6 +46,10 @@ const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
         : "seconds must be a whole number from 0 to 86400";
     },
     update_gravity: none,
+    // agent >= 1.5.0
+    recent_blocked: (p) => optMatch(p) ?? optMatch(p, "client"),
+    allow: (p) => (typeof p.domain === "string" && DOMAIN_RE.test(p.domain) ? null : "allow needs domain"),
+    unallow: (p) => (typeof p.domain === "string" && DOMAIN_RE.test(p.domain) ? null : "unallow needs domain"),
   },
   homebridge: { restart: none, refresh: none },
   homeassistant: {
@@ -52,6 +67,17 @@ const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
   },
   // agent >= 1.3.0: read-only diagnosis, and the same heal ladder the health loop uses.
   nextcloud: { status: none, restart: none },
+  // agent >= 1.5.0: read-only LAN / internet diagnosis from the Pi.
+  network: {
+    diagnose: (p) => optDomain(p) ?? optMatch(p),
+    find_device: (p) => optMatch(p),
+    domain: (p) => (typeof p.match === "string" && MATCH_RE.test(p.match) ? null : "domain needs match"),
+    ping: (p) => (typeof p.host === "string" && HOST_RE.test(p.host) ? null : "ping needs host"),
+    dns: (p) => (typeof p.host === "string" && DOMAIN_RE.test(p.host) ? null : "dns needs host (a domain)"),
+    wifi_scan: none,
+    speed: none,
+  },
+  router: { probe: none },
   // Self-update (agent >= 1.1.0). The agent re-checks the sha256 against the file it downloads.
   agent: {
     update: (p) =>
@@ -89,6 +115,8 @@ function validate(c: { target: string; action: string; payload: unknown }): stri
   if (typeof payload !== "object" || Array.isArray(payload)) return "payload must be an object";
   return check(payload as Payload);
 }
+
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -211,6 +239,26 @@ Deno.serve(async (req) => {
       p_data: data,
     });
     if (error) return json({ error: error.message }, 500);
+    return json({ ok: true });
+  }
+
+  // Five-minute network sample (agent >= 1.5.0): router + internet ping, DNS time, WAN state.
+  if (op === "net_sample") {
+    const s = (body.sample && typeof body.sample === "object" && !Array.isArray(body.sample)) ? body.sample as Payload : {};
+    const str = (v: unknown, n = 60) => (typeof v === "string" && v ? v.slice(0, n) : null);
+    const { error } = await supabase.from("home_hub_network_samples").insert({
+      gateway: str(s.gateway),
+      gw_loss_pct: num(s.gw_loss_pct), gw_avg_ms: num(s.gw_avg_ms), gw_max_ms: num(s.gw_max_ms),
+      inet_loss_pct: num(s.inet_loss_pct), inet_avg_ms: num(s.inet_avg_ms), inet_max_ms: num(s.inet_max_ms),
+      dns_ms: num(s.dns_ms), dns_ok: typeof s.dns_ok === "boolean" ? s.dns_ok : null,
+      wan_status: str(s.wan_status), wan_uptime_s: num(s.wan_uptime_s), external_ip: str(s.external_ip),
+    });
+    if (error) return json({ error: error.message }, 500);
+    // Keep 30 days.
+    if (Math.random() < 0.02) {
+      await supabase.from("home_hub_network_samples").delete()
+        .lt("captured_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
+    }
     return json({ ok: true });
   }
 

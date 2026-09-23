@@ -69,6 +69,8 @@
 //    comes back as NEEDS_YES, which Jared approves with one tap from the alert pane.
 //  - v11: commit_files takes edits ({path, old, new}); a tool call cut off at the output limit
 //    is refused instead of run half-empty (it used to arrive as "no files given", 9 times).
+//  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
+//    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -89,10 +91,17 @@ const PI_ACTIONS: Record<string, string[]> = {
   nextcloud: ["status", "restart"],
   homebridge: ["restart", "refresh"],
   homeassistant: ["refresh", "toggle_automation"],
-  pihole: ["enable", "disable", "update_gravity"],
+  pihole: ["enable", "disable", "update_gravity", "recent_blocked", "allow", "unallow"],
+  network: ["diagnose", "find_device", "domain", "ping", "dns", "wifi_scan", "speed"],
+  router: ["probe"],
   agent: ["test_alert", "run_maintenance"],
 };
-const PI_READ_ONLY = new Set(["nextcloud.status", "homebridge.refresh", "homeassistant.refresh"]);
+// v19: network diagnosis from the Pi (agent >= 1.5.0) is read-only, so it never needs a yes.
+const PI_READ_ONLY = new Set([
+  "nextcloud.status", "homebridge.refresh", "homeassistant.refresh",
+  "pihole.recent_blocked", "network.diagnose", "network.find_device", "network.domain", "network.ping",
+  "network.dns", "network.wifi_scan", "network.speed", "router.probe",
+]);
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
@@ -142,8 +151,12 @@ const TOOLS = [
       "Run a job on bestly-pi through the Home Hub agent and wait up to a minute for the answer. " +
       "nextcloud: status (full diagnosis) | restart (heal ladder: compose up, finish a pending occ upgrade, restart proxy, tunnel, app). " +
       "homebridge: restart | refresh. homeassistant: refresh | toggle_automation {automation_id, enabled}. " +
-      "pihole: enable | disable {seconds} | update_gravity. agent: test_alert | run_maintenance {steps}. " +
-      "status and refresh need no yes; everything else requires confirmed:true after Jared said yes.",
+      "pihole: enable | disable {seconds} | update_gravity | recent_blocked {minutes, client?, match?} | allow {domain} | unallow {domain}. " +
+      "network (the home LAN, seen from the Pi): diagnose {host?, match?} (router + internet ping, DNS via Pi-hole/router/Cloudflare, speed, Wi-Fi scan, router WAN state, verdicts) | " +
+      "find_device {match?} (every device on the home LAN right now from a live scan: IP, MAC, maker, the name the router's DHCP knows, ping; plus the Pi-hole clients) | " +
+      "domain {match, hours?} (who looked up domains containing match, and whether Pi-hole blocked them) | ping {host, count?} | dns {host} | wifi_scan | speed. " +
+      "router: probe (model and WAN status/uptime over UPnP). agent: test_alert | run_maintenance {steps}. " +
+      "status, refresh, pihole.recent_blocked and every network/router read need no yes; everything else requires confirmed:true after Jared said yes.",
     input_schema: {
       type: "object",
       properties: {
@@ -376,6 +389,17 @@ Read it with meeting_transcript. Then, in plain text: first the decisions (only 
 - Read anything: today, incidents, run_sql, meeting_transcript.
 - Fix data: db_write (one guarded INSERT/UPDATE/DELETE).
 - Fix the Pi: pi_command (Nextcloud diagnose and heal, Homebridge, Home Assistant, Pi-hole, the agent).
+- Diagnose the home network: pi_command network.* / router.probe / pihole.recent_blocked, and the 5-minute history in home_hub_network_samples (run_sql).
+
+# When something at home "times out" or "won't connect" (a smart device, an app, the Wi-Fi)
+The Pi (bestly-pi, wired to the Verizon router) sits on the same LAN, runs Pi-hole, and can scan and ping everything on it. Work it like this, reading results yourself:
+1. pi_command network.diagnose (add match: the device or brand, e.g. "spinn"). Read the verdicts first.
+2. pi_command network.domain {match: brand} — did the device's cloud lookups get blocked? A blocked cloud domain is the most common cause of "the app times out": the phone reaches the cloud, the cloud cannot reach the device. Also check pihole.recent_blocked for the device's IP.
+3. pi_command network.find_device (no match lists every LAN device; match filters by name, maker, IP or MAC) — is it on the network at all, and does it answer pings? Many IoT devices ignore ping; being in the list (from ARP) still means it is connected.
+Know this house: most LAN devices use the Verizon router for DNS, not Pi-hole. Pi-hole mainly sees the Pi itself and devices on Tailscale (100.x addresses, e.g. his iPhone). So "no lookups from the device" in Pi-hole is normal, not a fault. The internet is Verizon wireless home internet (a cellular WAN), so 20-60 ms average with spikes to 150+ ms is its normal; judge against home_hub_network_samples history, not a wired baseline.
+4. run_sql on home_hub_network_samples for the last day — spikes in gw_loss_pct / inet_loss_pct, dns_ms, or wan_uptime_s dropping (router restarted) show intermittent trouble.
+5. Say what you found in two lines: the cause, and the one fix. Fixes you can do on his tap: pihole.allow {domain} (propose the exact domain; unallow undoes it), pihole.disable {seconds: 300} to test whether Pi-hole is the cause. Fixes that need a hand on the hardware (move the device or repeater, power-cycle it, a 2.4 GHz-only device on a band-steered network) are his: give the single exact step.
+The router is a Verizon Internet Gateway (ASK-NCM1100) at 192.168.1.1. Scout has no router login, only UPnP read (router.probe). If a fix needs the router's own settings (reboot, a device's Wi-Fi signal, band split, DHCP reservation), give Jared the single exact step to do it himself at 192.168.1.1 or in the Verizon app. Never ask for the router password in chat.
 - Tidy up: clear_alerts, resolve_incident, mark_done.
 - Reach him later: notify (bell, and his phone with push). When you leave something waiting on him, or find something he must act on, notify him before you finish, in one line.
 - Change bestly.tech and the admin: list_files, read_file, commit_files (watched, auto-reverted on a failed build).
