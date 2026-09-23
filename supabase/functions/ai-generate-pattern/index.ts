@@ -1,12 +1,39 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
-import { alertEmail } from "../_shared/email-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+
+// Spend guard (v19, 2026-09-23 audit): this is where every Cookie Yeti OpenAI call happens, and it is
+// reached by cron, the public report-missed-banner endpoint, cy-autofix, render-banner and
+// auto-retry-failed-patterns (two of which reset the per-domain attempt count). Now every OpenAI call
+// first asks ai_gate (ai_caps: calls per day, and per domain per hour) and is logged with its cost in
+// ai_spend. Over the cap the call is skipped, never paid.
+const gateDb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+const OPENAI_PRICE: Record<string, [number, number]> = { "gpt-4o-mini": [0.15, 0.6], "gpt-4o": [2.5, 10] }; // $ per million in/out
+async function aiAllowed(domain: string): Promise<boolean> {
+  const { data, error } = await gateDb.rpc("ai_gate", { p_fn: "ai-generate-pattern", p_who: domain });
+  if (error) { console.error("ai_gate error:", error.message); return false; }
+  return (data as any)?.ok === true;
+}
+async function logAi(model: string, usage: any, domain: string) {
+  const [pin, pout] = OPENAI_PRICE[model] ?? [2.5, 10];
+  const i = Number(usage?.prompt_tokens ?? 0), o = Number(usage?.completion_tokens ?? 0);
+  await gateDb.from("ai_spend").insert({
+    fn: "ai-generate-pattern", scope: "patterns", job: model, model,
+    input_tokens: i, output_tokens: o, cost_usd: (i * pin + o * pout) / 1e6, ref: domain,
+  });
+}
+
+function alertEmail(o: { title: string; severity: string; summary: string; stats?: { label: string; value: any }[]; items?: { label: string; detail?: string }[]; timestamp: string }): string {
+  const color = o.severity === "danger" ? "#dc2626" : "#d97706";
+  const stats = (o.stats || []).map((s) => `<td style="padding:8px 14px;border:1px solid #eee;text-align:center"><div style="font-size:20px;font-weight:700">${s.value}</div><div style="font-size:11px;color:#888">${s.label}</div></td>`).join("");
+  const items = (o.items || []).map((i) => `<li><strong>${i.label}</strong>${i.detail ? ": " + i.detail : ""}</li>`).join("");
+  return `<div style="font-family:-apple-system,Segoe UI,sans-serif;max-width:600px;margin:0 auto;color:#222"><h2 style="color:${color}">${o.title}</h2><p>${o.summary}</p>${stats ? `<table style="border-collapse:collapse;margin:12px 0"><tr>${stats}</tr></table>` : ""}${items ? `<ul>${items}</ul>` : ""}<p style="font-size:11px;color:#aaa">${o.timestamp}</p></div>`;
+}
 
 // Known CMP signatures: detection keywords + CDN/script URL patterns → standard reject selectors
 const KNOWN_CMPS: { name: string; signatures: string[]; scriptSignatures: string[]; selector: string; action: string; cmp_fingerprint: string }[] = [
@@ -146,14 +173,6 @@ const KNOWN_CMPS: { name: string; signatures: string[]; scriptSignatures: string
     action: "reject",
     cmp_fingerprint: "admiral",
   },
-  {
-    name: "Piano",
-    signatures: ["piano", "piano-consent", "piano_consent"],
-    scriptSignatures: ["cdn.piano.io", "piano.io/xbuilder", "tinypass"],
-    selector: ".piano-consent-deny, [data-piano-action='deny'], .tp-modal .tp-close",
-    action: "reject",
-    cmp_fingerprint: "piano",
-  },
 ];
 
 // CSS selectors / keywords that indicate cookie-related elements
@@ -190,58 +209,28 @@ function extractCookieElements(html: string): string {
   return elements.join("\n");
 }
 
-/**
- * Result of a server-side HTML fetch attempt.
- * Carries the failure reason all the way up to ai_generation_log so that future
- * "why didn't pattern X get generated" debugging is one query, not a log dive.
- */
-interface FetchResult {
-  html: string | null;
-  reason: string | null;   // null on success; "HTTP 403" / "Timeout 8s" / "DNS fail" / etc.
-}
-
-async function fetchPageHtml(domain: string, pageUrl?: string): Promise<FetchResult> {
+async function fetchPageHtml(domain: string, pageUrl?: string): Promise<string | null> {
   const url = pageUrl || `https://${domain}`;
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 10_000);
   try {
     const res = await fetch(url, {
       headers: {
-        // More complete fingerprint; some Akamai/Cloudflare rules trip on
-        // missing Sec-CH-UA / Sec-Fetch headers more than the UA itself.
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not.A/Brand";v="99"',
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"macOS"',
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
       },
       redirect: "follow",
-      signal: ac.signal,
     });
-    if (!res.ok) {
-      return { html: null, reason: `HTTP ${res.status} ${res.statusText}` };
-    }
+    if (!res.ok) return null;
     const text = await res.text();
-    return { html: text.substring(0, 50000), reason: null };
-  } catch (e: any) {
-    const isTimeout = e.name === "AbortError" || e.name === "TimeoutError";
-    const reason = isTimeout ? "Timeout 10s" : (e.message || "network error");
-    console.error(`Failed to fetch ${url}: ${reason}`);
-    return { html: null, reason };
-  } finally {
-    clearTimeout(timer);
+    return text.substring(0, 50000);
+  } catch (e) {
+    console.error(`Failed to fetch ${url}:`, e);
+    return null;
   }
 }
 
-const AI_MODEL = "claude-sonnet-4-6";
-const AI_MODEL_LABEL = "claude-sonnet-4-6";
+const AI_MODEL = "gpt-4o";
+const AI_MODEL_LABEL = "gpt-4o";
 
 const BANNED_SELECTORS = ['body', 'html', 'head', 'body *', 'html *', '*'];
 
@@ -298,10 +287,10 @@ Deno.serve(async (req) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const svcClient = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
 
-  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!ANTHROPIC_API_KEY) {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) {
     return new Response(
-      JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }),
+      JSON.stringify({ error: "OPENAI_API_KEY not configured" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -338,11 +327,6 @@ Deno.serve(async (req) => {
       items = (candidates as any[]) ?? [];
     }
 
-    // Heartbeat: when there is no work to do, write a sentinel row so
-    // monitoring doesn't mistake "idle pipeline" for "broken pipeline".
-    // Without this, ai_generation_log goes silent during idle periods
-    // and the health check fires a false alarm. Cron-driven (no domain)
-    // calls only — explicit single-domain invocations don't heartbeat.
     if (items.length === 0 && !requestBody.domain) {
       try {
         await supabase.from("ai_generation_log").insert({
@@ -358,6 +342,15 @@ Deno.serve(async (req) => {
 
     for (const candidate of items) {
       processed++;
+      let failedSelectors: string[] = [];
+      try {
+        const { data: priorPats } = await supabase
+          .from("cookie_patterns")
+          .select("selector")
+          .eq("domain", candidate.domain)
+          .eq("success_count", 0);
+        failedSelectors = (priorPats ?? []).map((pp: any) => pp.selector).filter(Boolean).slice(0, 12);
+      } catch (_e) { /* best-effort */ }
 
       if (isDomainExcluded(candidate.domain)) {
         console.log(`[${candidate.domain}] Skipping — excluded domain`);
@@ -402,8 +395,7 @@ Deno.serve(async (req) => {
 
       if (!candidate.banner_html) {
         console.log(`[${candidate.domain}] No extension HTML — attempting server-side fetch for CMP detection`);
-        const fetched = await fetchPageHtml(candidate.domain, candidate.page_url);
-        const serverHtml = fetched.html;
+        const serverHtml = await fetchPageHtml(candidate.domain, candidate.page_url);
 
         if (serverHtml) {
           const serverCMP = detectKnownCMP(serverHtml);
@@ -427,7 +419,7 @@ Deno.serve(async (req) => {
           if (extractedHtml && extractedHtml.length >= 50) {
             console.log(`[${candidate.domain}] No CMP match, trying AI on ${extractedHtml.length} chars of server-extracted elements`);
             try {
-              const aiResult = await callAI(ANTHROPIC_API_KEY, extractedHtml, candidate.domain, candidate.cmp_fingerprint);
+              const aiResult = await callAI(OPENAI_API_KEY, extractedHtml, candidate.domain, candidate.cmp_fingerprint, failedSelectors);
               if (aiResult.is_cookie_banner && aiResult.selector) {
                 await insertPattern(supabase, candidate, aiResult, "success", extractedHtml);
                 generated++;
@@ -450,17 +442,12 @@ Deno.serve(async (req) => {
         skipped++;
         const currentAttempts = candidate.ai_attempts ?? 0;
         const skipStatus = currentAttempts >= 4 ? "permanently_failed" : "skipped_no_html";
-        // 2026-04-30: surface the actual fetch failure reason so the operator
-        // can tell at a glance whether it was 403 (bot-protected), timeout
-        // (slow site), DNS (dead domain), or no-CMP (HTML retrieved but the
-        // page renders the banner from JS and we got the pre-render HTML).
-        const skipReason = serverHtml
-          ? "Server fetched but no CMP detected and no usable cookie elements"
-          : `No extension HTML; server fetch failed: ${fetched.reason ?? "unknown"}`;
         await supabase.from("ai_generation_log").insert({
           domain: candidate.domain,
           status: skipStatus,
-          error_message: skipReason,
+          error_message: serverHtml
+            ? "Server fetched but no CMP detected and no usable cookie elements"
+            : "No extension HTML and server fetch failed",
           ai_model: AI_MODEL_LABEL,
         });
         await supabase.rpc("mark_ai_processed", {
@@ -489,7 +476,7 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const aiResult = await callAI(ANTHROPIC_API_KEY, candidate.banner_html, candidate.domain, candidate.cmp_fingerprint);
+        const aiResult = await callAI(OPENAI_API_KEY, candidate.banner_html, candidate.domain, candidate.cmp_fingerprint, failedSelectors);
 
         if (aiResult.is_cookie_banner && aiResult.selector) {
           await insertPattern(supabase, candidate, aiResult, "success");
@@ -507,8 +494,7 @@ Deno.serve(async (req) => {
         const reason = aiResult.rejection_reason || "not a cookie banner";
         console.log(`[${candidate.domain}] Extension HTML rejected: ${reason}. Attempting server-side fallback...`);
 
-        const fetched2 = await fetchPageHtml(candidate.domain, candidate.page_url);
-        const serverHtml = fetched2.html;
+        const serverHtml = await fetchPageHtml(candidate.domain, candidate.page_url);
         const serverFetchSuccess = !!serverHtml;
 
         if (serverHtml) {
@@ -533,7 +519,7 @@ Deno.serve(async (req) => {
 
           if (extractedHtml && extractedHtml.length >= 50) {
             console.log(`[${candidate.domain}] Attempting second AI analysis with ${extractedHtml.length} chars of extracted elements`);
-            const aiResult2 = await callAI(ANTHROPIC_API_KEY, extractedHtml, candidate.domain, candidate.cmp_fingerprint);
+            const aiResult2 = await callAI(OPENAI_API_KEY, extractedHtml, candidate.domain, candidate.cmp_fingerprint, failedSelectors);
 
             if (aiResult2.is_cookie_banner && aiResult2.selector) {
               await insertPattern(supabase, candidate, aiResult2, "success", extractedHtml);
@@ -553,8 +539,8 @@ Deno.serve(async (req) => {
 
         const fullHtmlForFailsafe = serverHtml || candidate.banner_html || "";
         if (fullHtmlForFailsafe.length > 100) {
-          console.log(`[${candidate.domain}] All layers failed, trying Claude Haiku failsafe...`);
-          const failsafeResult = await gptFailsafe(ANTHROPIC_API_KEY, candidate.domain, fullHtmlForFailsafe);
+          console.log(`[${candidate.domain}] All layers failed, trying GPT-4o-mini failsafe...`);
+          const failsafeResult = await gptFailsafe(OPENAI_API_KEY, candidate.domain, fullHtmlForFailsafe, failedSelectors);
           if (failsafeResult) {
             await insertPattern(supabase, candidate, {
               is_cookie_banner: true,
@@ -578,7 +564,7 @@ Deno.serve(async (req) => {
               selector: failsafeResult.selector,
               action: failsafeResult.action,
               confidence: failsafeResult.confidence,
-              note: `Claude Haiku failsafe${failsafeResult.strategy ? ` (strategy: ${failsafeResult.strategy})` : ""}`,
+              note: `GPT-4o-mini failsafe${failsafeResult.strategy ? ` (strategy: ${failsafeResult.strategy})` : ""}`,
             });
             continue;
           }
@@ -589,7 +575,7 @@ Deno.serve(async (req) => {
           `Server fetch: ${serverFetchSuccess ? "OK" : "FAILED"}`,
           serverFetchSuccess ? `Server CMP check: no match` : null,
           serverFetchSuccess ? `Server AI: ${serverHtml ? "no cookie elements or AI rejected" : "N/A"}` : null,
-          `Claude Haiku failsafe: no result`,
+          `GPT-4o-mini failsafe: no result`,
         ].filter(Boolean).join("; ");
 
         const currentAttempts = candidate.ai_attempts ?? 0;
@@ -714,8 +700,6 @@ Deno.serve(async (req) => {
   }
 });
 
-// ---------- Helper Functions ----------
-
 interface AIResult {
   is_cookie_banner: boolean;
   selector?: string;
@@ -760,7 +744,8 @@ async function hasExistingHighConfidencePattern(supabase: any, domain: string): 
   return (data?.length ?? 0) > 0;
 }
 
-async function callAI(apiKey: string, html: string, domain: string, cmpFingerprint?: string): Promise<AIResult> {
+async function callAI(apiKey: string, html: string, domain: string, cmpFingerprint?: string, failedSelectors: string[] = []): Promise<AIResult> {
+  if (!(await aiAllowed(domain))) throw new Error("paid AI cap reached for now (ai_caps); skipped without calling OpenAI");
   const systemPrompt = `You are a cookie consent banner analysis expert. Your job is to determine whether provided HTML is a cookie/consent/privacy/GDPR banner, and if so, extract the best CSS selector to dismiss or reject cookies.
 
 CRITICAL VALIDATION RULES:
@@ -800,60 +785,64 @@ Rules when is_cookie_banner is true:
 
 Domain: ${domain}
 ${cmpFingerprint && cmpFingerprint !== "unknown" ? `CMP hint: ${cmpFingerprint}` : ""}
-
+${failedSelectors.length ? `ALREADY TRIED — these selectors did NOT dismiss the banner. Do NOT output any of them; choose a DIFFERENT element:
+${failedSelectors.map((sel) => "- " + sel).join("\n")}
+` : ""}
 HTML to analyze:
 ${html}`;
 
   const aiRes = await fetch(
-    "https://api.anthropic.com/v1/messages",
+    "https://api.openai.com/v1/chat/completions",
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: AI_MODEL,
-        max_tokens: 1024,
-        system: systemPrompt,
         messages: [
+          { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         tools: [
           {
-            name: "analyze_cookie_banner",
-            description: "Report the analysis results for the provided HTML.",
-            input_schema: {
-              type: "object",
-              properties: {
-                is_cookie_banner: {
-                  type: "boolean",
-                  description: "True if the HTML is a cookie/consent/privacy/GDPR banner, false otherwise.",
+            type: "function",
+            function: {
+              name: "analyze_cookie_banner",
+              description: "Report the analysis results for the provided HTML.",
+              parameters: {
+                type: "object",
+                properties: {
+                  is_cookie_banner: {
+                    type: "boolean",
+                    description: "True if the HTML is a cookie/consent/privacy/GDPR banner, false otherwise.",
+                  },
+                  rejection_reason: {
+                    type: "string",
+                    description: "If is_cookie_banner is false, a short explanation of what the HTML actually is (e.g. 'signup popup', 'newsletter modal').",
+                  },
+                  selector: {
+                    type: "string",
+                    description: "CSS selector for the reject/decline/dismiss button. Only set if is_cookie_banner is true.",
+                  },
+                  action_type: {
+                    type: "string",
+                    enum: ["accept", "reject", "necessary", "save", "close"],
+                    description: "What the button ACTUALLY DOES.",
+                  },
+                  confidence: {
+                    type: "number",
+                    description: "Confidence score 1-10. Only set if is_cookie_banner is true.",
+                  },
                 },
-                rejection_reason: {
-                  type: "string",
-                  description: "If is_cookie_banner is false, a short explanation of what the HTML actually is (e.g. 'signup popup', 'newsletter modal').",
-                },
-                selector: {
-                  type: "string",
-                  description: "CSS selector for the reject/decline/dismiss button. Only set if is_cookie_banner is true.",
-                },
-                action_type: {
-                  type: "string",
-                  enum: ["accept", "reject", "necessary", "save", "close"],
-                  description: "What the button ACTUALLY DOES. 'accept' = accepts all cookies, 'reject' = rejects/declines, 'necessary' = essential only, 'save' = saves current preferences, 'close' = closes/hides banner. Must match the button's real function, NOT the user's desired outcome.",
-                },
-                confidence: {
-                  type: "number",
-                  description: "Confidence score 1-10. Only set if is_cookie_banner is true.",
-                },
+                required: ["is_cookie_banner"],
+                additionalProperties: false,
               },
-              required: ["is_cookie_banner"],
             },
           },
         ],
-        tool_choice: { type: "tool", name: "analyze_cookie_banner" },
+        tool_choice: { type: "function", function: { name: "analyze_cookie_banner" } },
       }),
     }
   );
@@ -865,21 +854,15 @@ ${html}`;
 
   const aiData = await aiRes.json();
   const usage = aiData.usage ?? {};
+  await logAi(AI_MODEL, usage, domain);
 
-  const toolUse = Array.isArray(aiData.content)
-    ? aiData.content.find((b: any) => b.type === "tool_use")
-    : null;
+  const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
   let parsed: any;
 
-  if (toolUse?.input) {
-    parsed = toolUse.input;
+  if (toolCall?.function?.arguments) {
+    parsed = JSON.parse(toolCall.function.arguments);
   } else {
-    // Fallback: forced tool_choice should always return a tool_use block, but
-    // if the model emitted plain text, scan it for a JSON object.
-    const textBlock = Array.isArray(aiData.content)
-      ? aiData.content.find((b: any) => b.type === "text")
-      : null;
-    const content = textBlock?.text;
+    const content = aiData.choices?.[0]?.message?.content;
     if (!content) throw new Error("No content or tool call in AI response");
     let jsonStr = content.trim();
     const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -896,7 +879,7 @@ ${html}`;
     action_type: actionType,
     confidence: parsed.confidence,
     rejection_reason: parsed.rejection_reason,
-    usage: { prompt_tokens: usage.input_tokens, completion_tokens: usage.output_tokens },
+    usage: { prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens },
   };
 }
 
@@ -1025,26 +1008,9 @@ async function insertPattern(supabase: any, candidate: any, aiResult: AIResult, 
   });
 }
 
-async function logFailure(supabase: any, candidate: any, reason: string, usage?: any) {
-  await supabase.from("ai_generation_log").insert({
-    domain: candidate.domain,
-    status: "failed_not_cookie_banner",
-    error_message: `Captured HTML is not a cookie banner: ${reason}`.substring(0, 500),
-    ai_model: AI_MODEL_LABEL,
-    prompt_tokens: usage?.prompt_tokens ?? null,
-    completion_tokens: usage?.completion_tokens ?? null,
-    html_source: candidate.banner_html?.substring(0, 500),
-  });
-  await supabase.rpc("mark_ai_processed", {
-    _domain: candidate.domain,
-    _resolved: false,
-  });
-}
+const FAILSAFE_MODEL = "gpt-4o-mini";
 
-// ---------- Claude Haiku Failsafe ----------
-const FAILSAFE_MODEL = "claude-haiku-4-5-20251001";
-
-async function gptFailsafe(apiKey: string, domain: string, html: string): Promise<{ selector: string; action: string; confidence: number; strategy?: string } | null> {
+async function gptFailsafe(apiKey: string, domain: string, html: string, failedSelectors: string[] = []): Promise<{ selector: string; action: string; confidence: number; strategy?: string } | null> {
   const prompt = `You are analyzing the HTML of ${domain} to find how to dismiss its cookie consent banner.
 
 The HTML may not contain the actual banner elements (they might be injected by JavaScript), but it WILL contain clues:
@@ -1062,64 +1028,63 @@ Rules:
 - If you can identify the CMP but can't determine a specific selector, return the CMP name as "strategy"
 - Only return JSON, no markdown
 
-HTML (first 15000 chars):
+${failedSelectors.length ? `ALREADY TRIED — these selectors did NOT work; pick a DIFFERENT one:\n${failedSelectors.map((sel) => "- " + sel).join("\n")}\n\n` : ""}HTML (first 15000 chars):
 ${html.substring(0, 15000)}`;
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    if (!(await aiAllowed(domain))) return null;
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: FAILSAFE_MODEL,
-        max_tokens: 1024,
-        system: "You analyze web pages to identify cookie consent management platforms and how to dismiss them. Return only valid JSON.",
         messages: [
+          { role: "system", content: "You analyze web pages to identify cookie consent management platforms and how to dismiss them. Return only valid JSON." },
           { role: "user", content: prompt },
         ],
         tools: [
           {
-            name: "identify_cookie_consent",
-            description: "Report the cookie consent system and how to dismiss it.",
-            input_schema: {
-              type: "object",
-              properties: {
-                cmp_detected: { type: "string", description: "Name of CMP or 'custom' or 'unknown'" },
-                strategy: { type: "string", description: "CMP name in lowercase if known CMP, null if custom. Used for built-in handler routing." },
-                selector: { type: "string", description: "CSS selector for reject/deny button" },
-                action: { type: "string", enum: ["reject", "accept", "close", "necessary", "save"], description: "What the button does" },
-                confidence: { type: "number", description: "1-10 confidence score" },
-                reasoning: { type: "string", description: "Brief explanation" },
+            type: "function",
+            function: {
+              name: "identify_cookie_consent",
+              description: "Report the cookie consent system and how to dismiss it.",
+              parameters: {
+                type: "object",
+                properties: {
+                  cmp_detected: { type: "string", description: "Name of CMP or 'custom' or 'unknown'" },
+                  strategy: { type: "string", description: "CMP name in lowercase if known CMP, null if custom." },
+                  selector: { type: "string", description: "CSS selector for reject/deny button" },
+                  action: { type: "string", enum: ["reject", "accept", "close", "necessary", "save"], description: "What the button does" },
+                  confidence: { type: "number", description: "1-10 confidence score" },
+                  reasoning: { type: "string", description: "Brief explanation" },
+                },
+                required: ["cmp_detected", "selector", "action", "confidence"],
+                additionalProperties: false,
               },
-              required: ["cmp_detected", "selector", "action", "confidence"],
             },
           },
         ],
-        tool_choice: { type: "tool", name: "identify_cookie_consent" },
+        tool_choice: { type: "function", function: { name: "identify_cookie_consent" } },
       }),
     });
 
     if (!response.ok) {
-      console.log(`Claude failsafe HTTP error for ${domain}: ${response.status}`);
+      console.log(`GPT failsafe HTTP error for ${domain}: ${response.status}`);
       return null;
     }
 
     const data = await response.json();
-    const toolUse = Array.isArray(data.content)
-      ? data.content.find((b: any) => b.type === "tool_use")
-      : null;
+    await logAi(FAILSAFE_MODEL, data.usage, domain);
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
     let parsed: any;
 
-    if (toolUse?.input) {
-      parsed = toolUse.input;
+    if (toolCall?.function?.arguments) {
+      parsed = JSON.parse(toolCall.function.arguments);
     } else {
-      const textBlock = Array.isArray(data.content)
-        ? data.content.find((b: any) => b.type === "text")
-        : null;
-      const content = textBlock?.text;
+      const content = data.choices?.[0]?.message?.content;
       if (!content) return null;
       let jsonStr = content.trim();
       const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -1143,7 +1108,7 @@ ${html.substring(0, 15000)}`;
       };
     }
   } catch (e) {
-    console.log(`Claude failsafe error for ${domain}: ${e}`);
+    console.log(`GPT failsafe error for ${domain}: ${e}`);
   }
   return null;
 }

@@ -4,14 +4,18 @@
  * POST multipart/form-data with:
  *   audio       file blob  (required)  webm/opus or m4a/wav
  *   prompt      string     (optional)  prefixed to the transcript before sending to Claude
- *   model       string     (optional)  defaults to anthropic/claude-sonnet-4.5
  *
  * Returns: { ok: true, transcript: string, response: string, model: string, ms_total: number }
  *
  * Env:
  *   OPENROUTER_API_KEY   required — used for both Whisper STT and the Claude chat completion
- *   VOICE_TO_CLAUDE_SHARED_TOKEN  optional — if set, requires X-Bestly-Token header to match
+ *   VOICE_TO_CLAUDE_SHARED_TOKEN  optional — X-Bestly-Token header that also lets a caller in
+ *
+ * v5 (2026-09-23 spend audit): it used to be open to anyone when the token secret was unset, and the
+ * caller could pick any model. Now: an admin session or the shared token, the model is fixed, and
+ * every call passes ai_gate (ai_caps: 50 a day, 20 an hour) and is logged in ai_spend.
  */
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,9 +25,11 @@ const corsHeaders = {
 };
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4.5";
+const MODEL = "anthropic/claude-sonnet-4.5";
 const STT_MODEL = "openai/whisper-1"; // OpenRouter exposes Whisper under the OpenAI namespace
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // 25 MB matches OpenAI's audio limit
+
+const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
 function ok(b: unknown, s = 200) {
   return new Response(JSON.stringify(b), {
@@ -38,6 +44,18 @@ function bad(reason: string, status = 400) {
   });
 }
 
+async function whoIsAllowed(req: Request): Promise<string | null> {
+  const sharedTok = Deno.env.get("VOICE_TO_CLAUDE_SHARED_TOKEN");
+  if (sharedTok && req.headers.get("x-bestly-token") === sharedTok) return "token";
+  const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!jwt) return null;
+  const { data } = await db.auth.getUser(jwt);
+  const uid = data?.user?.id;
+  if (!uid) return null;
+  const { data: isAdmin } = await db.rpc("has_role", { _user_id: uid, _role: "admin" });
+  return isAdmin ? `user:${uid}` : null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -49,10 +67,12 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
   if (!apiKey) return bad("server misconfigured: OPENROUTER_API_KEY not set", 500);
 
-  // Optional shared-token gate to avoid drive-by abuse before we wire real auth
-  const sharedTok = Deno.env.get("VOICE_TO_CLAUDE_SHARED_TOKEN");
-  if (sharedTok && req.headers.get("x-bestly-token") !== sharedTok) {
-    return bad("unauthorized", 401);
+  const who = await whoIsAllowed(req);
+  if (!who) return bad("sign in to the Bestly admin to use this", 401);
+
+  const { data: gate, error: gateErr } = await db.rpc("ai_gate", { p_fn: "voice-to-claude", p_who: who });
+  if (gateErr || (gate as any)?.ok !== true) {
+    return bad(`paused: ${(gate as any)?.reason ?? "spend limit"} (resets at midnight Pacific)`, 429);
   }
 
   let form: FormData;
@@ -71,8 +91,7 @@ Deno.serve(async (req) => {
     return bad(`audio too large (max ${MAX_AUDIO_BYTES} bytes)`);
   }
 
-  const userPrompt = (form.get("prompt") as string) || "";
-  const model = (form.get("model") as string) || DEFAULT_MODEL;
+  const userPrompt = String(form.get("prompt") ?? "").slice(0, 4000);
 
   const tStart = Date.now();
 
@@ -101,7 +120,7 @@ Deno.serve(async (req) => {
   const transcript = (sttJson.text || "").trim();
   if (!transcript) return bad("transcription returned empty text", 502);
 
-  // 2) Send to Claude (or chosen model) with the user's optional prefix prompt
+  // 2) Send to Claude with the user's optional prefix prompt
   const composedUserMessage = userPrompt
     ? `${userPrompt}\n\n--- Spoken input ---\n${transcript}`
     : transcript;
@@ -115,7 +134,7 @@ Deno.serve(async (req) => {
       "X-Title": "Bestly Voice-to-Claude",
     },
     body: JSON.stringify({
-      model,
+      model: MODEL,
       messages: [
         {
           role: "system",
@@ -135,16 +154,22 @@ Deno.serve(async (req) => {
 
   const chatJson = (await chatRes.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
-    usage?: unknown;
+    usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
   };
   const response =
     chatJson.choices?.[0]?.message?.content?.trim() || "(no response)";
+
+  const i = Number(chatJson.usage?.prompt_tokens ?? 0), o = Number(chatJson.usage?.completion_tokens ?? 0);
+  await db.from("ai_spend").insert({
+    fn: "voice-to-claude", scope: "public", job: "voice", model: MODEL, input_tokens: i, output_tokens: o,
+    cost_usd: typeof chatJson.usage?.cost === "number" ? chatJson.usage.cost : (i * 3 + o * 15) / 1e6, ref: who,
+  });
 
   return ok({
     ok: true,
     transcript,
     response,
-    model,
+    model: MODEL,
     ms_total: Date.now() - tStart,
     usage: chatJson.usage ?? null,
   });

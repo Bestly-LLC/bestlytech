@@ -82,7 +82,7 @@ function Row({ title, sub, on, onToggle }: { title: string; sub: string; on: boo
   );
 }
 
-type Budget = { spent: number; cap: number };
+type Budget = { spent: number; cap: number; total_today?: number };
 function useSpend() {
   const [b, setB] = useState<{ chat: Budget; background: Budget } | null>(null);
   useEffect(() => {
@@ -125,6 +125,7 @@ export function ScoutAutoRunBar() {
       {spend && (
         <p className="pb-1.5 text-[0.6875rem] leading-snug text-white/55">
           Spent today: chat {usd(spend.chat.spent)} of {usd(spend.chat.cap)} cap · background jobs {usd(spend.background.spent)} of {usd(spend.background.cap)} cap
+          {" · "}Cookie Yeti and other AI {usd(Math.max(0, Number(spend.chat.total_today ?? 0) - Number(spend.chat.spent) - Number(spend.background.spent)))}
         </p>
       )}
     </div>
