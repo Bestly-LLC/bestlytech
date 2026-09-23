@@ -4,6 +4,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // Gemini 2.5 Pro on every request. The free layer (known-CMP detection) still runs for everyone; the
 // paid AI layer only runs when ai_gate allows it (ai_caps: per-day cap, and per hashed IP per hour),
 // and each call is logged with its cost in ai_spend.
+// v13: nothing an anonymous caller sends can publish a pattern straight to every installed extension.
+// Probe results are saved like any other untrusted submission: confidence 0.2 (below the 0.3 serving
+// threshold, same rule upsert_pattern applies to the anon key) until real extension successes
+// corroborate them, and they never bump an existing pattern's confidence or mark a domain resolved.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,6 +47,18 @@ function detectKnownCMP(html: string): typeof KNOWN_CMPS[number] | null {
     }
   }
   return null;
+}
+
+// Save a probe's selector as an unverified submission. Never overwrites or boosts an existing pattern.
+async function saveUnverified(supabase: any, domain: string, selector: string, action: string, cmp: string, source: string) {
+  const d = String(domain).trim().toLowerCase();
+  const sel = String(selector ?? "").trim();
+  if (!d || d.length > 253 || sel.length < 2 || sel.length > 300) return;
+  if (["body", "html", "head", "body *", "html *", "*"].includes(sel.toLowerCase())) return;
+  await supabase.from("cookie_patterns").upsert(
+    { domain: d, selector: sel, action_type: action, cmp_fingerprint: cmp, source, confidence: 0.2, last_seen: new Date().toISOString() },
+    { onConflict: "domain,selector,action_type", ignoreDuplicates: true },
+  );
 }
 
 // The caller's IP, hashed (never stored raw), for the per-caller hourly cap.
@@ -88,31 +104,17 @@ Deno.serve(async (req) => {
     // Layer 1: CMP detection on probe HTML
     const cmpMatch = detectKnownCMP(bestMatch.html);
     if (cmpMatch) {
-      // Insert pattern
-      await supabase.rpc("upsert_pattern", {
-        _domain: domain,
-        _selector: cmpMatch.selector,
-        _action_type: cmpMatch.action,
-        _cmp_fingerprint: cmpMatch.cmp_fingerprint,
-        _source: "probe_cmp",
-      });
-
-      await supabase.from("cookie_patterns")
-        .update({ confidence: 6 })
-        .eq("domain", domain)
-        .eq("selector", cmpMatch.selector);
+      await saveUnverified(supabase, domain, cmpMatch.selector, cmpMatch.action, cmpMatch.cmp_fingerprint, "probe_cmp");
 
       await supabase.from("ai_generation_log").insert({
         domain,
         status: "success_probe",
         selector_generated: cmpMatch.selector,
         action_type: cmpMatch.action,
-        confidence: 6,
+        confidence: 0.2,
         ai_model: `probe_cmp:${cmpMatch.name}`,
         html_source: `Probe found CMP: ${cmpMatch.name} via selector ${bestMatch.selector}`.substring(0, 500),
       });
-
-      await supabase.rpc("mark_ai_processed", { _domain: domain, _resolved: true });
 
       return new Response(
         JSON.stringify({ status: "success_probe", cmp: cmpMatch.name, selector: cmpMatch.selector }),
@@ -216,18 +218,7 @@ ${bestMatch.html.substring(0, 8000)}`;
       const action = parsed.action === "hide" ? "close" : "reject";
       const confidence = Math.min(Math.round(Number(parsed.confidence)) || 5, 6);
 
-      await supabase.rpc("upsert_pattern", {
-        _domain: domain,
-        _selector: parsed.selector,
-        _action_type: action,
-        _cmp_fingerprint: "generic",
-        _source: "probe_ai",
-      });
-
-      await supabase.from("cookie_patterns")
-        .update({ confidence })
-        .eq("domain", domain)
-        .eq("selector", parsed.selector);
+      await saveUnverified(supabase, domain, parsed.selector, action, "generic", "probe_ai");
 
       await supabase.from("ai_generation_log").insert({
         domain,
@@ -241,10 +232,8 @@ ${bestMatch.html.substring(0, 8000)}`;
         html_source: `Probe selector: ${bestMatch.selector}`.substring(0, 500),
       });
 
-      await supabase.rpc("mark_ai_processed", { _domain: domain, _resolved: true });
-
       return new Response(
-        JSON.stringify({ status: "success_probe", selector: parsed.selector, action, confidence }),
+        JSON.stringify({ status: "success_probe", selector: parsed.selector, action, confidence: 0.2 }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
