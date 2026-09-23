@@ -11,7 +11,7 @@ import { Brush,
   Car,
   Mic,
   Handshake,
-  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck,
+  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, Siren,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -60,6 +60,7 @@ const cookieYetiItems = [
 ];
 
 const homeHubItems = [
+  { title: "Emergency", url: "/admin/emergency", icon: Siren },
   { title: "Overview", url: "/admin/home-hub", icon: Server },
   { title: "Pi-hole", url: "/admin/home-hub/pihole", icon: Shield },
   { title: "Home Assistant", url: "/admin/home-hub/home-assistant", icon: House },

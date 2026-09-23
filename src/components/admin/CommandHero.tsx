@@ -2,11 +2,12 @@
  * Command Center top (Jared): the same shape as Eli's partner Home.
  *   Greeting + Join next meeting (from the Nextcloud calendar via next-meeting) + what's coming up
  *   Your to-dos from calls (tick off in place)
- *   Quick actions: Ask Scout, Talk, Studio, Eli's portal
+ *   Quick actions: Emergency (one tap: EcoFlow to 100%, phone push, checklist), Ask Scout, Talk, Studio, Eli's portal
  */
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Bell, Binoculars, CalendarClock, Check, ExternalLink, MessagesSquare, Users, Video, X } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Bell, Binoculars, CalendarClock, Check, ExternalLink, Loader2, MessagesSquare, Siren, Users, Video, X } from "lucide-react";
+import { startEmergency } from "@/pages/admin/Emergency";
 import { supabase } from "@/integrations/supabase/client";
 import { openScout } from "@/components/admin/scoutBus";
 import { AdminMark } from "@/components/AdminMark";
@@ -119,7 +120,8 @@ export function CommandHero() {
       </div>
 
       {/* One tight row, not a tall column of stretched buttons beside the to-dos. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <EmergencyTile />
         <Quick onClick={openScout} icon={Binoculars} label="Ask Scout" tone="from-slate-700 to-slate-900" />
         <Quick href="https://cloud.bestly.tech/apps/spreed" icon={MessagesSquare} label="Talk" tone="from-sky-400 to-blue-600" />
         <Quick href="https://studio.bestly.tech" icon={ExternalLink} label="Studio" tone="from-violet-500 to-fuchsia-500" />
@@ -149,6 +151,26 @@ export function CommandHero() {
         )}
       </div>
     </section>
+  );
+}
+
+/** One tap: charge the EcoFlow to 100%, buzz the phone, open the checklist. */
+function EmergencyTile() {
+  const nav = useNavigate();
+  const [busy, setBusy] = useState(false);
+  return (
+    <Quick
+      onClick={async () => {
+        if (busy) return;
+        setBusy(true);
+        try { await startEmergency("general"); } catch { /* the page says what went wrong */ }
+        setBusy(false);
+        nav("/admin/emergency");
+      }}
+      icon={busy ? Loader2 : Siren}
+      label={busy ? "Starting…" : "Emergency"}
+      tone="from-red-500 to-red-700 col-span-2 sm:col-span-1"
+    />
   );
 }
 
