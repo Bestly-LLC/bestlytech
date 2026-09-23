@@ -54,6 +54,7 @@ const CookieYetiSupport = lazyPage(() => import("./pages/CookieYetiSupport"));
 const ConfeshPrivacy = lazyPage(() => import("./pages/ConfeshPrivacy"));
 const ConfeshSupport = lazyPage(() => import("./pages/ConfeshSupport"));
 const Links = lazyPage(() => import("./pages/Links"));
+const LaxGuest = lazyPage(() => import("./pages/LaxGuest"));
 const EmailUnsubscribe = lazyPage(() => import("./pages/EmailUnsubscribe"));
 const Status = lazyPage(() => import("./pages/Status"));
 const VoiceToClaude = lazyPage(() => import("./pages/VoiceToClaude"));
@@ -77,6 +78,7 @@ const AdminContacts = lazyPage(() => import("./pages/admin/AdminContacts"));
 const AdminMeetingsSection = lazyPage(() => import("./pages/admin/AdminMeetingsSection"));
 const AdminPartners = lazyPage(() => import("./pages/admin/AdminPartners"));
 const AdminTuro = lazyPage(() => import("./pages/admin/AdminTuro"));
+const LaxPass = lazyPage(() => import("./pages/admin/LaxPass"));
 const AdminPlaybook = lazyPage(() => import("./pages/admin/AdminPlaybook"));
 const PartnerPortal = lazyPage(() => import("./pages/partner/PartnerPortal"));
 const PartnerWelcome = lazyPage(() => import("./pages/partner/PartnerPortal").then((m) => ({ default: m.PartnerWelcome })));
@@ -168,6 +170,8 @@ const App = () => {
 
                 {/* Standalone pages (no Header/Footer) */}
                 <Route path="/links" element={<Links />} />
+                <Route path="/lax" element={<LaxGuest />} />
+                <Route path="/lax/:slug" element={<LaxGuest />} />
                 <Route path="/unsubscribe" element={<EmailUnsubscribe />} />
                 <Route path="/status" element={<Status />} />
                 <Route path="/voice-to-claude" element={<VoiceToClaude />} />
@@ -216,6 +220,7 @@ const App = () => {
                   <Route path="emergency" element={<Emergency />} />
                   <Route path="security" element={<Security />} />
                   <Route path="turo" element={<AdminTuro />} />
+                  <Route path="turo/lax-pass" element={<LaxPass />} />
                   <Route path="playbook" element={<AdminPlaybook />} />
                   <Route path="skills" element={<AdminSkills />} />
                   <Route path="*" element={<AdminNotFound />} />
