@@ -17,6 +17,7 @@ import {
   Copy,
   Check,
   RotateCcw,
+  Wrench,
 } from "lucide-react";
 import { CopyBlock } from "@/components/CopyText";
 import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecording } from "./ScoutRecorder";
@@ -151,6 +152,51 @@ export function splitOptions(body: string): { text: string; options: string[] } 
   return { text: body.replace(OPTION_LINE, "").trimEnd(), options };
 }
 
+/**
+ * What to show when Scout forgets its OPTIONS line.
+ *
+ * The system prompt asks for one on every reply that leaves a decision, but a prompt is
+ * a request, not a guarantee, and the reply it forgets on is usually the "want me to keep
+ * going?" - the exact moment Jared would otherwise have to type. So the buttons are
+ * generated here instead of hoped for, matched to what the message is actually doing.
+ */
+export function fallbackOptions(text: string): string[] {
+  const t = text.trim();
+  if (!t) return [];
+  const tail = t.slice(-400).toLowerCase();
+
+  // "Want me to keep going", "should I", "shall I", "ready for me to"
+  if (/\b(want me to|should i|shall i|ready for me to|do you want me to|keep going|carry on|continue\?)/.test(tail)) {
+    return ["Yes, keep going", "Not now", "Show me first"];
+  }
+  // Anything else phrased as a question still deserves a tap rather than typing.
+  if (t.endsWith("?")) return ["Yes", "No", "Tell me more"];
+  // A plain answer or status: the useful next tap is forward, not a yes/no.
+  return ["Keep going", "What else needs me?"];
+}
+
+/**
+ * Turn a Scout exchange into a prompt Jared can paste to Claude to get the thing fixed.
+ *
+ * Scout runs on a small model and can read and propose, but it does not write code. When
+ * it surfaces something broken the next step has always been Jared retyping the problem
+ * into a Claude session from memory. This hands him the whole thing - what he asked, what
+ * Scout answered, and where he was - so the fix starts with the context already in it.
+ */
+export function claudeFixPrompt(botText: string, userText?: string, path?: string): string {
+  return [
+    "In the Bestly admin (repo Bestly-LLC/bestlytech), Scout flagged this and I want it fixed.",
+    "",
+    userText ? `What I asked Scout:\n${userText.trim()}` : null,
+    "",
+    `What Scout said:\n${botText.trim()}`,
+    "",
+    path ? `Where: ${path}` : null,
+    "",
+    "Find the actual cause, fix it properly, and commit and push. Tell me what was wrong.",
+  ].filter((l) => l !== null).join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
 
 function Scoutie({ mood, className }: { mood: Mood; className?: string }) {
   return (
@@ -274,6 +320,7 @@ export function Scout() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameText, setRenameText] = useState("");
   const [copied, setCopied] = useState<number | null>(null);
+  const [copiedFix, setCopiedFix] = useState<number | null>(null);
   const [waiting, setWaiting] = useState(0);
   const [bubble, setBubble] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
@@ -915,21 +962,43 @@ export function Scout() {
                       <p className="whitespace-pre-wrap break-words text-[0.9375rem] leading-relaxed text-white/90 sm:text-sm">
                         {splitOptions(m.body).text}
                       </p>
-                      {/* Only the newest reply's options are live - older ones are history. */}
-                      {i === msgs.length - 1 && !busy && !!splitOptions(m.body).options.length && (
-                        <div className="mt-2.5 flex flex-wrap gap-1.5">
-                          {splitOptions(m.body).options.map((o) => (
+                      {/* Only the newest reply's options are live - older ones are history.
+                          If Scout gave none, we generate them: there is always something to tap. */}
+                      {i === msgs.length - 1 && !busy && (() => {
+                        const { text, options } = splitOptions(m.body);
+                        const chips = options.length ? options : fallbackOptions(text);
+                        const lastAsk = [...msgs.slice(0, i)].reverse().find((x) => x.role === "user")?.body;
+                        return (
+                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                            {chips.map((o) => (
+                              <button
+                                key={o}
+                                type="button"
+                                onClick={() => send(o)}
+                                className="scout-chip min-h-9 rounded-full border border-white/15 bg-white/[0.06] px-3.5 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/[0.12] active:scale-[0.97]"
+                              >
+                                {o}
+                              </button>
+                            ))}
+                            {/* Scout can read and propose but never writes code. This is the door
+                                to the thing that does, with the context already packed in. */}
                             <button
-                              key={o}
                               type="button"
-                              onClick={() => send(o)}
-                              className="scout-chip min-h-9 rounded-full border border-white/15 bg-white/[0.06] px-3.5 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/[0.12] active:scale-[0.97]"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(
+                                  claudeFixPrompt(text, lastAsk, typeof window !== "undefined" ? window.location.pathname : undefined),
+                                );
+                                setCopiedFix(i);
+                                setTimeout(() => setCopiedFix(null), 1600);
+                              }}
+                              className="scout-chip inline-flex min-h-9 items-center gap-1.5 rounded-full border border-dashed border-white/20 px-3.5 text-sm font-medium text-white/70 transition hover:border-white/40 hover:text-white active:scale-[0.97]"
                             >
-                              {o}
+                              {copiedFix === i ? <Check className="h-3.5 w-3.5" /> : <Wrench className="h-3.5 w-3.5" />}
+                              {copiedFix === i ? "Copied - paste to Claude" : "Prompt Claude to fix"}
                             </button>
-                          ))}
-                        </div>
-                      )}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <Button
                       variant="ghost"

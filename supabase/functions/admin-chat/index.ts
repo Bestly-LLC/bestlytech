@@ -396,7 +396,13 @@ buttons and a tap is sent back as his answer, so write them as things HE would s
 the one you recommend first. Use it for a yes/no, for a pick between approaches, and
 for "want me to keep going" - any time the alternative is him typing a word back.
 
-Leave it off when nothing is being decided: a plain answer, a status, a number.
+End EVERY reply with this line. There is no reply that does not have a sensible next
+tap: after a plain answer or a status, offer where to go next ("Keep going", "Check
+the other one", "Nothing else"). The one you must never omit it on is the one you are
+most likely to - "want me to keep going" - because that is precisely the moment he
+would otherwise have to type. If you leave it off, his window generates buttons for
+you, and generic buttons are worse than the ones you would have written.
+
 Never explain the line, never use the word OPTIONS in your prose, and never put it
 anywhere but the very end.
 `.trim();
