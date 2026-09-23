@@ -51,6 +51,9 @@
 //    to the FREE model on the Mac mini (fix_ai_jobs). If that can answer without tools, it does.
 //    Otherwise Scout asks, with three buttons: Yes, use paid AI | No, skip it | Always, stop asking.
 //    Autopilot without that OK stops at NEEDS_YES instead of spending.
+//  - v16: "keep going" is his yes. A message that starts with "keep going" runs as if auto-run
+//    were on for that one request (tools skip the yes, Mac jobs start, paid AI OK for the chat).
+//    Out of Anthropic credit: a plain-words reply plus one bell card a day, not the raw 400.
 //  - v13: autopilot. fix-ladder calls with the service key + autopilot:true when an incident
 //    outlived the self-heals and the free model. Anything needing a yes is refused in code and
 //    comes back as NEEDS_YES, which Jared approves with one tap from the alert pane.
@@ -587,7 +590,7 @@ async function macRun(args: Record<string, any>, threadId: string): Promise<Reco
   }).select("id").single();
   if (error) return { ok: false, error: error.message };
   if (autoRunOn) {
-    const { data: ar } = await db.rpc("mac_job_autorun", { p_id: data.id });
+    const { data: ar } = await db.rpc("mac_job_autorun", { p_id: data.id, p_force: true });
     if ((ar as any)?.ok) return { ok: true, id: data.id, status: "approved", note: "Auto-run is on, so it is running on the Mac mini now. Read the result with mac_run get when it finishes." };
   }
   return { ok: true, id: data.id, status: "proposed", note: "The Run card is on his screen now. It expires in an hour." };
@@ -904,7 +907,9 @@ Deno.serve(async (req) => {
   // Auto-run applies to chats and, when he has switched it on, to the fix ladder too - except
   // code changes to the live site, which still wait for his tap when nobody is watching.
   const { data: prefs } = await db.rpc("scout_prefs");
-  autoRunOn = (prefs as any)?.auto_run === true;
+  // "keep going" is his yes for this request: auto-run for this one turn, paid AI OK for the chat.
+  const keepGoing = !autopilot && /^\s*keep going\b/i.test(String(body.body ?? ""));
+  autoRunOn = (prefs as any)?.auto_run === true || keepGoing;
   const paidAlwaysOk = (prefs as any)?.paid_ai_ok === true;
 
   const text = String(body.body ?? "").trim();
@@ -932,7 +937,7 @@ Deno.serve(async (req) => {
       if (/^always,? stop asking\.?$/i.test(text)) {
         await db.from("scout_settings").update({ paid_ai_ok: true, updated_at: new Date().toISOString(), updated_by: uid }).eq("id", true);
         paidOk = true;
-      } else if (/^yes,? use paid ai\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
+      } else if (keepGoing || /^yes,? use paid ai\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
         await db.from("admin_chat_threads").update({ paid_ok: true }).eq("id", threadId);
         paidOk = true;
       } else if (/^no,? skip it\.?$/i.test(text)) {
@@ -996,7 +1001,8 @@ Deno.serve(async (req) => {
   const unread: Record<string, number> = {};
   for (const n of (bell ?? []) as { severity: string }[]) unread[n.severity] = (unread[n.severity] ?? 0) + 1;
   const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder, jobs, page ?? "unknown", lessonsDigest)
-    + (autoRunOn ? AUTO_RUN_ON : ASK_PLAINLY);
+    + (autoRunOn ? AUTO_RUN_ON : ASK_PLAINLY)
+    + (keepGoing ? "\n\n# He said keep going\nThat is his yes for everything the job needs right now. Carry on from where you stopped and do it; don't ask again." : "");
 
   const used: string[] = [];
   const shownFor: Record<string, string[]> = {};
@@ -1061,6 +1067,17 @@ Deno.serve(async (req) => {
       const why = `I ran long on that (${used.length} steps). Say "keep going" and I will pick it up, or ask for a smaller piece.`;
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
       return J({ ok: true, thread_id: threadId, reply: why, tools: used, partial: true });
+    }
+    if (/credit balance is too low/i.test(String((e as Error).message))) {
+      // Out of paid credit: say it in plain words once, and put one card in the bell per day.
+      const why = "My paid AI (Claude) is out of credit, so I can't do this right now. Top it up at console.anthropic.com, Settings, Billing, then say keep going.";
+      await db.rpc("admin_notify", {
+        p_kind: "scout", p_title: "Scout's paid AI is out of credit", p_body: "Top up at console.anthropic.com > Settings > Billing. Until then Scout can only use the free AI on the Mac mini.",
+        p_url: "https://console.anthropic.com/settings/billing", p_entity_key: "scout", p_severity: "warning",
+        p_dedupe_key: `scout.credit:${new Date().toISOString().slice(0, 10)}`,
+      });
+      await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
+      return J({ ok: false, error: "out_of_credit", thread_id: threadId, reply: why }, 200);
     }
     const why = `I could not reach the model: ${(e as Error).message}`.replace(/sk-ant-[A-Za-z0-9_\-]+/g, "sk-ant-…");
     await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
