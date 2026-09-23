@@ -20,7 +20,7 @@ const rpc = (fn: string, args?: Record<string, unknown>) =>
 export type Trip = { first: string | null; starts_at: string; ends_at: string; car_opens_at: string };
 export type CarState = {
   battery: number | null; range: number | null; inside_f: number | null; outside_f: number | null;
-  locked: boolean | null; charging: string | null; online: string | null; observed_at: string; name: string | null;
+  locked: boolean | null; charging: string | null; online: string | null; observed_at: string; name: string | null; climate_on?: boolean | null;
 };
 
 function Card({ label, icon, children }: { label: string; icon: ReactNode; children: ReactNode }) {
@@ -259,32 +259,39 @@ function ClimateControls({ demo, onAction, compact = false }: { demo: boolean; o
   );
 }
 
-export function CarCard({ trip, car, demo = false, onClimate, compact = false }: { trip: Trip; car: CarState | null; demo?: boolean; onClimate?: (a: ClimateAction) => Promise<void>; compact?: boolean }) {
+export function CarCard({ trip, car, demo = false, onClimate, compact = false }: { trip: Trip | null; car: CarState | null; demo?: boolean; onClimate?: (a: ClimateAction) => Promise<void>; compact?: boolean }) {
   if (compact) {
+    const beforeWindow = trip ? new Date(trip.car_opens_at) > new Date() : false;
+    const asleep = car?.online === "asleep" || car?.online === "offline";
     return (
       <div className="flex h-full flex-col rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
         <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}><Zap className="h-3.5 w-3.5" />Your car</p>
-        {!car && onClimate ? (
+        {car ? (
           <>
-            <p className="mt-1.5 text-[13px] leading-snug text-white/70">Parked and asleep. Tap a button and it wakes up.</p>
-            <ClimateControls demo={false} onAction={onClimate} compact />
-          </>
-        ) : car ? (
-          <>
-            {car.inside_f != null && <p className="mt-1.5 text-[13px] text-white/70">Inside <b className="text-[22px] font-semibold text-white tabular-nums">{Math.round(car.inside_f)}°</b></p>}
-            {car.battery != null && <p className="flex items-center gap-1.5 text-[13px] text-white/70"><BatteryMedium className="h-4 w-4 text-emerald-300" />{car.battery}%{car.range != null && ` · ${Math.round(car.range)} mi`}</p>}
-            {(demo || onClimate) ? <ClimateControls demo={demo} onAction={onClimate} compact /> : <p className="mt-auto text-[12px] text-white/45">Updated {ago(car.observed_at)}</p>}
+            {car.inside_f != null && (
+              <p className="mt-1.5 flex items-baseline gap-1.5 text-[13px] text-white/70">Inside <b className="text-[28px] font-semibold leading-none text-white tabular-nums">{Math.round(car.inside_f)}°</b></p>
+            )}
+            {car.battery != null && (
+              <p className="mt-1 flex items-center gap-1.5 text-[13px] text-white/80"><BatteryMedium className="h-4 w-4 text-emerald-300" /><b className="text-white">{car.battery}%</b> charged{car.range != null && ` · ${Math.round(car.range)} mi`}</p>
+            )}
+            {car.climate_on && <p className="mt-1 flex items-center gap-1.5 text-[12px] font-semibold text-sky-200"><Snowflake className="h-3.5 w-3.5" />Climate is on</p>}
+            <p className="mt-1 text-[11px] text-white/45">{asleep ? "Parked · " : ""}Updated {ago(car.observed_at)}</p>
           </>
         ) : (
-          new Date(trip.car_opens_at) > new Date()
-            ? <p className="mt-2 text-[13px] leading-snug text-white/70">Cabin temp and <b className="text-white">A/C controls</b> show up here at <b className="text-white">{fmtWhen(trip.car_opens_at)}</b>, an hour before pickup.</p>
-            : <p className="mt-2 text-[13px] leading-snug text-white/70">Live car info isn't available right now. Message your host in the Turo app if the car is too hot or cold.</p>
+          <p className="mt-1.5 text-[13px] leading-snug text-white/70">{onClimate ? "Parked and asleep. Tap a button and it wakes up." : "Car info isn't available right now."}</p>
         )}
+        {(demo || onClimate) ? (
+          <ClimateControls demo={demo} onAction={onClimate} compact />
+        ) : trip && beforeWindow ? (
+          <p className="mt-auto pt-3 text-[12px] leading-snug text-white/60"><b className="text-white">A/C buttons</b> turn on {fmtWhen(trip.car_opens_at)}, an hour before pickup.</p>
+        ) : !trip ? (
+          <p className="mt-auto pt-3 text-[12px] leading-snug text-white/60">A/C buttons are on your personal trip link from your host.</p>
+        ) : null}
       </div>
     );
   }
-  if (!car) {
-    if (new Date(trip.car_opens_at) > new Date()) {
+  if (!car || !trip) {
+    if (trip && new Date(trip.car_opens_at) > new Date()) {
       return (
         <Card label="Your car" icon={<Zap className="h-3.5 w-3.5" />}>
           <p className="text-[14px] text-white/75">Live battery, cabin temperature and A/C controls show up here at <b className="text-white">{fmtWhen(trip.car_opens_at)}</b>, an hour before pickup.</p>

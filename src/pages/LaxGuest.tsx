@@ -221,10 +221,10 @@ export default function LaxGuest() {
 
             {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} /></div>}
             {/* Weather next to the car: see how hot it is, then turn on the A/C right there. */}
-            {pub.trip ? (
+            {pub.trip || pub.car ? (
               <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
-                <WeatherCard trip={pub.trip} compact />
-                <CarCard trip={pub.trip} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && pub.controls ? carCommand : undefined} />
+                <WeatherCard trip={pub.trip ?? null} compact />
+                <CarCard trip={pub.trip ?? null} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && pub.controls ? carCommand : undefined} />
               </div>
             ) : (
               <div className="mt-2.5"><WeatherCard trip={null} /></div>
