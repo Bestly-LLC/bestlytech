@@ -30,7 +30,7 @@ export function ClipActivity() {
     <div className="flex items-center gap-2">
       {!!moving.length && (
         <Link
-          to="/admin/meetings?tab=clips"
+          to="/admin/meetings"
           className="group relative flex items-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/[0.06] py-1.5 pl-3 pr-3.5 text-xs text-white/80 transition hover:bg-white/[0.12]"
           title={moving.map((u) => u.name).join("\n")}
         >
@@ -41,7 +41,7 @@ export function ClipActivity() {
           />
           <Upload className="relative h-3.5 w-3.5 shrink-0" />
           <span className="relative tabular-nums">
-            {moving.length > 1 ? `${moving.length} clips · ` : ""}
+            {moving.length > 1 ? `${moving.length} recordings · ` : ""}
             {moving.some((u) => u.status === "saving") && moving.length === 1 ? "Saving" : `${pct}%`}
           </span>
           <span className="relative hidden text-white/45 sm:inline">of {mb(total)}</span>

@@ -17,7 +17,7 @@ import { startClipUpload, subscribeClipUploads, dismissUpload, CLIPS_CHANGED, ty
 
 const AUDIO = /\.(m4a|mp3|wav|aac|caf|amr|ogg|opus|flac|aiff|mp4)$/i;
 
-export type LinkedClip = { id: string; path: string; meeting_name: string | null; status: string; title: string | null; kind: string | null; seconds: number | null; created_at: string };
+export type LinkedClip = { id: string; path: string; meeting_name: string | null; status: string; title: string | null; kind: string | null; seconds: number | null; created_at: string; error: string | null; summary: { meeting_error?: string } | null };
 
 /** Clips that are (or are becoming) meetings. Refreshes while any are still being worked on. */
 export function useMeetingClips(onFiled?: () => void) {
@@ -25,8 +25,8 @@ export function useMeetingClips(onFiled?: () => void) {
   const filed = useRef<Set<string>>(new Set());
   const load = useMemo(() => async () => {
     const { data } = await supabase.from("voice_clips")
-      .select("id, path, meeting_name, status, title, kind, seconds, created_at")
-      .or("kind.eq.meeting,meeting_name.not.is.null")
+      .select("id, path, meeting_name, status, title, kind, seconds, created_at, error, summary")
+      .or("kind.is.null,kind.eq.meeting")
       .order("created_at", { ascending: false }).limit(100);
     const rows = (data ?? []) as unknown as LinkedClip[];
     // A meeting that just got its name is now in the Nextcloud archive: have Calls reload.
@@ -88,6 +88,12 @@ export function MeetingDrop({ clips }: { clips: LinkedClip[] }) {
   useEffect(() => subscribeClipUploads((u) => setUps(u.filter((x) => x.kind === "meeting" && x.status !== "done"))), []);
   const go = (files: File[]) => files.filter((f) => AUDIO.test(f.name)).forEach((f) => void startClipUpload(f, "meeting"));
   const working = clips.filter((c) => c.status === "new" || c.status === "working");
+  // Dropped in but never made it into the list: say why, and offer another go.
+  const stuck = clips.filter((c) => !c.meeting_name && (c.status === "error" || (c.status === "done" && c.summary?.meeting_error)));
+  const retry = async (c: LinkedClip) => {
+    await supabase.from("voice_clips").update({ kind: "meeting", status: "new", error: null } as never).eq("id", c.id);
+    window.dispatchEvent(new Event(CLIPS_CHANGED));
+  };
 
   return (
     <div className="space-y-2">
@@ -127,6 +133,14 @@ export function MeetingDrop({ clips }: { clips: LinkedClip[] }) {
             {c.status === "new" ? "Waiting for the Mac mini" : "Transcribing and naming who's speaking"} · {c.title ?? "meeting"}
           </p>
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-white/40" />
+        </div>
+      ))}
+      {stuck.map((c) => (
+        <div key={c.id} className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-2.5">
+          <p className="min-w-0 text-sm text-amber-200/90">
+            {c.title ?? "A recording"} didn't make it in: {c.error ?? c.summary?.meeting_error}
+          </p>
+          <Button size="sm" variant="ghost" className="shrink-0 text-white/70" onClick={() => void retry(c)}>Try again</Button>
         </div>
       ))}
     </div>

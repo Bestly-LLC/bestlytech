@@ -13,7 +13,7 @@ Standard library only. Key in ~/PartnerAI/.key (Vault: partner_ai_worker_key).
 import json, os, re, subprocess, time, traceback, urllib.error, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.4.2"   # 1.4: meetings (kind=meeting, or 10+ min) go through the call recorder's pipeline   # 1.3: parse talkscribe's 3-column output; a playable copy for parted clips; no silent empties
+VERSION = "1.5.0"   # 1.5: every recording is a meeting (Calls); no Clips list any more   # 1.4: meetings (kind=meeting, or 10+ min) go through the call recorder's pipeline   # 1.3: parse talkscribe's 3-column output; a playable copy for parted clips; no silent empties
 # 1.2: big files go up and come down in parts (storage caps one object at 50MB)
 HOME = os.path.expanduser("~")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
@@ -289,7 +289,9 @@ def work(clip):
         secs = seconds(tmp)
         kind = clip.get("kind")
         mname, merr = None, None
-        if kind == "meeting" or (kind is None and (secs or 0) >= MEETING_MIN_S):
+        # Clips are gone from the admin (2026-09-23): everything dropped in or AirDropped is a
+        # meeting and lands in Calls. Only an old row explicitly marked kind=note stays a clip.
+        if kind != "note":
             try:
                 mname, text = as_meeting(clip, tmp, secs)
                 text = "\n".join(l for l in text.splitlines() if not l.startswith("#"))

@@ -321,7 +321,7 @@ export default function AdminMeetings({ embedded }: { embedded?: boolean } = {})
       <PageHeader
         embedded={embedded}
         title="Meetings"
-        description="Calls recorded on the Mac mini, and meetings you drop in from anywhere else. Transcripts are read live from the archive."
+        description="Every call and meeting, newest first: recorded on the Mac mini or dropped in from anywhere. Transcripts are read live from the archive."
         actions={
           <Button
             variant="outline"

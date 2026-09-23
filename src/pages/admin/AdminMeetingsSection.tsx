@@ -1,22 +1,16 @@
-import { lazy } from "react";
-import { SectionTabs } from "@/components/admin/SectionTabs";
+import { lazy, Suspense } from "react";
 
 const AdminMeetings = lazy(() => import("./AdminMeetings"));
-const AdminClips = lazy(() => import("./AdminClips"));
 
 /**
- * Work -> Meetings: recorded calls, and the loose voice clips that aren't calls.
- * Both are "something Jared said out loud, transcribed", so they live on one page.
+ * Work -> Meetings: one list of calls, in the order they were recorded - the ones the Mac mini
+ * recorded and the ones dropped in (phone, Soundcore, AirDrop), which the Mac mini names and files
+ * the same way. The separate Clips tab is gone: everything dropped here is a meeting.
  */
 export default function AdminMeetingsSection() {
   return (
-    <SectionTabs
-      title="Meetings"
-      description="Calls: recorded on the Mac mini, or a meeting you drop in from anywhere. Clips: quick voice notes."
-      tabs={[
-        { value: "calls", label: "Calls", render: () => <AdminMeetings embedded /> },
-        { value: "clips", label: "Clips", render: () => <AdminClips embedded /> },
-      ]}
-    />
+    <Suspense fallback={null}>
+      <AdminMeetings />
+    </Suspense>
   );
 }

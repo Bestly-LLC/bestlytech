@@ -191,7 +191,7 @@ const App = () => {
                   <Route path="waitlist" element={<AdminWaitlist />} />
                   <Route path="meetings" element={<AdminMeetingsSection />} />
                   {/* Clips used to be its own page; keep the link working. */}
-                  <Route path="clips" element={<Navigate to="/admin/meetings?tab=clips" replace />} />
+                  <Route path="clips" element={<Navigate to="/admin/meetings" replace />} />
                   <Route path="partners" element={<AdminPartners />} />
                   <Route path="cloud" element={<TabRedirect to="/admin/leads" tab="cloud" />} />
                   <Route path="cloud/:id" element={<CloudDealDetail />} />
