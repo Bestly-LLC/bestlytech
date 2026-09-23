@@ -25,7 +25,9 @@ type Prep = { id: string; hazard: Hazard; started_at: string; ended_at: string |
 type Battery = { battery: number | null; max_charge: number | null; input_watts: number | null; minutes_to_full: number | null; online: boolean;
   alerts: { Event?: string; Headline?: string; Severity?: string; Ends?: string; Expires?: string }[]; message?: string; at: string };
 
-const rpc = supabase.rpc as unknown as (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+// Bound call: a bare reference to supabase.rpc loses `this` and throws "Cannot read properties of undefined (reading 'rest')".
+const rpc = (fn: string, args?: Record<string, unknown>) =>
+  supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as unknown as { from: (t: string) => any };
 
