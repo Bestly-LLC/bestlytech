@@ -12,6 +12,7 @@ import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
 import { Check, Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CarCard, EmailCard, TripCard, WeatherCard, type CarState, type Trip } from "./lax/GuestExtras";
+import { renderPassImage } from "./lax/passImage";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
 type Pub = { ok: boolean; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
@@ -136,15 +137,28 @@ export default function LaxGuest() {
     : "";
   const passUrl = token ? `${FN}?t=${encodeURIComponent(token)}` : `${FN}?slug=${encodeURIComponent(slug)}`;
 
-  const saveImage = () => {
+  // Saves a picture of the Wallet pass (same look, fields and QR), not a bare QR.
+  const [saving, setSaving] = useState(false);
+  const saveImage = async () => {
     const c = canvasWrap.current?.querySelector("canvas");
-    if (!c) return;
-    c.toBlob((b) => {
-      if (!b) return;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(b); a.download = "LAX-parking-QR.png"; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    });
+    if (!c || saving) return;
+    setSaving(true);
+    try {
+      const blob = await renderPassImage({
+        qr: c, trip: pub?.trip ?? null, level, garage, thru,
+        shuttle: shuttle.replace(/^The Parking Spot\s*[—-]\s*/i, "Parking Spot "),
+        afterHours: phone || undefined,
+      });
+      const file = new File([blob], "LAX-parking-pass.png", { type: "image/png" });
+      // Phones: the share sheet has "Save Image" (goes straight to Photos). Desktop: plain download.
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: "LAX parking pass" }).catch(() => {});
+      } else {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      }
+    } finally { setSaving(false); }
   };
 
   const shadow = { textShadow: "0 2px 12px rgba(26,17,64,0.85), 0 1px 2px rgba(26,17,64,0.9)" };
@@ -205,9 +219,9 @@ export default function LaxGuest() {
                     {plat !== "android" && <AppleWalletButton href={passUrl} />}
                     {plat !== "apple" && pub.google && <GoogleWalletButton href={token ? `${FN}/google?t=${encodeURIComponent(token)}` : `${FN}/google?slug=${encodeURIComponent(slug)}`} />}
                     {plat !== "apple" && (
-                      <button type="button" onClick={saveImage}
+                      <button type="button" onClick={saveImage} disabled={saving}
                         className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white/10 text-base font-semibold ring-1 ring-white/15 active:scale-[0.99]">
-                        <Download className="h-5 w-5" /> Save the QR code to your phone
+                        {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />} Save the pass to your phone
                       </button>
                     )}
                   </div>
