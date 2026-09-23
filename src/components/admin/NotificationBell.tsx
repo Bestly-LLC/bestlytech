@@ -225,7 +225,7 @@ export function NotificationBell() {
                       }}
                       aria-label="Copy this alert"
                       title="Copy to paste to Claude"
-                      className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-[#111114]/80 text-white/60 opacity-100 transition hover:text-white md:opacity-0 md:group-hover/row:opacity-100 focus-visible:opacity-100 bento:bg-white/90"
+                      className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg border border-[#ffffff26] bg-[#26262c] text-[#e8e8ec] opacity-100 shadow-sm transition hover:bg-[#34343c] hover:text-[#ffffff] md:opacity-0 md:group-hover/row:opacity-100 focus-visible:opacity-100 bento:border-[#dcdad4] bento:bg-[#ffffff] bento:text-[#111114] bento:hover:bg-[#f3f2ee] bento:hover:text-[#111114]"
                     >
                       {copied === n.id ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
                     </button>

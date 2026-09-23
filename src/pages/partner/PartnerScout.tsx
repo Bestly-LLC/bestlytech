@@ -15,7 +15,7 @@ import { CopyButton } from "@/components/CopyText";
 import { AdminMark } from "@/components/AdminMark";
 import { cn } from "@/lib/utils";
 import { playNotifySound } from "@/lib/notifySound";
-import { showLocalNotification, registerServiceWorker } from "@/lib/webPush";
+import { showLocalNotification, registerServiceWorker, enablePush, syncPushOnLoad } from "@/lib/webPush";
 import { useStickToBottom } from "@/lib/useStickToBottom";
 
 export interface ScoutMsg { id: string; role: "user" | "assistant"; content: string; status: "pending" | "working" | "done" | "error"; reply_to: string | null; created_at: string; updated_at?: string }
@@ -105,6 +105,10 @@ export function usePartnerScout(userId: string, viewing: boolean) {
     return () => { supabase.removeChannel(ch); document.removeEventListener("visibilitychange", back); };
   }, [userId, load]);
 
+  // Real push for this partner's own answers, so they reach him with the portal closed.
+  // Already allowed on this browser? Quietly (re)subscribe on every visit.
+  useEffect(() => { syncPushOnLoad("partner").then((st) => { partnerPushOn = st === "on"; }); }, []);
+
   // Is the Mac answering? The worker bumps this every ~15s while it's up.
   useEffect(() => {
     const check = async () => {
@@ -182,20 +186,27 @@ export function usePartnerScout(userId: string, viewing: boolean) {
 }
 export type ScoutState = ReturnType<typeof usePartnerScout>;
 
+/** True once this browser is subscribed to the partner's own pushes (then the server sends the popup). */
+let partnerPushOn = false;
+
 /**
- * Ask for notification permission. Must run synchronously inside a click: Safari silently
- * ignores a request made after an await, which is why the old "ask after send" never showed.
+ * Ask for notification permission and subscribe this browser to his Scout answers. The ask
+ * happens synchronously inside the click: Safari silently ignores a request made after an await,
+ * which is why the old "ask after send" never showed.
  */
 export function askNotifyPermission(): Promise<NotificationPermission | "unsupported"> {
   try {
     if (!("Notification" in window)) return Promise.resolve("unsupported");
-    if (Notification.permission !== "default") return Promise.resolve(Notification.permission);
+    if (Notification.permission === "denied") return Promise.resolve("denied");
     registerServiceWorker();
-    return Notification.requestPermission();
+    return enablePush("partner")
+      .then((st) => { partnerPushOn = st === "on"; return Notification.permission; })
+      .catch(() => Notification.permission);
   } catch { return Promise.resolve("unsupported"); } /* iOS Safari outside a home-screen app has no Notification */
 }
 /** An OS notification when an answer lands and he isn't looking at it (other tab, other app, other chat). */
 function notify(m: ScoutMsg) {
+  if (partnerPushOn) return; // the push from the server covers it, even with the portal closed
   const failed = m.status === "error";
   showLocalNotification(failed ? "Scout hit a snag" : "Scout answered", (m.content || "").slice(0, 140), "/partner#scout", "partner-scout");
 }
@@ -273,7 +284,8 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
 
   const send = async (q = text) => {
     if (!q.trim() || sending) return;
-    const permAsk = askNotifyPermission(); // first, while we still have the click
+    // First, while we still have the click, and only the first time.
+    const permAsk = "Notification" in window && Notification.permission === "default" ? askNotifyPermission() : Promise.resolve("unsupported" as const);
     setSending(true); setErr(null);
     jump();
     const { error } = await scout.send(q);

@@ -1,4 +1,4 @@
-import {
+import { Brush,
   LayoutDashboard,
   Settings,
   BarChart3,
@@ -69,7 +69,7 @@ const homeHubItems = [
 
 const turoItems = [
   { title: "Turo Watch", url: "/admin/turo", icon: Car },
-  { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Car },
+  { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Brush },
 ];
 
 // Backup of the account's Claude skills. The copies a session sees on disk are a

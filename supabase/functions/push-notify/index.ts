@@ -1,5 +1,7 @@
 // push-notify — send a real OS notification (Web Push) to every browser subscribed
-// in bestly.tech/admin. Body: { title, body?, severity?: info|warning|critical, url?, tag? }
+// in bestly.tech/admin. Body: { title, body?, severity?: info|warning|critical, url?, tag?, audience?, user_id? }
+// audience "admin" (default) = the admin's browsers. audience "partner" needs a user_id and reaches
+// only that partner's own browsers (partner_chat_push trigger); partner sends are service-role only.
 // Returns { sent: n, failed, removed }.
 //
 // Auth: the service role key (scout_notify via pg_net, other functions) or a signed-in admin.
@@ -20,18 +22,19 @@ const CORS = {
 const J = (o: unknown, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 
-async function authorized(req: Request): Promise<boolean> {
+/** "service" (server-side callers), "admin" (a signed-in admin), or null. */
+async function caller(req: Request): Promise<"service" | "admin" | null> {
   const auth = req.headers.get("Authorization") ?? "";
   const jwt = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (!jwt) return false;
-  if (jwt === SERVICE) return true;
+  if (!jwt) return null;
+  if (jwt === SERVICE) return "service";
   const { data: vaultKey } = await db.rpc("push_service_key_ok", { p_key: jwt });
-  if (vaultKey === true) return true;
+  if (vaultKey === true) return "service";
   const { data: who } = await db.auth.getUser(jwt);
   const uid = who?.user?.id;
-  if (!uid) return false;
+  if (!uid) return null;
   const { data: isAdmin } = await db.rpc("has_role", { _user_id: uid, _role: "admin" });
-  return isAdmin === true;
+  return isAdmin === true ? "admin" : null;
 }
 
 async function vapid() {
@@ -54,7 +57,8 @@ async function vapid() {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return J({ ok: false, error: "POST only" }, 405);
-  if (!(await authorized(req))) return J({ ok: false, error: "unauthorized" }, 401);
+  const who = await caller(req);
+  if (!who) return J({ ok: false, error: "unauthorized" }, 401);
 
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { /* empty body is fine for action:init */ }
@@ -62,6 +66,10 @@ Deno.serve(async (req) => {
   let keys;
   try { keys = await vapid(); } catch (e) { return J({ ok: false, error: String(e) }, 500); }
   if (body.action === "init") return J({ ok: true, public_key: keys.publicKey });
+
+  const audience = body.audience === "partner" ? "partner" : "admin";
+  const userId = body.user_id ? String(body.user_id) : "";
+  if (audience === "partner" && (who !== "service" || !userId)) return J({ ok: false, error: "partner pushes are server-side and need a user_id" }, 403);
 
   const title = String(body.title ?? "").trim().slice(0, 200);
   if (!title) return J({ ok: false, error: "title required" }, 400);
@@ -72,10 +80,14 @@ Deno.serve(async (req) => {
     severity,
     url: body.url ? String(body.url) : "/admin",
     tag: body.tag ? String(body.tag) : undefined,
+    // A partner already looking at the portal doesn't need an OS popup on top.
+    quiet_if_focused: audience === "partner",
   });
 
   webpush.setVapidDetails(keys.subject, keys.publicKey, keys.privateKey);
-  const { data: subs, error } = await db.from("push_subscriptions").select("id, endpoint, keys");
+  let q = db.from("push_subscriptions").select("id, endpoint, keys").eq("audience", audience);
+  if (userId) q = q.eq("user_id", userId);
+  const { data: subs, error } = await q;
   if (error) return J({ ok: false, error: error.message }, 500);
 
   let sent = 0, failed = 0;

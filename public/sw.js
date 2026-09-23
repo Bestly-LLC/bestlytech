@@ -1,4 +1,4 @@
-/* Bestly service worker — Web Push for bestly.tech/admin (and in-page alerts for /partner).
+/* Bestly service worker — Web Push for bestly.tech/admin and for each partner's own Scout answers in /partner.
  *
  * No fetch handler on purpose: this worker never touches page loads or caching.
  * It only turns a push into an OS notification and opens the right page on click.
@@ -28,7 +28,21 @@ self.addEventListener("push", (event) => {
     timestamp: Date.now(),
     data: { url: data.url || "/admin" },
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    (async () => {
+      await self.registration.showNotification(title, options);
+      // Partner Scout answers: if the portal is already on screen and focused, the page shows its
+      // own alert, so drop the OS popup (it must still be shown once, or Safari revokes push).
+      if (data.quiet_if_focused) {
+        const section = new URL(options.data.url, self.location.origin).pathname.split("/")[1];
+        const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        if (wins.some((w) => w.focused && w.visibilityState === "visible" && new URL(w.url).pathname.split("/")[1] === section)) {
+          const shown = await self.registration.getNotifications({ tag: options.tag });
+          shown.forEach((n) => n.close());
+        }
+      }
+    })(),
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
