@@ -184,6 +184,12 @@ Deno.serve(async (req) => {
   }
   const auth = "Basic " + btoa(`${ncUser}:${ncPass}`);
 
+  // Parse cache. A transcript never changes once written, so re-downloading and re-parsing
+  // every one on every list was ~1MB of text and about 15 seconds - long enough that the
+  // page looked empty and the meetings looked lost. Keyed by file name + size: same name
+  // and size means the same bytes.
+  const cacheDb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
   let body: Record<string, unknown> = {};
   try {
     body = await req.json();
@@ -226,8 +232,25 @@ Deno.serve(async (req) => {
 
             let parsed = null;
             if (chosen) {
-              const text = await getText(`${ARCHIVE}/${day.name}/${chosen.name}`, auth);
-              if (text) parsed = parseTranscript(text);
+              const { data: hit } = await cacheDb
+                .from("meetings_parse_cache")
+                .select("parsed, size_bytes")
+                .eq("file_name", chosen.name)
+                .maybeSingle();
+
+              if (hit && Number(hit.size_bytes) === chosen.size) {
+                parsed = hit.parsed;
+              } else {
+                const text = await getText(`${ARCHIVE}/${day.name}/${chosen.name}`, auth);
+                if (text) {
+                  parsed = parseTranscript(text);
+                  // Best effort: a cache write that fails must never fail the listing.
+                  await cacheDb
+                    .from("meetings_parse_cache")
+                    .upsert({ file_name: chosen.name, size_bytes: chosen.size, parsed, cached_at: new Date().toISOString() },
+                            { onConflict: "file_name" });
+                }
+              }
             }
 
             return {
