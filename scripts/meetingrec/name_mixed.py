@@ -30,6 +30,8 @@ R = f"{HERE}/recordings"
 V = f"{HERE}/voices"
 MATCH = 0.40          # a bit is that person when their voiceprint scores this high...
 MARGIN = 0.04         # ...and beats the next voiceprint by this much (Jared and Eli are close)
+ROOM_MATCH = 0.45     # against a voice as it sounds in this recording (built from confident bits)
+ROOM_MARGIN = 0.03
 GROUP = 0.50          # unknown bits this alike are one voice
 NEW_VOICE_S = 60      # an unknown voice needs a minute of speech to count as a person
 ENROLL_MIN_S = 30
@@ -67,6 +69,28 @@ for b in bits:
     if best >= MATCH and best - second >= MARGIN:
         b[4] = pnames[order[0]]
 
+# 2b. the saved voiceprints come from a close mic; a room mic sounds different. So build each
+#     person's voice as it sounds IN THIS RECORDING from their confident bits, and use that to
+#     place the unsure bits (two passes, so the room voices firm up).
+for _ in range(2):
+    room_v = {}
+    for nm in {b[4] for b in bits if b[4]}:
+        vs = [(b[3], b[1] - b[0]) for b in bits if b[4] == nm and b[3] is not None]
+        if sum(w for _, w in vs) >= 30:
+            m = np.sum([v * w for v, w in vs], axis=0)
+            room_v[nm] = m / np.linalg.norm(m)
+    if not room_v:
+        break
+    rn = list(room_v)
+    R_ = np.array([room_v[k] for k in rn])
+    for b in bits:
+        if b[4] is None and b[3] is not None:
+            sc = R_ @ b[3]
+            order = np.argsort(sc)[::-1]
+            best, second = sc[order[0]], (sc[order[1]] if len(order) > 1 else -1.0)
+            if best >= ROOM_MATCH and best - second >= ROOM_MARGIN:
+                b[4] = rn[order[0]]
+
 # 3. bits too short to score take the clear majority of their diarization cluster
 votes = {}
 for b in bits:
@@ -103,10 +127,17 @@ big = sorted([k for k in range(len(groups)) if wts[k] >= NEW_VOICE_S], key=lambd
 missing = [r for r in roster if r not in pnames and r != "jared"]
 learned = []
 n = 1
+room_known = room_v  # the voices as they sound in this recording (step 2b)
 for k in big:
+    c = cents[k] / np.linalg.norm(cents[k])
+    near = max(((nm, float(v @ c)) for nm, v in room_known.items()), key=lambda x: x[1], default=(None, 0.0))
+    if near[1] >= ROOM_MATCH:
+        # a whole group that sounds like someone already here is them, not a new person
+        for b in groups[k]:
+            b[4] = near[0]
+        continue
     if len(big) == 1 and len(missing) == 1:
         nm = missing[0]
-        c = cents[k] / np.linalg.norm(cents[k])
         if wts[k] >= ENROLL_MIN_S:
             np.save(f"{V}/{nm}.npy", c)
             learned.append(nm)
