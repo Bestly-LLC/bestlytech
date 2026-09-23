@@ -403,9 +403,9 @@ function WeekItem({ source, to, label, render, tone = "bento-lime" }: {
   const { value, text, extra } = render();
   return (
     <li className="bento:flex">
-      <Link to={to} className={cn("group inline-flex items-baseline gap-2 rounded-md py-1 pr-1 bento-tile bento:flex bento:w-full bento:flex-col bento:items-start bento:justify-between bento:gap-3 bento:p-5 bento:min-h-[8.5rem] bento:transition-transform bento:hover:-translate-y-0.5", tone, focusRing)}>
+      <Link to={to} className={cn("group inline-flex items-baseline gap-2 rounded-md py-1 pr-1 bento-tile bento:flex bento:w-full bento:min-w-0 bento:flex-col bento:items-start bento:justify-between bento:gap-2 bento:p-4 bento:min-h-[8.5rem] bento:transition-transform bento:hover:-translate-y-0.5", tone, focusRing)}>
         <span className="text-2xl font-medium tabular-nums text-white bento:order-2 bento:text-5xl bento:font-bold bento:tracking-[-0.04em] bento:leading-none">{value.toLocaleString()}</span>
-        <span className="text-sm text-white/70 group-hover:text-white transition-colors bento:order-1 bento:text-[0.8125rem] bento:font-semibold bento:uppercase bento:tracking-wide bento:text-white/80">{text}</span>
+        <span className="text-sm text-white/70 group-hover:text-white transition-colors bento:order-1 bento:text-[0.8125rem] bento:font-semibold bento:uppercase bento:leading-snug bento:tracking-[0.02em] bento:text-white/80 bento:break-words bento:hyphens-auto">{text}</span>
         {extra && <span className="text-sm text-white/55 bento:order-3 bento:text-xs bento:text-white/70">{extra}</span>}
       </Link>
     </li>
@@ -709,11 +709,11 @@ export default function AdminDashboard() {
       </section>
 
       {/* 3 ─ This week */}
-      <section aria-labelledby="week-title">
+      <section aria-labelledby="week-title" className="col-[1/-1]">
         <SectionTitle id="week-title" aside={<p className="text-xs text-white/55">New = last 7 days</p>}>
           This week
         </SectionTitle>
-        <ul className="flex flex-col gap-y-1 sm:flex-row sm:flex-wrap sm:gap-x-8 bento:grid bento:grid-cols-1 sm:bento:grid-cols-2 xl:bento:grid-cols-4 bento:gap-4 sm:bento:gap-4">
+        <ul className="flex flex-col gap-y-1 sm:flex-row sm:flex-wrap sm:gap-x-8 bento:grid bento:grid-cols-[repeat(auto-fit,minmax(min(13rem,100%),1fr))] bento:gap-4">
           <WeekItem
             source={deals}
             to="/admin/cloud"
