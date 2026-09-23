@@ -1,9 +1,9 @@
-import { lazy } from "react";
+import { lazyPage } from "@/lib/lazyPage";
 import { SectionTabs } from "@/components/admin/SectionTabs";
 
-const CYProductAnalytics = lazy(() => import("./CYProductAnalytics"));
-const CYDashboard = lazy(() => import("./CYDashboard"));
-const CommunityLearning = lazy(() => import("./CommunityLearning"));
+const CYProductAnalytics = lazyPage(() => import("./CYProductAnalytics"));
+const CYDashboard = lazyPage(() => import("./CYDashboard"));
+const CommunityLearning = lazyPage(() => import("./CommunityLearning"));
 
 /** Cookie Yeti → Analytics: Product, Operations, Community Learning. */
 export default function CookieYetiAnalytics() {

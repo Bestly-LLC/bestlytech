@@ -68,6 +68,18 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
+      if (isStaleChunkError(this.state.error)) {
+        // A new version shipped while this tab was open; the reload is already on its way.
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-background p-6">
+            <div className="max-w-md w-full text-center space-y-4">
+              <h1 className="text-xl font-semibold">Loading the new version…</h1>
+              <p className="text-sm text-muted-foreground">We shipped an update while this page was open.</p>
+              <Button onClick={() => window.location.assign(window.location.href)}>Load it now</Button>
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="min-h-screen flex items-center justify-center bg-background p-6">
           <div className="max-w-md w-full text-center space-y-4">

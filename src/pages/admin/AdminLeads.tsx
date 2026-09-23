@@ -1,10 +1,10 @@
-import { lazy } from "react";
+import { lazyPage } from "@/lib/lazyPage";
 import { SectionTabs } from "@/components/admin/SectionTabs";
 
-const LeadsCRM = lazy(() => import("@/components/admin/LeadsCRM"));
-const CloudDeals = lazy(() => import("./CloudDeals"));
-const AdminSubmissions = lazy(() => import("./AdminSubmissions"));
-const AdminHireRequests = lazy(() => import("./AdminHireRequests"));
+const LeadsCRM = lazyPage(() => import("@/components/admin/LeadsCRM"));
+const CloudDeals = lazyPage(() => import("./CloudDeals"));
+const AdminSubmissions = lazyPage(() => import("./AdminSubmissions"));
+const AdminHireRequests = lazyPage(() => import("./AdminHireRequests"));
 
 /** Work → Leads: every lead in one pipeline, plus each funnel's own working view. */
 export default function AdminLeads() {

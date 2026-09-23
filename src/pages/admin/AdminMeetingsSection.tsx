@@ -1,6 +1,7 @@
-import { lazy, Suspense } from "react";
+import { lazyPage } from "@/lib/lazyPage";
+import { Suspense } from "react";
 
-const AdminMeetings = lazy(() => import("./AdminMeetings"));
+const AdminMeetings = lazyPage(() => import("./AdminMeetings"));
 
 /**
  * Work -> Meetings: one list of calls, in the order they were recorded - the ones the Mac mini

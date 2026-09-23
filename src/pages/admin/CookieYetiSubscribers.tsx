@@ -1,8 +1,8 @@
-import { lazy } from "react";
+import { lazyPage } from "@/lib/lazyPage";
 import { SectionTabs } from "@/components/admin/SectionTabs";
 
-const CYSubscribers = lazy(() => import("./CYSubscribers"));
-const CYGrantedAccess = lazy(() => import("./CYGrantedAccess"));
+const CYSubscribers = lazyPage(() => import("./CYSubscribers"));
+const CYGrantedAccess = lazyPage(() => import("./CYGrantedAccess"));
 
 /** Cookie Yeti → Subscribers: Subscribers, Granted Access. */
 export default function CookieYetiSubscribers() {

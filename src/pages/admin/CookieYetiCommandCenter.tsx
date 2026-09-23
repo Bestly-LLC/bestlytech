@@ -1,9 +1,9 @@
-import { lazy } from "react";
+import { lazyPage } from "@/lib/lazyPage";
 import { SectionTabs } from "@/components/admin/SectionTabs";
 
-const CYCommandCenter = lazy(() => import("./CYCommandCenter"));
-const CYAutoFixMonitor = lazy(() => import("./CYAutoFixMonitor"));
-const CYDomains = lazy(() => import("./CYDomains"));
+const CYCommandCenter = lazyPage(() => import("./CYCommandCenter"));
+const CYAutoFixMonitor = lazyPage(() => import("./CYAutoFixMonitor"));
+const CYDomains = lazyPage(() => import("./CYDomains"));
 
 /** Cookie Yeti → Command Center: Overview, Auto-Fix, Domains. */
 export default function CookieYetiCommandCenter() {
