@@ -15,7 +15,7 @@ import { CarCard, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, typ
 import { renderPassImage } from "./lax/passImage";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; controls?: boolean; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -224,7 +224,7 @@ export default function LaxGuest() {
             {pub.trip || pub.car ? (
               <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
                 <WeatherCard trip={pub.trip ?? null} compact />
-                <CarCard trip={pub.trip ?? null} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && pub.controls ? carCommand : undefined} />
+                <CarCard trip={pub.trip ?? null} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && pub.controls ? carCommand : undefined} lockedUntil={!demoCar && pub.controls_state === "soon" ? pub.controls_opens_at ?? null : null} />
               </div>
             ) : (
               <div className="mt-2.5"><WeatherCard trip={null} /></div>

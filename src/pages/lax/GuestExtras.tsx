@@ -225,7 +225,7 @@ const CLIMATE: { id: ClimateAction; label: string; sub: string; icon: typeof Sno
 ];
 
 /** Climate buttons. Live mode is wired once Tesla access is connected; demo mode only shows what would happen. */
-function ClimateControls({ demo, onAction, compact = false }: { demo: boolean; onAction?: (a: ClimateAction) => Promise<void>; compact?: boolean }) {
+function ClimateControls({ demo, onAction, compact = false, lockedUntil }: { demo: boolean; onAction?: (a: ClimateAction) => Promise<void>; compact?: boolean; lockedUntil?: string | null }) {
   const [busy, setBusy] = useState<ClimateAction | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const press = async (a: (typeof CLIMATE)[number]) => {
@@ -245,8 +245,8 @@ function ClimateControls({ demo, onAction, compact = false }: { demo: boolean; o
         {CLIMATE.map((a) => {
           const Icon = a.icon;
           return (
-            <button key={a.id} type="button" onClick={() => press(a)} disabled={busy !== null}
-              className={`flex items-center gap-2.5 rounded-xl bg-white/[0.08] text-left ring-1 ring-white/10 transition active:scale-[0.98] disabled:opacity-60 ${compact ? "min-h-[44px] px-2.5 py-1.5" : "min-h-[56px] px-3 py-2.5"}`}>
+            <button key={a.id} type="button" onClick={() => press(a)} disabled={busy !== null || !!lockedUntil} aria-disabled={!!lockedUntil}
+              className={`flex items-center gap-2.5 rounded-xl bg-white/[0.08] text-left ring-1 ring-white/10 transition active:scale-[0.98] disabled:opacity-40 disabled:saturate-0 ${compact ? "min-h-[44px] px-2.5 py-1.5" : "min-h-[56px] px-3 py-2.5"}`}>
               {busy === a.id ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" style={{ color: PEACH }} /> : <Icon className="h-5 w-5 shrink-0" style={{ color: PEACH }} />}
               <span><span className="block text-[14px] font-semibold leading-tight text-white">{a.label}</span>{!compact && <span className="block text-[12px] text-white/55">{a.sub}</span>}</span>
             </button>
@@ -254,14 +254,17 @@ function ClimateControls({ demo, onAction, compact = false }: { demo: boolean; o
         })}
       </div>
       <p className="mt-2 min-h-[1.25rem] text-[12px] leading-snug text-emerald-300" aria-live="polite">{done}</p>
-      <p className="text-[11px] leading-snug text-white/45">{demo ? "Preview only. Not connected to the car yet." : "Works 1 hour before pickup until your trip ends."}</p>
+      <p className="text-[11px] leading-snug text-white/55">
+        {demo ? "Preview only. Not connected to the car yet."
+          : lockedUntil ? <>Turns on <b className="text-white/80">{fmtWhen(lockedUntil)}</b>, or as soon as your phone key is connected.</>
+          : "Works until your trip ends."}
+      </p>
     </div>
   );
 }
 
-export function CarCard({ trip, car, demo = false, onClimate, compact = false }: { trip: Trip | null; car: CarState | null; demo?: boolean; onClimate?: (a: ClimateAction) => Promise<void>; compact?: boolean }) {
+export function CarCard({ trip, car, demo = false, onClimate, compact = false, lockedUntil }: { trip: Trip | null; car: CarState | null; demo?: boolean; onClimate?: (a: ClimateAction) => Promise<void>; compact?: boolean; lockedUntil?: string | null }) {
   if (compact) {
-    const beforeWindow = trip ? new Date(trip.car_opens_at) > new Date() : false;
     const asleep = car?.online === "asleep" || car?.online === "offline";
     return (
       <div className="flex h-full flex-col rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
@@ -272,7 +275,7 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false }:
               <p className="mt-1.5 flex items-baseline gap-1.5 text-[13px] text-white/70">Inside <b className="text-[28px] font-semibold leading-none text-white tabular-nums">{Math.round(car.inside_f)}°</b></p>
             )}
             {car.battery != null && (
-              <p className="mt-1 flex items-center gap-1.5 text-[13px] text-white/80"><BatteryMedium className="h-4 w-4 text-emerald-300" /><b className="text-white">{car.battery}%</b> charged{car.range != null && ` · ${Math.round(car.range)} mi`}</p>
+              <p className="mt-1 flex items-center gap-1.5 text-[13px] text-white/80"><BatteryMedium className="h-4 w-4 shrink-0 text-emerald-300" /><b className="text-white">{car.battery}%</b>{car.range != null && <span className="whitespace-nowrap">· {Math.round(car.range)} mi</span>}</p>
             )}
             {car.climate_on && <p className="mt-1 flex items-center gap-1.5 text-[12px] font-semibold text-sky-200"><Snowflake className="h-3.5 w-3.5" />Climate is on</p>}
             <p className="mt-1 text-[11px] text-white/45">{asleep ? "Parked · " : ""}Updated {ago(car.observed_at)}</p>
@@ -280,10 +283,8 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false }:
         ) : (
           <p className="mt-1.5 text-[13px] leading-snug text-white/70">{onClimate ? "Parked and asleep. Tap a button and it wakes up." : "Car info isn't available right now."}</p>
         )}
-        {(demo || onClimate) ? (
-          <ClimateControls demo={demo} onAction={onClimate} compact />
-        ) : trip && beforeWindow ? (
-          <p className="mt-auto pt-3 text-[12px] leading-snug text-white/60"><b className="text-white">A/C buttons</b> turn on {fmtWhen(trip.car_opens_at)}, an hour before pickup.</p>
+        {(demo || onClimate || lockedUntil) ? (
+          <ClimateControls demo={demo} onAction={onClimate} compact lockedUntil={lockedUntil} />
         ) : !trip ? (
           <p className="mt-auto pt-3 text-[12px] leading-snug text-white/60">A/C buttons are on your personal trip link from your host.</p>
         ) : null}
