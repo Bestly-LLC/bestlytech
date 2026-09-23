@@ -15,6 +15,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { WeatherGlyph } from "@/components/admin/WeatherGlyph";
+import { WeatherBoard, type WxData, type WxDay, type WxHour } from "@/components/admin/WeatherBoard";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 /** Home. Everything else on this dashboard is Jared's day, so this is too. */
@@ -44,12 +46,14 @@ export function WeatherNow({ className }: { className?: string }) {
   const [now, setNow] = useState<Current | null>(null);
   const [today, setToday] = useState<Day | null>(null);
   const [failed, setFailed] = useState(false);
+  const [board, setBoard] = useState<WxData | null>(null);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
       const { data, error } = await supabase.functions.invoke("weatherkit-proxy", {
-        body: { lat: HOME.lat, lon: HOME.lon, dataSets: "currentWeather,forecastDaily" },
+        body: { lat: HOME.lat, lon: HOME.lon, dataSets: "currentWeather,forecastHourly,forecastDaily" },
       });
       if (!alive) return;
       const cw = (data as { currentWeather?: Current })?.currentWeather;
@@ -58,8 +62,15 @@ export function WeatherNow({ className }: { className?: string }) {
         setFailed(true);
         return;
       }
+      const d = data as { forecastDaily?: { days?: WxDay[] }; forecastHourly?: { hours?: WxHour[] } };
       setNow(cw);
-      setToday((data as { forecastDaily?: { days?: Day[] } })?.forecastDaily?.days?.[0] ?? null);
+      setToday(d.forecastDaily?.days?.[0] ?? null);
+      setBoard({
+        current: cw,
+        hours: d.forecastHourly?.hours ?? [],
+        days: d.forecastDaily?.days ?? [],
+        attribution: cw.metadata?.attributionURL ?? ATTRIBUTION,
+      });
       setFailed(false);
     };
     load();
@@ -78,9 +89,15 @@ export function WeatherNow({ className }: { className?: string }) {
   const drift = feels != null && temp != null && Math.abs(feels - temp) >= 3;
 
   return (
+    <>
     <div
+      role="button"
+      tabIndex={0}
+      onClick={(e) => { if (!(e.target as HTMLElement).closest("a")) setOpen(true); }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
+      aria-label={`Weather: ${temp} degrees, ${words(code)}. Open the forecast`}
       className={cn(
-        "flex items-center gap-3 rounded-[1.25rem] px-3.5 py-2.5",
+        "flex cursor-pointer items-center gap-3 rounded-[1.25rem] px-3.5 py-2.5 transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
         "bg-white/[0.05] ring-1 ring-inset ring-white/[0.07]",
         "bento:bg-[#F3F2EE] bento:ring-[#e6e4de]",
         className,
@@ -113,5 +130,13 @@ export function WeatherNow({ className }: { className?: string }) {
         </p>
       </div>
     </div>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-6xl overflow-y-auto border-white/10 bg-[#07090d] p-3 text-white sm:p-4 bento:bg-[#F3F2EE] bento:text-[#17151c]">
+        <DialogTitle className="sr-only">Weather in {HOME.label}</DialogTitle>
+        <DialogDescription className="sr-only">Now, the next hours, and the next ten days.</DialogDescription>
+        {board && <WeatherBoard data={board} place={HOME.label} />}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
