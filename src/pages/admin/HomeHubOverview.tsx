@@ -11,6 +11,7 @@ import {
 } from "@/services/homeHubApi";
 import { pollInterval } from "@/lib/polling";
 import { AgentUpgradeBanner, useSnapshot } from "@/components/admin/homeHub/shared";
+import { NetworkCard } from "@/components/admin/homeHub/NetworkCard";
 import type { HaSnapshot, HbSnapshot } from "@/services/homeHubApi";
 import { Shield, Cpu, RefreshCw, ArrowRight, CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, History } from "lucide-react";
 
@@ -90,7 +91,7 @@ export default function HomeHubOverview() {
     <div className="space-y-6">
       <PageHeader
         title="Home Hub"
-        description="The Pi agent, Pi-hole, Home Assistant and Homebridge"
+        description="The Pi agent, your home network, Pi-hole, Home Assistant and Homebridge"
         actions={
           <>
             <Button asChild variant="outline" className="border-white/15 text-white/85 hover:text-white hover:bg-white/5">
@@ -181,6 +182,8 @@ export default function HomeHubOverview() {
       </div>
 
       <AgentUpgradeBanner agent={agent} />
+
+      <NetworkCard />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[

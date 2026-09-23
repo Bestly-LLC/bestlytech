@@ -198,7 +198,7 @@ export async function enqueuePiholeCommand(action: PiholeAction, payload: Record
   return enqueueCommand("pihole", action, payload);
 }
 
-export type CommandTarget = "pihole" | "homeassistant" | "homebridge" | "agent";
+export type CommandTarget = "pihole" | "homeassistant" | "homebridge" | "agent" | "nextcloud" | "network" | "router";
 
 /** Queue any command in the contract (docs/home-hub-agent.md). The server rejects anything else. */
 export async function enqueueCommand(target: CommandTarget, action: string, payload: Record<string, unknown> = {}): Promise<HomeHubCommand> {
@@ -242,6 +242,16 @@ export const ACTION_LABELS: Record<string, string> = {
   refresh: "Refresh snapshot",
   toggle_automation: "Switch automation",
   update: "Update agent",
+  find_device: "Scan devices",
+  diagnose: "Check the network",
+  domain: "Look up a website",
+  ping: "Ping",
+  dns: "Look up a name",
+  speed: "Speed test",
+  probe: "Check the router",
+  recent_blocked: "Recently blocked",
+  allow: "Unblock a website",
+  unallow: "Block it again",
 };
 
 export const TARGET_LABELS: Record<string, string> = {
@@ -249,6 +259,9 @@ export const TARGET_LABELS: Record<string, string> = {
   homeassistant: "Home Assistant",
   homebridge: "Homebridge",
   agent: "Agent",
+  nextcloud: "Nextcloud",
+  network: "Network",
+  router: "Router",
 };
 
 /** Human-readable outcome of a command, using whatever the agent reported. */
@@ -446,4 +459,69 @@ export function inventoryAsText(items: InventoryItem[], host: HostSnapshot | nul
     for (const v of vault) lines.push(`- ${v.name}: ${v.description ?? ""} (updated ${v.updated_at.slice(0, 10)})`);
   }
   return lines.join("\n");
+}
+
+/* ───────── Home network (agent >= 1.5.0) ───────── */
+// `home_hub_network_samples`: one row every 5 minutes from the Pi — ping to the router and to the
+// internet, and how long a Pi-hole lookup took. Device scans are network.find_device commands.
+
+export interface NetworkSample {
+  capturedAt: string;
+  gwLossPct: number | null;
+  gwAvgMs: number | null;
+  inetLossPct: number | null;
+  inetAvgMs: number | null;
+  inetMaxMs: number | null;
+  dnsMs: number | null;
+  dnsOk: boolean | null;
+}
+
+/** Samples from the last `hours` hours, oldest first. */
+export async function fetchNetworkSamples(hours = 24): Promise<NetworkSample[]> {
+  const since = new Date(Date.now() - hours * 3600_000).toISOString();
+  const { data, error } = await db
+    .from("home_hub_network_samples")
+    .select("captured_at, gw_loss_pct, gw_avg_ms, inet_loss_pct, inet_avg_ms, inet_max_ms, dns_ms, dns_ok")
+    .gte("captured_at", since)
+    .order("captured_at", { ascending: true })
+    .limit(1000);
+  if (error) throw toError("Couldn't load network history", error);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    capturedAt: r.captured_at,
+    gwLossPct: r.gw_loss_pct, gwAvgMs: r.gw_avg_ms,
+    inetLossPct: r.inet_loss_pct, inetAvgMs: r.inet_avg_ms, inetMaxMs: r.inet_max_ms,
+    dnsMs: r.dns_ms, dnsOk: r.dns_ok,
+  }));
+}
+
+export interface LanDevice {
+  ip: string;
+  mac: string | null;
+  name: string | null;
+  vendor: string | null;
+  answersPing: boolean;
+  pingMs: number | null;
+}
+
+export interface LanScan { at: string; devices: LanDevice[] }
+
+/** The newest finished full device scan (network.find_device with no filter), or null. */
+export async function fetchLatestScan(): Promise<LanScan | null> {
+  const { data, error } = await db
+    .from("home_hub_commands")
+    .select("completed_at, created_at, payload, result")
+    .eq("target", "network").eq("action", "find_device").eq("status", "done")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (error) throw toError("Couldn't load the device scan", error);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const row = (data ?? []).find((r: any) => !r.payload?.match && Array.isArray(r.result?.lan?.devices));
+  if (!row) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const devices = (row.result.lan.devices as any[]).map((d) => ({
+    ip: String(d.ip), mac: d.mac ?? null, name: d.name ?? null, vendor: d.vendor ?? null,
+    answersPing: !!d.answers_ping, pingMs: typeof d.ping_ms === "number" ? d.ping_ms : null,
+  }));
+  return { at: row.completed_at ?? row.created_at, devices };
 }
