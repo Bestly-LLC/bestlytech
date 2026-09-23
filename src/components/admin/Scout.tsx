@@ -223,6 +223,23 @@ export function Scout() {
   // On a phone Scout is the whole screen: the draggable box, the resize grips and the
   // saved position are desktop furniture and get ignored rather than shrunk.
   const phone = useIsMobile();
+  // iOS slides the keyboard over a fixed panel rather than resizing the page, so the
+  // composer ends up underneath it. visualViewport is the only thing that knows how
+  // much screen is actually left; the sheet takes its height from that.
+  const [kb, setKb] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!phone || !vv || !open) return;
+    const on = () => setKb(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    on();
+    vv.addEventListener("resize", on);
+    vv.addEventListener("scroll", on);
+    return () => {
+      vv.removeEventListener("resize", on);
+      vv.removeEventListener("scroll", on);
+      setKb(0);
+    };
+  }, [phone, open]);
   const [closing, setClosing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [settling, setSettling] = useState(false);
@@ -601,7 +618,7 @@ export function Scout() {
       <section
         ref={sectionRef}
         aria-label="Scout"
-        style={box && !phone ? { left: box.x, top: box.y, width: box.w, height: box.h } : undefined}
+        style={box && !phone ? { left: box.x, top: box.y, width: box.w, height: box.h } : phone && kb ? { bottom: kb } : undefined}
         className={cn(
           "scout-pop-in scout-panel fixed z-40 flex flex-col overflow-hidden rounded-2xl shadow-2xl",
           closing && "scout-closing",
@@ -628,9 +645,9 @@ export function Scout() {
           <svg viewBox="0 0 10 10" className="absolute bottom-1 right-1 h-2.5 w-2.5 text-white/30"><path d="M9 1L1 9M9 5L5 9" stroke="currentColor" strokeWidth="1.2" /></svg>
         </div>
         <div
-          onPointerDown={(e) => startDrag(e, "move")}
+          onPointerDown={(e) => !phone && startDrag(e, "move")}
           onDoubleClick={resetBox}
-          className="flex cursor-default items-center gap-1.5 border-b border-white/[0.06] px-2.5 py-2.5 sm:cursor-grab sm:active:cursor-grabbing"
+          className="flex cursor-default items-center gap-1.5 border-b border-white/[0.06] px-2.5 py-2 sm:cursor-grab sm:active:cursor-grabbing"
         >
           {view === "history" ? (
             <Button
@@ -641,7 +658,7 @@ export function Scout() {
                 setView("chat");
               }}
               aria-label="Back to the conversation"
-              className="h-8 w-8 shrink-0 border-0 text-white/60 hover:bg-white/5 hover:text-white"
+              className="h-10 w-10 shrink-0 border-0 text-white/60 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
@@ -669,7 +686,7 @@ export function Scout() {
               onClick={resetBox}
               aria-label="Put Scout back in the corner"
               title="Put back in the corner"
-              className="scout-press h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
+              className="scout-press h-10 w-10 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
             >
               <RotateCcw className="h-3.5 w-3.5" />
             </Button>
@@ -681,7 +698,7 @@ export function Scout() {
                 size="icon"
                 onClick={newChat}
                 aria-label="New conversation"
-                className="scout-press h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
+                className="scout-press h-10 w-10 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -694,7 +711,7 @@ export function Scout() {
                   setView("history");
                 }}
                 aria-label="History"
-                className="scout-press h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
+                className="scout-press h-10 w-10 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
               >
                 <MessagesSquare className="h-4 w-4" />
               </Button>
@@ -706,7 +723,7 @@ export function Scout() {
             size="icon"
             onClick={close}
             aria-label="Close Scout"
-            className="scout-press h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
+            className="scout-press h-10 w-10 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -791,7 +808,7 @@ export function Scout() {
         ) : (
           <div key="chat" className={cn("flex min-h-0 flex-1 flex-col", viewDir === "back" ? "scout-view-back" : "")}>
           <RecorderBar state={rec} latest={lastCall} refresh={refreshRec} onDebrief={debrief} />
-          <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto scroll-smooth px-4 py-4">
+          <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto overscroll-contain scroll-smooth px-3 py-4 sm:px-4">
             {msgs.length === 0 && (
               <>
                 <p className="text-sm text-white/80">
@@ -837,13 +854,13 @@ export function Scout() {
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </span>
-                    <p className="max-w-[80%] rounded-2xl rounded-br-sm bg-white px-3 py-2 text-sm text-black">
+                    <p className="max-w-[85%] break-words rounded-2xl rounded-br-sm bg-white px-3 py-2 text-[0.9375rem] text-black sm:max-w-[80%] sm:text-sm">
                       {m.body}
                     </p>
                   </div>
                 ) : (
                   <div className="flex items-start gap-1">
-                    <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm leading-relaxed text-white/90">
+                    <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[0.9375rem] leading-relaxed text-white/90 sm:text-sm">
                       {m.body}
                     </p>
                     <Button
@@ -906,20 +923,23 @@ export function Scout() {
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  // On a phone Return is the only Return there is, so it types a newline
+                  // and the button sends. On a keyboard, Enter sends and Shift+Enter wraps.
+                  if (e.key === "Enter" && !e.shiftKey && !phone) {
                     e.preventDefault();
                     send(text, editing);
                   }
                 }}
+                enterKeyHint={phone ? "enter" : "send"}
                 placeholder="Ask, or say what to change..."
-                className="max-h-28 min-h-[2.375rem] flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-white/40 focus:border-white/25 focus:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="max-h-28 min-h-[2.75rem] flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-base sm:min-h-[2.375rem] sm:text-sm text-white transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-white/40 focus:border-white/25 focus:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
               <Button
                 size="icon"
                 onClick={() => send(text, editing)}
                 disabled={busy || !text.trim()}
                 aria-label="Send to Scout"
-                className="scout-press h-[2.375rem] w-[2.375rem] shrink-0 bg-white text-black transition-opacity hover:bg-white/90 disabled:opacity-40"
+                className="scout-press h-11 w-11 shrink-0 bg-white text-black transition-opacity hover:bg-white/90 disabled:opacity-40 sm:h-[2.375rem] sm:w-[2.375rem]"
               >
                 <CornerDownLeft className="h-4 w-4" />
               </Button>
