@@ -8,10 +8,9 @@ import { useAdminTheme } from "@/hooks/useAdminTheme";
  *
  * tone="dark" is the admin and partner loader: the binoculars, white on the black shell.
  *
- * The mark is deliberately STILL here. Everywhere else it glances, blinks and follows the
- * cursor, and that is the point of it - but a loading screen is the one place the eyes have
- * nothing to react to, so the motion reads as a glitch rather than as character. It holds
- * still until there is something to look at.
+ * The mark MOVES here: the side-eye glance and blink, phase-locked with the boot splash so it
+ * never restarts mid-look. A still version shipped once (c29f26a) and Jared asked for the
+ * motion back - don't pass animated={false} on a loader.
  */
 export function BrandLoader({
   tone = "light",
@@ -37,7 +36,7 @@ export function BrandLoader({
       )}
     >
       {tone === "dark" ? (
-        <AdminMark animated={false} watchCursor={false} className="h-28 w-28" />
+        <AdminMark className="h-28 w-28" />
       ) : (
         <div className="brand-loader-mark flex h-24 w-24 items-center justify-center">
           <img src="/bestly-mark.webp" alt="" width={84} height={84} decoding="async" fetchPriority="high" />

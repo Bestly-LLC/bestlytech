@@ -255,10 +255,9 @@ export function PartnerHome({ session }: { session: Session }) {
   const shell = cn("admin-shell min-h-dvh text-white", bento ? "admin-bento bg-[#F3F2EE]" : "bg-black");
 
   if (partner === undefined) {
-    // The binoculars, held still - the same mark the boot splash and BrandLoader show, so one
-    // load is one mark rather than logo -> binoculars -> globe. The globe below is identity,
-    // not loading, so it keeps its wobble.
-    return <div className={cn(shell, "grid place-items-center")}><AdminMark animated={false} watchCursor={false} className="h-24 w-24" label="Loading" /></div>;
+    // The binoculars, glancing - the same mark (and the same point in its cycle) the boot splash
+    // and BrandLoader show, so one load is one mark rather than logo -> binoculars -> globe.
+    return <div className={cn(shell, "grid place-items-center")}><AdminMark className="h-24 w-24" label="Loading" /></div>;
   }
   if (!partner && !admin) {
     return (

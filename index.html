@@ -103,7 +103,7 @@
         // Inline the side-eye mark (no network wait, no flash of the marketing logo). Same markup
         // and classes as AdminMark.tsx, so React's loaders pick up the glance mid-cycle.
         document.querySelector("#boot-splash .mark").innerHTML =
-          '<svg class="am-still" viewBox="0 0 72 72" style="width:112px;height:112px;color:' + (adminLight ? "#111114" : "#fff") + '" aria-hidden="true">' +
+          '<svg viewBox="0 0 72 72" style="width:112px;height:112px;color:' + (adminLight ? "#111114" : "#fff") + '" aria-hidden="true">' +
           '<defs><mask id="bm" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72"><rect width="72" height="72" fill="#fff"/><circle cx="19" cy="44" r="10.3"/><circle cx="53" cy="44" r="10.3"/></mask>' +
           '<clipPath id="bcl"><circle cx="19" cy="44" r="10.7"/></clipPath><clipPath id="bcr"><circle cx="53" cy="44" r="10.7"/></clipPath>' +
           '<mask id="bpm" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72"><rect width="72" height="72" fill="#fff"/><g class="am-lidL"><rect x="0" y="10" width="40" height="34.8"/></g><g class="am-lidR"><rect x="32" y="10" width="40" height="34.8"/></g></mask></defs>' +
