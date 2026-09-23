@@ -17,6 +17,7 @@ import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { LaxGuests } from "./LaxGuests";
 import { HostPassCard, TeslaCard } from "./TeslaCard";
+import { AskCard } from "./AskCard";
 
 type CodeRow = { id: string; payload: string; valid_month: string; note: string | null; created_at: string; is_this_month?: boolean };
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string };
@@ -243,6 +244,7 @@ export default function LaxPass() {
       {st && <GuideCard guide={st.guide ?? {}} onSaved={load} />}
       <HostPassCard />
       <TeslaCard />
+      <AskCard />
 
       {/* Guest link */}
       {st && (

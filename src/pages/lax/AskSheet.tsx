@@ -1,0 +1,133 @@
+/**
+ * "Ask a question" helper for the LAX guest page. Free: Gemini free tier first, then the Mac mini's
+ * local model, then the FAQ (all decided server-side in the lax-ask edge function + lax_ask_poll).
+ * Opens in the same luggage bottom sheet as Pickup / Return.
+ */
+import { useEffect, useRef, useState } from "react";
+import { ArrowUp, MessageCircleQuestion } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { TripSheet } from "./TripSheet";
+
+const PEACH = "#FFB878";
+type Msg = { id: number | string; role: "user" | "assistant"; content: string; status?: string };
+const rpc = (fn: string, args?: Record<string, unknown>) =>
+  supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
+
+const SUGGEST = ["Where do I catch the shuttle?", "How hot is the car right now?", "How do I unlock the Tesla?", "How do I return the car?", "The QR code won't scan"];
+
+/** Floating luggage-tag button that opens the helper. Sits just above the Pickup / Return bar. */
+export function AskButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button type="button" onClick={onOpen}
+      className="fixed right-4 z-40 flex h-11 items-center gap-2 rounded-full bg-[#EDE7FF] pl-3 pr-4 text-[15px] font-bold text-[#1A1140] shadow-lg shadow-black/40 ring-2 ring-[#1A1140]/20 active:scale-95 motion-reduce:transition-none"
+      style={{ bottom: "calc(max(10px, env(safe-area-inset-bottom)) + 84px)" }}>
+      <MessageCircleQuestion className="h-5 w-5" aria-hidden /> Ask a question
+    </button>
+  );
+}
+
+function Dots() {
+  return (
+    <span className="inline-flex gap-1 py-1" aria-label="Thinking">
+      {[0, 1, 2].map((i) => <span key={i} className="h-2 w-2 animate-bounce rounded-full bg-white/60 motion-reduce:animate-none" style={{ animationDelay: `${i * 140}ms` }} />)}
+    </span>
+  );
+}
+
+export function AskSheet({ open, onClose, token, slug }: { open: boolean; onClose: () => void; token?: string; slug?: string }) {
+  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [left, setLeft] = useState<number | null>(null);
+  const [urgent, setUrgent] = useState(false);
+  const loaded = useRef(false);
+  const body = useRef<HTMLDivElement>(null);
+  const who = { p_token: token || null, p_slug: token ? null : slug || null };
+
+  useEffect(() => {
+    if (!open || loaded.current) return;
+    loaded.current = true;
+    rpc("lax_ask_history", who).then(({ data }) => { if (Array.isArray(data) && data.length) setMsgs(data as Msg[]); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  useEffect(() => { body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" }); }, [msgs, open]);
+
+  const patch = (id: Msg["id"], m: Partial<Msg>) => setMsgs((xs) => xs.map((x) => (x.id === id ? { ...x, ...m } : x)));
+
+  const send = async (q: string) => {
+    q = q.trim();
+    if (!q || busy) return;
+    setBusy(true); setText("");
+    const tmp = `a${Date.now()}`;
+    setMsgs((xs) => [...xs, { id: `u${Date.now()}`, role: "user", content: q }, { id: tmp, role: "assistant", content: "", status: "pending" }]);
+    try {
+      const { data, error } = await supabase.functions.invoke("lax-ask", { body: { token: token || undefined, slug: token ? undefined : slug, question: q } });
+      const r = data as { ok: boolean; error?: string; reply_id?: number; status?: string; content?: string; left?: number; urgent?: boolean } | null;
+      if (error || !r?.ok || !r.reply_id) { patch(tmp, { content: r?.error ?? "The helper hit a snag. Try again, or message your host in the Turo app.", status: "error" }); return; }
+      if (r.left != null) setLeft(r.left);
+      if (r.urgent || /accident|crash|hurt|injur|emergency|911/i.test(q)) setUrgent(true);
+      if (r.status === "done") { patch(tmp, { id: r.reply_id, content: r.content ?? "", status: "done" }); return; }
+      patch(tmp, { id: r.reply_id });
+      for (let i = 0; i < 60; i++) {
+        await new Promise((res) => setTimeout(res, 1200));
+        const { data: p } = await rpc("lax_ask_poll", { ...who, p_reply_id: r.reply_id });
+        const a = p as { status: string; content: string } | null;
+        if (!a) continue;
+        patch(r.reply_id, { content: a.content, status: a.status });
+        if (a.status === "done" || a.status === "error") return;
+      }
+      patch(r.reply_id, { content: "That took too long. Try again, or message your host in the Turo app.", status: "error" });
+    } finally { setBusy(false); }
+  };
+
+  const footer = (
+    <form onSubmit={(e) => { e.preventDefault(); send(text); }} className="flex items-end gap-2">
+      <label className="sr-only" htmlFor="ask-input">Your question</label>
+      <textarea id="ask-input" rows={1} value={text} maxLength={500} placeholder="Ask about the shuttle, garage, car…"
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(text); } }}
+        className="max-h-28 min-h-[48px] flex-1 resize-none rounded-2xl bg-white/[0.08] px-4 py-3 text-[16px] text-white placeholder:text-white/40 outline-none ring-1 ring-white/15 focus:ring-2 focus:ring-[#FFB878]" />
+      <button type="submit" disabled={busy || !text.trim()} aria-label="Send"
+        className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-[#1A1140] transition active:scale-95 disabled:opacity-40" style={{ background: PEACH }}>
+        <ArrowUp className="h-5 w-5" strokeWidth={2.5} />
+      </button>
+    </form>
+  );
+
+  return (
+    <TripSheet open={open} onClose={onClose} kicker="Trip helper · free" title="Ask a question" footer={footer} bodyRef={body}>
+      {urgent && (
+        <div className="mb-3 rounded-xl bg-[#E4527A]/20 p-3 text-[14px] font-semibold leading-snug text-white ring-1 ring-[#E4527A]/50">
+          If anyone is hurt, call 911 first. Then use Roadside Assistance in the Turo app and message your host there.
+        </div>
+      )}
+      {msgs.length === 0 ? (
+        <div>
+          <p className="text-[15px] leading-relaxed text-white/75">Ask anything about getting to the garage, the lobby door, the car, or returning it. Answers come from your trip guide.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {SUGGEST.map((s) => (
+              <button key={s} type="button" onClick={() => send(s)}
+                className="rounded-full bg-white/[0.08] px-3.5 py-2 text-[14px] font-medium text-white ring-1 ring-white/15 active:scale-95">{s}</button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <ul className="space-y-3" aria-live="polite">
+          {msgs.map((m) => (
+            <li key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+              <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[15px] leading-relaxed ${m.role === "user"
+                ? "rounded-br-md text-[#1A1140]" : "rounded-bl-md bg-white/[0.08] text-white ring-1 ring-white/10"} ${m.status === "error" ? "ring-[#E4527A]/60" : ""}`}
+                style={m.role === "user" ? { background: PEACH } : undefined}>
+                {m.content || (m.status === "pending" || m.status === "working" ? <Dots /> : "")}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-5 text-[12px] leading-snug text-white/45">
+        Automated helper. It can make mistakes and can't change your trip. For anything else, message your host in the Turo app.
+        {left != null && left <= 5 ? ` ${left} question${left === 1 ? "" : "s"} left today.` : ""}
+      </p>
+    </TripSheet>
+  );
+}

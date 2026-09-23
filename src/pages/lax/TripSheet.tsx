@@ -20,7 +20,6 @@ function Tag({ which, active, onClick }: { which: Which; active: boolean; onClic
       type="button"
       onClick={onClick}
       aria-expanded={active}
-      aria-controls="trip-sheet"
       className="group relative flex h-[60px] flex-1 items-center gap-2.5 rounded-[14px] pl-9 pr-3 text-left shadow-lg shadow-black/30 transition active:scale-[0.97] motion-reduce:transition-none"
       style={{
         background: pickup ? PEACH : "#EDE7FF",
@@ -57,7 +56,7 @@ export function TagBar({ open, onOpen }: { open: Which | null; onOpen: (w: Which
   );
 }
 
-export function TripSheet({ open, onClose, children, title, kicker }: { open: boolean; onClose: () => void; children: ReactNode; title: string; kicker: string }) {
+export function TripSheet({ open, onClose, children, title, kicker, footer, bodyRef }: { open: boolean; onClose: () => void; children: ReactNode; title: string; kicker: string; footer?: ReactNode; bodyRef?: React.Ref<HTMLDivElement> }) {
   const [drag, setDrag] = useState(0);
   const start = useRef<{ y: number; t: number } | null>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -87,7 +86,6 @@ export function TripSheet({ open, onClose, children, title, kicker }: { open: bo
     <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
       <div onClick={onClose} className={`absolute inset-0 bg-black/55 transition-opacity duration-300 motion-reduce:transition-none ${open ? "opacity-100" : "opacity-0"}`} />
       <div
-        id="trip-sheet"
         ref={panel}
         role="dialog"
         aria-modal="true"
@@ -119,9 +117,10 @@ export function TripSheet({ open, onClose, children, title, kicker }: { open: bo
           {/* luggage strap under the header */}
           <div aria-hidden className="mt-3 h-[3px] rounded-full" style={{ background: `repeating-linear-gradient(90deg, ${PEACH}66 0 10px, transparent 10px 16px)` }} />
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-4" style={{ paddingBottom: "max(32px, env(safe-area-inset-bottom))" }}>
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-4" style={{ paddingBottom: footer ? 16 : "max(32px, env(safe-area-inset-bottom))" }}>
           {children}
         </div>
+        {footer && <div className="shrink-0 border-t border-white/10 px-4 pt-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>{footer}</div>}
       </div>
     </div>
   );

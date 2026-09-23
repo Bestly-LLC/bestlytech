@@ -12,6 +12,7 @@ import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
 import { Check, Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TagBar, TripSheet } from "./lax/TripSheet";
+import { AskButton, AskSheet } from "./lax/AskSheet";
 import { CarCard, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type ClimateAction, type Trip } from "./lax/GuestExtras";
 import { renderPassImage } from "./lax/passImage";
 
@@ -111,12 +112,12 @@ export default function LaxGuest() {
   const { slug = "", token = "" } = useParams();
   const [pub, setPub] = useState<Pub | null>(null);
   // Pickup / Return steps live in a bottom sheet opened from the luggage-tag bar. #pickup / #return deep-link it open.
-  const [sheet, setSheet] = useState<"pickup" | "return" | null>(() => {
+  const [sheet, setSheet] = useState<"pickup" | "return" | "ask" | null>(() => {
     if (typeof window === "undefined") return null;
     const h = window.location.hash;
-    return h === "#return" ? "return" : h === "#pickup" ? "pickup" : null;
+    return h === "#return" ? "return" : h === "#pickup" ? "pickup" : h === "#ask" ? "ask" : null;
   });
-  const openSheet = (t: "pickup" | "return" | null) => {
+  const openSheet = (t: "pickup" | "return" | "ask" | null) => {
     setSheet(t);
     try { history.replaceState(null, "", t ? `#${t}` : window.location.pathname + window.location.search); } catch { /* ignore */ }
   };
@@ -385,9 +386,11 @@ export default function LaxGuest() {
               )}
             
             </TripSheet>
-            <TagBar open={sheet} onOpen={openSheet} />
+            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} />
+            {!sheet && <AskButton onOpen={() => openSheet("ask")} />}
+            <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
 
-            <p className="mt-10 text-center text-sm text-white/50">Questions? Message your host in the Turo app.</p>
+            <p className="mt-10 text-center text-sm text-white/50">Questions? Tap Ask a question, or message your host in the Turo app.</p>
           </>
         )}
       </main>
