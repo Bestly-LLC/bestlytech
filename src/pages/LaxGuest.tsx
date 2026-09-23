@@ -183,7 +183,7 @@ export default function LaxGuest() {
 
             {/* QR */}
             <section id="qr" className="mt-7">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Your QR code · scan it at the garage door</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Your QR code · scan it at the lobby door</p>
               {pub.ready ? (
                 <>
                   <div className="mt-3 rounded-3xl bg-white p-6 text-center text-[#1A1140] shadow-2xl shadow-black/40">
@@ -253,9 +253,9 @@ export default function LaxGuest() {
                   At drop-off, follow the Park My Share signs across the alley to the garage entrance.
                   <Chips items={["Shuttle drop", "Alley", "Garage door"]} />
                 </Step>
-                <Step n={5} when="At the door" title="Scan your QR code.">
+                <Step n={5} when="At the door" title="Scan your QR code at the lobby door.">
                   {pub.ready ? <>Your QR code is <a href="#qr" className="underline decoration-white/40 underline-offset-2">at the top of this page</a>. </> : null}
-                  Scan at the door, take the elevator to {level}.
+                  Scan at the lobby door, take the elevator to {level}.
                   {g.spot ? <> Your space is <b className="text-white">{level} · {g.spot}</b>.</> : <> I'll text your exact {level} space the day before your trip.</>}
                   <Warn><b className="text-white">{level} only.</b> Please don't park on other levels. If the QR doesn't scan, there's an intercom right next to the door; someone will buzz you in.</Warn>
                 </Step>
