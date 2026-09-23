@@ -53,9 +53,19 @@ export function DocPreview({ file, onClose }: { file: PreviewFile | null; onClos
           return;
         }
         if (kind === "sheet") {
-          const XLSX = await import("xlsx");
-          const wb = XLSX.read(buf, { type: "array" });
-          const out = wb.SheetNames.slice(0, 8).map((n) => ({ name: n, html: XLSX.utils.sheet_to_html(wb.Sheets[n], { header: "", footer: "" }) }));
+          const ExcelJS = (await import("exceljs")).default;
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(buf);
+          const out: { name: string; html: string }[] = [];
+          workbook.eachSheet((sheet, _id) => {
+            if (out.length >= 8) return;
+            const rows: string[] = [];
+            sheet.eachRow((row) => {
+              const cells = (row.values as ExcelJS.CellValue[]).slice(1).map((v) => `<td>${v ?? ""}</td>`).join("");
+              rows.push(`<tr>${cells}</tr>`);
+            });
+            out.push({ name: sheet.name, html: `<table>${rows.join("")}</table>` });
+          });
           if (!gone) { setSheets(out); setState("ready"); }
         }
       } catch { if (!gone) setState("error"); }
