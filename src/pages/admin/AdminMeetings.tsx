@@ -6,6 +6,7 @@ import { AdminMark } from "@/components/AdminMark";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { TranscriptBubbles, CopyTranscriptButton } from "@/components/admin/TranscriptBubbles";
 import { StatCard } from "@/components/admin/StatCard";
+import { MeetingDrop, MeetingPlay, useMeetingClips } from "./MeetingDrop";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -175,6 +176,14 @@ export default function AdminMeetings({ embedded }: { embedded?: boolean } = {})
     load();
   }, [load]);
 
+  // Meetings dropped in from elsewhere: their clip plays them, and a newly filed one reloads the list.
+  const meetingClips = useMeetingClips(load);
+  const clipFor = useMemo(() => {
+    const m = new Map<string, (typeof meetingClips)[number]>();
+    for (const c of meetingClips) if (c.meeting_name) m.set(c.meeting_name, c);
+    return m;
+  }, [meetingClips]);
+
   const startRename = (m: Meeting) => {
     setRenameTarget(m);
     setRenameValue(m.id);
@@ -312,7 +321,7 @@ export default function AdminMeetings({ embedded }: { embedded?: boolean } = {})
       <PageHeader
         embedded={embedded}
         title="Meetings"
-        description="Recorded calls synced from this Mac to Nextcloud. Transcripts are read live from the archive."
+        description="Calls recorded on the Mac mini, and meetings you drop in from anywhere else. Transcripts are read live from the archive."
         actions={
           <Button
             variant="outline"
@@ -341,6 +350,8 @@ export default function AdminMeetings({ embedded }: { embedded?: boolean } = {})
         />
         <StatCard label="Archive size" value={fmtBytes(stats.bytes)} icon={FileText} />
       </div>
+
+      <MeetingDrop clips={meetingClips} />
 
       {err && (
         <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4">
@@ -394,6 +405,11 @@ export default function AdminMeetings({ embedded }: { embedded?: boolean } = {})
                       <Clock className="h-3 w-3 mr-1" />
                       {fmtDuration(m.durationSeconds)}
                     </Badge>
+                    {clipFor.has(m.id) && (
+                      <Badge variant="outline" className="border-[#0A84FF]/30 text-[#7cc4ff] bg-[#0A84FF]/[0.08] font-normal">
+                        Dropped in
+                      </Badge>
+                    )}
                     {m.diarizationSuspect && (
                       <Badge className="border-amber-500/40 text-amber-300 bg-amber-500/[0.12] font-normal hover:bg-amber-500/[0.12]">
                         <AlertTriangle className="h-3 w-3 mr-1" />
@@ -431,6 +447,7 @@ export default function AdminMeetings({ embedded }: { embedded?: boolean } = {})
                 </div>
 
                 <div className="shrink-0 flex items-center gap-2">
+                  {clipFor.get(m.id) && <MeetingPlay clip={clipFor.get(m.id)!} />}
                   <Button
                     variant="outline"
                     size="sm"

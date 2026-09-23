@@ -58,6 +58,10 @@ type Clip = {
   done_at: string | null;
   /** Big uploads are stored as <path>.part000, .part001, ...; null = one object at path. */
   parts?: number | null;
+  /** meeting = goes to Calls too; note = stays a clip; null = 10+ minutes counts as a meeting */
+  kind?: "meeting" | "note" | null;
+  /** the meeting-YYYYMMDD-HHMM it was filed as in Calls */
+  meeting_name?: string | null;
 };
 
 const partPaths = (c: Pick<Clip, "path" | "parts">) =>
@@ -161,10 +165,12 @@ function ClipCard({
   clip,
   onDelete,
   onNote,
+  onMakeCall,
 }: {
   clip: Clip;
   onDelete: (c: Clip) => void;
   onNote: (c: Clip, note: string) => void;
+  onMakeCall?: (c: Clip) => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [noUrl, setNoUrl] = useState(false);
@@ -211,6 +217,18 @@ function ClipCard({
             {clip.source === "airdrop" ? "AirDropped" : "Uploaded"} · {fmtWhen(clip.recorded_at || clip.created_at)}
             {dur ? ` · ${dur}` : ""} · {fmtBytes(clip.bytes)}
           </p>
+          {clip.meeting_name ? (
+            <p className="mt-1.5 text-xs text-[#7cc4ff]">Also in Calls, with who said what ({clip.meeting_name})</p>
+          ) : clip.status === "done" && clip.kind !== "meeting" && onMakeCall ? (
+            <button type="button" onClick={() => onMakeCall(clip)} className="mt-1.5 text-xs text-white/55 underline-offset-2 hover:text-white hover:underline">
+              This was a meeting: file it under Calls
+            </button>
+          ) : clip.kind === "meeting" && clip.status !== "done" ? (
+            <p className="mt-1.5 text-xs text-white/45">Going to Calls once it's transcribed</p>
+          ) : null}
+          {(clip.summary as { meeting_error?: string } | null)?.meeting_error && (
+            <p className="mt-1.5 text-xs text-amber-300/80">{(clip.summary as { meeting_error?: string }).meeting_error}</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge clip={clip} />
@@ -384,6 +402,17 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
     [load, toast],
   );
 
+  // Run it again through the call recorder's pipeline so it lands in Calls with names.
+  const makeCall = useCallback(
+    async (c: Clip) => {
+      setClips((all) => (all ?? []).map((x) => (x.id === c.id ? { ...x, kind: "meeting", status: "new" } : x)));
+      const { error } = await supabase.from("voice_clips").update({ kind: "meeting", status: "new", error: null } as never).eq("id", c.id);
+      if (error) { toast({ title: "Couldn't move it", description: error.message, variant: "destructive" }); void load(); }
+      else toast({ title: "Filing it under Calls", description: "The Mac mini names who's speaking; it shows up in Calls in a few minutes." });
+    },
+    [load, toast],
+  );
+
   const saveNote = useCallback(
     async (c: Clip, note: string) => {
       setClips((all) => (all ?? []).map((x) => (x.id === c.id ? { ...x, note } : x)));
@@ -502,7 +531,7 @@ export default function AdminClips({ embedded }: { embedded?: boolean } = {}) {
       ) : (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(26rem,100%),1fr))] items-start gap-4">
           {clips.map((c) => (
-            <ClipCard key={c.id} clip={c} onDelete={remove} onNote={saveNote} />
+            <ClipCard key={c.id} clip={c} onDelete={remove} onNote={saveNote} onMakeCall={makeCall} />
           ))}
         </div>
       )}

@@ -45,6 +45,8 @@ export type ClipUpload = {
   /** 0-1, or null before the first progress event */
   pct: number | null;
   status: "uploading" | "saving" | "done" | "error";
+  /** "meeting" when dropped on the Calls tab: it goes through the call recorder's pipeline. */
+  kind?: "meeting" | "note" | null;
   error?: string;
   startedAt: number;
 };
@@ -167,11 +169,11 @@ async function putWithRetry(url: string, token: () => Promise<string>, body: Blo
 }
 
 /** Queue one file. Returns once it's finished, but nothing needs to await it. */
-export async function startClipUpload(file: File) {
+export async function startClipUpload(file: File, kind: "meeting" | "note" | null = null) {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const up: ClipUpload = {
     id, name: file.name, bytes: file.size, sent: 0, pct: null,
-    status: "uploading", startedAt: Date.now(),
+    status: "uploading", startedAt: Date.now(), kind,
   };
   items.set(id, up);
   emit();
@@ -229,6 +231,7 @@ export async function startClipUpload(file: File) {
       source: "upload",
       recorded_at: file.lastModified ? new Date(file.lastModified).toISOString() : null,
       parts,
+      kind,
     } as never);
     if (error) throw error;
     report(true, `${clean} (${Math.round(file.size / 1048576)}MB${parts ? `, ${parts} parts` : ""}) uploaded fine.`);

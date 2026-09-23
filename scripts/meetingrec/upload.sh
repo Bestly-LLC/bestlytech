@@ -19,7 +19,7 @@ fi
 curl -s -o /dev/null -u "jared:$PW" -X MKCOL "$B/$ROOT"
 curl -s -o /dev/null -u "jared:$PW" -X MKCOL "$B/$ROOT/$DAY"
 OK=0; FAIL=0
-for f in "recordings/$NAME-system.m4a" "recordings/$NAME-mic.m4a" "recordings/$NAME-transcript.txt" "recordings/$NAME-transcript-named.txt" "recordings/$NAME-transcript-turns.txt"; do
+for f in "recordings/$NAME-system.m4a" "recordings/$NAME-mic.m4a" "recordings/$NAME-room.m4a" "recordings/$NAME-transcript.txt" "recordings/$NAME-transcript-named.txt" "recordings/$NAME-transcript-turns.txt"; do
   [ -f "$f" ] || continue
   bn=$(basename "$f")
   code=$(curl -s -o /dev/null -w "%{http_code}" -u "jared:$PW" -T "$f" "$B/$ROOT/$DAY/$bn")

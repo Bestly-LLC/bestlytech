@@ -12,7 +12,7 @@ export default function AdminMeetingsSection() {
   return (
     <SectionTabs
       title="Meetings"
-      description="Recorded calls from this Mac, and any voice clip you drop in or AirDrop to the mini."
+      description="Calls: recorded on the Mac mini, or a meeting you drop in from anywhere. Clips: quick voice notes."
       tabs={[
         { value: "calls", label: "Calls", render: () => <AdminMeetings embedded /> },
         { value: "clips", label: "Clips", render: () => <AdminClips embedded /> },

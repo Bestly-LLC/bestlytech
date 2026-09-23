@@ -13,7 +13,7 @@ Standard library only. Key in ~/PartnerAI/.key (Vault: partner_ai_worker_key).
 import json, os, re, subprocess, time, traceback, urllib.error, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.3.1"   # 1.3: parse talkscribe's 3-column output; a playable copy for parted clips; no silent empties
+VERSION = "1.4.0"   # 1.4: meetings (kind=meeting, or 10+ min) go through the call recorder's pipeline   # 1.3: parse talkscribe's 3-column output; a playable copy for parted clips; no silent empties
 # 1.2: big files go up and come down in parts (storage caps one object at 50MB)
 HOME = os.path.expanduser("~")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
@@ -203,8 +203,65 @@ def summarise(text):
     return out
 
 
+MR = f"{HOME}/MeetingRec"
+MEETING_MIN_S = 600          # a clip this long with no kind set is treated as a meeting
+
+
+def _iso(v):
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
+def meeting_name(clip, secs):
+    """meeting-YYYYMMDD-HHMM in this Mac's time, from when the recording STARTED (the file time is
+    when it ended), bumped a minute at a time until nothing in recordings/ has that name."""
+    end = _iso(clip.get("recorded_at")) or _iso(clip.get("created_at")) or datetime.now(timezone.utc)
+    start = datetime.fromtimestamp(end.timestamp() - (secs or 0)).replace(second=0, microsecond=0)
+    names = os.listdir(f"{MR}/recordings")
+    while True:
+        n = start.strftime("meeting-%Y%m%d-%H%M")
+        if not any(f.startswith(n) for f in names):
+            return n
+        start = datetime.fromtimestamp(start.timestamp() + 60)
+
+
+def as_meeting(clip, src, secs):
+    """Hand a one-track meeting to the call recorder's pipeline, so it lands in Calls exactly like a
+    call recorded here: recordings/<name>-room.m4a, transcribed, every voice named (name_mixed.py,
+    voiceprints in ~/MeetingRec/voices), uploaded to Nextcloud (upload.sh), and picked up by the
+    meetingrec agent's transcript sweep into meeting_recordings (summary, to-dos, partner portal)."""
+    name = meeting_name(clip, secs)
+    room = f"{MR}/recordings/{name}-room.m4a"
+    subprocess.run([FFMPEG, "-loglevel", "error", "-y", "-i", src, "-vn", "-ac", "1", "-c:a", "aac", "-b:a", "64k", room],
+                   check=True, timeout=1800)
+    tsv = f"/tmp/{name}.room.tsv"
+    with open(tsv, "w") as f:
+        subprocess.run([SCRIBE, room, "ROOM"], stdout=f, stderr=subprocess.DEVNULL, timeout=3 * 3600, check=False)
+    if os.path.getsize(tsv) < 10:
+        raise RuntimeError("the transcriber returned nothing for the meeting")
+    out = subprocess.run([f"{MR}/.venv-diar/bin/python", f"{MR}/name_mixed.py", name, clip.get("roster") or ""],
+                         capture_output=True, text=True, timeout=3 * 3600, cwd=MR)
+    log("name_mixed", name, out.returncode, (out.stdout or "")[-400:], (out.stderr or "")[-400:])
+    named = f"{MR}/recordings/{name}-transcript-named.txt"
+    if out.returncode != 0 or not os.path.exists(named):
+        # voices couldn't be told apart: still a meeting, with one ROOM speaker
+        rows = []
+        for line in open(tsv):
+            p = line.rstrip("\n").split("\t")
+            if len(p) >= 3 and p[-1].strip():
+                t = int(float(p[0]))
+                rows.append(f"[{t // 60:02d}:{t % 60:02d}] ROOM: {p[-1].strip()}")
+        open(named, "w").write("# One-track recording: speakers couldn't be told apart by voice this time.\n" + "\n".join(rows) + "\n")
+        open(f"{MR}/recordings/{name}-transcript.txt", "w").write("\n".join(rows) + "\n")
+    up = subprocess.run([f"{MR}/upload.sh", name], capture_output=True, text=True, timeout=1800, cwd=MR)
+    log("upload.sh", name, (up.stdout or "")[-300:])
+    return name, open(named).read()
+
+
 def work(clip):
-    """One clip: download, transcribe, summarise, write back."""
+    """One clip: download, transcribe, summarise, write back. Meetings also go to Calls."""
     tmp = f"/tmp/clip-{clip['id']}{os.path.splitext(clip['path'])[1] or '.m4a'}"
     try:
         download(clip["path"], tmp, clip.get("parts"))
@@ -213,16 +270,30 @@ def work(clip):
                 playable(tmp, clip)
             except Exception as e:  # playback copy is a nicety; the transcript still matters
                 log("playable copy failed", clip["id"], repr(e))
-        text = transcribe(tmp)
         secs = seconds(tmp)
+        kind = clip.get("kind")
+        mname, merr = None, None
+        if kind == "meeting" or (kind is None and (secs or 0) >= MEETING_MIN_S):
+            try:
+                mname, text = as_meeting(clip, tmp, secs)
+                text = "\n".join(l for l in text.splitlines() if not l.startswith("#"))
+            except Exception as e:  # noqa: BLE001 - still give him the clip's own transcript
+                merr = f"couldn't file it under Calls: {e!r}"[:300]
+                log("meeting failed", clip["id"], merr, traceback.format_exc()[-400:])
+                text = transcribe(tmp)
+        else:
+            text = transcribe(tmp)
         if not text.strip() and (secs or 0) > 90:
             # Minutes of audio and not one word is a transcriber problem, not silence. Say so,
             # so clips_watch raises it for Scout instead of it passing as "(no speech found)".
             raise RuntimeError(f"no words found in {int(secs // 60)} min of audio - the transcriber returned nothing")
         summary = summarise(text) if text.strip() else None
+        if merr:
+            summary = {**(summary or {}), "meeting_error": merr}
         rpc("clip_write", {"p_key": KEY, "p_id": clip["id"], "p_transcript": text or "(no speech found)",
                            "p_summary": summary, "p_seconds": secs,
-                           "p_title": (summary or {}).get("title") or clip.get("title")})
+                           "p_title": (summary or {}).get("title") or clip.get("title"),
+                           "p_meeting_name": mname})
         log("done", clip["id"], f"{len(text)} chars")
     except Exception as e:
         log("failed", clip["id"], repr(e), traceback.format_exc()[-500:])
