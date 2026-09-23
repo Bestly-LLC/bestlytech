@@ -20,6 +20,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { CopyBlock } from "@/components/CopyText";
+import { copyText } from "@/lib/copyForClaude";
 import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecording } from "./ScoutRecorder";
 import { ScoutJobs, useMacJobs, type MacJob } from "./ScoutJobs";
 import { ScoutAutoRunBar } from "./ScoutAutoRun";
@@ -320,7 +321,7 @@ export function Scout() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameText, setRenameText] = useState("");
   const [copied, setCopied] = useState<number | null>(null);
-  const [copiedFix, setCopiedFix] = useState<number | null>(null);
+  const [copiedFix, setCopiedFix] = useState<"ok" | "fail" | null>(null);
   const [waiting, setWaiting] = useState(0);
   const [bubble, setBubble] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
@@ -962,43 +963,6 @@ export function Scout() {
                       <p className="whitespace-pre-wrap break-words text-[0.9375rem] leading-relaxed text-white/90 sm:text-sm">
                         {splitOptions(m.body).text}
                       </p>
-                      {/* Only the newest reply's options are live - older ones are history.
-                          If Scout gave none, we generate them: there is always something to tap. */}
-                      {i === msgs.length - 1 && !busy && (() => {
-                        const { text, options } = splitOptions(m.body);
-                        const chips = options.length ? options : fallbackOptions(text);
-                        const lastAsk = [...msgs.slice(0, i)].reverse().find((x) => x.role === "user")?.body;
-                        return (
-                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                            {chips.map((o) => (
-                              <button
-                                key={o}
-                                type="button"
-                                onClick={() => send(o)}
-                                className="scout-chip min-h-9 rounded-full border border-white/15 bg-white/[0.06] px-3.5 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/[0.12] active:scale-[0.97]"
-                              >
-                                {o}
-                              </button>
-                            ))}
-                            {/* Scout can read and propose but never writes code. This is the door
-                                to the thing that does, with the context already packed in. */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard?.writeText(
-                                  claudeFixPrompt(text, lastAsk, typeof window !== "undefined" ? window.location.pathname : undefined),
-                                );
-                                setCopiedFix(i);
-                                setTimeout(() => setCopiedFix(null), 1600);
-                              }}
-                              className="scout-chip inline-flex min-h-9 items-center gap-1.5 rounded-full border border-dashed border-white/20 px-3.5 text-sm font-medium text-white/70 transition hover:border-white/40 hover:text-white active:scale-[0.97]"
-                            >
-                              {copiedFix === i ? <Check className="h-3.5 w-3.5" /> : <Wrench className="h-3.5 w-3.5" />}
-                              {copiedFix === i ? "Copied - paste to Claude" : "Prompt Claude to fix"}
-                            </button>
-                          </div>
-                        );
-                      })()}
                     </div>
                     <Button
                       variant="ghost"
@@ -1036,6 +1000,52 @@ export function Scout() {
 
         {view === "chat" && (
           <div className={cn("border-t border-white/[0.06] p-3", phone && "pb-[max(0.75rem,env(safe-area-inset-bottom))]")}>
+            {/* Suggestions sit above the composer rather than under the message, so they are
+                where his thumb already is and they do not scroll away as the reply grows. */}
+            {!busy && !editing && (() => {
+              const lastBot = [...msgs].reverse().find((m) => m.role !== "user");
+              if (!lastBot) return null;
+              const { text: botText, options } = splitOptions(lastBot.body);
+              const chips = options.length ? options : fallbackOptions(botText);
+              const lastAsk = [...msgs].reverse().find((m) => m.role === "user")?.body;
+              return (
+                <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                  {chips.map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      onClick={() => send(o)}
+                      className="scout-chip min-h-9 rounded-full border border-white/15 bg-white/[0.06] px-3.5 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/[0.12] active:scale-[0.97]"
+                    >
+                      {o}
+                    </button>
+                  ))}
+                  {/* Scout reads and proposes but never writes code. This is the door to the
+                      thing that does, with the context already packed in. */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await copyText(
+                        claudeFixPrompt(botText, lastAsk, typeof window !== "undefined" ? window.location.pathname : undefined),
+                      );
+                      setCopiedFix(ok ? "ok" : "fail");
+                      setTimeout(() => setCopiedFix(null), 2200);
+                    }}
+                    className={cn(
+                      "scout-chip inline-flex min-h-9 items-center gap-1.5 rounded-full border border-dashed px-3.5 text-sm font-medium transition active:scale-[0.97]",
+                      copiedFix === "fail"
+                        ? "border-red-400/40 text-red-200"
+                        : "border-white/20 text-white/70 hover:border-white/40 hover:text-white",
+                    )}
+                  >
+                    {copiedFix === "ok" ? <Check className="h-3.5 w-3.5" /> : <Wrench className="h-3.5 w-3.5" />}
+                    {copiedFix === "ok" ? "Copied - paste to Claude"
+                      : copiedFix === "fail" ? "Couldn't copy - long-press the reply"
+                      : "Prompt Claude to fix"}
+                  </button>
+                </div>
+              );
+            })()}
             {editing && (
               <div className="mb-2 flex items-center gap-2 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-xs text-white/70">
                 <Pencil className="h-3 w-3 shrink-0" aria-hidden />
