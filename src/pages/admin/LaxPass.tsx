@@ -159,7 +159,7 @@ export default function LaxPass() {
   };
 
   const link = st ? `${SITE}/lax/${st.slug}` : "";
-  const message = `Getting your Tesla at LAX: everything you need is on this page — shuttle steps, the garage, and your QR code (add it to your Apple or Google Wallet). ${link}`;
+  const message = `How to pick up your Turo car at LAX: shuttle steps, the garage address, and the QR code that opens the garage door (you can add it to Apple or Google Wallet). ${link}`;
   const cur = st?.current;
   const missing = st && (!cur || !cur.is_this_month);
 

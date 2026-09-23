@@ -152,7 +152,7 @@ export default function LaxGuest() {
   return (
     <div className="min-h-screen bg-[#1A1140] text-white" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
       <Helmet>
-        <title>Getting your Tesla at LAX</title>
+        <title>Picking up your Turo car at LAX</title>
         <meta name="robots" content="noindex, nofollow" />
         <meta name="theme-color" content="#2B1A73" />
         <link rel="apple-touch-icon" href="/wallet/lax/apple-touch-icon.png" />
@@ -161,8 +161,8 @@ export default function LaxGuest() {
       <div className="relative">
         <img src="/wallet/lax/hero.svg" alt="" className="block h-44 w-full object-cover object-[65%_center] sm:h-56" />
         <div className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: PEACH, ...shadow }}>{pub?.trip?.first ? `Hi ${pub.trip.first} · welcome to LA` : "Welcome to LA"}</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={shadow}>Getting your Tesla at LAX</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: PEACH, ...shadow }}>{pub?.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={shadow}>Picking up your Turo car at LAX</h1>
         </div>
       </div>
 
@@ -176,7 +176,7 @@ export default function LaxGuest() {
           </div>
         ) : (
           <>
-            <p className="text-[16px] leading-relaxed text-white/80">Skim before you fly, keep it handy on the curb. Questions any time.</p>
+            <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Below: how to get there, and the QR code that opens the garage door.</p>
 
             {pub.trip && <div className="mt-5 space-y-2.5"><TripCard trip={pub.trip} /><CarCard trip={pub.trip} car={pub.car ?? null} /></div>}
             <div className="mt-2.5"><WeatherCard trip={pub.trip ?? null} /></div>

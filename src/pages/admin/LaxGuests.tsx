@@ -34,7 +34,7 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
     reload();
   };
   const link = r.token ? `${SITE}/lax/t/${r.token}` : null;
-  const msg = link ? `Hi ${r.first ?? ""}! Everything for picking up the Tesla at LAX, including the garage QR code (add it to your Apple or Google Wallet): ${link}` : "";
+  const msg = link ? `Hi ${r.first ?? ""}! Here's how to pick up your Turo car at LAX, plus the QR code that opens the garage door (you can add it to Apple or Google Wallet): ${link}` : "";
   const status = r.reminder_sent_at ? `Reminder sent ${when(r.reminder_sent_at)}`
     : r.reminder_error ? `Reminder failed: ${r.reminder_error.replace(/^gave up: /, "")}`
     : r.email && r.reminder_at ? `Reminder ${when(r.reminder_at)}${r.email_by === "guest" ? " (guest signed up)" : ""}`

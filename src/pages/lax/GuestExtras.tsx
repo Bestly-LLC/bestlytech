@@ -34,7 +34,8 @@ function Card({ label, icon, children }: { label: string; icon: ReactNode; child
 
 export function TripCard({ trip }: { trip: Trip }) {
   return (
-    <Card label="Your trip" icon={<Car className="h-3.5 w-3.5" />}>
+    <Card label="Your Turo trip" icon={<Car className="h-3.5 w-3.5" />}>
+      <img src="/wallet/lax/car.jpg" alt="Your Tesla Model 3" className="mb-3 aspect-[16/10] w-full rounded-xl object-cover" />
       <div className="grid grid-cols-2 gap-3 text-[15px]">
         <div><p className="text-xs text-white/55">Pickup</p><p className="font-semibold text-white">{fmtWhen(trip.starts_at)}</p></div>
         <div><p className="text-xs text-white/55">Return</p><p className="font-semibold text-white">{fmtWhen(trip.ends_at)}</p></div>
