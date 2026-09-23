@@ -59,6 +59,11 @@
 //    dashboard's alert settings"). The free model also gets a short list of true facts about the
 //    admin (e.g. "Fixed:" alerts already exist), and Scout no longer offers paid AI while it is out
 //    of credit - it says so and keeps the message.
+//  - v18: call to-dos can be moved between people with no AI at all. "move them to me" / "these are
+//    mine, not Eli's" is recognised in code, matched against open call to-dos by their titles (in the
+//    message or his last few messages) and moved with todo_set_owner(), which also renames the Deck
+//    card. The paid model gets the same as a tool (todo_owner). The free model may never answer a
+//    request to do something, or claim something was done (it told him "No action needed" 3 times).
 //  - v13: autopilot. fix-ladder calls with the service key + autopilot:true when an incident
 //    outlived the self-heals and the free model. Anything needing a yes is refused in code and
 //    comes back as NEEDS_YES, which Jared approves with one tap from the alert pane.
@@ -294,6 +299,11 @@ const TOOLS = [
       },
       required: ["scope", "title", "when", "do"],
     },
+  },
+  {
+    name: "todo_owner",
+    description: "Move a call to-do to another person (its owner), e.g. when Jared says a to-do on Eli's list is his. id from run_sql on scout_daily (kind='call', status='open'); owner is a first name, Jared for him. Also renames its Deck card. No yes needed when he asked for it.",
+    input_schema: { type: "object", properties: { id: { type: "string" }, owner: { type: "string" } }, required: ["id", "owner"] },
   },
   {
     name: "mark_done",
@@ -638,6 +648,7 @@ async function freeTry(threadId: string, text: string, page: unknown): Promise<{
   const prompt = `You are Scout's free helper inside Jared's Bestly admin dashboard. You have NO access to his database, files, servers or the internet, and you cannot change anything.
 Answer Jared's last message ONLY if you can answer it fully and correctly from general knowledge, the facts below, or the conversation (for example: explaining a concept, rewording text, a quick calculation).
 Never guess how the admin works or tell him to use settings or pages that are not in the facts.
+If he asks you to DO anything (move, change, add, delete, assign, fix, send, run, set, mark), you can't: reply NEEDS_TOOLS: ACTION. Never say you did something, that it's done, or that "no action is needed".
 If you can't answer, reply with exactly one line and nothing else:
 NEEDS_TOOLS: DATA    (it needs his live numbers, leads, orders, alerts, logs or status)
 NEEDS_TOOLS: ACTION  (it asks to do, fix, run, send, change or look something up)
@@ -663,6 +674,49 @@ ${convo}`;
     }
   }
   return { why: "The free AI on your Mac mini took too long." };
+}
+
+/**
+ * v18: "move these to me", "these are mine not Eli's", "give that one to Eli" - done in code, no AI.
+ * Finds open call to-dos whose titles are in this message or his last few, and moves them.
+ * Returns the reply, or null when the message isn't a to-do move (then the normal path runs).
+ */
+const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+async function tryTodoMove(threadId: string, text: string): Promise<string | null> {
+  if (!/\b(move|moved|put|give|assign|reassign|switch|transfer)\b|\b(are|is) (mine|my)\b|\bnot (eli|his|hers|theirs)/i.test(text)) return null;
+  let owner: string | null = null;
+  const notMine = /\b(not|isn'?t|aren'?t) (mine|my)\b/i.test(text);
+  if (!notMine && /\b(to me|to mine|my (list|to-?dos?|todos?)|to my|mine|are my|is my)\b/i.test(text)) owner = "Jared";
+  const named = text.match(/\b(?:to|for|give (?:it|them|that|those|these)? ?to)\s+([A-Z][a-z]{1,20})(?:'s)?\b/);
+  if (!owner && named && !/^(my|me|the|his|her|their|list|deck|mine)$/i.test(named[1])) owner = named[1];
+  if (!owner) return null;
+
+  const since = new Date(Date.now() - 21 * 864e5).toISOString().slice(0, 10);
+  const { data: todos } = await db.from("scout_daily").select("id, title, action").eq("kind", "call").eq("status", "open").gte("day", since).limit(200);
+  if (!todos?.length) return null;
+  const { data: hist } = await db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId)
+    .order("created_at", { ascending: false }).limit(8);
+  const mineNow = norm(text);
+  const earlier = ((hist ?? []) as any[]).filter((m) => m.role === "user").map((m) => norm(String(m.body)));
+  const hit = (hay: string) => (todos as any[]).filter((t) => {
+    const title = norm(String(t.title));
+    return title.length > 12 && hay.includes(title.slice(0, Math.min(title.length, 60)));
+  });
+  let picked = hit(mineNow);
+  if (!picked.length && /\b(them|these|those|it|that|this|both)\b/i.test(text)) {
+    for (const h of earlier) { picked = hit(h); if (picked.length) break; }
+  }
+  const toMove = picked.filter((t: any) => String(t.action?.owner ?? "").toLowerCase() !== owner!.toLowerCase());
+  if (!picked.length) return null;
+  if (!toMove.length) return `Those are already on ${owner === "Jared" ? "your" : `${owner}'s`} list.\n\nOPTIONS: Thanks | Show my to-dos`;
+  const done: string[] = [];
+  for (const t of toMove as any[]) {
+    const { error } = await db.rpc("todo_set_owner", { p_id: t.id, p_owner: owner });
+    if (!error) done.push(String(t.title));
+    await db.from("admin_chat_actions").insert({ thread_id: threadId, tool: "todo_owner", args: { id: t.id, owner }, result: { ok: !error, error: error?.message ?? null }, ok: !error });
+  }
+  if (!done.length) return "I couldn't move them just now. Try again in a minute.\n\nOPTIONS: Try again | Skip it";
+  return `Moved ${done.length} to ${owner === "Jared" ? "you" : owner}:\n${done.map((d) => `- ${d}`).join("\n")}\nDeck cards renamed too.\n\nOPTIONS: Thanks | Show my to-dos`;
 }
 
 // Set per request from scout_settings.auto_run.
@@ -827,6 +881,11 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
       out = error ? { ok: false, error: error.message } : { ok: true, saved: `${row.scope}: ${row.title}` };
       break;
     }
+    case "todo_owner": {
+      const { data, error } = await db.rpc("todo_set_owner", { p_id: String(args.id ?? ""), p_owner: String(args.owner ?? "") });
+      out = error ? { ok: false, error: error.message } : (data as Record<string, unknown>);
+      break;
+    }
     case "mark_done": {
       const { data, error } = await db.rpc("admin_today_done", { p_key: String(args.key ?? "") });
       out = error ? { ok: false, error: error.message } : { ok: true, cleared: data };
@@ -956,6 +1015,16 @@ Deno.serve(async (req) => {
     threadId = data.id;
   }
   await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "user", body: text });
+
+  // v18: moving call to-dos between people needs no AI.
+  if (!autopilot) {
+    const moved = await tryTodoMove(threadId, text).catch(() => null);
+    if (moved) {
+      await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: moved });
+      await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
+      return J({ ok: true, thread_id: threadId, reply: moved, tools: ["todo_owner"] });
+    }
+  }
 
   // v15: paid AI only with his OK.
   if (!paidAlwaysOk) {

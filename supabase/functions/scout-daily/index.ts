@@ -7,6 +7,10 @@
 //   op wrap     what got done, what rolls over, tomorrow's first move    -> kind wrap
 //   op run      {job, force} the same, started from the admin home page (admin JWT)
 //   op deck_check  can we reach the Deck board
+//   op todo_owner  {id} rename a call to-do's Deck card to "<owner>: <task>" after todo_set_owner()
+//                  moved it (v3: to-dos from one-mic meetings could land on the wrong person)
+//   op reflect  {days} learn from the last day(s): what failed, what fixed it -> scout_lessons
+//               (+ mirrored to bestly_memory lessons/scout-playbook). Nightly at 2am LA via tick_reflect.
 //
 // Called by pg_cron / a trigger with the service key, or by an admin from the browser.
 // Nothing here sends anything to anyone: drafts wait for Jared's tap in his own mail app.
@@ -201,6 +205,20 @@ async function deck() {
   if (!stack) throw new Error("Deck board has no lists");
   return {
     board, stack,
+    renameCard: async (cardId: number, title: string) => {
+      // Deck's PUT needs the card's current type/owner; its list may have changed since it was made.
+      for (const s of stacks) {
+        const found = ((await api(`/boards/${board.id}/stacks/${s.id}`)).cards ?? []).find((c: any) => c.id === cardId);
+        if (!found) continue;
+        await api(`/boards/${board.id}/stacks/${s.id}/cards/${cardId}`, {
+          method: "PUT",
+          body: JSON.stringify({ title: title.slice(0, 250), type: found.type ?? "plain", owner: found.owner?.uid ?? found.owner ?? "",
+            description: found.description ?? "", duedate: found.duedate ?? null, order: found.order ?? 999 }),
+        });
+        return true;
+      }
+      return false;
+    },
     addCard: async (title: string, description: string, due: string | null) => {
       const card = await api(`/boards/${board.id}/stacks/${stack.id}/cards`, {
         method: "POST",
@@ -225,7 +243,9 @@ async function call(id: string, force = false) {
     out = await claude(
       `${VOICE}\nYou are Scout. Read this call transcript (JARED lines are his own mic; a name ending in ? was a voice guess, so check it against context). ` +
       `Return JSON only: {"summary":"2 sentences","decisions":["..."],"commitments":[{"owner":"Jared|<first name>","task":"imperative, under 90 characters","due":"YYYY-MM-DD or null"}],"questions":["..."]}. ` +
-      `Only what was actually agreed. A due date only if one was said (today is ${la().day}; resolve "Friday" etc. to a date). No duplicates.`,
+      `Only what was actually agreed. A due date only if one was said (today is ${la().day}; resolve "Friday" etc. to a date). No duplicates. ` +
+      `Owner = the person who will DO it, worked out from what is said ("I'll send it" -> the speaker; "can you..." -> the person asked; "Jared will..." -> Jared). ` +
+      `Speaker labels can be wrong, especially on one-mic recordings (the header says so): trust what the words say over the label. When it's unclear who will do it, the owner is Jared.`,
       `Call: ${r.name}\nPeople: Jared, ${(r.roster ?? []).join(", ")}\n\n${t}`,
       2500,
     );
@@ -288,6 +308,74 @@ async function wrap(day: string) {
   return { sent: true, done: done.length, left: left.length };
 }
 
+/* ───────── 2am: reflect (self-learning) ───────── */
+
+async function reflect(days = 1) {
+  const since = new Date(Date.now() - days * 864e5).toISOString();
+  const [{ data: acts }, { data: jobs }, { data: inc }, { data: known }] = await Promise.all([
+    db.from("admin_chat_actions").select("id, thread_id, tool, args, result, ok, created_at").gte("created_at", since).order("created_at").limit(400),
+    db.from("mac_jobs").select("id, thread_id, title, status, exit_code, script, output, created_at").gte("created_at", since).in("status", ["done", "failed"]).limit(60),
+    db.from("monitor_issues").select("key, title, body, status, self_healed, heal_attempts, resolved_at").gte("updated_at", since).limit(60),
+    db.from("scout_lessons").select("scope, title, do_text").eq("active", true).limit(200),
+  ]);
+  const trim = (v: unknown, n: number) => { const t = typeof v === "string" ? v : JSON.stringify(v ?? ""); return t.length > n ? t.slice(0, n) + "…" : t; };
+  const a = (acts ?? []).map((x: any) => ({ id: x.id, thread: String(x.thread_id).slice(0, 8), tool: x.tool, ok: x.ok, at: x.created_at.slice(5, 16),
+    args: trim(x.tool === "commit_files" ? { message: x.args?.message, paths: (x.args?.files ?? x.args?.edits ?? []).map((f: any) => f.path) } : x.args, 300),
+    result: x.ok ? trim(x.result, 120) : trim(x.result, 400) }));
+  const failures = a.filter((x) => !x.ok).length + (jobs ?? []).filter((j: any) => j.status === "failed").length;
+  if (!failures && !(inc ?? []).length) return { learned: 0, note: "nothing failed" };
+
+  const out = await claude(
+    `You are Scout's reflection step. Scout is the assistant in Jared's admin (tools: run_sql, db_write, read_file, list_files, commit_files, mac_run, pi_command, recorder, ...). ` +
+    `Below is what Scout did recently: its tool calls in order (grouped by thread), Mac mini jobs, and monitor incidents. ` +
+    `Find LESSONS: something failed and then something else worked (same thread or same kind of task), or the same mistake repeats and the fix is clear from the data. ` +
+    `A lesson must be specific and reusable: e.g. scope "table:cloud_leads", when "reading cloud leads", do "the columns are contact_name, company_name, status (there is no name column)". ` +
+    `Scopes: tool:<name>, table:<name>, project:<name>, mac, pi, deploy, recorder. Never invent a fix that the data doesn't show. Skip one-off noise. ` +
+    `Also list UNSOLVED problems: failures that repeat with no fix yet. Existing lessons (update one by reusing its exact scope+title): ${JSON.stringify(known ?? [])}. ` +
+    `Return JSON only: {"lessons":[{"scope":"...","title":"<60 chars","when":"...","do":"...","avoid":"... or null","signature":"key words from the error","evidence":["<action or job ids>"]}],"unsolved":[{"scope":"...","problem":"one line"}]}. At most 12 lessons.`,
+    JSON.stringify({ actions: a, jobs: (jobs ?? []).map((j: any) => ({ id: j.id, title: j.title, status: j.status, exit: j.exit_code, script: trim(j.script, 500), output_tail: trim(String(j.output ?? "").slice(-500), 500) })),
+      incidents: (inc ?? []).map((i: any) => ({ key: i.key, title: i.title, status: i.status, healed: i.self_healed, tries: i.heal_attempts, body: trim(i.body, 300) })) }),
+    4000,
+  );
+
+  let learned = 0;
+  for (const l of (out.lessons ?? []).slice(0, 12)) {
+    if (!l?.scope || !l?.title || !l?.when || !l?.do) continue;
+    const scope = String(l.scope).toLowerCase().slice(0, 60), title = String(l.title).slice(0, 90);
+    const { data: prev } = await db.from("scout_lessons").select("id, evidence").eq("scope", scope).eq("title", title).maybeSingle();
+    const evidence = [...new Set([...(((prev as any)?.evidence) ?? []), ...((l.evidence ?? []) as string[])])].slice(-20);
+    const row = { scope, title, when_text: String(l.when).slice(0, 400), do_text: String(l.do).slice(0, 800), avoid_text: l.avoid ? String(l.avoid).slice(0, 400) : null,
+      signature: String(l.signature ?? "").toLowerCase().slice(0, 200), evidence, updated_at: new Date().toISOString() };
+    const { error } = prev ? await db.from("scout_lessons").update(row).eq("id", (prev as any).id)
+      : await db.from("scout_lessons").insert({ ...row, source: "reflect" });
+    if (!error) learned++;
+  }
+  await mirrorPlaybook();
+  const unsolved = (out.unsolved ?? []).slice(0, 5);
+  if (learned || unsolved.length) {
+    await db.rpc("scout_notify", {
+      p_title: learned ? `Scout learned ${learned} thing${learned === 1 ? "" : "s"} overnight` : "Scout found something it can't fix yet",
+      p_body: [unsolved.length ? `Still stuck on: ${unsolved.map((u: any) => u.problem).join("; ")}` : "", "See /admin/playbook."].filter(Boolean).join(" ").slice(0, 500),
+      p_severity: unsolved.length ? "warning" : "info", p_push: false, p_url: "/admin/playbook", p_dedupe: `scout.reflect.${la().day}`,
+    });
+  }
+  return { learned, unsolved: unsolved.length, looked_at: { actions: a.length, jobs: (jobs ?? []).length, incidents: (inc ?? []).length } };
+}
+
+/** The playbook every Claude session can read: bestly_memory lessons/scout-playbook. */
+async function mirrorPlaybook() {
+  const { data } = await db.from("scout_lessons").select("scope, title, when_text, do_text, avoid_text, wins, losses")
+    .eq("active", true).order("scope").limit(80);
+  if (!data?.length) return;
+  const body = "What Scout has learned (auto-written nightly from what failed and what fixed it; source table scout_lessons, managed at /admin/playbook).\n\n" +
+    (data as any[]).map((l) => `[${l.scope}] ${l.title}\n  When: ${l.when_text}\n  Do: ${l.do_text}${l.avoid_text ? `\n  Avoid: ${l.avoid_text}` : ""}${l.wins || l.losses ? `\n  Record: ${l.wins} worked, ${l.losses} didn't` : ""}`).join("\n\n");
+  await db.from("bestly_memory").upsert({
+    area: "lessons", key: "scout-playbook", title: "Scout's playbook: lessons from what failed and what worked", kind: "convention",
+    body: body.slice(0, 20000), tags: ["scout", "lessons", "self-healing"], source: "scout-daily reflect", written_by: "Spark", pinned: true, active: true,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "area,key" });
+}
+
 /* ───────── entry ───────── */
 
 // The cron sends the service key from the vault; it may not be byte-identical to this
@@ -314,7 +402,7 @@ async function isAdmin(jwt: string) {
 async function job(name: string, day: string, force: boolean) {
   if (!(await claimRun(day, name, force))) return { skipped: "already ran today" };
   try {
-    const res = name === "morning" ? await morning(day) : name === "drafts" ? await drafts(day) : await wrap(day);
+    const res = name === "morning" ? await morning(day) : name === "drafts" ? await drafts(day) : name === "reflect" ? await reflect(1) : await wrap(day);
     await finishRun(day, name, res);
     return res;
   } catch (e) {
@@ -351,6 +439,18 @@ Deno.serve(async (req) => {
       }
       case "call":
         return J(await call(String(body.id), !!body.force));
+      case "tick_reflect":
+        return J({ ok: true, hour, ran: hour === 2 ? await job("reflect", day, false) : null });
+      case "reflect":
+        return J({ ok: true, reflect: await reflect(Math.min(30, Math.max(1, Number(body.days) || 1))) });
+      case "todo_owner": {
+        const { data: t } = await db.from("scout_daily").select("id, title, action").eq("id", String(body.id)).maybeSingle();
+        const cardId = Number((t as any)?.action?.deck_card);
+        if (!t || !cardId) return J({ ok: false, error: "no to-do with a Deck card" });
+        const d = await deck();
+        const ok = await d.renameCard(cardId, `${(t as any).action.owner}: ${(t as any).title}`);
+        return J({ ok, card: cardId });
+      }
       case "deck_check": {
         const d = await deck();
         return J({ ok: true, board: d.board.title, list: d.stack.title });

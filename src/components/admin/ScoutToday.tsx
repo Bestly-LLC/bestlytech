@@ -111,6 +111,19 @@ export function ScoutToday() {
   }, [rows, today]);
 
   const doneCount = picks.filter((p) => p.status === "done").length;
+  // Everyone who has owned a call to-do lately, so a wrong owner is one tap to fix.
+  const people = useMemo(() => {
+    const names = new Set<string>(["Jared"]);
+    for (const r of rows ?? []) if (r.kind === "call" && r.action?.owner) names.add(String(r.action.owner));
+    return [...names];
+  }, [rows]);
+
+  const setOwner = async (r: Row, owner: string) => {
+    setRows((all) => all?.map((x) => (x.id === r.id ? { ...x, action: { ...x.action, owner } } : x)) ?? null);
+    const { error } = await supabase.rpc("todo_set_owner" as never, { p_id: r.id, p_owner: owner } as never);
+    if (error) { toast.error(error.message); load(); return; }
+    toast.success(owner.toLowerCase() === "jared" ? "Moved to your list" : `Moved to ${owner}`);
+  };
 
   return (
     <div className="space-y-8">
@@ -225,7 +238,7 @@ export function ScoutToday() {
                   <div className="min-w-0 flex-1">
                     <p className="text-[0.9375rem] text-white">{c.title}</p>
                     <p className="mt-0.5 text-xs text-white/50">
-                      <span className={cn("font-semibold", mine ? "text-white/80" : "text-white/60")}>{mine ? "You" : owner}</span>
+                      <OwnerMenu owner={owner} mine={mine} people={people} onPick={(o) => setOwner(c, o)} />
                       {c.action?.due ? ` · due ${c.action.due}` : ""} · {String(c.action?.meeting ?? "")}
                     </p>
                   </div>
@@ -253,6 +266,28 @@ export function ScoutToday() {
         @media (prefers-reduced-motion: reduce) { .scout-card-in { animation: none; } }
       `}</style>
     </div>
+  );
+}
+
+function OwnerMenu({ owner, mine, people, onPick }: { owner: string; mine: boolean; people: string[]; onPick: (o: string) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className={cn("inline-flex items-center gap-0.5 rounded font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80", mine ? "text-white/80" : "text-white/60")}
+          aria-label={`Owner: ${mine ? "you" : owner}. Change owner`}
+        >
+          {mine ? "You" : owner} <ChevronDown className="h-3 w-3" aria-hidden />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-44">
+        {people.filter((p) => p.toLowerCase() !== owner.toLowerCase()).map((p) => (
+          <DropdownMenuItem key={p} onSelect={() => onPick(p)}>
+            {p.toLowerCase() === "jared" ? "Mine" : `Give to ${p}`}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
