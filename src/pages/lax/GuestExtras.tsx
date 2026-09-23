@@ -4,7 +4,7 @@
  * Data comes from lax_guest_public (page) and weatherkit-proxy (Apple WeatherKit, public, cached).
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { BatteryMedium, Car, CloudSun, Lock, LockOpen, Mail, Thermometer, Zap } from "lucide-react";
+import { BatteryMedium, Car, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSun, Lock, LockOpen, Mail, Moon, Sun, Thermometer, Wind, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const PEACH = "#FFB878";
@@ -44,9 +44,12 @@ export function TripCard({ trip }: { trip: Trip }) {
   );
 }
 
-type Hour = { forecastStart: string; temperature: number; conditionCode: string; precipitationChance: number };
+type Hour = { forecastStart: string; temperature: number; conditionCode: string; precipitationChance: number; daylight?: boolean };
 type Day = { forecastStart: string; temperatureMax: number; temperatureMin: number; conditionCode: string; precipitationChance: number };
-type Wx = { currentWeather?: { temperature: number; conditionCode: string }; forecastHourly?: { hours: Hour[] }; forecastDaily?: { days: Day[] } };
+type Wx = {
+  currentWeather?: { temperature: number; conditionCode: string; daylight?: boolean; temperatureApparent?: number };
+  forecastHourly?: { hours: Hour[] }; forecastDaily?: { days: Day[] };
+};
 
 function nearestHour(hours: Hour[], at: string) {
   const t = new Date(at).getTime();
@@ -58,34 +61,117 @@ function dayOf(days: Day[], at: string) {
   return days.find((d) => new Date(new Date(d.forecastStart).getTime() + 12 * 3600 * 1000).toLocaleDateString("en-US", { timeZone: LA }) === key) ?? null;
 }
 
-/** Apple Weather at LAX: now, plus pickup/return if they're inside the forecast window. */
+// Apple Weather look: sky gradient follows the condition and day/night.
+function sky(code: string, day: boolean) {
+  const c = code.toLowerCase();
+  if (/rain|drizzle|shower|thunder|storm/.test(c)) return day ? "from-[#4b5d73] to-[#27313f]" : "from-[#232b38] to-[#11151c]";
+  if (/fog|haze|smok|dust/.test(c)) return day ? "from-[#8a97a6] to-[#5b6674]" : "from-[#343a44] to-[#1a1d23]";
+  if (/cloud|overcast/.test(c)) return day ? "from-[#5f7fa3] to-[#34506f]" : "from-[#26324a] to-[#121826]";
+  return day ? "from-[#3a8ee6] to-[#1f5fb0]" : "from-[#1b2a55] to-[#0b1330]";
+}
+function WxIcon({ code, day, className }: { code: string; day: boolean; className?: string }) {
+  const c = code.toLowerCase();
+  const p = { className, strokeWidth: 1.75, "aria-hidden": true } as const;
+  if (/thunder|storm/.test(c)) return <CloudLightning {...p} />;
+  if (/drizzle/.test(c)) return <CloudDrizzle {...p} />;
+  if (/rain|shower/.test(c)) return <CloudRain {...p} />;
+  if (/fog|haze|smok|dust/.test(c)) return <CloudFog {...p} />;
+  if (/wind|breez/.test(c)) return <Wind {...p} />;
+  if (/partly|mostlyclear/.test(c)) return day ? <CloudSun {...p} /> : <CloudMoon {...p} />;
+  if (/cloud|overcast/.test(c)) return <Cloud {...p} />;
+  return day ? <Sun {...p} /> : <Moon {...p} />;
+}
+const hourLabel = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", hour12: true, timeZone: LA }).replace(" ", "");
+const sameHour = (a: string, b: string) => Math.abs(+new Date(a) - +new Date(b)) < 30 * 60 * 1000;
+const rainPct = (p: number) => (p >= 0.3 ? `${Math.round(p * 10) * 10}%` : null);
+
+/** Apple Weather at LAX, laid out like the Weather app: big temp, hourly strip with the pickup hour marked, then pickup/return rows. */
 export function WeatherCard({ trip }: { trip: Trip | null }) {
-  const [wx, setWx] = useState<Wx | null>(null);
+  const [wx, setWx] = useState<Wx | null | "loading">("loading");
   useEffect(() => {
     supabase.functions.invoke("weatherkit-proxy", { body: { lat: 33.947, lon: -118.3816, dataSets: "currentWeather,forecastHourly,forecastDaily" } })
       .then(({ data }) => setWx((data as Wx) ?? null)).catch(() => setWx(null));
   }, []);
+  if (wx === "loading") return <div className="h-[260px] animate-pulse rounded-3xl bg-white/[0.06] motion-reduce:animate-none" aria-label="Loading weather" />;
   if (!wx?.currentWeather) return null;
-  const rows: { label: string; text: string }[] = [];
-  const at = (label: string, iso: string) => {
+
+  const now = wx.currentWeather;
+  const day = now.daylight ?? true;
+  const today = wx.forecastDaily?.days?.[0];
+  const pickup = trip && new Date(trip.starts_at) > new Date() ? trip.starts_at : null;
+  const ret = trip && new Date(trip.ends_at) > new Date() ? trip.ends_at : null;
+
+  // Hourly strip: 12 hours from now, or shifted so a later pickup hour is in view.
+  const hours = (wx.forecastHourly?.hours ?? []).filter((h) => +new Date(h.forecastStart) > Date.now() - 3600 * 1000);
+  const pIdx = pickup ? hours.findIndex((h) => sameHour(h.forecastStart, pickup)) : -1;
+  const start = pIdx > 6 ? pIdx - 3 : 0;
+  const strip = hours.slice(start, start + 12);
+
+  const rows: { label: string; when: string; code: string; day: boolean; temp: string; rain: string | null }[] = [];
+  const addRow = (label: string, iso: string) => {
     const h = wx.forecastHourly ? nearestHour(wx.forecastHourly.hours, iso) : null;
-    if (h) {
-      rows.push({ label: `${label} · ${fmtTime(iso)}`, text: `${cToF(h.temperature)}°F, ${cond(h.conditionCode)}${h.precipitationChance >= 0.3 ? ` · ${Math.round(h.precipitationChance * 100)}% rain` : ""}` });
-      return;
-    }
+    if (h) { rows.push({ label, when: fmtWhen(iso), code: h.conditionCode, day: h.daylight ?? true, temp: `${cToF(h.temperature)}°`, rain: rainPct(h.precipitationChance) }); return; }
     const d = wx.forecastDaily ? dayOf(wx.forecastDaily.days, iso) : null;
-    if (d) rows.push({ label: `${label} · ${new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: LA })}`, text: `${cToF(d.temperatureMax)}° / ${cToF(d.temperatureMin)}°, ${cond(d.conditionCode)}${d.precipitationChance >= 0.3 ? ` · ${Math.round(d.precipitationChance * 100)}% rain` : ""}` });
+    if (d) rows.push({ label, when: fmtWhen(iso), code: d.conditionCode, day: true, temp: `${cToF(d.temperatureMax)}° / ${cToF(d.temperatureMin)}°`, rain: rainPct(d.precipitationChance) });
   };
-  if (trip && new Date(trip.starts_at) > new Date()) at("Pickup", trip.starts_at);
-  if (trip && new Date(trip.ends_at) > new Date()) at("Return", trip.ends_at);
+  if (pickup) addRow("Pickup", pickup);
+  if (ret) addRow("Return", ret);
+
   return (
-    <Card label="Weather at LAX" icon={<CloudSun className="h-3.5 w-3.5" />}>
-      <p className="text-[15px] text-white"><span className="text-2xl font-semibold">{cToF(wx.currentWeather.temperature)}°F</span> <span className="text-white/70">now, {cond(wx.currentWeather.conditionCode)}</span></p>
-      {rows.map((r) => (
-        <p key={r.label} className="mt-1.5 text-[14px] text-white/80"><span className="text-white/50">{r.label}:</span> {r.text}</p>
-      ))}
-      <p className="mt-2 text-[11px] text-white/35"> Weather</p>
-    </Card>
+    <section aria-label="Weather at LAX" className={`overflow-hidden rounded-3xl bg-gradient-to-b ${sky(now.conditionCode, day)} text-white shadow-lg shadow-black/20`}>
+      <div className="px-5 pb-4 pt-5 text-center">
+        <p className="text-[15px] font-medium">LAX</p>
+        <p className="mt-0.5 text-[64px] font-extralight leading-none tracking-tight tabular-nums">{cToF(now.temperature)}°</p>
+        <p className="mt-1 text-[17px] font-medium capitalize text-white/90">{cond(now.conditionCode)}</p>
+        {today && <p className="text-[15px] text-white/80 tabular-nums">H:{cToF(today.temperatureMax)}°&nbsp;&nbsp;L:{cToF(today.temperatureMin)}°</p>}
+      </div>
+
+      {strip.length > 0 && (
+        <div className="mx-3 mb-3 rounded-2xl bg-black/15 backdrop-blur-sm">
+          <p className="border-b border-white/10 px-3 py-2 text-[12px] uppercase tracking-wide text-white/60">
+            {pickup && pIdx >= 0 ? `Hourly · pickup at ${fmtTime(pickup)}` : "Hourly forecast"}
+          </p>
+          <ol className="flex snap-x gap-1 overflow-x-auto px-2 py-3 [scrollbar-width:none]" aria-label="Hourly forecast">
+            {strip.map((h, i) => {
+              const isPickup = pickup ? sameHour(h.forecastStart, pickup) : false;
+              const label = i === 0 && start === 0 ? "Now" : hourLabel(h.forecastStart);
+              const r = rainPct(h.precipitationChance);
+              return (
+                <li key={h.forecastStart}
+                  className={`flex min-w-[52px] snap-start flex-col items-center gap-1.5 rounded-xl px-1.5 py-1.5 ${isPickup ? "bg-white/20 ring-1 ring-[#FFB878]/70" : ""}`}
+                  aria-label={`${isPickup ? "Pickup, " : ""}${label}: ${cToF(h.temperature)} degrees, ${cond(h.conditionCode)}${r ? `, ${r} chance of rain` : ""}`}>
+                  <span className={`text-[13px] font-medium ${isPickup ? "text-[#FFB878]" : "text-white/90"}`}>{isPickup ? "Pickup" : label}</span>
+                  <WxIcon code={h.conditionCode} day={h.daylight ?? true} className="h-6 w-6" />
+                  <span className="h-3 text-[11px] font-semibold text-sky-200">{r ?? ""}</span>
+                  <span className="text-[17px] font-medium tabular-nums">{cToF(h.temperature)}°</span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <ul className="mx-3 mb-3 divide-y divide-white/10 rounded-2xl bg-black/15 backdrop-blur-sm">
+          {rows.map((r) => (
+            <li key={r.label} className="flex items-center gap-3 px-3.5 py-3">
+              <WxIcon code={r.code} day={r.day} className="h-6 w-6 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-semibold">{r.label}</p>
+                <p className="text-[13px] text-white/70">{r.when}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[17px] font-medium tabular-nums">{r.temp}</p>
+                {r.rain && <p className="text-[12px] font-semibold text-sky-200">{r.rain} rain</p>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <a href="https://weatherkit.apple.com/legal-attribution.html" target="_blank" rel="noreferrer"
+        className="block pb-3 text-center text-[11px] text-white/55 hover:text-white/80">{""} Weather · Data sources</a>
+    </section>
   );
 }
 
