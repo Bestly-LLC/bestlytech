@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 // Bound call: supabase.rpc unbound loses `this` ("reading 'rest'").
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
-const card = "rounded-2xl border border-white/10 bg-white/[0.03] p-5 bento:border-neutral-200 bento:bg-white";
+const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
 
 type TState = { client_id: string | null; has_secret: boolean; enabled: boolean; monthly_cap_usd: number; per_trip_cap_usd: number; spent_usd: number };
 
@@ -73,7 +73,7 @@ export function HostPassCard() {
           <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Your own garage pass. Add it once on your iPhone; the new code lands in it on the 1st, when you save it here.</p>
         </div>
       </div>
-      <a href={url} className="inline-flex shrink-0 items-center justify-center rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white ring-1 ring-white/20 hover:bg-neutral-900">Add my pass to Apple Wallet</a>
+      <a href={url} className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black hover:bg-white/90 bento:bg-[#111114] bento:text-white bento:hover:bg-[#2a2a30]">Add my pass to Apple Wallet</a>
     </div>
   );
 }

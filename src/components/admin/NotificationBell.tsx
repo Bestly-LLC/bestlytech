@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, CircleDollarSign, Cloud, FileSignature, ListChecks, Mail,
-  Rocket, Snowflake, Store, Wrench, Binoculars, Check, Copy, type LucideIcon,
+  Rocket, Snowflake, Store, Wrench, Binoculars, Check, Copy, Car, QrCode, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copyForClaude } from "@/lib/copyForClaude";
@@ -49,6 +49,23 @@ const KIND: Record<string, { icon: LucideIcon; tint: string; label: string }> = 
 };
 const kindMeta = (k: string) => KIND[k] ?? { icon: AlertTriangle, tint: "bg-white/10 text-white/70", label: "Update" };
 
+// Sort alerts by what they're about, not who sent them: a Scout push about the LAX pass files under
+// "LAX Parking Pass", Turo Watch runs under "Turo". Group drives the filter chips.
+type Meta = { icon: LucideIcon; tint: string; label: string; group: string };
+const TOPICS: { test: (n: Notification) => boolean; meta: Omit<Meta, "label"> & { label: string } }[] = [
+  { test: (n) => /\/admin\/turo\/lax-pass/.test(n.url ?? "") || /\blax (parking|pass)|parking code|host pass/i.test(n.title),
+    meta: { icon: QrCode, tint: "bg-teal-400/15 text-teal-300", label: "LAX Parking Pass", group: "Turo" } },
+  { test: (n) => /\/admin\/turo/.test(n.url ?? "") || /\bturo\b/i.test(n.title),
+    meta: { icon: Car, tint: "bg-orange-400/15 text-orange-300", label: "Turo", group: "Turo" } },
+];
+function metaFor(n: Notification): Meta {
+  const topic = TOPICS.find((t) => t.test(n));
+  if (topic) return { ...topic.meta, label: n.kind === "scout.push" ? `${topic.meta.label} · sent to your phone` : topic.meta.label };
+  const k = kindMeta(n.kind);
+  const group = n.kind.startsWith("scout") ? "Scout" : n.kind === "monitor" ? "Monitor" : n.kind === "cy_needs_you" ? "Cookie Yeti" : "Work";
+  return { ...k, group };
+}
+
 function ago(iso: string) {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (m < 1) return "now";
@@ -63,7 +80,7 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [items, setItems] = useState<Notification[]>([]);
-  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [filter, setFilter] = useState<string>("all");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pane, setPane] = useState<PaneAlert | null>(null);
   // Desktop alerts (Web Push): the worker registers on every admin load; turning it on needs a click.
@@ -107,7 +124,7 @@ export function NotificationBell() {
       await supabase.from("admin_notifications" as any).update({ read_at: at } as any).eq("id", n.id).select("id");
     }
     // Open the alert in a reading pane with suggested next moves for Scout (it has a link to the page).
-    setPane({ ...n, kindLabel: kindMeta(n.kind).label });
+    setPane({ ...n, kindLabel: metaFor(n).label });
   }, []);
 
   useEffect(() => {
@@ -133,7 +150,13 @@ export function NotificationBell() {
   }, [load, go]);
 
   const unread = useMemo(() => items.filter((n) => !n.read_at).length, [items]);
-  const shown = filter === "unread" ? items.filter((n) => !n.read_at) : items;
+  const groups = useMemo(() => {
+    const order = ["Turo", "Work", "Scout", "Monitor", "Cookie Yeti"];
+    const present = new Set(items.map((n) => metaFor(n).group));
+    return order.filter((g) => present.has(g));
+  }, [items]);
+  const shown = filter === "unread" ? items.filter((n) => !n.read_at)
+    : filter === "all" ? items : items.filter((n) => metaFor(n).group === filter);
 
   const markAll = async () => {
     const ids = items.filter((n) => !n.read_at).map((n) => n.id);
@@ -191,11 +214,11 @@ export function NotificationBell() {
             )}
           </div>
         )}
-        <div className="flex gap-1 px-3 pb-2" role="group" aria-label="Show">
-          {(["all", "unread"] as const).map((f) => (
+        <div className="flex gap-1 overflow-x-auto px-3 pb-2 [scrollbar-width:none]" role="group" aria-label="Show">
+          {["all", "unread", ...groups].map((f) => (
             <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}
-              className={cn("h-8 rounded-md px-2.5 text-xs", filter === f ? "bg-white/10 text-white" : "text-white/55 hover:text-white")}>
-              {f === "all" ? "All" : `Unread${unread ? ` ${unread}` : ""}`}
+              className={cn("h-8 shrink-0 rounded-md px-2.5 text-xs", filter === f ? "bg-white/10 text-white" : "text-white/55 hover:text-white")}>
+              {f === "all" ? "All" : f === "unread" ? `Unread${unread ? ` ${unread}` : ""}` : f}
             </button>
           ))}
         </div>
@@ -212,7 +235,7 @@ export function NotificationBell() {
           ) : (
             <ul>
               {shown.map((n) => {
-                const k = kindMeta(n.kind);
+                const k = metaFor(n);
                 const Icon = k.icon;
                 return (
                   <li key={n.id} className="group/row relative">

@@ -87,6 +87,8 @@ const opsItems = [
 const hokuItems = [
   { title: "HOKU admin", url: HOKU_ADMIN_URL, icon: ShoppingBag, sso: true },
 ];
+const ALL_NAV_URLS = [...workItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
+
 
 export const ADMIN_NAV_SECTIONS = [
   { label: "Work", items: workItems },
@@ -209,7 +211,10 @@ export function AdminSidebar() {
     if (path === "/admin/home-hub") return currentPath === "/admin/home-hub";
     // Lead detail pages (a cloud deal, a marketplace submission) belong to Leads.
     if (path === "/admin/leads") return ["/admin/leads", "/admin/cloud", "/admin/submissions", "/admin/hires"].some((p) => currentPath.startsWith(p));
-    return currentPath.startsWith(path);
+    // A deeper nav item wins: on /admin/turo/lax-pass only "LAX Parking Pass" lights up, not "Turo Watch".
+    const under = (p: string) => currentPath === p || currentPath.startsWith(p + "/");
+    if (!under(path)) return false;
+    return !ALL_NAV_URLS.some((u) => u.length > path.length && u.startsWith(path + "/") && under(u));
   };
 
   const [hokuBusy, setHokuBusy] = useState(false);
