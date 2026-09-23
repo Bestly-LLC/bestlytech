@@ -20,7 +20,43 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { cn } from "@/lib/utils";
 
 /** Home. Everything else on this dashboard is Jared's day, so this is too. */
-const HOME = { lat: 34.09, lon: -118.3617, label: "West Hollywood" };
+const HOME: Place = { lat: 34.09, lon: -118.3617, label: "West Hollywood" };
+export type Place = { lat: number; lon: number; label: string };
+
+/*
+ * Where the viewer is, for the partner portal (Eli does not live where Jared does).
+ * The browser asks once; the answer is kept on this device so it does not ask on every
+ * visit, and refreshed quietly after a day. Coordinates are rounded to ~1 km before they
+ * leave the page - plenty for weather, and no one needs the house.
+ */
+const LOC_KEY = "bestly-wx-place";
+const DAY_MS = 24 * 3600 * 1000;
+const round = (n: number) => Math.round(n * 100) / 100;
+function cachedPlace(): (Place & { at: number }) | null {
+  try { return JSON.parse(localStorage.getItem(LOC_KEY) ?? "null"); } catch { return null; }
+}
+async function placeName(lat: number, lon: number): Promise<string> {
+  try {
+    const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+    const j = await r.json();
+    return j.city || j.locality || j.principalSubdivision || "Your area";
+  } catch { return "Your area"; }
+}
+function locate(): Promise<Place> {
+  return new Promise((resolve, reject) => {
+    if (!("geolocation" in navigator)) return reject(new Error("no geolocation"));
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = round(pos.coords.latitude), lon = round(pos.coords.longitude);
+        const place = { lat, lon, label: await placeName(lat, lon) };
+        try { localStorage.setItem(LOC_KEY, JSON.stringify({ ...place, at: Date.now() })); } catch { /* ok */ }
+        resolve(place);
+      },
+      reject,
+      { maximumAge: 60 * 60 * 1000, timeout: 15000, enableHighAccuracy: false },
+    );
+  });
+}
 const REFRESH_MS = 15 * 60 * 1000;
 const ATTRIBUTION = "https://developer.apple.com/weatherkit/data-source-attribution/";
 
@@ -42,7 +78,23 @@ const words = (code: string) => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-export function WeatherNow({ className }: { className?: string }) {
+export function WeatherNow({ className, useDeviceLocation = false }: {
+  className?: string;
+  /** Partner portal: weather where the viewer is (browser location), not Jared's home. */
+  useDeviceLocation?: boolean;
+}) {
+  const [place, setPlace] = useState<Place | null>(() => {
+    if (!useDeviceLocation) return HOME;
+    const c = cachedPlace();
+    return c ? { lat: c.lat, lon: c.lon, label: c.label } : null;
+  });
+  const [needsTap, setNeedsTap] = useState(false);
+  useEffect(() => {
+    if (!useDeviceLocation) return;
+    const c = cachedPlace();
+    if (c && Date.now() - c.at < DAY_MS) return;
+    locate().then(setPlace).catch(() => { if (!c) setNeedsTap(true); });
+  }, [useDeviceLocation]);
   const [now, setNow] = useState<Current | null>(null);
   const [today, setToday] = useState<Day | null>(null);
   const [failed, setFailed] = useState(false);
@@ -50,10 +102,11 @@ export function WeatherNow({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (!place) return;
     let alive = true;
     const load = async () => {
       const { data, error } = await supabase.functions.invoke("weatherkit-proxy", {
-        body: { lat: HOME.lat, lon: HOME.lon, dataSets: "currentWeather,forecastHourly,forecastDaily" },
+        body: { lat: place.lat, lon: place.lon, dataSets: "currentWeather,forecastHourly,forecastDaily" },
       });
       if (!alive) return;
       const cw = (data as { currentWeather?: Current })?.currentWeather;
@@ -76,9 +129,25 @@ export function WeatherNow({ className }: { className?: string }) {
     load();
     const t = setInterval(load, REFRESH_MS);
     return () => { alive = false; clearInterval(t); };
-  }, []);
+  }, [place]);
 
-  if (failed || !now) return null;
+  if (needsTap && !place) {
+    // Location was blocked or timed out: one tap asks again (Safari only asks from a click).
+    return (
+      <button
+        type="button"
+        onClick={() => { setNeedsTap(false); locate().then(setPlace).catch(() => setNeedsTap(true)); }}
+        className={cn(
+          "inline-flex items-center gap-2 rounded-[1.25rem] bg-white/[0.05] px-3.5 py-2.5 text-sm font-medium text-white/75 ring-1 ring-inset ring-white/[0.07] transition hover:bg-white/[0.08] bento:bg-[#F3F2EE] bento:text-[#33313a] bento:ring-[#e6e4de]",
+          className,
+        )}
+      >
+        <WeatherGlyph code="PartlyCloudy" day className="h-8 w-8 shrink-0" />
+        Show my weather
+      </button>
+    );
+  }
+  if (failed || !now || !place) return null;
 
   const temp = f(now.temperature);
   const feels = f(now.temperatureApparent);
@@ -118,7 +187,7 @@ export function WeatherNow({ className }: { className?: string }) {
             </span>
           )}
           {drift && <span className="tabular-nums">Feels {feels}&deg;</span>}
-          <span className="hidden xl:inline">{HOME.label}</span>
+          <span className="hidden xl:inline">{place.label}</span>
           <a
             href={now.metadata?.attributionURL ?? ATTRIBUTION}
             target="_blank"
@@ -132,9 +201,9 @@ export function WeatherNow({ className }: { className?: string }) {
     </div>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-6xl overflow-y-auto border-white/10 bg-[#07090d] p-3 text-white sm:p-4 bento:bg-[#F3F2EE] bento:text-[#17151c]">
-        <DialogTitle className="sr-only">Weather in {HOME.label}</DialogTitle>
+        <DialogTitle className="sr-only">Weather in {place.label}</DialogTitle>
         <DialogDescription className="sr-only">Now, the next hours, and the next ten days.</DialogDescription>
-        {board && <WeatherBoard data={board} place={HOME.label} />}
+        {board && <WeatherBoard data={board} place={place.label} />}
       </DialogContent>
     </Dialog>
     </>
