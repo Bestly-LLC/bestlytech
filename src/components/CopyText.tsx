@@ -42,6 +42,21 @@ export function CopyButton({ text, label = "Copy", className }: { text: string; 
   );
 }
 
+/**
+ * A multi-line block (prompt, script, config) with a one-tap "Copy all" button.
+ * Use this for anything Jared needs to paste somewhere else.
+ */
+export function CopyBlock({ text, className }: { text: string; className?: string }) {
+  return (
+    <div className={cn("my-2 rounded-xl overflow-hidden border border-white/[0.1] bg-black/40", className)}>
+      <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-[12px] text-white/90 leading-relaxed select-all">{text}</pre>
+      <div className="flex justify-end border-t border-white/[0.07] px-3 py-1.5">
+        <CopyButton text={text} label="Copy all" />
+      </div>
+    </div>
+  );
+}
+
 export function CopyText({ text, className }: { text: string; className?: string }) {
   const cmd = pasteable(text);
   const prose = cmd ? text.replace(/`([^`]+)`/g, "$1") : text;

@@ -17,6 +17,7 @@ import {
   Check,
   RotateCcw,
 } from "lucide-react";
+import { CopyBlock } from "@/components/CopyText";
 import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecording } from "./ScoutRecorder";
 import { ScoutJobs, useMacJobs, type MacJob } from "./ScoutJobs";
 import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
@@ -103,6 +104,25 @@ function pageContext(path: string, about?: string) {
  * no "reply with yes" - which is the whole point.
  */
 const OPTION_LINE = /\n?^\s*OPTIONS?\s*:\s*(.+?)\s*$/im;
+
+// Regex that matches a fenced code block: ```optional-lang\ncontent\n```
+const FENCE_RE = /```[^\n]*\n([\s\S]*?)```/g;
+
+/**
+ * Splits a Scout message body into alternating plain-text and code-block segments.
+ * Returns an array of {kind:'text'|'code', content:string}.
+ */
+export function splitFences(body: string): Array<{ kind: "text" | "code"; content: string }> {
+  const parts: Array<{ kind: "text" | "code"; content: string }> = [];
+  let last = 0;
+  for (const m of body.matchAll(FENCE_RE)) {
+    if (m.index! > last) parts.push({ kind: "text", content: body.slice(last, m.index) });
+    parts.push({ kind: "code", content: m[1].trimEnd() });
+    last = m.index! + m[0].length;
+  }
+  if (last < body.length) parts.push({ kind: "text", content: body.slice(last) });
+  return parts;
+}
 
 export function splitOptions(body: string): { text: string; options: string[] } {
   const m = body.match(OPTION_LINE);
