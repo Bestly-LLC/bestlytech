@@ -10,6 +10,7 @@ import { Bell, Binoculars, CalendarClock, Check, ExternalLink, MessagesSquare, U
 import { supabase } from "@/integrations/supabase/client";
 import { openScout } from "@/components/admin/scoutBus";
 import { AdminMark } from "@/components/AdminMark";
+import { WeatherNow } from "@/components/admin/WeatherNow";
 import { useNextMeeting, whenLabel } from "@/pages/partner/PartnerExtras";
 import { cn } from "@/lib/utils";
 
@@ -84,6 +85,7 @@ export function CommandHero() {
                 {todos === null ? "…" : todos.length ? `${todos.length} to-do${todos.length === 1 ? "" : "s"} from calls` : "No call to-dos on you"}
                 {next ? ` · next meeting ${whenLabel(next.start).toLowerCase()}` : ""}
               </p>
+              <WeatherNow className="mt-1.5" />
             </div>
           </div>
           <a href={joinUrl} target="_blank" rel="noreferrer"
