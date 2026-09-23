@@ -87,6 +87,24 @@ function Flag({ tone, icon: Icon, children }: { tone: "ok" | "warn" | "bad"; ico
   );
 }
 
+/**
+ * Blue Steel itself. Cropped tight to the car and served at 560px - twice the largest
+ * size it renders - so it stays sharp on a retina screen for 31KB.
+ */
+function CarShot({ className }: { className?: string }) {
+  return (
+    <img
+      src="/blue-steel.webp"
+      alt="Blue Steel, the 2020 Tesla Model 3"
+      width={560}
+      height={272}
+      loading="eager"
+      decoding="async"
+      className={cn("h-auto w-[13rem] shrink-0 drop-shadow-[0_12px_24px_rgba(0,0,0,0.45)] sm:w-[16rem]", className)}
+    />
+  );
+}
+
 function Tile({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={cn(card, "p-4", className)}>
@@ -129,6 +147,8 @@ export function FleetNow({ trips, vehicle }: { trips: Trip[]; vehicle: VehicleSt
         <div aria-hidden className="pointer-events-none absolute -right-24 -top-28 h-64 w-64 rounded-full bg-[#0A84FF]/12 blur-3xl" />
         {current ? (
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+            <CarShot />
             <div className="min-w-0">
               <p className={cn("text-[0.7rem] font-semibold uppercase tracking-wide", muted)}>Out now</p>
               <h3 className={cn("mt-1 text-[1.75rem] font-bold leading-tight tracking-tight", ink)}>
@@ -158,6 +178,7 @@ export function FleetNow({ trips, vehicle }: { trips: Trip[]; vehicle: VehicleSt
                 </a>
               )}
             </div>
+            </div>
             <div className="shrink-0 lg:text-right">
               <p className={cn("text-[0.7rem] font-semibold uppercase tracking-wide", muted)}>
                 {back?.past ? "Overdue by" : "Returns in"}
@@ -169,12 +190,15 @@ export function FleetNow({ trips, vehicle }: { trips: Trip[]; vehicle: VehicleSt
             </div>
           </div>
         ) : (
-          <div className="relative">
-            <p className={cn("text-[0.7rem] font-semibold uppercase tracking-wide", muted)}>Out now</p>
-            <h3 className={cn("mt-1 text-[1.5rem] font-bold tracking-tight", ink)}>Nobody has the car</h3>
-            <p className={cn("mt-1 text-sm", muted)}>
-              {next ? `Next out ${dayTime(next.starts_at)}` : "Nothing booked."}
-            </p>
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+            <CarShot />
+            <div>
+              <p className={cn("text-[0.7rem] font-semibold uppercase tracking-wide", muted)}>Out now</p>
+              <h3 className={cn("mt-1 text-[1.5rem] font-bold tracking-tight", ink)}>Nobody has the car</h3>
+              <p className={cn("mt-1 text-sm", muted)}>
+                {next ? `Next out ${dayTime(next.starts_at)}` : "Nothing booked."}
+              </p>
+            </div>
           </div>
         )}
       </div>
