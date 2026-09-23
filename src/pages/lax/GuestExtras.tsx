@@ -170,7 +170,7 @@ export function WeatherCard({ trip }: { trip: Trip | null }) {
       )}
 
       <a href="https://weatherkit.apple.com/legal-attribution.html" target="_blank" rel="noreferrer"
-        className="block pb-3 text-center text-[11px] text-white/55 hover:text-white/80">{""} Weather · Data sources</a>
+        className="block pb-3 text-center text-[11px] text-white/55 hover:text-white/80">Apple Weather · Data sources</a>
     </section>
   );
 }
