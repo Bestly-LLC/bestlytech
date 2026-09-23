@@ -86,7 +86,13 @@ const Card = ({ className, children, label }: { className?: string; children: Re
   <section
     className={cn(
       "rounded-[1.25rem] border border-white/[0.08] bg-[#0b0e14] p-4 sm:p-5",
-      "bento:border-[#e6e4de] bento:bg-white",
+      // NOT bento:bg-white. Under .admin-bento the theme redefines Tailwind's white as
+      // ink (--tw-white: 17 17 20) so that text-white/60 becomes ink at 60% with no
+      // per-page work - which means bento:bg-white paints a near-BLACK card. That is
+      // what left these panels dark while their bento:text-[#17151c] labels turned
+      // dark too: dark text on a dark card. The surface token is the safe way to say
+      // "the light theme's card".
+      "bento:border-[#e6e4de] bento:bg-[var(--bento-card)]",
       className,
     )}
   >
