@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
-import { Check, Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
+import { ArrowRight, Check, Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TagBar, TripSheet } from "./lax/TripSheet";
 import { AskButton, AskSheet } from "./lax/AskSheet";
@@ -390,6 +390,17 @@ export default function LaxGuest() {
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
 
             <p className="mt-10 text-center text-sm text-white/50">Questions? Tap Ask a question, or message your host in the Turo app.</p>
+
+            {/* Small Bestly ad: guests who like this page may want one for their own business. */}
+            <a href="https://www.bestly.tech/hire?utm_source=turo&utm_medium=guest-page&utm_campaign=lax-trip-page" target="_blank" rel="noopener"
+              className="mt-8 block rounded-3xl p-5 ring-1 ring-white/15 transition active:scale-[0.99]"
+              style={{ background: "linear-gradient(135deg, rgba(122,46,158,0.35), rgba(43,26,115,0.6))" }}>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Who made this page?</p>
+              <p className="mt-1 text-lg font-semibold text-white">Bestly built it. We can build one for you.</p>
+              <p className="mt-1.5 text-[15px] leading-relaxed text-white/75">We make websites, apps, and tools for small businesses. Like this page: live car info, A/C buttons, and a door pass right in your phone.</p>
+              <span className="mt-4 inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-[15px] font-semibold text-[#1A1140]">Tell us what you need <ArrowRight className="h-4 w-4" aria-hidden /></span>
+              <span className="mt-3 block text-[12px] text-white/45">bestly.tech · Los Angeles</span>
+            </a>
           </>
         )}
       </main>

@@ -21,7 +21,6 @@ export function AskButton({ onOpen }: { onOpen: () => void }) {
     <button type="button" onClick={onOpen}
       className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white/[0.08] text-[15px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98] motion-reduce:transition-none">
       <MessageCircleQuestion className="h-[18px] w-[18px]" style={{ color: PEACH }} aria-hidden /> Ask a question
-      <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#1A1140]" style={{ background: PEACH }}>Free</span>
     </button>
   );
 }
@@ -95,7 +94,7 @@ export function AskSheet({ open, onClose, token, slug }: { open: boolean; onClos
   );
 
   return (
-    <TripSheet open={open} onClose={onClose} kicker="Trip helper · free" title="Ask a question" footer={footer} bodyRef={body}>
+    <TripSheet open={open} onClose={onClose} kicker="Trip helper" title="Ask a question" footer={footer} bodyRef={body}>
       {urgent && (
         <div className="mb-3 rounded-xl bg-[#E4527A]/20 p-3 text-[14px] font-semibold leading-snug text-white ring-1 ring-[#E4527A]/50">
           If anyone is hurt, call 911 first. Then use Roadside Assistance in the Turo app and message your host there.
