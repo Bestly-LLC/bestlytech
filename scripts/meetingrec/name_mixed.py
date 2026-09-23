@@ -3,12 +3,15 @@ anything uploaded / AirDropped) - the counterpart of name_speakers.py for calls 
 
 Calls recorded on this Mac have two tracks, so JARED is always his own mic. An uploaded meeting is
 everyone mixed together, so here every voice, Jared's included, is told apart by voice:
-  - the audio is split into voices (sherpa-onnx diarization, same models as speakerid.py)
-  - each voice is matched to the saved voiceprints (voices/<name>.npy: jared, eli, elizabeth, ...)
-  - a voice with no match is "SPEAKER 2", "SPEAKER 3"...; if the roster names exactly one person
-    with no voiceprint and exactly one big voice is left, that voice is theirs (elimination) and
-    their voiceprint is saved for next time
-  - each transcript line goes to the voice speaking at that moment
+  - diarization (sherpa-onnx, same models as speakerid.py) only cuts the audio into bits: on one
+    room mic it over-splits (100 "speakers" in a 74-minute two-person meeting)
+  - each bit is scored against the saved voiceprints (voices/<name>.npy: jared, eli, ...) and is
+    that person when the best score is high enough AND clearly beats the next one
+  - bits too short to score take their diarization cluster's clear majority
+  - bits that match nobody are grouped by voice; a group with a minute of speech is a person
+    ("SPEAKER-2"...; or, when the roster names exactly one person with no voiceprint, them - and
+    their voiceprint is saved for next time)
+  - each transcript line goes to whoever is speaking at that moment
 
 usage: name_mixed.py <meeting-name> "<roster, comma separated, optional>"
 reads:  recordings/<name>-room.m4a   and  /tmp/<name>.room.tsv (talkscribe: start<TAB>LABEL<TAB>text)
@@ -25,8 +28,10 @@ from speakerid import segments, embed, cos, load_profiles  # noqa: E402
 
 R = f"{HERE}/recordings"
 V = f"{HERE}/voices"
-MATCH = 0.45          # same bar speakerid.identify uses
-MIN_VOICE_S = 20      # a "voice" with less speech than this is folded into the nearest real one
+MATCH = 0.40          # a bit is that person when their voiceprint scores this high...
+MARGIN = 0.04         # ...and beats the next voiceprint by this much (Jared and Eli are close)
+GROUP = 0.50          # unknown bits this alike are one voice
+NEW_VOICE_S = 60      # an unknown voice needs a minute of speech to count as a person
 ENROLL_MIN_S = 30
 
 name = sys.argv[1]
@@ -41,87 +46,102 @@ wav = f"/tmp/{name}-room.wav"
 if not os.path.exists(wav):
     subprocess.run(["afconvert", "-f", "WAVE", "-d", "LEI16@16000", "-c", "1", room, wav], check=True)
 
-# 1. voices
-nclust = len(set(roster) | {"jared"}) if roster else -1
-data, segs = segments(wav, nclust=nclust)
-vecs, secs, first = {}, {}, {}
-for s, e, c in segs:
-    secs[c] = secs.get(c, 0.0) + (e - s)
-    first.setdefault(c, s)
-    if e - s >= 1.0 and len(vecs.get(c, [])) < 60:          # 60 good bits is plenty per voice
-        v = embed(data[int(s * 16000):int(e * 16000)])
-        if v is not None:
-            vecs.setdefault(c, []).append(v)
-
-
-def centroid(vs):
-    m = np.mean(vs, axis=0)
-    return m / np.linalg.norm(m)
-
-
-cent = {c: centroid(v) for c, v in vecs.items() if v}
-
-# 2. tiny voices fold into the nearest big one (diarization over-splits long recordings)
-big = [c for c in cent if secs.get(c, 0) >= MIN_VOICE_S] or list(cent)
-alias = {}
-for c in cent:
-    if c not in big:
-        alias[c] = max(big, key=lambda b: cos(cent[c], cent[b]))
-
-# 3. names by voiceprint
+# 1. voices. Diarization on one room mic over-splits badly (a 74-minute meeting came back as 100
+#    clusters), so it is used only for timing. Who is who comes from each bit's own voiceprint score.
+data, segs = segments(wav, nclust=-1)
 profs = load_profiles()
-label = {}
-for c in big:
-    best = max(((n, cos(cent[c], p)) for n, p in profs.items()), key=lambda x: x[1], default=(None, 0.0))
-    label[c] = {"name": best[0], "how": "voice", "score": round(best[1], 2)} if best[1] >= MATCH else None
+pnames = list(profs)
+P = np.array([profs[n] for n in pnames]) if pnames else np.zeros((0, 1))
+bits = []                                    # [start, end, diar cluster, embedding|None, label|None]
+for s, e, c in segs:
+    v = embed(data[int(s * 16000):int(e * 16000)]) if e - s >= 1.0 else None
+    bits.append([s, e, c, v, None])
 
-# two voices can't both be the same person: keep the closer one
-taken = {}
-for c, lab in list(label.items()):
-    if lab:
-        o = taken.get(lab["name"])
-        if o is None or label[o]["score"] < lab["score"]:
-            if o is not None:
-                label[o] = None
-            taken[lab["name"]] = c
-        else:
-            label[c] = None
+# 2. a bit is someone when their voiceprint clearly wins (score and margin over the next best)
+for b in bits:
+    if b[3] is None or not pnames:
+        continue
+    sc = P @ b[3]
+    order = np.argsort(sc)[::-1]
+    best, second = sc[order[0]], (sc[order[1]] if len(order) > 1 else -1.0)
+    if best >= MATCH and best - second >= MARGIN:
+        b[4] = pnames[order[0]]
 
-left = [c for c in big if not label.get(c)]
-missing = [r for r in roster if r not in taken]
+# 3. bits too short to score take the clear majority of their diarization cluster
+votes = {}
+for b in bits:
+    if b[4]:
+        votes.setdefault(b[2], {}).setdefault(b[4], 0.0)
+        votes[b[2]][b[4]] += b[1] - b[0]
+for b in bits:
+    if b[4] is None and b[3] is None and b[2] in votes:
+        who_, w = max(votes[b[2]].items(), key=lambda x: x[1])
+        if w >= 0.6 * sum(votes[b[2]].values()):
+            b[4] = who_
+
+# 4. voices that match nobody: group them (average-link on the voiceprint), a group with a minute
+#    or more of speech is a person (SPEAKER-n, or a roster name by elimination); crumbs are left for
+#    the nearest named bit in time
+unk = [b for b in bits if b[4] is None and b[3] is not None]
+groups = [[b] for b in unk]
+cents = [b[3].copy() for b in unk]
+wts = [b[1] - b[0] for b in unk]
+while len(groups) > 1:
+    M = np.array(cents)
+    M = M / np.linalg.norm(M, axis=1, keepdims=True)
+    sim = M @ M.T
+    np.fill_diagonal(sim, -1)
+    i, j = np.unravel_index(int(sim.argmax()), sim.shape)
+    if sim[i, j] < GROUP:
+        break
+    a, z = min(i, j), max(i, j)
+    cents[a] = (cents[a] * wts[a] + cents[z] * wts[z]) / (wts[a] + wts[z])
+    wts[a] += wts[z]
+    groups[a] += groups[z]
+    del cents[z], wts[z], groups[z]
+big = sorted([k for k in range(len(groups)) if wts[k] >= NEW_VOICE_S], key=lambda k: min(b[0] for b in groups[k]))
+missing = [r for r in roster if r not in pnames and r != "jared"]
 learned = []
-if len(left) == 1 and len(missing) == 1:
-    c = left[0]
-    label[c] = {"name": missing[0], "how": "only one left", "score": None}
-    if missing[0] not in profs and secs.get(c, 0) >= ENROLL_MIN_S and len(vecs.get(c, [])) >= 3:
-        np.save(f"{V}/{missing[0]}.npy", cent[c])
-        learned.append(missing[0])
 n = 1
-for c in sorted(left, key=lambda c: first.get(c, 0)):
-    if not label.get(c):
+for k in big:
+    if len(big) == 1 and len(missing) == 1:
+        nm = missing[0]
+        c = cents[k] / np.linalg.norm(cents[k])
+        if wts[k] >= ENROLL_MIN_S:
+            np.save(f"{V}/{nm}.npy", c)
+            learned.append(nm)
+    else:
         n += 1
-        label[c] = {"name": f"speaker-{n}", "how": "unknown", "score": None}
+        nm = f"speaker-{n}"
+    for b in groups[k]:
+        b[4] = nm
 
-spans = sorted(((s, e, alias.get(c, c)) for s, e, c in segs if alias.get(c, c) in label), key=lambda x: x[0])
+named_bits = sorted((b for b in bits if b[4]), key=lambda b: b[0])
+spans = [(b[0], b[1], b[4]) for b in named_bits]
+
+stats = {}
+for s_, e_, nm in spans:
+    st = stats.setdefault(nm, {"min": 0.0, "first": s_})
+    st["min"] += (e_ - s_) / 60
+label = {nm: {"name": nm, "how": ("voice" if nm in pnames else "only one left" if nm in learned else "unknown"),
+              "score": None} for nm in stats}
 
 
 def who(t):
     best = None
-    for s, e, c in spans:
-        if s <= t <= e:
-            return c
-        d = s - t if t < s else t - e
+    for s_, e_, nm in spans:
+        if s_ <= t <= e_:
+            return nm
+        d = s_ - t if t < s_ else t - e_
         if best is None or d < best[0]:
-            best = (d, c)
-        if s > t + 5:
+            best = (d, nm)
+        if s_ > t + 8:
             break
-    return best[1] if best and best[0] < 3 else None
+    return best[1] if best and best[0] < 6 else None
 
 
-def tag(c):
-    if c is None:
-        return "SPEAKER?"
-    return label[c]["name"].upper()
+def tag(nm):
+    return nm.upper() if nm else "SPEAKER?"
 
 
 # 4. lines
@@ -143,10 +163,8 @@ for t, txt in rows:
 
 HOW = {"voice": "matched by voice", "only one left": "the only voice left on the roster", "unknown": "voice not known yet"}
 hdr = ["# One-track recording (uploaded or AirDropped): every voice, Jared's too, is told apart by voice."]
-for c in sorted(label, key=lambda c: first.get(c, 0)):
-    lab = label[c]
-    sc = f", {lab['score']:.2f}" if lab["score"] is not None else ""
-    hdr.append(f"# {lab['name'].upper()}: {HOW[lab['how']]}{sc}, {round(secs.get(c, 0) / 60, 1)} min")
+for nm in sorted(stats, key=lambda k: stats[k]["first"]):
+    hdr.append(f"# {nm.upper()}: {HOW[label[nm]['how']]}, {round(stats[nm]['min'], 1)} min")
 if any(l["how"] == "unknown" for l in label.values()):
     hdr.append("# SPEAKER-n = a voice with no saved voiceprint; rename it from context.")
 if learned:
@@ -156,7 +174,7 @@ if learned:
 open(f"{R}/{name}-transcript-named.txt", "w").write("\n".join(hdr) + "\n" + "\n".join(named) + "\n")
 people = sorted({l["name"] for l in label.values() if not l["name"].startswith("speaker-") and l["name"] != "jared"})
 json.dump({"roster": people, "source": "upload", "learned": learned,
-           "voices": [{**label[c], "minutes": round(secs.get(c, 0) / 60, 1)} for c in sorted(label, key=lambda c: first.get(c, 0))]},
+           "voices": [{**label[nm], "minutes": round(stats[nm]["min"], 1)} for nm in sorted(stats, key=lambda k: stats[k]["first"])]},
           open(f"/tmp/{name}-speakers.json", "w"))
 open(f"{R}/{name}-transcript.txt.tmp", "w").write("\n".join(plain) + "\n")
 os.replace(f"{R}/{name}-transcript.txt.tmp", f"{R}/{name}-transcript.txt")
