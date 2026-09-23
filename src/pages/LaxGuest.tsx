@@ -141,19 +141,21 @@ export default function LaxGuest() {
   // Personal link acts for its own trip; the shared Turo link acts for the trip happening now (unlocked by the guest's phone key).
   const reload = () => (token ? rpc("lax_guest_public", { p_token: token }) : rpc("lax_pass_public", { p_slug: slug }))
     .then(({ data }) => data && setPub(data as Pub));
-  const carCommand = async (action: ClimateAction | "refresh") => {
+  const carCommand = async (action: ClimateAction | "refresh", onStage?: (s: string) => void) => {
     const { data, error } = token
       ? await rpc("lax_guest_car_command", { p_token: token, p_action: action })
       : await rpc("lax_shared_car_command", { p_slug: slug, p_action: action });
     const r = data as { ok: boolean; id?: number; error?: string; cached?: boolean } | null;
     if (error || !r?.ok) throw new Error(r?.error ?? error?.message ?? "Couldn't reach the car");
     if (!r.id) return;
-    for (let i = 0; i < 40; i++) {
-      await new Promise((res) => setTimeout(res, 3000));
+    onStage?.("Waiting for the car helper");
+    for (let i = 0; i < 45; i++) {
+      await new Promise((res) => setTimeout(res, 2000));
       const { data: j } = token
         ? await rpc("lax_guest_car_job", { p_token: token, p_id: r.id })
         : await rpc("lax_shared_car_job", { p_slug: slug, p_id: r.id });
-      const job = j as { status: string; result?: { error?: string } } | null;
+      const job = j as { status: string; stage?: string | null; result?: { error?: string } } | null;
+      if (job?.stage) onStage?.(job.stage);
       if (job?.status === "done") { reload(); return; }
       if (job?.status === "failed") throw new Error(job.result?.error ?? "The car didn't respond");
     }

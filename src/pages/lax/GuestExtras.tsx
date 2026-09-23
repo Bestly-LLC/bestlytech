@@ -225,18 +225,26 @@ const CLIMATE: { id: ClimateAction; label: string; sub: string; icon: typeof Sno
 ];
 
 /** Climate buttons. Live mode is wired once Tesla access is connected; demo mode only shows what would happen. */
-function ClimateControls({ demo, onAction, compact = false, lockedUntil }: { demo: boolean; onAction?: (a: ClimateAction) => Promise<void>; compact?: boolean; lockedUntil?: string | null }) {
+function ClimateControls({ demo, onAction, compact = false, lockedUntil }: { demo: boolean; onAction?: (a: ClimateAction, onStage?: (s: string) => void) => Promise<void>; compact?: boolean; lockedUntil?: string | null }) {
   const [busy, setBusy] = useState<ClimateAction | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [stage, setStage] = useState<string | null>(null);
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    if (!busy) return;
+    setSecs(0);
+    const t = window.setInterval(() => setSecs((x) => x + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [busy]);
   const press = async (a: (typeof CLIMATE)[number]) => {
-    setBusy(a.id); setDone(null);
+    setBusy(a.id); setDone(null); setStage("Sending your request");
     try {
       if (demo || !onAction) await new Promise((r) => setTimeout(r, 900));
-      else await onAction(a.id);
+      else await onAction(a.id, setStage);
       setDone(a.id === "off" ? "Climate is off." : `${a.label}: on. Give it about 10 minutes.`);
     } catch (e) {
       setDone(`Couldn't reach the car. ${(e as Error).message ?? ""}`.trim());
-    } finally { setBusy(null); }
+    } finally { setBusy(null); setStage(null); }
   };
   return (
     <div className={compact ? "mt-3" : "mt-4 border-t border-white/10 pt-4"}>
@@ -253,7 +261,9 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil }: { dem
           );
         })}
       </div>
-      <p className="mt-2 min-h-[1.25rem] text-[12px] leading-snug text-emerald-300" aria-live="polite">{done}</p>
+      <p className={`mt-2 min-h-[1.25rem] text-[12px] leading-snug ${busy ? "text-white/75" : done?.startsWith("Couldn't") ? "text-red-300" : "text-emerald-300"}`} aria-live="polite">
+        {busy ? <>{stage ?? "Working"}… <span className="tabular-nums text-white/45">{secs}s</span>{stage === "Waking up the car" && <span className="block text-white/45">Can take up to a minute.</span>}</> : done}
+      </p>
       <p className="text-[11px] leading-snug text-white/55">
         {demo ? "Preview only. Not connected to the car yet."
           : lockedUntil === "pending" ? "Turns on when your Tesla phone key is connected, or 1 hour before pickup."
@@ -264,7 +274,7 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil }: { dem
   );
 }
 
-export function CarCard({ trip, car, demo = false, onClimate, compact = false, lockedUntil }: { trip: Trip | null; car: CarState | null; demo?: boolean; onClimate?: (a: ClimateAction) => Promise<void>; compact?: boolean; lockedUntil?: string | null }) {
+export function CarCard({ trip, car, demo = false, onClimate, compact = false, lockedUntil }: { trip: Trip | null; car: CarState | null; demo?: boolean; onClimate?: (a: ClimateAction, onStage?: (s: string) => void) => Promise<void>; compact?: boolean; lockedUntil?: string | null }) {
   if (compact) {
     const asleep = car?.online === "asleep" || car?.online === "offline";
     return (
