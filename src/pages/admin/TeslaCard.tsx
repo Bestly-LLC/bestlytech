@@ -9,7 +9,7 @@ const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
 
-type TState = { client_id: string | null; has_secret: boolean; enabled: boolean; monthly_cap_usd: number; per_trip_cap_usd: number; spent_usd: number };
+type TState = { client_id: string | null; has_secret: boolean; connected: boolean; vehicle_name: string | null; vin_last4: string | null; last_error: string | null; enabled: boolean; monthly_cap_usd: number; per_trip_cap_usd: number; spent_usd: number };
 
 /** Tesla Fleet API: paste the Client Secret once. It goes straight into Supabase Vault and can't be read back here. */
 export function TeslaCard() {
@@ -21,6 +21,28 @@ export function TeslaCard() {
     if (!error) setSt(data as TState);
   }, []);
   useEffect(() => { load(); }, [load]);
+  // Back from Tesla sign-in: /admin/turo/lax-pass?tesla=connected|error&why=…#tesla
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const t = q.get("tesla");
+    if (!t) return;
+    if (t === "connected") toast.success(`Tesla connected${q.get("car") ? `: ${q.get("car")}` : ""}`);
+    else toast.error("Tesla didn't connect", { description: q.get("why") ?? undefined });
+    try { history.replaceState(null, "", window.location.pathname + "#tesla"); } catch { /* ignore */ }
+  }, []);
+  const [connecting, setConnecting] = useState(false);
+  const connect = async () => {
+    setConnecting(true);
+    const { data, error } = await supabase.functions.invoke("tesla-fleet", { body: { op: "start" } });
+    const url = (data as { url?: string } | null)?.url;
+    if (error || !url) {
+      setConnecting(false);
+      toast.error("Couldn't start Tesla sign-in", { description: (data as { error?: string } | null)?.error ?? error?.message });
+      load();
+      return;
+    }
+    window.location.href = url;
+  };
   const save = async () => {
     setSaving(true);
     const { error } = await rpc("tesla_fleet_set_secret", { p_secret: secret });
@@ -32,7 +54,7 @@ export function TeslaCard() {
   };
   if (!st) return null;
   return (
-    <div className={cn(card, "space-y-3")}>
+    <div id="tesla" className={cn(card, "space-y-3")}>
       <div className="flex items-start gap-3">
         <KeyRound className="mt-0.5 h-4 w-4 text-violet-300 bento:text-violet-600" />
         <div>
@@ -43,7 +65,22 @@ export function TeslaCard() {
         </div>
       </div>
       {st.has_secret ? (
-        <p className="flex items-center gap-2 text-sm text-emerald-300 bento:text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Client Secret is saved in Vault.</p>
+        st.connected ? (
+          <div className="space-y-2">
+            <p className="flex items-center gap-2 text-sm text-emerald-300 bento:text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Connected{st.vehicle_name ? `: ${st.vehicle_name}` : ""}{st.vin_last4 ? ` (VIN …${st.vin_last4})` : ""}</p>
+            <p className="text-xs text-white/60 bento:text-neutral-600">If Tesla didn't ask you to add the key during sign-in: on your iPhone, near the car, open <a className="underline" href="https://tesla.com/_ak/www.bestly.tech">tesla.com/_ak/www.bestly.tech</a> and approve it in the Tesla app.</p>
+            <button type="button" onClick={connect} disabled={connecting} className="text-xs text-white/60 underline bento:text-neutral-600">Reconnect</button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="flex items-center gap-2 text-sm text-emerald-300 bento:text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Client Secret is saved in Vault.</p>
+            <button type="button" onClick={connect} disabled={connecting}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#e31937] px-5 py-2.5 text-sm font-medium text-[#fff] hover:bg-[#c8142f] disabled:opacity-60">
+              {connecting && <Loader2 className="h-4 w-4 animate-spin" />} Connect your Tesla
+            </button>
+            <p className="text-xs text-white/60 bento:text-neutral-600">Sign in to Tesla, tap Allow, then add the Bestly key when it asks (do this on your iPhone near the car).</p>
+          </div>
+        )
       ) : (
         <div className="flex flex-col gap-2 sm:flex-row">
           <input type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)}
@@ -55,6 +92,7 @@ export function TeslaCard() {
           </button>
         </div>
       )}
+      {st.last_error && <p className="text-xs text-red-300 bento:text-red-700">Last Tesla error: {st.last_error}</p>}
     </div>
   );
 }
