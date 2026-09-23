@@ -11,11 +11,11 @@ import { Helmet } from "react-helmet-async";
 import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
 import { Check, Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { CarCard, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type Trip } from "./lax/GuestExtras";
+import { CarCard, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type ClimateAction, type Trip } from "./lax/GuestExtras";
 import { renderPassImage } from "./lax/passImage";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; controls?: boolean; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -126,6 +126,31 @@ export default function LaxGuest() {
     return () => window.clearInterval(id);
   }, [slug, token]);
 
+  // Car buttons: queue the command, then wait for the Mac mini helper to send it (signed) and report back.
+  const reload = () => rpc("lax_guest_public", { p_token: token }).then(({ data }) => data && setPub(data as Pub));
+  const carCommand = async (action: ClimateAction | "refresh") => {
+    const { data, error } = await rpc("lax_guest_car_command", { p_token: token, p_action: action });
+    const r = data as { ok: boolean; id?: number; error?: string; cached?: boolean } | null;
+    if (error || !r?.ok) throw new Error(r?.error ?? error?.message ?? "Couldn't reach the car");
+    if (!r.id) return;
+    for (let i = 0; i < 40; i++) {
+      await new Promise((res) => setTimeout(res, 3000));
+      const { data: j } = await rpc("lax_guest_car_job", { p_token: token, p_id: r.id });
+      const job = j as { status: string; result?: { error?: string } } | null;
+      if (job?.status === "done") { reload(); return; }
+      if (job?.status === "failed") throw new Error(job.result?.error ?? "The car didn't respond");
+    }
+    throw new Error("The car is taking a while. Try again in a minute.");
+  };
+  // Controls open but no fresh reading yet: ask for one (never wakes the car).
+  const refreshed = useRef(false);
+  useEffect(() => {
+    if (!token || !pub?.controls || pub.car || refreshed.current) return;
+    refreshed.current = true;
+    carCommand("refresh").catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pub?.controls, pub?.car, token]);
+
   const g = pub?.guide ?? {};
   const garage = g.garage || "5730 W 98th St, LA 90045";
   const level = g.level || "P3";
@@ -199,7 +224,7 @@ export default function LaxGuest() {
             {pub.trip ? (
               <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
                 <WeatherCard trip={pub.trip} compact />
-                <CarCard trip={pub.trip} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact />
+                <CarCard trip={pub.trip} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && pub.controls ? carCommand : undefined} />
               </div>
             ) : (
               <div className="mt-2.5"><WeatherCard trip={null} /></div>

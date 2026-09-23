@@ -216,7 +216,7 @@ export const DEMO_CAR: CarState = {
   online: "online", observed_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(), name: "Tesla Model 3",
 };
 
-type ClimateAction = "cool" | "warm" | "seat" | "off";
+export type ClimateAction = "cool" | "warm" | "seat" | "off";
 const CLIMATE: { id: ClimateAction; label: string; sub: string; icon: typeof Snowflake }[] = [
   { id: "cool", label: "Cool it down", sub: "A/C to 68°F", icon: Snowflake },
   { id: "warm", label: "Warm it up", sub: "Heat to 74°F", icon: Flame },
@@ -264,7 +264,12 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false }:
     return (
       <div className="flex h-full flex-col rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
         <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}><Zap className="h-3.5 w-3.5" />Your car</p>
-        {car ? (
+        {!car && onClimate ? (
+          <>
+            <p className="mt-1.5 text-[13px] leading-snug text-white/70">Parked and asleep. Tap a button and it wakes up.</p>
+            <ClimateControls demo={false} onAction={onClimate} compact />
+          </>
+        ) : car ? (
           <>
             {car.inside_f != null && <p className="mt-1.5 text-[13px] text-white/70">Inside <b className="text-[22px] font-semibold text-white tabular-nums">{Math.round(car.inside_f)}°</b></p>}
             {car.battery != null && <p className="flex items-center gap-1.5 text-[13px] text-white/70"><BatteryMedium className="h-4 w-4 text-emerald-300" />{car.battery}%{car.range != null && ` · ${Math.round(car.range)} mi`}</p>}
