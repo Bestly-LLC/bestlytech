@@ -18,6 +18,14 @@
       "destination": "/admin.html"
     },
     {
+      "source": "/lax",
+      "destination": "/lax.html"
+    },
+    {
+      "source": "/lax/(.*)",
+      "destination": "/lax.html"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

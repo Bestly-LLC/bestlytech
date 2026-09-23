@@ -34,6 +34,8 @@ export default defineConfig(() => ({
       input: {
         main: path.resolve(__dirname, "index.html"),
         admin: path.resolve(__dirname, "admin.html"),
+        // Turo guest page: its own link preview + share-sheet identity (see lax.html).
+        lax: path.resolve(__dirname, "lax.html"),
       },
     },
   },

@@ -9,10 +9,10 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
-import { Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
+import { Check, Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string };
+type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
 type Pub = { ok: boolean; ready?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
@@ -61,6 +61,25 @@ function Warn({ children }: { children: ReactNode }) {
   );
 }
 
+function Ok({ children }: { children: ReactNode }) {
+  return (
+    <div className="mt-4 flex gap-3 rounded-xl bg-emerald-400/10 p-3 text-[14px] leading-snug text-white/90 ring-1 ring-emerald-300/40">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400 text-[#1A1140]"><Check className="h-3.5 w-3.5" strokeWidth={3} /></span>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function Chips({ items }: { items: string[] }) {
+  return (
+    <p className="mt-2 flex flex-wrap items-center gap-2 text-[13px] font-medium text-white/60">
+      {items.map((t, i) => (
+        <span key={t} className="contents">{i > 0 && <span>→</span>}<span className="rounded-full bg-white/10 px-2.5 py-1">{t}</span></span>
+      ))}
+    </p>
+  );
+}
+
 function Step({ n, when, title, children }: { n: number; when: string; title: string; children: ReactNode }) {
   return (
     <li className="relative pl-12">
@@ -75,6 +94,8 @@ function Step({ n, when, title, children }: { n: number; when: string; title: st
 export default function LaxGuest() {
   const { slug = "" } = useParams();
   const [pub, setPub] = useState<Pub | null>(null);
+  const [tab, setTab] = useState<"pickup" | "return">(() => (typeof window !== "undefined" && window.location.hash === "#return" ? "return" : "pickup"));
+  const pick = (t: "pickup" | "return") => { setTab(t); try { history.replaceState(null, "", t === "return" ? "#return" : window.location.pathname); } catch { /* ignore */ } };
   const canvasWrap = useRef<HTMLDivElement>(null);
   const plat = useMemo(platform, []);
 
@@ -88,6 +109,7 @@ export default function LaxGuest() {
   const shuttle = g.shuttle || "The Parking Spot — Century";
   const shuttleShort = shuttle.replace(/^The Parking Spot\s*[—-]\s*/i, "").toUpperCase();
   const phone = g.after_hours || "";
+  const stop = g.shuttle_stop || "5701 W Century Blvd";
   const maps = plat === "android" ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(garage)}` : `https://maps.apple.com/?q=${encodeURIComponent(garage)}`;
   const thru = pub?.valid_through
     ? new Date(pub.valid_through + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" })
@@ -183,8 +205,18 @@ export default function LaxGuest() {
               </div>
             )}
 
-            {/* Pickup guide */}
-            <section className="mt-10">
+            {/* Pickup / Return */}
+            <div className="mt-10 grid grid-cols-2 rounded-2xl bg-white/[0.06] p-1 ring-1 ring-white/10" role="tablist">
+              {(["pickup", "return"] as const).map((t) => (
+                <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => pick(t)}
+                  className={"h-11 rounded-xl text-[15px] font-semibold transition-colors " + (tab === t ? "bg-white text-[#1A1140]" : "text-white/70")}>
+                  {t === "pickup" ? "Pickup" : "Return"}
+                </button>
+              ))}
+            </div>
+
+            {tab === "pickup" ? (
+            <section className="mt-7">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">Arriving at LAX</p>
               <h2 className="mt-1 text-2xl font-bold tracking-tight">Pickup. Plane → shuttle → garage.</h2>
               <p className="mt-2 text-[15px] leading-relaxed text-white/75">About 20 minutes from wheels-down to driving away. Follow the steps in order.</p>
@@ -203,9 +235,7 @@ export default function LaxGuest() {
                 </Step>
                 <Step n={4} when="~5 min ride" title="Walk across the alley.">
                   At drop-off, follow the Park My Share signs across the alley to the garage entrance.
-                  <p className="mt-2 flex flex-wrap items-center gap-2 text-[13px] font-medium text-white/60">
-                    <span className="rounded-full bg-white/10 px-2.5 py-1">Shuttle drop</span>→<span className="rounded-full bg-white/10 px-2.5 py-1">Alley</span>→<span className="rounded-full bg-white/10 px-2.5 py-1">Garage door</span>
-                  </p>
+                  <Chips items={["Shuttle drop", "Alley", "Garage door"]} />
                 </Step>
                 <Step n={5} when="At the door" title="Scan your QR code.">
                   {pub.ready ? <>Your QR code is <a href="#qr" className="underline decoration-white/40 underline-offset-2">at the top of this page</a>. </> : null}
@@ -228,11 +258,49 @@ export default function LaxGuest() {
 
               <p className="mt-6 flex items-center gap-2 text-sm text-white/60"><Sun className="h-4 w-4" style={{ color: PEACH }} /> Screen brightness up helps the QR scan on the first try.</p>
             </section>
+            ) : (
+            <section className="mt-7">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">LAX drop-off</p>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight">Return. Drop the car → catch the shuttle.</h2>
+              <p className="mt-2 text-[15px] leading-relaxed text-white/75">
+                Reverse of the morning. The two things to watch: <b className="text-white">which entrance you use</b>, and <b className="text-white">which address you drive to</b>. Get those right and you're done.
+              </p>
+
+              <ol className="mt-6 space-y-7">
+                <Step n={1} when="Drive in" title="Use the carshare return lane on 98th St.">
+                  Drive to <a href={maps} className="underline decoration-white/40 underline-offset-2">{garage.split(",")[0]}</a> and take the car share return lane on 98th St.
+                  <span className="mt-1 block text-white/60"><b className="text-white/80">After 10 PM:</b> use the alley return lane between Century Blvd and 98th St instead.</span>
+                </Step>
+                <Step n={2} when="Inside" title={`Park on ${level}. Designated carshare area only.`}>
+                  Same level you picked up from. The carshare zone is marked.
+                  <Warn><b className="text-white">Do not return to The Parking Spot Century at {stop.replace(/ Blvd$/, "")}.</b> Your car won't have access there and you may be charged an improper-return fee.</Warn>
+                </Step>
+                <Step n={3} when="Walk out" title="Elevator down, exit on 98th St.">
+                  From {level}, take the elevator down, exit onto 98th St, and follow the Park My Share signs.
+                  <Chips items={[level, "Elevator", "98th St exit", "Shuttle stop"]} />
+                </Step>
+                <Step n={4} when="Shuttle pickup" title={`Catch the shuttle at ${stop}.`}>
+                  Signs point you right to it. Board <b className="text-white">The Parking Spot · {shuttleShort}</b> back to LAX.
+                  <Ok>Allow <b className="text-white">at least 1 hour</b> before your terminal arrival for return + shuttle + TSA buffer.</Ok>
+                </Step>
+              </ol>
+
+              {phone && (
+                <div className="mt-8 rounded-2xl p-4 ring-1 ring-white/10" style={{ background: "linear-gradient(135deg, rgba(122,46,158,0.35), rgba(228,82,122,0.25))" }}>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>10 PM – 6 AM</p>
+                  <p className="mt-1 text-lg font-semibold">Late departure? Request the shuttle.</p>
+                  <p className="mt-1 text-[15px] leading-relaxed text-white/80">Between 10 PM and 6 AM, call to request a shuttle to your terminal:</p>
+                  <a href={telHref(phone)} className="mt-3 flex h-12 items-center justify-center gap-2 rounded-xl bg-white text-base font-semibold text-[#1A1140]">
+                    <Phone className="h-4 w-4" /> {dotted(phone)}
+                  </a>
+                </div>
+              )}
+            </section>
+            )}
 
             <p className="mt-10 text-center text-sm text-white/50">Questions? Message your host in the Turo app.</p>
           </>
         )}
-        <p className="mt-6 text-center text-xs text-white/30">Pass by Bestly · Los Angeles</p>
       </main>
     </div>
   );
