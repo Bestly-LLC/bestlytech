@@ -76,8 +76,8 @@ export default function LaxGuest() {
       <div className="relative">
         <img src="/wallet/lax/hero.svg" alt="" className="block h-40 w-full object-cover object-[65%_center] sm:h-56" />
         <div className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#FFB878]">Welcome to LA</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">Your LAX parking pass</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#FFB878]" style={{ textShadow: "0 1px 6px rgba(26,17,64,0.9)" }}>Welcome to LA</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={{ textShadow: "0 2px 12px rgba(26,17,64,0.85), 0 1px 2px rgba(26,17,64,0.9)" }}>Your LAX parking pass</h1>
         </div>
       </div>
 
