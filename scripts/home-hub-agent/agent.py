@@ -64,7 +64,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = "1.2.0"
+VERSION = "1.4.0"
 CONFIG_PATH = os.environ.get("HOME_HUB_AGENT_CONFIG", "/etc/bestly/home-hub-agent.json")
 STATE_DIR = os.environ.get("HOME_HUB_AGENT_STATE", "/var/lib/bestly-home-hub")
 STATE_PATH = os.path.join(STATE_DIR, "state.json")
@@ -73,6 +73,7 @@ ROLLED_BACK = os.path.join(STATE_DIR, "rolled-back")         # written by launch
 BACKUP_DIR = "/mnt/ssd/backups/home-hub"
 HA_DIR = "/mnt/ssd/apps/homeassistant"
 HB_DIR = "/mnt/ssd/apps/homebridge"
+NC_DIR = "/mnt/ssd/apps/nextcloud"
 SCRIPTS_DIR = "/home/pi/scripts"
 CTX = ssl.create_default_context()
 
@@ -274,6 +275,8 @@ def do_homeassistant(cfg, action, payload):
         if not ok:
             raise RuntimeError(err or "Home Assistant snapshot failed")
         return {"message": "Home Assistant snapshot refreshed."}
+    if action == "ecoflow":
+        return do_ecoflow(ha, payload.get("mode") or "status")
     if action != "toggle_automation":
         raise RuntimeError(f"Unknown homeassistant action: {action}")
     entity = payload.get("automation_id")
@@ -288,6 +291,84 @@ def do_homeassistant(cfg, action, payload):
     )
     push_snapshot(cfg, "homeassistant")
     return {"message": f"{entity} turned {'on' if payload.get('enabled') else 'off'}."}
+
+
+# ── EcoFlow DELTA 2 (agent 1.4.0): the admin's emergency button ─────────────────
+# mode full:    charge to 100% now - runs Jared's own "EcoFlow - storm: charge to 100%" automation
+#               (its conditions skipped: he pressed the button, that IS the storm) and also sets the
+#               DELTA 2's max charge level to 100 directly, so it works even if that automation changes.
+# mode storage: back to the storage level - runs "EcoFlow - all clear: back to storage level".
+# mode status:  read only. Battery %, charge limit, input watts, time to full, plus any active
+#               National Weather Service alerts Home Assistant has.
+ECOFLOW_FULL = "automation.ecoflow_storm_charge_to_100"
+ECOFLOW_STORAGE = "automation.ecoflow_all_clear_back_to_storage_level"
+
+
+def _ha(ha, path, data=None):
+    return http(f"{ha['base'].rstrip('/')}{path}", method="POST" if data is not None else "GET", data=data,
+                headers={"Authorization": f"Bearer {ha['token']}"}, timeout=30)
+
+
+def ecoflow_status(ha):
+    states = _ha(ha, "/api/states")
+    states = states if isinstance(states, list) else []
+    d2 = {s["entity_id"]: s for s in states if isinstance(s, dict) and ".delta_2_" in s.get("entity_id", "")}
+
+    def val(*needles):
+        for eid, st in d2.items():
+            if all(n in eid for n in needles) and st.get("state") not in (None, "unknown", "unavailable"):
+                return st.get("state"), eid
+        return None, None
+
+    level, _ = val("sensor.", "battery_level")
+    limit, limit_id = val("number.", "max_charge")
+    watts_in, _ = val("sensor.", "in_power")
+    to_full, _ = val("sensor.", "charge_remaining_time")
+    alerts = []
+    for st in states:
+        eid = st.get("entity_id", "") if isinstance(st, dict) else ""
+        if eid.startswith("sensor.") and "nws" in eid and "alert" in eid:
+            for a in (st.get("attributes") or {}).get("Alerts") or (st.get("attributes") or {}).get("alerts") or []:
+                if isinstance(a, dict):
+                    alerts.append({k: a.get(k) for k in ("Event", "Headline", "Severity", "Ends", "Expires", "Description") if a.get(k)})
+    return {
+        "battery": float(level) if level not in (None, "") else None,
+        "max_charge": float(limit) if limit not in (None, "") else None,
+        "max_charge_entity": limit_id,
+        "input_watts": float(watts_in) if watts_in not in (None, "") else None,
+        "minutes_to_full": float(to_full) if to_full not in (None, "") else None,
+        "online": any(st.get("state") not in ("unavailable", "unknown") for st in d2.values()),
+        "alerts": alerts[:10],
+    }
+
+
+def do_ecoflow(ha, mode):
+    if mode not in ("full", "storage", "status"):
+        raise RuntimeError(f"Unknown ecoflow mode: {mode}")
+    done = []
+    if mode in ("full", "storage"):
+        auto = ECOFLOW_FULL if mode == "full" else ECOFLOW_STORAGE
+        try:
+            _ha(ha, "/api/services/automation/trigger", {"entity_id": auto, "skip_condition": True})
+            done.append(f"ran {auto}")
+        except Exception as e:  # noqa: BLE001 - the direct setting below still does the job
+            done.append(f"{auto} failed: {e}")
+        if mode == "full":
+            st = ecoflow_status(ha)
+            if st.get("max_charge_entity"):
+                _ha(ha, "/api/services/number/set_value", {"entity_id": st["max_charge_entity"], "value": 100})
+                done.append(f"set {st['max_charge_entity']} to 100")
+            else:
+                done.append("no max-charge setting found on the DELTA 2 (it may be offline)")
+        time.sleep(4)
+    st = ecoflow_status(ha)
+    st["done"] = done
+    if mode == "full":
+        st["message"] = ("Charging the DELTA 2 to 100%." if st.get("online") else
+                         "Asked the DELTA 2 to charge to 100%, but it looks offline. Check it's plugged in and on Wi-Fi.")
+    elif mode == "storage":
+        st["message"] = "DELTA 2 set back to its storage level."
+    return st
 
 
 def _homebridge_token(hb):
@@ -934,6 +1015,163 @@ def heal_unit(unit):
     return fix
 
 
+NC_PUBLIC = "https://cloud.bestly.tech/status.php"
+NC_APP, NC_PROXY = "nextcloud-nextcloud-1", "nextcloud-proxy-1"
+
+
+def nc_probe(url=NC_PUBLIC, timeout=20):
+    """(ok, detail). ok means Nextcloud answered status.php with installed and not in maintenance."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "bestly-home-hub"})
+        with urllib.request.urlopen(req, timeout=timeout, context=CTX) as resp:
+            raw = resp.read().decode(errors="replace")
+    except urllib.error.HTTPError as exc:
+        return exc.code < 500, f"{url} returned HTTP {exc.code}."
+    except Exception as exc:
+        return False, f"{url} did not answer ({type(exc).__name__}: {str(exc)[:120]})."
+    try:
+        st = json.loads(raw)
+    except json.JSONDecodeError:
+        return False, f"{url} answered, but not with Nextcloud status JSON."
+    if st.get("maintenance"):
+        return False, "Nextcloud is stuck in maintenance mode."
+    if st.get("needsDbUpgrade"):
+        return False, "Nextcloud needs its database upgrade finished."
+    return True, None
+
+
+def nc_occ(*args, timeout=900):
+    return sh(["docker", "exec", "-u", "www-data", NC_APP, "php", "occ", *args], timeout=timeout)
+
+
+NC_LOCAL = "http://127.0.0.1:8082/status.php"
+
+
+def nc_local_ok():
+    """Is the Pi's own proxy serving Nextcloud? (Host header so trusted_domains passes.)"""
+    try:
+        req = urllib.request.Request(NC_LOCAL, headers={"Host": "cloud.bestly.tech"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.status < 500, f"HTTP {resp.status}"
+    except urllib.error.HTTPError as exc:
+        return exc.code < 500, f"HTTP {exc.code}"
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {str(exc)[:100]}"
+
+
+def nc_tunnels():
+    """Whatever carries cloud.bestly.tech from Cloudflare to this Pi: cloudflared units/containers, Tailscale Funnel."""
+    units = [u for u in _sh("systemctl list-units --type=service --all --no-legend --plain", timeout=20).split("\n")
+             if re.search(r"cloudflared|tunnel|frpc|ngrok|caddy", u)]
+    boxes = [b for b in _sh("docker ps -a --format '{{.Names}}|{{.Image}}|{{.Status}}'", timeout=20).split("\n")
+             if re.search(r"cloudflared|tunnel|frpc|ngrok|caddy", b)]
+    funnel = _sh("tailscale funnel status 2>&1", timeout=20)
+    return units, boxes, funnel
+
+
+def nc_status_text():
+    lines = []
+    for name in (NC_APP, NC_PROXY, "nextcloud-db-1", "nextcloud-redis-1"):
+        info = container(name)
+        st = (info or {}).get("State") or {}
+        lines.append(f"{name}: {st.get('Status', 'missing')}" + (f" (exit {st.get('ExitCode')})" if st.get("ExitCode") else ""))
+    ok, detail = nc_probe()
+    lines.append("public: OK" if ok else f"public: {detail}")
+    lines.append("dns: " + (_sh("getent ahosts cloud.bestly.tech | head -3", timeout=10) or "no answer"))
+    lok, ldetail = nc_local_ok()
+    lines.append(f"local proxy {NC_LOCAL}: {ldetail}")
+    rc, out = nc_occ("status", "--output=json", timeout=60)
+    lines.append(f"occ status: {out[-300:]}")
+    units, boxes, funnel = nc_tunnels()
+    lines.append("tunnel units: " + ("; ".join(u.strip() for u in units) or "none"))
+    lines.append("tunnel containers: " + ("; ".join(boxes) or "none"))
+    lines.append("tailscale funnel: " + (funnel[-400:] or "none"))
+    rc, out = sh(["docker", "logs", "--tail", "12", NC_PROXY], timeout=30)
+    lines.append("proxy log:\n" + out[-1000:])
+    for u in units[:2]:
+        name = u.split()[0]
+        lines.append(f"{name} log:\n" + _sh(f"journalctl -u {name} -n 12 --no-pager", timeout=20)[-1000:])
+    for b in boxes[:2]:
+        name = b.split("|")[0]
+        lines.append(f"{name} log:\n" + sh(["docker", "logs", "--tail", "12", name], timeout=30)[1][-1000:])
+    return "\n".join(lines)
+
+
+def heal_tunnel():
+    units, boxes, funnel = nc_tunnels()
+    done = []
+    for u in units:
+        name = u.split()[0]
+        if "cloudflared" in name or "tunnel" in name:
+            sh(["systemctl", "reset-failed", name], timeout=30)
+            rc, _ = sh(["systemctl", "restart", name], timeout=120)
+            done.append(f"restarted {name}" if rc == 0 else f"could not restart {name}")
+    for b in boxes:
+        name = b.split("|")[0]
+        rc, _ = sh(["docker", "restart", "-t", "20", name], timeout=120)
+        done.append(f"restarted {name}" if rc == 0 else f"could not restart {name}")
+    if not done and "Funnel on" in funnel:
+        rc, _ = sh(["systemctl", "restart", "tailscaled"], timeout=120)
+        done.append("restarted tailscaled (Funnel)" if rc == 0 else "could not restart tailscaled")
+    return done
+
+
+def heal_nextcloud():
+    """Cheapest fix first. The usual cause is the app container being recreated (Sunday updater)
+    while nginx keeps the old container IP, which shows up as a 502."""
+    steps = []
+    rc, out = sh(f"cd {NC_DIR} && docker compose up -d", timeout=600)
+    steps.append("compose up" if rc == 0 else f"compose up failed: {out[-150:]}")
+    rc, out = nc_occ("status", "--output=json", timeout=60)
+    try:
+        st = json.JSONDecoder().raw_decode(out[out.index("{"):])[0] if "{" in out else {}   # occ prints a notice after the JSON
+    except (ValueError, json.JSONDecodeError):
+        st = {}
+    if st.get("needsDbUpgrade") and not other_jobs_running():
+        rc, out = nc_occ("upgrade", "--no-interaction")
+        steps.append("ran occ upgrade" if rc == 0 else f"occ upgrade failed: {out[-200:]}")
+    if st.get("maintenance") and not st.get("needsDbUpgrade") and not other_jobs_running():
+        rc, out = nc_occ("maintenance:mode", "--off", timeout=60)
+        steps.append("maintenance mode off" if rc == 0 else f"maintenance off failed: {out[-150:]}")
+    rc, out = sh(["docker", "restart", "-t", "20", NC_PROXY], timeout=120)
+    steps.append("restarted the proxy" if rc == 0 else f"proxy restart failed: {out[-150:]}")
+    if wait_until(lambda: nc_probe()[0], 60, 10):
+        return ", ".join(steps) + " → back up"
+    if nc_local_ok()[0]:
+        # Nextcloud itself is fine on the Pi; the link from Cloudflare to the Pi is what broke.
+        steps += heal_tunnel() or ["local proxy is fine but no tunnel service was found to restart"]
+        ok = wait_until(lambda: nc_probe()[0], 120, 15)
+        return ", ".join(steps) + (" → back up" if ok else " → still down (the route from Cloudflare to the Pi)")
+    rc, out = sh(["docker", "restart", "-t", "30", NC_APP], timeout=240)
+    steps.append("restarted Nextcloud" if rc == 0 else f"Nextcloud restart failed: {out[-150:]}")
+    time.sleep(20)
+    sh(["docker", "restart", "-t", "20", NC_PROXY], timeout=120)
+    ok = wait_until(lambda: nc_probe()[0], 180, 15)
+    return ", ".join(steps) + (" → back up" if ok else " → still down")
+
+
+def check_nextcloud(cfg, online, docker_ok):
+    if not (online and docker_ok) or "nextcloud" in manage_cfg(cfg)["ignore"] or not os.path.isdir(NC_DIR):
+        return
+    if other_jobs_running():   # the updater or the backup has it on purpose
+        return
+    ok, detail = nc_probe()
+    if not ok and nc_probe()[0]:   # one blip is not an outage
+        ok = True
+    evaluate(cfg, "nextcloud", "Nextcloud", ok, detail or "Nextcloud is not responding.",
+             heal=heal_nextcloud, threshold=3, heal_wait=600)
+
+
+def do_nextcloud(cfg, action, payload):
+    if not os.path.isdir(NC_DIR):
+        raise RuntimeError(f"{NC_DIR} does not exist on this Pi")
+    if action == "status":
+        return {"message": nc_status_text()}
+    if action in ("restart", "heal"):
+        return {"message": heal_nextcloud() + "\n\n" + nc_status_text()}
+    raise RuntimeError(f"Unknown nextcloud action: {action}")
+
+
 def run_health(cfg):
     online = internet_up()
 
@@ -973,6 +1211,8 @@ def run_health(cfg):
             if light_probe(base + probe_path, headers=hdrs):
                 ok = True
         evaluate(cfg, name, label, ok, err or f"{label} is not responding.", heal=heal_container(name), threshold=3)
+
+    check_nextcloud(cfg, online, docker_ok)
 
     if shutil.which("pihole"):
         ok, detail = pihole_ok()
@@ -1566,7 +1806,7 @@ def confirm_update(cfg):
     emit(cfg, "agent.updated", "info", "success", f"Home Hub agent updated to {VERSION}", f"From {pu.get('from', '?')}.")
 
 
-EXECUTORS = {"pihole": do_pihole, "homeassistant": do_homeassistant, "homebridge": do_homebridge, "agent": do_agent}
+EXECUTORS = {"nextcloud": do_nextcloud, "pihole": do_pihole, "homeassistant": do_homeassistant, "homebridge": do_homebridge, "agent": do_agent}
 
 
 def run_command(cfg, cmd):

@@ -43,7 +43,15 @@ const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
         ? null
         : "toggle_automation needs automation_id (automation.<id>) and enabled (boolean)",
     refresh: none,
+    // agent >= 1.4.0: the admin's emergency button. full = charge the EcoFlow DELTA 2 to 100%,
+    // storage = back to its storage level, status = read only (battery, limit, NWS alerts).
+    ecoflow: (p) =>
+      p.mode === undefined || ["full", "storage", "status"].includes(String(p.mode))
+        ? null
+        : "ecoflow mode must be full, storage or status",
   },
+  // agent >= 1.3.0: read-only diagnosis, and the same heal ladder the health loop uses.
+  nextcloud: { status: none, restart: none },
   // Self-update (agent >= 1.1.0). The agent re-checks the sha256 against the file it downloads.
   agent: {
     update: (p) =>
