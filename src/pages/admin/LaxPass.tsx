@@ -22,7 +22,8 @@ type State = {
   wallet_devices: number; last_push: { at: string; detail: { devices?: number; sent?: number; failed?: number } } | null;
 };
 
-const rpc = supabase.rpc as unknown as (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+const rpc = (fn: string, args?: Record<string, unknown>) =>
+  supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
 const SITE = "https://www.bestly.tech";
 

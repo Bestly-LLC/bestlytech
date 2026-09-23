@@ -14,7 +14,8 @@ import { supabase } from "@/integrations/supabase/client";
 type Pub = { ok: boolean; ready?: boolean; payload?: string; note?: string | null; valid_month?: string; valid_through?: string; current?: boolean };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
-const rpc = supabase.rpc as unknown as (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+const rpc = (fn: string, args?: Record<string, unknown>) =>
+  supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 
 function platform(): "apple" | "android" | "other" {
   const ua = navigator.userAgent;
