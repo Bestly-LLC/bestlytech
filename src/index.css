@@ -459,6 +459,19 @@
   }
 }
 
+/* Added to the Home Screen, iOS draws the page under a translucent status bar and
+   over the home indicator, so the admin shell has to keep clear of both itself. */
+@media (display-mode: standalone) {
+  .admin-shell header {
+    height: auto;
+    min-height: 3rem;
+    padding-top: env(safe-area-inset-top);
+  }
+  .admin-shell main {
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+  }
+}
+
 /* Apple-esque Admin Shell — scoped dark overrides */
 .admin-shell {
   --background: 0 0% 0%;

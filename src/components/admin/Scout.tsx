@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   X,
   CornerDownLeft,
@@ -219,6 +220,9 @@ export function Scout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [box, setBox] = useState<Box | null>(() => loadBox());
+  // On a phone Scout is the whole screen: the draggable box, the resize grips and the
+  // saved position are desktop furniture and get ignored rather than shrunk.
+  const phone = useIsMobile();
   const [closing, setClosing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [settling, setSettling] = useState(false);
@@ -541,7 +545,7 @@ export function Scout() {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="scout-bubble-in fixed bottom-[4.5rem] right-5 z-40 max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
+            className="scout-bubble-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-5 z-40 max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
           >
             {pendingJobs === 1 ? "I have a Mac job ready. Tap Run?" : `${pendingJobs} Mac jobs are waiting for you.`}
           </button>
@@ -553,7 +557,7 @@ export function Scout() {
               setBubble(false);
               setOpen(true);
             }}
-            className="scout-bubble-in fixed bottom-[4.5rem] right-5 z-40 max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
+            className="scout-bubble-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-5 z-40 max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
           >
             {waiting === 1 ? "One thing needs you. Want the detail?" : `${waiting} things need you. Want the detail?`}
           </button>
@@ -564,7 +568,7 @@ export function Scout() {
           aria-label="Open Scout (Cmd+J)"
           title="Scout (⌘J)"
           className={cn(
-            "scout-launcher fixed bottom-5 right-5 z-40 flex items-center gap-2.5 rounded-full",
+            "scout-launcher fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex items-center gap-2.5 rounded-full",
             "px-4 py-2.5 text-sm font-semibold shadow-lg",
             "bg-white text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             needs > 0 && "scout-nudge",
@@ -597,13 +601,15 @@ export function Scout() {
       <section
         ref={sectionRef}
         aria-label="Scout"
-        style={box ? { left: box.x, top: box.y, width: box.w, height: box.h } : undefined}
+        style={box && !phone ? { left: box.x, top: box.y, width: box.w, height: box.h } : undefined}
         className={cn(
           "scout-pop-in scout-panel fixed z-40 flex flex-col overflow-hidden rounded-2xl shadow-2xl",
           closing && "scout-closing",
           dragging && "scout-dragging",
           settling && "scout-settling",
-          !box && "bottom-5 right-5 w-[min(25rem,calc(100vw-2.5rem))] max-h-[min(38rem,calc(100vh-6rem))]",
+          phone
+            ? "inset-0 rounded-none pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]"
+            : !box && "bottom-5 right-5 w-[min(25rem,calc(100vw-2.5rem))] max-h-[min(38rem,calc(100vh-6rem))]",
           "border border-white/[0.08] bg-black/95 backdrop-blur-xl",
         )}
       >

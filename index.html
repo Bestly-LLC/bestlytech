@@ -13,6 +13,13 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <!-- Added to the Home Screen, /admin is a standalone app: the binoculars mark,
+         black chrome, no Safari UI. The link is retargeted below for admin routes. -->
+    <link rel="manifest" id="app-manifest" href="/site.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Bestly" />
 
     <link rel="preconnect" href="https://rcqfqhguwpmaarseifqg.supabase.co" crossorigin />
     <!-- Cookie Yeti marketing type: Fredoka (playful display) + Nunito (body) -->
@@ -104,6 +111,12 @@
           l.setAttribute("data-site-href", l.getAttribute("href"));
           l.href = l.rel === "apple-touch-icon" ? "/admin-apple-touch-icon.png" : l.type === "image/x-icon" ? "/admin-favicon.ico" : "/admin-favicon-512.png";
         });
+        var mf = document.getElementById("app-manifest");
+        if (mf) mf.href = "/admin.webmanifest";
+        var tc = document.querySelector('meta[name="theme-color"]');
+        if (tc) tc.setAttribute("content", adminLight ? "#F3F2EE" : "#000000");
+        var wt = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if (wt) wt.setAttribute("content", "Bestly Admin");
       }
     </script>
     <script type="module" src="/src/main.tsx"></script>
