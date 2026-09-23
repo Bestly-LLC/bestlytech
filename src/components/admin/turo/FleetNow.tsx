@@ -24,7 +24,8 @@ export interface Trip {
   starts_at: string; ends_at: string; local_start: string | null; local_end: string | null;
   in_progress: boolean; checked_out: boolean;
   pickup_address: string | null; pickup_city: string | null; airport_code: string | null;
-  earnings: number | null;
+  earnings: number | null; miles_included: number | null; miles_unlimited: boolean;
+  guest_phone: string | null;
 }
 export interface VehicleState {
   vin: string; display_name: string | null; observed_at: string;
@@ -42,6 +43,10 @@ const READY_PCT = 80;
 const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
 const muted = "text-white/50 bento:text-[#55525c]";
 const ink = "text-white bento:text-[#17151c]";
+
+/** Turo quotes host earnings to the cent; rounding them would misreport the payout. */
+const money = (n: number | null | undefined) =>
+  n == null ? null : `$${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /** Straight-line miles. Good enough to answer "is it in the neighborhood or in Vegas". */
 function milesFrom(lat: number, lon: number) {
@@ -136,6 +141,16 @@ export function FleetNow({ trips, vehicle }: { trips: Trip[]; vehicle: VehicleSt
                 )}
                 {current.pickup_city && <span>{current.pickup_city}</span>}
               </p>
+              <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                {current.earnings != null && (
+                  <span className={cn("text-sm font-semibold", ink)}>{money(current.earnings)}</span>
+                )}
+                {current.miles_unlimited
+                  ? <Flag tone="ok" icon={Gauge}>Unlimited miles</Flag>
+                  : current.miles_included != null
+                    ? <Flag tone="warn" icon={Gauge}>{`${current.miles_included.toLocaleString()} mi cap`}</Flag>
+                    : null}
+              </p>
               {current.guest_url && (
                 <a href={current.guest_url} target="_blank" rel="noopener noreferrer"
                   className={cn("mt-2.5 inline-flex items-center gap-1.5 text-xs underline-offset-2 hover:underline", muted)}>
@@ -171,7 +186,10 @@ export function FleetNow({ trips, vehicle }: { trips: Trip[]; vehicle: VehicleSt
             <>
               <p className={cn("text-lg font-semibold leading-tight", ink)}>{name(next)}</p>
               <p className={cn("mt-1 text-sm", muted)}>{dayTime(next.starts_at)}</p>
-              <p className={cn("mt-0.5 text-xs", muted)}>in {until(next.starts_at, now).text}</p>
+              <p className={cn("mt-0.5 text-xs", muted)}>
+                in {until(next.starts_at, now).text}
+                {next.earnings != null && <> &middot; <span className={ink}>{money(next.earnings)}</span></>}
+              </p>
               {gap != null && (
                 <p className="mt-3">
                   {gap < 3
@@ -273,7 +291,14 @@ export function FleetNow({ trips, vehicle }: { trips: Trip[]; vehicle: VehicleSt
       {/* ── Everything else booked ──────────────────────────────── */}
       {upcoming.length > 0 && (
         <div className={cn(card, "overflow-hidden")}>
-          <p className={cn("px-4 pt-4 text-[0.7rem] font-semibold uppercase tracking-wide", muted)}>Booked</p>
+          <p className={cn("flex items-baseline justify-between px-4 pt-4 text-[0.7rem] font-semibold uppercase tracking-wide", muted)}>
+            <span>Booked</span>
+            {(() => {
+              // What is already committed, current trip included - the number he actually cares about.
+              const total = [current, ...upcoming].reduce((n, t) => n + (t?.earnings ?? 0), 0);
+              return total > 0 ? <span className={cn("tabular-nums", ink)}>{money(total)} booked</span> : null;
+            })()}
+          </p>
           <ul className="mt-1 divide-y divide-white/[0.06] bento:divide-[#e6e4de]">
             {upcoming.map((t) => (
               <li key={t.reservation_id} className="flex items-center gap-3 px-4 py-3">
@@ -282,7 +307,10 @@ export function FleetNow({ trips, vehicle }: { trips: Trip[]; vehicle: VehicleSt
                   <p className={cn("truncate text-sm font-medium", ink)}>{name(t)}</p>
                   <p className={cn("text-xs", muted)}>{dayTime(t.starts_at)} &rarr; {dayTime(t.ends_at)}</p>
                 </div>
-                <span className={cn("shrink-0 text-xs tabular-nums", muted)}>in {until(t.starts_at, now).text}</span>
+                <span className="shrink-0 text-right">
+                  {t.earnings != null && <span className={cn("block text-sm font-medium tabular-nums", ink)}>{money(t.earnings)}</span>}
+                  <span className={cn("block text-xs tabular-nums", muted)}>in {until(t.starts_at, now).text}</span>
+                </span>
               </li>
             ))}
           </ul>
