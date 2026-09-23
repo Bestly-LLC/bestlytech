@@ -132,6 +132,16 @@ export function WeatherCard({ trip, compact = false }: { trip: Trip | null; comp
             {atPickup.rain && <p className="text-[12px] font-semibold text-sky-200">{atPickup.rain} rain</p>}
           </div>
         )}
+        {/* Next few hours: the rest of the tile, so it matches the car tile's height. */}
+        <ol className={`${atPickup ? "mt-2" : "mt-auto"} grid gap-1 rounded-2xl bg-black/15 px-3 py-2`} aria-label="Next hours">
+          {hours.slice(1, 5).map((h) => (
+            <li key={h.forecastStart} className="flex items-center justify-between text-[13px] tabular-nums">
+              <span className="w-10 text-white/75">{hourLabel(h.forecastStart)}</span>
+              <WxIcon code={h.conditionCode} day={h.daylight ?? true} className="h-4 w-4" />
+              <span className="w-9 text-right font-semibold">{cToF(h.temperature)}°</span>
+            </li>
+          ))}
+        </ol>
         <a href="https://weatherkit.apple.com/legal-attribution.html" target="_blank" rel="noreferrer" className="mt-2 text-[10px] text-white/55">Apple Weather</a>
       </section>
     );
