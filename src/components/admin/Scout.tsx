@@ -125,6 +125,19 @@ export function splitFences(body: string): Array<{ kind: "text" | "code"; conten
   return parts;
 }
 
+const SCOUT_STATE_KEY = "bestly-scout-state";
+type ScoutSaved = { open: boolean; threadId: string | null; text: string; at: number };
+function loadScoutState(): ScoutSaved | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(SCOUT_STATE_KEY) ?? "null") as ScoutSaved | null;
+    // Kept for a working day; after that a fresh start is what you'd expect.
+    return v && Date.now() - v.at < 12 * 3600_000 ? v : null;
+  } catch { return null; }
+}
+function saveScoutState(v: Omit<ScoutSaved, "at">) {
+  try { localStorage.setItem(SCOUT_STATE_KEY, JSON.stringify({ ...v, at: Date.now() })); } catch { /* private mode */ }
+}
+
 export function splitOptions(body: string): { text: string; options: string[] } {
   const m = body.match(OPTION_LINE);
   if (!m) return { text: body, options: [] };
@@ -245,13 +258,16 @@ function when(iso: string): string {
 }
 
 export function Scout() {
-  const [open, setOpen] = useState(false);
+  // Where you were (open or not, which conversation, a half-typed message) survives a reload,
+  // a discarded tab or a new build, so coming back never means starting Scout over.
+  const saved = useRef(loadScoutState()).current;
+  const [open, setOpen] = useState(saved?.open ?? false);
   const [view, setView] = useState<"chat" | "history">("chat");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [threads, setThreads] = useState<ThreadRow[]>([]);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(saved?.text ?? "");
   const [busy, setBusy] = useState(false);
-  const [threadId, setThreadId] = useState<string | null>(null);
+  const [threadId, setThreadId] = useState<string | null>(saved?.threadId ?? null);
   const [title, setTitle] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -366,6 +382,14 @@ export function Scout() {
       .order("created_at");
     setMsgs((data ?? []) as unknown as Msg[]);
   }, []);
+
+  // Put the remembered conversation back on screen, then keep remembering.
+  useEffect(() => {
+    if (saved?.threadId) loadThread(saved.threadId);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    saveScoutState({ open, threadId, text });
+  }, [open, threadId, text]);
 
   const send = useCallback(
     async (body: string, replacing?: string | null, fresh?: boolean, about?: string) => {

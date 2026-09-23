@@ -5,8 +5,9 @@ import { toast } from "sonner";
 /**
  * The admin is a single-page app, so a tab left open keeps running the build it loaded,
  * even after Vercel ships a new one. Check the live index.html for a new bundle:
- * - coming back to the tab (phone app switch) with a new build: reload right away
- * - new build found while you're working: reload on your next page change, and offer a button
+ * - new build found: a quiet "Reload now" button, and it swaps in on your next page change
+ * - coming back to the tab does NOT reload any more. It used to, and since something ships
+ *   most hours, leaving for five minutes cost you your place (Jared, 2026-09-22).
  */
 const BUNDLE_RE = /\/assets\/index-[A-Za-z0-9_-]+\.js/;
 const CHECK_MS = 2 * 60_000;
@@ -35,11 +36,10 @@ export function useDeployRefresh() {
     const mine = currentBundle();
     if (!mine) return; // dev server: nothing to compare
 
-    const check = async (fromVisibility: boolean) => {
+    const check = async () => {
       const live = await liveBundle();
       if (!live || live === mine) return;
       stale.current = true;
-      if (fromVisibility) { window.location.reload(); return; }
       if (!toasted.current) {
         toasted.current = true;
         toast("New version of the admin is ready", {
@@ -50,10 +50,10 @@ export function useDeployRefresh() {
       }
     };
 
-    const onVisible = () => { if (document.visibilityState === "visible") check(true); };
-    const timer = window.setInterval(() => check(false), CHECK_MS);
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    const timer = window.setInterval(check, CHECK_MS);
     document.addEventListener("visibilitychange", onVisible);
-    check(false);
+    check();
     return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, []);
 
