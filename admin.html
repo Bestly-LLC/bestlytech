@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
+    <title>Bestly Admin</title>
+    <meta name="description" content="Bestly LLC operator dashboard." />
+    <!-- The operator dashboard is not a page anyone should find in a search result. -->
+    <meta name="robots" content="noindex, nofollow" />
+
+    <!--
+      This file exists so that /admin is installable as its own app.
+
+      index.html is the marketing site: its manifest is site.webmanifest, whose start_url
+      is "/", and its apple-touch-icon is the Bestly wordmark. /admin used to be served by
+      that same file and then rewrite its own identity in JavaScript. That is too late.
+      "Add to Dock" in Safari, and Chrome's install, read the manifest and icons as the
+      document is parsed - so the dock app it created pointed at start_url "/" and opened
+      the marketing homepage, wearing the same icon as every other Bestly app.
+
+      Everything the OS needs is therefore static here: title, icons, and a manifest whose
+      start_url and scope are /admin. Vercel rewrites /admin and /admin/* to this file.
+    -->
+    <link rel="icon" type="image/x-icon" href="/admin-favicon.ico" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/admin-favicon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/admin-apple-touch-icon.png" />
+    <link rel="manifest" href="/admin.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Bestly Admin" />
+
+    <link rel="preconnect" href="https://rcqfqhguwpmaarseifqg.supabase.co" crossorigin />
+
+    <style>
+      #boot-splash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fbfaf8;z-index:2147483647}
+      #boot-splash.is-admin{background:#000}
+      #boot-splash.is-admin.is-bento{background:#F3F2EE}
+      #boot-splash .mark{width:96px;height:96px;display:flex;align-items:center;justify-content:center;animation:boot-breathe 1.6s cubic-bezier(.4,0,.2,1) infinite}
+      #boot-splash.is-admin .mark{width:112px;height:112px;animation:none}
+      #boot-splash img{width:84px;height:84px}
+      #boot-splash.is-admin img{width:112px;height:112px}
+      /* Admin side-eye mark (AdminMark.tsx + boot splash). One 3.2s glance: settle, look left, look right, blink. */
+      .am-st{fill:none;stroke:currentColor;stroke-width:5.5;stroke-linecap:round;stroke-linejoin:round}
+      .am-fl{fill:currentColor}
+      .am-look,.am-lidL,.am-lidR{transform-box:view-box;animation-duration:3.2s;animation-iteration-count:infinite;animation-delay:var(--am-delay,0ms)}
+      .am-look{animation-name:am-look;animation-timing-function:cubic-bezier(.45,1.5,.5,1)}
+      .am-lidL,.am-lidR{animation-name:am-lid;animation-timing-function:cubic-bezier(.4,1.35,.5,1)}
+      .am-lidL{transform-origin:19px 42px}.am-lidR{transform-origin:53px 42px}
+      @keyframes am-look{0%,8%{transform:translate(0,0)}14%{transform:translate(0,1.5px)}22%,42%{transform:translate(-5.4px,3px)}52%,72%{transform:translate(5.4px,3px)}82%,100%{transform:translate(0,0)}}
+      @keyframes am-lid{0%,6%{transform:translateY(-13px) rotate(0)}14%,18%{transform:translateY(-2.5px) rotate(0)}24%,42%{transform:translateY(-.8px) rotate(-9deg)}52%{transform:translateY(-2.5px) rotate(0)}58%,72%{transform:translateY(-.8px) rotate(9deg)}82%{transform:translateY(-15px) rotate(0)}87%{transform:translateY(-13px) rotate(0)}91%{transform:translateY(14px) rotate(0)}95%,100%{transform:translateY(-13px) rotate(0)}}
+      .am-still .am-look,.am-still .am-lidL,.am-still .am-lidR{animation:none}
+      /* Staring at the cursor (AdminMark watchCursor): JS sets the transforms, eased so the eyes glide. */
+      .am-watching .am-look,.am-watching .am-lidL,.am-watching .am-lidR{animation:none;transition:transform .18s cubic-bezier(.2,.8,.2,1)}
+      @media (prefers-reduced-motion:reduce){.am-watching .am-look,.am-watching .am-lidL,.am-watching .am-lidR{transition:none}}
+      .am-still .am-lidL,.am-still .am-lidR{transform:translateY(-13px)}
+      @media (prefers-reduced-motion:reduce){.am-look,.am-lidL,.am-lidR{animation:none}.am-lidL,.am-lidR{transform:translateY(-.8px) rotate(-9deg)}.am-look{transform:translate(-5.4px,3px)}}
+      @keyframes boot-breathe{0%,100%{opacity:.55;transform:scale(.96)}50%{opacity:1;transform:scale(1)}}
+      @media (prefers-reduced-motion:reduce){#boot-splash .mark{animation:none}}
+    </style>
+  </head>
+
+  <body>
+    <div id="root"><div id="boot-splash" role="status" aria-label="Loading Bestly Admin"><div class="mark"></div></div></div>
+    <script>
+      // Only the theme is decided at runtime here; the app identity above is static.
+      var adminLight = true;
+      try { adminLight = localStorage.getItem("bestly-admin-theme") !== "dark"; } catch (e) {}
+      document.getElementById("boot-splash").className = adminLight ? "is-admin is-bento" : "is-admin";
+      var tc = document.querySelector('meta[name="theme-color"]');
+      if (tc) tc.setAttribute("content", adminLight ? "#F3F2EE" : "#000000");
+      // The binoculars, held still, inlined so there is no flash of the marketing logo.
+      document.querySelector("#boot-splash .mark").innerHTML =
+        '<svg class="am-still" viewBox="0 0 72 72" style="width:112px;height:112px;color:' + (adminLight ? "#111114" : "#fff") + '" aria-hidden="true">' +
+        '<defs><mask id="bm" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72"><rect width="72" height="72" fill="#fff"/><circle cx="19" cy="44" r="10.3"/><circle cx="53" cy="44" r="10.3"/></mask>' +
+        '<clipPath id="bcl"><circle cx="19" cy="44" r="10.7"/></clipPath><clipPath id="bcr"><circle cx="53" cy="44" r="10.7"/></clipPath>' +
+        '<mask id="bpm" maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72"><rect width="72" height="72" fill="#fff"/><g class="am-lidL"><rect x="0" y="10" width="40" height="34.8"/></g><g class="am-lidR"><rect x="32" y="10" width="40" height="34.8"/></g></mask></defs>' +
+        '<g mask="url(#bm)"><path class="am-st" d="M9 37L13.5 21Q14 18 17 18H21Q24 18 24.5 21L29 37M43 37L47.5 21Q48 18 51 18H55Q58 18 58.5 21L63 37"/><path class="am-st" d="M25.5 27H46.5M30 42H42"/></g>' +
+        '<circle class="am-st" cx="19" cy="44" r="13"/><circle class="am-st" cx="53" cy="44" r="13"/>' +
+        '<g mask="url(#bpm)"><g class="am-look"><circle class="am-fl" cx="19" cy="44" r="4.8"/><circle class="am-fl" cx="53" cy="44" r="4.8"/></g></g>' +
+        '<g clip-path="url(#bcl)"><g class="am-lidL"><rect class="am-fl" x="0" y="10" width="40" height="32"/></g></g>' +
+        '<g clip-path="url(#bcr)"><g class="am-lidR"><rect class="am-fl" x="32" y="10" width="40" height="32"/></g></g></svg>';
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

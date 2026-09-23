@@ -26,6 +26,17 @@ export default defineConfig(() => ({
     port: 8080,
   },
   plugins: [react(), stampBuild()],
+  build: {
+    rollupOptions: {
+      // Two entries. /admin is served by its own HTML so that its manifest, icons and
+      // title are in the document when the OS reads them at install time - see the
+      // comment at the top of admin.html.
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        admin: path.resolve(__dirname, "admin.html"),
+      },
+    },
+  },
   define: { __BUILD_ID__: JSON.stringify(BUILD_ID) },
   optimizeDeps: {
     include: ["framer-motion", "react", "react-dom", "react/jsx-dev-runtime"],
