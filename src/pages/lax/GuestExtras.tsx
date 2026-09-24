@@ -3,7 +3,7 @@
  * the live car card (1 hour before pickup → end of trip) and the reminder-email opt-in.
  * Data comes from lax_guest_public (page) and weatherkit-proxy (Apple WeatherKit, public, cached).
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Armchair, ArrowRight, BatteryMedium, Car, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSun, Fan, Flame, Loader2, Lock, LockOpen, Mail, Moon, Power, Snowflake, Sun, Thermometer, Wind, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -317,28 +317,43 @@ function useNow(active: boolean) {
 }
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
-/** Climate running: spinning fan, what it's doing, and a countdown to the automatic 20-minute shut-off. */
-function ClimateOn({ mode, until, onOff, busy }: { mode: string; until: string; onOff: () => void; busy: boolean }) {
-  const now = useNow(true);
-  const left = +new Date(until) - now;
+/** Climate panel. On: fan spins + countdown. Turning off: fan slows. Off: fan winds down to a stop and the timer freezes. */
+function ClimateOn({ mode, until, onOff, busy, stoppedAt, auto }: { mode: string; until: string; onOff: () => void; busy: boolean; stoppedAt?: number | null; auto?: boolean }) {
+  const off = stoppedAt != null;
+  const now = useNow(!off);
+  const left = Math.max(0, +new Date(until) - (off ? stoppedAt! : now));
   const frac = Math.min(1, Math.max(0, left / (CLIMATE_MINUTES * 60000)));
   const cool = mode === "cool";
+  const tint = off ? "text-white/45" : cool ? "text-sky-300" : "text-orange-300";
+  const fanAnim = off ? "lax-fan-stop" : busy ? "animate-[spin_2.6s_linear_infinite]" : "animate-[spin_1.1s_linear_infinite]";
   return (
-    <div role="status" aria-live="polite" className={`overflow-hidden rounded-2xl p-3 ring-1 ${cool ? "bg-sky-400/10 ring-sky-300/30" : "bg-orange-400/10 ring-orange-300/30"}`}>
+    <div role="status" aria-live="polite"
+      className={`overflow-hidden rounded-2xl p-3 ring-1 transition-colors duration-700 ${off ? "bg-white/[0.05] ring-white/10" : cool ? "bg-sky-400/10 ring-sky-300/30" : "bg-orange-400/10 ring-orange-300/30"}`}>
+      <style>{`@keyframes lax-fan-stop { from { transform: rotate(0deg) } to { transform: rotate(420deg) } }
+        .lax-fan-stop { animation: lax-fan-stop 1.8s cubic-bezier(.12,.62,.25,1) forwards }
+        @media (prefers-reduced-motion: reduce) { .lax-fan-stop { animation: none } }`}</style>
       <div className="flex items-center gap-2">
-        <Fan className={`h-6 w-6 shrink-0 animate-[spin_1.1s_linear_infinite] motion-reduce:animate-none ${cool ? "text-sky-300" : "text-orange-300"}`} aria-hidden />
-        <p className={`whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.1em] ${cool ? "text-sky-200" : "text-orange-200"}`}>Climate on</p>
+        <Fan className={`h-6 w-6 shrink-0 motion-reduce:animate-none ${fanAnim} ${tint} transition-colors duration-700`} aria-hidden />
+        <p className={`whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.1em] transition-colors duration-700 ${off ? "text-white/60" : cool ? "text-sky-200" : "text-orange-200"}`}>
+          {off ? (auto ? "Auto-off" : "Climate off") : busy ? "Turning off…" : "Climate on"}
+        </p>
       </div>
-      <p className="mt-2 text-[34px] font-semibold leading-none tracking-tight text-white tabular-nums" aria-label={`${mmss(left)} left`}>{mmss(left)}</p>
-      <p className="mt-1 text-[13px] font-medium text-white/80">{MODE_TEXT[mode] ?? "Running"}</p>
+      <p className={`mt-2 text-[34px] font-semibold leading-none tracking-tight tabular-nums transition-colors duration-700 ${off ? "text-white/35" : "text-white"}`} aria-label={off ? "Stopped" : `${mmss(left)} left`}>{mmss(left)}</p>
+      <p className={`mt-1 text-[13px] font-medium ${off ? "text-white/55" : "text-white/80"}`}>{off ? (auto ? `Ran the full ${CLIMATE_MINUTES} minutes` : "Stopped") : MODE_TEXT[mode] ?? "Running"}</p>
       <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-white/10">
-        <div className={`h-full w-full origin-left rounded-full transition-transform duration-1000 ease-linear ${cool ? "bg-sky-300" : "bg-orange-300"}`} style={{ transform: `scaleX(${frac})` }} />
+        <div className={`h-full w-full origin-left rounded-full ${off ? "bg-white/30" : cool ? "bg-sky-300 transition-transform duration-1000 ease-linear" : "bg-orange-300 transition-transform duration-1000 ease-linear"}`} style={{ transform: `scaleX(${frac})` }} />
       </div>
-      <p className="mt-1.5 text-[11px] leading-snug text-white/55">Turns off by itself at {fmtTime(until)}</p>
-      <button type="button" onClick={onOff} disabled={busy}
-        className="mt-2.5 flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl bg-white/10 text-[14px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98] disabled:opacity-50">
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" style={{ color: PEACH }} />} Turn off
-      </button>
+      {off ? (
+        <p className="mt-2 text-[12px] leading-snug text-white/60">The cabin stays comfy for a while. Turn it back on anytime.</p>
+      ) : (
+        <>
+          <p className="mt-1.5 text-[11px] leading-snug text-white/55">Turns off by itself at {fmtTime(until)}</p>
+          <button type="button" onClick={onOff} disabled={busy}
+            className="mt-2.5 flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl bg-white/10 text-[14px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98] disabled:opacity-50">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" style={{ color: PEACH }} />} {busy ? "Turning off" : "Turn off"}
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -361,15 +376,35 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car }: 
   const now = useNow(true);
   const session = demoOn ?? (car?.climate_until && car.climate_mode ? { mode: car.climate_mode, until: car.climate_until } : null);
   const running = session && +new Date(session.until) > now ? session : null;
+  // After "off" (or the 20-minute auto-off), keep the panel up for a few seconds: fan winds down, timer freezes.
+  const [stopped, setStopped] = useState<{ mode: string; until: string; at: number; auto: boolean } | null>(null);
+  const lastSession = useRef<{ mode: string; until: string } | null>(null);
+  if (running) lastSession.current = running;
+  const shownFor = useRef<string | null>(null);
+  useEffect(() => {
+    const s = lastSession.current;
+    if (!stopped && s && !running && +new Date(s.until) <= now && shownFor.current !== s.until) {
+      shownFor.current = s.until;
+      setStopped({ ...s, at: +new Date(s.until), auto: true });
+      setDemoOn(null);
+    }
+  }, [now, running, stopped]);
+  useEffect(() => {
+    if (!stopped) return;
+    const t = window.setTimeout(() => setStopped(null), stopped.auto ? 9000 : 6000);
+    return () => window.clearTimeout(t);
+  }, [stopped]);
 
   const press = async (id: ClimateAction) => {
     const a = CLIMATE.find((x) => x.id === id)!;
+    const was = running;
     setBusy(id); setDone(null); setStage("Sending your request");
     try {
       if (demo || !onAction) {
         await new Promise((r) => setTimeout(r, 900));
         setDemoOn(id === "off" ? null : { mode: id, until: new Date(Date.now() + CLIMATE_MINUTES * 60000).toISOString() });
       } else await onAction(id, setStage);
+      if (id === "off" && was) { shownFor.current = was.until; setStopped({ ...was, at: Date.now(), auto: false }); lastSession.current = null; }
       setDone(id === "off" ? "Climate is off." : `${a.label}: on for ${CLIMATE_MINUTES} minutes.`);
     } catch (e) {
       setDone(`Couldn't reach the car. ${(e as Error).message ?? ""}`.trim());
@@ -388,7 +423,9 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car }: 
   return (
     <div className={compact ? "mt-3" : "mt-4 border-t border-white/10 pt-4"}>
       {!compact && <p className="text-[13px] font-semibold text-white">Get the car comfortable before you arrive</p>}
-      {running && !locked ? (
+      {stopped ? (
+        <ClimateOn mode={stopped.mode} until={stopped.until} busy={false} onOff={() => {}} stoppedAt={stopped.at} auto={stopped.auto} />
+      ) : running && !locked ? (
         <ClimateOn mode={running.mode} until={running.until} busy={busy === "off"} onOff={() => press("off")} />
       ) : (
         <>

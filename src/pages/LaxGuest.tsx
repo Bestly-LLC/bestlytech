@@ -145,9 +145,10 @@ export default function LaxGuest() {
   const plat = useMemo(platform, []);
   // ?demo=car shows the car card with sample data and the climate buttons (preview only, nothing is sent to the car).
   const demoParam = useMemo(() => typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("demo") : null, []);
-  const demoCar = demoParam === "car" || demoParam === "climate" || demoParam === "cold";
+  const demoCar = demoParam === "car" || demoParam === "climate" || demoParam === "cold" || demoParam === "ending";
   const demoState: CarState = useMemo(() => demoParam === "climate"
     ? { ...DEMO_CAR, inside_f: 84, climate_on: true, climate_mode: "cool", climate_until: new Date(Date.now() + 17 * 60000 + 42000).toISOString() }
+    : demoParam === "ending" ? { ...DEMO_CAR, inside_f: 76, climate_on: true, climate_mode: "cool", climate_until: new Date(Date.now() + 8000).toISOString() }
     : demoParam === "cold" ? { ...DEMO_CAR, inside_f: 54, outside_f: 49 } : DEMO_CAR, [demoParam]);
   const [outsideF, setOutsideF] = useState<number | null>(null);
   // ?demo=soon previews the greyed-out buttons (before they open).
