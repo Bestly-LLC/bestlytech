@@ -19,6 +19,7 @@ import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { TripHealth } from "./TripHealth";
 import { DemoKeyCard } from "./DemoKeyCard";
+import { GuestFunnel } from "./GuestFunnel";
 import { GuestHelperCard } from "./AskCard";
 import { TripSettingsBody } from "./TripSettings";
 import { HostPassCard } from "./TeslaCard";
@@ -313,6 +314,10 @@ export default function LaxPass() {
         </div>
         <DemoKeyCard />
         <div id="health"><TripHealth /></div>
+      </Section>
+
+      <Section title="How guests use their page" id="guest-steps" footer="Green = done, orange = late for that step. Hover a step for its time.">
+        <GuestFunnel />
       </Section>
       </div>
 

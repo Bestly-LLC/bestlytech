@@ -18,6 +18,7 @@ import {
   type SweepState,
 } from "@/services/streetSweepingApi";
 import { TuroMini } from "@/components/admin/turo/TuroMini";
+import { StatusBoard } from "@/components/admin/StatusBoard";
 import { fetchLatestRun, runHeadline } from "@/services/securityAuditApi";
 
 /**
@@ -570,7 +571,7 @@ export default function AdminDashboard() {
     if (!health.data) return null;
     const status = healthHeadlineStatus(health.data);
     const failing = failingSystems(health.data);
-    if (status === "ok") return { tone: "ok" as Tone, word: "All systems OK", hideLabel: true };
+    if (status === "ok") return { tone: "ok" as Tone, word: "OK" };
     if (status === "down") return { tone: "bad" as Tone, word: `${failing.join(", ")} down` };
     if (status === "warn") {
       return { tone: "warn" as Tone, word: failing.length ? `${failing.join(", ")} degraded` : "Unverified" };
@@ -709,13 +710,13 @@ export default function AdminDashboard() {
       {/* 2 ─ Status */}
       <section aria-labelledby="status-title">
         <SectionTitle id="status-title">Status</SectionTitle>
-        <ul className="flex flex-wrap gap-2">
-          <StatusChip label="System" source={health} to="/admin/cookie-yeti/analytics?tab=operations" render={healthChip} />
+        <StatusBoard>
+          <StatusChip label="Services" source={health} to="/admin/cookie-yeti/analytics?tab=operations" render={healthChip} />
           <StatusChip label="Home Hub" source={homeHub} to="/admin/home-hub" render={homeHubChip} />
           <StatusChip label="Street Sweeping" source={sweep} to="/admin/street-sweeping" render={sweepChip} />
           <StatusChip label="Cookie Yeti" source={cy} to="/admin/cookie-yeti" render={cyChip} />
           <StatusChip label="Security" source={security} to="/admin/security" render={() => runHeadline(security.data ?? null)} />
-        </ul>
+        </StatusBoard>
       </section>
 
       {/* 3 ─ This week */}
