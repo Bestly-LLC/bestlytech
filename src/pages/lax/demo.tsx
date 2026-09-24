@@ -71,7 +71,7 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
     };
   }
   return {
-    ...base, key, ready: stage !== "booked", payload: "BESTLY-DEMO-QR", note: null, google: false, code_for_trip_month: true,
+    ...base, key, ready: true, payload: "BESTLY-DEMO-QR", note: null, google: false, code_for_trip_month: true,
     valid_through: iso(now + 20 * 24 * H).slice(0, 10),
     guide: { car: "Tesla Model 3", garage: "5730 W 98th St, LA 90045", level: "P3", spot: "", shuttle: "The Parking Spot — Century", after_hours: "310-642-0947", shuttle_stop: "5701 W Century Blvd" },
   };

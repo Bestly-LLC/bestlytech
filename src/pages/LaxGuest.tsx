@@ -363,12 +363,44 @@ export default function LaxGuest() {
           </div>
         ) : (
           <>
-            {!ended && <p className="text-[17px] leading-relaxed text-white/85">Your Turo Tesla is in a garage 5 minutes from LAX. <b className="text-white">Your phone is the key</b>, and a QR code opens the garage door.</p>}
+            {!ended && <p className="text-[17px] leading-relaxed text-white/85">Your Turo Tesla is in a garage 5 minutes from LAX. <b className="text-white">Your phone is the key</b>, and a QR code opens the lobby door.</p>}
 
             {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" /></div>}
 
             {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token || undefined} /> : <>
             <NextStep next={guide.next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? carCommand : undefined} kind="lax" />
+
+            {/* QR */}
+            <Collapse id="qr" kicker="Your QR code · opens the lobby door" title={pub.ready ? "Scan it at the lobby door" : undefined} accent={PEACH} className={guide.next?.action === "qr" ? "trip-glow trip-glow-card" : ""} summary={pub.ready ? "Tap to show your QR code." : "Shows up here before your trip."}>
+              {pub.ready ? (
+                <>
+                  <div className="mt-3 rounded-3xl bg-white p-6 text-center text-[#1A1140] shadow-2xl shadow-black/40">
+                    <QRCodeSVG value={pub.payload!} size={240} level="M" className="mx-auto h-auto w-full max-w-[240px]" />
+                    <p className="mt-4 text-sm font-medium text-[#1A1140]/70">Good through {thru}</p>
+                  </div>
+                  <div ref={canvasWrap} className="hidden"><QRCodeCanvas value={pub.payload!} size={1024} level="M" marginSize={4} /></div>
+                  <div className="mt-4 space-y-3">
+                    {plat !== "android" && <AppleWalletButton href={passUrl} />}
+                    {plat !== "apple" && pub.google && <GoogleWalletButton href={token ? `${FN}/google?t=${encodeURIComponent(token)}` : `${FN}/google?slug=${encodeURIComponent(slug)}`} />}
+                    {plat !== "apple" && (
+                      <button type="button" onClick={saveImage} disabled={saving}
+                        className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white/10 text-base font-semibold ring-1 ring-white/15 active:scale-[0.99]">
+                        {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />} Save the pass to your phone
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-3 text-[13px] leading-snug text-white/55">
+                    {plat === "android" && pub.google
+                      ? "Adding it to Google Wallet keeps it one tap away at the door. Saving the image works too."
+                      : plat === "android"
+                      ? "To keep it in Google Wallet: open Google Wallet, tap Add to Wallet → Everything else → Photo, and pick the saved code."
+                      : "Adding it to Wallet keeps it one double-click away at the door. A screenshot works too."}
+                  </p>
+                </>
+              ) : (
+                <div className="mt-3 rounded-2xl bg-white/[0.06] p-4 text-white/80 ring-1 ring-white/10">Your QR code shows up right here before your trip. Nothing to do: this page updates by itself.</div>
+              )}
+            </Collapse>
 
             {/* One widget for the car: weather + cabin + climate buttons, then find-it buttons (same as the home page). */}
             <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${glow.has("climate") || doClimate ? "trip-glow trip-glow-card" : "ring-white/10"}`}
@@ -398,37 +430,7 @@ export default function LaxGuest() {
               )}
             </section>
 
-            {/* QR */}
-            <Collapse id="qr" kicker="QR code · opens the garage door" accent={PEACH} summary={pub.ready ? "Tap to show the lobby door code." : "Arrives the day before your trip."}>
-              {pub.ready ? (
-                <>
-                  <div className="mt-3 rounded-3xl bg-white p-6 text-center text-[#1A1140] shadow-2xl shadow-black/40">
-                    <QRCodeSVG value={pub.payload!} size={240} level="M" className="mx-auto h-auto w-full max-w-[240px]" />
-                    <p className="mt-4 text-sm font-medium text-[#1A1140]/70">Good through {thru}</p>
-                  </div>
-                  <div ref={canvasWrap} className="hidden"><QRCodeCanvas value={pub.payload!} size={1024} level="M" marginSize={4} /></div>
-                  <div className="mt-4 space-y-3">
-                    {plat !== "android" && <AppleWalletButton href={passUrl} />}
-                    {plat !== "apple" && pub.google && <GoogleWalletButton href={token ? `${FN}/google?t=${encodeURIComponent(token)}` : `${FN}/google?slug=${encodeURIComponent(slug)}`} />}
-                    {plat !== "apple" && (
-                      <button type="button" onClick={saveImage} disabled={saving}
-                        className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white/10 text-base font-semibold ring-1 ring-white/15 active:scale-[0.99]">
-                        {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />} Save the pass to your phone
-                      </button>
-                    )}
-                  </div>
-                  <p className="mt-3 text-[13px] leading-snug text-white/55">
-                    {plat === "android" && pub.google
-                      ? "Adding it to Google Wallet keeps it one tap away at the door. Saving the image works too."
-                      : plat === "android"
-                      ? "To keep it in Google Wallet: open Google Wallet, tap Add to Wallet → Everything else → Photo, and pick the saved code."
-                      : "Adding it to Wallet keeps it one double-click away at the door. A screenshot works too."}
-                  </p>
-                </>
-              ) : (
-                <div className="mt-3 rounded-2xl bg-white/[0.06] p-4 text-white/80 ring-1 ring-white/10">Your host will text your QR code the day before your trip.</div>
-              )}
-            </Collapse>
+
 
             {pub.charging && <ChargingCard charging={pub.charging} token={token || undefined} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery} />}
 

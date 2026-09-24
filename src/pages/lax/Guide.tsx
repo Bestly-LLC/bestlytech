@@ -73,7 +73,7 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
   // Key added, pickup later
   if (added) return { next: { icon: CheckCircle2, title: "Key added. You're all set.", sub: `Pickup ${fmtWhen(trip.starts_at)}. You can cool or warm the car 1 hour before.`, action: "pickup", label: "Pickup steps" }, glow };
   // No phone key on this trip (older LAX trips)
-  if (kind === "lax" && qrReady && now >= s - 24 * H) return { next: { icon: Lock, title: "Your QR code opens the garage door", sub: "Add it to your phone's Wallet now.", action: "qr", label: "Show QR code" }, glow };
+  if (kind === "lax" && qrReady && now >= s - 24 * H) return { next: { icon: Lock, title: "Your QR code opens the lobby door", sub: "Add it to your phone's Wallet now.", action: "qr", label: "Show QR code" }, glow };
   return { next: { icon: ArrowRight, title: `Pickup ${fmtWhen(trip.starts_at)}`, sub: "Tap Pickup at the bottom for the steps.", action: "pickup", label: "Pickup steps" }, glow };
 }
 
