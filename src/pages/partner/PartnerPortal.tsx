@@ -22,7 +22,7 @@ import { addPasskey, passkeyCount, passkeysSupported, signInWithPasskey } from "
 
 const card = "rounded-[1.5rem] bg-white/[0.04] border border-white/[0.06] bento:bg-[#fff] bento:border-transparent";
 const btnSolid = "inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 text-[1rem] font-semibold text-black transition active:scale-[0.98] disabled:opacity-50 bento:bg-[#111114] bento:text-[#fff]";
-const input = "h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:bg-[var(--bento-well)] bento:border-black/5";
+const input = "h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:bg-[var(--bento-well)] bento:border-white/5";
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 

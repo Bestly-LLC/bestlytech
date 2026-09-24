@@ -97,7 +97,7 @@ export default function AdminPlaybook() {
         <div className="relative flex-1 min-w-[12rem]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search lessons"
-            className="h-10 w-full rounded-full border border-white/10 bg-white/[0.04] pl-9 pr-4 text-[16px] text-white outline-none placeholder:text-white/35 bento:bg-[#fff] bento:border-black/5" />
+            className="h-10 w-full rounded-full border border-white/10 bg-white/[0.04] pl-9 pr-4 text-[16px] text-white outline-none placeholder:text-white/35 bento:bg-[#fff] bento:border-white/5" />
         </div>
         <button onClick={reflectNow} disabled={running} className="inline-flex h-10 items-center gap-1.5 rounded-full bg-white/[0.08] px-4 text-sm font-medium text-white disabled:opacity-50">
           <Sparkles className={cn("h-4 w-4", running && "animate-pulse")} /> {running ? "Looking back…" : "Learn from the last 3 days"}

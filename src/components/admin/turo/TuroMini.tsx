@@ -90,7 +90,7 @@ export function TuroMini() {
             detail={w.owed > 0 ? "Not requested in Turo" : `${w.alerts} car alert${w.alerts === 1 ? "" : "s"} today`}
           />
         </div>
-        <ChevronRight className="h-4 w-4 shrink-0 text-white/35 transition-colors group-hover:text-white/70" aria-hidden />
+        <ChevronRight className="h-4 w-4 shrink-0 text-white/60 transition-colors group-hover:text-white/70" aria-hidden />
       </Link>
     </section>
   );

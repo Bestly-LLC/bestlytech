@@ -451,7 +451,7 @@ function DraftCard({ d, onSet, busy }: { d: Row; onSet: (r: Row, s: Status, msg?
             onChange={(e) => setText(e.target.value)}
             aria-label={`Reply to ${a.to_name ?? a.to ?? "sender"}`}
             rows={Math.min(12, Math.max(4, text_.split("\n").length + 1))}
-            className="w-full resize-y rounded-xl border border-white/10 bg-black/20 p-3 text-[15px] leading-relaxed text-white outline-none focus:border-white/25 focus-visible:ring-2 focus-visible:ring-[#0A84FF] bento:border-black/5 bento:bg-[var(--bento-well)]"
+            className="w-full resize-y rounded-xl border border-white/10 bg-black/20 p-3 text-[15px] leading-relaxed text-white outline-none focus:border-white/25 focus-visible:ring-2 focus-visible:ring-[#0A84FF] bento:border-white/5 bento:bg-[var(--bento-well)]"
           />
           <div className="-mx-1 flex flex-wrap gap-1">
             <a href={mailto} className={solid}><Mail className="h-4 w-4" aria-hidden /> Open in Mail</a>

@@ -31,15 +31,15 @@ export function RunHistory() {
         return (
           <li key={r.id} className="px-4 py-3 sm:px-5">
             <div className="flex items-center justify-between gap-3">
-              <span className="flex items-center gap-2 text-[0.95rem] text-white bento:text-[#111]"><Navigation className="h-4 w-4 text-white/40" /> {when(r.ran_at)}</span>
+              <span className="flex items-center gap-2 text-[0.95rem] text-white bento:text-[#111]"><Navigation className="h-4 w-4 text-white/60" /> {when(r.ran_at)}</span>
               <span className={cn("text-xs font-semibold", MODE[r.mode]?.tone ?? "text-white/60")}>{MODE[r.mode]?.label ?? r.mode}</span>
             </div>
-            <p className="mt-1 text-xs text-white/50 bento:text-neutral-500">
+            <p className="mt-1 text-xs text-white/60 bento:text-neutral-500">
               {r.runner} · market {money(r.market_base)} · n={r.comp_n ?? 0}
               {r.mode === "applied" ? ` · ${r.days_verified}/${r.days_written} days verified` : ""}
               {tripped.length ? ` · stopped by: ${tripped.join(", ")}` : ""}
             </p>
-            {r.notes && <p className="mt-1 line-clamp-2 text-xs text-white/40">{r.notes.replace(/^CRASH:.*/s, "Runner crashed (fixed Sept 22).")}</p>}
+            {r.notes && <p className="mt-1 line-clamp-2 text-xs text-white/60">{r.notes.replace(/^CRASH:.*/s, "Runner crashed (fixed Sept 22).")}</p>}
           </li>
         );
       })}

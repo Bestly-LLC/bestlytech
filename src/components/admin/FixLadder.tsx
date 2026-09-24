@@ -66,17 +66,17 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
   const log = (iss.fix_log ?? []).slice(-8).reverse();
 
   return (
-    <div className="border-t border-white/[0.06] px-5 py-4 bento:border-black/5">
+    <div className="border-t border-white/[0.06] px-5 py-4 bento:border-white/5">
       {/* The one thing to know / do */}
       {fixed ? (
         <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 p-4 bento:bg-emerald-50">
           <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300 bento:text-emerald-700"><Check className="h-4 w-4" aria-hidden /> Fixed</p>
-          <p className="mt-1 text-[0.9375rem] text-white/85 bento:text-black/80">{iss.fix_note ?? "It's working again."}</p>
+          <p className="mt-1 text-[0.9375rem] text-white/85 bento:text-white/80">{iss.fix_note ?? "It's working again."}</p>
         </div>
       ) : iss.fix_stage === "needs_yes" ? (
         <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4 bento:bg-amber-50">
           <p className="text-sm font-semibold text-amber-200 bento:text-amber-800">Scout knows how to fix this. Tap Yes and it does it for you.</p>
-          <p className="mt-1 text-[0.9375rem] text-white/85 bento:text-black/80">What it will do: {iss.scout_ask}</p>
+          <p className="mt-1 text-[0.9375rem] text-white/85 bento:text-white/80">What it will do: {iss.scout_ask}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={() => { askScout(`Yes, do it: ${iss.scout_ask}`, { about }); onClose(); }}
               className="inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-sm font-semibold text-black active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
@@ -88,20 +88,20 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
       ) : iss.fix_stage === "claude" ? (
         <div className="rounded-2xl border border-violet-400/25 bg-violet-400/10 p-4 bento:bg-violet-50">
           <p className="flex items-center gap-1.5 text-sm font-semibold text-violet-200 bento:text-violet-800"><Sparkles className="h-4 w-4" aria-hidden /> Every AI here tried. Hand it to Claude.</p>
-          <p className="mt-1 text-sm text-white/70 bento:text-black/65">One tap copies a prompt with everything that was tried. Paste it into Claude (desktop or Code).</p>
+          <p className="mt-1 text-sm text-white/70 bento:text-white/65">One tap copies a prompt with everything that was tried. Paste it into Claude (desktop or Code).</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {iss.claude_prompt && <CopyButton text={iss.claude_prompt} label="Copy prompt for Claude" className="h-11 bg-white px-5 text-black hover:bg-white/90 bento:bg-[#111114] bento:text-[#fff]" />}
           </div>
           {iss.claude_prompt && (
             <details className="mt-3 text-sm">
-              <summary className="cursor-pointer text-white/55 bento:text-black/55">See the prompt</summary>
-              <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-[12px] leading-relaxed text-white/75 bento:bg-black/5 bento:text-black/75">{iss.claude_prompt}</pre>
+              <summary className="cursor-pointer text-white/55 bento:text-white/60">See the prompt</summary>
+              <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-[12px] leading-relaxed text-white/75 bento:bg-white/5 bento:text-white/75">{iss.claude_prompt}</pre>
             </details>
           )}
         </div>
       ) : (
-        <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-[0.9375rem] bento:border-black/5 bento:bg-[#F3F2EE]">
-          <Loader2 className="h-4 w-4 animate-spin text-white/60 bento:text-black/50" aria-hidden />
+        <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-[0.9375rem] bento:border-white/5 bento:bg-[#F3F2EE]">
+          <Loader2 className="h-4 w-4 animate-spin text-white/60 bento:text-white/60" aria-hidden />
           <span>Working on it: {iss.fix_stage === "auto" ? "self-heal first" : iss.fix_stage === "free_ai" ? "the free AI is reading it" : "Scout is on it"}. Nothing needed from you yet.</span>
         </div>
       )}
@@ -114,12 +114,12 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
           return (
             <li key={r.id} className="flex flex-col items-center gap-1 text-center">
               <span className={cn("grid h-7 w-7 place-items-center rounded-full text-[11px] font-semibold",
-                done ? "bg-white/15 text-white/80 bento:bg-black/10 bento:text-black/70"
+                done ? "bg-white/15 text-white/80 bento:bg-white/10 bento:text-white/70"
                   : now ? "bg-white text-black ring-2 ring-white/30 bento:bg-[#111114] bento:text-[#fff]"
-                  : "bg-white/[0.04] text-white/35 bento:bg-black/5 bento:text-black/35")}>
+                  : "bg-white/[0.04] text-white/35 bento:bg-white/5 bento:text-white/60")}>
                 {done ? <Check className="h-3.5 w-3.5" aria-hidden /> : n + 1}
               </span>
-              <span className={cn("text-[11px]", now ? "font-semibold text-white bento:text-black" : "text-white/50 bento:text-black/50")}>{r.label}</span>
+              <span className={cn("text-[11px]", now ? "font-semibold text-white bento:text-white" : "text-white/50 bento:text-white/60")}>{r.label}</span>
             </li>
           );
         })}
@@ -134,9 +134,9 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
                 l.ok === true ? "bg-emerald-400/20 text-emerald-300" : l.ok === false ? "bg-rose-400/15 text-rose-300" : "bg-white/10 text-white/50")}>
                 {l.ok === true ? <Check className="h-3 w-3" aria-hidden /> : l.ok === false ? <X className="h-3 w-3" aria-hidden /> : <span className="h-1 w-1 rounded-full bg-current" />}
               </span>
-              <span className="min-w-0 text-white/75 bento:text-black/70">
-                <span className="font-medium text-white bento:text-black">{WHO[l.by] ?? l.by}</span> · {l.text}
-                <span className="ml-1 text-white/35 bento:text-black/35">{time(l.at)}</span>
+              <span className="min-w-0 text-white/75 bento:text-white/70">
+                <span className="font-medium text-white bento:text-white">{WHO[l.by] ?? l.by}</span> · {l.text}
+                <span className="ml-1 text-white/35 bento:text-white/60">{time(l.at)}</span>
               </span>
             </li>
           ))}
@@ -146,7 +146,7 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
       {!fixed && (
         <div className="mt-4 flex items-center gap-3">
           <button type="button" onClick={retry} disabled={busy}
-            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-white/10 px-4 text-sm font-medium text-white/80 hover:bg-white/[0.06] disabled:opacity-50 bento:border-black/10 bento:text-black/75">
+            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-white/10 px-4 text-sm font-medium text-white/80 hover:bg-white/[0.06] disabled:opacity-50 bento:border-white/10 bento:text-white/75">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RotateCw className="h-4 w-4" aria-hidden />}
             {busy ? "Starting…" : "Try the ladder again now"}
           </button>

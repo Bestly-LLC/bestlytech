@@ -45,7 +45,7 @@ export function PasswordSetup() {
     setHidden(true);
   };
 
-  const field = "h-12 w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 text-[16px] text-white outline-none placeholder:text-white/35 focus:border-white/40 bento:border-black/10 bento:bg-[#fff]";
+  const field = "h-12 w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 text-[16px] text-white outline-none placeholder:text-white/35 focus:border-white/40 bento:border-white/10 bento:bg-[#fff]";
   return (
     <DialogPrimitive.Root open onOpenChange={(o) => { if (!o && !busy) later(); }}>
       <DialogPrimitive.Portal>

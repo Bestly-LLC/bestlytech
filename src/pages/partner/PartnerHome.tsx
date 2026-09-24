@@ -298,7 +298,7 @@ export function PartnerHome({ session }: { session: Session }) {
   return (
     <div className={shell}>
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/[0.06] bg-black/40 px-4 py-6 backdrop-blur lg:flex bento:border-black/5 bento:bg-[#fff]/70">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/[0.06] bg-black/40 px-4 py-6 backdrop-blur lg:flex bento:border-white/5 bento:bg-[#fff]/70">
         <div className="flex items-center gap-2.5 px-2">
           <AdminMark className="h-8 w-8" />
           <span className="text-[1rem] font-semibold tracking-tight">Bestly <span className="text-white/60">· Partner</span></span>
@@ -314,7 +314,7 @@ export function PartnerHome({ session }: { session: Session }) {
             </button>
           ))}
         </nav>
-        <div className="mt-6 space-y-1 border-t border-white/[0.06] pt-4 bento:border-black/5">
+        <div className="mt-6 space-y-1 border-t border-white/[0.06] pt-4 bento:border-white/5">
           <button onClick={() => setBellOpen(true)} className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
             <Bell className="h-[18px] w-[18px]" /> Studio
             {notifs.unread > 0 && <span className="ml-auto rounded-full bg-red-500 px-2 text-xs font-semibold text-[#fff]">{notifs.unread}</span>}
@@ -342,7 +342,7 @@ export function PartnerHome({ session }: { session: Session }) {
 
       <main className="lg:pl-64">
         {/* Mobile header */}
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/[0.06] bg-black/70 px-4 pb-2 pt-[max(0.6rem,env(safe-area-inset-top))] backdrop-blur-xl lg:hidden bento:border-black/5 bento:bg-[#F3F2EE]/80">
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/[0.06] bg-black/70 px-4 pb-2 pt-[max(0.6rem,env(safe-area-inset-top))] backdrop-blur-xl lg:hidden bento:border-white/5 bento:bg-[#F3F2EE]/80">
           <span className="flex items-center gap-2 text-[0.95rem] font-semibold tracking-tight">
             <AdminMark className="h-7 w-7" /> Bestly <span className="text-white/60">· Partner</span>
           </span>
@@ -399,7 +399,7 @@ export function PartnerHome({ session }: { session: Session }) {
       {tab !== "scout" && <ScoutAlert scout={scout} open={() => setTab("scout")} />}
 
       {/* Mobile tab bar */}
-      <nav aria-label="Portal" className="fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.08] bg-black/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden bento:border-black/5 bento:bg-[#fff]/95">
+      <nav aria-label="Portal" className="fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.08] bg-black/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden bento:border-white/5 bento:bg-[#fff]/95">
         <div className="mx-auto grid max-w-lg grid-cols-5">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setTab(id)} aria-current={tab === id ? "page" : undefined}
@@ -535,7 +535,7 @@ function HomeTab(props: {
           )}
           <form onSubmit={(e) => { e.preventDefault(); ask(q); }} className="flex gap-2">
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="What did we decide about…"
-              className="h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-black/30 px-4 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:border-black/10 bento:bg-[#fff]" />
+              className="h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-black/30 px-4 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:border-white/10 bento:bg-[#fff]" />
             <button aria-label="Ask" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#0A84FF] text-[#fff] active:scale-95"><ArrowRight className="h-5 w-5" /></button>
           </form>
           <div className="mt-3 flex flex-col gap-1.5">
@@ -720,7 +720,7 @@ function DoneList({ done, tick }: { done: Todo[]; tick: (t: Todo, s: "done" | "o
   const [all, setAll] = useState(false);
   const shown = all ? done : done.slice(0, 8);
   return (
-    <div className="mt-3 border-t border-white/[0.06] pt-3 bento:border-black/5">
+    <div className="mt-3 border-t border-white/[0.06] pt-3 bento:border-white/5">
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
         className="flex min-h-[40px] w-full items-center gap-1.5 text-left text-sm font-medium text-white/60 hover:text-white">
         <ChevronDown className={cn("h-4 w-4 transition-transform", !open && "-rotate-90")} />
@@ -856,7 +856,7 @@ function TabHead({ title, sub, q, setQ, placeholder }: { title: string; sub: str
       <label className="relative sm:w-72">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label={placeholder}
-          className="h-11 w-full rounded-full border border-white/10 bg-white/[0.04] pl-10 pr-4 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:border-black/5 bento:bg-[#fff]" />
+          className="h-11 w-full rounded-full border border-white/10 bg-white/[0.04] pl-10 pr-4 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:border-white/5 bento:bg-[#fff]" />
       </label>
     </div>
   );

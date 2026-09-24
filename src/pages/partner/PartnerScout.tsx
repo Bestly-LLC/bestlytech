@@ -226,7 +226,7 @@ export function ScoutAlert({ scout, open }: { scout: ScoutState; open: () => voi
   return (
     <div role="status" aria-live="polite"
       className="fixed inset-x-3 bottom-[calc(4.6rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-md animate-in fade-in slide-in-from-bottom-4 duration-300 lg:inset-x-auto lg:bottom-6 lg:right-6 lg:mx-0 lg:w-[24rem]">
-      <div className="flex items-start gap-3 rounded-[1.4rem] border border-white/10 bg-[#141418]/95 p-3.5 pr-2 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl bento:border-black/5 bento:bg-[#fff]/95">
+      <div className="flex items-start gap-3 rounded-[1.4rem] border border-white/10 bg-[#141418]/95 p-3.5 pr-2 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl bento:border-white/5 bento:bg-[#fff]/95">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/[0.08] bento:bg-[#F3F2EE]"><AdminMark watchCursor={false} className="h-7 w-7" /></span>
         <button onClick={() => { if (m.thread_id) scout.setActive(m.thread_id); scout.dismissAlert(); open(); }} className="min-w-0 flex-1 text-left">
           <p className="text-sm font-semibold">{failed ? "Scout hit a snag" : "Scout answered"}</p>
@@ -395,7 +395,7 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
               <div className="mt-6 grid w-full gap-2 sm:grid-cols-2">
                 {SCOUT_IDEAS.map((q) => (
                   <button key={q} onClick={() => send(q)}
-                    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left text-[0.95rem] text-white/85 transition hover:bg-white/[0.08] active:scale-[0.99] bento:border-black/5 bento:bg-[#fff]">
+                    className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left text-[0.95rem] text-white/85 transition hover:bg-white/[0.08] active:scale-[0.99] bento:border-white/5 bento:bg-[#fff]">
                     {q}
                   </button>
                 ))}
@@ -442,7 +442,7 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
             </button>
           )}
           {err && <p role="alert" className="mb-2 text-sm text-red-400 bento:text-red-600">{err}</p>}
-          <div className="flex items-end gap-2 rounded-[1.6rem] border border-white/10 bg-[#141418]/95 p-2 pl-4 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.6)] backdrop-blur bento:border-black/5 bento:bg-[#fff]/95">
+          <div className="flex items-end gap-2 rounded-[1.6rem] border border-white/10 bg-[#141418]/95 p-2 pl-4 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.6)] backdrop-blur bento:border-white/5 bento:bg-[#fff]/95">
             <textarea ref={box} rows={1} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
               placeholder={active ? "Reply to Scout" : "Ask Scout anything"} aria-label="Your question"
               className="max-h-[180px] min-h-[40px] flex-1 resize-none bg-transparent py-2.5 text-[16px] leading-snug text-white outline-none placeholder:text-white/60" />

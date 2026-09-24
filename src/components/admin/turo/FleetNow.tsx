@@ -41,7 +41,7 @@ const HOME = { lat: 34.0836, lon: -118.3765 };
 const READY_PCT = 80;
 
 const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
-const muted = "text-white/50 bento:text-[#55525c]";
+const muted = "text-white/60 bento:text-[#55525c]";
 const ink = "text-white bento:text-[#17151c]";
 
 /** Turo quotes host earnings to the cent; rounding them would misreport the payout. */

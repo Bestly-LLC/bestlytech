@@ -37,7 +37,7 @@ export function SuperchargeAudit() {
   const load = useCallback(async () => { const { data, error } = await rpc("supercharge_audit"); if (error) toast.error(error.message); else setA(data as Audit); }, []);
   useEffect(() => { void load(); }, [load]);
   const settle = async (rid: number, on: boolean) => { const { data, error } = await rpc("supercharge_audit_settle", { p_rid: rid, p_on: on }); if (error) toast.error(error.message); else setA(data as Audit); };
-  if (!a) return <div className={card}><Loader2 className="h-5 w-5 animate-spin text-white/50" /></div>;
+  if (!a) return <div className={card}><Loader2 className="h-5 w-5 animate-spin text-white/60" /></div>;
   const trips = a.trips.filter((t) => t.status !== "none");
   const todo = trips.filter((t) => t.status === "not_billed" || t.status === "short");
   const list = showAll ? trips : todo;
@@ -119,7 +119,7 @@ export function CarHealth() {
     setBusy(null);
     if (r?.ok) setBh(r.health as Record<string, unknown>); else toast.error(r?.error ?? "TezLab didn't answer");
   };
-  if (!h) return <div className={card}><Loader2 className="h-5 w-5 animate-spin text-white/50" /></div>;
+  if (!h) return <div className={card}><Loader2 className="h-5 w-5 animate-spin text-white/60" /></div>;
   const tires = h.health?.tires ?? null;
   const low = tires ? Math.min(...Object.values(tires).filter((x): x is number => typeof x === "number")) : null;
   const upd = h.health?.update?.status;
@@ -195,7 +195,7 @@ function TireGrid({ tires, low }: { tires: Record<string, number | null>; low: n
                     [&>span]:px-2 [&>span]:py-0.5
                     [&>span:nth-child(even)]:border-l [&>span:nth-child(odd)]:pl-0
                     [&>span:nth-child(n+3)]:border-t
-                    [&>span]:border-white/[0.10] bento:[&>span]:border-black/10">
+                    [&>span]:border-white/[0.14]">
       {cell("fl", "Front left")}{cell("fr", "Front right")}
       {cell("rl", "Rear left")}{cell("rr", "Rear right")}
     </div>

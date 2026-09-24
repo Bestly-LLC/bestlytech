@@ -70,7 +70,7 @@ export function TuroTrends({ rows }: { rows: SeriesRow[] | null }) {
   return (
     <section className={cn(card, "p-5")}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-white"><TrendingUp className="h-4 w-4 text-white/50" /> Price trends</h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-white"><TrendingUp className="h-4 w-4 text-white/60" /> Price trends</h2>
         <div role="group" aria-label="Range" className="flex rounded-full bg-white/[0.06] p-1 bento:bg-[#F3F2EE]">
           {RANGES.map((r) => (
             <button key={r.id} onClick={() => setRange(r.id)} aria-pressed={range === r.id}
@@ -87,10 +87,10 @@ export function TuroTrends({ rows }: { rows: SeriesRow[] | null }) {
             const diff = s.key !== "us" && us != null && s.value != null ? us - s.value : null;
             return (
               <div key={s.key} className="rounded-2xl bg-white/[0.04] p-4 bento:bg-[#F3F2EE]">
-                <p className="flex items-center gap-1.5 text-xs text-white/55"><span className="h-2 w-2 rounded-full" style={{ background: s.color }} />{s.label}</p>
-                <p className="mt-1.5 text-2xl font-semibold tabular-nums text-white">{money(s.value)}<span className="text-sm font-normal text-white/40">/day</span></p>
+                <p className="flex items-center gap-1.5 text-xs text-white/60"><span className="h-2 w-2 rounded-full" style={{ background: s.color }} />{s.label}</p>
+                <p className="mt-1.5 text-2xl font-semibold tabular-nums text-white">{money(s.value)}<span className="text-sm font-normal text-white/60">/day</span></p>
                 {diff != null && (
-                  <p className={cn("mt-0.5 flex items-center gap-0.5 text-xs", diff > 0 ? "text-emerald-300 bento:text-emerald-700" : diff < 0 ? "text-amber-300 bento:text-amber-700" : "text-white/45")}>
+                  <p className={cn("mt-0.5 flex items-center gap-0.5 text-xs", diff > 0 ? "text-emerald-300 bento:text-emerald-700" : diff < 0 ? "text-amber-300 bento:text-amber-700" : "text-white/60")}>
                     {diff > 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : diff < 0 ? <ArrowDownRight className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
                     you're {diff === 0 ? "even" : `${money(Math.abs(diff))} ${diff > 0 ? "above" : "below"}`}
                   </p>
@@ -100,7 +100,7 @@ export function TuroTrends({ rows }: { rows: SeriesRow[] | null }) {
           })}
         </div>
       ) : data.length === 0 ? (
-        <p className="mt-6 py-10 text-center text-sm text-white/50">No prices in this range yet.</p>
+        <p className="mt-6 py-10 text-center text-sm text-white/60">No prices in this range yet.</p>
       ) : (
         <div className="mt-4 h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -122,7 +122,7 @@ export function TuroTrends({ rows }: { rows: SeriesRow[] | null }) {
           </ResponsiveContainer>
         </div>
       )}
-      <p className="mt-3 text-xs text-white/40">
+      <p className="mt-3 text-xs text-white/60">
         Listing-price dollars per day. Market and Edgar are converted from what renters pay (x 0.603, Turo's cut). Right of "today" is what's planned.
       </p>
     </section>
@@ -184,7 +184,7 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-white">Price manager</h2>
-          <p className="mt-0.5 max-w-xl text-xs text-white/50">
+          <p className="mt-0.5 max-w-xl text-xs text-white/60">
             Starts from Turo's dynamic price (never goes under it), adds more the further out a day is, and caps at 10% over the nearby Model 3 market. Moves at most 25% per run.
           </p>
         </div>
@@ -202,7 +202,7 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
 
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[34rem] text-sm">
-          <thead className="text-xs text-white/45">
+          <thead className="text-xs text-white/60">
             <tr className="border-b border-white/[0.06]">
               <th className="py-2 pr-2 text-left font-medium">Day</th>
               <th className="px-2 py-2 text-right font-medium">Turo's price</th>
@@ -218,11 +218,11 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
               return (
                 <tr key={x.d}>
                   <td className="py-2.5 pr-2 text-white">{new Date(x.d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</td>
-                  <td className="px-2 py-2.5 text-right tabular-nums text-white/55">{money(x.floor)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums text-white/60">{money(x.floor)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-white/75">{money(x.cur)}</td>
                   <td className="px-2 py-2.5 text-right font-semibold tabular-nums text-white">{money(x.rec)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-emerald-300 bento:text-emerald-700">{up != null ? `+$${up}` : "–"}</td>
-                  <td className="py-2.5 pl-2 text-right text-xs text-white/50">
+                  <td className="py-2.5 pl-2 text-right text-xs text-white/60">
                     {x.status === "applied" ? "Set" : x.status === "estimate" ? "Estimate" : x.status === "no-data" ? "Needs a run" : x.status === "blocked" ? "Not set" : x.status}
                   </td>
                 </tr>
@@ -231,7 +231,7 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-white/40">"Estimate" rows use the last known Turo price; the next run with Turo signed in replaces them with live numbers and sets them.</p>
+      <p className="mt-2 text-xs text-white/60">"Estimate" rows use the last known Turo price; the next run with Turo signed in replaces them with live numbers and sets them.</p>
     </section>
   );
 }
@@ -251,8 +251,8 @@ export function Competitors({ targets, prices }: { targets: Target[]; prices: Co
             <li key={t.id} className="py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-medium text-white">{t.label} <span className="font-normal text-white/45">· {t.vehicle}</span></p>
-                  {t.note && <p className="text-xs text-white/45">{t.note}</p>}
+                  <p className="font-medium text-white">{t.label} <span className="font-normal text-white/60">· {t.vehicle}</span></p>
+                  {t.note && <p className="text-xs text-white/60">{t.note}</p>}
                 </div>
                 <a href={t.page_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[#5AB0FF] bento:text-[#0A6FD8]">Turo page <ExternalLink className="h-3.5 w-3.5" /></a>
               </div>
@@ -263,9 +263,9 @@ export function Competitors({ targets, prices }: { targets: Target[]; prices: Co
                       {p.car}: <b className="text-white">{money(p.renter_daily)}</b>/day to renters · ≈{money(p.host_equiv)} listing
                     </span>
                   ))}
-                  <span className="self-center text-xs text-white/40">checked {new Date(at!).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</span>
+                  <span className="self-center text-xs text-white/60">checked {new Date(at!).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</span>
                 </div>
-              ) : <p className="mt-1 text-xs text-white/45">No reading yet. Every Turo Watch run checks it.</p>}
+              ) : <p className="mt-1 text-xs text-white/60">No reading yet. Every Turo Watch run checks it.</p>}
             </li>
           );
         })}

@@ -300,7 +300,7 @@ export default function AdminApproveLogin() {
 
             {req && (
               <section className="approve-in mt-2 space-y-4" aria-live="polite">
-                <div className="flex items-center gap-3.5 rounded-2xl border border-white/10 bg-white/[0.05] p-4 bento:border-black/5 bento:bg-[#fff]">
+                <div className="flex items-center gap-3.5 rounded-2xl border border-white/10 bg-white/[0.05] p-4 bento:border-white/5 bento:bg-[#fff]">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/[0.08] bento:bg-[#F3F2EE]">
                     <device.Icon className="h-5 w-5 text-white/80" aria-hidden />
                   </span>

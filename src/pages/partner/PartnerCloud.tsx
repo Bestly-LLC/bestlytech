@@ -31,7 +31,7 @@ function Shell({ title, sub, open, onOpenChange, children }: { title: string; su
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 border-white/10 bg-[#0b0d12] p-0 text-white sm:max-w-xl bento:bg-[#F3F2EE]">
-        <div className="border-b border-white/[0.06] px-5 pb-3 pt-6 bento:border-black/5">
+        <div className="border-b border-white/[0.06] px-5 pb-3 pt-6 bento:border-white/5">
           <SheetTitle className="text-lg font-semibold text-white">{title}</SheetTitle>
           <SheetDescription className="text-sm text-white/60">{sub}</SheetDescription>
         </div>
@@ -145,8 +145,8 @@ export function TalkSheet({ open, onOpenChange }: { open: boolean; onOpenChange:
               return (
                 <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
                   <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[0.95rem] leading-relaxed",
-                    mine ? "bg-[#0A84FF] text-[#fff]" : "bg-white/[0.07] text-white bento:bg-[#fff] bento:text-black")}>
-                    {!mine && <p className="mb-0.5 text-xs font-semibold text-white/60 bento:text-black/50">{m.actor_name}</p>}
+                    mine ? "bg-[#0A84FF] text-[#fff]" : "bg-white/[0.07] text-white bento:bg-[#fff] bento:text-white")}>
+                    {!mine && <p className="mb-0.5 text-xs font-semibold text-white/60 bento:text-white/60">{m.actor_name}</p>}
                     <p className="whitespace-pre-wrap break-words">{m.body}</p>
                     <p className={cn("mt-1 text-[11px]", mine ? "text-[#fff]/70" : "text-white/60")}>
                       {new Date(m.sent_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...PT })}
@@ -157,10 +157,10 @@ export function TalkSheet({ open, onOpenChange }: { open: boolean; onOpenChange:
             })}
             <div ref={bottom} />
           </div>
-          <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex items-end gap-2 border-t border-white/[0.06] p-4 bento:border-black/5">
+          <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex items-end gap-2 border-t border-white/[0.06] p-4 bento:border-white/5">
             <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={1} placeholder="Message"
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              className="max-h-32 min-h-[48px] flex-1 resize-none rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:border-black/10 bento:bg-[#fff]" />
+              className="max-h-32 min-h-[48px] flex-1 resize-none rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:border-white/10 bento:bg-[#fff]" />
             <button type="submit" disabled={!draft.trim() || busy} aria-label="Send"
               className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white text-black disabled:opacity-40 bento:bg-[#111114] bento:text-[#fff]">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

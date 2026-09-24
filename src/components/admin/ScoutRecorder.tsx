@@ -395,7 +395,7 @@ export function RecordingPill() {
 
   if (state.status === "transcribing") {
     return (
-      <span className="hidden items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-white/70 sm:inline-flex bento:bg-black/5 bento:text-black/70" aria-live="polite">
+      <span className="hidden items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-white/70 sm:inline-flex bento:bg-white/5 bento:text-white/70" aria-live="polite">
         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Transcribing
       </span>
     );

@@ -104,7 +104,7 @@ export default function AdminTuro() {
       {/* Who has the car right now, with each trip's guest page / key / reminder controls. */}
       <div id="keys" className="scroll-mt-24">
         <FleetNow trips={trips} vehicle={vehicle}
-          guest={(t) => { const g = guests.rows?.find((x) => x.reservation_id === t.reservation_id); return g ? <ul><GuestRow r={g} reload={guests.reload} compact /></ul> : <p className="text-sm text-white/50">No guest page for this trip yet.</p>; }}
+          guest={(t) => { const g = guests.rows?.find((x) => x.reservation_id === t.reservation_id); return g ? <ul><GuestRow r={g} reload={guests.reload} compact /></ul> : <p className="text-sm text-white/60">No guest page for this trip yet.</p>; }}
           returnAt={(t) => { const g = guests.rows?.find((x) => x.reservation_id === t.reservation_id); return g ? { pct: g.pickup_battery ?? null, at: g.pickup_battery_at ?? null } : null; }} />
       </div>
 
@@ -148,21 +148,21 @@ export default function AdminTuro() {
               </a>
             </div>
             <div className="border-t border-white/[0.06] pt-4">
-              <label htmlFor="turo-note" className="text-xs font-semibold uppercase tracking-widest text-white/50">Note for the next run</label>
+              <label htmlFor="turo-note" className="text-xs font-semibold uppercase tracking-widest text-white/60">Note for the next run</label>
               {settings?.note_for_claude ? (
                 <div className="mt-2 flex items-start justify-between gap-3 rounded-xl bg-white/[0.04] p-3 bento:bg-[var(--bento-well)]">
                   <p className="text-[0.95rem] text-white/85">{settings.note_for_claude}</p>
-                  <button className="shrink-0 text-xs text-white/50 underline" onClick={() => save({ p_note: "" }, "Note cleared")}>Clear</button>
+                  <button className="shrink-0 text-xs text-white/60 underline" onClick={() => save({ p_note: "" }, "Note cleared")}>Clear</button>
                 </div>
               ) : (
                 <div className="mt-2 flex gap-2">
                   <input id="turo-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. hold Saturday at $120, or skip writing this weekend"
-                    className="h-11 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[16px] text-white outline-none placeholder:text-white/35 bento:bg-[var(--bento-well)] bento:border-black/5" />
+                    className="h-11 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[16px] text-white outline-none placeholder:text-white/60 bento:bg-[var(--bento-well)] bento:border-white/5" />
                   <button disabled={saving || !note.trim()} onClick={async () => { if (await save({ p_note: note }, "Claude will read it next run")) setNote(""); }}
                     className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-white px-4 text-sm font-medium text-black disabled:opacity-40 bento:bg-[#111114] bento:text-[#fff]"><Send className="h-4 w-4" /> Save</button>
                 </div>
               )}
-              <p className="mt-1.5 text-xs text-white/45">Claude reads it at the start of the next run, follows it, then clears it.</p>
+              <p className="mt-1.5 text-xs text-white/60">Claude reads it at the start of the next run, follows it, then clears it.</p>
             </div>
           </section>
         );
@@ -178,9 +178,9 @@ export default function AdminTuro() {
             ["Ceiling", money(lastPlanRun?.ceiling ?? last.ceiling), "never priced above"],
           ].map(([k, v, sub]) => (
             <div key={k} className={cn(card, "p-4")}>
-              <p className="text-xs text-white/50">{k}</p>
+              <p className="text-xs text-white/60">{k}</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-white">{v}</p>
-              <p className="mt-0.5 text-xs text-white/45">{sub}</p>
+              <p className="mt-0.5 text-xs text-white/60">{sub}</p>
             </div>
           ))}
         </section>

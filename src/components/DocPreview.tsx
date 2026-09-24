@@ -76,7 +76,7 @@ export function DocPreview({ file, onClose }: { file: PreviewFile | null; onClos
   return (
     <Dialog open={!!file} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className={cn(
-        "flex max-w-none flex-col gap-0 overflow-hidden rounded-2xl border border-white/10 bg-[#111114] p-0 text-white shadow-2xl sm:rounded-2xl [&>button]:hidden bento:border-black/10 bento:bg-[#fff]",
+        "flex max-w-none flex-col gap-0 overflow-hidden rounded-2xl border border-white/10 bg-[#111114] p-0 text-white shadow-2xl sm:rounded-2xl [&>button]:hidden bento:border-white/10 bento:bg-[#fff]",
         // Pictures get a window sized to the picture; documents get the tall reader.
         kind === "image" ? "max-h-[90dvh] w-auto min-w-[min(22rem,94vw)] max-w-[min(64rem,94vw)]" : "h-[92dvh] w-[min(64rem,96vw)]",
       )}>
@@ -91,7 +91,7 @@ export function DocPreview({ file, onClose }: { file: PreviewFile | null; onClos
               <a href={file.url} download={file.name} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/[0.08] px-3.5 text-sm font-medium text-white hover:bg-white/[0.14] bento:bg-[#F3F2EE]"><Download className="h-4 w-4" /> Download</a>
             </>
           )}
-          <button onClick={onClose} aria-label="Close preview" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.08] text-white hover:bg-white/[0.16] bento:bg-black/5 bento:text-black"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} aria-label="Close preview" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.08] text-white hover:bg-white/[0.16] bento:bg-white/5 bento:text-white"><X className="h-5 w-5" /></button>
         </div>
 
         <div className={cn("relative min-h-0 overflow-auto bg-black/40 bento:bg-[#F3F2EE]", kind !== "image" && "flex-1")}>

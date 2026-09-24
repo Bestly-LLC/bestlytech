@@ -109,7 +109,7 @@ export function AlertPane({ alert, onClose }: { alert: PaneAlert | null; onClose
             {suggestions(alert).map((s) => (
               <li key={s}>
                 <button type="button" onClick={() => send(s)}
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-[0.9375rem] text-white transition hover:bg-white/[0.08] active:scale-[0.99] bento:border-black/5 bento:bg-[#F3F2EE]">
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-[0.9375rem] text-white transition hover:bg-white/[0.08] active:scale-[0.99] bento:border-white/5 bento:bg-[#F3F2EE]">
                   {s}
                 </button>
               </li>
@@ -117,7 +117,7 @@ export function AlertPane({ alert, onClose }: { alert: PaneAlert | null; onClose
           </ul>
           <form onSubmit={(e) => { e.preventDefault(); send(own); }} className="mt-3 flex gap-2">
             <input value={own} onChange={(e) => setOwn(e.target.value)} placeholder="Or tell Scout something else"
-              className="h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 text-[16px] text-white outline-none placeholder:text-white/35 focus:border-white/30 bento:border-black/10 bento:bg-[#fff]" />
+              className="h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 text-[16px] text-white outline-none placeholder:text-white/35 focus:border-white/30 bento:border-white/10 bento:bg-[#fff]" />
             <button type="submit" disabled={!own.trim()} aria-label="Send to Scout"
               className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-black disabled:opacity-30 bento:bg-[#111114] bento:text-[#fff]">
               <Send className="h-4 w-4" aria-hidden />

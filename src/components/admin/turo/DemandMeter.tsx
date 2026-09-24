@@ -75,8 +75,8 @@ export function DemandMeter({ rows }: { rows: DemandRow[] | null }) {
   return (
     <section className={cn(card, "p-5")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-white"><Flame className="h-4 w-4 text-white/50" /> Demand</h2>
-        {at && <span className="text-xs text-white/40">checked {new Date(at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</span>}
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-white"><Flame className="h-4 w-4 text-white/60" /> Demand</h2>
+        {at && <span className="text-xs text-white/60">checked {new Date(at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</span>}
       </div>
       {rows === null ? <div className="mt-4 h-40 animate-pulse rounded-xl bg-white/[0.04]" /> : (
         <>
@@ -87,21 +87,21 @@ export function DemandMeter({ rows }: { rows: DemandRow[] | null }) {
               return (
                 <div key={s.id} className="flex flex-col items-center rounded-2xl bg-white/[0.04] px-4 pb-4 pt-3 text-center bento:bg-[#F3F2EE]">
                   <p className="text-sm font-semibold text-white">{s.title}</p>
-                  <p className="text-xs text-white/45">{s.sub}</p>
+                  <p className="text-xs text-white/60">{s.sub}</p>
                   {r && b ? (
                     <>
                       <div className="mt-2 w-full text-white"><Gauge score={r.score} /></div>
                       <p className="-mt-1 text-lg font-bold" style={{ color: b.color }}>{b.label}</p>
-                      <p className="text-xs tabular-nums text-white/45">{r.score} / 100</p>
+                      <p className="text-xs tabular-nums text-white/60">{r.score} / 100</p>
                       <p className="mt-2 text-xs leading-snug text-white/65">{why(r)}</p>
                     </>
-                  ) : <p className="mt-6 text-xs text-white/45">No reading yet. The next run checks it.</p>}
+                  ) : <p className="mt-6 text-xs text-white/60">No reading yet. The next run checks it.</p>}
                 </div>
               );
             })}
           </div>
           {advice && <p className="mt-4 rounded-2xl bg-[#0A84FF]/10 px-4 py-3 text-sm text-white/85">{advice}</p>}
-          <p className="mt-2 text-xs text-white/40">Slow · Normal · Busy · Hot. Checked on every Turo Watch run, twice a day.</p>
+          <p className="mt-2 text-xs text-white/60">Slow · Normal · Busy · Hot. Checked on every Turo Watch run, twice a day.</p>
         </>
       )}
     </section>
