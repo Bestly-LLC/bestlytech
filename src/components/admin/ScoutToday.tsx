@@ -13,6 +13,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Binoculars, Check, ChevronDown, Clock3, Copy, ExternalLink, Mail, MoreHorizontal, RefreshCw, Sparkles, X } from "lucide-react";
+import {
+  Disclosure, IconButton, Pill, SectionHeader, btnPlain, btnPrimary, cardCls, divider, focusRing, hairline, inset, rowCls, text, tint,
+} from "@/components/admin/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { askScout } from "@/components/admin/scoutBus";
 import { cn } from "@/lib/utils";
@@ -38,16 +41,17 @@ interface Row {
 }
 
 const SLOT = {
-  decision: { label: "Decide", tint: "bg-violet-500/15 text-violet-200 bento:bg-[var(--bento-lavender)] bento:text-[#111114]" },
-  quick: { label: "Quick win", tint: "bg-lime-500/15 text-lime-200 bento:bg-[var(--bento-lime)] bento:text-[#111114]" },
-  focus: { label: "Focus", tint: "bg-orange-500/15 text-orange-200 bento:bg-[var(--bento-peach)] bento:text-[#111114]" },
+  decision: { label: "Decide" },
+  quick: { label: "Quick win" },
+  focus: { label: "Focus" },
 } as const;
 
 const laDay = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
-const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
-const btn = "inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80";
-const ghost = cn(btn, "text-white/70 hover:bg-white/[0.06] hover:text-white");
-const solid = cn(btn, "bg-white text-black hover:bg-white/90 bento:bg-[#111114] bento:text-[#fff]");
+/** Short lists: show this many, fold the rest behind "Show all". */
+const FOLD = 5;
+const btn = cn("inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 text-[15px] font-medium transition active:scale-[0.97] disabled:opacity-50 sm:min-h-9", focusRing);
+const ghost = cn(btn, "text-white/75 hover:bg-white/[0.06] hover:text-white");
+const solid = cn(btnPrimary, "px-4");
 
 function isExternal(url: string) {
   return /^https?:\/\//.test(url);
@@ -62,6 +66,8 @@ export function ScoutToday() {
   const [healed, setHealed] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
+  const [allCalls, setAllCalls] = useState(false);
+  const [allDrafts, setAllDrafts] = useState(false);
   const today = laDay();
 
   const load = useCallback(async () => {
@@ -138,29 +144,37 @@ export function ScoutToday() {
     toast.success(owner.toLowerCase() === "jared" ? "Moved to your list" : `Moved to ${owner}`);
   };
 
+  // Yours first, then everyone else's, so the top of a folded list is always what's on you.
+  const callsSorted = useMemo(() => [...calls].sort((a, b) =>
+    Number(String(b.action?.owner ?? "Jared").toLowerCase() === "jared") - Number(String(a.action?.owner ?? "Jared").toLowerCase() === "jared")), [calls]);
+  const shownCalls = allCalls ? callsSorted : callsSorted.slice(0, FOLD);
+  const shownDrafts = allDrafts ? drafts : drafts.slice(0, 3);
+
   return (
     <div className="space-y-8">
       {/* Today's 3 */}
       <section aria-labelledby="today3-title">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 id="today3-title" className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-white/55">
-            <Sparkles className="h-3.5 w-3.5" aria-hidden /> Scout's picks for today
-          </h2>
-          <div className="flex items-center gap-1">
-            {picks.length > 0 && <span className="text-sm tabular-nums text-white/60">{doneCount} of {picks.length} done</span>}
-            <RunMenu running={running} onRun={run} />
-          </div>
-        </div>
+        <SectionHeader
+          id="today3-title"
+          title="Scout's picks"
+          icon={<Sparkles className="h-3.5 w-3.5" aria-hidden />}
+          aside={
+            <>
+              {picks.length > 0 && <span>{doneCount} of {picks.length} done</span>}
+              <RunMenu running={running} onRun={run} />
+            </>
+          }
+        />
 
         {rows === null ? (
           <div className="grid gap-3 sm:grid-cols-3">
-            {[0, 1, 2].map((i) => <div key={i} className={cn(card, "h-36 animate-pulse")} />)}
+            {[0, 1, 2].map((i) => <div key={i} className={cn(cardCls, "h-36 animate-pulse")} />)}
           </div>
         ) : picks.length === 0 ? (
-          <div className={cn(card, "flex flex-wrap items-center justify-between gap-3 px-5 py-4")}>
-            <p className="text-[0.9375rem] text-white/75">Scout picks your three at 9am.</p>
+          <div className={cn(cardCls, "flex flex-wrap items-center justify-between gap-3 py-3", inset)}>
+            <p className={text.title}>Scout picks your three at 9:00 AM.</p>
             <button className={solid} onClick={() => run("morning")} disabled={!!running}>
-              {running === "morning" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Pick now
+              {running === "morning" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />} Pick now
             </button>
           </div>
         ) : (
@@ -172,34 +186,40 @@ export function ScoutToday() {
               return (
                 <li
                   key={p.id}
-                  className={cn(card, "scout-card-in flex flex-col gap-3 p-4 transition-opacity", (done || gone) && "opacity-55")}
+                  className={cn(cardCls, "scout-card-in flex flex-col gap-3 p-4 transition-opacity sm:p-5", (done || gone) && "opacity-60")}
                   style={{ animationDelay: `${i * 60}ms` }}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", s.tint)}>{s.label}</span>
-                    {done && <span className="flex items-center gap-1 text-xs font-medium text-emerald-300 bento:text-emerald-700"><Check className="h-3.5 w-3.5" /> Done</span>}
-                    {p.status === "snoozed" && <span className="text-xs text-white/50">Tomorrow</span>}
-                    {p.status === "handed" && <span className="text-xs text-white/50">With Scout</span>}
+                    <Pill>{s.label}</Pill>
+                    {done && <Pill tone="green"><Check className="h-3 w-3" aria-hidden /> Done</Pill>}
+                    {p.status === "snoozed" && <Pill>Tomorrow</Pill>}
+                    {p.status === "handed" && <Pill tone="blue">With Scout</Pill>}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className={cn("text-[0.975rem] font-semibold leading-snug text-white", done && "line-through decoration-white/40")}>{p.title}</p>
-                    {p.why && <p className="mt-1.5 text-sm leading-relaxed text-white/60">{p.why}</p>}
+                    {p.url && p.status === "open" ? (
+                      <Go url={p.url} className={cn("group inline-flex items-start gap-1 rounded-md text-[17px] font-semibold leading-snug text-white hover:underline underline-offset-2", focusRing)}>
+                        {p.title}
+                        <ExternalLink className="mt-1 h-3.5 w-3.5 shrink-0 text-white/45" aria-label="Open" />
+                      </Go>
+                    ) : (
+                      <p className={cn("text-[17px] font-semibold leading-snug text-white", done && "line-through decoration-white/40")}>{p.title}</p>
+                    )}
+                    {p.why && <p className={cn(text.detail, "mt-1 line-clamp-2")} title={p.why}>{p.why}</p>}
                   </div>
                   {p.status === "open" ? (
                     <div className="-mx-1 flex flex-wrap items-center gap-1">
                       <button className={solid} disabled={busy === p.id} onClick={() => set(p, "done")}>
-                        <Check className="h-4 w-4" /> Done
+                        <Check className="h-4 w-4" aria-hidden /> Done
                       </button>
-                      {p.url && <Go url={p.url} className={ghost}>Open <ExternalLink className="h-3.5 w-3.5" /></Go>}
                       {/* Labelled, not a mystery icon: this is the button that means
                           "you do it", and it should read that way at a glance. */}
                       <button className={ghost} title="Scout takes this on"
                         onClick={() => { set(p, "handed"); askScout(`Take this off my plate: ${p.title}`, { about: `${p.title}\n${p.why ?? ""}\n${p.url ?? ""}` }); }}>
-                        <Binoculars className="h-4 w-4" /> Scout does it
+                        <Binoculars className="h-4 w-4" aria-hidden /> Scout does it
                       </button>
-                      <button className={ghost} aria-label="Tomorrow" title="Move to tomorrow" onClick={() => set(p, "snoozed", "Moved to tomorrow")}>
-                        <Clock3 className="h-4 w-4" />
-                      </button>
+                      <IconButton label="Move to tomorrow" className="ml-auto" onClick={() => set(p, "snoozed", "Moved to tomorrow")}>
+                        <Clock3 className="h-4 w-4" aria-hidden />
+                      </IconButton>
                     </div>
                   ) : (
                     <button className={cn(ghost, "self-start")} onClick={() => set(p, "open")}>Undo</button>
@@ -210,9 +230,9 @@ export function ScoutToday() {
           </ul>
         )}
         {healed > 0 && (
-          <p className="mt-3 flex items-center gap-2 text-sm text-white/55">
-            <Check className="h-4 w-4 text-emerald-300 bento:text-emerald-700" aria-hidden />
-            Scout fixed {healed} thing{healed === 1 ? "" : "s"} on its own in the last day. Nothing needed you.
+          <p className={cn(text.detail, "mt-2 flex items-center gap-2", inset)}>
+            <Check className={cn("h-4 w-4 shrink-0", tint.green)} aria-hidden />
+            Scout fixed {healed} thing{healed === 1 ? "" : "s"} on its own today.
           </p>
         )}
       </section>
@@ -220,58 +240,72 @@ export function ScoutToday() {
       {/* Replies ready */}
       {drafts.length > 0 && (
         <section id="drafts" aria-labelledby="drafts-title">
-          <h2 id="drafts-title" className="mb-3 text-xs font-semibold uppercase tracking-widest text-white/55">
-            Replies ready · {drafts.length}
-          </h2>
-          <ul className="space-y-2">
-            {drafts.map((d) => <DraftCard key={d.id} d={d} onSet={set} busy={busy === d.id} />)}
-          </ul>
+          <SectionHeader id="drafts-title" title="Replies ready" aside={drafts.length} />
+          <div className={cn(cardCls, "overflow-hidden")}>
+            <ul id="drafts-list" className={divider}>
+              {shownDrafts.map((d) => <DraftCard key={d.id} d={d} onSet={set} busy={busy === d.id} />)}
+            </ul>
+            {drafts.length > 3 && (
+              <Disclosure open={allDrafts} onToggle={() => setAllDrafts((v) => !v)} controls="drafts-list">
+                {allDrafts ? "Show fewer" : `Show all ${drafts.length}`}
+              </Disclosure>
+            )}
+          </div>
         </section>
       )}
 
       {/* From calls */}
       {(calls.length > 0 || callsDone.length > 0) && (
-        <section aria-labelledby="calls-title">
-          <h2 id="calls-title" className="mb-3 text-xs font-semibold uppercase tracking-widest text-white/55">From your calls · {calls.length}</h2>
-          {calls.length === 0 && <p className="mb-3 text-sm text-white/55">Nothing left from your calls. Finished ones are under Done.</p>}
-          {/* A to-do is one short line; on a wide screen a single column of them is a
-              long thin ribbon. Let them flow into as many columns as fit. */}
-          <ul className={cn(card, "grid grid-cols-[repeat(auto-fit,minmax(min(24rem,100%),1fr))] overflow-hidden")}>
-            {calls.map((c) => {
-              const owner = String(c.action?.owner ?? "Jared");
-              const mine = owner.toLowerCase() === "jared";
-              return (
-                <li key={c.id} className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3 last:border-b-0 sm:px-5">
-                  <button
-                    aria-label="Mark done"
-                    onClick={() => set(c, "done", "Marked done")}
-                    className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-white/25 text-transparent transition hover:border-emerald-400 hover:text-emerald-400 active:scale-90"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[0.9375rem] text-white">{c.title}</p>
-                    <p className="mt-0.5 text-xs text-white/50">
-                      <OwnerMenu owner={owner} mine={mine} people={people} onPick={(o) => setOwner(c, o)} />
-                      {c.action?.due ? ` · due ${c.action.due}` : ""} · {String(c.action?.meeting ?? "")}
-                    </p>
-                  </div>
-                  {c.action?.deck_url && (
-                    <a href={c.action.deck_url} target="_blank" rel="noreferrer" className={ghost} aria-label="Open on Deck">Deck <ExternalLink className="h-3.5 w-3.5" /></a>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+        <section id="calls" aria-labelledby="calls-title" className="scroll-mt-24">
+          <SectionHeader id="calls-title" title="From your calls" aside={calls.length} />
+          {calls.length === 0 ? (
+            <div className={cn(cardCls, rowCls)}>
+              <Check className={cn("h-5 w-5 shrink-0", tint.green)} aria-hidden />
+              <p className={text.title}>All done from your calls.</p>
+            </div>
+          ) : (
+            <div className={cn(cardCls, "overflow-hidden")}>
+              <ul id="calls-list" className={divider}>
+                {shownCalls.map((c) => {
+                  const owner = String(c.action?.owner ?? "Jared");
+                  const mine = owner.toLowerCase() === "jared";
+                  return (
+                    <li key={c.id} className={cn(rowCls, "py-2 pl-2 sm:pl-4")}>
+                      <CheckCircle label={`Mark done: ${c.title}`} onClick={() => set(c, "done", "Marked done")} />
+                      <div className="min-w-0 flex-1">
+                        <p className={text.title}>{c.title}</p>
+                        <p className={cn(text.detail, "mt-0.5")}>
+                          <OwnerMenu owner={owner} mine={mine} people={people} onPick={(o) => setOwner(c, o)} />
+                          {c.action?.due ? ` · due ${c.action.due}` : ""}{c.action?.meeting ? ` · ${String(c.action.meeting)}` : ""}
+                        </p>
+                      </div>
+                      {c.action?.deck_url && (
+                        <a href={c.action.deck_url} target="_blank" rel="noreferrer" className={cn(btnPlain, "shrink-0 text-[13px] sm:min-h-9")} aria-label={`Open on Deck: ${c.title}`}>
+                          Deck <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                        </a>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              {calls.length > FOLD && (
+                <Disclosure open={allCalls} onToggle={() => setAllCalls((v) => !v)} controls="calls-list">
+                  {allCalls ? "Show fewer" : `Show all ${calls.length}`}
+                </Disclosure>
+              )}
+            </div>
+          )}
           {callsDone.length > 0 && <CallsDone rows={callsDone} onReopen={(r) => set(r, "open", "Back on your list")} />}
         </section>
       )}
 
       {/* Wrap */}
       {wrap?.body && (
-        <section aria-labelledby="wrap-title" className={cn(card, "px-5 py-4")}>
-          <h2 id="wrap-title" className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/55">Today's wrap</h2>
-          {wrap.body.split("\n").map((l, i) => <p key={i} className={cn("text-[0.9375rem] text-white/80", i === 0 && "font-semibold text-white")}>{l}</p>)}
+        <section aria-labelledby="wrap-title">
+          <SectionHeader id="wrap-title" title="Today's wrap" />
+          <div className={cn(cardCls, "space-y-1 p-4 sm:p-6")}>
+            {wrap.body.split("\n").map((l, i) => <p key={i} className={cn("text-[15px] text-white/80", i === 0 && "font-semibold text-white")}>{l}</p>)}
+          </div>
         </section>
       )}
 
@@ -284,6 +318,28 @@ export function ScoutToday() {
   );
 }
 
+/** Round tick: 44px hit area on touch, 22px circle drawn inside. */
+function CheckCircle({ label, onClick, checked }: { label: string; onClick: () => void; checked?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={cn("group grid h-11 w-11 shrink-0 place-items-center rounded-full sm:h-9 sm:w-9", focusRing)}
+    >
+      <span className={cn(
+        "grid h-[22px] w-[22px] place-items-center rounded-full transition active:scale-90",
+        checked
+          ? "bg-[#30D158] text-[#fff] group-hover:bg-white/20 bento:bg-[#34C759]"
+          : "border-2 border-white/30 text-transparent group-hover:border-[#30D158] group-hover:text-[#30D158]",
+      )}>
+        <Check className="h-3.5 w-3.5" aria-hidden />
+      </span>
+    </button>
+  );
+}
+
 /**
  * Finished call to-dos. Collapsed, newest first: tap the green check to put one
  * back on the list. A to-do that can only ever go one way is a trap, not a list.
@@ -291,38 +347,34 @@ export function ScoutToday() {
 function CallsDone({ rows, onReopen }: { rows: Row[]; onReopen: (r: Row) => void }) {
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(false);
-  const shown = all ? rows : rows.slice(0, 8);
+  const shown = all ? rows : rows.slice(0, FOLD);
   return (
-    <div className="mt-3">
-      <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
-        className="flex min-h-[40px] w-full items-center gap-1.5 text-left text-sm font-medium text-white/55 transition hover:text-white">
-        <ChevronDown className={cn("h-4 w-4 transition-transform", !open && "-rotate-90")} aria-hidden />
+    <div className={cn("mt-2", inset)}>
+      <Disclosure variant="inline" open={open} onToggle={() => setOpen((o) => !o)} controls="calls-done" className="text-white/60 bento:text-white/60">
         Done ({rows.length})
-      </button>
+      </Disclosure>
       {open && (
-        <ul className={cn(card, "mt-1 overflow-hidden")}>
-          {shown.map((r) => (
-            <li key={r.id} className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3 last:border-b-0 sm:px-5">
-              <button aria-label={`Put back on the list: ${r.title}`} title="Put it back on my list"
-                onClick={() => onReopen(r)}
-                className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-500 text-[#fff] transition hover:bg-white/20 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80">
-                <Check className="h-3.5 w-3.5" aria-hidden />
-              </button>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[0.9375rem] text-white/50 line-through decoration-white/30">{r.title}</p>
-                <p className="mt-0.5 text-xs text-white/40">
-                  {String(r.action?.owner ?? "Jared")}
-                  {r.done_at ? ` \u00b7 done ${new Date(r.done_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" })}` : ""}
-                </p>
-              </div>
-            </li>
-          ))}
-          {rows.length > shown.length && (
-            <li className="px-4 py-3 sm:px-5">
-              <button onClick={() => setAll(true)} className="text-sm font-medium text-[#0A84FF]">Show all {rows.length}</button>
-            </li>
+        <div id="calls-done" className={cn(cardCls, "-mx-4 mt-1 overflow-hidden sm:-mx-6")}>
+          <ul className={divider}>
+            {shown.map((r) => (
+              <li key={r.id} className={cn(rowCls, "py-2 pl-2 sm:pl-4")}>
+                <CheckCircle checked label={`Put back on the list: ${r.title}`} onClick={() => onReopen(r)} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[15px] text-white/50 line-through decoration-white/30">{r.title}</p>
+                  <p className="mt-0.5 text-[13px] text-white/45">
+                    {String(r.action?.owner ?? "Jared")}
+                    {r.done_at ? ` · done ${new Date(r.done_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" })}` : ""}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {rows.length > FOLD && (
+            <Disclosure open={all} onToggle={() => setAll((v) => !v)}>
+              {all ? "Show fewer" : `Show all ${rows.length}`}
+            </Disclosure>
           )}
-        </ul>
+        </div>
       )}
     </div>
   );
@@ -333,7 +385,7 @@ function OwnerMenu({ owner, mine, people, onPick }: { owner: string; mine: boole
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className={cn("inline-flex items-center gap-0.5 rounded font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80", mine ? "text-white/80" : "text-white/60")}
+          className={cn("inline-flex items-center gap-0.5 rounded font-semibold underline-offset-2 hover:underline", focusRing, mine ? "text-white/80" : "text-white/60")}
           aria-label={`Owner: ${mine ? "you" : owner}. Change owner`}
         >
           {mine ? "You" : owner} <ChevronDown className="h-3 w-3" aria-hidden />
@@ -358,9 +410,9 @@ function RunMenu({ running, onRun }: { running: string | null; onRun: (j: "morni
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className={cn(ghost, "px-2.5")} aria-label="Run Scout now">
-          {running ? <RefreshCw className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
-        </button>
+        <IconButton label="Run Scout now" className="-mr-2">
+          {running ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden /> : <MoreHorizontal className="h-4 w-4" aria-hidden />}
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         {([["morning", "Re-pick today's 3"], ["drafts", "Check mail for replies"], ["wrap", "Write today's wrap"]] as const).map(([j, label]) => (
@@ -375,36 +427,37 @@ function RunMenu({ running, onRun }: { running: string | null; onRun: (j: "morni
 
 function DraftCard({ d, onSet, busy }: { d: Row; onSet: (r: Row, s: Status, msg?: string) => void; busy: boolean }) {
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState(d.body ?? "");
+  const [text_, setText] = useState(d.body ?? "");
   const a = d.action ?? {};
-  const mailto = `mailto:${encodeURIComponent(a.to ?? "")}?subject=${encodeURIComponent(a.subject ?? "")}&body=${encodeURIComponent(text)}`;
+  const mailto = `mailto:${encodeURIComponent(a.to ?? "")}?subject=${encodeURIComponent(a.subject ?? "")}&body=${encodeURIComponent(text_)}`;
   const copy = async () => {
-    try { await navigator.clipboard.writeText(text); toast.success("Reply copied"); } catch { toast.error("Could not copy"); }
+    try { await navigator.clipboard.writeText(text_); toast.success("Reply copied"); } catch { toast.error("Could not copy"); }
   };
   return (
-    <li className={cn(card, "overflow-hidden")}>
-      <button className="flex w-full items-center gap-3 px-4 py-3 text-left sm:px-5" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <Mail className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
+    <li>
+      <button className={cn(rowCls, "w-full text-left transition-colors hover:bg-white/[0.04] focus-visible:ring-inset", focusRing)} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <Mail className="h-4 w-4 shrink-0 text-white/55" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[0.9375rem] font-medium text-white">{d.title}</p>
-          {d.why && <p className="mt-0.5 truncate text-sm text-white/55">{d.why}</p>}
+          <p className={cn(text.title, "truncate")}>{d.title}</p>
+          {d.why && <p className={cn(text.detail, "mt-0.5 truncate")}>{d.why}</p>}
         </div>
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-white/40 transition-transform", open && "rotate-180")} aria-hidden />
       </button>
       {open && (
-        <div className="space-y-3 border-t border-white/[0.06] px-4 pb-4 pt-3 sm:px-5">
-          <p className="text-xs text-white/50">To {a.to_name ? `${a.to_name} <${a.to}>` : a.to} · from {a.mailbox}</p>
+        <div className={cn("space-y-3 border-t pb-4 pt-3", hairline, inset)}>
+          <p className={text.detail}>To {a.to_name ? `${a.to_name} <${a.to}>` : a.to} · from {a.mailbox}</p>
           <textarea
-            value={text}
+            value={text_}
             onChange={(e) => setText(e.target.value)}
-            rows={Math.min(12, Math.max(4, text.split("\n").length + 1))}
-            className="w-full resize-y rounded-xl border border-white/10 bg-black/20 p-3 text-[0.9375rem] leading-relaxed text-white outline-none focus:border-white/25 bento:bg-[var(--bento-well)] bento:border-black/5"
+            aria-label={`Reply to ${a.to_name ?? a.to ?? "sender"}`}
+            rows={Math.min(12, Math.max(4, text_.split("\n").length + 1))}
+            className="w-full resize-y rounded-xl border border-white/10 bg-black/20 p-3 text-[15px] leading-relaxed text-white outline-none focus:border-white/25 focus-visible:ring-2 focus-visible:ring-[#0A84FF] bento:border-black/5 bento:bg-[var(--bento-well)]"
           />
           <div className="-mx-1 flex flex-wrap gap-1">
-            <a href={mailto} className={solid}><Mail className="h-4 w-4" /> Open in Mail</a>
-            <button className={ghost} onClick={copy}><Copy className="h-4 w-4" /> Copy</button>
-            <button className={ghost} disabled={busy} onClick={() => onSet(d, "done", "Marked sent")}><Check className="h-4 w-4" /> Sent</button>
-            <button className={ghost} disabled={busy} onClick={() => onSet(d, "dismissed")}><X className="h-4 w-4" /> Skip</button>
+            <a href={mailto} className={solid}><Mail className="h-4 w-4" aria-hidden /> Open in Mail</a>
+            <button className={ghost} onClick={copy}><Copy className="h-4 w-4" aria-hidden /> Copy</button>
+            <button className={ghost} disabled={busy} onClick={() => onSet(d, "done", "Marked sent")}><Check className="h-4 w-4" aria-hidden /> Sent</button>
+            <button className={ghost} disabled={busy} onClick={() => onSet(d, "dismissed")}><X className="h-4 w-4" aria-hidden /> Skip</button>
           </div>
         </div>
       )}

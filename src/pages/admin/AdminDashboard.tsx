@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, RefreshCw, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ActionMenu } from "@/components/admin/ActionMenu";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -20,10 +20,15 @@ import {
 import { TuroMini } from "@/components/admin/turo/TuroMini";
 import { StatusBoard } from "@/components/admin/StatusBoard";
 import { fetchLatestRun, runHeadline } from "@/services/securityAuditApi";
+import {
+  Disclosure, LoadError, Pill, RowLink, SectionHeader, SkeletonRows,
+  cardCls, divider, focusRing, hairline, inset, rowCls, text, tint,
+} from "@/components/admin/ui";
 
 /**
- * Admin home ("Today"). Answer first, one list of what needs action, a row of status chips,
+ * Admin home ("Today"). Answer first, one list of what needs action, one status card,
  * four pipeline numbers, and recent activity behind a disclosure. Nothing else.
+ * Every section uses the same pieces from components/admin/ui.tsx.
  *
  * Every data source loads independently: a failure shows "Couldn't load X · Retry" in its own
  * spot and never reads as zero or as healthy.
@@ -292,100 +297,58 @@ function stuckDeals(deals: DealRow[]): DealRow[] {
 
 /* ───────── small UI pieces ───────── */
 
-const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80";
-
-function SectionTitle({ id, children, aside }: { id: string; children: ReactNode; aside?: ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 mb-3">
-      <h2 id={id} className="text-xs font-semibold uppercase tracking-widest text-white/55">{children}</h2>
-      {aside}
-    </div>
-  );
-}
-
-function RetryButton({ onClick, busy, label }: { onClick: () => void; busy: boolean; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      aria-label={`Retry loading ${label}`}
-      className={cn("inline-flex h-9 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-indigo-300 hover:text-indigo-200 hover:bg-white/5 disabled:opacity-60", focusRing)}
-    >
-      <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} aria-hidden />
-      {busy ? "Retrying…" : "Retry"}
-    </button>
-  );
-}
-
-function LoadError({ label, source }: { label: string; source: Source<unknown> }) {
-  return (
-    <div role="alert" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-amber-200">
-      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" aria-hidden />
-      <span title={source.error ?? undefined}>Couldn't load {label}</span>
-      <span className="text-white/40" aria-hidden>·</span>
-      <RetryButton onClick={() => source.reload()} busy={source.busy} label={label} />
-    </div>
-  );
+function SourceError({ label, source }: { label: string; source: Source<unknown> }) {
+  return <LoadError label={label} onRetry={() => source.reload()} busy={source.busy} detail={source.error} />;
 }
 
 const TONE: Record<Tone, { icon: typeof CheckCircle2; text: string }> = {
-  ok: { icon: CheckCircle2, text: "text-emerald-300" },
-  warn: { icon: AlertTriangle, text: "text-amber-300" },
-  bad: { icon: XCircle, text: "text-red-300" },
+  ok: { icon: CheckCircle2, text: tint.green },
+  warn: { icon: AlertTriangle, text: tint.orange },
+  bad: { icon: XCircle, text: tint.red },
 };
 
-const chipBase = "inline-flex h-9 max-w-full items-center gap-2 rounded-full border border-white/10 px-3 text-sm";
-
-function StatusChip({ label, source, to, render }: {
+/** One product line in the Status card: name left, answer right (icon + words, never color alone). */
+function StatusRow({ label, source, to, render }: {
   label: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   source: Source<any>;
   to: string;
-  /** hideLabel: the word already says it all (e.g. "All systems OK"). */
+  /** hideLabel is kept for callers; the row always shows the product name. */
   render: () => { tone: Tone; word: string; hideLabel?: boolean } | null;
 }) {
   if (source.loading) {
-    return <li><Skeleton className="h-9 w-40 rounded-full bg-white/[0.05]" /></li>;
+    return (
+      <li className={rowCls} aria-hidden>
+        <Skeleton className="h-4 w-28 bg-white/[0.06]" />
+        <Skeleton className="ml-auto h-4 w-24 bg-white/[0.04]" />
+      </li>
+    );
   }
   if (source.error) {
     return (
-      <li>
-        <button
-          type="button"
-          onClick={() => source.reload()}
-          disabled={source.busy}
-          title={source.error}
-          className={cn(chipBase, "text-white/70 hover:bg-white/5 disabled:opacity-60", focusRing)}
-        >
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" aria-hidden />
-          <span className="min-w-0 truncate">{label}: couldn't load</span>
-          <span className="text-white/40" aria-hidden>·</span>
-          <span className="inline-flex items-center gap-1 text-indigo-300">
-            <RefreshCw className={cn("h-3.5 w-3.5", source.busy && "animate-spin")} aria-hidden /> Retry
-          </span>
-        </button>
+      <li className={rowCls}>
+        <SourceError label={label} source={source} />
       </li>
     );
   }
   const r = render();
   if (!r) return null;
-  const { icon: Icon, text } = TONE[r.tone];
+  const { icon: Icon, text: color } = TONE[r.tone];
   return (
     <li>
-      <Link to={to} className={cn(chipBase, "hover:bg-white/5 hover:border-white/20 transition-colors", focusRing)}>
-        <Icon className={cn("h-4 w-4 shrink-0", text)} aria-hidden />
-        {!r.hideLabel && <span className="text-white/70 shrink-0">{label}</span>}
-        <span className={cn("min-w-0 truncate font-medium", text)}>{r.word}</span>
-      </Link>
+      <RowLink href={to} label={`${label}: ${r.word}`}>
+        <span className={cn(text.title, "shrink-0")}>{label}</span>
+        <span className={cn("ml-auto inline-flex min-w-0 items-center gap-1.5 text-[15px] font-medium", color)}>
+          <Icon className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="truncate">{r.word}</span>
+        </span>
+      </RowLink>
     </li>
   );
 }
 
-const WEEK_TONES = ["bento-lime", "bento-peach", "bento-lavender", "bento-sky"] as const;
-
-function WeekItem({ source, to, label, render, tone = "bento-lime" }: {
-  tone?: (typeof WEEK_TONES)[number];
+/** One number in the "This week" card. */
+function WeekItem({ source, to, label, render }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   source: Source<any>;
   to: string;
@@ -394,26 +357,29 @@ function WeekItem({ source, to, label, render, tone = "bento-lime" }: {
 }) {
   if (source.loading) {
     return (
-      <li className="flex items-baseline gap-2 py-1 bento:rounded-[1.75rem] bento:bg-[#fff] bento:p-5 bento:min-h-[8.5rem]">
-        <Skeleton className="h-7 w-8 bg-white/[0.06]" />
-        <Skeleton className="h-4 w-36 bg-white/[0.04]" />
+      <li className="space-y-2 p-4 sm:p-6" aria-hidden>
+        <Skeleton className="h-7 w-10 bg-white/[0.06]" />
+        <Skeleton className="h-4 w-28 bg-white/[0.04]" />
       </li>
     );
   }
   if (source.error) {
-    return <li className="py-1 bento:rounded-[1.75rem] bento:bg-[#fff] bento:p-5"><LoadError label={label} source={source} /></li>;
+    return <li className="p-4 sm:p-6"><SourceError label={label} source={source} /></li>;
   }
-  const { value, text, extra } = render();
+  const { value, text: words, extra } = render();
   return (
-    <li className="bento:flex">
-      <Link to={to} className={cn("group inline-flex items-baseline gap-2 rounded-md py-1 pr-1 bento-tile bento:flex bento:w-full bento:min-w-0 bento:flex-col bento:items-start bento:justify-between bento:gap-2 bento:p-4 bento:min-h-[8.5rem] bento:transition-transform bento:hover:-translate-y-0.5", tone, focusRing)}>
-        <span className="text-2xl font-medium tabular-nums text-white bento:order-2 bento:text-5xl bento:font-bold bento:tracking-[-0.04em] bento:leading-none">{value.toLocaleString()}</span>
-        <span className="text-sm text-white/70 group-hover:text-white transition-colors bento:order-1 bento:text-[0.8125rem] bento:font-semibold bento:uppercase bento:leading-snug bento:tracking-[0.02em] bento:text-white/80 bento:break-words bento:hyphens-auto">{text}</span>
-        {extra && <span className="text-sm text-white/55 bento:order-3 bento:text-xs bento:text-white/70">{extra}</span>}
+    <li className="flex">
+      <Link to={to} className={cn("group flex w-full flex-col gap-0.5 p-4 transition-colors hover:bg-white/[0.04] focus-visible:ring-inset sm:p-6", focusRing)}>
+        <span className="text-[28px] font-semibold leading-none tracking-tight tabular-nums text-white">{value.toLocaleString()}</span>
+        <span className={cn(text.detail, "mt-1 group-hover:text-white/80")}>{words}</span>
+        {extra && <span className="text-[12px] text-white/45">{extra}</span>}
       </Link>
     </li>
   );
 }
+
+/** Items shown before "Show all" in the waiting list. */
+const NEEDS_FOLD = 3;
 
 /* ───────── page ───────── */
 
@@ -435,6 +401,7 @@ export default function AdminDashboard() {
   const waitlist = useSource(loadWaitlist);
 
   const [showRecent, setShowRecent] = useState(false);
+  const [showAllNeeds, setShowAllNeeds] = useState(false);
   const [activityKey, setActivityKey] = useState(0);
 
   const all = [contacts, hires, intakes, emails, cloudLeads, deals, sweep, health, homeHub, cy, security, newLeads, paidSubs, waitlist];
@@ -595,6 +562,8 @@ export default function AdminDashboard() {
     return { tone: "ok" as Tone, word: "Serving OK" };
   };
 
+  const shownNeeds = showAllNeeds ? needs : needs.slice(0, NEEDS_FOLD);
+
   return (
     <div className="mx-auto max-w-[102rem] space-y-8 pb-8">
       <PageHeader
@@ -608,15 +577,14 @@ export default function AdminDashboard() {
         }
       />
 
-      {/* 0 ─ At a glance: join the next meeting, to-dos from calls, quick actions */}
+      {/* 0 ─ At a glance: join the next meeting, quick actions */}
       <CommandHero />
 
       {/* 1 ─ Everything waiting on you, from admin_today(). The sidebar's attention dots and
-          Scout's "needs you" bubble already read this same rule set; until now nothing on
-          screen said what they were pointing at. */}
+          Scout's "needs you" bubble already read this same rule set. */}
       <ActionInbox />
 
-      {/* 2 ─ What Scout prepared for today */}
+      {/* 2 ─ What Scout prepared for today (picks, replies, call to-dos, wrap) */}
       <ScoutToday />
 
       {/* Turo at a glance */}
@@ -624,107 +592,81 @@ export default function AdminDashboard() {
 
       {/* Side by side while there is room for a 26rem column, stacked the moment there
           isn't. No breakpoint guessing - the browser works it out at every width. */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(26rem,100%),1fr))] items-start gap-6 xl:gap-8">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(26rem,100%),1fr))] items-start gap-x-6 gap-y-8 xl:gap-x-8">
 
-      {/* 1 ─ Everything else waiting */}
+      {/* 3 ─ Everything else waiting */}
       <section aria-labelledby="needs-title" aria-busy={needsLoading}>
-        <SectionTitle
+        <SectionHeader
           id="needs-title"
+          title="Also waiting"
           aside={
             !needsLoading && needs.length > 0 ? (
-              <p className="text-sm text-white/70 tabular-nums">
-                {needs.length} {plural(needs.length, "thing", "things")}
-                {urgentCount > 0 && <span className="text-red-300"> · {urgentCount} urgent</span>}
-              </p>
+              <span>
+                {needs.length}
+                {urgentCount > 0 && <> · {urgentCount} urgent</>}
+              </span>
             ) : undefined
           }
-        >
-          Everything else waiting
-        </SectionTitle>
+        />
 
         {needsLoading ? (
-          <ul className="divide-y divide-white/[0.06] rounded-2xl border border-white/[0.06]">
-            {[0, 1, 2].map((i) => (
-              <li key={i} className="px-4 py-4 sm:px-5 space-y-2">
-                <Skeleton className="h-4 w-2/3 bg-white/[0.06]" />
-                <Skeleton className="h-3.5 w-1/2 bg-white/[0.04]" />
-              </li>
-            ))}
-          </ul>
+          <SkeletonRows rows={3} />
         ) : needs.length === 0 && needErrors.length === 0 ? (
-          <p className="flex items-center gap-2.5 rounded-2xl border border-white/[0.06] px-4 py-4 sm:px-5 text-[0.9375rem] text-white/80">
-            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-300" aria-hidden />
-            You're clear for today.
-          </p>
+          <div className={cn(cardCls, rowCls, "py-4")}>
+            <CheckCircle2 className={cn("h-5 w-5 shrink-0", tint.green)} aria-hidden />
+            <p className={text.title}>You're clear.</p>
+          </div>
         ) : (
-          <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
+          <div className={cn(cardCls, "overflow-hidden")}>
             {needs.length > 0 && (
-              <ul className="divide-y divide-white/[0.06]">
-                {needs.map((n) => {
-                  const body = (
-                    <>
+              <ul id="needs-list" className={divider}>
+                {shownNeeds.map((n) => (
+                  <li key={n.id}>
+                    <RowLink href={n.href}>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[0.9375rem] font-medium text-white">
-                          {n.urgent && (
-                            <span className="mr-2 inline-flex items-center rounded-full border border-red-400/30 bg-red-500/10 px-2 py-0.5 align-middle text-xs font-semibold text-red-300">
-                              Urgent
-                            </span>
-                          )}
-                          {n.title}
+                        <p className={cn(text.title, "flex flex-wrap items-center gap-x-2 gap-y-1")}>
+                          {n.urgent && <Pill tone="red">Urgent</Pill>}
+                          <span>{n.title}</span>
                         </p>
-                        <p className="mt-1 text-sm text-white/55">{n.why}</p>
+                        <p className={cn(text.detail, "mt-0.5")}>{n.why}</p>
                       </div>
-                      {n.href && (
-                        <ChevronRight className="h-4 w-4 shrink-0 text-white/40 transition-colors group-hover:text-white/80" aria-hidden />
-                      )}
-                    </>
-                  );
-                  return (
-                    <li key={n.id}>
-                      {n.href ? (
-                        <Link
-                          to={n.href}
-                          className={cn("group flex items-center gap-3 px-4 py-4 sm:px-5 hover:bg-white/[0.03] transition-colors focus-visible:ring-inset", focusRing)}
-                        >
-                          {body}
-                        </Link>
-                      ) : (
-                        <div className="flex items-center gap-3 px-4 py-4 sm:px-5">{body}</div>
-                      )}
-                    </li>
-                  );
-                })}
+                    </RowLink>
+                  </li>
+                ))}
               </ul>
             )}
             {needErrors.length > 0 && (
-              <ul className={cn("space-y-1 px-4 py-3 sm:px-5", needs.length > 0 && "border-t border-white/[0.06]")}>
+              <ul className={cn("space-y-1 py-2", inset, needs.length > 0 && cn("border-t", hairline))}>
                 {needErrors.map((n) => (
-                  <li key={n.label}><LoadError label={n.label} source={n.source} /></li>
+                  <li key={n.label}><SourceError label={n.label} source={n.source} /></li>
                 ))}
               </ul>
+            )}
+            {needs.length > NEEDS_FOLD && (
+              <Disclosure open={showAllNeeds} onToggle={() => setShowAllNeeds((v) => !v)} controls="needs-list">
+                {showAllNeeds ? "Show fewer" : `Show all ${needs.length}`}
+              </Disclosure>
             )}
           </div>
         )}
       </section>
 
-      {/* 2 ─ Status */}
+      {/* 4 ─ Status */}
       <section aria-labelledby="status-title">
-        <SectionTitle id="status-title">Status</SectionTitle>
+        <SectionHeader id="status-title" title="Status" />
         <StatusBoard>
-          <StatusChip label="Services" source={health} to="/admin/cookie-yeti/analytics?tab=operations" render={healthChip} />
-          <StatusChip label="Home Hub" source={homeHub} to="/admin/home-hub" render={homeHubChip} />
-          <StatusChip label="Street Sweeping" source={sweep} to="/admin/street-sweeping" render={sweepChip} />
-          <StatusChip label="Cookie Yeti" source={cy} to="/admin/cookie-yeti" render={cyChip} />
-          <StatusChip label="Security" source={security} to="/admin/security" render={() => runHeadline(security.data ?? null)} />
+          <StatusRow label="Services" source={health} to="/admin/cookie-yeti/analytics?tab=operations" render={healthChip} />
+          <StatusRow label="Home Hub" source={homeHub} to="/admin/home-hub" render={homeHubChip} />
+          <StatusRow label="Street Sweeping" source={sweep} to="/admin/street-sweeping" render={sweepChip} />
+          <StatusRow label="Cookie Yeti" source={cy} to="/admin/cookie-yeti" render={cyChip} />
+          <StatusRow label="Security" source={security} to="/admin/security" render={() => runHeadline(security.data ?? null)} />
         </StatusBoard>
       </section>
 
-      {/* 3 ─ This week */}
+      {/* 5 ─ This week */}
       <section aria-labelledby="week-title" className="col-[1/-1]">
-        <SectionTitle id="week-title" aside={<p className="text-xs text-white/55">New = last 7 days</p>}>
-          This week
-        </SectionTitle>
-        <ul className="flex flex-col gap-y-1 sm:flex-row sm:flex-wrap sm:gap-x-8 bento:grid bento:grid-cols-[repeat(auto-fit,minmax(min(13rem,100%),1fr))] bento:gap-4">
+        <SectionHeader id="week-title" title="This week" aside="Last 7 days" />
+        <ul className={cn(cardCls, "grid grid-cols-2 overflow-hidden lg:grid-cols-4 [&>li]:border-white/[0.06] [&>li:nth-child(odd)]:border-r lg:[&>li]:border-r lg:[&>li:last-child]:border-r-0 [&>li:nth-child(-n+2)]:border-b lg:[&>li:nth-child(-n+2)]:border-b-0")}>
           <WeekItem
             source={deals}
             to="/admin/cloud"
@@ -738,7 +680,7 @@ export default function AdminDashboard() {
               return {
                 value: rows.length,
                 text: plural(rows.length, "Cloud deal in progress", "Cloud deals in progress"),
-                extra: byStage.length ? `(${byStage.join(", ")})` : undefined,
+                extra: byStage.length ? byStage.join(" · ") : undefined,
               };
             }}
           />
@@ -746,42 +688,32 @@ export default function AdminDashboard() {
             source={newLeads}
             to="/admin/cloud"
             label="new leads"
-            tone="bento-peach"
-            render={() => ({ value: newLeads.data ?? 0, text: plural(newLeads.data ?? 0, "new Cloud lead", "new Cloud leads") })}
+            render={() => ({ value: newLeads.data ?? 0, text: plural(newLeads.data ?? 0, "New Cloud lead", "New Cloud leads") })}
           />
           <WeekItem
             source={paidSubs}
             to="/admin/cookie-yeti/subscribers"
             label="paid subscribers"
-            tone="bento-lavender"
-            render={() => ({ value: paidSubs.data ?? 0, text: plural(paidSubs.data ?? 0, "paid Cookie Yeti subscriber", "paid Cookie Yeti subscribers") })}
+            render={() => ({ value: paidSubs.data ?? 0, text: plural(paidSubs.data ?? 0, "Paid Cookie Yeti subscriber", "Paid Cookie Yeti subscribers") })}
           />
           <WeekItem
             source={waitlist}
             to="/admin/waitlist"
             label="waitlist signups"
-            tone="bento-sky"
-            render={() => ({ value: waitlist.data ?? 0, text: plural(waitlist.data ?? 0, "new waitlist signup", "new waitlist signups") })}
+            render={() => ({ value: waitlist.data ?? 0, text: plural(waitlist.data ?? 0, "New waitlist signup", "New waitlist signups") })}
           />
         </ul>
       </section>
 
       </div>
 
-      {/* 4 ─ Recent (collapsed by default; the feed only loads once opened) */}
-      <section aria-label="Recent activity">
-        <button
-          type="button"
-          aria-expanded={showRecent}
-          aria-controls="recent-activity"
-          onClick={() => setShowRecent((v) => !v)}
-          className={cn("inline-flex h-9 items-center gap-1.5 rounded-md px-2 -ml-2 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors", focusRing)}
-        >
-          <ChevronDown className={cn("h-4 w-4 transition-transform", showRecent && "rotate-180")} aria-hidden />
-          {showRecent ? "Hide recent activity" : "Show recent activity"}
-        </button>
+      {/* 6 ─ Recent (collapsed by default; the feed only loads once opened) */}
+      <section aria-label="Recent activity" className={inset}>
+        <Disclosure variant="inline" open={showRecent} onToggle={() => setShowRecent((v) => !v)} controls="recent-activity">
+          {showRecent ? "Hide recent activity" : "Recent activity"}
+        </Disclosure>
         {showRecent && (
-          <div id="recent-activity" className="mt-3 rounded-2xl border border-white/[0.06]">
+          <div id="recent-activity" className={cn(cardCls, "-mx-4 mt-2 overflow-hidden sm:-mx-6")}>
             <ActivityFeed key={activityKey} limit={5} embedded />
           </div>
         )}

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AlertTriangle,
@@ -13,14 +12,15 @@ import {
   Package,
   Home,
   ShieldCheck,
-  Sparkles,
-  ChevronRight,
   RefreshCw,
   Check,
+  CheckCircle2,
 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  Disclosure, IconButton, LoadError, Pill, RowLink, SectionHeader, SkeletonRows,
+  btnTinted, cardCls, divider, hairline, inset, rowCls, text, tint,
+} from "@/components/admin/ui";
 import { AskScoutButton } from "./AskScoutButton";
 
 /**
@@ -66,13 +66,6 @@ interface ActionItem {
 
 const severityRank: Record<Severity, number> = { critical: 0, urgent: 1, stale: 2, info: 3 };
 
-const severityDot: Record<Severity, string> = {
-  critical: "bg-red-500 shadow-[0_0_0.75rem_rgba(239,68,68,0.6)]",
-  urgent: "bg-amber-400 shadow-[0_0_0.625rem_rgba(251,191,36,0.5)]",
-  stale: "bg-yellow-500/70",
-  info: "bg-white/40",
-};
-
 const severityWord: Record<Severity, string> = {
   critical: "Critical",
   urgent: "Urgent",
@@ -80,12 +73,8 @@ const severityWord: Record<Severity, string> = {
   info: "FYI",
 };
 
-const severityIconColor: Record<Severity, string> = {
-  critical: "text-red-400",
-  urgent: "text-amber-400",
-  stale: "text-yellow-500",
-  info: "text-white/55",
-};
+/** Only the two loud severities get a visible pill; the rest stay quiet (word is still read out). */
+const severityPill: Partial<Record<Severity, "red" | "orange">> = { critical: "red", urgent: "orange" };
 
 /** admin_today() severities -> the four this panel shows. */
 const severityFromRow: Record<string, Severity> = {
@@ -109,17 +98,17 @@ const sourceIcon: Record<string, typeof AlertTriangle> = {
   Alerts: Bell,
 };
 
-const COLLAPSED_COUNT = 8;
+const COLLAPSED_COUNT = 5;
 
 function timeAgo(ms: number): string {
   const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s ago`;
+  if (s < 60) return "now";
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return `${h}h`;
   const d = Math.floor(h / 24);
-  return `${d}d ago`;
+  return `${d}d`;
 }
 
 export function ActionInbox() {
@@ -206,194 +195,130 @@ export function ActionInbox() {
     return { critical, urgent, stale, total: items.length };
   }, [items]);
 
+  const header = (
+    <SectionHeader
+      id="action-inbox-title"
+      title="Needs you"
+      aside={
+        <>
+          {!loading && summary.total > 0 && (
+            <span>
+              {summary.total}
+              {summary.critical > 0 && ` · ${summary.critical} critical`}
+              {summary.urgent > 0 && ` · ${summary.urgent} urgent`}
+            </span>
+          )}
+          <IconButton label="Refresh the queue" onClick={() => load()} className="-mr-2">
+            <RefreshCw className="h-4 w-4" aria-hidden />
+          </IconButton>
+        </>
+      }
+    />
+  );
+
   if (loading) {
     return (
-      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5">
-        <Skeleton className="h-5 w-40 bg-white/[0.05]" />
-        <div className="mt-4 space-y-2">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-12 rounded-xl bg-white/[0.04]" />
-          ))}
-        </div>
-      </div>
+      <section aria-labelledby="action-inbox-title" aria-busy>
+        {header}
+        <SkeletonRows rows={3} />
+      </section>
     );
   }
 
   const errorBar = error && (
-    <div role="alert" className="flex items-center gap-3 px-5 py-2.5 border-b border-amber-500/20 bg-amber-500/[0.06]">
-      <AlertTriangle className="h-4 w-4 text-amber-300 shrink-0" aria-hidden />
-      <p className="text-xs text-amber-100 flex-1">{error}</p>
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-9 border-amber-400/30 text-amber-100 hover:bg-amber-500/10"
-        onClick={() => load()}
-      >
-        <RefreshCw className="h-3.5 w-3.5 mr-1.5" aria-hidden /> Retry
-      </Button>
+    <div className={cn("border-b py-2", hairline, inset)}>
+      <LoadError label="the queue" message={error.replace(/\.$/, "")} onRetry={() => load()} />
     </div>
   );
 
   if (summary.total === 0) {
     return (
-      <div className="bg-white/[0.03] border border-emerald-500/20 rounded-2xl overflow-hidden">
-        {errorBar}
-        <div className="flex items-center gap-3 p-5">
-          <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
-            <Sparkles className="h-5 w-5 text-emerald-400" aria-hidden />
-          </div>
-          <div>
-            <h3 className="text-[0.9375rem] font-semibold text-white">
-              {error ? "Nothing found" : "Nothing needs you"}
-            </h3>
-            <p className="text-xs text-white/60 mt-0.5">
-              {error
-                ? "The queue didn't load, so this may not be the whole picture."
-                : "Every queue is clear - releases, Studio, client asks, mail, stock and uptime."}
+      <section aria-labelledby="action-inbox-title">
+        {header}
+        <div className={cn(cardCls, "overflow-hidden")}>
+          {errorBar}
+          <div className={cn(rowCls, "py-4")}>
+            <CheckCircle2 className={cn("h-5 w-5 shrink-0", error ? "text-white/40" : tint.green)} aria-hidden />
+            <p className={text.title}>
+              {error ? "Nothing loaded, so this may not be everything." : "Nothing needs you."}
             </p>
           </div>
         </div>
-      </div>
+      </section>
     );
   }
-
-  const headlineColor =
-    summary.critical > 0 ? "text-red-400" : summary.urgent > 0 ? "text-amber-400" : "text-yellow-400";
 
   const visible = showAll ? items : items.slice(0, COLLAPSED_COUNT);
   const hidden = items.length - COLLAPSED_COUNT;
 
   return (
-    <section
-      aria-labelledby="action-inbox-title"
-      className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden"
-    >
-      <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
-        <div>
-          <h3 id="action-inbox-title" className="text-[0.9375rem] font-semibold text-white">
-            Needs you
-          </h3>
-          <p className={cn("text-xs mt-0.5 font-medium", headlineColor)}>
-            {summary.total} {summary.total === 1 ? "item" : "items"}
-            {summary.critical > 0 && ` · ${summary.critical} critical`}
-            {summary.urgent > 0 && ` · ${summary.urgent} urgent`}
-            {summary.stale > 0 && ` · ${summary.stale} waiting`}
-          </p>
-        </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-9 text-xs text-white/60 hover:text-white hover:bg-white/5"
-          onClick={() => load()}
-          aria-label="Refresh the queue"
-        >
-          <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-        </Button>
-      </div>
-      {errorBar}
-      <ul className="divide-y divide-white/[0.04]">
-        {visible.map((item) => {
-          const Icon = item.icon;
-          const body = (
-            <>
-              <span className={cn("h-2 w-2 rounded-full shrink-0", severityDot[item.severity])} aria-hidden />
-              <Icon className={cn("h-4 w-4 shrink-0", severityIconColor[item.severity])} aria-hidden />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-white truncate">
-                  <span className="sr-only">{severityWord[item.severity]}: </span>
-                  {item.title}
-                </p>
-                {item.detail && <p className="text-xs text-white/60 truncate mt-0.5">{item.detail}</p>}
-              </div>
-              {item.count && (
-                <span className="text-[0.6875rem] text-white/60 tabular-nums shrink-0 rounded-full border border-white/10 px-2 py-0.5">
-                  {item.count}
+    <section aria-labelledby="action-inbox-title">
+      {header}
+      <div className={cn(cardCls, "overflow-hidden")}>
+        {errorBar}
+        <ul id="action-inbox-list" className={divider}>
+          {visible.map((item) => {
+            const Icon = item.icon;
+            const pill = severityPill[item.severity];
+            const body = (
+              <>
+                <Icon className="h-4 w-4 shrink-0 text-white/55" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className={cn(text.title, "flex min-w-0 items-center gap-2")}>
+                    {pill ? <Pill tone={pill}>{severityWord[item.severity]}</Pill> : <span className="sr-only">{severityWord[item.severity]}: </span>}
+                    <span className="truncate">{item.title}</span>
+                  </p>
+                  {item.detail && <p className={cn(text.detail, "mt-0.5 truncate")}>{item.detail}</p>}
+                </div>
+                {item.count && <Pill>{item.count}</Pill>}
+                <span className={cn(text.meta, "shrink-0")}>
+                  <span className="sr-only">Waiting </span>{timeAgo(item.ageMs)}
                 </span>
-              )}
-              <span className="text-xs text-white/55 tabular-nums shrink-0">{timeAgo(item.ageMs)}</span>
-            </>
-          );
+              </>
+            );
 
-          if (item.done) {
+            if (item.done) {
+              return (
+                <li key={item.id} className={cn(rowCls, "pr-2 sm:pr-3")}>
+                  {body}
+                  <button
+                    type="button"
+                    className={cn(btnTinted, "px-3 text-[13px]")}
+                    disabled={working === item.id}
+                    onClick={() => markDone(item.id)}
+                  >
+                    <Check className="h-3.5 w-3.5" aria-hidden />
+                    {working === item.id ? "Saving…" : item.doneLabel}
+                  </button>
+                  <AskScoutButton
+                    question={`Help me with this: ${item.title}. What's going on, and can you handle it?`}
+                    about={[item.title, item.detail].filter(Boolean).join(" | ")}
+                    className="h-11 w-11 rounded-full sm:h-9 sm:w-9"
+                  />
+                </li>
+              );
+            }
+
             return (
-              <li key={item.id} className="flex items-center gap-3 px-5 py-3">
-                {body}
-                <Button
-                  size="sm"
-                  className="h-9 shrink-0 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
-                  disabled={working === item.id}
-                  onClick={() => markDone(item.id)}
-                >
-                  <Check className="h-3.5 w-3.5 mr-1.5" aria-hidden />
-                  {working === item.id ? "..." : item.doneLabel}
-                </Button>
+              <li key={item.id} className="flex items-stretch">
+                <div className="min-w-0 flex-1">
+                  <RowLink href={item.href}>{body}</RowLink>
+                </div>
                 <AskScoutButton
-                  question={`Help me with this: ${item.title}. What's going on, and can you handle it?`}
-                  about={[item.title, item.detail].filter(Boolean).join(" | ")}
-                  className="-mr-2"
+                  question={`Help me with this: ${item.title}. What's going on, and can you fix it?`}
+                  about={[item.title, item.detail, item.href].filter(Boolean).join(" | ")}
+                  className="mr-2 h-11 w-11 self-center rounded-full sm:mr-3 sm:h-9 sm:w-9"
                 />
               </li>
             );
-          }
-
-          const ask = (
-            <AskScoutButton
-              question={`Help me with this: ${item.title}. What's going on, and can you fix it?`}
-              about={[item.title, item.detail, item.href].filter(Boolean).join(" | ")}
-              className="mr-2 self-center"
-            />
-          );
-          return (
-            <li key={item.id} className="flex items-stretch">
-              <div className="min-w-0 flex-1">
-              {item.href ? (
-                item.external ? (
-                  <a
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  >
-                    {body}
-                    <ChevronRight
-                      className="h-4 w-4 text-white/40 group-hover:text-white/70 transition-colors shrink-0"
-                      aria-hidden
-                    />
-                  </a>
-                ) : (
-                  <Link
-                    to={item.href}
-                    className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  >
-                    {body}
-                    <ChevronRight
-                      className="h-4 w-4 text-white/40 group-hover:text-white/70 transition-colors shrink-0"
-                      aria-hidden
-                    />
-                  </Link>
-                )
-              ) : (
-                <div className="flex items-center gap-3 px-5 py-3">{body}</div>
-              )}
-              </div>
-              {ask}
-            </li>
-          );
-        })}
-      </ul>
-      {hidden > 0 && (
-        <div className="px-5 py-2 text-center border-t border-white/[0.04]">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 text-xs text-white/70 hover:text-white hover:bg-white/5"
-            aria-expanded={showAll}
-            onClick={() => setShowAll((v) => !v)}
-          >
-            {showAll ? "Show fewer" : `Show ${hidden} more`}
-          </Button>
-        </div>
-      )}
+          })}
+        </ul>
+        {hidden > 0 && (
+          <Disclosure open={showAll} onToggle={() => setShowAll((v) => !v)} controls="action-inbox-list">
+            {showAll ? "Show fewer" : `Show all ${items.length}`}
+          </Disclosure>
+        )}
+      </div>
     </section>
   );
 }

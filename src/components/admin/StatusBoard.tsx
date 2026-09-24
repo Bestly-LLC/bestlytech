@@ -1,13 +1,14 @@
 /**
  * Status: every watchdog and scheduled job in one place (admin_watchdogs()), plus the product
- * chips passed in as children. Problems float to the top with an "Ask Scout to fix" button;
- * everything else sits behind "See all checks", grouped, each with a dot and its last run.
+ * rows passed in as children. One card: the answer ("All 40 checks are working"), the product
+ * rows, then anything failing with "Ask Scout to fix". Everything else sits behind "See all checks".
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, RefreshCw, Sparkles, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, RefreshCw, Sparkles, XCircle, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { askScout } from "@/components/admin/scoutBus";
 import { cn } from "@/lib/utils";
+import { Disclosure, IconButton, LoadError, cardCls, divider, focusRing, hairline, inset, rowCls, text, tint } from "@/components/admin/ui";
 
 type State = "ok" | "flaky" | "late" | "bad" | "new" | "off";
 export type Check = {
@@ -15,21 +16,21 @@ export type Check = {
   last_status?: string | null; detail?: string | null; recent_fails?: number; state: State;
 };
 
-const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80";
 const PROBLEM: State[] = ["bad", "late", "flaky"];
 const DOT: Record<State, string> = {
-  ok: "bg-emerald-500", flaky: "bg-amber-400", late: "bg-amber-400", bad: "bg-red-500", new: "bg-white/25", off: "bg-white/15",
+  ok: "bg-[#30D158]", flaky: "bg-[#FF9F0A]", late: "bg-[#FF9F0A]", bad: "bg-[#FF453A]", new: "bg-white/25", off: "bg-white/15",
 };
 const WORD: Record<State, string> = {
   ok: "OK", flaky: "Failing sometimes", late: "Hasn't run on time", bad: "Last run failed", new: "Waiting for first run", off: "Turned off",
 };
 
+/** 12-hour clock, LA time: "just now", "12 min ago", "3:05 PM", "Sep 22, 3:05 PM". */
 function when(iso: string | null): string {
   if (!iso) return "never";
   const d = new Date(iso), now = Date.now(), mins = Math.round((now - +d) / 60000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins} min ago`;
-  const t = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" });
+  const t = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
   const sameDay = new Date(now).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" }) === d.toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
   return sameDay ? t : `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" })}, ${t}`;
 }
@@ -44,19 +45,19 @@ function askFix(c: Check) {
 
 function Row({ c, fix }: { c: Check; fix?: boolean }) {
   return (
-    <li className="flex min-h-[44px] items-center gap-3 py-2">
+    <li className={rowCls}>
       <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", DOT[c.state])} aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-white/90">{c.name}</p>
-        <p className="truncate text-xs text-white/55" title={c.detail ?? undefined}>
-          {c.state === "ok" ? `Ran ${when(c.last_run)}` : c.state === "new" || c.state === "off" ? WORD[c.state] : `${WORD[c.state]} · last ran ${when(c.last_run)}`}
+        <p className={cn(text.title, "truncate")}>{c.name}</p>
+        <p className={cn(text.detail, "truncate")} title={c.detail ?? undefined}>
+          {c.state === "ok" ? `Ran ${when(c.last_run)}` : c.state === "new" || c.state === "off" ? WORD[c.state] : `${WORD[c.state]} · ran ${when(c.last_run)}`}
           {c.detail && c.state !== "ok" ? ` · ${c.detail}` : ""}
         </p>
       </div>
       <span className="sr-only">{WORD[c.state]}</span>
       {fix && (
-        <button type="button" onClick={() => askFix(c)}
-          className={cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-white/[0.08] px-3 text-sm font-medium text-white/90 hover:bg-white/[0.14] transition-colors", focusRing)}>
+        <button type="button" onClick={() => askFix(c)} aria-label={`Ask Scout to fix ${c.name}`}
+          className={cn("inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full bg-white/[0.08] px-3 text-[13px] font-semibold text-white/90 transition-colors hover:bg-white/[0.14] sm:min-h-9", focusRing)}>
           <Sparkles className="h-3.5 w-3.5" aria-hidden /> Ask Scout to fix
         </button>
       )}
@@ -94,62 +95,62 @@ export function StatusBoard({ children }: { children?: ReactNode }) {
 
   return (
     <div className="space-y-3">
-      {/* Headline: one line that answers "is everything working?" */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        {checks == null && !error ? (
-          <span className="inline-flex h-9 items-center gap-2 text-sm text-white/60"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Checking…</span>
-        ) : error ? (
-          <button type="button" onClick={load} className={cn("inline-flex h-9 items-center gap-2 text-sm text-amber-300", focusRing)}>
-            <AlertTriangle className="h-4 w-4" aria-hidden /> Couldn't load checks · Retry
-          </button>
-        ) : problems.length === 0 ? (
-          <p className="inline-flex items-center gap-2 text-[15px] font-semibold text-emerald-300">
-            <CheckCircle2 className="h-5 w-5" aria-hidden /> All {total} checks are working
-          </p>
-        ) : (
-          <p className={cn("inline-flex items-center gap-2 text-[15px] font-semibold", red ? "text-red-300" : "text-amber-300")}>
-            {red ? <XCircle className="h-5 w-5" aria-hidden /> : <AlertTriangle className="h-5 w-5" aria-hidden />}
-            {problems.length} of {total} {problems.length === 1 ? "check needs" : "checks need"} you
-          </p>
+      <div className={cn(cardCls, "overflow-hidden")}>
+        {/* Headline: one line that answers "is everything working?" */}
+        <div className={cn("flex min-h-[52px] items-center justify-between gap-3 py-2", inset)}>
+          {checks == null && !error ? (
+            <span className={cn(text.detail, "inline-flex items-center gap-2 text-[15px]")}><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Checking…</span>
+          ) : error && checks == null ? (
+            <LoadError label="checks" onRetry={load} busy={busy} detail={error} />
+          ) : problems.length === 0 ? (
+            <p className={cn("inline-flex items-center gap-2 text-[15px] font-semibold", tint.green)}>
+              <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden /> All {total} checks working
+            </p>
+          ) : (
+            <p className={cn("inline-flex items-center gap-2 text-[15px] font-semibold", red ? tint.red : tint.orange)}>
+              {red ? <XCircle className="h-5 w-5 shrink-0" aria-hidden /> : <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden />}
+              {problems.length} of {total} {problems.length === 1 ? "check needs" : "checks need"} you
+            </p>
+          )}
+          <IconButton label="Check again" onClick={load} disabled={busy} className="-mr-2">
+            <RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} aria-hidden />
+          </IconButton>
+        </div>
+        {/* Kept the last good list on a failed refresh; say so instead of going quiet. */}
+        {error && checks != null && (
+          <div className={cn("border-t py-2", hairline, inset)}><LoadError label="the latest checks" onRetry={load} busy={busy} detail={error} /></div>
         )}
-        <button type="button" onClick={load} disabled={busy} aria-label="Check again"
-          className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full text-white/50 hover:bg-white/5 hover:text-white/80 disabled:opacity-50", focusRing)}>
-          <RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} aria-hidden />
-        </button>
+
+        {children && <ul className={cn("border-t", hairline, divider)} aria-label="Products">{children}</ul>}
+
+        {problems.length > 0 && (
+          <ul className={cn("border-t", hairline, divider)} aria-label="Checks that need you">
+            {problems.map((c) => <Row key={c.id} c={c} fix />)}
+          </ul>
+        )}
+
+        {total > 0 && (
+          <Disclosure open={open} onToggle={() => setOpen((v) => !v)} controls="all-checks">
+            {open ? "Hide checks" : `See all ${total} checks`}
+          </Disclosure>
+        )}
       </div>
 
-      {children && <ul className="flex flex-wrap gap-2">{children}</ul>}
-
-      {problems.length > 0 && (
-        <ul className="divide-y divide-white/[0.06] rounded-2xl border border-white/10 bg-white/[0.03] px-4" aria-label="Checks that need you">
-          {problems.map((c) => <Row key={c.id} c={c} fix />)}
-        </ul>
-      )}
-
-      {total > 0 && (
-        <div>
-          <button type="button" aria-expanded={open} aria-controls="all-checks" onClick={() => setOpen((v) => !v)}
-            className={cn("inline-flex h-9 items-center gap-1.5 rounded-md px-2 -ml-2 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors", focusRing)}>
-            <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} aria-hidden />
-            {open ? "Hide all checks" : `See all ${total} checks`}
-          </button>
-          {open && (
-            <div id="all-checks" className="mt-2 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(20rem,100%),1fr))]">
-              {groups.map(([g, list]) => {
-                const bad = list.filter((c) => PROBLEM.includes(c.state)).length;
-                return (
-                  <section key={g} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 pb-2 pt-3" aria-label={g}>
-                    <h3 className="flex items-baseline justify-between text-xs font-semibold uppercase tracking-widest text-white/55">
-                      {g}<span className={cn("normal-case tracking-normal", bad ? "text-amber-300" : "text-white/40")}>{bad ? `${bad} need you` : `${list.length} OK`}</span>
-                    </h3>
-                    <ul className="mt-1 divide-y divide-white/[0.06]">
-                      {list.map((c) => <Row key={c.id} c={c} fix={PROBLEM.includes(c.state)} />)}
-                    </ul>
-                  </section>
-                );
-              })}
-            </div>
-          )}
+      {open && (
+        <div id="all-checks" className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(20rem,100%),1fr))]">
+          {groups.map(([g, list]) => {
+            const bad = list.filter((c) => PROBLEM.includes(c.state)).length;
+            return (
+              <section key={g} className={cn(cardCls, "overflow-hidden")} aria-label={g}>
+                <h3 className={cn("flex min-h-[44px] items-center justify-between border-b text-[13px] font-semibold uppercase tracking-[0.02em] text-white/60", hairline, inset)}>
+                  {g}<span className={cn("normal-case tracking-normal", bad ? tint.orange : "text-white/45")}>{bad ? `${bad} need you` : `${list.length} OK`}</span>
+                </h3>
+                <ul className={divider}>
+                  {list.map((c) => <Row key={c.id} c={c} fix={PROBLEM.includes(c.state)} />)}
+                </ul>
+              </section>
+            );
+          })}
         </div>
       )}
     </div>
