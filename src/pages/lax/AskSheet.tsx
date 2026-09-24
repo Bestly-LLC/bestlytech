@@ -4,7 +4,7 @@
  * Opens in the same luggage bottom sheet as Pickup / Return.
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, MessageCircleQuestion } from "lucide-react";
+import { ArrowUp, MessageCircleQuestion, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
 
@@ -22,6 +22,35 @@ export function AskButton({ onOpen }: { onOpen: () => void }) {
       className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white/[0.08] text-[15px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98] motion-reduce:transition-none">
       <MessageCircleQuestion className="h-[18px] w-[18px]" style={{ color: PEACH }} aria-hidden /> Ask a question
     </button>
+  );
+}
+
+// Phone numbers in an answer become one-tap call buttons.
+const NAMES: Record<string, string> = { "4159654525": "Call Turo", "8777983752": "Call Tesla Roadside", "911": "Call 911" };
+function phones(text: string) {
+  const out: { digits: string; label: string; shown: string }[] = [];
+  const re = /(?:\+?1[\s.-]?)?\(?(\d{3})\)?[\s.-]?(\d{3})[\s.-]?(\d{4})\b|\b911\b/g;
+  for (const m of text.matchAll(re)) {
+    const digits = m[1] ? m[1] + m[2] + m[3] : "911";
+    if (out.some((o) => o.digits === digits)) continue;
+    const shown = digits === "911" ? "911" : `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    out.push({ digits, shown, label: NAMES[digits] ?? "Call" });
+  }
+  return out;
+}
+function CallButtons({ text }: { text: string }) {
+  const list = phones(text);
+  if (!list.length) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {list.map((p) => (
+        <a key={p.digits} href={p.digits === "911" ? "tel:911" : `tel:+1${p.digits}`}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold text-[#1A1140] active:scale-95"
+          style={{ background: p.digits === "911" ? "#FF6B6B" : "#7CE0A5" }}>
+          <Phone className="h-4 w-4" aria-hidden /> {p.label}{p.digits !== "911" && <span className="font-medium opacity-70">{p.shown}</span>}
+        </a>
+      ))}
+    </div>
   );
 }
 
@@ -118,6 +147,7 @@ export function AskSheet({ open, onClose, token, slug }: { open: boolean; onClos
                 ? "rounded-br-md text-[#1A1140]" : "rounded-bl-md bg-white/[0.08] text-white ring-1 ring-white/10"} ${m.status === "error" ? "ring-[#E4527A]/60" : ""}`}
                 style={m.role === "user" ? { background: PEACH } : undefined}>
                 {m.content || (m.status === "pending" || m.status === "working" ? <Dots /> : "")}
+                {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && m.content && <CallButtons text={m.content} />}
               </div>
             </li>
           ))}
