@@ -60,6 +60,20 @@ const FREE_WHY: Record<string, string> = {
   CODE: "It's a change to the app, which goes to the builder.",
 };
 
+// The free AI reads a compact snapshot: the whole queue and her feedback, none of the long notes. Cutting
+// the full one short would drop posts and give wrong counts.
+function freeSnap(snap: any) {
+  const s = snap ?? {};
+  const day = (t: unknown) => String(t ?? "").slice(0, 10);
+  return {
+    now: s.now, clients: s.clients,
+    queue: (s.queue ?? []).map((q: any) => ({ title: q.title, stage: q.stage, type: q.media_type, internal_status: q.internal_status,
+      client_status: q.client_status, made: day(q.created_at),
+      client_said: q.client_said ? { decision: q.client_said.decision, note: q.client_said.note, on: day(q.client_said.at) } : null })),
+    client_feedback: (s.client_feedback ?? []).map((f: any) => ({ post: f.post, decision: f.decision, note: f.note, on: day(f.at) })),
+  };
+}
+
 async function freeTry(requestId: string, ctx: Record<string, unknown>, staff: Record<string, any>): Promise<{ answer?: string; why: string }> {
   const { data: hist } = await db.from("studio_request_messages").select("role, body").eq("request_id", requestId)
     .order("created_at", { ascending: false }).limit(7);
@@ -78,7 +92,8 @@ NEEDS_TOOLS: CODE    (it asks to change how the app looks or works)
 Otherwise answer in plain text, under 60 words, no markdown, no asterisks.
 
 Where they are: ${JSON.stringify(ctx).slice(0, 400)}
-What is in the app right now: ${JSON.stringify(snap ?? {}).slice(0, 12000)}
+What is in the app right now (stage "internal" = not sent to the client yet; internal_status = the team's review; client_status = the client's answer):
+${JSON.stringify(freeSnap(snap)).slice(0, 60000)}
 
 Conversation:
 ${convo}`;
