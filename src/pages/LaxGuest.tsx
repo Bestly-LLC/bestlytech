@@ -318,6 +318,12 @@ export default function LaxGuest() {
   const live = !!pub?.controls || demo;
   // "Set Up" done at the car (the car unlocked/moved by itself after the key was accepted), or 45 min into the trip.
   const carConnected = !!pub?.car_connected_at || (!!pub?.trip && Date.now() > +new Date(pub.trip.starts_at) + 45 * 60e3);
+  // Lobby QR: folded while booked, open from 24 hours before pickup, gone once the phone key is set up at the car
+  // (they're past the lobby). Only a real Set Up hides it early; otherwise it stays until 6 hours into the trip.
+  const startsMs = pub?.trip ? +new Date(pub.trip.starts_at) : null;
+  const qrPhase: "booked" | "pickup" | "done" = startsMs == null ? "pickup"
+    : pub?.car_connected_at || Date.now() > startsMs + 6 * 3600e3 ? "done"
+    : Date.now() < startsMs - 24 * 3600e3 ? "booked" : "pickup";
   const g = pub?.guide ?? {};
   const garage = g.garage || "5730 W 98th St, LA 90045";
   const level = g.level || "P3";
@@ -408,7 +414,8 @@ export default function LaxGuest() {
             <NextStep next={guide.next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? carCommand : undefined} kind="lax" />
 
             {/* QR */}
-            <Collapse id={onTrip ? "qr-trip" : "qr"} defaultOpen={!onTrip} kicker={onTrip ? "Park My Share QR code" : "Your QR code · opens the lobby door"} title={pub.ready && !onTrip ? "Scan it at the lobby door" : undefined} accent={PEACH} className={guide.next?.action === "qr" ? "trip-glow trip-glow-card" : ""} summary={onTrip ? "Opens the garage lobby door. Tap if you need it again." : pub.ready ? "Tap to show your QR code." : "Shows up here before your trip."}>
+            {qrPhase !== "done" && (
+            <Collapse id={qrPhase === "booked" ? "qr-booked" : "qr"} defaultOpen={qrPhase === "pickup"} kicker="Your QR code · opens the lobby door" title={pub.ready && qrPhase === "pickup" ? "Scan it at the lobby door" : undefined} accent={PEACH} className={guide.next?.action === "qr" ? "trip-glow trip-glow-card" : ""} summary={qrPhase === "booked" ? "You'll need it at pickup. It opens by itself the day before." : pub.ready ? "Tap to show your QR code." : "Shows up here before your trip."}>
               {pub.ready ? (
                 <>
                   <div className="mt-3 rounded-3xl bg-white p-6 text-center text-[#1A1140] shadow-2xl shadow-black/40">
@@ -438,6 +445,7 @@ export default function LaxGuest() {
                 <div className="mt-3 rounded-2xl bg-white/[0.06] p-4 text-white/80 ring-1 ring-white/10">Your QR code shows up right here before your trip. Nothing to do: this page updates by itself.</div>
               )}
             </Collapse>
+            )}
 
             {/* On the trip these three swipe (Your car · Supercharging · Help & guides); before it they stack. */}
             <TripSlides on={onTrip} id="lax-trip" labels={[...(carConnected ? [] : ["Your car"]), ...(pub.charging ? ["Supercharging"] : []), "Help & guides"]}>
