@@ -2,21 +2,22 @@
 // Jared reads it, edits it, and chooses Agree or Push back; nothing here is
 // ever sent to the client. Auth: a staff token (Studio button) or the cron key
 // in vault (feedback_draft_key) for the pre-draft pass. (Cowork / Spark 2026-09-23)
+// v2 (2026-09-23): drafts come from the free, no-training AI (_shared/free-llm.ts, Groq -> Cloudflare), $0.
+// It never calls paid Claude: the hourly pre-draft pass was unlogged, ungated Sonnet spend.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { llm } from "../_shared/free-llm.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
-const MODELS = ["claude-sonnet-4-6", "claude-haiku-4-5"];
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-draft-key",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
-const cleanKey = (raw?: string) => { if (!raw) return ""; const m = raw.match(/sk-ant-[A-Za-z0-9_\-]{20,}/); return (m ? m[0] : raw).trim(); };
 
 const SYSTEM = `You help a small social-media studio answer its client's feedback on a finished video or post.
 The studio owner (Jared) thinks most of this work is already right and wants to push back kindly and clearly, so the client understands the reason and the post can go back to her without an email thread.
@@ -41,27 +42,20 @@ Return ONLY JSON: {"call":"pushback|agree|ask","reply":"...","why":"one line for
 async function draft(reviewId: string) {
   const { data: ctx, error } = await db.rpc("feedback_draft_context", { p_review: reviewId });
   if (error || !ctx) return { ok: false, error: "no_context" };
-  const key = cleanKey(Deno.env.get("ANTHROPIC_API_KEY"));
-  if (!key) return { ok: false, error: "not_configured" };
   const user = JSON.stringify(ctx);
-  for (const model of MODELS) {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model, max_tokens: 500, system: SYSTEM, messages: [{ role: "user", content: user }] }),
-    });
-    if (r.status === 404 || r.status === 400) continue;
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) return { ok: false, error: `model ${r.status}` };
-    const txt = ((j as any).content ?? []).filter((x: any) => x.type === "text").map((x: any) => x.text).join("").trim();
-    const m = txt.match(/\{[\s\S]*\}/);
-    let out: any = null; try { out = m ? JSON.parse(m[0]) : null; } catch { out = null; }
-    if (!out?.reply) return { ok: false, error: "unparsed" };
-    const d = { call: ["pushback", "agree", "ask"].includes(out.call) ? out.call : "pushback", reply: String(out.reply).slice(0, 1200), why: String(out.why ?? "").slice(0, 300), model, by: "Spark" };
-    await db.rpc("feedback_draft_save", { p_review: reviewId, p_draft: d });
-    return { ok: true, draft: d };
+  let r;
+  try {
+    r = await llm({ task: "summarize", system: SYSTEM, user, json: true, maxTokens: 1500, job: "feedback-draft", ref: reviewId,
+      fn: "feedback-reply", scope: "background", paid: "never", deadlineMs: 60_000,
+      validate: (o) => (o && typeof o.reply === "string" && o.reply.trim() ? null : "no reply") });
+  } catch {
+    return { ok: false, error: "free_ai_busy" };
   }
-  return { ok: false, error: "no model" };
+  const out = r.json;
+  const d = { call: ["pushback", "agree", "ask"].includes(out.call) ? out.call : "pushback", reply: String(out.reply).replace(/\*\*/g, "").slice(0, 1200),
+    why: String(out.why ?? "").slice(0, 300), model: r.model, by: "Spark" };
+  await db.rpc("feedback_draft_save", { p_review: reviewId, p_draft: d });
+  return { ok: true, draft: d };
 }
 
 Deno.serve(async (req) => {

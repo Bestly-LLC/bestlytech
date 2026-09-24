@@ -665,6 +665,12 @@ Deno.serve(async (req) => {
     const { data: th } = await db.from("studio_requests").select("paid_ok_until").eq("id", requestId).maybeSingle();
     const paidOk = !!(th as any)?.paid_ok_until && Date.parse((th as any).paid_ok_until) > Date.now();
     if (/^yes,? use paid ai\.?$/i.test(text)) {
+      // v18.2: a yes only counts right after Spark asked for one, so a stray "yes" never starts a paid run.
+      const { data: prev } = await db.from("studio_request_messages").select("body").eq("request_id", requestId).eq("role", "claude")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (!paidOk && !/OPTIONS:\s*Yes, use paid AI/i.test(String((prev as any)?.body ?? ""))) {
+        return await say("Nothing is waiting for a yes right now. Ask your question and I'll tell you if it needs paid AI.");
+      }
       await db.from("studio_requests").update({ paid_ok_until: new Date(Date.now() + 3600_000).toISOString() }).eq("id", requestId);
     } else if (/^no,? skip it\.?$/i.test(text)) {
       return await say("OK, skipped. Nothing was spent.");
