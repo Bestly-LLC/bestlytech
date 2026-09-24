@@ -13,7 +13,20 @@ type Msg = { id: number | string; role: "user" | "assistant"; content: string; s
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 
-const SUGGEST = ["Where do I catch the shuttle?", "How hot is the car right now?", "How do I unlock the Tesla?", "How do I return the car?", "The QR code won't scan"];
+// Fallback chips; the live ones come from lax_ask_suggest (trip phase, LA time of day, car state, last question).
+const SUGGEST = ["Where do I catch the shuttle after I land?", "How do I get into the garage?", "How do I unlock and start the Tesla?", "How do I return the car?"];
+
+function Chips({ list, onPick, disabled }: { list: string[]; onPick: (s: string) => void; disabled?: boolean }) {
+  if (!list.length) return null;
+  return (
+    <div className="mt-3 flex flex-wrap gap-2" aria-label="Suggested questions">
+      {list.map((s) => (
+        <button key={s} type="button" disabled={disabled} onClick={() => onPick(s)}
+          className="min-h-[40px] rounded-full bg-white/[0.08] px-3.5 py-2 text-left text-[14px] font-medium text-white ring-1 ring-white/15 active:scale-95 disabled:opacity-40">{s}</button>
+      ))}
+    </div>
+  );
+}
 
 /** Slim button in the bottom bar, above the Pickup / Return tags. */
 export function AskButton({ onOpen }: { onOpen: () => void }) {
@@ -68,14 +81,18 @@ export function AskSheet({ open, onClose, token, slug }: { open: boolean; onClos
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState<number | null>(null);
   const [urgent, setUrgent] = useState(false);
+  const [chips, setChips] = useState<string[]>(SUGGEST);
   const loaded = useRef(false);
   const body = useRef<HTMLDivElement>(null);
   const who = { p_token: token || null, p_slug: token ? null : slug || null };
+  const refreshChips = () =>
+    rpc("lax_ask_suggest", who).then(({ data }) => { if (Array.isArray(data) && data.length) setChips(data as string[]); }).catch(() => {});
 
   useEffect(() => {
     if (!open || loaded.current) return;
     loaded.current = true;
     rpc("lax_ask_history", who).then(({ data }) => { if (Array.isArray(data) && data.length) setMsgs(data as Msg[]); });
+    refreshChips();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   useEffect(() => { body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" }); }, [msgs, open]);
@@ -105,7 +122,7 @@ export function AskSheet({ open, onClose, token, slug }: { open: boolean; onClos
         if (a.status === "done" || a.status === "error") return;
       }
       patch(r.reply_id, { content: "That took too long. Try again, or message your host in the Turo app.", status: "error" });
-    } finally { setBusy(false); }
+    } finally { setBusy(false); refreshChips(); }
   };
 
   const footer = (
@@ -132,14 +149,10 @@ export function AskSheet({ open, onClose, token, slug }: { open: boolean; onClos
       {msgs.length === 0 ? (
         <div>
           <p className="text-[15px] leading-relaxed text-white/75">Ask anything about getting to the garage, the lobby door, the car, or returning it. Answers come from your trip guide.</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {SUGGEST.map((s) => (
-              <button key={s} type="button" onClick={() => send(s)}
-                className="rounded-full bg-white/[0.08] px-3.5 py-2 text-[14px] font-medium text-white ring-1 ring-white/15 active:scale-95">{s}</button>
-            ))}
-          </div>
+          <Chips list={chips} onPick={send} />
         </div>
       ) : (
+        <>
         <ul className="space-y-3" aria-live="polite">
           {msgs.map((m) => (
             <li key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
@@ -152,6 +165,8 @@ export function AskSheet({ open, onClose, token, slug }: { open: boolean; onClos
             </li>
           ))}
         </ul>
+        {!busy && <Chips list={chips} onPick={send} />}
+        </>
       )}
       <p className="mt-5 text-[12px] leading-snug text-white/45">
         Automated helper. It can make mistakes and can't change your trip. For anything else, message your host in the Turo app.
