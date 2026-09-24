@@ -14,6 +14,7 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
     { id: "booked", label: "Booked (3 days out)" },
     { id: "key-soon", label: "3 hours before" },
     { id: "key-ready", label: "Pickup soon: key ready (tap it to add)" },
+    { id: "on-way", label: "On the way (30 min before, key added)" },
     { id: "on-trip", label: "On the trip" },
     { id: "returning", label: "Return in 90 min" },
     { id: "ended", label: "Trip ended" },
@@ -21,6 +22,7 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
   lax: [
     { id: "booked", label: "Booked (3 days out)" },
     { id: "day-of", label: "Pickup soon: key ready (tap it to add)" },
+    { id: "on-way", label: "On the way (30 min before, key added)" },
     { id: "on-trip", label: "On the trip" },
     { id: "returning", label: "Return in 90 min" },
     { id: "ended", label: "Trip ended" },
@@ -45,7 +47,7 @@ function demoCharging(start: number, ended: boolean) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function demoPub(kind: "home" | "lax", stage: string): any {
   const now = Date.now();
-  const startIn: Record<string, number> = { booked: 72 * H, "key-soon": 3 * H, "key-ready": 1.5 * H, "key-added": 0.5 * H, "day-of": 1.5 * H, "on-trip": -24 * H, returning: -70.5 * H, ended: -74 * H };
+  const startIn: Record<string, number> = { booked: 72 * H, "key-soon": 3 * H, "key-ready": 1.5 * H, "key-added": 0.5 * H, "day-of": 1.5 * H, "on-way": 0.5 * H, "on-trip": -24 * H, returning: -70.5 * H, ended: -74 * H };
   const s = now + (startIn[stage] ?? 72 * H);
   const e = s + 72 * H;
   const trip = { first: "Demo", starts_at: iso(s), ends_at: iso(e), car_opens_at: iso(s - H) };
