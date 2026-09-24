@@ -93,10 +93,11 @@ export default function CloudDeals({ embedded = false }: { embedded?: boolean } 
     const [funnel, leads, deals] = await Promise.all([
       supabase.from("v_cloud_lead_funnel").select("*").limit(500),
       // Columns the funnel view doesn't carry, for the list view.
-      supabase.from("cloud_leads").select("id, source, updated_at").limit(500),
+      supabase.from("cloud_leads").select("id, source, updated_at").order("created_at", { ascending: false }).limit(500),
       supabase
         .from("cloud_deals")
         .select("lead_id, updated_at, company_name, primary_contact_name, primary_contact_email")
+        .order("created_at", { ascending: false })
         .limit(500),
     ]);
     const { data, error } = funnel;

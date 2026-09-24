@@ -96,7 +96,12 @@ export default function AdminLogin() {
     // No "@" means a username: look up which admin email it belongs to.
     let login = email.trim();
     if (!login.includes("@")) {
-      const { data } = await supabase.rpc("admin_login_email" as never, { p_username: login } as never);
+      const { data, error: lookupError } = await supabase.rpc("admin_login_email" as never, { p_username: login } as never);
+      if (lookupError) {
+        setSubmitting(false);
+        toast({ title: "Couldn't look up that username", description: lookupError.message, variant: "destructive" });
+        return;
+      }
       login = (data as unknown as string | null) ?? login;
     }
     const { error } = await signIn(login, password);

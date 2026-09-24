@@ -56,7 +56,7 @@ function sidebarDefaultOpen(): boolean {
 }
 
 export function AdminLayout() {
-  const { signOut } = useAdminAuth();
+  const { signOut, user } = useAdminAuth();
   const textSize = useAdminTextSize();
   useEffect(() => armNotifySound(), []);
   const [muted, setMuted] = useState(notifySoundMuted());
@@ -162,7 +162,7 @@ export function AdminLayout() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
                   </span>
-                  <span className="text-xs text-white/50">jared@bestly.tech</span>
+                  <span className="text-xs text-white/50">{user?.email ?? "Signed in"}</span>
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
