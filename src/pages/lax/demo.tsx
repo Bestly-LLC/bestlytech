@@ -23,7 +23,8 @@ type RealKey = { state: string; link: string | null; keep_minutes?: number } | n
 /** null = not the host, so the pretend key is used. */
 export let realKey: RealKey = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const rpc = (fn: string, args: Record<string, unknown>) => supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: any }>;
+// Promise.resolve: the Supabase builder is only a thenable (no .catch), and it sends nothing until awaited.
+const rpc = (fn: string, args: Record<string, unknown>): Promise<{ data: any }> => Promise.resolve(supabase.rpc(fn as never, args as never) as unknown as PromiseLike<{ data: any }>);
 
 /** Asks for the real demo key; re-asks every 10s while it's being made, every 5 min after. */
 export function useRealDemoKey(enabled: boolean, onChange: () => void) {
