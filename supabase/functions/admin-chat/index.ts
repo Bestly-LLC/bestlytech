@@ -77,6 +77,15 @@
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v23 (2026-09-23): the free model is never trusted with a job. It told Jared "Scout will resolve the
+//   git conflict" on a handed-off to-do, then "Scout can't push code, do it manually" - both false (Scout
+//   has mac_run and had already fixed it). Now, in code: a thread that asks for work ("Take this off my
+//   plate", fix/run/push/resolve..., "keep going", "are you doing it") skips the free model, and any free
+//   answer that promises, refuses or reports work is thrown away and treated as NEEDS_TOOLS: ACTION.
+// v22 (2026-09-23): prompt caching. SYSTEM is [fixed rules]<<CACHE_SPLIT>>[lessons]<<CACHE_SPLIT>>[live data];
+//   systemBlocks() puts cache breakpoints on the first two, and a top-level cache_control caches the
+//   conversation inside the tool loop. logSpend prices cache writes at 1.25x and reads at 0.1x input.
+
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
@@ -355,33 +364,6 @@ You are Scout, the assistant inside Jared Best's Bestly admin console at bestly.
 
 Jared runs Bestly LLC: Cookie Yeti (a Safari and Chrome cookie-banner extension), HOKU, InventoryProof, SchoolPilot, Bestly Studio (studio.bestly.tech), a small shop, a Home Hub on a Raspberry Pi (bestly-pi: Nextcloud at cloud.bestly.tech, Home Assistant, Homebridge, Pi-hole), and a Turo fleet. He is the only operator.
 
-# The queue, read a moment ago
-${JSON.stringify(today)}
-rank 0 is stopped and needs him, 1 is broken, 2 is slipping, 3 is waiting on a decision.
-
-# Open incidents, from the monitor
-${JSON.stringify(incidents)}
-The monitor runs every five minutes, fixes what it can by itself, and pushes to his phone over ntfy when it cannot. Only OPEN incidents are problems. Anything resolved is history: never report it as a current problem or a "warning worth a look".
-
-# Unread admin alerts
-${JSON.stringify(unread)}
-
-# The Mac agent
-${JSON.stringify(mac)}
-It runs on his MacBook Air and polls every five minutes while the Mac is awake. Quiet for hours almost always means the lid is closed; queued mail work runs by itself when he next opens it. Say that in one line; do not treat it as an outage or ask him to do anything about it.
-
-# The call recorder on the Mac mini
-${JSON.stringify(recorder)}
-There is a Record a call button at the top of this chat, so he can also do it himself. When he asks you to record, start it with the recorder tool and the names he gave. When a call is done, the button offers a Debrief.
-
-# Jobs on the Mac mini (mac_run), newest first
-${JSON.stringify(jobs)}
-The Mac mini is always on and can do almost anything a terminal can: git pull/push the repos, npm and builds, brew, restart launchd agents (launchctl kickstart -k gui/$(id -u)/<label>), read logs, curl, python. When a fix or a check needs a real machine, write the script and propose it with mac_run. Keep scripts short, idempotent and safe to re-run; print what they did. Never put a secret in a script. Never delete outside a project folder or ~/MeetingRec/recordings. When a job finishes, Jared's window tells you; read the output (mac_run get) and say in one line whether it worked, then the next step.
-
-# Where Jared is right now
-${JSON.stringify(page)}
-That is the admin page open behind this chat. When he says "this", "here" or "this page", he means it. Use it to pick the right data without asking.
-
 # When the notetaker breaks (incident recorder.notetaker)
 The notetaker is a headless Chrome that joins Talk calls as "Scout (notetaker)" and records each person on their own track. A Talk update can move the page's buttons or name labels and break it. The Mac mini runs a self-test on every Talk update, every code change and daily, and opens incident recorder.notetaker with diagnostics (the buttons it could see, dialogs, its log) when it fails. While it is broken, recordings still work but names fall back to voice guessing. Fixing it is your job, not Jared's:
 1. Read the incident body. 2. read_file scripts/meetingrec/notetaker/notetaker.js (join section: the strategies list and the device dialog; naming: the WHO selector list). 3. Propose the smallest change that matches what the diagnostics show, in one line. 4. On his yes, commit_files it. 5. Run recorder selftest. It pulls main first; if the fix passes, the incident resolves by itself. If a self-test fails right after a code update, the Mac rolls that update back and blocks it, so a bad fix cannot stick.
@@ -414,9 +396,6 @@ The router is a Verizon Internet Gateway (ASK-NCM1100) at 192.168.1.1. Scout has
 Your job is to clear his plate, not to hand him a to-do list. For every item: if a tool can do it, propose it in one line and, on his yes, do it and report the result. Batch them: "I can do these three - say yes and I'll run all of them." Cleanup (stale alerts, incidents that are over, cards whose job is done) you may do without asking and just report.
 Only hand Jared something when it physically needs him: typing a password, a device in his hand, a decision only he can make. When you do, say it is the one thing you cannot do and why, give the single exact step, and nothing else.
 Known one: accepting the Xcode licence needs sudo on his Mac, which needs his password - Apple does not allow it any other way. That is the only true blocker for the Cookie Yeti Mac and iOS builds.
-
-# What you have learned (scout_lessons, best first)
-${lessons || "Nothing yet."}
 
 # Healing yourself
 When a tool fails, the result comes back with "lessons" (what worked before in the same spot) and, for run_sql, the real columns. Use them: change your approach, never repeat the exact call that failed. When a different approach works after a failure, call learn once with what worked, so next time is right first time. If you are stuck after two different tries, say plainly what you tried and what you need. When Jared says "remember" about how to do something (a tool, table, project or preference for how work gets done), save it with learn and taught_by_jared: true.
@@ -452,6 +431,38 @@ you, and generic buttons are worse than the ones you would have written.
 
 Never explain the line, never use the word OPTIONS in your prose, and never put it
 anywhere but the very end.
+
+<<CACHE_SPLIT>>
+# What you have learned (scout_lessons, best first)
+${lessons || "Nothing yet."}
+
+<<CACHE_SPLIT>>
+# The queue, read a moment ago
+${JSON.stringify(today)}
+rank 0 is stopped and needs him, 1 is broken, 2 is slipping, 3 is waiting on a decision.
+
+# Open incidents, from the monitor
+${JSON.stringify(incidents)}
+The monitor runs every five minutes, fixes what it can by itself, and pushes to his phone over ntfy when it cannot. Only OPEN incidents are problems. Anything resolved is history: never report it as a current problem or a "warning worth a look".
+
+# Unread admin alerts
+${JSON.stringify(unread)}
+
+# The Mac agent
+${JSON.stringify(mac)}
+It runs on his MacBook Air and polls every five minutes while the Mac is awake. Quiet for hours almost always means the lid is closed; queued mail work runs by itself when he next opens it. Say that in one line; do not treat it as an outage or ask him to do anything about it.
+
+# The call recorder on the Mac mini
+${JSON.stringify(recorder)}
+There is a Record a call button at the top of this chat, so he can also do it himself. When he asks you to record, start it with the recorder tool and the names he gave. When a call is done, the button offers a Debrief.
+
+# Jobs on the Mac mini (mac_run), newest first
+${JSON.stringify(jobs)}
+The Mac mini is always on and can do almost anything a terminal can: git pull/push the repos, npm and builds, brew, restart launchd agents (launchctl kickstart -k gui/$(id -u)/<label>), read logs, curl, python. When a fix or a check needs a real machine, write the script and propose it with mac_run. Keep scripts short, idempotent and safe to re-run; print what they did. Never put a secret in a script. Never delete outside a project folder or ~/MeetingRec/recordings. When a job finishes, Jared's window tells you; read the output (mac_run get) and say in one line whether it worked, then the next step.
+
+# Where Jared is right now
+${JSON.stringify(page)}
+That is the admin page open behind this chat. When he says "this", "here" or "this page", he means it. Use it to pick the right data without asking.
 `.trim();
 
 async function gitCall(body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -667,10 +678,20 @@ async function paidOutOfCredit(): Promise<boolean> {
   return !!data?.length;
 }
 
+/** v23: a request for work. The free model has no tools, so it must never field one. */
+const ASKS_FOR_WORK = /^take this off my plate|^keep going|^do it\b|\b(are|is) (you|scout) (doing|on) it\b|\b(fix|resolve|push|pull|merge|deploy|run|restart|install|update|delete|remove|send|commit|revert|rollback|roll back|clear|handle|finish|redo|retry)\b/i;
+/** v23: a free answer that promises, refuses or reports work - the free model is not allowed to say any of it. */
+const CLAIMS_WORK = /\b(scout|i)\s*(will|'ll|would|am going to|can'?t|cannot|can not|won'?t|is unable|am unable|don'?t have|doesn'?t have)\b|\bi'll\b|\bmanually\b|\byou('ll| will)? (need|have) to\b|\b(it'?s|it is|all|now) (done|fixed|resolved|pushed)\b|\bno action (is )?needed\b|\btakes? (a few )?minutes\b/i;
+
 async function freeTry(threadId: string, text: string, page: unknown): Promise<{ answer?: string; why: string }> {
   const { data: st } = await db.from("partner_ai_status").select("seen_at").eq("id", 1).maybeSingle();
   const seen = (st as any)?.seen_at ? Date.parse((st as any).seen_at) : 0;
   if (Date.now() - seen > 3 * 60_000) return { why: "The free AI on your Mac mini isn't answering right now." };
+  // v23: work goes to the model with tools. So does every follow-up in a thread that began as a hand-off.
+  if (ASKS_FOR_WORK.test(text.trim())) return { why: FREE_WHY.ACTION };
+  const { data: first } = await db.from("admin_chat_messages").select("body").eq("thread_id", threadId).eq("role", "user")
+    .order("created_at", { ascending: true }).limit(1);
+  if (/^take this off my plate/i.test(String((first as any)?.[0]?.body ?? ""))) return { why: FREE_WHY.ACTION };
   const { data: hist } = await db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId)
     .order("created_at", { ascending: false }).limit(7);
   const convo = ((hist ?? []) as any[]).reverse().map((m) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body).slice(0, 600)}`).join("\n");
@@ -699,7 +720,8 @@ ${convo}`;
       const a = String((row as any).answer ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
       const m = a.match(/NEEDS_TOOLS:\s*([A-Z]+)?/i);
       if (m || !a) return { why: FREE_WHY[(m?.[1] ?? "").toUpperCase()] ?? "The free AI can't do this one." };
-      return { answer: a };
+      if (CLAIMS_WORK.test(a)) return { why: FREE_WHY.ACTION }; // v23: it tried to promise/refuse work anyway
+      return { answer: a, why: "" };
     }
   }
   return { why: "The free AI on your Mac mini took too long." };
@@ -975,11 +997,23 @@ let spentNow = 0;                     // what this request has cost so far
 async function logSpend(j: any) {
   const model = String(j?.model ?? MODEL);
   const [pin, pout] = priceOf(model);
-  const inT = Number(j?.usage?.input_tokens ?? 0) + Number(j?.usage?.cache_creation_input_tokens ?? 0) + Number(j?.usage?.cache_read_input_tokens ?? 0);
+  const plain = Number(j?.usage?.input_tokens ?? 0);
+  const wrote = Number(j?.usage?.cache_creation_input_tokens ?? 0);
+  const read = Number(j?.usage?.cache_read_input_tokens ?? 0);
+  const inT = plain + wrote + read;
   const outT = Number(j?.usage?.output_tokens ?? 0);
-  const cost = (inT * pin + outT * pout) / 1e6;
+  // cache writes bill at 1.25x input, cache reads at 0.1x
+  const cost = ((plain + wrote * 1.25 + read * 0.1) * pin + outT * pout) / 1e6;
+  console.log(JSON.stringify({ cache: { wrote, read, plain } }));
   spentNow += cost;
   await db.from("ai_spend").insert({ fn: "admin-chat", scope: "chat", job: "chat", model, input_tokens: inT, output_tokens: outT, cost_usd: cost, ref: spendRef });
+}
+
+// Split the system prompt at <<CACHE_SPLIT>>: [fixed rules][lessons][live data].
+// The first two get cache breakpoints; the live part changes every request and stays uncached.
+function systemBlocks(system: string) {
+  const parts = system.split("<<CACHE_SPLIT>>").map((p) => p.trim()).filter(Boolean);
+  return parts.map((text, i) => (i < parts.length - 1 ? { type: "text", text, cache_control: { type: "ephemeral" } } : { type: "text", text }));
 }
 
 async function ask(messages: any[], system: string, apiKey: string, opts: { timeoutMs?: number; noTools?: boolean } = {}) {
@@ -988,7 +1022,10 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
-        model: MODEL, max_tokens: opts.noTools ? 1500 : 8000, system, tools: TOOLS, messages,
+        model: MODEL, max_tokens: opts.noTools ? 1500 : 8000, system: systemBlocks(system), tools: TOOLS, messages,
+        // Prompt caching: the fixed rules + tools are cached across messages, the lessons digest
+        // separately, and this top-level marker caches the growing conversation within the tool loop.
+        cache_control: { type: "ephemeral" },
         ...(opts.noTools ? { tool_choice: { type: "none" } } : {}),
       }),
       signal: opts.timeoutMs ? AbortSignal.timeout(Math.max(3000, opts.timeoutMs)) : undefined,
