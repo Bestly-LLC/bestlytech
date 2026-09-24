@@ -66,7 +66,7 @@ export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" |
 export type HomePub = {
   trip?: Trip; car?: CarState | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null;
   pickup_battery?: number | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; charging?: Charging | null;
-  pickup_battery_at?: string | null; range_check?: RangeCheckData;
+  pickup_battery_at?: string | null; range_check?: RangeCheckData; car_connected_at?: string | null;
 };
 
 function platform(): "apple" | "android" | "other" {
@@ -249,7 +249,8 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
   const key: KeyInfo | null = demo === "key" ? { state: "ready", link: null, expires_at: null, unlock: false }
     : demo === "added" ? { state: "added" } : demo === "soon" ? { state: "soon", opens_at: pub.trip ? new Date(+new Date(pub.trip.starts_at) - 2 * 3600e3).toISOString() : undefined } : pub.key ?? null;
   const live = !!pub.controls && !demo;
-  const carConnected = key?.state === "added";
+  // "Set Up" done at the car (the car unlocked/moved by itself after the key was accepted), or 45 min into the trip.
+  const carConnected = !!pub.car_connected_at || (!!pub.trip && Date.now() > +new Date(pub.trip.starts_at) + 45 * 60e3);
   const spot = pub.spot ?? (demoCar ? { lat: home.lat, lon: home.lon, observed_at: new Date(Date.now() - 4 * 60e3).toISOString() } : null);
   const street = home.address.split(",")[0];
   const shadow = { textShadow: "0 2px 14px rgba(19,39,38,0.9), 0 1px 2px rgba(19,39,38,0.9)" };
