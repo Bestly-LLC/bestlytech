@@ -276,8 +276,8 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
       </Helmet>
 
       <div className="relative overflow-hidden">
-        <img data-fx-hero src="/wallet/home/hero-mcm-v5.svg" alt="" className="block h-52 w-full object-cover object-[60%_70%] will-change-transform sm:h-64" />
-        <div data-fx-title className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
+        <img data-fx-hero src="/wallet/home/hero-mcm-v5.svg" alt="" className="block w-full object-cover object-[60%_70%] will-change-transform" style={{ height: "calc(13rem + env(safe-area-inset-top))" }} />
+        <div data-fx-title className="absolute inset-x-0 top-0 px-5 sm:px-8" style={{ paddingTop: "calc(env(safe-area-inset-top) + 24px)" }}>
           <p className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: PEACH, ...shadow }}>{pub.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
           <h1 className="mt-1 text-[32px] leading-[1.05] sm:text-5xl" style={{ ...shadow, fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif", fontWeight: 700, color: "#F4EAD5" }}>Your Tesla in<br />West Hollywood</h1>
         </div>
