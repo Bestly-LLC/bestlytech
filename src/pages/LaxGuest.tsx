@@ -23,11 +23,12 @@ import { HomeGuide, VideoList, VideoPlayer } from "./lax/HomeGuide";
 import { ChargerLine, KeyNextSteps } from "./lax/KeyNext";
 import { laxPlace } from "./lax/places";
 import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
+import { ChargingCard, type Charging } from "./lax/Charging";
 import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPub, isDemo, useDemoStage } from "./lax/demo";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -352,7 +353,7 @@ export default function LaxGuest() {
 
             {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" /></div>}
 
-            {ended && pub.trip ? <TripDone trip={pub.trip} /> : <>
+            {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} /> : <>
             {/* Same key card as the home page: phone key, extra drivers, and what to do next (with Send to car). */}
             {key && key.state !== "off" && token && (
               <KeyCard k={key} trip={pub.trip} run={live ? carCommand : undefined} token={token} onAdded={() => void reload()}
@@ -429,6 +430,8 @@ export default function LaxGuest() {
                 <div className="mt-3 rounded-2xl bg-white/[0.06] p-4 text-white/80 ring-1 ring-white/10">Your host will text your QR code the day before your trip.</div>
               )}
             </Collapse>
+
+            {pub.charging && <ChargingCard charging={pub.charging} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery} />}
 
             {token && pub.trip && new Date(pub.trip.starts_at) > new Date() && (
               <div className="mt-6"><EmailCard token={token} email={pub.email ?? null} reminderAt={pub.reminder_at ?? null} sentAt={pub.reminder_sent_at ?? null} /></div>

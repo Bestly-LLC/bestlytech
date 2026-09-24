@@ -6,7 +6,7 @@
  * Reminders go out from support@bestly.tech (wallet-pass op remind_due, cron lax-guest-tick every 10 min).
  */
 import { useCallback, useEffect, useState } from "react";
-import { Activity, ExternalLink, House, KeyRound, Loader2, Mail, Plane, RotateCcw, Send } from "lucide-react";
+import { Activity, ExternalLink, House, KeyRound, Loader2, Mail, Plane, RotateCcw, Send, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
@@ -159,6 +159,36 @@ function LinkSentRow({ res }: { res: number }) {
     </div>
   );
 }
+type ChargeAdm = { total: number; idle: number; kwh: number; count: number; final: boolean; updated_at?: string | null; last_error?: string | null;
+  sessions: { at: string; place?: string | null; kwh?: number | null; cost?: number | null; idle?: number | null; final?: boolean }[] };
+/** Supercharging on this trip: TezLab estimate live, Tesla's billed amount after the trip. Copy line for Turo's reimbursement form. */
+function ChargingAdmin({ res, first }: { res: number; first: string | null }) {
+  const [c, setC] = useState<ChargeAdm | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => { const { data } = await rpc("trip_charges_admin", { p_reservation: res }); if (data) setC(data as ChargeAdm); }, [res]);
+  useEffect(() => { void load(); }, [load]);
+  if (!c) return null;
+  const money = (n?: number | null) => `$${(n ?? 0).toFixed(2)}`;
+  const copy = [`Supercharging during ${first ?? "the"} trip: ${money(c.total)} (${c.count} session${c.count === 1 ? "" : "s"}, ${c.kwh} kWh${c.idle > 0 ? `, incl. ${money(c.idle)} idle fees` : ""}).`,
+    ...c.sessions.map((s) => `- ${when(s.at)} ${s.place ?? "Supercharger"}: ${money((s.cost ?? 0) + (s.idle ?? 0))}${s.kwh ? ` (${s.kwh} kWh)` : ""}`),
+    c.final ? "Amounts are from Tesla's Supercharger billing." : "Amounts are estimates from the car's charging log."].join("\n");
+  const btn = "inline-flex h-7 items-center gap-1 rounded-full border border-white/15 px-2.5 text-[11px] text-white disabled:opacity-50 bento:border-neutral-200 bento:text-neutral-800";
+  const refresh = async () => { setBusy(true); const { error } = await rpc("trip_charges_refresh", { p_reservation: res }); if (error) toast.error(error.message); else { toast.success("Checking. Updates in about a minute."); window.setTimeout(() => { void load(); setBusy(false); }, 45000); return; } setBusy(false); };
+  return (
+    <div className="mt-3 rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-white/80 bento:bg-neutral-50 bento:text-neutral-700">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5"><Zap className="h-4 w-4 shrink-0" />Supercharging <b className="tabular-nums">{money(c.total)}</b>
+          <span className="text-xs text-white/50 bento:text-neutral-500">{c.count} stop{c.count === 1 ? "" : "s"} · {c.final ? "final from Tesla" : "estimate"}</span></span>
+        <span className="flex gap-1.5">
+          {c.count > 0 && <CopyButton text={copy} label="Copy for Turo" />}
+          <button type="button" className={btn} disabled={busy} onClick={() => void refresh()}>{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}Check now</button>
+        </span>
+      </div>
+      {c.last_error && <p className="mt-1 text-xs text-amber-300 bento:text-amber-700">Last check: {c.last_error.includes("Scope") ? "Tesla needs the charging permission. Reconnect Tesla in Settings to get final amounts." : c.last_error}</p>}
+    </div>
+  );
+}
+
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 
@@ -203,6 +233,7 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
             <a href={`/t/${r.token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white bento:text-neutral-500">Open <ExternalLink className="h-3.5 w-3.5" /></a>
           </div>
           <LinkSentRow res={r.reservation_id} />
+          {new Date(r.starts_at) <= new Date() && <ChargingAdmin res={r.reservation_id} first={r.first} />}
           <ActivityRow a={r.activity} />
           {home && <KeyRow r={r} reload={reload} />}
           {<><div className="mt-3 flex flex-wrap items-center gap-2">

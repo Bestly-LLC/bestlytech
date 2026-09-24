@@ -19,6 +19,8 @@ const DOMAIN = "www.bestly.tech";
 const REDIRECT = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/tesla-fleet/callback";
 const ADMIN = "https://www.bestly.tech/admin/turo/lax-pass";
 const SCOPES = "openid offline_access vehicle_device_data vehicle_cmds";
+// Guest sign-in (authorize) also asks for charging history, so trip pages can show billed Supercharger costs.
+const USER_SCOPES = `${SCOPES} vehicle_charging_cmds`;
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
 const cors = {
@@ -107,7 +109,7 @@ Deno.serve(async (req) => {
         catch (e) { await setErr(String(e).slice(0, 300)); return json({ error: String(e).slice(0, 300) }, 502); }
         const state = crypto.randomUUID().replace(/-/g, "");
         await sb.from("tesla_fleet_oauth").insert({ state });
-        const q = new URLSearchParams({ response_type: "code", client_id: s.client_id, redirect_uri: REDIRECT, scope: SCOPES, state,
+        const q = new URLSearchParams({ response_type: "code", client_id: s.client_id, redirect_uri: REDIRECT, scope: USER_SCOPES, state,
           prompt_missing_scopes: "true", require_requested_scopes: "true", show_keypair_step: "true", locale: "en-US" });
         return json({ url: `${AUTH}?${q}` });
       }

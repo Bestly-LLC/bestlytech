@@ -7,6 +7,7 @@ import { CheckCircle2, ExternalLink, KeyRound, Camera } from "lucide-react";
 import { fmtWhen, type Trip } from "./GuestExtras";
 import { TURO_TRIPS } from "./places";
 import { track } from "./track";
+import { ChargingCard, type Charging } from "./Charging";
 
 const ACCENT = "var(--trip-accent)";
 
@@ -20,16 +21,19 @@ export function OpenTuro({ label = "Open the Turo app", className = "", primary 
   );
 }
 
-export function TripDone({ trip, titleFont }: { trip: Trip; titleFont?: string }) {
+export function TripDone({ trip, titleFont, charging }: { trip: Trip; titleFont?: string; charging?: Charging | null }) {
   const rows = [
     { icon: Camera, title: "Return photos", body: "If you haven't yet, add your return photos in the Turo app. They protect you." },
     { icon: KeyRound, title: "Your key is off", body: "Tesla access turned off by itself. Nothing to hand back." },
-    { icon: CheckCircle2, title: "Charging and extras", body: "Any Supercharger costs from your trip come through Turo as a reimbursement request." },
+    { icon: CheckCircle2, title: "Charging and extras", body: charging && charging.count > 0
+      ? `Your Supercharging (${charging.final ? "" : "about "}$${charging.total.toFixed(2)}) comes through Turo as a reimbursement request.`
+      : "Any Supercharger costs from your trip come through Turo as a reimbursement request." },
   ];
   return (
     <section aria-label="Trip complete" className="mt-5 rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Trip complete · {fmtWhen(trip.ends_at)}</p>
       <h2 className="mt-1 text-[22px] font-bold leading-snug text-white" style={{ fontFamily: titleFont }}>Thanks for driving with us{trip.first ? `, ${trip.first}` : ""}.</h2>
+      {charging && <div className="mt-4 rounded-2xl bg-white/[0.05] p-3.5 ring-1 ring-white/10"><ChargingCard charging={charging} ended embedded titleFont={titleFont} /></div>}
       <ol className="mt-3 divide-y divide-white/10">
         {rows.map((r) => (
           <li key={r.title} className="flex items-start gap-3 py-3">

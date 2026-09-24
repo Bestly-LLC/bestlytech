@@ -22,6 +22,7 @@ import { Collapse } from "./Collapse";
 import { ChargerLine, KeyNextSteps, KeyPending, keyTapped, markKeyTapped, useKeyWatch } from "./KeyNext";
 import { homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
+import { ChargingCard, type Charging } from "./Charging";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -55,7 +56,7 @@ export type HomeInfo = { address: string; lat: number; lon: number; parking_note
 export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" | "problem" | "off"; opens_at?: string; link?: string | null; expires_at?: string | null; unlock?: boolean };
 export type HomePub = {
   trip?: Trip; car?: CarState | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null;
-  pickup_battery?: number | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null;
+  pickup_battery?: number | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; charging?: Charging | null;
 };
 
 function platform(): "apple" | "android" | "other" {
@@ -243,7 +244,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
 
         {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" /></div>}
 
-        {ended && pub.trip ? <TripDone trip={pub.trip} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" /> : <>
+        {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" /> : <>
         {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} token={token} onAdded={() => reload?.()}
           next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} place={homePlace(home.address)} kind="home" maps={mapsFor(home.address)} run={live ? run : undefined}
             go={(w) => { if (w === "return" || w === "pickup") openSheet(w); else { if (w === "before") window.dispatchEvent(new Event("open-before")); document.getElementById(w)?.scrollIntoView({ behavior: "smooth", block: "start" }); } }} /> : null} />}
@@ -277,6 +278,8 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
             <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? run : undefined} hint={live ? "Good at night" : " "} />
           </div>
         </section>
+
+        {pub.charging && <ChargingCard charging={pub.charging} battery={car?.battery} pickupBattery={pub.pickup_battery} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" />}
 
         {pub.trip && new Date(pub.trip.starts_at) > new Date() && (
           <div className="mt-6"><EmailCard token={token} email={pub.email ?? null} reminderAt={pub.reminder_at ?? null} sentAt={pub.reminder_sent_at ?? null} home /></div>

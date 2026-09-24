@@ -32,6 +32,17 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
 const H = 3600e3;
 const iso = (ms: number) => new Date(ms).toISOString();
 
+/** Two sample Supercharger stops (the real numbers come from TezLab during the trip, then Tesla's bill). */
+function demoCharging(start: number, ended: boolean) {
+  const sessions = [
+    { at: iso(start + 26 * H), place: "Los Angeles, CA - Venice Boulevard", kwh: 14.5, from: 42, to: 77, cost: 7.19, idle: 0, final: ended },
+    { at: iso(start + 51 * H), place: "Santa Monica, CA", kwh: 15.3, from: 42, to: 80, cost: 8.19, idle: ended ? 1.0 : 0, final: ended },
+  ].filter((x) => +new Date(x.at) < Date.now());
+  const total = sessions.reduce((a, x) => a + x.cost + x.idle, 0);
+  return { sessions, total: Math.round(total * 100) / 100, idle: ended ? 1 : 0, kwh: Math.round(sessions.reduce((a, x) => a + x.kwh, 0) * 10) / 10,
+    count: sessions.length, final: ended, updated_at: iso(Date.now() - 12 * 60e3) };
+}
+
 /** A fake lax_guest_public() answer for the chosen stage. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function demoPub(kind: "home" | "lax", stage: string): any {
@@ -48,6 +59,7 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
   const base = {
     ok: true, kind, trip, car: { ...DEMO_CAR, observed_at: iso(now - 3 * 60e3) }, controls: controls_state === "on", controls_state,
     controls_opens_at: iso(s - H), email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: 80, demo: true,
+    charging: now < s ? null : demoCharging(s, now >= e),
   };
   if (kind === "home") {
     return {
