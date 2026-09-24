@@ -1,14 +1,15 @@
 /**
  * "Put this trip on your Home Screen" toast for the trip pages.
  *  - iPhone/iPad Safari: can't install from a button, so we show how, with an arrow bouncing toward
- *    Safari's menu (bottom-right on iPhone, top-right on iPad): ••• / Share → "Add to Home Screen".
+ *    Safari's page menu (the puzzle-piece button left of the address; bottom bar on iPhone, top on iPad):
+ *    page menu → Share → "Add to Home Screen". Older Safari: the Share button.
  *    Shows our real icon so they know what they'll get, and why: trip alerts (key ready, return time).
  *  - Android Chrome: the real "Install" button (beforeinstallprompt).
  *  - Already on the Home Screen: a one-tap "Turn on trip alerts" card instead (push needs a tap).
  * Shows once after a short delay; "Not now" hides it for 3 days. Never in the demo's first seconds of a stage switch.
  */
 import { useEffect, useState } from "react";
-import { BellRing, MoreHorizontal, Plus, Share, X } from "lucide-react";
+import { BellRing, Plus, Puzzle, Share, X } from "lucide-react";
 import { track } from "./track";
 import { enableTripPush, refreshTripPush, tripPushState } from "./tripPush";
 
@@ -67,7 +68,7 @@ export function InstallToast({ token, kind }: { token: string; kind: "home" | "l
     <>
       {/* iPhone: arrow bouncing at Safari's ••• button (bottom right). iPad: top right. */}
       {mode === "ios" && (
-        <div aria-hidden className={`pointer-events-none fixed z-[61] ${isIPad() ? "right-4 top-2" : "bottom-1 right-5"}`} style={isIPad() ? {} : { paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div aria-hidden className="pointer-events-none fixed z-[61]" style={isIPad() ? { top: 4, left: "34%" } : { bottom: 2, left: "calc(24% - 20px)", paddingBottom: "env(safe-area-inset-bottom)" }}>
           <svg viewBox="0 0 40 56" className={`h-14 w-10 ${isIPad() ? "rotate-180" : ""} trip-a2hs-arrow`} style={{ color: "#fff", filter: "drop-shadow(0 0 8px var(--trip-accent))" }}>
             <path d="M20 4 V44 M8 32 L20 46 L32 32" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -88,12 +89,12 @@ export function InstallToast({ token, kind }: { token: string; kind: "home" | "l
           </div>
           {mode === "ios" && (
             <ol className="mt-3 grid grid-cols-3 gap-2 text-center text-[12px] leading-tight text-white/85">
-              <li className="rounded-2xl bg-white/10 px-1.5 py-2.5"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><MoreHorizontal className="h-4 w-4" /></span>1. Tap <b className="text-white">•••</b> {isIPad() ? "up top" : "below"}</li>
+              <li className="rounded-2xl bg-white/10 px-1.5 py-2.5"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><Puzzle className="h-4 w-4" /></span>1. Tap the <b className="text-white">puzzle piece</b> next to bestly.tech</li>
               <li className="rounded-2xl bg-white/10 px-1.5 py-2.5"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><Share className="h-4 w-4" /></span>2. Tap <b className="text-white">Share</b></li>
-              <li className="rounded-2xl bg-white/10 px-1.5 py-2.5"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><Plus className="h-4 w-4" /></span>3. <b className="text-white">Add to Home Screen</b></li>
+              <li className="rounded-2xl bg-white/10 px-1.5 py-2.5"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><Plus className="h-4 w-4" /></span>3. <b className="text-white">Add to Home Screen</b> (scroll down if needed)</li>
             </ol>
           )}
-          {mode === "ios" && <p className="mt-2 text-center text-[12px] text-white/60">Don't see •••? Tap the Share button <Share className="inline h-3 w-3" /> in Safari's toolbar.</p>}
+          {mode === "ios" && <p className="mt-2 text-center text-[12px] text-white/60">No puzzle piece? Tap the Share button <Share className="inline h-3 w-3" /> in Safari's toolbar instead.</p>}
           {mode === "android" && bip && (
             <button type="button" onClick={async () => { await bip.prompt(); const c = await bip.userChoice; track(token, "a2hs_android", { outcome: c.outcome }); setShow(false); }}
               className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#1A1140]" style={{ background: ACCENT }}>
