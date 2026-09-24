@@ -1,10 +1,14 @@
 // todo-check: "Check if it's done" for Scout to-dos (scout_daily kind pick / call).
 // Plan: docs/todo-check-opusplan.md. Migration: 20260923200000_todo_check.sql
 //
-//   op check   {id, force?}   one to-do (the button). Admin JWT.
-//   op sweep                  every open to-do, closes the sure ones (the "Check all" menu item). Admin JWT.
-//   op tick                   hourly cron; runs the nightly pass at 10 PM Los Angeles, once a day.
+//   op check   {id}           queue one to-do (the button). Admin JWT. Returns at once.
+//   op sweep                  queue every open to-do; closes the sure ones ("Check them all"). Admin JWT.
+//   op drain                  work the queue in the background (todo_check_drain cron, every minute).
+//   op tick                   hourly cron; queues the nightly pass at 10 PM Los Angeles, once a day.
 //   op nightly {force?}       the nightly pass (the watchdog calls this with force when tick missed).
+//
+// v2: everything goes through todo_check_jobs so a check finishes even if Jared closes the page;
+// the page reads progress from todo_check_runs / todo_check_jobs, and a finished run sends a notification.
 //   op learn   {check_id}     after a thumbs down / put back: write a lesson Scout reads next time.
 //   op learn_backlog          retry lessons that failed to write (watchdog).
 //
@@ -317,40 +321,86 @@ async function check(id: string, trigger: "button" | "sweep" | "nightly", allowC
   return { todo: { id, title: todo.title }, ...checkDoc, searched };
 }
 
-/* ───────── many at once ───────── */
+/* ───────── the queue: checks keep going after Jared leaves the page ───────── */
 
-async function sweep(trigger: "sweep" | "nightly") {
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
+const background = (p: Promise<unknown>) => {
+  const safe = p.catch((e) => console.error("todo-check background:", (e as Error).message));
+  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(safe);
+};
+
+async function openTodos(skipRecent: boolean) {
   const since = new Date(Date.now() - 21 * 864e5).toISOString();
-  const { data } = await db.from("scout_daily").select("id, title, action").in("kind", ["pick", "call"]).eq("status", "open")
-    .gte("created_at", since).order("created_at", { ascending: false }).limit(30);
-  const todos = ((data ?? []) as any[]).filter((t) => {
-    // don't recheck something checked in the last 12 hours unless it's the button
+  const { data } = await db.from("scout_daily").select("id, action").in("kind", ["pick", "call"]).eq("status", "open")
+    .gte("created_at", since).order("created_at", { ascending: false }).limit(40);
+  return ((data ?? []) as any[]).filter((t) => {
     const at = t.action?.check?.at ? Date.parse(t.action.check.at) : 0;
-    return trigger === "sweep" || Date.now() - at > 12 * 3600e3;
-  });
-  const results: any[] = [];
-  const queue = [...todos];
-  const worker = async () => {
-    for (let t = queue.shift(); t; t = queue.shift()) {
-      try { results.push(await check(t.id, trigger, true)); }
-      catch (e) { results.push({ todo: { id: t.id, title: t.title }, error: (e as Error).message }); }
-    }
-  };
-  await Promise.all([worker(), worker(), worker()]);
-  const closed = results.filter((r) => r.auto_closed);
-  if (closed.length) {
-    await db.rpc("scout_notify", {
-      p_title: `Scout closed ${closed.length} to-do${closed.length === 1 ? "" : "s"} it found proof for`,
-      p_body: closed.map((c) => `- ${c.todo.title}: ${c.summary}`).join("\n").slice(0, 480) + "\nWrong? Tap Put back on the home page.",
-      p_severity: "info", p_push: false, p_url: "/admin", p_dedupe: `todo-check.closed.${trigger}.${new Date().toISOString().slice(0, 13)}`,
-    });
+    return !skipRecent || Date.now() - at > 12 * 3600e3; // nightly skips what was checked today
+  }).map((t) => String(t.id));
+}
+
+async function enqueue(ids: string[], trigger: "button" | "sweep" | "nightly", allowClose: boolean, by: string | null) {
+  if (!ids.length) return { run_id: null, total: 0 };
+  // a to-do already waiting keeps its place (unique live job per to-do)
+  const { data: live } = await db.from("todo_check_jobs").select("todo_id").in("todo_id", ids).in("status", ["queued", "running"]);
+  const busy = new Set(((live ?? []) as any[]).map((r) => r.todo_id));
+  const fresh = ids.filter((i) => !busy.has(i));
+  if (!fresh.length) return { run_id: null, total: 0, already: ids.length };
+  const { data: run, error } = await db.from("todo_check_runs").insert({ trigger, total: fresh.length, started_by: by }).select("id").single();
+  if (error) throw new Error(error.message);
+  const { error: jErr } = await db.from("todo_check_jobs").insert(fresh.map((todo_id) => ({ run_id: run.id, todo_id, trigger, allow_close: allowClose })));
+  if (jErr) {
+    await db.from("todo_check_runs").delete().eq("id", run.id);
+    throw new Error(jErr.message);
   }
-  return {
-    checked: results.length, closed: closed.length,
-    done: results.filter((r) => r.verdict === "done").length,
-    errors: results.filter((r) => r.error).length,
-    results: results.map((r) => ({ title: r.todo?.title, verdict: r.verdict, confidence: r.confidence, auto_closed: r.auto_closed, summary: r.summary, error: r.error })),
-  };
+  return { run_id: run.id as string, total: fresh.length, already: ids.length - fresh.length };
+}
+
+async function notifyRun(r: any) {
+  const { data: jobs } = await db.from("todo_check_jobs").select("result, todo:scout_daily(title)").eq("run_id", r.id);
+  const rows = ((jobs ?? []) as any[]).filter((j) => j.result);
+  const closed = rows.filter((j) => j.result.auto_closed);
+  const done = rows.filter((j) => j.result.verdict === "done" && !j.result.auto_closed);
+  const title = r.total === 1 && rows[0]
+    ? `Checked: ${rows[0].todo?.title ?? "your to-do"}`
+    : `Scout checked ${r.total} to-do${r.total === 1 ? "" : "s"}`;
+  const label: Record<string, string> = { done: "Looks done", partly: "Partly done", not_done: "Not yet", unknown: "Can't tell" };
+  const body = r.total === 1 && rows[0]
+    ? `${label[rows[0].result.verdict] ?? "Checked"}: ${rows[0].result.summary ?? ""}`
+    : [
+        closed.length ? `Closed ${closed.length}: ${closed.map((c) => c.todo?.title).join("; ")}` : "",
+        done.length ? `${done.length} look done, tap Mark done: ${done.map((c) => c.todo?.title).join("; ")}` : "",
+        !closed.length && !done.length ? "Nothing new looks done." : "",
+        r.errors ? `${r.errors} couldn't be checked; Scout will retry tonight.` : "",
+        closed.length ? "Wrong? Tap Put back." : "",
+      ].filter(Boolean).join("\n");
+  // nightly with nothing to report stays quiet
+  if (r.trigger === "nightly" && !closed.length && !done.length) return;
+  await db.rpc("scout_notify", {
+    p_title: title.slice(0, 200), p_body: body.slice(0, 480), p_severity: "info", p_push: false,
+    p_url: "/admin", p_dedupe: `todo-check.run.${r.id}`,
+  });
+}
+
+// Work the queue until the time budget runs out; todo_check_drain() (every minute) picks up the rest.
+async function drain(budgetMs = 120_000) {
+  const stop = Date.now() + budgetMs;
+  let n = 0;
+  while (Date.now() < stop - 25_000) {
+    const { data: jobs, error } = await db.rpc("todo_check_claim", { p_n: 3 });
+    if (error) throw new Error(error.message);
+    const list = (jobs ?? []) as any[];
+    if (!list.length) break;
+    await Promise.all(list.map(async (j) => {
+      let res: any = null, err: string | null = null;
+      try { res = await check(j.todo_id, j.trigger, j.allow_close); } catch (e) { err = (e as Error).message; }
+      const slim = res ? { verdict: res.verdict, confidence: res.confidence, summary: res.summary, auto_closed: res.auto_closed, check_id: res.id } : null;
+      const { data: finishedRun } = await db.rpc("todo_check_job_done", { p_job: j.id, p_ok: !!res, p_result: slim, p_error: err });
+      if (finishedRun) await notifyRun(finishedRun).catch(() => {});
+      n++;
+    }));
+  }
+  return n;
 }
 
 /* ───────── learning from a thumbs down ───────── */
@@ -415,36 +465,44 @@ Deno.serve(async (req) => {
   try {
     switch (body.op) {
       case "check": {
+        // one to-do: queued, so it finishes even if the page closes
         if (!body.id) return J({ ok: false, error: "id required" }, 400);
-        if (!body.force) {
-          const { data: t } = await db.from("scout_daily").select("action").eq("id", body.id).maybeSingle();
-          const c = (t as any)?.action?.check;
-          if (c?.at && Date.now() - Date.parse(c.at) < 30 * 60e3) return J({ ok: true, cached: true, ...c });
-        }
         if (!service) {
           const { data: gate } = await db.rpc("ai_gate", { p_fn: "todo-check", p_who: `user:${admin}` });
           if ((gate as any)?.ok === false) return J({ ok: false, error: `paused: ${(gate as any)?.reason ?? "limit"} (resets at midnight Pacific)` }, 429);
         }
-        return J({ ok: true, ...(await check(String(body.id), "button", false)) });
+        const q = await enqueue([String(body.id)], "button", false, admin);
+        background(drain());
+        return J({ ok: true, queued: true, ...q });
       }
-      case "sweep":
-        return J({ ok: true, ...(await sweep("sweep")) });
+      case "sweep": {
+        const q = await enqueue(await openTodos(false), "sweep", true, admin);
+        background(drain());
+        return J({ ok: true, queued: true, ...q });
+      }
+      case "drain": {
+        if (!service) return J({ ok: false, error: "service only" }, 403);
+        background(drain());
+        return J({ ok: true, draining: true });
+      }
       case "tick": {
         const { day, hour } = laNow();
         if (hour !== 22) return J({ ok: true, hour, ran: null });
         const { error } = await db.from("scout_daily_runs").insert({ day, job: "todo-check" });
         if (error) return J({ ok: true, hour, ran: "already ran today" });
-        const res = await sweep("nightly");
-        await db.from("scout_daily_runs").update({ result: { checked: res.checked, closed: res.closed, errors: res.errors } }).eq("day", day).eq("job", "todo-check");
-        return J({ ok: true, hour, ran: res });
+        const q = await enqueue(await openTodos(true), "nightly", true, null);
+        await db.from("scout_daily_runs").update({ result: q }).eq("day", day).eq("job", "todo-check");
+        background(drain());
+        return J({ ok: true, hour, ran: q });
       }
       case "nightly": {
         if (!service) return J({ ok: false, error: "service only" }, 403);
         const { day } = laNow();
         await db.from("scout_daily_runs").upsert({ day, job: "todo-check", ran_at: new Date().toISOString() });
-        const res = await sweep("nightly");
-        await db.from("scout_daily_runs").update({ result: { checked: res.checked, closed: res.closed, errors: res.errors, healed: !!body.force } }).eq("day", day).eq("job", "todo-check");
-        return J({ ok: true, ...res });
+        const q = await enqueue(await openTodos(true), "nightly", true, null);
+        await db.from("scout_daily_runs").update({ result: { ...q, healed: !!body.force } }).eq("day", day).eq("job", "todo-check");
+        background(drain());
+        return J({ ok: true, ...q });
       }
       case "learn":
         return J(await learn(String(body.check_id)));

@@ -113,3 +113,23 @@ Every source has a 4-second timeout. If a source fails, it's listed as "not sear
 - **Toggle**: the ⋯ menu on "Scout's picks" → "Check which to-dos are done" (sweep) and the auto-close on/off switch.
 - **Judge model**: Haiku under `ai_budget('background')` via a local `llm()` with the same signature as the planned `_shared/free-llm.ts`. Swap when that lands.
 - **Gaps**: only INBOX mail is synced (no Sent folder yet), so "I emailed X" to-dos rely on their reply. iMessage waits on Full Disk Access.
+
+## v2 (2026-09-23 evening): up top, and it keeps going when you leave
+
+- **Where**: the "Your to-dos from calls" card at the top of /admin (`CommandHero.tsx`) now opens with the check panel:
+  "Did any of these get done?" + **Check them all**, a live progress bar ("Checking 5 of 12…"), the last run's result,
+  and the **Close them for me** switch. Every to-do has a **Check** button; results sit on their own line under it.
+  "Closed by Scout" with **Put back** lives in the same card. Shared code: `src/components/admin/todoCheck.tsx`.
+- **Leave the page**: every check is a row in `todo_check_jobs` under a `todo_check_runs` row
+  (migration `20260923210000_todo_check_queue.sql`). `todo-check` v2 queues and returns at once, works the queue in
+  the background (`EdgeRuntime.waitUntil`), and `todo_check_drain()` (cron every minute) requeues stuck jobs (3 tries)
+  and wakes the worker if anything is left. A finished run sends a Scout notification (web push; nightly stays quiet
+  unless something looks done). The page polls every 3s while work is running, 30s otherwise, and on tab focus.
+
+## What's next (in order)
+
+1. **Free models**: swap `llm()` for `_shared/free-llm.ts` when the Scout free-LLM chat ships it (one import).
+2. **Sent mail**: sync the Sent folders into `bestly_mail`, so "I emailed X" to-dos prove themselves without a reply.
+3. **iMessage** (phase 3): needs Full Disk Access for python3 on the Mac mini (Jared, one toggle), then a fixed read-only chat.db job.
+4. **Partners**: the same check on Eli's portal for his to-dos (check only, never auto-close someone else's).
+5. **Scout does it**: when a check says "Not yet", offer the one next step as a button (draft the email, open the card).
