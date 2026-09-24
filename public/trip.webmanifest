@@ -1,0 +1,13 @@
+{
+  "name": "Turo Trip",
+  "short_name": "Turo Trip",
+  "description": "Your Turo Tesla: phone key, car buttons, return steps and trip alerts.",
+  "scope": "/t/",
+  "display": "standalone",
+  "background_color": "#132726",
+  "theme_color": "#132726",
+  "icons": [
+    { "src": "/wallet/home/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/wallet/home/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -16,6 +16,11 @@
     <link id="ic" rel="icon" type="image/png" sizes="180x180" href="/wallet/home/apple-touch-icon.png" />
     <link id="ati" rel="apple-touch-icon" sizes="180x180" href="/wallet/home/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-title" content="Turo Trip" />
+    <!-- Home Screen app: no start_url, so it opens the guest's own trip link it was added from. Needed for iPhone trip alerts. -->
+    <link rel="manifest" href="/trip.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Your Turo trip" />

@@ -23,6 +23,8 @@ import { HomeGuide, VideoList, VideoPlayer } from "./lax/HomeGuide";
 import { ChargerLine, SendToCar, useKeyWatch } from "./lax/KeyNext";
 import { KeySteps, NextStep, ProfileTip, guideFor, useHasApp } from "./lax/Guide";
 import { Carousel, TripSlides } from "./lax/Carousel";
+import { ReturnChecklist } from "./lax/ReturnChecklist";
+import { InstallToast } from "./lax/InstallToast";
 import { Fold } from "./lax/HomeGuide";
 import ExtraDrivers from "./lax/ExtraDrivers";
 import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
@@ -544,6 +546,7 @@ export default function LaxGuest() {
             
             </TripSheet>
             <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Drop the car → catch your flight" title="Return: car → shuttle → LAX">
+              {token && <div className="mb-5"><ReturnChecklist token={token} kind="lax" run={live ? carCommand : undefined} demo={demo} /></div>}
 
               <p className="text-[15px] leading-relaxed text-white/75">
                 Reverse of the morning. The two things to watch: <b className="text-white">which entrance you use</b>, and <b className="text-white">which address you drive to</b>. Get those right and you're done.
@@ -593,6 +596,7 @@ export default function LaxGuest() {
             {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} />}
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
             {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
+            {token && !ended && <InstallToast token={token} kind="lax" />}
             <VideoPlayer />
             <ScrollFx />
 

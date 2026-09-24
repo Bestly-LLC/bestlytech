@@ -23,6 +23,8 @@ import { Collapse } from "./Collapse";
 import { ChargerLine, KeyPending, SendToCar, keyTapped, markKeyTapped, useKeyWatch } from "./KeyNext";
 import { KeySteps, NextStep, ProfileTip, guideFor, useHasApp } from "./Guide";
 import { Carousel, TripSlides } from "./Carousel";
+import { ReturnChecklist } from "./ReturnChecklist";
+import { InstallToast } from "./InstallToast";
 import { Fold } from "./HomeGuide";
 import { homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
@@ -55,7 +57,7 @@ function DecoRule({ className = "" }: { className?: string }) {
   );
 }
 
-export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock" | "nav_charger" | "nav_charger_lax" | "nav_garage_lax" | "nav_home";
+export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock" | "nav_charger" | "nav_charger_lax" | "nav_garage_lax" | "nav_home" | "lock" | "windows_close";
 export type HomeInfo = { address: string; lat: number; lon: number; parking_note?: string | null; return_note?: string | null; host_note?: string | null };
 export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" | "problem" | "off"; opens_at?: string; link?: string | null; expires_at?: string | null; unlock?: boolean };
 export type HomePub = {
@@ -357,7 +359,9 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
         </TripSheet>
 
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
-          <Carousel id="home-return" labels={["Charge", "Park", "Photos + lock"]}>
+          <ReturnChecklist token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} />
+          <p className="mt-6 text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>The steps</p>
+          <Carousel id="home-return" className="mt-3" labels={["Charge", "Park", "Photos + lock"]}>
             <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"}.<BatteryReturn className="mt-3" target={pub.pickup_battery} now={car?.battery} observedAt={car?.observed_at} /><span className="mt-3 block"><ChargerLine kind="home" /></span><SendToCar run={live ? run : undefined} kind="home" /></Step>
             <Step n={2}><b className="text-white">Park on N Kings Rd</b> near the building. <b className="text-white">Avoid the Joybird street parking.</b> Watch for <b className="text-white">street sweeping on Mondays and Tuesdays</b>: west side Monday 8–10 AM, east side Tuesday 8–10 AM ($75 tickets).<span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span></Step>
             <Step n={3}><b className="text-white">Return photos</b> in the Turo app, grab your stuff, lock it in the Tesla app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
@@ -368,6 +372,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
         <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended}
           glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
         {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
+        {!ended && <InstallToast token={token} kind="home" />}
         <VideoPlayer />
         <ScrollFx />
         <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home />

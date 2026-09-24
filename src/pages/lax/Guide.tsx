@@ -46,7 +46,7 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
   if (now >= s + 45 * 60e3) {
     if (now >= e - 3 * H) {
       glow.add("return"); glow.add("next");
-      return { next: { icon: Undo2, title: "Time to head back", sub: `Return by ${fmtWhen(trip.ends_at)}.${pickupBattery != null ? ` Charge it to ${pickupBattery}%+ first${car?.battery != null ? ` (now ${car.battery}%)` : ""}.` : " Charge it back up first."}`, action: "return", label: "Return steps" }, glow };
+      return { next: { icon: Undo2, title: "Time to head back", sub: `Return by ${fmtWhen(trip.ends_at)}.${pickupBattery != null ? ` Charge it to ${pickupBattery}%+ first${car?.battery != null ? ` (now ${car.battery}%)` : ""}.` : " Charge it back up first."}`, action: "return", label: "Return checklist" }, glow };
     }
     const bat = car?.battery, goal = pickupBattery;
     const sub = goal != null ? `Bring it back at ${goal}%+.${bat != null ? ` It's at ${bat}% now.` : ""}` : "Bring it back with the charge you picked it up with.";

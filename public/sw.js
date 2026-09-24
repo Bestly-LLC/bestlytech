@@ -20,8 +20,8 @@ self.addEventListener("push", (event) => {
   const critical = data.severity === "critical";
   const options = {
     body: data.body || "",
-    icon: "/admin-icon-192.png",
-    badge: "/admin-icon-192.png",
+    icon: data.icon || "/admin-icon-192.png", // trip-push sends the trip's own icon for guests
+    badge: data.icon || "/admin-icon-192.png",
     tag: data.tag || undefined,
     renotify: !!data.tag,
     requireInteraction: critical,
