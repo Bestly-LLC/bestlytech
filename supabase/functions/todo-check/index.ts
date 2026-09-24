@@ -7,6 +7,9 @@
 //   op tick                   hourly cron; queues the nightly pass at 10 PM Los Angeles, once a day.
 //   op nightly {force?}       the nightly pass (the watchdog calls this with force when tick missed).
 //
+// v5 (2026-09-23): $0. The judge and the lesson writer use the shared helper _shared/free-llm.ts:
+//   Groq -> Cloudflare Workers AI -> Mac mini, all no-training, paid never. Haiku is no longer called.
+//   If every free rung fails, the check is a no-AI read (same as before). Rollback: redeploy v4.
 // v4: Sent mail is evidence (todo_evidence_sent: bestly_sent_mail + partner_mail); partners can check their own to-dos.
 // v3: obeys the Paid AI switch. Off = free AI only (Mac mini); asleep = no-AI read, never paid.
 // v2: everything goes through todo_check_jobs so a check finishes even if Jared closes the page;
@@ -26,6 +29,7 @@
 // and failed lessons. Nothing here sends anything to anyone.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { llm as sharedLlm, LlmUnavailable, type LlmTask } from "../_shared/free-llm.ts";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const SECRETS: string[] = (() => {
@@ -130,8 +134,19 @@ async function macLlm(o: LlmReq): Promise<LlmOut> {
 }
 
 async function llm(o: LlmReq): Promise<LlmOut> {
-  if (!(await paidAllowed())) return macLlm(o);
-  return haiku(o);
+  // v5: free only, through the shared helper. "learn" isn't a helper task; it's a short summarize job.
+  const task: LlmTask = o.task === "judge" ? "judge" : "summarize";
+  try {
+    const r = await sharedLlm({
+      task, system: o.system, user: o.user, json: o.json, job: o.job, ref: o.ref, fn: "todo-check", scope: "background",
+      paid: "never", maxTokens: Math.max(o.maxTokens * 3, 1500), // free reasoning models think before answering
+      deadlineMs: 60_000,
+    });
+    return { text: r.text, json: r.json, model: `${r.provider}:${r.model}`, provider: r.provider, cost_usd: r.cost_usd };
+  } catch (e) {
+    if (e instanceof LlmUnavailable) throw new FreeOffline(`free AI unavailable: ${e.tried.map((t) => `${t.provider} ${t.outcome}`).join(", ")}`);
+    throw e;
+  }
 }
 
 async function haiku(o: LlmReq): Promise<LlmOut> {
@@ -328,7 +343,7 @@ async function check(id: string, trigger: "button" | "sweep" | "nightly", allowC
       'Return JSON only: {"verdict":"done|partly|not_done|unknown","confidence":0-1,"evidence_ids":["..."],"summary":"one plain sentence","remaining":"what is left, or empty","next_step":"the one next action, or empty"}',
     ].filter(Boolean).join("\n");
     // the free Mac model has a small context window: fewer, shorter snippets when it's the judge
-    const paid = await paidAllowed();
+    const paid = true; // v5: Groq/Cloudflare have room for the full evidence (was: paid AI only)
     const user = JSON.stringify({
       todo: { title: todo.title, detail: todo.why, owner: todo.action?.owner ?? "Jared", due: todo.action?.due ?? null, created: time12(todo.created_at) },
       jared_said_before: ((past ?? []) as any[]).map((p) => ({ verdict_was: p.verdict, he_said: p.feedback, note: p.feedback_note })),
@@ -354,7 +369,7 @@ async function check(id: string, trigger: "button" | "sweep" | "nightly", allowC
     if (deck) { verdict = "done"; confidence = 0.7; cited = [deck.id]; summary = "The Deck card was moved to Done."; }
     else { verdict = "unknown"; summary = items.length ? "Found some related things but could not judge them." : "Nothing found about this yet."; cited = items.slice(0, 4).map((i) => i.id); }
     if (err) summary += " (Judge unavailable, so this is a no-AI read.)";
-    else if (offline) summary += " (Paid AI is off and the free AI on the Mac mini isn't answering, so this is a no-AI read. Scout tries again tonight.)";
+    else if (offline) summary += " (The free AI isn't answering right now, so this is a no-AI read. Scout tries again tonight.)";
     model = "no-ai";
   }
 
@@ -450,9 +465,9 @@ async function notifyRun(r: any) {
 // Work the queue until the time budget runs out; todo_check_drain() (every minute) picks up the rest.
 async function drain(budgetMs = 140_000) {
   const stop = Date.now() + budgetMs;
-  const paid = await paidAllowed();
+  const paid = true; // v5: free Groq answers in ~1 s; the Mac mini is only the last rung
   // the Mac mini answers one at a time and can take ~30-90s, so leave room for a whole job
-  const margin = paid ? 25_000 : 105_000;
+  const margin = paid ? 65_000 : 105_000;
   let n = 0;
   while (Date.now() < stop - margin) {
     const { data: jobs, error } = await db.rpc("todo_check_claim", { p_n: paid ? 3 : 1 });
