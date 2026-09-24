@@ -4,6 +4,21 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
+// Stripe secrets (2026-09-24): Vault first (stripe_secret_key / stripe_webhook_secret via the
+// service-only stripe_secret RPC), then the env var. Env secrets can't be set from Bestly's tooling;
+// Vault can, through the clipboard intake slot, so the key never enters a chat.
+async function stripeSecret(vaultName: string, envName: string): Promise<string | undefined> {
+  try {
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/stripe_secret`, {
+      method: "POST",
+      headers: { apikey: SB_SECRET, ...(SB_SECRET.startsWith("sb_") ? {} : { Authorization: `Bearer ${SB_SECRET}` }), "Content-Type": "application/json" },
+      body: JSON.stringify({ p_name: vaultName }),
+    });
+    if (r.ok) { const v = await r.json(); if (typeof v === "string" && v) return v; }
+  } catch (_) { /* fall back to env */ }
+  return Deno.env.get(envName) || undefined;
+}
+
 /**
  * Generate a Stripe Payment Link for a deal's deposit.
  * Auth: admin role required (uses service role behind admin-auth gate).
@@ -50,7 +65,7 @@ function bad(reason: string, status = 400) {
 }
 
 async function stripeForm(path: string, params: Record<string, string>) {
-  const key = Deno.env.get("STRIPE_SECRET_KEY");
+  const key = await stripeSecret("stripe_secret_key", "STRIPE_SECRET_KEY");
   if (!key) throw new Error("STRIPE_SECRET_KEY not configured");
   const body = new URLSearchParams(params);
   const r = await fetch(`https://api.stripe.com/v1${path}`, {

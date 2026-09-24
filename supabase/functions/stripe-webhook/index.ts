@@ -5,6 +5,21 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
+// Stripe secrets (2026-09-24): Vault first (stripe_secret_key / stripe_webhook_secret via the
+// service-only stripe_secret RPC), then the env var. Env secrets can't be set from Bestly's tooling;
+// Vault can, through the clipboard intake slot, so the key never enters a chat.
+async function stripeSecret(vaultName: string, envName: string): Promise<string | undefined> {
+  try {
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/stripe_secret`, {
+      method: "POST",
+      headers: { apikey: SB_SECRET, ...(SB_SECRET.startsWith("sb_") ? {} : { Authorization: `Bearer ${SB_SECRET}` }), "Content-Type": "application/json" },
+      body: JSON.stringify({ p_name: vaultName }),
+    });
+    if (r.ok) { const v = await r.json(); if (typeof v === "string" && v) return v; }
+  } catch (_) { /* fall back to env */ }
+  return Deno.env.get(envName) || undefined;
+}
+
 async function verifyStripeSignature(
   payload: string,
   sigHeader: string,
@@ -78,7 +93,7 @@ serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const STRIPE_WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+  const STRIPE_WEBHOOK_SECRET = await stripeSecret("stripe_webhook_secret", "STRIPE_WEBHOOK_SECRET");
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SUPABASE_SERVICE_ROLE_KEY = SB_SECRET;
 
@@ -312,7 +327,7 @@ serve(async (req) => {
         if (mode === "payment") {
           plan = "lifetime";
         } else if (subscriptionId) {
-          const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
+          const STRIPE_SECRET_KEY = await stripeSecret("stripe_secret_key", "STRIPE_SECRET_KEY");
           if (STRIPE_SECRET_KEY) {
             const subRes = await fetch(`https://api.stripe.com/v1/subscriptions/${subscriptionId}`, {
               headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },

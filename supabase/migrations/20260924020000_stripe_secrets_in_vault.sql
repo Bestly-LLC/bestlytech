@@ -1,0 +1,7 @@
+-- Applied live via MCP (migration stripe_secrets_in_vault + follow-up), 2026-09-24.
+-- stripe_secret(p_name)            service-only; returns Vault stripe_secret_key / stripe_webhook_secret
+-- stripe_key_intake(nonce, value)  one-time clipboard intake slot (nonce in secret_intake_nonces); live keys only;
+--                                  then invokes stripe-probe {op:create_webhook}
+-- stripe_webhook_secret_set(value) service-only; stripe-probe stores a new endpoint's whsec_ here
+-- Edge functions stripe-webhook / create-checkout / cloud-deal-payment-link read Vault first, env as fallback.
+-- Live definitions: pg_get_functiondef('public.stripe_key_intake'::regproc) etc.

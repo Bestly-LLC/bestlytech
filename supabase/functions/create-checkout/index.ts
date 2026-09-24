@@ -5,6 +5,21 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
+// Stripe secrets (2026-09-24): Vault first (stripe_secret_key / stripe_webhook_secret via the
+// service-only stripe_secret RPC), then the env var. Env secrets can't be set from Bestly's tooling;
+// Vault can, through the clipboard intake slot, so the key never enters a chat.
+async function stripeSecret(vaultName: string, envName: string): Promise<string | undefined> {
+  try {
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/stripe_secret`, {
+      method: "POST",
+      headers: { apikey: SB_SECRET, ...(SB_SECRET.startsWith("sb_") ? {} : { Authorization: `Bearer ${SB_SECRET}` }), "Content-Type": "application/json" },
+      body: JSON.stringify({ p_name: vaultName }),
+    });
+    if (r.ok) { const v = await r.json(); if (typeof v === "string" && v) return v; }
+  } catch (_) { /* fall back to env */ }
+  return Deno.env.get(envName) || undefined;
+}
+
 // SEC-01 / CY-MIG-01: This endpoint is intentionally public (pre-signup Cookie
 // Yeti checkout), so JWT verification stays off and we defend in depth via an
 // Origin gate + email validation.
@@ -91,7 +106,7 @@ serve(async (req) => {
       });
     }
 
-    const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
+    const STRIPE_SECRET_KEY = await stripeSecret("stripe_secret_key", "STRIPE_SECRET_KEY");
     if (!STRIPE_SECRET_KEY) {
       console.error("create-checkout: STRIPE_SECRET_KEY missing");
       return new Response(JSON.stringify({ error: "Server configuration error" }), {
