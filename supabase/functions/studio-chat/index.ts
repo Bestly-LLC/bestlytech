@@ -15,6 +15,11 @@
 //  3. Every tool run is written to studio_chat_actions. The question six weeks
 //     from now is "why did this caption change?", and it deserves an answer.
 //
+// v18 (2026-09-23): free first, like Scout. A question is answered by the free, no-training AI
+// (Groq -> Cloudflare via _shared/free-llm.ts, $0). Anything that needs Spark's tools (make, edit,
+// send, build, remember) asks first: "Yes, use paid AI" covers the thread for 1 hour, "No, skip it"
+// spends nothing. scout_settings.paid_ai_ok skips the question. Every paid call checks
+// ai_budget('chat') (the daily cap) and is logged to ai_spend (fn studio-chat). Applies to everyone.
 // v15 (2026-09-23): prompt caching. The system prompt is now [fixed rules][memory
 // index][live data]; tools + fixed rules and the memory index carry cache
 // breakpoints, and a top-level cache_control caches the conversation inside the
@@ -36,6 +41,7 @@
 //    door is behind a staff token with can_promote instead.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { llm } from "../_shared/free-llm.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -43,6 +49,52 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
 
 const MODEL = Deno.env.get("STUDIO_CHAT_MODEL") ?? "claude-sonnet-4-6";
 const MAX_TURNS = 10;
+const PRICE: [number, number] = MODEL.includes("haiku") ? [1, 5] : MODEL.includes("opus") ? [15, 75] : [3, 15]; // $ per 1M tokens in/out
+
+// v18: what the free AI must not field (it has no tools).
+const ASKS_FOR_WORK = /^(please\s+|pls\s+|ok,?\s+|can you\s+|could you\s+|would you\s+|spark,?\s+)*(make|write|draft|create|edit|change|rewrite|tighten|shorten|fix|send|promote|approve|decline|kill|move|add|remove|delete|rename|build|queue|ship|remember|update|schedule|redo|retry|turn|put|swap|replace|set|mark|attach|upload|render)\b|\bremember (that|this)\b|\bfrom now on\b/i;
+const CLAIMS_WORK = /\b(spark|i)\s*(will|'ll|would|am going to|can'?t|cannot|can not|won'?t|am unable|don'?t have)\b|\bi'll\b|\bi('ve| have) (made|changed|edited|sent|updated|queued|created)\b|\b(it'?s|it is|all|now) (done|fixed|sent|live|updated)\b|\byou('ll| will)? (need|have) to\b/i;
+const FREE_WHY: Record<string, string> = {
+  ACTION: "It asks Spark to make or change something.",
+  DATA: "It needs more than the free AI can see.",
+  CODE: "It's a change to the app, which goes to the builder.",
+};
+
+async function freeTry(requestId: string, ctx: Record<string, unknown>, staff: Record<string, any>): Promise<{ answer?: string; why: string }> {
+  const { data: hist } = await db.from("studio_request_messages").select("role, body").eq("request_id", requestId)
+    .order("created_at", { ascending: false }).limit(7);
+  const last = String(((hist ?? []) as any[])[0]?.body ?? "").trim();
+  if (ASKS_FOR_WORK.test(last)) return { why: FREE_WHY.ACTION };
+  const convo = ((hist ?? []) as any[]).reverse().map((m) => `${m.role === "claude" ? "Spark" : "Staff"}: ${String(m.body).slice(0, 600)}`).join("\n");
+  const { data: snap } = await db.rpc("studio_chat_snapshot", { p_client_slug: (ctx as any).client ?? null });
+  const prompt = `You are Spark's free helper inside Bestly Studio, the internal app where Bestly's staff review social content for clients. You are talking to ${staff.name}.
+You can only READ the snapshot below. You have no tools and cannot change, send, make or remember anything.
+Answer the last staff message ONLY if you can answer it fully and correctly from the snapshot, the conversation or general knowledge. Quote a client's own words exactly; never invent a number, date, name or feature.
+If they ask you to DO anything (write, edit, send, approve, build, remember...), reply NEEDS_TOOLS: ACTION. Never say you did something or will do it.
+If you can't answer, reply with exactly one line and nothing else:
+NEEDS_TOOLS: DATA    (it needs something not in the snapshot)
+NEEDS_TOOLS: ACTION  (it asks to do or change something)
+NEEDS_TOOLS: CODE    (it asks to change how the app looks or works)
+Otherwise answer in plain text, under 60 words, no markdown, no asterisks.
+
+Where they are: ${JSON.stringify(ctx).slice(0, 400)}
+What is in the app right now: ${JSON.stringify(snap ?? {}).slice(0, 12000)}
+
+Conversation:
+${convo}`;
+  let a = "";
+  try {
+    const r = await llm({ task: "summarize", system: prompt, user: "Reply to the last staff message now, following the rules above.",
+      job: "spark-free", ref: requestId, fn: "studio-chat", scope: "chat", paid: "never", maxTokens: 1200, deadlineMs: 30_000 });
+    a = r.text.replace(/\*\*/g, "").trim();
+  } catch {
+    return { why: "The free AI isn't answering right now." };
+  }
+  const m = a.match(/NEEDS_TOOLS:\s*([A-Z]+)?/i);
+  if (m || !a) return { why: FREE_WHY[(m?.[1] ?? "").toUpperCase()] ?? "The free AI can't do this one." };
+  if (CLAIMS_WORK.test(a)) return { why: FREE_WHY.ACTION };
+  return { answer: a, why: "" };
+}
 const SB = Deno.env.get("SUPABASE_URL")!;
 
 const db = createClient(SB, SB_SECRET, { auth: { persistSession: false } });
@@ -517,7 +569,11 @@ async function runTool(
 }
 
 // ── the loop ──────────────────────────────────────────────────────────────
-async function ask(messages: any[], system: any[], apiKey: string) {
+async function ask(messages: any[], system: any[], apiKey: string, ref = "") {
+  // v18: the daily cap, checked before every paid call.
+  const { data: budget } = await db.rpc("ai_budget", { p_scope: "chat" });
+  if ((budget as any)?.ok === false) throw new Error(`budget: $${(budget as any).spent} of $${(budget as any).cap}`);
+  const t0 = Date.now();
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
@@ -531,6 +587,11 @@ async function ask(messages: any[], system: any[], apiKey: string) {
   }
   const u = j?.usage ?? {};
   console.log(JSON.stringify({ cache: { wrote: u.cache_creation_input_tokens ?? 0, read: u.cache_read_input_tokens ?? 0, plain: u.input_tokens ?? 0 } }));
+  // v18: every paid call is logged, so the daily cap and the spend view see Spark.
+  const plain = Number(u.input_tokens ?? 0), cw = Number(u.cache_creation_input_tokens ?? 0), cr = Number(u.cache_read_input_tokens ?? 0), outT = Number(u.output_tokens ?? 0);
+  const cost = (plain * PRICE[0] + cw * PRICE[0] * 1.25 + cr * PRICE[0] * 0.1 + outT * PRICE[1]) / 1e6;
+  await db.from("ai_spend").insert({ fn: "studio-chat", scope: "chat", job: "spark", model: String(j.model ?? MODEL), ref: ref || null,
+    input_tokens: plain + cw + cr, output_tokens: outT, cost_usd: cost, provider: "anthropic", ok: true, ms: Date.now() - t0, outcome: "ok" });
   return j;
 }
 
@@ -578,6 +639,30 @@ Deno.serve(async (req) => {
   await db.from("studio_request_messages").insert({ request_id: requestId, role: "staff", staff_id: staff.id, body: text });
   await db.from("studio_requests").update({ updated_at: new Date().toISOString() }).eq("id", requestId);
 
+  // v18: free first; paid AI only with a yes (or scout_settings.paid_ai_ok). Same rules as Scout, for everyone.
+  const say = async (reply: string, extra: Record<string, unknown> = {}) => {
+    await db.from("studio_request_messages").insert({ request_id: requestId, role: "claude", body: reply });
+    await db.from("studio_requests").update({ updated_at: new Date().toISOString() }).eq("id", requestId);
+    return J({ ok: true, request_id: requestId, reply, tools: [], ...extra });
+  };
+  const { data: prefs } = await db.rpc("scout_prefs");
+  if ((prefs as any)?.paid_ai_ok !== true) {
+    const { data: th } = await db.from("studio_requests").select("paid_ok_until").eq("id", requestId).maybeSingle();
+    const paidOk = !!(th as any)?.paid_ok_until && Date.parse((th as any).paid_ok_until) > Date.now();
+    if (/^yes,? use paid ai\.?$/i.test(text)) {
+      await db.from("studio_requests").update({ paid_ok_until: new Date(Date.now() + 3600_000).toISOString() }).eq("id", requestId);
+    } else if (/^no,? skip it\.?$/i.test(text)) {
+      return await say("OK, skipped. Nothing was spent.");
+    } else if (!paidOk) {
+      const free = await freeTry(requestId, ctx, staff);
+      if (free.answer) return await say(free.answer, { free: true });
+      return await say(
+        `That needs Spark's tools, which run on paid AI (Claude). ${free.why} It costs about 5 to 50 cents; a yes covers this thread for 1 hour.\n\nOPTIONS: Yes, use paid AI | No, skip it`,
+        { paid_needed: true },
+      );
+    }
+  }
+
   if (!apiKey) {
     const why = "No Anthropic key is set on this project, so I cannot answer here yet. Your message is saved.";
     await db.from("studio_request_messages").insert({ request_id: requestId, role: "claude", body: why });
@@ -607,7 +692,7 @@ Deno.serve(async (req) => {
   let used: string[] = [], queued = false, reply = "";
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const res = await ask(messages, system, apiKey);
+      const res = await ask(messages, system, apiKey, requestId);
       const calls = (res.content ?? []).filter((c: any) => c.type === "tool_use");
       const said = (res.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n").trim();
       if (!calls.length) { reply = said; break; }
@@ -623,6 +708,9 @@ Deno.serve(async (req) => {
       if (turn === MAX_TURNS - 1) reply = said || "I got part-way through that and ran out of steps. Tell me which bit to finish.";
     }
   } catch (e) {
+    if ((e as Error).message.startsWith("budget:")) {
+      return await say(`Today's paid AI limit is used up (${(e as Error).message.slice(8).trim()}). Questions are still free; actions can run again tomorrow.`, { budget: true });
+    }
     const why = `I could not reach the model: ${(e as Error).message}`.replace(/sk-ant-[A-Za-z0-9_\-]+/g, "sk-ant-…");
     await db.from("studio_request_messages").insert({ request_id: requestId, role: "claude", body: why });
     return J({ ok: false, error: (e as Error).message, request_id: requestId, reply: why }, 200);
