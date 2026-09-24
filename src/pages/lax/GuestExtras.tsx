@@ -327,7 +327,7 @@ function ClimateOn({ mode, until, onOff, busy }: { mode: string; until: string; 
     <div role="status" aria-live="polite" className={`overflow-hidden rounded-2xl p-3 ring-1 ${cool ? "bg-sky-400/10 ring-sky-300/30" : "bg-orange-400/10 ring-orange-300/30"}`}>
       <div className="flex items-center gap-2">
         <Fan className={`h-6 w-6 shrink-0 animate-[spin_1.1s_linear_infinite] motion-reduce:animate-none ${cool ? "text-sky-300" : "text-orange-300"}`} aria-hidden />
-        <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${cool ? "text-sky-200" : "text-orange-200"}`}>Climate on</p>
+        <p className={`whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.1em] ${cool ? "text-sky-200" : "text-orange-200"}`}>Climate on</p>
       </div>
       <p className="mt-2 text-[34px] font-semibold leading-none tracking-tight text-white tabular-nums" aria-label={`${mmss(left)} left`}>{mmss(left)}</p>
       <p className="mt-1 text-[13px] font-medium text-white/80">{MODE_TEXT[mode] ?? "Running"}</p>
