@@ -129,8 +129,12 @@ async function gemini(key: string, p: Prompt, token: string | null, retried = fa
   for (let round = 0; round < 6; round++) {
     let { r, j } = await gcall(key, p.model, system, contents, tools, plain);
     if (r.status === 400 && !plain && /thinking/i.test(j?.error?.message ?? "")) { plain = true; ({ r, j } = await gcall(key, p.model, system, contents, tools, true)); }
-    if (r.status === 503 && !retried && round === 0) {
-      for (const m of (await flashModels(key)).filter((n) => n !== p.model).slice(0, 1)) {
+    // Busy (503) or over the free quota (429): Flash-Lite has its own quota and is rarely busy, so try it
+    // (then one more Flash) before handing the question to Groq.
+    if ((r.status === 503 || r.status === 429) && !retried && round === 0) {
+      const others = (await flashModels(key)).filter((n) => n !== p.model);
+      const order = [...others.filter((n) => n.endsWith("-lite")), ...others.filter((n) => !n.endsWith("-lite"))].slice(0, 2);
+      for (const m of order) {
         try { return await gemini(key, { ...p, model: m }, token, true); } catch { /* next rung */ }
       }
     }

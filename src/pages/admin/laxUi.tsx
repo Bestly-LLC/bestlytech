@@ -72,3 +72,44 @@ export function Segmented<T extends string>({ value, options, onChange, ariaLabe
     </div>
   );
 }
+
+/** iOS switch (a real checkbox underneath, so it's keyboard + screen-reader friendly). */
+export function Switch({ checked, onChange, label: text, detail, disabled }: {
+  checked: boolean; onChange: (v: boolean) => void; label: string; detail?: ReactNode; disabled?: boolean;
+}) {
+  return (
+    <label className={cn("flex min-h-[44px] cursor-pointer items-center justify-between gap-4 py-2", disabled && "cursor-not-allowed opacity-50")}>
+      <span className="min-w-0">
+        <span className={cn("block text-[15px]", label)}>{text}</span>
+        {detail && <span className={cn("mt-0.5 block text-[13px] leading-snug", secondary)}>{detail}</span>}
+      </span>
+      <span className="relative inline-flex shrink-0">
+        <input type="checkbox" role="switch" className="peer sr-only" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+        <span className="h-[31px] w-[51px] rounded-full bg-[#39393D] transition-colors duration-200 peer-checked:bg-[#30D158] peer-focus-visible:ring-2 peer-focus-visible:ring-[#0A84FF] bento:bg-[#E9E9EA] bento:peer-checked:bg-[#34C759]" />
+        <span className="pointer-events-none absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-[#fff] shadow-[0_3px_8px_#00000026,0_3px_1px_#0000000f] transition-transform duration-200 peer-checked:translate-x-[20px]" />
+      </span>
+    </label>
+  );
+}
+
+/** A sheet (card window) over a dimmed page. Esc or the scrim closes it. */
+export function Sheet({ open, onClose, title, children, footer }: {
+  open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label={title}
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-[#00000080] backdrop-blur-[2px] animate-in fade-in duration-200" />
+      <div className="relative flex max-h-[88dvh] w-full flex-col rounded-t-[22px] bg-[#1C1C1E] shadow-[0_20px_60px_#00000080] ring-1 ring-[#ffffff14] animate-in slide-in-from-bottom-6 fade-in duration-200 sm:max-w-lg sm:rounded-[22px] bento:bg-[#F2F2F7] bento:ring-[#0000000f]">
+        <div className="flex items-center justify-between gap-3 px-5 pb-3 pt-4">
+          <span className="w-14" />
+          <h3 className={cn("text-[17px] font-semibold", label)}>{title}</h3>
+          <button type="button" onClick={onClose} className={cn(btnPlain, "w-14 justify-end font-semibold")} autoFocus>Done</button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 pb-5">{children}</div>
+        {footer && <div className="border-t border-[#38383A] px-5 py-3 bento:border-[#C6C6C8]">{footer}</div>}
+      </div>
+    </div>
+  );
+}

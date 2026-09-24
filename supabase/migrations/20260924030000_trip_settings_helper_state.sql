@@ -1,0 +1,6 @@
+-- Applied live via MCP, 2026-09-24:
+--  lax_ask_admin_state_groq: admin state adds groq_key / groq_ok_at / groq_error / groq_error_at and week.groq;
+--    week counts now include "-agent" sources (gemini-agent, groq-agent).
+--  trip_health_agent_groq_covering_ok: "Trip helper AI" stays ok while Groq covers a busy/over-quota Gemini;
+--    warns only after Gemini has been out 24h; fails only when both are out.
+-- Live definitions: pg_get_functiondef('public.lax_ask_admin_state'::regproc), ('public.trip_health_agent'::regproc).

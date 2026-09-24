@@ -8,8 +8,9 @@
  * lax_pass_reminder() (cron, 9 AM PT daily) nudges Scout when this month's code isn't in yet.
  */
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
+import { Link } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, ImageUp, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, ImageUp, Loader2, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -17,9 +18,8 @@ import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { LaxGuests } from "./LaxGuests";
 import { TripHealth } from "./TripHealth";
-import { HostPassCard, TeslaCard } from "./TeslaCard";
-import { AskCard } from "./AskCard";
-import { Section, Segmented, btnPlain, btnPrimary, btnTinted, btnDestructivePlain, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
+import { GuestHelperCard } from "./AskCard";
+import { Section, Segmented, btnPlain, btnPrimary, btnTinted, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
 
 type CodeRow = { id: string; payload: string; valid_month: string; note: string | null; created_at: string; is_this_month?: boolean };
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string };
@@ -176,11 +176,6 @@ export default function LaxPass() {
     load();
   };
 
-  const rotate = async () => {
-    if (!window.confirm("Make a new guest link? The old link stops working, so update it anywhere you pasted it.")) return;
-    const { error } = await rpc("lax_pass_rotate_slug");
-    if (error) toast.error(error.message); else { toast.success("New link made."); load(); }
-  };
 
   const link = st ? `${SITE}/lax/${st.slug}` : "";
   const message = `How to pick up your Turo car at LAX: shuttle steps, the garage address, and the QR code that opens the lobby door (you can add it to Apple or Google Wallet). ${link}`;
@@ -195,7 +190,8 @@ export default function LaxPass() {
 
   return (
     <div className="w-full space-y-8">
-      <PageHeader title="LAX Parking Pass" description="This month's Park My Share code, the trips using it, and the guest page." />
+      <PageHeader title="LAX Parking Pass" description="This month's Park My Share code, the trips using it, and the guest page."
+        actions={<Link to="/admin/turo/settings" className={cn(btnTinted, "px-4")}><Settings className="h-4 w-4" aria-hidden /> Settings</Link>} />
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { take(e.target.files?.[0]); e.target.value = ""; }} />
 
       {/* Fills the width: sections flow into as many ~30rem columns as fit (1 on phones, 2-3 on wide screens). */}
@@ -208,7 +204,7 @@ export default function LaxPass() {
             {!st ? (
               <div className="flex h-40 items-center justify-center"><Loader2 className={cn("h-6 w-6 animate-spin", tertiary)} aria-label="Loading" /></div>
             ) : (
-              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
+              <div className="flex flex-col items-center gap-6 md:flex-row md:flex-wrap md:items-center xl:flex-nowrap">
                 <PassArt month={cur ? monthLabel(cur.valid_month) : null} payload={cur?.payload ?? null} />
                 <div className="w-full min-w-0 flex-1 space-y-4 text-center sm:text-left">
                   <div className="space-y-2">
@@ -238,7 +234,7 @@ export default function LaxPass() {
                   </div>
                 </div>
                 {/* At a glance: fills the wide hero on big screens */}
-                <dl className={cn("hidden w-full max-w-[340px] shrink-0 divide-y self-stretch rounded-[16px] bg-[#2C2C2E] px-4 lg:block bento:bg-[#F2F2F7]", separator)}>
+                <dl className={cn("w-full shrink-0 divide-y self-stretch rounded-[16px] bg-[#2C2C2E] px-4 text-left xl:max-w-[340px] bento:bg-[#F2F2F7]", separator)}>
                   {[
                     ["Next code due", monthLabel(nextMonth(st.month_now)).replace(" ", " 1, ")],
                     ["In Apple Wallet", `${st.wallet_devices} phone${st.wallet_devices === 1 ? "" : "s"}`],
@@ -255,6 +251,7 @@ export default function LaxPass() {
                       <code className={cn("min-w-0 flex-1 truncate font-mono text-[13px]", label)}>{link.replace("https://www.", "")}</code>
                       <CopyButton text={link} label="Copy" className={cn(btnTinted, "h-auto px-3.5")} />
                     </dd>
+                    <dd><CopyButton text={message} label="Copy message for Turo" className={cn(btnPlain, "h-auto bg-transparent px-0 hover:bg-transparent bento:bg-transparent")} /></dd>
                   </div>
                 </dl>
               </div>
@@ -312,33 +309,9 @@ export default function LaxPass() {
         </Section>
       )}
 
-      {st && (
-        <Section title="Guest link" footer="The link never changes, so paste it into Turo once. Making a new one turns the old one off.">
-          <div className={cn(card, "space-y-4")}>
-            <p className={cn("text-[15px]", secondary)}>Always shows the newest code.</p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <code className={cn(field, "truncate font-mono text-[14px] sm:flex-1")}>{link.replace("https://", "")}</code>
-              <CopyButton text={link} label="Copy link" className={cn(btnTinted, "h-auto")} />
-            </div>
-            <div className="rounded-[14px] bg-[#2C2C2E] p-3.5 bento:bg-[#F2F2F7]">
-              <p className={cn("text-[13px] font-medium", secondary)}>Message for Turo</p>
-              <p className={cn("mt-1 text-[15px] leading-snug", label)}>{message}</p>
-              <div className="mt-3"><CopyButton text={message} label="Copy message" className={cn(btnTinted, "h-auto")} /></div>
-            </div>
-            <button type="button" onClick={rotate} className={btnDestructivePlain}>
-              <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Make a new link
-            </button>
-          </div>
-        </Section>
-      )}
-
-      <Section title="Keys and passes" id="passes">
-        <HostPassCard />
-        <TeslaCard />
-      </Section>
 
       <Section title="Guest questions">
-        <AskCard />
+        <GuestHelperCard />
       </Section>
 
       {st && st.history.length > 0 && (

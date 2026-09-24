@@ -11,7 +11,7 @@ import { Brush,
   Car,
   Mic,
   Handshake,
-  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, Siren, QrCode,
+  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, Siren, QrCode, SlidersHorizontal,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -71,6 +71,7 @@ const homeHubItems = [
 const turoItems = [
   { title: "Turo Watch", url: "/admin/turo", icon: Car },
   { title: "LAX Parking Pass", url: "/admin/turo/lax-pass", icon: QrCode },
+  { title: "Trip settings", url: "/admin/turo/settings", icon: SlidersHorizontal },
   { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Brush },
 ];
 

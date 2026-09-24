@@ -79,6 +79,7 @@ const AdminMeetingsSection = lazyPage(() => import("./pages/admin/AdminMeetingsS
 const AdminPartners = lazyPage(() => import("./pages/admin/AdminPartners"));
 const AdminTuro = lazyPage(() => import("./pages/admin/AdminTuro"));
 const LaxPass = lazyPage(() => import("./pages/admin/LaxPass"));
+const TripSettings = lazyPage(() => import("./pages/admin/TripSettings"));
 const AdminPlaybook = lazyPage(() => import("./pages/admin/AdminPlaybook"));
 const PartnerPortal = lazyPage(() => import("./pages/partner/PartnerPortal"));
 const PartnerWelcome = lazyPage(() => import("./pages/partner/PartnerPortal").then((m) => ({ default: m.PartnerWelcome })));
@@ -223,6 +224,7 @@ const App = () => {
                   <Route path="security" element={<Security />} />
                   <Route path="turo" element={<AdminTuro />} />
                   <Route path="turo/lax-pass" element={<LaxPass />} />
+                  <Route path="turo/settings" element={<TripSettings />} />
                   <Route path="playbook" element={<AdminPlaybook />} />
                   <Route path="skills" element={<AdminSkills />} />
                   <Route path="*" element={<AdminNotFound />} />
