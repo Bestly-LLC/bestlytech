@@ -364,14 +364,19 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
   else if (paid === "fallback") ladder.push(paidRung);
 
   let budgetHit = false;
-  for (const rung of ladder) {
+  // 2026-09-24: a paused (cooled-down) provider is skipped - except in a live chat, where Jared is waiting: if every
+  // free rung was skipped only for being paused, try them once anyway before giving up (pauses can be false alarms).
+  const cooled: Rung[] = [];
+  for (let pass = 0; pass < 2; pass++) {
+  const rungs = pass === 0 ? ladder : (req.scope === "chat" && !tried.some((x) => x.outcome === "ok") ? cooled : []);
+  for (const rung of rungs) {
     const left = deadline - Date.now();
     const skip = (outcome: Outcome) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0 });
     if (left < 3000) { skip("timeout"); continue; }
     const p = prov[rung.provider];
     if (p && !p.enabled) { skip("skipped_off"); continue; }
     if (privacy === "private" && p && !p.private_ok) { skip("skipped_privacy"); continue; }
-    if (p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now()) { skip("rate_limited"); continue; }
+    if (pass === 0 && p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now()) { cooled.push(rung); skip("rate_limited"); continue; }
     if (need > rung.maxIn) { skip("skipped_size"); continue; }
     if (p?.daily_cap && rung.provider !== "anthropic" && (await usedToday(rung.provider)) >= p.daily_cap) { skip("skipped_budget"); continue; }
 
@@ -413,6 +418,7 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
       await log(req, rung.provider, rung.model, f.outcome, ms, undefined, f.message);
       if (f.outcome === "rate_limited" && rung.provider !== "anthropic") await cooldown(rung.provider, f.retryAfter, f.message);
     }
+  }
   }
   if (paid === "never") throw new LlmUnavailable("paid_never", tried);
   if (budgetHit) throw new LlmUnavailable("budget", tried);

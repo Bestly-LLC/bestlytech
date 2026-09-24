@@ -674,7 +674,9 @@ const FREE_WHY: Record<string, string> = {
 const FREE_FACTS = `Facts about the admin you may use:
 - Problems Scout watches are incidents. When one gets fixed on its own (auto-fix, the free AI or Scout), the bell already shows a "Fixed: <what>" alert saying what fixed it, and a push if it had pushed.
 - Failed voice-clip uploads on the Clips page are reported to Scout as an incident and clear with a "Fixed" alert when the next upload works.
-- Auto-run (Scout does things without asking) and Paid AI switches sit at the top of the Scout panel.`;
+- Auto-run (Scout does things without asking) and Paid AI switches sit at the top of the Scout panel.
+- Alerts he pastes in (e.g. "Studio database is slow", "Bestly database is down") come from the watchdogs. "Self-heal is running" means it is already being handled; a "back"/"Fixed" note follows when it recovers. Explain what it means in plain words and whether he needs to do anything (usually not).
+- Database slow/down alerts: the database was upgraded from Nano to Micro compute on Sep 24, 2026 because Nano ran out of memory. A watchdog pauses background jobs when memory is tight and resumes them after.`;
 
 /** Paid AI said "credit balance too low" in the last day and hasn't worked since (the unread bell card). */
 async function paidOutOfCredit(): Promise<boolean> {
@@ -831,12 +833,14 @@ ${convo}`;
 
   const steps: string[] = [];
   const used: string[] = [];
+  let replied = false;   // v28.4: did any free model answer at all this turn?
   let acted = false;
   let fails = 0;
   for (let i = 0; i < FREE_STEPS && Date.now() < until - 8000; i++) {
     toolDeadline = Math.min(until - 5000, Date.now() + 60_000);
     const raw = await freeModel(threadId, head, `Your steps so far this turn:\n${steps.join("\n") || "(none yet)"}\n\nNext JSON:`, until);
     if (raw == null) { if (++fails > 1) break; continue; }   // every free rung failed this step: one more try
+    replied = true;
     const s = parseStep(raw);
     if (!s) { steps.push(`(your last answer was not valid JSON; answer with one JSON object)`); if (++fails > 2) break; continue; }
 
@@ -872,6 +876,8 @@ ${convo}`;
     steps.push(`Step ${steps.length + 1}: you used ${name} with ${JSON.stringify(args).slice(0, 500)}. Result: ${res}`);
     if (fails > 3) break;
   }
+  // v28.4: don't blame the question when the free AI simply never answered.
+  if (!replied) return { why: "The free AI isn't answering right now.", tools: used };
   return { why: used.length ? "The free AI got partway but couldn't finish this." : FREE_WHY.ACTION, tools: used };
 }
 
