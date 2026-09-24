@@ -466,7 +466,6 @@ export default function LaxGuest() {
                   <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? carCommand : undefined} hint={live ? "Good in the garage" : " "} />
                 </div>
               )}
-              {token && (demo ? (key?.state === "added" && <UnlockStart demo />) : <UnlockStart token={token} />)}
             </section>
 
 
@@ -477,7 +476,7 @@ export default function LaxGuest() {
               <RangeCheck rc={pub.range_check} kind="lax" className="mt-3" />
             </ChargingCard>}
 
-            <HomeGuide pickupBattery={pub.pickup_battery} kind="lax">
+            <HomeGuide pickupBattery={pub.pickup_battery} kind="lax" valet={token ? (demo ? (key?.state === "added" ? <UnlockStart demo /> : null) : <UnlockStart token={token} />) : null}>
               {token && pub.kind === "lax" && key && (
                 <Fold icon={Users} title="Someone else driving?" sub="Add them in Turo first, then get their key here">
                   <ExtraDrivers token={token} embedded />

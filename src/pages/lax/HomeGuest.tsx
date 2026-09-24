@@ -327,7 +327,6 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
             <CarButton action="honk" label="Honk" icon={BellRing} run={live ? run : undefined} hint={live ? "Short beep" : "Works 1 hour before pickup"} />
             <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? run : undefined} hint={live ? "Good at night" : " "} />
           </div>
-          {demoPage ? (key?.state === "added" && <UnlockStart demo />) : <UnlockStart token={token} />}
         </section>
 
         {pub.charging && <ChargingCard charging={pub.charging} token={token} battery={car?.battery} pickupBattery={pub.pickup_battery} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif">
@@ -336,7 +335,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           <RangeCheck rc={pub.range_check} kind="home" className="mt-3" />
         </ChargingCard>}
 
-        <HomeGuide pickupBattery={pub.pickup_battery}>
+        <HomeGuide pickupBattery={pub.pickup_battery} valet={demoPage ? (key?.state === "added" ? <UnlockStart demo /> : null) : <UnlockStart token={token} />}>
           <Fold icon={Users} title="Someone else driving?" sub="Add them in Turo first, then get their key here">
             <ExtraDrivers token={token} embedded />
           </Fold>

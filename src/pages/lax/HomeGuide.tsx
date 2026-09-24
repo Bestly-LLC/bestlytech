@@ -125,7 +125,7 @@ export function ChargeBadge({ pct }: { pct: number | null | undefined }) {
   );
 }
 
-export function HomeGuide({ pickupBattery, kind = "home", children }: { pickupBattery?: number | null; kind?: TripKind; children?: ReactNode }) {
+export function HomeGuide({ pickupBattery, kind = "home", children, valet }: { pickupBattery?: number | null; kind?: TripKind; children?: ReactNode; valet?: ReactNode }) {
   const ch = CHARGERS[kind];
   return (
     <section className="mt-6 rounded-3xl bg-white/[0.06] px-4 pt-3 ring-1 ring-white/10" aria-label="Car guide">
@@ -182,6 +182,7 @@ export function HomeGuide({ pickupBattery, kind = "home", children }: { pickupBa
         <Numbered items={["Open the Tesla app.", "Tap Controls.", "Tap Start. The attendant has 2 minutes to drive and park it."]} />
         <H>Pickup</H>
         <Numbered items={["Open the Tesla app.", "Tap Controls, then Start.", "Get in and drive away during the window. Repeat if needed."]} />
+        {valet && <><H>Or do it from this page</H>{valet}</>}
       </Fold>
 
       <Fold icon={AlertTriangle} title="Accidents & roadside" sub="Flat tire, bump or accident: what to do" tone="alert">
