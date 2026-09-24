@@ -6,7 +6,7 @@
  * Reminders go out from support@bestly.tech (wallet-pass op remind_due, cron lax-guest-tick every 10 min).
  */
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, House, KeyRound, Loader2, Mail, Plane, Send } from "lucide-react";
+import { Activity, ExternalLink, House, KeyRound, Loader2, Mail, Plane, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
@@ -16,6 +16,7 @@ type Row = {
   reservation_id: number; first: string | null; last: string | null; starts_at: string; ends_at: string; lax: boolean;
   token: string | null; email: string | null; email_by: "guest" | "host" | null; reminder_at: string | null;
   reminder_sent_at: string | null; reminder_error: string | null; suggested_reminder_at: string; kind?: "lax" | "home";
+  activity?: { views: number; first_seen: string | null; last_seen: string | null; devices: string[]; asks: number; recent: { kind: string; at: string; detail: Record<string, string> | null }[] } | null;
   key?: { status: string; error: string | null; ready_at: string | null; accepted_at: string | null; removed_at: string | null; driver: string | null; opens_at: string } | null;
 };
 const KEY_TEXT: Record<string, string> = {
@@ -23,6 +24,30 @@ const KEY_TEXT: Record<string, string> = {
   accepted: "Guest added the key", expired: "Invite expired, a new one is being made", removing: "Removing access…",
   removed: "Access removed", failed: "Key problem, retrying", off: "Auto key is off for this trip",
 };
+
+const ACT: Record<string, string> = {
+  key_tap: "Tapped Add the car", have_app: "Has the Tesla app", video: "Watched a video", directions: "Opened directions", spot: "Checked the exact spot",
+  call: "Tapped a call button", email: "Signed up for the reminder", ask: "Asked the helper", climate: "Used A/C / heat", honk: "Honked", flash: "Flashed lights",
+  unlock: "Used backup unlock", turo_app: "Opened the Turo app", app_link: "Opened an app link", reminder_click: "Opened the reminder email",
+};
+const ago = (iso: string) => { const m = Math.round((Date.now() - +new Date(iso)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : `${Math.round(m / 1440)} d ago`; };
+
+/** Did the guest (not you) actually use their page? Your own views never count (see lax/track.ts). */
+function ActivityRow({ a }: { a: Row["activity"] }) {
+  if (!a || !a.last_seen) return <p className="mt-2 flex items-center gap-1.5 text-xs text-white/55 bento:text-neutral-500"><Activity className="h-3.5 w-3.5" /> Guest hasn't opened their page yet.</p>;
+  return (
+    <div className="mt-2 text-xs text-white/75 bento:text-neutral-600">
+      <p className="flex flex-wrap items-center gap-1.5"><Activity className="h-3.5 w-3.5 text-emerald-400" />
+        <b className="text-white bento:text-neutral-900">Opened {a.views}×</b> · last seen {when(a.last_seen)} ({ago(a.last_seen)}){a.devices?.length ? ` · ${a.devices.join(", ")}` : ""}{a.asks ? ` · ${a.asks} question${a.asks === 1 ? "" : "s"}` : ""}
+      </p>
+      {a.recent?.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {a.recent.map((e, i) => <span key={i} className="rounded-full bg-white/[0.06] px-2 py-0.5 bento:bg-neutral-100">{ACT[e.kind] ?? e.kind} · {ago(e.at)}</span>)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function KeyRow({ r, reload }: { r: Row; reload: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -97,6 +122,7 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
             <CopyButton text={link} label="Copy link" />
             <a href={`/t/${r.token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white bento:text-neutral-500">Open <ExternalLink className="h-3.5 w-3.5" /></a>
           </div>
+          <ActivityRow a={r.activity} />
           {home && <KeyRow r={r} reload={reload} />}
           {<><div className="mt-3 flex flex-wrap items-center gap-2">
             <Mail className="h-4 w-4 text-white/40 bento:text-neutral-400" />
@@ -132,6 +158,8 @@ export function LaxGuests() {
     setRows((data as Row[]) ?? []);
   }, []);
   useEffect(() => { load(); }, [load]);
+  // This browser belongs to the host: its visits to guest pages never count as guest activity.
+  useEffect(() => { try { localStorage.setItem("bestly-host", "1"); } catch { /* private mode */ } }, []);
   return (
     <div className={card}>
       <p className="text-sm font-medium text-white bento:text-neutral-900">Guests</p>

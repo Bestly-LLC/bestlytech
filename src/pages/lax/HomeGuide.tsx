@@ -5,6 +5,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { BeforeYouDrive } from "./BeforeYouDrive";
+import { track } from "./track";
 import { AlertTriangle, BatteryCharging, ChevronDown, Cpu, Download, ExternalLink, FileText, KeySquare, Phone, Play, PlayCircle, X } from "lucide-react";
 
 const ACCENT = "var(--trip-accent)";
@@ -15,7 +16,7 @@ export type Video = { title: string; sub: string; href: string; id?: string; lis
 const thumb = (id: string) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 
 /** Opens the in-page player (VideoPlayer listens). */
-export function playVideo(v: Video) { window.dispatchEvent(new CustomEvent("trip-video", { detail: v })); }
+export function playVideo(v: Video) { track(undefined, "video", { title: v.title }); window.dispatchEvent(new CustomEvent("trip-video", { detail: v })); }
 
 /** In-page YouTube player (privacy-enhanced embed), opened by playVideo(). */
 export function VideoPlayer() {

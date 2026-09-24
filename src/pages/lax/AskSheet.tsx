@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Download, ExternalLink, FileText, MapPin, MessageCircleQuestion, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
+import { track } from "./track";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 type Msg = { id: number | string; role: "user" | "assistant"; content: string; status?: string };
@@ -94,7 +95,7 @@ function CallButtons({ text, onAsk }: { text: string; onAsk?: (q: string) => voi
         </a>
       ))}
       {acts.map(({ key, label, href, icon: Icon }) => (
-        <a key={key} href={href} target="_blank" rel="noreferrer"
+        <a key={key} href={href} target="_blank" rel="noreferrer" onClick={() => track(undefined, "app_link", { what: key })}
           className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold text-[#1A1140] active:scale-95"
           style={{ background: PEACH }}>
           <Icon className="h-4 w-4" aria-hidden /> {label}
@@ -146,6 +147,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
     q = q.trim();
     if (!q || busy) return;
     setBusy(true); setText("");
+    track(token, "ask");
     const tmp = `a${Date.now()}`;
     setMsgs((xs) => [...xs, { id: `u${Date.now()}`, role: "user", content: q }, { id: tmp, role: "assistant", content: "", status: "pending" }]);
     try {

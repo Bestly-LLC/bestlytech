@@ -16,6 +16,7 @@ import { AskButton, AskSheet } from "./AskSheet";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
 import { ScrollFx } from "./ScrollFx";
+import { track } from "./track";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -112,7 +113,7 @@ function CarButton({ action, label, icon: Icon, run, disabled, hint }: { action:
 function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void> }) {
   // Guest says they already have the Tesla app: skip that step and show what's next instead.
   const [hasApp, setHasApp] = useState(() => { try { return localStorage.getItem("hasTeslaApp") === "1"; } catch { return false; } });
-  const haveIt = () => { setHasApp(true); try { localStorage.setItem("hasTeslaApp", "1"); } catch { /* private mode */ } };
+  const haveIt = () => { track(undefined, "have_app"); setHasApp(true); try { localStorage.setItem("hasTeslaApp", "1"); } catch { /* private mode */ } };
   const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   const appStore = platform() === "android" ? "https://play.google.com/store/apps/details?id=com.teslamotors.tesla" : "https://apps.apple.com/app/tesla/id582007913";
   return (
@@ -153,7 +154,7 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
             <Step n={3}>At the car, open the Tesla app and tap <b className="text-white">Unlock</b>. The app walks you through turning on your phone key.</Step>
           </ol>
           {k.link
-            ? <a href={k.link} className="mt-4 flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#132726] shadow-lg shadow-black/30 active:scale-[0.99]" style={{ background: PEACH }}>
+            ? <a href={k.link} onClick={() => track(undefined, "key_tap")} className="mt-4 flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#132726] shadow-lg shadow-black/30 active:scale-[0.99]" style={{ background: PEACH }}>
                 <KeyRound className="h-5 w-5" /> Add the car to my Tesla app
               </a>
             : <p className="mt-4 rounded-xl bg-white/10 p-3 text-[14px] text-white/80">Preview: the real button appears here 2 hours before pickup.</p>}
@@ -259,9 +260,9 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
             <CarCard trip={pub.trip ?? null} car={car} demo={demoCar} compact onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2.5">
-            <a href={mapsFor(home.address)} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#132726] active:scale-[0.98]"><Navigation className="h-4 w-4" /> Directions</a>
+            <a href={mapsFor(home.address)} onClick={() => track(undefined, "directions")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#132726] active:scale-[0.98]"><Navigation className="h-4 w-4" /> Directions</a>
             {spot
-              ? <a href={mapsFor("Your Turo Tesla", spot.lat, spot.lon)} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold ring-1 ring-white/15 active:scale-[0.98]"><MapPin className="h-4 w-4" style={{ color: PEACH }} /> Exact spot</a>
+              ? <a href={mapsFor("Your Turo Tesla", spot.lat, spot.lon)} onClick={() => track(undefined, "spot")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold ring-1 ring-white/15 active:scale-[0.98]"><MapPin className="h-4 w-4" style={{ color: PEACH }} /> Exact spot</a>
               : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">Exact spot shows 2 hours before pickup</span>}
           </div>
           {spot && <p className="mt-1.5 px-1 text-[12px] text-white/65">Car location updated {ago(spot.observed_at)}</p>}

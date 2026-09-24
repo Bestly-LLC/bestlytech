@@ -16,6 +16,7 @@ import { AskButton, AskSheet } from "./lax/AskSheet";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type Trip } from "./lax/GuestExtras";
 import { WalletLoader } from "./lax/WalletLoader";
 import { ScrollFx } from "./lax/ScrollFx";
+import { track } from "./lax/track";
 import HomeGuest, { type CarAction, type HomeInfo, type KeyInfo } from "./lax/HomeGuest";
 import { renderPassImage } from "./lax/passImage";
 
@@ -133,6 +134,7 @@ function Step({ n, when, title, children }: { n: number; when: string; title: st
 export default function LaxGuest() {
   const { slug = "", token = "" } = useParams();
   const [pub, setPub] = useState<Pub | null>(null);
+  const viewed = useRef(false);
   // Pickup / Return steps live in a bottom sheet opened from the luggage-tag bar. #pickup / #return deep-link it open.
   const [sheet, setSheet] = useState<"pickup" | "return" | "ask" | null>(() => {
     if (typeof window === "undefined") return null;
@@ -162,6 +164,12 @@ export default function LaxGuest() {
       : rpc("lax_pass_public", { p_slug: slug })).then(({ data }) => {
         const p = (data as Pub) ?? { ok: false };
         if (token && p.kind) { try { localStorage.setItem(`tripkind:${token}`, p.kind); } catch { /* private mode */ } }
+        if (token && p.ok && !viewed.current) {
+          viewed.current = true;
+          track(token, "view", { kind: p.kind });
+          const d = new URLSearchParams(window.location.search).get("do");
+          if (d) track(token, "reminder_click", { do: d });
+        }
         setPub(p);
       });
     load();
@@ -175,6 +183,7 @@ export default function LaxGuest() {
   const reload = () => (token ? rpc("lax_guest_public", { p_token: token }) : rpc("lax_pass_public", { p_slug: slug }))
     .then(({ data }) => data && setPub(data as Pub));
   const carCommand = async (action: CarAction, onStage?: (s: string) => void) => {
+    if (action !== "refresh") track(token || undefined, ["cool", "warm", "seat", "off"].includes(action) ? "climate" : action, { action });
     const { data, error } = token
       ? await rpc("lax_guest_car_command", { p_token: token, p_action: action })
       : await rpc("lax_shared_car_command", { p_slug: slug, p_action: action });
@@ -253,7 +262,7 @@ export default function LaxGuest() {
   if (token && pub?.ok && pub.kind === "home") return <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} />;
 
   return (
-    <div className="min-h-screen bg-[#1A1140] text-white" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
+    <div className="trip min-h-dvh bg-[#1A1140] text-white" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
       <Helmet>
         <title>Picking up your Turo car at LAX</title>
         <meta name="robots" content="noindex, nofollow" />

@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Armchair, ArrowRight, BatteryMedium, Car, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSun, Fan, Flame, Loader2, Lock, LockOpen, Mail, Moon, Power, Snowflake, Sun, Thermometer, Wind, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { track } from "./track";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 const LA = "America/Los_Angeles";
@@ -531,6 +532,7 @@ export function EmailCard({ token, email, reminderAt, sentAt, home = false }: { 
     const { data, error } = await rpc("lax_guest_set_email", { p_token: token, p_email: value });
     setBusy(false);
     if (error) { setErr(error.message.replace(/^.*?: /, "")); return; }
+    track(token, "email");
     const d = data as { email: string; reminder_at: string | null };
     setShown({ email: d.email, at: d.reminder_at }); setEditing(false); setValue("");
   };

@@ -1,14 +1,16 @@
 /**
- * Subtle 3D scroll effects for the trip pages (LAX + home). Nothing crazy:
- *  - Cards tilt up into place (rotateX + rise + fade) the first time they scroll into view.
- *  - The hero picture drifts slower than the page (parallax) and the headline eases up.
- * Works on whatever the page renders: every direct child of <main> that isn't a fixed overlay
- * (sheets, bottom bar, video player) gets the reveal; new children are picked up as data loads.
- * Transforms are cleared after the reveal so nothing inside is affected. Off with reduced motion.
+ * Subtle 3D scroll effects for the trip pages (LAX + home), tuned for smoothness on phones:
+ *  - Cards rise and tilt into place the first time they scroll into view (transform + opacity only,
+ *    GPU-composited, staggered 70ms when several arrive together, cleaned up on transitionend).
+ *  - The hero picture drifts slower than the page and the headline eases up (rAF, only while the
+ *    hero is on screen).
+ * Every direct child of <main> that isn't a fixed overlay gets the reveal; new children are picked
+ * up as data loads. Nothing runs with reduced motion.
  */
 import { useEffect } from "react";
 
-const HIDDEN = "perspective(900px) rotateX(12deg) translateY(28px) scale(0.98)";
+const HIDDEN = "perspective(1100px) rotateX(7deg) translate3d(0, 22px, 0)";
+const EASE = "cubic-bezier(.16, 1, .3, 1)"; // smooth "ease-out-expo" settle, close to an iOS spring
 
 export function ScrollFx() {
   useEffect(() => {
@@ -16,17 +18,27 @@ export function ScrollFx() {
     const main = document.querySelector("main");
     if (!main) return;
 
+    const reveal = (el: HTMLElement, delay: number) => {
+      el.style.transitionDelay = `${delay}ms`;
+      el.style.opacity = "1";
+      el.style.transform = "translate3d(0,0,0)";
+      const done = () => {
+        el.removeEventListener("transitionend", done);
+        // Clear everything so fixed/sticky children and later layout behave normally.
+        el.style.transition = ""; el.style.transitionDelay = ""; el.style.transform = ""; el.style.willChange = ""; el.style.backfaceVisibility = "";
+      };
+      el.addEventListener("transitionend", done);
+      window.setTimeout(done, 1200 + delay); // safety net if transitionend never fires
+    };
+
     const io = new IntersectionObserver((entries) => {
+      let n = 0;
       for (const e of entries) {
         if (!e.isIntersecting) continue;
-        const el = e.target as HTMLElement;
-        io.unobserve(el);
-        el.style.opacity = "1";
-        el.style.transform = "none";
-        // Clear the transform once done so fixed/sticky things inside behave normally.
-        window.setTimeout(() => { el.style.transition = ""; el.style.transform = ""; el.style.willChange = ""; }, 900);
+        io.unobserve(e.target);
+        reveal(e.target as HTMLElement, Math.min(n++, 4) * 70);
       }
-    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+    }, { rootMargin: "0px 0px -6% 0px", threshold: 0.06 });
 
     const prime = () => {
       for (const node of Array.from(main.children)) {
@@ -34,13 +46,13 @@ export function ScrollFx() {
         if (el.dataset.fx) continue;
         el.dataset.fx = "1";
         if (getComputedStyle(el).position === "fixed") continue;
-        const r = el.getBoundingClientRect();
-        if (r.top < window.innerHeight * 0.92) continue; // already on screen: leave it be
+        if (el.getBoundingClientRect().top < window.innerHeight * 0.94) continue; // already visible: leave it
         el.style.opacity = "0";
         el.style.transform = HIDDEN;
         el.style.transformOrigin = "50% 0%";
+        el.style.backfaceVisibility = "hidden";
         el.style.willChange = "transform, opacity";
-        el.style.transition = "opacity 700ms ease, transform 800ms cubic-bezier(.2,.7,.2,1)";
+        el.style.transition = `opacity 520ms ${EASE}, transform 700ms ${EASE}`;
         io.observe(el);
       }
     };
@@ -48,21 +60,32 @@ export function ScrollFx() {
     const mo = new MutationObserver(prime);
     mo.observe(main, { childList: true });
 
-    // Parallax hero.
+    // Parallax hero: only while it's on screen; transform-only so it stays on the compositor.
     const hero = document.querySelector<HTMLElement>("[data-fx-hero]");
     const title = document.querySelector<HTMLElement>("[data-fx-title]");
-    let raf = 0;
-    const onScroll = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        const y = Math.min(window.scrollY, 400);
-        if (hero) hero.style.transform = `translate3d(0, ${y * 0.35}px, 0) scale(${1 + y / 2400})`;
-        if (title) { title.style.transform = `translate3d(0, ${y * 0.18}px, 0)`; title.style.opacity = String(Math.max(0, 1 - y / 260)); }
-      });
+    if (hero) { hero.style.backfaceVisibility = "hidden"; hero.style.transformOrigin = "50% 100%"; }
+    let raf = 0, last = -1;
+    const frame = () => {
+      raf = 0;
+      const y = window.scrollY;
+      if (y > 420 && last > 420) return;
+      last = y;
+      const c = Math.min(Math.max(y, 0), 420);
+      if (hero) hero.style.transform = `translate3d(0, ${(c * 0.32).toFixed(1)}px, 0) scale(${(1 + c / 2600).toFixed(4)})`;
+      if (title) { title.style.transform = `translate3d(0, ${(c * 0.16).toFixed(1)}px, 0)`; title.style.opacity = Math.max(0, 1 - c / 240).toFixed(3); }
     };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(frame); };
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => { io.disconnect(); mo.disconnect(); window.removeEventListener("scroll", onScroll); cancelAnimationFrame(raf); };
+    frame();
+    return () => { io.disconnect(); mo.disconnect(); window.removeEventListener("scroll", onScroll); if (raf) cancelAnimationFrame(raf); };
   }, []);
-  return null;
+  // Keep the pages contained: no sideways wiggle from animating cards, carousels don't drag the
+  // page or trigger back-swipe, sheets don't scroll the page behind them, anchor jumps glide.
+  return (
+    <style>{`:root:has(.trip){scroll-behavior:smooth;overscroll-behavior-x:none}
+.trip{overflow-x:clip}
+.trip [aria-roledescription="carousel"]{overscroll-behavior-x:contain;touch-action:pan-x pan-y;-webkit-overflow-scrolling:touch}
+.trip [role="dialog"] .overflow-y-auto{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+@media (prefers-reduced-motion: reduce){:root:has(.trip){scroll-behavior:auto}}`}</style>
+  );
 }
