@@ -775,8 +775,10 @@ async function freeModel(threadId: string, system: string, user: string, until: 
   if (left < 6000) return null;
   try {
     const r = await llm({
-      task: "judge", system, user, json: true, job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat",
-      paid: "never", maxTokens: 900, deadlineMs: Math.min(left - 2000, 35_000),
+      // json:false on purpose: strict JSON mode makes Groq reject and Cloudflare's gpt-oss spend the whole
+      // budget reasoning (empty reply). parseStep() pulls the JSON object out of plain text instead.
+      task: "judge", system, user, json: false, job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat",
+      paid: "never", maxTokens: 2500, deadlineMs: Math.min(left - 2000, 45_000),
     });
     return r.text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
   } catch {
@@ -803,7 +805,7 @@ async function freeAgent(threadId: string, text: string, page: unknown): Promise
   const queue = ((today ?? []) as any[]).slice(0, 12).map((q) => `- [${q.key}] rank ${q.rank} ${q.title}${q.detail ? `: ${String(q.detail).slice(0, 140)}` : ""}`).join("\n");
 
   const head = `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You DO things with tools; you do not describe what someone else should do.
-Answer with ONE JSON object and nothing else, one of:
+Answer with ONE JSON object and nothing else (no prose, no code fences), one of:
 {"tool": "<name>", "args": {...}}                      run a tool; you will see its result, then choose the next step
 {"reply": "<text for Jared>", "options": ["Do it", "Not now"]}   finish: plain text under 70 words, lead with the answer; options = 2-4 short buttons he can tap
 {"escalate": "CODE" | "DATA" | "ACTION", "why": "<one line>"}    hand to paid Scout when the job needs a code change or build, a data change (INSERT/UPDATE/DELETE), or more than you can finish here
@@ -834,7 +836,7 @@ ${convo}`;
   for (let i = 0; i < FREE_STEPS && Date.now() < until - 8000; i++) {
     toolDeadline = Math.min(until - 5000, Date.now() + 60_000);
     const raw = await freeModel(threadId, head, `Your steps so far this turn:\n${steps.join("\n") || "(none yet)"}\n\nNext JSON:`, until);
-    if (raw == null) break;
+    if (raw == null) { if (++fails > 1) break; continue; }   // every free rung failed this step: one more try
     const s = parseStep(raw);
     if (!s) { steps.push(`(your last answer was not valid JSON; answer with one JSON object)`); if (++fails > 2) break; continue; }
 
