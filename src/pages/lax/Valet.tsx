@@ -6,7 +6,7 @@
  * Server: trip_valet_state / trip_valet_consent / trip_unlock_start → worker action unlock_start (door_unlock + remote_start_drive).
  */
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, KeyRound, Loader2, ShieldAlert, X } from "lucide-react";
+import { KeyRound, Loader2, ShieldAlert, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
 
@@ -22,7 +22,20 @@ export function UnlockStart({ token, demo }: { token?: string; demo?: boolean })
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  // The 2-minute driving window: counts down on the button (kept across a reload in this tab).
+  const WIN = 120e3;
+  const uKey = `valet-until:${token ?? "demo"}`;
+  const [until, setUntil] = useState<number>(() => { try { return Number(sessionStorage.getItem(uKey) || 0); } catch { return 0; } });
+  const [now, setNow] = useState(() => Date.now());
+  const [closed, setClosed] = useState(false);
+  const left = Math.max(0, until - now);
+  const active = left > 0;
+  useEffect(() => {
+    if (!until || Date.now() >= until) return;
+    const id = window.setInterval(() => { const t = Date.now(); setNow(t); if (t >= until) { window.clearInterval(id); setClosed(true); } }, 250);
+    return () => window.clearInterval(id);
+  }, [until]);
+  const startWindow = () => { const u = Date.now() + WIN; setUntil(u); setNow(Date.now()); setClosed(false); try { sessionStorage.setItem(uKey, String(u)); } catch { /* ignore */ } };
   const load = useCallback(async () => {
     if (demo || !token) return;
     const { data } = await rpc("trip_valet_state", { p_token: token });
@@ -38,9 +51,10 @@ export function UnlockStart({ token, demo }: { token?: string; demo?: boolean })
   );
 
   const go = async () => {
-    setBusy(true); setMsg(null); setReady(false);
+    if (active) return;
+    setBusy(true); setMsg(null); setClosed(false);
     try {
-      if (demo) { await new Promise((r) => setTimeout(r, 1500)); setReady(true); return; }
+      if (demo) { await new Promise((r) => setTimeout(r, 1500)); startWindow(); return; }
       const { data } = await rpc("trip_unlock_start", { p_token: token });
       const r = data as { ok: boolean; id?: number; error?: string } | null;
       if (!r?.ok || !r.id) { setMsg(r?.error ?? "Couldn't reach the car."); return; }
@@ -50,7 +64,7 @@ export function UnlockStart({ token, demo }: { token?: string; demo?: boolean })
         const { data: j } = await rpc("lax_guest_car_job", { p_token: token, p_id: r.id });
         const job = j as { status: string; stage?: string | null; result?: { error?: string } } | null;
         if (job?.stage) setMsg(job.stage);
-        if (job?.status === "done") { setMsg(null); setReady(true); return; }
+        if (job?.status === "done") { setMsg(null); startWindow(); return; }
         if (job?.status === "failed") { setMsg(job.result?.error ?? "The car didn't respond. Use your Tesla app."); return; }
       }
       setMsg("The car is taking a while. Use your Tesla app to unlock.");
@@ -69,12 +83,25 @@ export function UnlockStart({ token, demo }: { token?: string; demo?: boolean })
 
   return (
     <div className="mt-3">
-      <button type="button" onClick={() => (st.consented_at ? void go() : setTerms(true))} disabled={busy}
-        className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#1A1140] shadow-lg shadow-black/25 active:scale-[0.99] disabled:opacity-60" style={{ background: ACCENT }}>
-        {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <KeyRound className="h-5 w-5" />} {busy ? "Unlocking…" : "Unlock & Start"}
-      </button>
-      <p className="mt-1.5 px-1 text-[12px] text-white/60">Unlocks the car and starts the same 2-minute driving window: hand it to the valet, or get in and go.</p>
-      {ready && <p className="mt-2 flex items-center gap-2 rounded-xl bg-emerald-400/15 p-2.5 text-[14px] font-semibold text-emerald-100" aria-live="polite"><CheckCircle2 className="h-5 w-5" /> Unlocked. Press the brake and shift within 2 minutes.{demo ? " (Demo)" : ""}</p>}
+      {active ? (
+        // During the window: pressed-in, greyed out, counting down, with a bar draining inside the button.
+        <div role="timer" aria-live="polite" aria-label={`Driving window: ${Math.ceil(left / 1000)} seconds left`}
+          className="relative flex min-h-[52px] w-full cursor-not-allowed items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white/[0.08] text-[16px] font-bold text-white/80 shadow-[inset_0_3px_8px_rgba(0,0,0,.55)] ring-1 ring-white/10">
+          <span aria-hidden className="absolute inset-y-0 left-0 bg-emerald-400/20" style={{ width: `${(left / WIN) * 100}%`, transition: "width 250ms linear" }} />
+          <KeyRound className="relative h-5 w-5" />
+          <span className="relative tabular-nums">Unlocked · drive within {Math.floor(left / 60000)}:{String(Math.floor((left % 60000) / 1000)).padStart(2, "0")}</span>
+        </div>
+      ) : (
+        <button type="button" onClick={() => (st.consented_at ? void go() : setTerms(true))} disabled={busy}
+          className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#1A1140] shadow-lg shadow-black/25 active:scale-[0.99] disabled:opacity-60" style={{ background: ACCENT }}>
+          {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <KeyRound className="h-5 w-5" />} {busy ? "Unlocking…" : closed ? "Unlock & Start again" : "Unlock & Start"}
+        </button>
+      )}
+      <p className="mt-1.5 px-1 text-[12px] text-white/60">
+        {active ? <>Press the brake and shift into Drive before the timer ends{demo ? " (Demo)" : ""}.</>
+          : closed ? "The 2-minute window ended. If nobody drove off, lock the car in the Tesla app. Tap to start a new window."
+          : "Unlocks the car and starts the same 2-minute driving window: hand it to the valet, or get in and go."}
+      </p>
       {msg && <p className="mt-2 text-[13px] text-white/75" aria-live="polite">{msg}</p>}
 
       {terms && (
