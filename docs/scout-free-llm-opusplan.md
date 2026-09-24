@@ -1,6 +1,8 @@
 # Scout on free LLMs — plan (not built)
 
-Written 2026-09-23 (Cowork, Opus). Planning only: nothing deployed, no function edited.
+Written 2026-09-23 (Cowork, Opus).
+
+**Status 2026-09-23 night — phase 1 BUILT and live:** `_shared/free-llm.ts` (interface §3, unchanged), edge fn `free-llm` v1 (ops canary / test / run), migration `20260923230000_free_llm_phase1.sql` (llm_providers, ai_spend provider/ok/ms/free_units/outcome, ai_spend_mix_today, llm_keys, llm_key_set, llm_shadow, free_llm_watch), crons `free-llm-watch` (every 15 min) and `free-llm-canary` (12:30 UTC = 5:30 AM PDT). Self-test passed on the Mac mini rung (qwen3:8b, 6–11 s): scrub, JSON judge, privacy default, size skip, paid-never. **Waiting on the 3 Vault secrets (§5)**; until then Groq/Cloudflare rungs report `skipped_nokey` and incident `ai.free.keys` stays open. scout-daily, admin-chat and the to-do UI are untouched (phases 2–4).
 Owner of `supabase/functions/_shared/free-llm.ts`: **this plan**. The to-do "Check if it's done" chat (`docs/todo-check-opusplan.md`) consumes it and must not edit it.
 
 ## TL;DR
@@ -183,7 +185,7 @@ Size check before each rung: estimated tokens = chars ÷ 3.5 + maxTokens. Groq i
 
 1. **Groq** — sign in at https://console.groq.com/keys (Google sign-in is fine) → **Create API Key** → copy.
 2. **Cloudflare** (account already exists) — https://dash.cloudflare.com/profile/api-tokens → **Create Token** → template **"Workers AI"** (Workers AI: Read + Edit) → your account → Create → copy. Account ID is on the dashboard home page, right column. Do **not** add a payment method or switch to Workers Paid; on the free plan Cloudflare refuses calls past 10K Neurons instead of billing.
-3. Paste both on the admin **Free AI keys** card (built in phase 1): paste boxes → `llm_key_set` → Vault. Never in chat.
+3. Paste them into **Supabase → Integrations → Vault → Add new secret** (https://supabase.com/dashboard/project/rcqfqhguwpmaarseifqg/integrations/vault/secrets), one secret each, named exactly `groq_api_key`, `cloudflare_ai_token`, `cloudflare_account_id`. Never in chat. (`llm_key_set(name, value)` exists for a future admin paste box; Claude is not allowed to write secrets itself.)
 
 **Vault names:** `groq_api_key`, `cloudflare_ai_token`, `cloudflare_account_id`. Optional later, public-only, not needed for Scout: `gemini_api_key` (https://aistudio.google.com/apikey — the "Default Gemini Project" already exists), `openrouter_api_key` (https://openrouter.ai/keys; never buy the $10 credit).
 
