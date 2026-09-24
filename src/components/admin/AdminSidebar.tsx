@@ -11,7 +11,7 @@ import { Brush,
   Car,
   Mic,
   Handshake,
-  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, Siren, CarFront,
+  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, Siren, CarFront, Flower2,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -83,16 +83,22 @@ const opsItems = [
 ];
 
 
+// Vesta (women-only support app with Eli and Rohit): health + every link.
+const vestaItems = [
+  { title: "Vesta", url: "/admin/vesta", icon: Flower2 },
+];
+
 // Signs you straight into the HOKU store admin (see lib/openHokuAdmin).
 const hokuItems = [
   { title: "HOKU admin", url: HOKU_ADMIN_URL, icon: ShoppingBag, sso: true },
 ];
-const ALL_NAV_URLS = [...workItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
+const ALL_NAV_URLS = [...workItems, ...vestaItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
 
 
 export const ADMIN_NAV_SECTIONS = [
   { label: "Work", items: workItems },
   { label: "HOKU", items: hokuItems },
+  { label: "Vesta", items: vestaItems },
   { label: "Cookie Yeti", items: cookieYetiItems },
   { label: "Home Hub", items: homeHubItems },
   { label: "Turo", items: turoItems },
