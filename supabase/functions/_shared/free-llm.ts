@@ -121,7 +121,15 @@ let _keys: { at: number; v: Record<string, string> } | null = null;
 async function keys(): Promise<Record<string, string>> {
   if (_keys && Date.now() - _keys.at < 10 * 60_000) return _keys.v;
   const { data, error } = await db().rpc("llm_keys");
-  const v = (!error && data && typeof data === "object") ? data as Record<string, string> : {};
+  const raw = (!error && data && typeof data === "object") ? data as Record<string, string> : {};
+  // People paste more than the key (Cloudflare's "test this token" curl line, quotes, spaces): keep only the key itself.
+  const pick = (val: string | undefined, re: RegExp) => { const m = (val ?? "").match(re); return m ? m[0] : (val ?? "").trim(); };
+  const v: Record<string, string> = { ...raw };
+  if (raw.groq_api_key) v.groq_api_key = pick(raw.groq_api_key, /gsk_[A-Za-z0-9]{20,}/);
+  if (raw.cloudflare_ai_token) v.cloudflare_ai_token = pick(raw.cloudflare_ai_token, /cfut_[A-Za-z0-9_\-]{20,}|(?<![A-Za-z0-9_\-])[A-Za-z0-9_\-]{40}(?![A-Za-z0-9_\-])/);
+  if (raw.cloudflare_account_id) v.cloudflare_account_id = pick(raw.cloudflare_account_id, /[0-9a-f]{32}/);
+  if (raw.gemini_api_key) v.gemini_api_key = pick(raw.gemini_api_key, /AIza[0-9A-Za-z_\-]{30,}/);
+  if (raw.openrouter_api_key) v.openrouter_api_key = pick(raw.openrouter_api_key, /sk-or-[A-Za-z0-9_\-]{20,}/);
   _keys = { at: Date.now(), v };
   return v;
 }
@@ -141,7 +149,7 @@ async function cooldown(p: Provider, seconds: number, why: string) {
   await db().from("llm_providers").update({ cooldown_until: until, cooldown_reason: why.slice(0, 200), updated_at: new Date().toISOString() }).eq("name", p);
 }
 
-const SECRET_RE = /(sk-ant-[A-Za-z0-9_\-]{10,}|sk-[A-Za-z0-9_\-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sb_secret_[A-Za-z0-9_\-]{10,}|gsk_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_\-]{30,}|xox[abpr]-[A-Za-z0-9\-]{10,}|eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,})/g;
+const SECRET_RE = /(sk-ant-[A-Za-z0-9_\-]{10,}|sk-[A-Za-z0-9_\-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sb_secret_[A-Za-z0-9_\-]{10,}|gsk_[A-Za-z0-9]{20,}|cfut_[A-Za-z0-9_\-]{10,}|AIza[0-9A-Za-z_\-]{30,}|xox[abpr]-[A-Za-z0-9\-]{10,}|eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,})/g;
 // A long value right after a key-ish word ("api_key": "...", password=..., Bearer ...).
 const LABELLED_RE = /((?:api[_-]?key|secret|token|password|passwd|bearer|authorization)["'\s]*[:=]?\s*["']?)([A-Za-z0-9_\-.\/+=]{16,})/gi;
 export function scrub(s: string): string {
@@ -164,7 +172,8 @@ function parseJson(t: string): any {
 }
 
 class Fail extends Error {
-  constructor(public outcome: Outcome, msg: string, public retryAfter = 0) { super(msg); }
+  // Error text can echo request headers (e.g. "Invalid header value: Bearer ..."): never let a key reach a log.
+  constructor(public outcome: Outcome, msg: string, public retryAfter = 0) { super(scrub(msg).replace(/Bearer\s+\S+/gi, "Bearer [secret]")); }
 }
 
 function laDayStart(): string {
