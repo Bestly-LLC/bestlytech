@@ -26,7 +26,7 @@ import { TranscriptBubbles, CopyTranscriptButton } from "@/components/admin/Tran
 import { CopyButton } from "@/components/CopyText";
 import { AdminMark } from "@/components/AdminMark";
 import { PartnerMark } from "@/components/PartnerMark";
-import { WeatherNow } from "@/components/admin/WeatherNow";
+import { WeatherNow, type Place } from "@/components/admin/WeatherNow";
 import { GreetingSwap } from "./GreetingSwap";
 import { cn } from "@/lib/utils";
 import { ART } from "./partnerArt";
@@ -39,7 +39,7 @@ import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState
 
 /* ───────── types + helpers ───────── */
 
-interface Partner { id: string; name: string; email: string; roster_name: string; call_url: string | null; company: string | null; mark: string }
+interface Partner { id: string; name: string; email: string; roster_name: string; call_url: string | null; company: string | null; mark: string; wx_lat?: number | null; wx_lon?: number | null; wx_label?: string | null; wx_at?: string | null; wx_precise?: boolean | null }
 export interface Meeting {
   id: string; name: string; started_at: string | null; stopped_at: string | null; people: string[];
   summary: { summary?: string; decisions?: string[]; questions?: string[] } | null;
@@ -191,7 +191,7 @@ export function PartnerHome({ session }: { session: Session }) {
   const load = useCallback(async () => {
     const uid = session.user.id;
     const [{ data: p }, { data: isAdmin }] = await Promise.all([
-      supabase.from("partners" as never).select("id, name, email, roster_name, call_url, company, mark").eq("user_id", uid).maybeSingle(),
+      supabase.from("partners" as never).select("id, name, email, roster_name, call_url, company, mark, wx_lat, wx_lon, wx_label, wx_at, wx_precise").eq("user_id", uid).maybeSingle(),
       supabase.rpc("has_role" as never, { _user_id: uid, _role: "admin" } as never),
     ]);
     // Admin "view as": /partner?as=eli shows exactly that partner's screen, using the same
@@ -199,7 +199,7 @@ export function PartnerHome({ session }: { session: Session }) {
     let asPartner: Partner | null = null;
     const asRoster = isAdmin ? asParam : null;
     if (asRoster && !p) {
-      const { data: ap } = await supabase.from("partners" as never).select("id, name, email, roster_name, call_url, company, mark").eq("roster_name", asRoster).maybeSingle();
+      const { data: ap } = await supabase.from("partners" as never).select("id, name, email, roster_name, call_url, company, mark, wx_lat, wx_lon, wx_label, wx_at, wx_precise").eq("roster_name", asRoster).maybeSingle();
       asPartner = (ap as unknown as Partner) ?? null;
     }
     setViewAs(!!asPartner);
@@ -254,7 +254,16 @@ export function PartnerHome({ session }: { session: Session }) {
   const callUrl = partner?.call_url ?? "https://cloud.bestly.tech/call/sm33w3fu";
   // The next meeting on the calendar with Eli, if there is one; else his standing room.
   const joinUrl = nextMtg?.join_url ?? callUrl;
+  const savePlace = useCallback((p: Place) => {
+    supabase.rpc("partner_set_place" as never, { p_lat: p.lat, p_lon: p.lon, p_label: p.label, p_precise: !p.approx } as never).then(() => {});
+  }, []);
   const first = (partner?.name ?? "Jared").split(" ")[0];
+  // Weather: the partner's own browser finds where they are and saves it (city level) on their row;
+  // Jared's "view as" then shows the partner's weather, not his own.
+  const wxFixed: Place | null = viewAs && partner?.wx_lat != null && partner?.wx_lon != null
+    ? { lat: Number(partner.wx_lat), lon: Number(partner.wx_lon), label: partner.wx_label ?? "Their area", approx: partner.wx_precise === false }
+    : null;
+  const wxNote = viewAs && partner ? `${first}'s last location${partner.wx_at ? `, ${new Date(partner.wx_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}` : ""}` : undefined;
   const files = useMemo(() => (mail ?? []).flatMap((m) => m.attachments.map((a) => ({ ...a, mail: m }))), [mail]);
   const docs = useMemo(() => {
     const seen = new Set<string>();
@@ -368,7 +377,7 @@ export function PartnerHome({ session }: { session: Session }) {
           )}
 
           {tab === "home" && (
-            <HomeTab first={first} company={partner?.company ?? null} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} openCloud={setCloud} talkUnread={talkUnread} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
+            <HomeTab first={first} company={partner?.company ?? null} wxFixed={wxFixed} wxNote={wxNote} onWxPlace={viewAs || !partner ? undefined : savePlace} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} openCloud={setCloud} talkUnread={talkUnread} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
               files={files} pipe={pipe} go={setTab} openCall={(m) => { setTab("calls"); setOpenCall(m); }}
               openMail={(m) => { setTab("mail"); setOpenMail(m); }} ask={askScout} scout={scout} />
           )}
@@ -409,11 +418,12 @@ export function PartnerHome({ session }: { session: Session }) {
 /* ───────── Home ───────── */
 
 function HomeTab(props: {
+  wxFixed: Place | null; wxNote?: string; onWxPlace?: (p: Place) => void;
   first: string; company: string | null; callUrl: string; joinUrl: string; nextMtg: NextEvent | null; studioUnread: number; onConnect: () => void; openCloud: (v: CloudView) => void; talkUnread: number; mine: Todo[]; done: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
   meetings: Meeting[] | null; mail: MailRow[] | null; files: (Att & { mail: MailRow })[]; pipe: { deals: any[]; leads: any[] } | null;
   go: (t: Tab) => void; openCall: (m: Meeting) => void; openMail: (m: MailRow) => void; ask: (q?: string) => void; scout: ScoutState;
 }) {
-  const { first, company, callUrl, joinUrl, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
+  const { wxFixed, wxNote, onWxPlace, first, company, callUrl, joinUrl, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
   const [q, setQ] = useState("");
   const [excited, setExcited] = useState(false); // hovering the greeting: the mark reacts
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", ...PT });
@@ -447,7 +457,7 @@ function HomeTab(props: {
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
-            <WeatherNow useDeviceLocation className="self-start" />
+            <WeatherNow useDeviceLocation fixedPlace={wxFixed} fixedNote={wxNote} onPlace={onWxPlace} className="self-start" />
             <a href={joinUrl} target="_blank" rel="noreferrer"
               className="inline-flex min-h-12 items-center justify-center gap-2.5 rounded-2xl bg-emerald-500 px-5 py-2 text-[#fff] shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)] transition hover:bg-emerald-400 active:scale-[0.98]">
               <Video className="h-5 w-5 shrink-0" />

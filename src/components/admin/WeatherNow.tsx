@@ -17,11 +17,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { WeatherGlyph } from "@/components/admin/WeatherGlyph";
 import { WeatherBoard, type WxData, type WxDay, type WxHour } from "@/components/admin/WeatherBoard";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ChevronRight, MapPin, Navigation } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** Home. Everything else on this dashboard is Jared's day, so this is too. */
 const HOME: Place = { lat: 34.09, lon: -118.3617, label: "West Hollywood" };
-export type Place = { lat: number; lon: number; label: string };
+export type Place = { lat: number; lon: number; label: string; approx?: boolean };
 
 /*
  * Where the viewer is, for the partner portal (Eli does not live where Jared does).
@@ -30,7 +31,8 @@ export type Place = { lat: number; lon: number; label: string };
  * leave the page - plenty for weather, and no one needs the house.
  */
 const LOC_KEY = "bestly-wx-place";
-const DAY_MS = 24 * 3600 * 1000;
+/** Re-check where the viewer is after this long (it used to be a whole day, so a trip showed home). */
+const RELOCATE_MS = 30 * 60 * 1000;
 const round = (n: number) => Math.round(n * 100) / 100;
 function cachedPlace(): (Place & { at: number }) | null {
   try { return JSON.parse(localStorage.getItem(LOC_KEY) ?? "null"); } catch { return null; }
@@ -41,6 +43,20 @@ async function placeName(lat: number, lon: number): Promise<string> {
     const j = await r.json();
     return j.city || j.locality || j.principalSubdivision || "Your area";
   } catch { return "Your area"; }
+}
+/** No GPS answer (blocked, timed out, desktop without Wi-Fi location): the city from the connection. */
+async function ipPlace(): Promise<Place | null> {
+  try {
+    const r = await fetch("https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=en");
+    const j = await r.json();
+    if (typeof j.latitude !== "number" || typeof j.longitude !== "number") return null;
+    const place = { lat: round(j.latitude), lon: round(j.longitude), label: j.city || j.locality || j.principalSubdivision || "Your area", approx: true };
+    try { localStorage.setItem(LOC_KEY, JSON.stringify({ ...place, at: Date.now() })); } catch { /* ok */ }
+    return place;
+  } catch { return null; }
+}
+async function geoPermission(): Promise<PermissionState | "unknown"> {
+  try { return (await navigator.permissions.query({ name: "geolocation" as PermissionName })).state; } catch { return "unknown"; }
 }
 function locate(): Promise<Place> {
   return new Promise((resolve, reject) => {
@@ -53,7 +69,7 @@ function locate(): Promise<Place> {
         resolve(place);
       },
       reject,
-      { maximumAge: 60 * 60 * 1000, timeout: 15000, enableHighAccuracy: false },
+      { maximumAge: 10 * 60 * 1000, timeout: 15000, enableHighAccuracy: false },
     );
   });
 }
@@ -78,23 +94,55 @@ const words = (code: string) => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-export function WeatherNow({ className, useDeviceLocation = false }: {
+export function WeatherNow({ className, useDeviceLocation = false, fixedPlace, fixedNote, onPlace }: {
   className?: string;
   /** Partner portal: weather where the viewer is (browser location), not Jared's home. */
   useDeviceLocation?: boolean;
+  /** Show this place instead (Jared viewing Eli's screen: Eli's last known place, not Jared's). */
+  fixedPlace?: Place | null;
+  /** Small line under the place when fixedPlace is used, e.g. "Eli's last location". */
+  fixedNote?: string;
+  /** Told whenever the viewer's own place is found (the portal saves it to the partner's row). */
+  onPlace?: (p: Place) => void;
 }) {
-  const [place, setPlace] = useState<Place | null>(() => {
+  const [place, setPlaceRaw] = useState<Place | null>(() => {
+    if (fixedPlace) return fixedPlace;
     if (!useDeviceLocation) return HOME;
     const c = cachedPlace();
-    return c ? { lat: c.lat, lon: c.lon, label: c.label } : null;
+    return c ? { lat: c.lat, lon: c.lon, label: c.label, approx: c.approx } : null;
   });
+  const setPlace = (p: Place) => { setPlaceRaw(p); onPlace?.(p); };
   const [needsTap, setNeedsTap] = useState(false);
+  useEffect(() => { if (fixedPlace) setPlaceRaw(fixedPlace); }, [fixedPlace?.lat, fixedPlace?.lon, fixedPlace?.label]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!useDeviceLocation) return;
-    const c = cachedPlace();
-    if (c && Date.now() - c.at < DAY_MS) return;
-    locate().then(setPlace).catch(() => { if (!c) setNeedsTap(true); });
-  }, [useDeviceLocation]);
+    if (!useDeviceLocation || fixedPlace) return;
+    let alive = true;
+    const find = async (force = false) => {
+      const c = cachedPlace();
+      if (!force && c && !c.approx && Date.now() - c.at < RELOCATE_MS) return;
+      const perm = await geoPermission();
+      // Never a blank tile while the browser asks "allow location?": show the connection's city now,
+      // swap to the exact spot the moment it arrives.
+      let exact = false;
+      const quick = !c && perm !== "granted"
+        ? ipPlace().then((ip) => { if (alive && ip && !exact) setPlace(ip); return ip; })
+        : null;
+      if (perm !== "denied") {
+        try { const p = await locate(); exact = true; if (alive) setPlace(p); return; } catch { /* fall through to the connection's city */ }
+      }
+      const ip = quick ? await quick : await ipPlace();
+      if (!alive) return;
+      if (ip) setPlace(ip);
+      else if (!c) setNeedsTap(true);
+    };
+    find();
+    const t = setInterval(() => find(), RELOCATE_MS);
+    return () => { alive = false; clearInterval(t); };
+  }, [useDeviceLocation, fixedPlace]); // eslint-disable-line react-hooks/exhaustive-deps
+  const preciseNow = (e: React.MouseEvent) => {
+    e.stopPropagation(); // a tap here asks for location (Safari only asks from a tap), it doesn't open the forecast
+    locate().then(setPlace).catch(() => { /* still blocked: keep the approximate city */ });
+  };
   const [now, setNow] = useState<Current | null>(null);
   const [today, setToday] = useState<Day | null>(null);
   const [failed, setFailed] = useState(false);
@@ -157,37 +205,53 @@ export function WeatherNow({ className, useDeviceLocation = false }: {
   const day = now.daylight !== false;
   const drift = feels != null && temp != null && Math.abs(feels - temp) >= 3;
 
+  const PlaceIcon = fixedPlace || !useDeviceLocation ? MapPin : Navigation;
   return (
     <>
     <div
       role="button"
       tabIndex={0}
-      onClick={(e) => { if (!(e.target as HTMLElement).closest("a")) setOpen(true); }}
+      title="Tap for the hourly and 10-day forecast"
+      onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button")) setOpen(true); }}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
-      aria-label={`Weather: ${temp} degrees, ${words(code)}. Open the forecast`}
+      aria-label={`Weather in ${place.label}: ${temp} degrees, ${words(code)}. Open the forecast`}
       className={cn(
-        "flex cursor-pointer items-center gap-3 rounded-[1.25rem] px-3.5 py-2.5 transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
+        "group flex cursor-pointer items-center gap-3 rounded-[1.25rem] py-2.5 pl-3 pr-2.5 transition duration-200",
+        "hover:-translate-y-px hover:bg-white/[0.08] active:translate-y-0 active:scale-[0.99]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF]/60",
         "bg-white/[0.05] ring-1 ring-inset ring-white/[0.07]",
-        "bento:bg-[#F3F2EE] bento:ring-[#e6e4de]",
+        "bento:bg-[#F3F2EE] bento:ring-[#e6e4de] bento:hover:bg-[#ECEAE4]",
         className,
       )}
     >
-      <WeatherGlyph code={code} day={day} className="h-16 w-16 shrink-0 drop-shadow-sm" />
+      <WeatherGlyph code={code} day={day} className="h-14 w-14 shrink-0 drop-shadow-sm" />
       <div className="min-w-0">
+        {/* where this is, iOS Weather style: arrow = where you are now, pin = a set place */}
+        <p className="flex items-center gap-1 text-[0.75rem] font-semibold text-white/65 bento:text-[#55525c]">
+          <PlaceIcon className={cn("h-3 w-3 shrink-0", PlaceIcon === Navigation && "fill-current")} aria-hidden />
+          <span className="truncate">{place.label}</span>
+          {place.approx && !fixedPlace && (
+            <button type="button" onClick={preciseNow}
+              className="ml-0.5 shrink-0 rounded-full px-1.5 text-[0.6875rem] font-medium text-[#0A84FF] hover:bg-[#0A84FF]/10 bento:text-[#007AFF]"
+              title="Approximate, from your connection. Tap to use your exact location">
+              Approx.
+            </button>
+          )}
+        </p>
         <div className="flex items-baseline gap-2">
-          <span className="text-[2.25rem] font-bold leading-none tracking-tight tabular-nums text-white bento:text-[#17151c]">
+          <span className="text-[2.1rem] font-bold leading-none tracking-tight tabular-nums text-white bento:text-[#17151c]">
             {temp}&deg;
           </span>
           <span className="truncate text-sm font-medium text-white/75 bento:text-[#33313a]">{words(code)}</span>
         </div>
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-white/50 bento:text-[#55525c]">
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-white/50 bento:text-[#55525c]">
           {hi != null && lo != null && (
             <span className="tabular-nums">
               H {hi}&deg; &nbsp;L {lo}&deg;
             </span>
           )}
           {drift && <span className="tabular-nums">Feels {feels}&deg;</span>}
-          <span className="hidden xl:inline">{place.label}</span>
+          {fixedPlace && fixedNote && <span>{fixedNote}</span>}
           <a
             href={now.metadata?.attributionURL ?? ATTRIBUTION}
             target="_blank"
@@ -198,6 +262,8 @@ export function WeatherNow({ className, useDeviceLocation = false }: {
           </a>
         </p>
       </div>
+      {/* says "this opens": a chevron that nudges on hover, like an iOS list row */}
+      <ChevronRight className="ml-0.5 h-4 w-4 shrink-0 text-white/30 transition duration-200 group-hover:translate-x-0.5 group-hover:text-white/70 bento:text-[#b3b0b8] bento:group-hover:text-[#55525c]" aria-hidden />
     </div>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-6xl overflow-y-auto border-white/10 bg-[#07090d] p-3 text-white sm:p-4 bento:bg-[#F3F2EE] bento:text-[#17151c]">
