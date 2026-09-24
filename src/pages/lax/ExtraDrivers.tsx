@@ -26,7 +26,7 @@ const STEPS = [
   <>Come back here and add them below. Their own key appears once Turo confirms.</>,
 ];
 
-export default function ExtraDrivers({ token, ended }: { token: string; ended?: boolean }) {
+export default function ExtraDrivers({ token, ended, embedded }: { token: string; ended?: boolean; embedded?: boolean }) {
   const [data, setData] = useState<Data | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -72,11 +72,11 @@ export default function ExtraDrivers({ token, ended }: { token: string; ended?: 
   if (ended) return null;
   const drivers = data?.drivers ?? [];
   return (
-    <section id="drivers" className="mt-6 scroll-mt-4 rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
+    <section id="drivers" className={embedded ? "mt-5 scroll-mt-4 border-t border-white/10 pt-4" : "mt-6 scroll-mt-4 rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10"}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Extra drivers</p>
-      <h2 className="mt-1 text-[20px] font-bold leading-snug text-white" style={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>
+      <h3 className={`mt-1 font-bold leading-snug text-white ${embedded ? "text-[17px]" : "text-[20px]"}`} style={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>
         {drivers.length ? "Your drivers" : "Someone else driving?"}
-      </h2>
+      </h3>
 
       {drivers.length > 0 && (
         <ul className="mt-3 space-y-2">
@@ -110,7 +110,7 @@ export default function ExtraDrivers({ token, ended }: { token: string; ended?: 
 
       {!open ? (
         <>
-          {!drivers.length && <p className="text-[15px] leading-relaxed text-white/80">Anyone else who drives must be <b className="text-white">added and approved in Turo first</b>. Then they get their own phone key here.</p>}
+          {!drivers.length && <p className="text-[15px] leading-relaxed text-white/80">Anyone else who drives must be <b className="text-white">added and approved in Turo first</b>. Then they get their own phone key here. Everyone drives with a phone key; there&apos;s no key card or remote unlock.</p>}
           <button type="button" onClick={() => { setOpen(true); track(token, "driver_open"); }} className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.99]">
             <UserPlus className="h-5 w-5" style={{ color: ACCENT }} /> Add a driver
           </button>

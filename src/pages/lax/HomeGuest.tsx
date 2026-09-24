@@ -10,7 +10,7 @@
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
-import { ArrowRight, BellRing, CheckCircle2, Flashlight, KeyRound, Loader2, LockOpen, MapPin, Navigation, ShieldAlert, Smartphone } from "lucide-react";
+import { ArrowRight, BellRing, CheckCircle2, Flashlight, KeyRound, Loader2, MapPin, Navigation, ShieldAlert, Smartphone } from "lucide-react";
 import { TagBar, TripSheet } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
@@ -18,6 +18,7 @@ import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
 import { ScrollFx } from "./ScrollFx";
 import { track } from "./track";
 import ExtraDrivers from "./ExtraDrivers";
+import { Collapse } from "./Collapse";
 import { KeyNextSteps, KeyPending, keyTapped, markKeyTapped } from "./KeyNext";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
@@ -71,14 +72,9 @@ const ago = (iso: string) => {
   return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} hr ago`;
 };
 
-function Section({ kicker, title, children, id }: { kicker: string; title?: string; children: ReactNode; id?: string }) {
-  return (
-    <section id={id} className="mt-6 rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>{kicker}</p>
-      {title && <h2 className="mt-1 text-[20px] font-bold leading-snug text-white" style={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>{title}</h2>}
-      <div className="mt-2">{children}</div>
-    </section>
-  );
+function Section({ kicker, title, children, id, summary, defaultOpen }: { kicker: string; title?: string; children: ReactNode; id?: string; summary?: ReactNode; defaultOpen?: boolean }) {
+  return <Collapse id={id ?? `s-${kicker.toLowerCase().replace(/[^a-z]+/g, "-")}`} kicker={kicker} title={title} summary={summary} defaultOpen={defaultOpen}
+    accent={PEACH} titleStyle={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>{children}</Collapse>;
 }
 
 function Step({ n, children }: { n: number; children: ReactNode }) {
@@ -124,7 +120,8 @@ function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; trip: Tri
   const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   const appStore = platform() === "android" ? "https://play.google.com/store/apps/details?id=com.teslamotors.tesla" : "https://apps.apple.com/app/tesla/id582007913";
   return (
-    <Section kicker="Your key" title={k.state === "added" ? "You're all set. Your phone is the key." : "Your phone is the key"} id="key">
+    <Section kicker="Your key" title={k.state === "added" ? "You're all set. Your phone is the key." : "Your phone is the key"} id="key"
+      summary={k.state === "added" ? "Phone key is on. Extra drivers inside." : k.state === "ready" ? "Your key link is ready: open to add the car." : k.state === "soon" ? `Key appears ${k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"}.` : undefined}>
       {k.state === "soon" && (
         <p className="text-[15px] leading-relaxed text-white/80">
           Your key shows up here <b className="text-white">{k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"}</b>. You'll add the car to the free Tesla app with one tap. There's no key card with this car.
@@ -175,12 +172,7 @@ function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; trip: Tri
       {k.state === "problem" && (
         <p className="flex items-start gap-2 text-[15px] leading-relaxed text-white/85"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />Your key is taking longer than usual. Your host has been told and it retries by itself. If pickup is soon, message your host in the Turo app.</p>
       )}
-      {k.unlock && run && (
-        <div className="mt-4 border-t border-white/10 pt-3">
-          <p className="text-[13px] text-white/60">Phone key not working? Unlock it from here:</p>
-          <div className="mt-2 flex"><CarButton action="unlock" label="Unlock the car" icon={LockOpen} run={run} /></div>
-        </div>
-      )}
+      {k.state !== "ended" && k.state !== "off" && <ExtraDrivers token={token} embedded />}
       {trip && k.state !== "ended" && <p className="mt-1 text-[12px] text-white/65">Access turns off by itself after your {fmtWhen(trip.ends_at)} return.</p>}
     </Section>
   );
@@ -234,7 +226,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
       </Helmet>
 
       <div className="relative overflow-hidden">
-        <img data-fx-hero src="/wallet/home/hero-mcm-v4.svg" alt="" className="block h-52 w-full object-cover object-[60%_70%] will-change-transform sm:h-64" />
+        <img data-fx-hero src="/wallet/home/hero-mcm-v5.svg" alt="" className="block h-52 w-full object-cover object-[60%_70%] will-change-transform sm:h-64" />
         <div data-fx-title className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
           <p className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: PEACH, ...shadow }}>{pub.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
           <h1 className="mt-1 text-[32px] leading-[1.05] sm:text-5xl" style={{ ...shadow, fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif", fontWeight: 700, color: "#F4EAD5" }}>Your Tesla in<br />West Hollywood</h1>
@@ -245,13 +237,11 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
       <main className="mx-auto max-w-md px-5 pb-48 pt-5">
         <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">Tesla Model 3</b> on <b className="text-white">Turo</b>. It's parked on the street at <b className="text-white">{street}</b>. Your phone is the key: no meetup, no keys to hand over. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for the steps.</p>
 
-        {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} /></div>}
+        {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} battery={car?.battery ?? null} keyState={key && key.state !== "off" ? key.state : undefined} /></div>}
 
         {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} token={token} onAdded={() => reload?.()}
           next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} address={home.address} maps={mapsFor(home.address)}
             go={(w) => { if (w === "return" || w === "pickup") openSheet(w); else { if (w === "before") window.dispatchEvent(new Event("open-before")); document.getElementById(w)?.scrollIntoView({ behavior: "smooth", block: "start" }); } }} /> : null} />}
-
-        {key && key.state !== "off" && <ExtraDrivers token={token} ended={key.state === "ended"} />}
 
         {/* One widget for the car: where it is, weather + cabin + climate buttons, find-it buttons. */}
         <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${doClimate ? "ring-2 ring-[#E8A93A]" : "ring-white/10"}`}

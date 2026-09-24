@@ -13,6 +13,7 @@ import { ArrowRight, Check, Download, Loader2, MapPin, Phone, Sun } from "lucide
 import { supabase } from "@/integrations/supabase/client";
 import { TagBar, TripSheet } from "./lax/TripSheet";
 import { AskButton, AskSheet } from "./lax/AskSheet";
+import { Collapse } from "./lax/Collapse";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type Trip } from "./lax/GuestExtras";
 import { WalletLoader } from "./lax/WalletLoader";
 import { ScrollFx } from "./lax/ScrollFx";
@@ -281,7 +282,7 @@ export default function LaxGuest() {
       </Helmet>
 
       <div className="relative overflow-hidden">
-        <img data-fx-hero src="/wallet/lax/hero-live2.svg" alt="" className="block h-44 w-full object-cover object-[65%_center] will-change-transform sm:h-56" />
+        <img data-fx-hero src="/wallet/lax/hero-live3.svg" alt="" className="block h-44 w-full object-cover object-[65%_center] will-change-transform sm:h-56" />
         <div data-fx-title className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: PEACH, ...shadow }}>{pub?.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={shadow}>Picking up your Turo car at LAX</h1>
@@ -300,7 +301,7 @@ export default function LaxGuest() {
           <>
             <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Your QR code that opens the lobby door is below. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for step-by-step directions.</p>
 
-            {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} /></div>}
+            {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} battery={(demoCar ? demoState : pub.car)?.battery ?? null} insideF={(demoCar ? demoState : pub.car)?.inside_f ?? null} /></div>}
             {/* Weather next to the car: see how hot it is, then turn on the A/C right there. */}
             {(pub.trip || pub.car) && (
               <div className="mt-5"><ClimateAdvice car={demoCar ? demoState : pub.car ?? null} outsideF={outsideF} /></div>
@@ -325,8 +326,7 @@ export default function LaxGuest() {
             </div>
 
             {/* QR */}
-            <section id="qr" className="mt-7">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Your QR code · scan it at the lobby door</p>
+            <Collapse id="qr" kicker="Your QR code · scan it at the lobby door" accent={PEACH} summary={pub.ready ? "Tap to show the lobby door code." : "Arrives the day before your trip."}>
               {pub.ready ? (
                 <>
                   <div className="mt-3 rounded-3xl bg-white p-6 text-center text-[#1A1140] shadow-2xl shadow-black/40">
@@ -355,7 +355,7 @@ export default function LaxGuest() {
               ) : (
                 <div className="mt-3 rounded-2xl bg-white/[0.06] p-4 text-white/80 ring-1 ring-white/10">Your host will text your QR code the day before your trip.</div>
               )}
-            </section>
+            </Collapse>
 
             {token && pub.trip && (
               <div className="mt-6"><EmailCard token={token} email={pub.email ?? null} reminderAt={pub.reminder_at ?? null} sentAt={pub.reminder_sent_at ?? null} /></div>
@@ -365,10 +365,9 @@ export default function LaxGuest() {
             )}
 
             {pub.note && (
-              <div className="mt-6 rounded-2xl bg-white/[0.06] p-4 ring-1 ring-white/10">
-                <p className="text-xs font-semibold uppercase tracking-[0.15em]" style={{ color: PEACH }}>From your host</p>
-                <p className="mt-1 text-white/90">{pub.note}</p>
-              </div>
+              <Collapse id="host-note" kicker="From your host" accent={PEACH} summary={pub.note.slice(0, 60) + (pub.note.length > 60 ? "…" : "")}>
+                <p className="text-white/90">{pub.note}</p>
+              </Collapse>
             )}
 
             <TripSheet open={sheet === "pickup"} onClose={() => openSheet(null)} kicker="Baggage claim → your car" title="Pickup: plane → shuttle → garage">
