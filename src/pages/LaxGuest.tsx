@@ -135,6 +135,16 @@ export default function LaxGuest() {
   const { slug = "", token = "" } = useParams();
   const [pub, setPub] = useState<Pub | null>(null);
   const viewed = useRef(false);
+  // Errors on guests' phones go to the trip-apps health board (max 3 per visit; never from the host).
+  useEffect(() => {
+    let n = 0;
+    const send = (msg: string) => { if (n++ < 3 && token) track(token, "error", { msg: msg.slice(0, 200), path: window.location.pathname }); };
+    const onErr = (e: ErrorEvent) => send(e.message || "error");
+    const onRej = (e: PromiseRejectionEvent) => send(String((e.reason as Error)?.message ?? e.reason ?? "rejection"));
+    window.addEventListener("error", onErr);
+    window.addEventListener("unhandledrejection", onRej);
+    return () => { window.removeEventListener("error", onErr); window.removeEventListener("unhandledrejection", onRej); };
+  }, [token]);
   // Pickup / Return steps live in a bottom sheet opened from the luggage-tag bar. #pickup / #return deep-link it open.
   const [sheet, setSheet] = useState<"pickup" | "return" | "ask" | null>(() => {
     if (typeof window === "undefined") return null;
@@ -259,7 +269,7 @@ export default function LaxGuest() {
     </div>
   );
   // Home pickup (733 N Kings Rd): same page system, home look. No QR code, shuttle or garage.
-  if (token && pub?.ok && pub.kind === "home") return <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} />;
+  if (token && pub?.ok && pub.kind === "home") return <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} reload={reload} />;
 
   return (
     <div className="trip min-h-dvh bg-[#1A1140] text-white" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>

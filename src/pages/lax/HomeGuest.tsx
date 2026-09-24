@@ -17,6 +17,7 @@ import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, fmt
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
 import { ScrollFx } from "./ScrollFx";
 import { track } from "./track";
+import { KeyNextSteps, KeyPending, keyTapped, markKeyTapped } from "./KeyNext";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -110,7 +111,9 @@ function CarButton({ action, label, icon: Icon, run, disabled, hint }: { action:
   );
 }
 
-function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void> }) {
+function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; trip: Trip | undefined; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; token: string; onAdded: () => void; next?: ReactNode }) {
+  // After the guest taps the key button, grey it out and keep checking with Tesla until it says added.
+  const [tapped, setTapped] = useState(() => (keyTapped(token) ?? 0) > Date.now() - 24 * 3600e3);
   // Guest says they already have the Tesla app: skip that step and show what's next instead.
   const [hasApp, setHasApp] = useState(() => { try { return localStorage.getItem("hasTeslaApp") === "1"; } catch { return false; } });
   const haveIt = () => { track(undefined, "have_app"); setHasApp(true); try { localStorage.setItem("hasTeslaApp", "1"); } catch { /* private mode */ } };
@@ -154,7 +157,7 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
             <Step n={3}>At the car, open the Tesla app and tap <b className="text-white">Unlock</b>. The app walks you through turning on your phone key.</Step>
           </ol>
           {k.link
-            ? <a href={k.link} onClick={() => track(undefined, "key_tap")} className="mt-4 flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#132726] shadow-lg shadow-black/30 active:scale-[0.99]" style={{ background: PEACH }}>
+            ? tapped ? <KeyPending token={token} link={k.link} onAdded={onAdded} /> : <a href={k.link} onClick={() => { track(undefined, "key_tap"); markKeyTapped(token); window.setTimeout(() => setTapped(true), 600); }} className="mt-4 flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#132726] shadow-lg shadow-black/30 active:scale-[0.99]" style={{ background: PEACH }}>
                 <KeyRound className="h-5 w-5" /> Add the car to my Tesla app
               </a>
             : <p className="mt-4 rounded-xl bg-white/10 p-3 text-[14px] text-white/80">Preview: the real button appears here 2 hours before pickup.</p>}
@@ -162,7 +165,7 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
         </>
       )}
       {k.state === "added" && (
-        <p className="flex items-start gap-2 text-[15px] leading-relaxed text-white/85"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />The car is in your Tesla app. Walk up with your phone and it unlocks. Access ends by itself after your trip.</p>
+        <><p className="flex items-start gap-2 text-[15px] leading-relaxed text-white/85"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />The car is in your Tesla app. Walk up with your phone and it unlocks. Access ends by itself after your trip.</p>{next}</>
       )}
       {k.state === "ended" && <p className="text-[15px] text-white/75">Your trip is over, so your key has been turned off. Thanks for driving with us.</p>}
       {k.state === "problem" && (
@@ -180,7 +183,7 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
 }
 
 
-export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; token: string; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; demo: string | null }) {
+export default function HomeGuest({ pub, token, run, demo, reload }: { pub: HomePub; token: string; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; demo: string | null; reload?: () => void }) {
   const [sheet, setSheet] = useState<"pickup" | "return" | "ask" | null>(() => {
     if (typeof window === "undefined") return null;
     const h = window.location.hash;
@@ -240,7 +243,9 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
 
         {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} /></div>}
 
-        {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} />}
+        {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} token={token} onAdded={() => reload?.()}
+          next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} address={home.address} maps={mapsFor(home.address)}
+            go={(w) => { if (w === "return" || w === "pickup") openSheet(w); else { if (w === "before") window.dispatchEvent(new Event("open-before")); document.getElementById(w)?.scrollIntoView({ behavior: "smooth", block: "start" }); } }} /> : null} />}
 
         {/* One widget for the car: where it is, weather + cabin + climate buttons, find-it buttons. */}
         <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${doClimate ? "ring-2 ring-[#E8A93A]" : "ring-white/10"}`}

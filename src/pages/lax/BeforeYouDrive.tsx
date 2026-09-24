@@ -104,6 +104,7 @@ export function BeforeYouDrive() {
   const track = useRef<HTMLDivElement>(null);
   const [i, setI] = useState(0);
   const [open, setOpen] = useState(false);
+  useEffect(() => { const o = () => setOpen(true); window.addEventListener("open-before", o); return () => window.removeEventListener("open-before", o); }, []);
   useEffect(() => {
     const el = track.current;
     if (!el) return;

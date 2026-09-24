@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { LaxGuests } from "./LaxGuests";
+import { TripHealth } from "./TripHealth";
 import { HostPassCard, TeslaCard } from "./TeslaCard";
 import { AskCard } from "./AskCard";
 
@@ -239,6 +240,7 @@ export default function LaxPass() {
         </div>
       )}
 
+      <TripHealth />
       <div id="keys"><LaxGuests /></div>
 
       {st && <GuideCard guide={st.guide ?? {}} onSaved={load} />}
