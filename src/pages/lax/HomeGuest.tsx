@@ -72,7 +72,7 @@ function Section({ kicker, title, children, id }: { kicker: string; title?: stri
   return (
     <section id={id} className="mt-6 rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>{kicker}</p>
-      {title && <h2 className="mt-1 text-[19px] font-semibold leading-snug text-white">{title}</h2>}
+      {title && <h2 className="mt-1 text-[20px] font-bold leading-snug text-white" style={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>{title}</h2>}
       <div className="mt-2">{children}</div>
     </section>
   );
@@ -104,7 +104,7 @@ function CarButton({ action, label, icon: Icon, run, disabled, hint }: { action:
         className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.09] px-3 text-[15px] font-semibold text-white ring-1 ring-white/15 transition active:scale-[0.98] disabled:opacity-40">
         {busy ? <Loader2 className="h-5 w-5 animate-spin" style={{ color: PEACH }} /> : <Icon className="h-5 w-5" style={{ color: PEACH }} />}{label}
       </button>
-      <p className={`mt-1 min-h-[1rem] text-center text-[12px] ${msg?.startsWith("Couldn't") ? "text-red-300" : "text-white/55"}`} aria-live="polite">{msg ?? hint ?? ""}</p>
+      <p className={`mt-1 min-h-[1rem] text-center text-[12px] ${msg?.startsWith("Couldn't") ? "text-red-300" : "text-white/65"}`} aria-live="polite">{msg ?? hint ?? ""}</p>
     </div>
   );
 }
@@ -131,7 +131,7 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
           ) : (
             <>
               <span className="mt-3 flex items-start gap-2 rounded-xl bg-emerald-400/10 p-3 text-[14px] text-white/90 ring-1 ring-emerald-300/30"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />You're set with the Tesla app. Just make sure you're signed in.</span>
-              <span className="mt-3 block text-[13px] font-semibold uppercase tracking-[0.12em] text-white/55">While you wait</span>
+              <span className="mt-3 block text-[13px] font-semibold uppercase tracking-[0.12em] text-white/65">While you wait</span>
               <span className="mt-2 grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => jump("before")} className="flex min-h-[48px] items-center justify-center rounded-xl bg-white/10 px-2 text-[14px] font-semibold text-white ring-1 ring-white/15">Before you drive</button>
                 <button type="button" onClick={() => jump("videos")} className="flex min-h-[48px] items-center justify-center rounded-xl bg-white/10 px-2 text-[14px] font-semibold text-white ring-1 ring-white/15">2-min videos</button>
@@ -157,7 +157,7 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
                 <KeyRound className="h-5 w-5" /> Add the car to my Tesla app
               </a>
             : <p className="mt-4 rounded-xl bg-white/10 p-3 text-[14px] text-white/80">Preview: the real button appears here 2 hours before pickup.</p>}
-          <p className="mt-2 text-[12px] text-white/50">One-time link, just for you.{k.expires_at ? ` Works until ${fmtWhen(k.expires_at)}; a new one appears here if it runs out.` : ""}</p>
+          <p className="mt-2 text-[12px] text-white/65">One-time link, just for you.{k.expires_at ? ` Works until ${fmtWhen(k.expires_at)}; a new one appears here if it runs out.` : ""}</p>
         </>
       )}
       {k.state === "added" && (
@@ -173,7 +173,7 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
           <div className="mt-2 flex"><CarButton action="unlock" label="Unlock the car" icon={LockOpen} run={run} /></div>
         </div>
       )}
-      {trip && k.state !== "ended" && <p className="mt-1 text-[12px] text-white/45">Access turns off by itself after your {fmtWhen(trip.ends_at)} return.</p>}
+      {trip && k.state !== "ended" && <p className="mt-1 text-[12px] text-white/65">Access turns off by itself after your {fmtWhen(trip.ends_at)} return.</p>}
     </Section>
   );
 }
@@ -213,13 +213,16 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
   const lockedUntil = demoCar ? null : pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending";
 
   return (
-    <div className="min-h-screen text-white" style={{ ...MCM, background: "radial-gradient(120% 60% at 50% 0%, #1f4442 0%, #132726 62%)", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
+    <div className="trip min-h-dvh text-white" style={{ ...MCM, background: "radial-gradient(120% 60% at 50% 0%, #1f4442 0%, #132726 62%)", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
       <Helmet>
         <title>Picking up your Turo Tesla in West Hollywood</title>
         <meta name="robots" content="noindex, nofollow" />
         <meta name="theme-color" content="#132726" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@600;700&display=swap" />
+        <style>{`.trip :is(a,button):focus-visible{outline:2px solid #E8A93A;outline-offset:3px;border-radius:14px}
+.trip :is(a,button){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.trip :is(a,button):not(:disabled):active{filter:brightness(1.08)}`}</style>
       </Helmet>
 
       <div className="relative overflow-hidden">
@@ -239,7 +242,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
         {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} />}
 
         {/* One widget for the car: where it is, weather + cabin + climate buttons, find-it buttons. */}
-        <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-[28px] p-3 ring-1 transition ${doClimate ? "ring-2 ring-[#E8A93A]" : "ring-white/10"}`}
+        <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${doClimate ? "ring-2 ring-[#E8A93A]" : "ring-white/10"}`}
           style={{ background: "linear-gradient(160deg, rgba(232,169,58,0.10), rgba(255,255,255,0.04) 40%, rgba(42,107,102,0.18))" }}>
           <div className="flex items-start justify-between gap-3 px-1 pt-1">
             <div className="min-w-0">
@@ -259,9 +262,9 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
             <a href={mapsFor(home.address)} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#132726] active:scale-[0.98]"><Navigation className="h-4 w-4" /> Directions</a>
             {spot
               ? <a href={mapsFor("Your Turo Tesla", spot.lat, spot.lon)} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold ring-1 ring-white/15 active:scale-[0.98]"><MapPin className="h-4 w-4" style={{ color: PEACH }} /> Exact spot</a>
-              : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/50 ring-1 ring-white/10">Exact spot shows 2 hours before pickup</span>}
+              : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">Exact spot shows 2 hours before pickup</span>}
           </div>
-          {spot && <p className="mt-1.5 px-1 text-[12px] text-white/45">Car location updated {ago(spot.observed_at)}</p>}
+          {spot && <p className="mt-1.5 px-1 text-[12px] text-white/65">Car location updated {ago(spot.observed_at)}</p>}
           <div className="mt-3 flex gap-2.5">
             <CarButton action="honk" label="Honk" icon={BellRing} run={live ? run : undefined} hint={live ? "Short beep" : "Works 1 hour before pickup"} />
             <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? run : undefined} hint={live ? "Good at night" : " "} />
@@ -310,7 +313,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
         <ScrollFx />
         <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home />
 
-        <p className="mt-10 text-center text-sm text-white/50">Questions? Tap Ask a question, or message your host in the Turo app.</p>
+        <p className="mt-10 text-center text-sm text-white/65">Questions? Tap Ask a question, or message your host in the Turo app.</p>
 
         <a href="https://www.bestly.tech/hire?utm_source=turo&utm_medium=guest-page&utm_campaign=home-trip-page" target="_blank" rel="noopener"
           className="mt-8 block rounded-3xl p-5 ring-1 ring-white/15 transition active:scale-[0.99]"

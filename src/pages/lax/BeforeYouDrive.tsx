@@ -4,7 +4,7 @@
  * Scroll-snap on phones, arrows + dots for everyone else. Colors follow the page theme vars.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, ExternalLink } from "lucide-react";
 
 const MUSTARD = "#E8A93A", ORANGE = "#E36F3C", CREAM = "#F4EAD5", TEAL = "#2a6b66", DEEP = "#132726", OLIVE = "#6f7d3a";
 const star = (cx: number, cy: number, r: number, fill = CREAM) => {
@@ -102,27 +102,34 @@ const SLIDES: Slide[] = [
 export function BeforeYouDrive() {
   const track = useRef<HTMLDivElement>(null);
   const [i, setI] = useState(0);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     const el = track.current;
     if (!el) return;
     const on = () => setI(Math.round(el.scrollLeft / Math.max(1, el.clientWidth * 0.86)));
     el.addEventListener("scroll", on, { passive: true });
     return () => el.removeEventListener("scroll", on);
-  }, []);
+  }, [open]);
   const go = (n: number) => {
     const el = track.current;
     const card = el?.children[Math.max(0, Math.min(SLIDES.length - 1, n))] as HTMLElement | undefined;
     if (el && card) el.scrollTo({ left: card.offsetLeft - el.offsetLeft, behavior: "smooth" });
   };
   return (
-    <div className="-mx-4 pb-4 pt-2" id="before">
-      <div className="flex items-end justify-between px-4">
-        <p className="text-[16px] font-semibold text-white">Before you drive</p>
-        <div className="flex gap-1.5">
-          <button type="button" aria-label="Previous" onClick={() => go(i - 1)} disabled={i === 0} className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white disabled:opacity-30"><ChevronLeft className="h-5 w-5" /></button>
-          <button type="button" aria-label="Next" onClick={() => go(i + 1)} disabled={i >= SLIDES.length - 1} className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white disabled:opacity-30"><ChevronRight className="h-5 w-5" /></button>
-        </div>
+    <div className="-mx-4 border-b border-white/10" id="before">
+      <div className="flex items-center gap-3 px-4">
+        <button type="button" onClick={() => setOpen((x) => !x)} aria-expanded={open} className="flex min-h-[60px] min-w-0 flex-1 items-center gap-3 py-3 text-left">
+          <ClipboardList className="h-6 w-6 shrink-0" style={{ color: "var(--trip-accent)" }} strokeWidth={1.75} />
+          <span className="min-w-0 flex-1"><span className="block text-[16px] font-semibold text-white">Before you drive</span><span className="block text-[13px] leading-snug text-white/60">5 quick cards · trip changes, profile, paperwork</span></span>
+          {!open && <ChevronDown className="h-5 w-5 shrink-0 text-white/65" />}
+        </button>
+        {open && <div className="flex shrink-0 gap-1.5">
+          <button type="button" aria-label="Previous" onClick={() => go(i - 1)} disabled={i === 0} className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition active:scale-95 disabled:opacity-30"><ChevronLeft className="h-5 w-5" /></button>
+          <button type="button" aria-label="Next" onClick={() => go(i + 1)} disabled={i >= SLIDES.length - 1} className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition active:scale-95 disabled:opacity-30"><ChevronRight className="h-5 w-5" /></button>
+          <button type="button" aria-label="Collapse" onClick={() => setOpen(false)} className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition active:scale-95"><ChevronDown className="h-5 w-5 rotate-180" /></button>
+        </div>}
       </div>
+      {open && <div className="pb-4">
       <div ref={track} className="mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="region" aria-roledescription="carousel" aria-label="Before you drive">
         {SLIDES.map((s, n) => (
           <article key={s.kicker} aria-roledescription="slide" aria-label={`${n + 1} of ${SLIDES.length}`}
@@ -144,6 +151,7 @@ export function BeforeYouDrive() {
       <div className="mt-3 flex justify-center gap-1.5" aria-hidden>
         {SLIDES.map((s, n) => <span key={s.kicker} className={`h-1.5 rounded-full transition-all ${n === i ? "w-5" : "w-1.5 bg-white/25"}`} style={n === i ? { background: "var(--trip-accent)" } : undefined} />)}
       </div>
+      </div>}
     </div>
   );
 }

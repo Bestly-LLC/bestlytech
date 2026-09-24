@@ -174,7 +174,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
       <textarea id="ask-input" rows={1} value={text} maxLength={500} placeholder={home ? "Ask about the key, car, parking…" : "Ask about the shuttle, garage, car…"}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(text); } }}
-        className="max-h-28 min-h-[48px] flex-1 resize-none rounded-2xl bg-white/[0.08] px-4 py-3 text-[16px] text-white placeholder:text-white/40 outline-none ring-1 ring-white/15 focus:ring-2 focus:ring-[color:var(--trip-accent,#FFB878)]" />
+        className="max-h-28 min-h-[48px] flex-1 resize-none rounded-2xl bg-white/[0.08] px-4 py-3 text-[16px] text-white placeholder:text-white/65 outline-none ring-1 ring-white/15 focus:ring-2 focus:ring-[color:var(--trip-accent,#FFB878)]" />
       <button type="submit" disabled={busy || !text.trim()} aria-label="Send"
         className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-[#1A1140] transition active:scale-95 disabled:opacity-40" style={{ background: PEACH }}>
         <ArrowUp className="h-5 w-5" strokeWidth={2.5} />
@@ -211,7 +211,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
         {!busy && <Chips list={chips} onPick={send} />}
         </>
       )}
-      <p className="mt-5 text-[12px] leading-snug text-white/45">
+      <p className="mt-5 text-[12px] leading-snug text-white/65">
         Automated helper. It can make mistakes and can't change your trip. For anything else, message your host in the Turo app.
         {left != null && left <= 5 ? ` ${left} question${left === 1 ? "" : "s"} left today.` : ""}
       </p>

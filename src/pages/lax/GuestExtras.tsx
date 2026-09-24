@@ -56,7 +56,7 @@ function Stop({ label, iso, align }: { label: string; iso: string; align: "left"
   const { hm, ap } = timeParts(iso);
   return (
     <div className={align === "right" ? "text-right" : ""}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/55">{label}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/65">{label}</p>
       <p className="mt-0.5 font-semibold leading-none text-white tabular-nums"><span className="text-[30px] tracking-tight">{hm}</span><span className="ml-1 text-[13px] text-white/70">{ap}</span></p>
       <p className="mt-1 text-[14px] text-white/75">{dayPart(iso)}</p>
     </div>
@@ -76,7 +76,7 @@ export function TripCard({ trip }: { trip: Trip }) {
       </div>
       <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <Stop label="Pickup" iso={trip.starts_at} align="left" />
-        <div className="flex flex-col items-center gap-1 px-1 text-white/55" aria-label={`Trip length ${span(+new Date(trip.ends_at) - +new Date(trip.starts_at))}`}>
+        <div className="flex flex-col items-center gap-1 px-1 text-white/65" aria-label={`Trip length ${span(+new Date(trip.ends_at) - +new Date(trip.starts_at))}`}>
           <div className="flex items-center gap-1">
             <span className="h-1.5 w-1.5 rounded-full bg-white/40" />
             <span className="w-6 border-t border-dashed border-white/35" />
@@ -222,7 +222,7 @@ export function WeatherCard({ trip, compact = false, onNow, lat = 33.947, lon = 
             </li>
           ))}
         </ol>
-        <a href="https://weatherkit.apple.com/legal-attribution.html" target="_blank" rel="noreferrer" className="mt-2 text-[10px] text-white/55">Apple Weather</a>
+        <a href="https://weatherkit.apple.com/legal-attribution.html" target="_blank" rel="noreferrer" className="mt-2 text-[10px] text-white/65">Apple Weather</a>
       </section>
     );
   }
@@ -280,7 +280,7 @@ export function WeatherCard({ trip, compact = false, onNow, lat = 33.947, lon = 
       )}
 
       <a href="https://weatherkit.apple.com/legal-attribution.html" target="_blank" rel="noreferrer"
-        className="block pb-3 text-center text-[11px] text-white/55 hover:text-white/80">Apple Weather · Data sources</a>
+        className="block pb-3 text-center text-[11px] text-white/65 hover:text-white/80">Apple Weather · Data sources</a>
     </section>
   );
 }
@@ -324,7 +324,7 @@ function ClimateOn({ mode, until, onOff, busy, stoppedAt, auto }: { mode: string
   const left = Math.max(0, +new Date(until) - (off ? stoppedAt! : now));
   const frac = Math.min(1, Math.max(0, left / (CLIMATE_MINUTES * 60000)));
   const cool = mode === "cool";
-  const tint = off ? "text-white/45" : cool ? "text-sky-300" : "text-orange-300";
+  const tint = off ? "text-white/65" : cool ? "text-sky-300" : "text-orange-300";
   const fanAnim = off ? "lax-fan-stop" : busy ? "animate-[spin_2.6s_linear_infinite]" : "animate-[spin_1.1s_linear_infinite]";
   return (
     <div role="status" aria-live="polite"
@@ -339,7 +339,7 @@ function ClimateOn({ mode, until, onOff, busy, stoppedAt, auto }: { mode: string
         </p>
       </div>
       <p className={`mt-2 text-[34px] font-semibold leading-none tracking-tight tabular-nums transition-colors duration-700 ${off ? "text-white/35" : "text-white"}`} aria-label={off ? "Stopped" : `${mmss(left)} left`}>{mmss(left)}</p>
-      <p className={`mt-1 text-[13px] font-medium ${off ? "text-white/55" : "text-white/80"}`}>{off ? (auto ? `Ran the full ${CLIMATE_MINUTES} minutes` : "Stopped") : MODE_TEXT[mode] ?? "Running"}</p>
+      <p className={`mt-1 text-[13px] font-medium ${off ? "text-white/65" : "text-white/80"}`}>{off ? (auto ? `Ran the full ${CLIMATE_MINUTES} minutes` : "Stopped") : MODE_TEXT[mode] ?? "Running"}</p>
       <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-white/10">
         <div className={`h-full w-full origin-left rounded-full ${off ? "bg-white/30" : cool ? "bg-sky-300 transition-transform duration-1000 ease-linear" : "bg-orange-300 transition-transform duration-1000 ease-linear"}`} style={{ transform: `scaleX(${frac})` }} />
       </div>
@@ -347,7 +347,7 @@ function ClimateOn({ mode, until, onOff, busy, stoppedAt, auto }: { mode: string
         <p className="mt-2 text-[12px] leading-snug text-white/60">The cabin stays comfy for a while. Turn it back on anytime.</p>
       ) : (
         <>
-          <p className="mt-1.5 text-[11px] leading-snug text-white/55">Turns off by itself at {fmtTime(until)}</p>
+          <p className="mt-1.5 text-[11px] leading-snug text-white/65">Turns off by itself at {fmtTime(until)}</p>
           <button type="button" onClick={onOff} disabled={busy}
             className="mt-2.5 flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl bg-white/10 text-[14px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98] disabled:opacity-50">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" style={{ color: PEACH }} />} {busy ? "Turning off" : "Turn off"}
@@ -441,20 +441,20 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car }: 
                 <button key={id} type="button" onClick={() => press(id)} disabled={busy !== null || locked} aria-disabled={locked}
                   className={`flex items-center gap-2.5 rounded-xl text-left ring-1 transition active:scale-[0.98] disabled:opacity-40 disabled:saturate-0 ${primary ? (id === "cool" ? "bg-sky-400/20 ring-sky-300/40" : "bg-orange-400/20 ring-orange-300/40") : "bg-white/[0.08] ring-white/10"} ${compact ? "min-h-[48px] px-2.5 py-1.5" : "min-h-[56px] px-3 py-2.5"}`}>
                   {busy === id ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" style={{ color: PEACH }} /> : <Icon className="h-5 w-5 shrink-0" style={{ color: id === "cool" ? "#7dd3fc" : PEACH }} />}
-                  <span><span className="block text-[14px] font-semibold leading-tight text-white">{a.label}</span><span className="block text-[11px] text-white/55">{a.sub}</span></span>
+                  <span><span className="block text-[14px] font-semibold leading-tight text-white">{a.label}</span><span className="block text-[11px] text-white/65">{a.sub}</span></span>
                 </button>
               );
             })}
           </div>
-          <button type="button" onClick={() => setAll((x) => !x)} className="mt-1.5 min-h-[32px] text-[12px] font-medium text-white/55 underline decoration-white/25 underline-offset-2">
+          <button type="button" onClick={() => setAll((x) => !x)} className="mt-1.5 min-h-[32px] text-[12px] font-medium text-white/65 underline decoration-white/25 underline-offset-2">
             {all ? "Show fewer" : need === "comfy" ? "Show A/C controls" : "More controls"}
           </button>
         </>
       )}
       <p className={`mt-1 min-h-[1.25rem] text-[12px] leading-snug ${busy ? "text-white/75" : done?.startsWith("Couldn't") ? "text-red-300" : "text-emerald-300"}`} aria-live="polite">
-        {busy ? <>{stage ?? "Working"}… <span className="tabular-nums text-white/45">{secs}s</span>{stage === "Waking up the car" && <span className="block text-white/45">Can take up to a minute.</span>}</> : done}
+        {busy ? <>{stage ?? "Working"}… <span className="tabular-nums text-white/65">{secs}s</span>{stage === "Waking up the car" && <span className="block text-white/65">Can take up to a minute.</span>}</> : done}
       </p>
-      <p className="text-[11px] leading-snug text-white/55">
+      <p className="text-[11px] leading-snug text-white/65">
         {demo ? "Preview only. Not connected to the car yet."
           : lockedUntil === "pending" ? "Turns on when your Tesla phone key is connected, or 1 hour before pickup."
           : lockedUntil ? <>Turns on <b className="text-white/80">{fmtWhen(lockedUntil)}</b>, or as soon as your phone key is connected.</>
@@ -482,7 +482,7 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
             {car.battery != null && (
               <p className="mt-1 flex items-center gap-1.5 text-[13px] text-white/80"><BatteryMedium className="h-4 w-4 shrink-0 text-emerald-300" /><b className="text-white">{car.battery}%</b>{car.range != null && <span className="whitespace-nowrap">· {Math.round(car.range)} mi</span>}</p>
             )}
-            <p className="mt-1 text-[11px] text-white/45">{asleep ? "Parked · " : ""}Updated {ago(car.observed_at)}</p>
+            <p className="mt-1 text-[11px] text-white/65">{asleep ? "Parked · " : ""}Updated {ago(car.observed_at)}</p>
           </>
         ) : (
           <p className="mt-1.5 text-[13px] leading-snug text-white/70">{onClimate ? "Parked and asleep. Tap a button and it wakes up." : "Car info isn't available right now."}</p>
@@ -510,10 +510,10 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
       <div className="grid grid-cols-2 gap-3 text-[15px]">
         {car.battery != null && <p className="flex items-center gap-2 text-white"><BatteryMedium className="h-4 w-4 text-emerald-300" /><b>{car.battery}%</b>{car.range != null && <span className="text-white/60">· {Math.round(car.range)} mi</span>}</p>}
         {car.inside_f != null && <p className="flex items-center gap-2 text-white"><Thermometer className="h-4 w-4" style={{ color: PEACH }} />Inside <b>{Math.round(car.inside_f)}°F</b></p>}
-        {car.outside_f != null && <p className="flex items-center gap-2 text-white/80"><Thermometer className="h-4 w-4 text-white/40" />Outside {Math.round(car.outside_f)}°F</p>}
+        {car.outside_f != null && <p className="flex items-center gap-2 text-white/80"><Thermometer className="h-4 w-4 text-white/65" />Outside {Math.round(car.outside_f)}°F</p>}
         {car.locked != null && <p className="flex items-center gap-2 text-white/80">{car.locked ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}{car.locked ? "Locked" : "Unlocked"}</p>}
       </div>
-      <p className="mt-2 text-[12px] text-white/45">Updated {ago(car.observed_at)}{car.charging && car.charging !== "Disconnected" ? ` · ${car.charging.toLowerCase()}` : ""}</p>
+      <p className="mt-2 text-[12px] text-white/65">Updated {ago(car.observed_at)}{car.charging && car.charging !== "Disconnected" ? ` · ${car.charging.toLowerCase()}` : ""}</p>
       {(demo || onClimate) && <ClimateControls demo={demo} onAction={onClimate} car={car} />}
     </Card>
   );
@@ -555,7 +555,7 @@ export function EmailCard({ token, email, reminderAt, sentAt, home = false }: { 
             </button>
           </div>
           {err && <p className="mt-2 text-[13px] text-[#FF8FA8]">{err}</p>}
-          <p className="mt-2 text-[11px] text-white/40">Only used for this trip's reminder. Never shared.</p>
+          <p className="mt-2 text-[11px] text-white/65">Only used for this trip's reminder. Never shared.</p>
         </div>
       )}
     </Card>

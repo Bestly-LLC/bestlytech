@@ -96,7 +96,7 @@ function Fold({ icon: Icon, title, sub, children, tone, open: start = false }: {
         className="flex min-h-[60px] w-full items-center gap-3 py-3 text-left">
         <Icon className="h-6 w-6 shrink-0" style={{ color: tone === "alert" ? "#FF8FA8" : ACCENT }} strokeWidth={1.75} />
         <span className="min-w-0 flex-1"><span className="block text-[16px] font-semibold text-white">{title}</span><span className="block text-[13px] leading-snug text-white/60">{sub}</span></span>
-        <ChevronDown className={`h-5 w-5 shrink-0 text-white/50 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-5 w-5 shrink-0 text-white/65 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && <div className="pb-4 text-[15px] leading-relaxed text-white/85">{children}</div>}
     </div>
@@ -109,7 +109,7 @@ function Bullets({ items }: { items: ReactNode[] }) {
 function Numbered({ items }: { items: ReactNode[] }) {
   return <ol className="mt-1.5 space-y-1.5">{items.map((x, i) => <li key={i} className="flex gap-2.5"><span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-[#140826]" style={{ background: ACCENT }}>{i + 1}</span><span>{x}</span></li>)}</ol>;
 }
-const H = ({ children }: { children: ReactNode }) => <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55 first:mt-0">{children}</p>;
+const H = ({ children }: { children: ReactNode }) => <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/65 first:mt-0">{children}</p>;
 const Call = ({ tel, label, shown, red }: { tel: string; label: string; shown?: string; red?: boolean }) => (
   <a href={`tel:${tel}`} className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold text-[#140826] active:scale-95" style={{ background: red ? "#FF6B6B" : "#7CE0A5" }}>
     <Phone className="h-4 w-4" /> {label}{shown && <span className="font-medium opacity-70">{shown}</span>}
@@ -130,7 +130,7 @@ export function HomeGuide({ pickupBattery }: { pickupBattery?: number | null }) 
   return (
     <section className="mt-6 rounded-3xl bg-white/[0.06] px-4 pt-3 ring-1 ring-white/10" aria-label="Car guide">
       <p className="pt-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Your car guide</p>
-      <h2 className="mt-1 text-[19px] font-semibold leading-snug text-white">Everything you need, at a glance</h2>
+      <h2 className="mt-1 text-[20px] font-bold leading-snug text-white" style={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>Everything you need, at a glance</h2>
 
       <BeforeYouDrive />
 
@@ -197,7 +197,7 @@ export function HomeGuide({ pickupBattery }: { pickupBattery?: number | null }) 
         </div>
         <p className="mt-2 text-[13px] text-white/60">Turo Roadside sends help to you at no cost. Tesla Roadside is also in the Tesla app under Roadside. Be ready to share your location and what happened.</p>
         <a href={INCIDENT_CARD} target="_blank" rel="noreferrer" className="mt-3 flex min-h-[48px] items-center gap-2 rounded-2xl bg-white/[0.09] px-4 text-[15px] font-semibold ring-1 ring-white/15">
-          <FileText className="h-5 w-5 shrink-0" style={{ color: ACCENT }} /> Turo incident information card (PDF) <ExternalLink className="ml-auto h-4 w-4 text-white/40" />
+          <FileText className="h-5 w-5 shrink-0" style={{ color: ACCENT }} /> Turo incident information card (PDF) <ExternalLink className="ml-auto h-4 w-4 text-white/65" />
         </a>
         <H>Insurance notes</H>
         <Bullets items={[

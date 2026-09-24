@@ -39,6 +39,7 @@
     }
   ],
   "redirects": [
+    { "source": "/tezlab/:s", "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/tezlab/connect?s=:s", "permanent": false },
     {
       "source": "/:path*",
       "has": [
