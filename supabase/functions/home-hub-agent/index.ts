@@ -68,6 +68,11 @@ const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
       p.mode === undefined || ["full", "storage", "status"].includes(String(p.mode))
         ? null
         : "ecoflow mode must be full, storage or status",
+    // agent >= 1.5.3: speak an urgent alert on the HomePods + critical iPhone alert (bestly_announce()).
+    announce: (p) =>
+      typeof p.message === "string" && p.message.trim().length > 0 && p.message.length <= 400
+        ? null
+        : "announce needs a message (1-400 characters)",
   },
   // agent >= 1.3.0: read-only diagnosis, and the same heal ladder the health loop uses.
   nextcloud: { status: none, restart: none },
