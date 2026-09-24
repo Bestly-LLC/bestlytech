@@ -501,6 +501,36 @@
   --sidebar-ring: 0 0% 30%;
 }
 
+/* Keyboard focus, everywhere in the admin and partner shells.
+   Not one of the 59 buttons in the partner portal had a focus ring: tabbing through it moved an
+   invisible cursor. This is `outline`, not a ring/box-shadow, so the handful of components that
+   already set `focus-visible:ring-*` keep their own treatment and these two never fight.
+   #0A84FF is the accent both themes already use for links, and it clears 3:1 on black and on
+   the warm bento page. :focus-visible means a mouse click never draws it. */
+body.admin-shell :is(a[href], button, summary, [role="button"], [role="tab"], [role="menuitem"],
+                     input, select, textarea, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid #0A84FF;
+  outline-offset: 2px;
+}
+/* On the light page the same blue needs a touch more weight to read against white cards. */
+body.admin-bento :is(a[href], button, summary, [role="button"], [role="tab"], [role="menuitem"],
+                     input, select, textarea, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline-color: #0063CC;
+}
+
+/* Motion: honour the system setting rather than assuming everyone wants the movement.
+   Transitions still happen, just fast enough not to read as motion. */
+@media (prefers-reduced-motion: reduce) {
+  body.admin-shell *,
+  body.admin-shell *::before,
+  body.admin-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Dark admin: dark scrollbars on the page and every scroll box (they were the light system ones). */
 html:has(body.admin-shell:not(.admin-bento)) {
   color-scheme: dark;

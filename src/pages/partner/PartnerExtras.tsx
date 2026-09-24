@@ -75,7 +75,7 @@ export function BellSheet({ notifs, open, onOpenChange }: { notifs: ReturnType<t
           <div className="flex items-center justify-between border-b border-white/[0.08] px-5 pb-3 pt-5">
             <div>
               <SheetTitle className="text-lg font-semibold text-white">From Studio</SheetTitle>
-              <SheetDescription className="text-xs text-white/50">Same notifications as in Studio. Reading them here marks them read there too.</SheetDescription>
+              <SheetDescription className="text-xs text-white/60">Same notifications as in Studio. Reading them here marks them read there too.</SheetDescription>
             </div>
           </div>
           <div className="flex gap-2 px-5 py-3">
@@ -87,17 +87,17 @@ export function BellSheet({ notifs, open, onOpenChange }: { notifs: ReturnType<t
             )}
           </div>
           <ul className="min-h-0 flex-1 divide-y divide-white/[0.06] overflow-y-auto">
-            {!notifs.linked ? <li className="px-5 py-8 text-sm text-white/55">Your Studio account isn't linked to this portal yet. Ask Jared.</li>
-              : notifs.items.length === 0 ? <li className="px-5 py-8 text-sm text-white/55">Nothing new from Studio.</li>
+            {!notifs.linked ? <li className="px-5 py-8 text-sm text-white/60">Your Studio account isn't linked to this portal yet. Ask Jared.</li>
+              : notifs.items.length === 0 ? <li className="px-5 py-8 text-sm text-white/60">Nothing new from Studio.</li>
               : notifs.items.map((n) => (
                 <li key={n.id}>
                   <a href={n.link || STUDIO} target="_blank" rel="noreferrer" className={cn("block px-5 py-3.5 transition hover:bg-white/[0.04]", n.unread && "bg-[#0A84FF]/[0.06]")}>
                     <div className="flex items-start gap-2">
                       <p className={cn("flex-1 text-sm leading-snug", n.unread ? "font-semibold text-white" : "text-white/80")}>{n.subject || n.kind.replace(/_/g, " ")}</p>
-                      <span className="shrink-0 text-[11px] text-white/40">{ago(n.at)}</span>
+                      <span className="shrink-0 text-[11px] text-white/60">{ago(n.at)}</span>
                       {n.unread && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#0A84FF]" />}
                     </div>
-                    {n.body && <p className="mt-0.5 line-clamp-2 text-xs text-white/55">{n.body}</p>}
+                    {n.body && <p className="mt-0.5 line-clamp-2 text-xs text-white/60">{n.body}</p>}
                   </a>
                 </li>
               ))}
@@ -159,7 +159,7 @@ export function ConnectClaude({ open, onOpenChange }: { open: boolean; onOpenCha
             <p className="text-sm font-semibold text-white">Your private link (shown once)</p>
             <code className="mt-2 block select-all break-all rounded-lg bg-black/40 p-2.5 font-mono text-[12px] text-white bento:bg-[#fff]">{fresh}</code>
             <CopyButton text={fresh} label="Copy link" className="mt-3" />
-            <p className="mt-2 text-xs text-white/55">Treat it like a password: anyone with it can read your portal. Remove it below any time.</p>
+            <p className="mt-2 text-xs text-white/60">Treat it like a password: anyone with it can read your portal. Remove it below any time.</p>
           </div>
         ) : (
           <button onClick={make} disabled={busy} className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-white text-[0.975rem] font-semibold text-black disabled:opacity-50 bento:bg-[#111114] bento:text-[#fff]">
@@ -174,19 +174,19 @@ export function ConnectClaude({ open, onOpenChange }: { open: boolean; onOpenCha
           ))}
         </ol>
 
-        <h3 className="mt-8 text-xs font-semibold uppercase tracking-widest text-white/45">Connected</h3>
-        {conns === null ? <Loader2 className="mt-3 h-5 w-5 animate-spin text-white/40" /> : conns.length === 0 ? <p className="mt-2 text-sm text-white/50">Nothing connected yet.</p> : (
+        <h3 className="mt-8 text-xs font-semibold uppercase tracking-widest text-white/60">Connected</h3>
+        {conns === null ? <Loader2 className="mt-3 h-5 w-5 animate-spin text-white/60" /> : conns.length === 0 ? <p className="mt-2 text-sm text-white/60">Nothing connected yet.</p> : (
           <ul className="mt-2 divide-y divide-white/[0.06] rounded-2xl bg-white/[0.04] bento:bg-[#fff]">
             {conns.map((c) => (
               <li key={c.id} className="flex items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-white">{c.label}</p>
-                  <p className="text-xs text-white/45">Made {new Date(c.created_at).toLocaleDateString()} · {c.last_used_at ? `last used ${ago(c.last_used_at)} ago` : "not used yet"}</p>
+                  <p className="text-xs text-white/60">Made {new Date(c.created_at).toLocaleDateString()} · {c.last_used_at ? `last used ${ago(c.last_used_at)} ago` : "not used yet"}</p>
                 </div>
                 <button onClick={() => remove(c.id)} disabled={removing === c.id}
                   aria-label={arming === c.id ? "Tap again to disconnect" : "Disconnect"}
                   className={cn("inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full text-sm font-medium transition disabled:opacity-50",
-                    arming === c.id ? "bg-red-500 px-3.5 text-[#fff]" : "w-9 text-white/50 hover:bg-white/[0.06] hover:text-red-400")}>
+                    arming === c.id ? "bg-red-500 px-3.5 text-[#fff]" : "w-9 text-white/60 hover:bg-white/[0.06] hover:text-red-400")}>
                   {removing === c.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                   {arming === c.id && "Remove"}
                 </button>

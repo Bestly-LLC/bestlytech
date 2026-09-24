@@ -33,15 +33,15 @@ function Shell({ title, sub, open, onOpenChange, children }: { title: string; su
       <SheetContent side="right" className="flex w-full flex-col gap-0 border-white/10 bg-[#0b0d12] p-0 text-white sm:max-w-xl bento:bg-[#F3F2EE]">
         <div className="border-b border-white/[0.06] px-5 pb-3 pt-6 bento:border-black/5">
           <SheetTitle className="text-lg font-semibold text-white">{title}</SheetTitle>
-          <SheetDescription className="text-sm text-white/55">{sub}</SheetDescription>
+          <SheetDescription className="text-sm text-white/60">{sub}</SheetDescription>
         </div>
         {children}
       </SheetContent>
     </Sheet>
   );
 }
-const Empty = ({ children }: { children: React.ReactNode }) => <p className="p-6 text-center text-sm text-white/50">{children}</p>;
-const Spin = () => <div className="grid flex-1 place-items-center p-10"><Loader2 className="h-6 w-6 animate-spin text-white/40" /></div>;
+const Empty = ({ children }: { children: React.ReactNode }) => <p className="p-6 text-center text-sm text-white/60">{children}</p>;
+const Spin = () => <div className="grid flex-1 place-items-center p-10"><Loader2 className="h-6 w-6 animate-spin text-white/60" /></div>;
 
 /* ───────── Talk ───────── */
 
@@ -125,9 +125,9 @@ export function TalkSheet({ open, onOpenChange }: { open: boolean; onOpenChange:
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2"><span className="truncate font-medium">{r.label}</span>
                       {r.unread > 0 && <span className="rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-[#fff]">{r.unread}</span>}</span>
-                    {r.preview && <span className="mt-0.5 line-clamp-1 block text-xs text-white/45">{r.preview}</span>}
+                    {r.preview && <span className="mt-0.5 line-clamp-1 block text-xs text-white/60">{r.preview}</span>}
                   </span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-white/30" />
+                  <ChevronRight className="h-4 w-4 shrink-0 text-white/60" />
                 </button>
               </li>
             ))}
@@ -141,14 +141,14 @@ export function TalkSheet({ open, onOpenChange }: { open: boolean; onOpenChange:
           <div className="flex-1 space-y-2.5 overflow-y-auto px-5 py-3">
             {msgs === null ? <Spin /> : msgs.length === 0 ? <Empty>No messages yet. Say hello.</Empty> : msgs.map((m) => {
               const mine = m.actor_id === me;
-              if (m.system) return <p key={m.id} className="py-1 text-center text-xs text-white/35">{m.body}</p>;
+              if (m.system) return <p key={m.id} className="py-1 text-center text-xs text-white/60">{m.body}</p>;
               return (
                 <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
                   <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[0.95rem] leading-relaxed",
                     mine ? "bg-[#0A84FF] text-[#fff]" : "bg-white/[0.07] text-white bento:bg-[#fff] bento:text-black")}>
                     {!mine && <p className="mb-0.5 text-xs font-semibold text-white/60 bento:text-black/50">{m.actor_name}</p>}
                     <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                    <p className={cn("mt-1 text-[11px]", mine ? "text-[#fff]/70" : "text-white/35")}>
+                    <p className={cn("mt-1 text-[11px]", mine ? "text-[#fff]/70" : "text-white/60")}>
                       {new Date(m.sent_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...PT })}
                     </p>
                   </div>
@@ -160,7 +160,7 @@ export function TalkSheet({ open, onOpenChange }: { open: boolean; onOpenChange:
           <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex items-end gap-2 border-t border-white/[0.06] p-4 bento:border-black/5">
             <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={1} placeholder="Message"
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              className="max-h-32 min-h-[48px] flex-1 resize-none rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-[16px] text-white outline-none placeholder:text-white/35 focus:border-white/30 bento:border-black/10 bento:bg-[#fff]" />
+              className="max-h-32 min-h-[48px] flex-1 resize-none rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:border-black/10 bento:bg-[#fff]" />
             <button type="submit" disabled={!draft.trim() || busy} aria-label="Send"
               className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white text-black disabled:opacity-40 bento:bg-[#111114] bento:text-[#fff]">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -193,15 +193,15 @@ export function BoardSheet({ open, onOpenChange }: { open: boolean; onOpenChange
           {err && <p className="text-sm text-red-400">{err}</p>}
           {stacks.map((s) => (
             <section key={s.id}>
-              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-white/45">
-                {s.title} <span className="rounded-full bg-white/[0.07] px-1.5 text-[11px] text-white/55">{s.cards.length}</span>
+              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-white/60">
+                {s.title} <span className="rounded-full bg-white/[0.07] px-1.5 text-[11px] text-white/60">{s.cards.length}</span>
               </h3>
-              {s.cards.length === 0 ? <p className="text-sm text-white/35">Nothing here.</p> : (
+              {s.cards.length === 0 ? <p className="text-sm text-white/60">Nothing here.</p> : (
                 <ul className="space-y-2">
                   {s.cards.map((c) => (
                     <li key={c.id} className="rounded-2xl bg-white/[0.04] p-3.5 bento:bg-[#fff]">
                       <p className="text-[0.95rem] font-medium">{c.title}</p>
-                      {c.description && <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-white/55">{c.description}</p>}
+                      {c.description && <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-white/60">{c.description}</p>}
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {c.labels.map((l) => (
                           <span key={l.title} className="rounded-full px-2 py-0.5 text-[11px] font-medium text-[#fff]" style={{ background: `#${l.color}` }}>{l.title}</span>
@@ -271,9 +271,9 @@ export function CloudSheet({ open, onOpenChange }: { open: boolean; onOpenChange
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{it.name}</span>
-                    <span className="block text-xs text-white/45">{it.dir ? "Folder" : size(it.size)}{it.modified ? ` · ${new Date(it.modified).toLocaleDateString("en-US", { month: "short", day: "numeric", ...PT })}` : ""}</span>
+                    <span className="block text-xs text-white/60">{it.dir ? "Folder" : size(it.size)}{it.modified ? ` · ${new Date(it.modified).toLocaleDateString("en-US", { month: "short", day: "numeric", ...PT })}` : ""}</span>
                   </span>
-                  {it.dir && <ChevronRight className="h-4 w-4 shrink-0 text-white/30" />}
+                  {it.dir && <ChevronRight className="h-4 w-4 shrink-0 text-white/60" />}
                 </button>
               </li>
             ))}
@@ -306,7 +306,7 @@ export function CalendarSheet({ open, onOpenChange }: { open: boolean; onOpenCha
           {events.map((e, i) => (
             <li key={i} className="px-5 py-3.5">
               <p className="text-[0.95rem] font-medium">{e.title}</p>
-              <p className="mt-0.5 text-sm text-white/50">{when(e)}{e.location ? ` · ${e.location}` : ""}</p>
+              <p className="mt-0.5 text-sm text-white/60">{when(e)}{e.location ? ` · ${e.location}` : ""}</p>
               {e.join_url && (
                 <a href={e.join_url} target="_blank" rel="noreferrer"
                   className="mt-2 inline-flex h-9 items-center rounded-full bg-white px-4 text-sm font-semibold text-black bento:bg-[#111114] bento:text-[#fff]">Join</a>

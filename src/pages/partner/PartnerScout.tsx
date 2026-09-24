@@ -233,7 +233,7 @@ export function ScoutAlert({ scout, open }: { scout: ScoutState; open: () => voi
           <p className="mt-0.5 line-clamp-2 text-sm text-white/60">{m.content}</p>
           <span className="mt-2 inline-flex h-8 items-center rounded-full bg-[#0A84FF] px-3.5 text-[13px] font-semibold text-[#fff]">Open</span>
         </button>
-        <button onClick={scout.dismissAlert} aria-label="Dismiss" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white/45 hover:bg-white/[0.06]">
+        <button onClick={scout.dismissAlert} aria-label="Dismiss" className="relative before:absolute before:-inset-1.5 before:content-[''] grid h-8 w-8 shrink-0 place-items-center rounded-full text-white/60 hover:bg-white/[0.06]">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -313,7 +313,7 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
         <Plus className="h-4 w-4" /> New chat
       </button>
       <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
-        {threads.length === 0 && <li className="px-2 py-3 text-xs text-white/45">Your conversations show up here.</li>}
+        {threads.length === 0 && <li className="px-2 py-3 text-xs text-white/60">Your conversations show up here.</li>}
         {threads.map((t) => (
           <li key={t.id} className={cn("group relative flex items-center rounded-xl", t.id === active ? "bg-white/[0.09] bento:bg-[#fff]" : "hover:bg-white/[0.05]")}>
             {editing === t.id ? (
@@ -325,16 +325,16 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
               <button onClick={() => pick(t.id)} className="min-w-0 flex-1 px-3 py-2.5 text-left">
                 <span className="flex items-center gap-2">
                   <span className="truncate text-sm text-white/90">{t.title}</span>
-                  {scout.busyThreads.has(t.id) ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-white/45" />
+                  {scout.busyThreads.has(t.id) ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-white/60" />
                     : scout.unreadBy[t.id] ? <span className="h-2 w-2 shrink-0 rounded-full bg-[#0A84FF]" aria-label="New answer" /> : null}
                 </span>
-                <span className="block text-[11px] text-white/40">{new Date(t.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                <span className="block text-[11px] text-white/60">{new Date(t.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
               </button>
             )}
             {editing !== t.id && (
-              <span className="flex shrink-0 pr-1 opacity-100 md:opacity-0 md:group-hover:opacity-100">
-                <button onClick={() => setEditing(t.id)} aria-label="Rename" className="grid h-8 w-8 place-items-center rounded-lg text-white/45 hover:text-white"><Pencil className="h-3.5 w-3.5" /></button>
-                <button onClick={() => { if (window.confirm("Delete this conversation?")) scout.remove(t.id); }} aria-label="Delete" className="grid h-8 w-8 place-items-center rounded-lg text-white/45 hover:text-red-400"><Trash2 className="h-3.5 w-3.5" /></button>
+              <span className="flex shrink-0 gap-3 pr-1 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                <button onClick={() => setEditing(t.id)} aria-label="Rename" className="relative before:absolute before:-inset-1.5 before:content-[''] grid h-8 w-8 place-items-center rounded-lg text-white/60 hover:text-white"><Pencil className="h-3.5 w-3.5" /></button>
+                <button onClick={() => { if (window.confirm("Delete this conversation?")) scout.remove(t.id); }} aria-label="Delete" className="relative before:absolute before:-inset-1.5 before:content-[''] grid h-8 w-8 place-items-center rounded-lg text-white/60 hover:text-red-400"><Trash2 className="h-3.5 w-3.5" /></button>
               </span>
             )}
           </li>
@@ -353,7 +353,7 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/[0.07] bento:bg-[#fff]"><AdminMark className="h-9 w-9" /></span>
             <div className="min-w-0">
               <h1 className="truncate text-[1.5rem] font-bold leading-tight tracking-tight">{current?.title ?? "Scout"}</h1>
-              <p className="flex items-center gap-1.5 text-sm text-white/55">
+              <p className="flex items-center gap-1.5 text-sm text-white/60">
                 <span className={cn("h-2 w-2 shrink-0 rounded-full", online ? "bg-emerald-400" : online === false ? "bg-amber-400" : "bg-white/30")} />
                 <span className="truncate">{online === false ? "Resting. Questions get answered when Scout wakes up." : "Knows your calls, emails, to-dos and the pipeline."}</span>
               </p>
@@ -386,12 +386,12 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
 
         <div ref={listRef} className="mt-6 min-h-[40vh] space-y-3" aria-live="polite">
           {msgs === null ? (
-            <div className="grid place-items-center py-16"><Loader2 className="h-6 w-6 animate-spin text-white/40" /></div>
+            <div className="grid place-items-center py-16"><Loader2 className="h-6 w-6 animate-spin text-white/60" /></div>
           ) : msgs.length === 0 ? (
             <div className="flex flex-col items-center py-8 text-center">
               <AdminMark className="h-20 w-20" />
               <p className="mt-4 text-lg font-semibold">Hi {name}, I'm Scout. What do you want to know?</p>
-              <p className="mt-1 max-w-sm text-sm text-white/55">Ask about your calls with Jared, his emails, what's due, the pipeline, or have me draft something. Free to use.</p>
+              <p className="mt-1 max-w-sm text-sm text-white/60">Ask about your calls with Jared, his emails, what's due, the pipeline, or have me draft something. Free to use.</p>
               <div className="mt-6 grid w-full gap-2 sm:grid-cols-2">
                 {SCOUT_IDEAS.map((q) => (
                   <button key={q} onClick={() => send(q)}
@@ -416,8 +416,8 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
                     {m.status === "working" && m.content && <span className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse rounded-sm bg-white/60" />}
                   </div>
                   {m.status === "done" && m.content && (
-                    <div className="mt-1 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
-                      <CopyButton text={m.content} className="h-7 bg-transparent px-2 text-[12px] text-white/55 hover:bg-white/[0.06]" />
+                    <div className="mt-1 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                      <CopyButton text={m.content} className="h-7 bg-transparent px-2 text-[12px] text-white/60 hover:bg-white/[0.06]" />
                     </div>
                   )}
                 </div>
@@ -429,7 +429,7 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
               <AdminMark watchCursor={false} className="mb-1 h-7 w-7 shrink-0" />
               <div className="rounded-[1.35rem] rounded-bl-md bg-white/[0.07] px-4 py-3 bento:bg-[#fff]">
                 <Dots />
-                {online === false && <p className="mt-1 text-xs text-white/50">Waiting for Scout to wake up.</p>}
+                {online === false && <p className="mt-1 text-xs text-white/60">Waiting for Scout to wake up.</p>}
               </div>
             </div>
           )}
@@ -445,7 +445,7 @@ export function PartnerScout({ scout, name, draft, onDraftUsed }: { scout: Scout
           <div className="flex items-end gap-2 rounded-[1.6rem] border border-white/10 bg-[#141418]/95 p-2 pl-4 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.6)] backdrop-blur bento:border-black/5 bento:bg-[#fff]/95">
             <textarea ref={box} rows={1} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
               placeholder={active ? "Reply to Scout" : "Ask Scout anything"} aria-label="Your question"
-              className="max-h-[180px] min-h-[40px] flex-1 resize-none bg-transparent py-2.5 text-[16px] leading-snug text-white outline-none placeholder:text-white/35" />
+              className="max-h-[180px] min-h-[40px] flex-1 resize-none bg-transparent py-2.5 text-[16px] leading-snug text-white outline-none placeholder:text-white/60" />
             <button type="submit" disabled={!text.trim() || sending} aria-label="Send"
               className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0A84FF] text-[#fff] transition active:scale-95 disabled:opacity-30">
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-5 w-5" />}

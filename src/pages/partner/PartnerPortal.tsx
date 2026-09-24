@@ -22,7 +22,7 @@ import { addPasskey, passkeyCount, passkeysSupported, signInWithPasskey } from "
 
 const card = "rounded-[1.5rem] bg-white/[0.04] border border-white/[0.06] bento:bg-[#fff] bento:border-transparent";
 const btnSolid = "inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 text-[1rem] font-semibold text-black transition active:scale-[0.98] disabled:opacity-50 bento:bg-[#111114] bento:text-[#fff]";
-const input = "h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[16px] text-white outline-none placeholder:text-white/35 focus:border-white/30 bento:bg-[var(--bento-well)] bento:border-black/5";
+const input = "h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:bg-[var(--bento-well)] bento:border-black/5";
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -35,7 +35,7 @@ function Shell({ children, right }: { children: ReactNode; right?: ReactNode }) 
         <header className="flex h-14 items-center justify-between">
           <span className="flex items-center gap-2 text-[0.95rem] font-semibold tracking-tight">
             <AdminMark className="h-7 w-7" />
-            Bestly <span className="text-white/45">· Partner</span>
+            Bestly <span className="text-white/60">· Partner</span>
           </span>
           {right}
         </header>
@@ -52,14 +52,14 @@ function Duo() {
       <div className="flex items-end gap-5">
         <div className="flex flex-col items-center gap-1.5">
           <AdminMark stareRadius={SIGNIN_STARE_RADIUS_PX} label="Binoculars" className="h-20 w-20" />
-          <span className="text-[11px] font-semibold uppercase tracking-widest text-white/40">Spot</span>
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-white/60">Spot</span>
         </div>
         <div className="flex flex-col items-center gap-1.5">
           <PartnerMark watchCursor stareRadius={SIGNIN_STARE_RADIUS_PX} label="Globe" className="h-20 w-20" />
-          <span className="text-[11px] font-semibold uppercase tracking-widest text-white/40">Steer</span>
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-white/60">Steer</span>
         </div>
       </div>
-      <figcaption className="mt-3 text-sm text-white/50">Jared spots it. You steer it.</figcaption>
+      <figcaption className="mt-3 text-sm text-white/60">Jared spots it. You steer it.</figcaption>
     </figure>
   );
 }
@@ -107,7 +107,7 @@ function SignIn() {
             </button>
           </>
         )}
-        <p className="mt-6 text-center text-sm text-white/50">First time, or on a new device? Ask Jared for a sign-in link.</p>
+        <p className="mt-6 text-center text-sm text-white/60">First time, or on a new device? Ask Jared for a sign-in link.</p>
       </div>
     </Shell>
   );
@@ -185,7 +185,7 @@ export function PartnerWelcome() {
               {pkBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Fingerprint className="h-5 w-5" />} Set up Face ID
             </button>
             {!passkeysSupported() && (
-              <p className="mt-4 text-sm text-white/50">This browser can't do passkeys. Open this same link on your phone and set it up there.</p>
+              <p className="mt-4 text-sm text-white/60">This browser can't do passkeys. Open this same link on your phone and set it up there.</p>
             )}
           </>
         )}
@@ -235,9 +235,9 @@ function PasskeyGate({ session, done }: { session: Session; done: () => void }) 
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Fingerprint className="h-5 w-5" />} Set up Face ID
         </button>
         {!passkeysSupported() && (
-          <p className="mt-4 text-sm text-white/55">This browser can't do passkeys. Open bestly.tech/partner on your phone and set it up there — then this device works too.</p>
+          <p className="mt-4 text-sm text-white/60">This browser can't do passkeys. Open bestly.tech/partner on your phone and set it up there — then this device works too.</p>
         )}
-        <button className="mt-6 w-full text-center text-sm text-white/40" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <button className="mt-6 w-full text-center text-sm text-white/60" onClick={() => supabase.auth.signOut()}>Sign out</button>
       </div>
     </Shell>
   );
