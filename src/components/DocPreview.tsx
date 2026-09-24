@@ -61,7 +61,7 @@ export function DocPreview({ file, onClose }: { file: PreviewFile | null; onClos
             if (out.length >= 8) return;
             const rows: string[] = [];
             sheet.eachRow((row) => {
-              const cells = (row.values as ExcelJS.CellValue[]).slice(1).map((v) => `<td>${v ?? ""}</td>`).join("");
+              const cells = (row.values as unknown[]).slice(1).map((v) => `<td>${v ?? ""}</td>`).join("");
               rows.push(`<tr>${cells}</tr>`);
             });
             out.push({ name: sheet.name, html: `<table>${rows.join("")}</table>` });

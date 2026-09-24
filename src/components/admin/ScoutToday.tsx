@@ -12,8 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Binoculars, Check, ChevronDown, Clock3, Copy, ExternalLink, Mail, MoreHorizontal, RefreshCw, Sparkles, Undo2, X } from "lucide-react";
-import { CheckButton, CheckResult, useRemembered, useTodoCheck } from "@/components/admin/todoCheck";
+import { Binoculars, Check, ChevronDown, Clock3, Copy, ExternalLink, Mail, MoreHorizontal, RefreshCw, Sparkles, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { askScout } from "@/components/admin/scoutBus";
 import { cn } from "@/lib/utils";
@@ -34,8 +33,8 @@ interface Row {
   url: string | null;
   action: Record<string, any>;
   status: Status;
+  done_at: string | null;
   created_at: string;
-  done_at?: string | null;
 }
 
 const SLOT = {
@@ -82,13 +81,23 @@ export function ScoutToday() {
     return () => clearInterval(t);
   }, [load]);
 
-  const set = async (r: Row, status: Status, msg?: string) => {
+  const set = async (r: Row, status: Status, msg?: string, quiet = false) => {
     setBusy(r.id);
-    setRows((all) => all?.map((x) => (x.id === r.id ? { ...x, status, done_at: status === "open" ? null : new Date().toISOString() } : x)) ?? null); // instant
+    // done_at moves with the status, exactly as scout_daily_set() does it, so the
+    // Done list below sorts right away instead of waiting for the next poll.
+    const at = status === "open" ? null : new Date().toISOString();
+    setRows((all) => all?.map((x) => (x.id === r.id ? { ...x, status, done_at: at } : x)) ?? null); // instant
     const { error } = await supabase.rpc("scout_daily_set" as never, { p_id: r.id, p_status: status } as never);
     setBusy(null);
     if (error) { toast.error(error.message); load(); return; }
-    if (msg) toast.success(msg);
+    // Every status change is one tap, so every status change is undoable. Without
+    // this a mis-tap on a to-do dropped it out of the list with no way back.
+    if (!quiet && (msg || status !== "open")) {
+      toast(msg ?? "Done", {
+        description: r.title,
+        action: { label: "Undo", onClick: () => set(r, r.status, undefined, true) },
+      });
+    }
     if (status === "snoozed") load();
   };
 
@@ -101,29 +110,18 @@ export function ScoutToday() {
     load();
   };
 
-  const { picks, drafts, calls, justDone, wrap } = useMemo(() => {
+  const { picks, drafts, calls, callsDone, wrap } = useMemo(() => {
     const r = rows ?? [];
     const order = { decision: 0, quick: 1, focus: 2 } as Record<string, number>;
     return {
       picks: r.filter((x) => x.kind === "pick" && x.day === today).sort((a, b) => order[a.slot ?? "focus"] - order[b.slot ?? "focus"]),
       drafts: r.filter((x) => x.kind === "draft" && x.status === "open"),
       calls: r.filter((x) => x.kind === "call" && x.status === "open"),
-      // ticked off in the last day, newest first: one tap puts a mistake back
-      justDone: r.filter((x) => x.kind === "call" && x.status === "done" && x.done_at && Date.now() - Date.parse(x.done_at) < 864e5)
-        .sort((a, b) => Date.parse(b.done_at!) - Date.parse(a.done_at!)).slice(0, 5),
+      callsDone: r.filter((x) => x.kind === "call" && x.status === "done")
+        .sort((a, b) => String(b.done_at ?? "").localeCompare(String(a.done_at ?? ""))),
       wrap: r.find((x) => x.kind === "wrap" && x.day === today),
     };
   }, [rows, today]);
-
-  // "Check if it's done": shared with the top card (todoCheck.tsx); checks run on the server queue.
-  const tc = useTodoCheck(load);
-  const [callsOpen, toggleCalls] = useRemembered("admin.fromCalls.open", true);
-
-  // Mark a call to-do done with an Undo right in the toast (and in "Done today" below the list).
-  const doneCall = (c: Row) => {
-    set(c, "done");
-    toast.success(`Done: ${c.title}`, { duration: 8000, action: { label: "Undo", onClick: () => set(c, "open", "Put back") } });
-  };
 
   const doneCount = picks.filter((p) => p.status === "done").length;
   // Everyone who has owned a call to-do lately, so a wrong owner is one tap to fix.
@@ -186,7 +184,6 @@ export function ScoutToday() {
                   <div className="min-w-0 flex-1">
                     <p className={cn("text-[0.975rem] font-semibold leading-snug text-white", done && "line-through decoration-white/40")}>{p.title}</p>
                     {p.why && <p className="mt-1.5 text-sm leading-relaxed text-white/60">{p.why}</p>}
-                    {p.action?.check && p.status === "open" && !tc.pending.has(p.id) && <CheckResult r={p} tc={tc} onDone={() => set(p, "done", "Done")} onNext={(q) => askScout(q, { about: p.title })} />}
                   </div>
                   {p.status === "open" ? (
                     <div className="-mx-1 flex flex-wrap items-center gap-1">
@@ -203,12 +200,6 @@ export function ScoutToday() {
                       <button className={ghost} aria-label="Tomorrow" title="Move to tomorrow" onClick={() => set(p, "snoozed", "Moved to tomorrow")}>
                         <Clock3 className="h-4 w-4" />
                       </button>
-                      <CheckButton busy={tc.pending.has(p.id)} onClick={() => tc.checkOne(p.id)} />
-                    </div>
-                  ) : p.action?.auto_closed && done ? (
-                    <div className="-mx-1 flex flex-wrap items-center gap-1">
-                      <span className="px-1 text-xs text-white/50">Closed by Scout</span>
-                      <button className={ghost} onClick={() => tc.feedback(p, "undo")}><Undo2 className="h-4 w-4" /> Put back</button>
                     </div>
                   ) : (
                     <button className={cn(ghost, "self-start")} onClick={() => set(p, "open")}>Undo</button>
@@ -239,30 +230,22 @@ export function ScoutToday() {
       )}
 
       {/* From calls */}
-      {(calls.length > 0 || justDone.length > 0) && (
+      {(calls.length > 0 || callsDone.length > 0) && (
         <section aria-labelledby="calls-title">
-          <h2 id="calls-title" className="mb-3">
-            <button onClick={toggleCalls} aria-expanded={callsOpen} aria-controls="calls-list"
-              className="-mx-2 flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-semibold uppercase tracking-widest text-white/55 transition hover:bg-white/[0.06] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80">
-              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !callsOpen && "-rotate-90")} aria-hidden />
-              From your calls · {calls.length}
-              {!callsOpen && <span className="normal-case tracking-normal text-white/40">(tap to show)</span>}
-            </button>
-          </h2>
+          <h2 id="calls-title" className="mb-3 text-xs font-semibold uppercase tracking-widest text-white/55">From your calls · {calls.length}</h2>
+          {calls.length === 0 && <p className="mb-3 text-sm text-white/55">Nothing left from your calls. Finished ones are under Done.</p>}
           {/* A to-do is one short line; on a wide screen a single column of them is a
               long thin ribbon. Let them flow into as many columns as fit. */}
-          {callsOpen && (
-          <ul id="calls-list" className={cn(card, "grid grid-cols-[repeat(auto-fit,minmax(min(24rem,100%),1fr))] overflow-hidden")}>
+          <ul className={cn(card, "grid grid-cols-[repeat(auto-fit,minmax(min(24rem,100%),1fr))] overflow-hidden")}>
             {calls.map((c) => {
               const owner = String(c.action?.owner ?? "Jared");
               const mine = owner.toLowerCase() === "jared";
               return (
-                <li key={c.id} className="border-b border-white/[0.06] px-4 py-3 last:border-b-0 sm:px-5">
-                  <div className="flex items-start gap-3">
+                <li key={c.id} className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3 last:border-b-0 sm:px-5">
                   <button
                     aria-label="Mark done"
-                    onClick={() => doneCall(c)}
-                    className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-white/25 text-transparent transition hover:border-emerald-400 hover:text-emerald-400 active:scale-90"
+                    onClick={() => set(c, "done", "Marked done")}
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-white/25 text-transparent transition hover:border-emerald-400 hover:text-emerald-400 active:scale-90"
                   >
                     <Check className="h-3.5 w-3.5" />
                   </button>
@@ -272,35 +255,15 @@ export function ScoutToday() {
                       <OwnerMenu owner={owner} mine={mine} people={people} onPick={(o) => setOwner(c, o)} />
                       {c.action?.due ? ` · due ${c.action.due}` : ""} · {String(c.action?.meeting ?? "")}
                     </p>
-                    {c.action?.check && !tc.pending.has(c.id) && <CheckResult r={c} tc={tc} onDone={() => doneCall(c)} onNext={(q) => askScout(q, { about: c.title })} />}
                   </div>
-                  <CheckButton busy={tc.pending.has(c.id)} onClick={() => tc.checkOne(c.id)} compact />
                   {c.action?.deck_url && (
                     <a href={c.action.deck_url} target="_blank" rel="noreferrer" className={ghost} aria-label="Open on Deck">Deck <ExternalLink className="h-3.5 w-3.5" /></a>
                   )}
-                  </div>
                 </li>
               );
             })}
           </ul>
-          )}
-          {callsOpen && justDone.length > 0 && (
-            <div className="mt-2 px-1">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-white/40">Done today · {justDone.length}</p>
-              <ul className="space-y-0.5">
-                {justDone.map((d) => (
-                  <li key={d.id} className="flex items-center gap-2">
-                    <Check className="h-3.5 w-3.5 shrink-0 text-emerald-300 bento:text-emerald-700" aria-hidden />
-                    <p className="min-w-0 flex-1 truncate text-sm text-white/55 line-through decoration-white/25">{d.title}</p>
-                    <span className="shrink-0 text-xs text-white/35">{new Date(d.done_at!).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}</span>
-                    <button className={cn(ghost, "min-h-[32px] px-2.5 text-xs")} onClick={() => set(d, "open", "Put back")} aria-label={`Undo: ${d.title}`}>
-                      <Undo2 className="h-3.5 w-3.5" /> Undo
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {callsDone.length > 0 && <CallsDone rows={callsDone} onReopen={(r) => set(r, "open", "Back on your list")} />}
         </section>
       )}
 
@@ -317,6 +280,50 @@ export function ScoutToday() {
         @keyframes scout-card-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
         @media (prefers-reduced-motion: reduce) { .scout-card-in { animation: none; } }
       `}</style>
+    </div>
+  );
+}
+
+/**
+ * Finished call to-dos. Collapsed, newest first: tap the green check to put one
+ * back on the list. A to-do that can only ever go one way is a trap, not a list.
+ */
+function CallsDone({ rows, onReopen }: { rows: Row[]; onReopen: (r: Row) => void }) {
+  const [open, setOpen] = useState(false);
+  const [all, setAll] = useState(false);
+  const shown = all ? rows : rows.slice(0, 8);
+  return (
+    <div className="mt-3">
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
+        className="flex min-h-[40px] w-full items-center gap-1.5 text-left text-sm font-medium text-white/55 transition hover:text-white">
+        <ChevronDown className={cn("h-4 w-4 transition-transform", !open && "-rotate-90")} aria-hidden />
+        Done ({rows.length})
+      </button>
+      {open && (
+        <ul className={cn(card, "mt-1 overflow-hidden")}>
+          {shown.map((r) => (
+            <li key={r.id} className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3 last:border-b-0 sm:px-5">
+              <button aria-label={`Put back on the list: ${r.title}`} title="Put it back on my list"
+                onClick={() => onReopen(r)}
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-500 text-[#fff] transition hover:bg-white/20 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80">
+                <Check className="h-3.5 w-3.5" aria-hidden />
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[0.9375rem] text-white/50 line-through decoration-white/30">{r.title}</p>
+                <p className="mt-0.5 text-xs text-white/40">
+                  {String(r.action?.owner ?? "Jared")}
+                  {r.done_at ? ` \u00b7 done ${new Date(r.done_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" })}` : ""}
+                </p>
+              </div>
+            </li>
+          ))}
+          {rows.length > shown.length && (
+            <li className="px-4 py-3 sm:px-5">
+              <button onClick={() => setAll(true)} className="text-sm font-medium text-[#0A84FF]">Show all {rows.length}</button>
+            </li>
+          )}
+        </ul>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 /**
- * Scout for partners (the Scout tab). Free: answers come from the local model on Jared's Mac mini
- * (scripts/partner-ai/worker.py), not a paid API, so an answer can take a little while.
+ * Scout for partners (the Scout tab). Free, and only ever free: answers come off the same free-LLM
+ * ladder the admin Scout uses (groq -> Cloudflare Workers AI -> the local model on Jared's Mac mini),
+ * through the partner-ai function with paid: "never". Usually about a second; the Mac rung is slower.
  *
  * usePartnerScout() lives in the portal shell, not the tab, so the conversation keeps updating while
  * Eli is elsewhere in the portal. When Scout finishes and he isn't looking, ScoutAlert pops up
@@ -166,6 +167,10 @@ export function usePartnerScout(userId: string, viewing: boolean) {
     const row = data as unknown as ScoutMsg & { thread_id: string };
     setMsgs((cur) => (cur?.some((m) => m.id === row.id) ? cur : [...(cur ?? []), row]));
     if (row.thread_id && row.thread_id !== activeRef.current) setActive(row.thread_id);
+    // Wake the free-LLM answerer now rather than waiting up to a minute for its cron. Fire and
+    // forget: the answer arrives over realtime either way, and the cron is the backstop if this
+    // never lands. Nothing here decides the answer, so a failed nudge costs nothing.
+    void supabase.functions.invoke("partner-ai", { body: { op: "tick" } }).catch(() => {});
     return { error: null };
   }, [setActive]);
   const rename = useCallback(async (id: string, title: string) => {

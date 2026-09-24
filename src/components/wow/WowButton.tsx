@@ -66,7 +66,7 @@ export const WowButton = forwardRef<HTMLElement, Props>(function WowButton(props
       </Link>
     );
   } else if ("href" in rest && rest.href) {
-    const { href, target, rel } = rest;
+    const { href, target, rel } = rest as { href: string; target?: string; rel?: string };
     element = (
       <a ref={ref as never} href={href} target={target} rel={rel} className={cls}>
         {inner}

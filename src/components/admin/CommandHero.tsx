@@ -6,18 +6,17 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Binoculars, CalendarClock, Check, ChevronDown, ExternalLink, Loader2, MessagesSquare, Siren, Users, Video, X } from "lucide-react";
+import { Bell, Binoculars, CalendarClock, Check, ExternalLink, Loader2, MessagesSquare, Siren, Users, Video, X } from "lucide-react";
 import { startEmergency } from "@/pages/admin/Emergency";
 import { supabase } from "@/integrations/supabase/client";
-import { askScout, openScout } from "@/components/admin/scoutBus";
+import { toast } from "sonner";
+import { openScout } from "@/components/admin/scoutBus";
 import { AdminMark } from "@/components/AdminMark";
 import { WeatherNow } from "@/components/admin/WeatherNow";
 import { useNextMeeting, whenLabel } from "@/pages/partner/PartnerExtras";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { CheckAllPanel, CheckButton, CheckResult, ClosedByScout, useRemembered, useTodoCheck, type CheckRow } from "@/components/admin/todoCheck";
 
-interface Todo { id: string; title: string; status: string; action: Record<string, any>; done_at?: string | null }
+interface Todo { id: string; title: string; status: string; action: Record<string, any> }
 
 function NotifBanner() {
   const [perm, setPerm] = useState<NotificationPermission | null>(null);
@@ -57,32 +56,26 @@ const PT = { timeZone: "America/Los_Angeles" } as const;
 export function CommandHero() {
   const { next, events } = useNextMeeting();
   const [todos, setTodos] = useState<Todo[] | null>(null);
-  const [closed, setClosed] = useState<Todo[]>([]);
   const load = useCallback(async () => {
-    const [{ data }, { data: shut }] = await Promise.all([
-      supabase.from("scout_daily" as never).select("id, title, status, action").eq("kind", "call").eq("status", "open")
-        .order("created_at", { ascending: false }).limit(60),
-      // what Scout closed on its own lately, so a wrong one is one tap to put back
-      supabase.from("scout_daily" as never).select("id, title, status, action, done_at").in("kind", ["call", "pick"]).eq("status", "done")
-        .not("action->auto_closed", "is", null).gte("done_at", new Date(Date.now() - 3 * 864e5).toISOString()).order("done_at", { ascending: false }).limit(20),
-    ]);
+    const { data } = await supabase.from("scout_daily" as never).select("id, title, status, action").eq("kind", "call").eq("status", "open")
+      .order("created_at", { ascending: false }).limit(60);
     setTodos(((data ?? []) as unknown as Todo[]).filter((t) => String(t.action?.owner ?? "jared").toLowerCase() === "jared"));
-    setClosed((shut ?? []) as unknown as Todo[]);
   }, []);
-  const tc = useTodoCheck(load);
-  const [todosOpen, toggleTodos] = useRemembered("admin.todosCard.open", true);
   useEffect(() => { load(); }, [load]);
-  const tick = async (t: Todo) => {
-    setTodos((xs) => (xs ?? []).filter((x) => x.id !== t.id));
-    const { error } = await supabase.rpc("partner_task_set" as never, { p_id: t.id, p_status: "done" } as never);
-    if (error) { load(); return; }
-    toast.success(`Done: ${t.title}`, {
-      duration: 8000,
-      action: { label: "Undo", onClick: async () => {
-        await supabase.rpc("partner_task_set" as never, { p_id: t.id, p_status: "open" } as never);
-        load();
-      } },
-    });
+  // One tap marks it done and the row leaves the card, so the same tap has to be
+  // reversible: a mis-tap used to lose the to-do with nothing to click.
+  const tick = async (t: Todo, status: "done" | "open" = "done", quiet = false) => {
+    setTodos((xs) => (status === "done"
+      ? (xs ?? []).filter((x) => x.id !== t.id)
+      : [t, ...(xs ?? []).filter((x) => x.id !== t.id)]));
+    const { error } = await supabase.rpc("partner_task_set" as never, { p_id: t.id, p_status: status } as never);
+    if (error) { toast.error("Couldn't save that", { description: error.message }); load(); return; }
+    if (!quiet) {
+      toast(status === "done" ? "Marked done" : "Back on your list", {
+        description: t.title,
+        action: { label: "Undo", onClick: () => tick(t, status === "done" ? "open" : "done", true) },
+      });
+    }
   };
 
   const h = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, ...PT }));
@@ -146,46 +139,27 @@ export function CommandHero() {
         <Quick to="/partner" icon={Users} label="Eli's portal" tone="from-emerald-400 to-teal-600" />
       </div>
 
-      {/* Your to-dos, with Scout's "did it get done?" check right on top: it's the thing to use here. */}
       <div className={cn(card, "p-5")}>
-        <h3 className={cn(todosOpen && "mb-3")}>
-          <button onClick={toggleTodos} aria-expanded={todosOpen} aria-controls="hero-todos"
-            className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-xl px-2 py-1 text-left text-sm font-semibold text-white transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80">
-            <Check className="h-4 w-4 text-white/50" aria-hidden />
-            <span className="flex-1">Your to-dos from calls{todos?.length ? <span className="font-normal text-white/50"> · {todos.length}</span> : null}</span>
-            <ChevronDown className={cn("h-4 w-4 text-white/50 transition-transform", !todosOpen && "-rotate-90")} aria-hidden />
-          </button>
-        </h3>
-        {todosOpen && (<div id="hero-todos">
-        <CheckAllPanel tc={tc} />
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-white"><Check className="h-4 w-4 text-white/50" /> Your to-dos from calls</h3>
         {todos === null ? <div className="mt-3 h-16 animate-pulse rounded-xl bg-white/[0.04]" /> : todos.length === 0 ? (
-          <p className="mt-3 text-sm text-white/50">All clear.</p>
+          <p className="mt-2 text-sm text-white/50">All clear.</p>
         ) : (
-          <ul className="mt-1 columns-[22rem] gap-x-8">
-            {todos.slice(0, 12).map((t) => {
-              const checking = tc.pending.has(t.id);
-              return (
-                <li key={t.id} className="break-inside-avoid border-b border-white/[0.06] py-3">
-                  <div className="flex items-start gap-3">
-                    <button aria-label="Mark done" onClick={() => tick(t)}
-                      className="mt-px grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border-[1.5px] border-white/30 text-transparent transition hover:border-[#30D158] hover:text-[#30D158] active:scale-90 bento:hover:border-[#34C759] bento:hover:text-[#34C759]">
-                      <Check className="h-3.5 w-3.5" />
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[0.9375rem] leading-snug text-white">{t.title}</p>
-                      <p className="mt-0.5 text-[0.75rem] text-white/40">{t.action?.due ? `Due ${t.action.due} · ` : ""}{String(t.action?.meeting ?? "")}</p>
-                      {t.action?.check && !checking && <CheckResult r={t as CheckRow} tc={tc} onDone={() => tick(t)} onNext={(q) => askScout(q, { about: t.title })} />}
-                    </div>
-                    <CheckButton busy={checking} onClick={() => tc.checkOne(t.id)} />
-                  </div>
-                </li>
-              );
-            })}
-            {todos.length > 12 && <li className="break-inside-avoid pt-2 text-xs text-white/45">+{todos.length - 12} more below in From calls</li>}
+          <ul className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(min(22rem,100%),1fr))] gap-x-6">
+            {todos.slice(0, 12).map((t) => (
+              <li key={t.id} className="flex items-start gap-3 border-b border-white/[0.06] py-2.5">
+                <button aria-label="Mark done" onClick={() => tick(t)}
+                  className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 border-white/25 text-transparent transition hover:border-emerald-400 hover:text-emerald-400 active:scale-90">
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+                <div className="min-w-0">
+                  <p className="text-[0.95rem] text-white">{t.title}</p>
+                  <p className="text-xs text-white/45">{t.action?.due ? `Due ${t.action.due} · ` : ""}{String(t.action?.meeting ?? "")}</p>
+                </div>
+              </li>
+            ))}
+            {todos.length > 12 && <li className="pt-2 text-xs text-white/45">+{todos.length - 12} more below in From calls</li>}
           </ul>
         )}
-        <ClosedByScout rows={closed as CheckRow[]} tc={tc} />
-        </div>)}
       </div>
     </section>
   );
