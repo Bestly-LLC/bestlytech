@@ -94,15 +94,20 @@ export function InstallToast({ token, kind }: { token: string; kind: "home" | "l
       <div role="dialog" aria-label="Add this trip to your Home Screen" className="fixed inset-x-0 z-[60] flex justify-center px-3"
         style={{ bottom: isIPad() ? "auto" : "calc(env(safe-area-inset-bottom) + 64px)", top: isIPad() ? 64 : "auto" }}>
         <div className="trip-glass trip-glass-dark trip-pop-in w-full max-w-md rounded-[28px] p-4 text-white">
+          {/* Close: a tab built into the top-right corner (follows the card's corner, arcs down into the left). */}
+          <button type="button" onClick={close} aria-label="Not now"
+            className="absolute right-0 top-0 z-[2] grid h-[60px] w-[60px] place-items-center rounded-bl-[30px] bg-white/[0.10] pl-1 pb-1 text-white/85 shadow-[inset_1px_-1px_0_rgba(255,255,255,.14)] transition active:bg-white/20">
+            <X className="h-[18px] w-[18px]" strokeWidth={2.5} />
+          </button>
           <div className="flex items-start gap-3">
             <img src={icon} alt="" className="h-14 w-14 shrink-0 rounded-[14px] shadow-lg ring-1 ring-white/20" />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 pr-11">
               <p className="text-[17px] font-bold leading-snug">{mode === "alerts" ? "Turn on trip alerts" : "Add your trip to your Home Screen"}</p>
               <p className="mt-0.5 text-[14px] leading-snug text-white/80">
                 {mode === "alerts" ? "Get a nudge when your key is ready and when it's time to return." : "One tap to open it, and alerts when your key is ready and when it's time to return."}
               </p>
             </div>
-            <button type="button" onClick={close} aria-label="Not now" className="-mr-1.5 -mt-1.5 grid h-11 w-11 shrink-0 place-items-center rounded-full"><span className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.12] text-white/80"><X className="h-4 w-4" strokeWidth={2.5} /></span></button>
+            
           </div>
           {mode === "ios" && (
             <ol className="mt-3 grid grid-cols-3 gap-2 text-center text-[12px] leading-tight text-white/85">
