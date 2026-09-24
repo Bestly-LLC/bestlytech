@@ -91,7 +91,8 @@ export function UnlockStart({ token, demo }: { token?: string; demo?: boolean })
               <li><b className="text-white">You're responsible for the car</b> from the moment it's unlocked, the same as with your phone key: damage, tickets, tolls and fees follow Turo's rules for your trip.</li>
               <li>Each use is logged (time and your trip) and your host is told.</li>
             </ul>
-            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl bg-white/[0.06] p-3 ring-1 ring-white/10">
+            <div className="sticky -bottom-5 -mx-5 mt-4 bg-[linear-gradient(180deg,transparent,rgba(18,16,34,.96)_18%)] px-5 pb-5 pt-3">
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-white/[0.06] p-3 ring-1 ring-white/10">
               <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-[color:var(--trip-accent)]" />
               <span className="text-[14px] leading-snug">I'm an approved driver on this Turo trip. I'll only use this at the car, I won't let unapproved people drive, and I accept responsibility for the car while it's unlocked.</span>
             </label>
@@ -100,6 +101,7 @@ export function UnlockStart({ token, demo }: { token?: string; demo?: boolean })
               <KeyRound className="h-5 w-5" /> I agree: Unlock &amp; Start
             </button>
             <p className="mt-2 text-center text-[11px] text-white/50">Your Tesla phone key still works as usual. This is a backup.</p>
+            </div>
           </div>
         </div>
       )}
