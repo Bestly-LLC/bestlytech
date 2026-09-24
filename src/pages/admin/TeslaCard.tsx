@@ -86,6 +86,11 @@ export function TeslaCard() {
     ["Mac mini helper", <span key="w" className={st.worker_online ? tint.green : tint.red}>{st.worker_online ? "Online" : "Offline"}</span>],
     ["Last reading", carRead],
     ["Tesla spend", `$${Number(st.spent_usd).toFixed(2)} of $${Number(st.monthly_cap_usd).toFixed(2)} this month (free credit is $10)`],
+    // Charging bills + receipts need Tesla's "Vehicle Charging Management" scope. Tesla silently drops it at sign-in
+    // unless the developer app has it turned on, so reconnecting alone can't fix it.
+    ["Charging bills", (st as { charging_ok?: boolean }).charging_ok
+      ? <span key="c" className={tint.green}>On</span>
+      : <span key="c" className={tint.red}>Off: turn on &ldquo;Vehicle Charging Management&rdquo; for your app at developer.tesla.com, then Reconnect Tesla once</span>],
   ];
   return (
     <div id="tesla" className="scroll-mt-24 space-y-3">
