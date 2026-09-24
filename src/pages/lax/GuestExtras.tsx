@@ -5,6 +5,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Armchair, ArrowRight, BatteryMedium, Car, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSun, Fan, Flame, Loader2, Lock, LockOpen, Mail, Moon, Power, Snowflake, Sun, Thermometer, Wind, Zap } from "lucide-react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
 
@@ -77,9 +78,28 @@ const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday
 
 // One track for the whole trip: ramp up = the last 24h before pickup, plateau = the trip, ramp down = after return.
 const TRACK = "M4 44 C 34 44, 40 12, 74 12 L 246 12 C 280 12, 286 44, 316 44";
+// Real lengths of the track's pieces, so "pickup" lands exactly at the top of the ramp and "return" at the end of the plateau.
+const RAMP = (() => {  // cubic from (4,44) c(34,44) (40,12) to (74,12)
+  let len = 0, px = 4, py = 44;
+  for (let i = 1; i <= 64; i++) {
+    const t = i / 64, u = 1 - t;
+    const x = u * u * u * 4 + 3 * u * u * t * 34 + 3 * u * t * t * 40 + t * t * t * 74;
+    const y = u * u * u * 44 + 3 * u * u * t * 44 + 3 * u * t * t * 12 + t * t * t * 12;
+    len += Math.hypot(x - px, y - py); px = x; py = y;
+  }
+  return len;
+})();
+const PLATEAU = 246 - 74;
+const TOTAL = RAMP * 2 + PLATEAU;
 function position(s: number, e: number, now: number) {
-  if (now < s) return 0.2 * Math.max(0, 1 - (s - now) / (24 * 3600e3));
-  if (now < e) return 0.2 + 0.6 * ((now - s) / (e - s));
+  if (now < s) return (RAMP / TOTAL) * Math.max(0, 1 - (s - now) / (24 * 3600e3));  // last 24h before pickup climbs the ramp
+  if (now < e) return (RAMP + PLATEAU * ((now - s) / (e - s))) / TOTAL;              // the trip runs along the top
+  return 1;
+}
+/** Linear 0..1 for the slim pinned bar: before pickup = last 24h countdown, during = trip progress. */
+function linear(s: number, e: number, now: number) {
+  if (now < s) return Math.max(0, 1 - (s - now) / (24 * 3600e3));
+  if (now < e) return (now - s) / (e - s);
   return 1;
 }
 
@@ -99,12 +119,46 @@ export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | 
   const label = before ? "until pickup" : during ? "left on your trip" : "trip complete · thanks!";
   const soon = during && e - now < 2 * 3600e3;
   const numColor = soon ? "#FF9F0A" : C.hot;
+  // Scrolled past the card -> it squishes into a slim bar pinned to the top (like a Live Activity in the island).
+  const cardRef = useRef<HTMLElement>(null);
+  const [pinned, setPinned] = useState(false);
+  useEffect(() => {
+    const el = cardRef.current; if (!el || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(([en]) => setPinned(!en.isIntersecting && en.boundingClientRect.top < 0), { threshold: 0, rootMargin: "-8px 0px 0px 0px" });
+    io.observe(el); return () => io.disconnect();
+  }, []);
+  const mini = typeof document !== "undefined" ? createPortal(
+    <div aria-hidden={!pinned} className="pointer-events-none fixed inset-x-0 top-0 z-40 flex justify-center px-2"
+      style={{ paddingTop: "max(8px, env(safe-area-inset-top))" }}>
+      <button type="button" tabIndex={pinned ? 0 : -1} onClick={() => cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
+        aria-label={`Your Turo trip: ${big} ${label}. Tap to show details.`}
+        className={`w-full max-w-md rounded-[22px] px-3.5 py-2 text-left backdrop-blur-xl transition-[transform,opacity] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${pinned ? "pointer-events-auto translate-y-0 scale-100 opacity-100" : "-translate-y-[130%] scale-95 opacity-0"}`}
+        style={{ background: home ? "rgba(19,39,38,0.94)" : "rgba(10,10,12,0.9)", boxShadow: `0 10px 30px -12px rgba(0,0,0,.7), inset 0 0 0 1px ${C.ring}`, fontFamily: C.font, color: C.text }}>
+        <span className="flex items-center gap-2.5">
+          <Car className="h-4 w-4 shrink-0" style={{ color: C.hot }} aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center justify-between text-[12px] font-semibold tabular-nums" style={{ color: C.sub }}>
+              <span style={{ color: before ? C.hot : C.text }}>{hm(trip.starts_at)}</span>
+              <span style={{ color: during ? C.hot : C.text }}>{hm(trip.ends_at)}</span>
+            </span>
+            <span className="mt-1 block h-[3px] overflow-hidden rounded-full" style={{ background: C.track }}>
+              <span className="block h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.round(linear(s, e, now) * 100)}%`, background: C.accent }} />
+            </span>
+          </span>
+          <span className="shrink-0 text-right leading-none">
+            <span className="block text-[17px] font-bold tabular-nums" style={{ color: numColor }}>{big}</span>
+            <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: C.sub }}>{before ? "to pickup" : during ? "left" : "done"}</span>
+          </span>
+        </span>
+      </button>
+    </div>, document.body) : null;
   // Where "now" sits on the track (the glowing dot / starburst).
   const trackRef = useRef<SVGPathElement>(null);
   const [dot, setDot] = useState<{ x: number; y: number } | null>(null);
   useEffect(() => { const el = trackRef.current; if (!el) return; const L = el.getTotalLength(); const pt = el.getPointAtLength(L * pos); setDot({ x: pt.x, y: pt.y }); }, [pos]);
   return (
-    <section aria-label={`Your Turo trip: ${big} ${label}`} className="relative overflow-hidden rounded-[30px] px-4 pb-4 pt-3.5"
+    <>{mini}
+    <section ref={cardRef} aria-label={`Your Turo trip: ${big} ${label}`} className="relative overflow-hidden rounded-[30px] px-4 pb-4 pt-3.5"
       style={{ background: C.bg, boxShadow: `0 20px 44px -20px rgba(0,0,0,.7), inset 0 0 0 1px ${C.ring}`, fontFamily: C.font, color: C.text }}>
       <div className="flex items-center justify-between text-[12px]" style={{ color: C.sub }}>
         <span className="flex items-center gap-1.5 font-semibold uppercase tracking-[0.12em]"><Car className="h-3.5 w-3.5" style={{ color: C.hot }} />Your Turo trip</span>
@@ -140,6 +194,7 @@ export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | 
         <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: C.sub }}>{label}</p>
       </div>
     </section>
+    </>
   );
 }
 
