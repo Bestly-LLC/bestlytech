@@ -64,7 +64,8 @@ export function ReturnChecklist({ token, kind, run, demo }: { token: string; kin
     </div>
   );
 
-  const items = (c.items ?? []).map((i) => ({ ...i, ok: local[i.id] ?? i.ok }));
+  // Right after a Lock tap the next car reading can lag a minute: show what we just did.
+  const items = (c.items ?? []).map((i) => (local[i.id] && !i.ok ? { ...i, ok: true, detail: i.id === "locked" ? "Locked just now." : "Done just now." } : i));
   const done = items.filter((i) => i.ok).length + (photos ? 1 : 0), total = items.length + 1;
   const all = done === total;
   const act = async (id: string, a: Parameters<Run>[0], okItem?: Item["id"]) => {
