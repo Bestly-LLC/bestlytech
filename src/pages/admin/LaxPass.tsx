@@ -205,10 +205,11 @@ export default function LaxPass() {
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { take(e.target.files?.[0]); e.target.value = ""; }} />
 
       {/* Fills the width: sections flow into as many ~30rem columns as fit (1 on phones, 2-3 on wide screens). */}
-      <div className="gap-8 [column-fill:balance] columns-1 md:columns-[28rem] [&>section]:mb-8 [&>section]:break-inside-avoid">
+      {/* Code card on top, then three columns on wide screens (two on laptops, one on phones). */}
+      <div className="space-y-8">
 
 
-      <Section title="LAX garage code · this month" className="[column-span:all]" footer={<>Paste a screenshot of the new QR anywhere on this page (⌘V), drop it on the card, or choose the file. Only the code is read; the picture isn't saved.</>}>
+      <Section title="LAX garage code · this month" footer={<>Paste a screenshot of the new QR anywhere on this page (⌘V), drop it on the card, or choose the file. Only the code is read; the picture isn't saved.</>}>
         {!draft ? (
           <div {...dropProps}
             className={cn(card, "transition-[box-shadow,background-color] duration-200", drag && "ring-2 ring-[#0A84FF] bg-[#0A84FF14] bento:ring-[#007AFF] bento:bg-[#007AFF0d]")}>
@@ -308,6 +309,8 @@ export default function LaxPass() {
         )}
       </Section>
 
+      <div className="grid items-start gap-8 lg:grid-cols-2 2xl:grid-cols-3">
+      <div className="min-w-0 space-y-8 lg:row-span-2 2xl:row-span-1">
       <Section title="Trips" id="trips">
         <div className={cn(card, "flex flex-col gap-3")}>
           <div>
@@ -322,7 +325,9 @@ export default function LaxPass() {
         <TripHealth />
         <div id="keys"><LaxGuests /></div>
       </Section>
+      </div>
 
+      <div className="min-w-0 space-y-8">
       {st && (
         <Section title="Guest page">
           <GuideCard guide={st.guide ?? {}} onSaved={load} />
@@ -349,6 +354,9 @@ export default function LaxPass() {
         </Section>
       )}
 
+      </div>
+
+      <div className="min-w-0 space-y-8">
       <Section title="Keys and passes" id="passes">
         <HostPassCard />
       </Section>
@@ -370,7 +378,10 @@ export default function LaxPass() {
           </ul>
         </Section>
       )}
-      <section id="settings" className="scroll-mt-24 [column-span:all]">
+      </div>
+      </div>
+
+      <section id="settings" className="scroll-mt-24">
         <details open={openSettings} className={cn(card, "p-0")}>
           <summary onClick={(e) => { e.preventDefault(); setOpenSettings((o) => !o); }} aria-expanded={openSettings} className={cn("flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 [&::-webkit-details-marker]:hidden")}>
             <span className="flex items-center gap-2.5">
@@ -383,7 +394,7 @@ export default function LaxPass() {
             <ChevronRight className={cn("h-5 w-5 transition-transform duration-200", openSettings && "rotate-90", tertiary)} aria-hidden />
           </summary>
           {openSettings && (
-            <div className="gap-8 border-t px-2 pb-2 pt-5 columns-1 md:columns-[28rem] md:px-3 [&>section]:mb-8 [&>section]:break-inside-avoid" style={{ borderColor: "rgba(127,127,127,.2)" }}>
+            <div className="grid items-start gap-8 border-t px-2 pb-2 pt-5 md:px-3 lg:grid-cols-2 2xl:grid-cols-3" style={{ borderColor: "rgba(127,127,127,.2)" }}>
               <TripSettingsBody />
             </div>
           )}
