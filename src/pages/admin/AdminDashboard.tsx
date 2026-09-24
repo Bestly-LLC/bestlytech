@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { ActivityFeed } from "@/components/admin/ActivityFeed";
 import { ScoutToday } from "@/components/admin/ScoutToday";
 import { CommandHero } from "@/components/admin/CommandHero";
+import { ActionInbox } from "@/components/admin/ActionInbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { pollInterval } from "@/lib/polling";
@@ -609,7 +610,12 @@ export default function AdminDashboard() {
       {/* 0 ─ At a glance: join the next meeting, to-dos from calls, quick actions */}
       <CommandHero />
 
-      {/* 1 ─ What Scout prepared for today */}
+      {/* 1 ─ Everything waiting on you, from admin_today(). The sidebar's attention dots and
+          Scout's "needs you" bubble already read this same rule set; until now nothing on
+          screen said what they were pointing at. */}
+      <ActionInbox />
+
+      {/* 2 ─ What Scout prepared for today */}
       <ScoutToday />
 
       {/* Turo at a glance */}
