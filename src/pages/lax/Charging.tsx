@@ -98,10 +98,12 @@ export function ChargingFab({ charging }: { charging: Charging }) {
   const [open, setOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
-    const el = document.getElementById("charging");
-    if (!el || !("IntersectionObserver" in window)) return;
-    const io = new IntersectionObserver(([en]) => setHidden(en.isIntersecting), { threshold: 0.15 });
-    io.observe(el); return () => io.disconnect();
+    // Hide while the charging card or the lobby-door QR code is on screen (never cover the QR).
+    const els = ["charging", "qr"].map((id) => document.getElementById(id)).filter(Boolean) as HTMLElement[];
+    if (!els.length || !("IntersectionObserver" in window)) return;
+    const seen = new Map<Element, boolean>();
+    const io = new IntersectionObserver((ens) => { ens.forEach((en) => seen.set(en.target, en.isIntersecting)); setHidden([...seen.values()].some(Boolean)); }, { threshold: 0.05 });
+    els.forEach((el) => io.observe(el)); return () => io.disconnect();
   });
   useEffect(() => {
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
