@@ -177,7 +177,8 @@ export default function LaxPass() {
 
 
   // Settings stay folded unless a link points into them (e.g. back from Tesla sign-in: #tesla).
-  const [openSettings, setOpenSettings] = useState(() => typeof window !== "undefined" && /^#(tesla|ask|settings|helper)/.test(window.location.hash));
+  const [openSettings, setOpenSettings] = useState(false);
+  useEffect(() => { if (/^#(tesla|tezlab|ask|settings|helper)/.test(window.location.hash)) setOpenSettings(true); }, []);
   const link = st ? `${SITE}/lax/${st.slug}` : "";
   const cur = st?.current;
   const missing = st && (!cur || !cur.is_this_month);
@@ -315,8 +316,8 @@ export default function LaxPass() {
         </Section>
       )}
       <section id="settings" className="scroll-mt-24 [column-span:all]">
-        <details open={openSettings} onToggle={(e) => setOpenSettings((e.target as HTMLDetailsElement).open)} className={cn(card, "p-0")}>
-          <summary className={cn("flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 [&::-webkit-details-marker]:hidden")}>
+        <details open={openSettings} className={cn(card, "p-0")}>
+          <summary onClick={(e) => { e.preventDefault(); setOpenSettings((o) => !o); }} aria-expanded={openSettings} className={cn("flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 [&::-webkit-details-marker]:hidden")}>
             <span className="flex items-center gap-2.5">
               <Settings className={cn("h-5 w-5", tertiary)} aria-hidden />
               <span>
