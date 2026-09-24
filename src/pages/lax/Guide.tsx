@@ -11,6 +11,7 @@ import { ArrowRight, CheckCircle2, KeyRound, Loader2, Lock, ShieldAlert, Smartph
 import { fmtWhen, climateNeed, type CarState, type Trip } from "./GuestExtras";
 import type { KeyInfo } from "./HomeGuest";
 import { KeyPending, SendToCar, keyTapped, markKeyTapped } from "./KeyNext";
+import { openCharging } from "./Charging";
 import type { TripKind } from "./places";
 import { track } from "./track";
 
@@ -28,7 +29,7 @@ export function useHasApp() {
 }
 
 export type GlowTarget = "next" | "pickup" | "return" | "key" | "climate";
-export type Next = { icon: typeof Zap; title: string; sub?: string; action?: "getapp" | "pickup" | "return" | "climate" | "send" | "qr"; label?: string } | null;
+export type Next = { icon: typeof Zap; title: string; sub?: string; action?: "getapp" | "pickup" | "return" | "climate" | "send" | "qr"; label?: string; charging?: boolean } | null;
 
 /** One place decides what the guest should do now, and what glows. */
 export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady, pickupBattery, now = Date.now() }: {
@@ -50,7 +51,7 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
     }
     const bat = car?.battery, goal = pickupBattery;
     const sub = goal != null ? `Bring it back at ${goal}%+.${bat != null ? ` It's at ${bat}% now.` : ""}` : "Bring it back with the charge you picked it up with.";
-    return { next: { icon: Zap, title: `Return by ${fmtWhen(trip.ends_at)}`, sub, action: "send", label: "Send charger to car" }, glow };
+    return { next: { icon: Zap, title: `Return by ${fmtWhen(trip.ends_at)}`, sub, action: "send", label: "Send charger to car", charging: true }, glow };
   }
   // Key: not ready yet
   if (k && !added && now < opens) {
@@ -108,6 +109,15 @@ export function NextStep({ next, glow, onAction, onHasApp, run, kind }: {
           {next.label}<ArrowRight className="h-4 w-4" />
         </button>
       ) : null}
+      {next.charging && (
+        // On the trip: tell them where Supercharging costs show up.
+        <button type="button" onClick={() => { track(undefined, "next_charging"); openCharging(); }}
+          className="mt-3 flex min-h-[44px] w-full items-center gap-2.5 border-t border-white/10 pt-3 text-left text-[14px] leading-snug text-white/80 active:opacity-70">
+          <Zap className="h-4 w-4 shrink-0" style={{ color: ACCENT }} aria-hidden />
+          <span className="min-w-0 flex-1"><b className="font-semibold text-white">Supercharging?</b> Come back here to see each stop and what it cost.</span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
+        </button>
+      )}
     </section>
   );
 }

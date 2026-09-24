@@ -42,18 +42,28 @@ export function ChargingCard({ charging, battery, pickupBattery, health, chargin
   const ok = short != null && short <= 0;
   const stops = all ? c.sessions : c.sessions.slice(-2).reverse();
   const receipts = !!token && c.final; // Receipts only once Tesla's final bill is in (after the trip).
+  const empty = c.sessions.length === 0; // No stops: no "$0.00" hero, just what happens when they charge.
   return (
     <section id="charging" aria-label="Supercharging on your trip" className={embedded ? "" : "mt-6 scroll-mt-4 rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10"}>
       {/* 1. The one number: what charging has cost so far. */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Supercharging</p>
-          <p className="mt-1 text-[34px] font-bold leading-none tabular-nums text-white" style={{ fontFamily: titleFont }}>{money(c.total)}</p>
-          <p className="mt-1.5 text-[13px] text-white/65">{c.count === 0 ? "No stops yet" : `${c.count} stop${c.count === 1 ? "" : "s"} so far`}{c.idle > 0 ? ` · incl. ${money(c.idle)} idle fees` : ""}</p>
+          {empty ? (
+            <>
+              <p className="mt-1 text-[24px] font-bold leading-tight text-white" style={{ fontFamily: titleFont }}>{ended ? "No Supercharging" : "No Supercharging yet"}</p>
+              <p className="mt-1.5 text-[13px] leading-snug text-white/65">{ended ? "Nothing to pay for charging on this trip." : "When you charge, the stop and its cost show up here in about 30 min."}</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 text-[34px] font-bold leading-none tabular-nums text-white" style={{ fontFamily: titleFont }}>{money(c.total)}</p>
+              <p className="mt-1.5 text-[13px] text-white/65">{`${c.count} stop${c.count === 1 ? "" : "s"} so far`}{c.idle > 0 ? ` · incl. ${money(c.idle)} idle fees` : ""}</p>
+            </>
+          )}
         </div>
-        <span className={`mt-1 inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${c.final ? "bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-300/30" : "bg-white/10 text-white/75 ring-1 ring-white/15"}`}>
+        {!empty && <span className={`mt-1 inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${c.final ? "bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-300/30" : "bg-white/10 text-white/75 ring-1 ring-white/15"}`}>
           {c.final ? <><CheckCircle2 className="h-3.5 w-3.5" /> Final</> : <><Clock className="h-3.5 w-3.5" /> Estimate</>}
-        </span>
+        </span>}
       </div>
 
       {/* 2. Battery: now vs the return line, health as sub text. (Bar hidden while charging: the live charging box shows it.) */}
@@ -107,9 +117,7 @@ export function ChargingCard({ charging, battery, pickupBattery, health, chargin
             </button>
           )}
         </>
-      ) : (
-        <p className="mt-3 text-[14px] leading-snug text-white/70">{ended ? "No Supercharger stops on this trip." : "When you Supercharge, the stop shows up here within about 30 minutes."}</p>
-      )}
+      ) : null}
 
       {receipts && c.count > 0 && (
         <a href={`${RECEIPT}?t=${encodeURIComponent(token!)}`} target="_blank" rel="noreferrer" onClick={() => track(token, "charge_receipt")}
@@ -118,7 +126,7 @@ export function ChargingCard({ charging, battery, pickupBattery, health, chargin
         </a>
       )}
       <p className="mt-2 text-[12px] leading-snug text-white/50">
-        Billed to the car's Tesla account; your host requests it in Turo.{c.final ? "" : " Final after your trip."}{c.updated_at ? ` Updated ${ago(c.updated_at)}.` : ""}
+        {empty ? "Charging is billed to the car's Tesla account; your host requests it in Turo." : <>Billed to the car's Tesla account; your host requests it in Turo.{c.final ? "" : " Final after your trip."}{c.updated_at ? ` Updated ${ago(c.updated_at)}.` : ""}</>}
       </p>
     </section>
   );
@@ -126,6 +134,14 @@ export function ChargingCard({ charging, battery, pickupBattery, health, chargin
 
 /** Small bolt button on the right edge during the trip. Every so often it slides open with
  *  "See your true Supercharging cost" (or the running total). Tap: jumps to the charging card. Hidden while that card is on screen. */
+/** Jump to the Supercharging card (it lives in the trip carousel). */
+export function openCharging() {
+  window.dispatchEvent(new CustomEvent("open-section", { detail: "charging" }));
+  const el = document.getElementById("charging");
+  const box = (el?.closest("[aria-roledescription=carousel]") as HTMLElement | null) ?? el;
+  box?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 export function ChargingFab({ charging }: { charging: Charging }) {
   const [open, setOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -149,13 +165,7 @@ export function ChargingFab({ charging }: { charging: Charging }) {
     return () => { window.clearTimeout(first); window.clearTimeout(t2); window.clearInterval(every); };
   }, []);
   const label = charging.count > 0 ? `${money(charging.total)} so far · see details` : "See your true Supercharging cost";
-  const go = () => {
-    track(undefined, "charging_fab");
-    window.dispatchEvent(new CustomEvent("open-section", { detail: "charging" }));
-    const el = document.getElementById("charging");
-    const box = (el?.closest("[aria-roledescription=carousel]") as HTMLElement | null) ?? el;
-    box?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const go = () => { track(undefined, "charging_fab"); openCharging(); };
   return (
     <button type="button" onClick={go} aria-label={label}
       className={`fixed right-3 z-30 flex h-[52px] items-center overflow-hidden rounded-full text-left text-white shadow-xl shadow-black/40 ring-1 ring-white/25 backdrop-blur-xl transition-all duration-500 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${hidden || !scrolled ? "pointer-events-none translate-x-24 opacity-0" : "opacity-100"}`}
