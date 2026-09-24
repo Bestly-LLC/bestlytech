@@ -10,6 +10,7 @@ import { BatteryCharging, CheckCircle2, Clock, ExternalLink, KeyRound, Loader2, 
 import { supabase } from "@/integrations/supabase/client";
 import { fmtWhen, type Trip } from "./GuestExtras";
 import { track } from "./track";
+import { realDemoKeyAdded, realKey } from "./demo";
 import { CHARGERS, TURO_TRIPS, chargerMaps, type Place, type TripKind } from "./places";
 
 const ACCENT = "var(--trip-accent)";
@@ -56,9 +57,14 @@ export function KeyPending({ token, link, onAdded }: { token: string; link: stri
       } finally { busy.current = false; setChecks((n) => n + 1); }
     };
     // Demo pages: pretend Tesla accepted it a moment later, so the host sees the whole flow.
+    // Real demo key (host only): wait for Tesla to show the new driver instead.
     if (token.startsWith("demo-")) {
-      const t = window.setTimeout(() => { try { sessionStorage.setItem("demo-key-added", "1"); } catch { /* ignore */ } onAdded(); }, 2500);
-      return () => window.clearTimeout(t);
+      const done = () => { stop = true; try { sessionStorage.setItem("demo-key-added", "1"); } catch { /* ignore */ } onAdded(); };
+      if (!realKey) { const t = window.setTimeout(done, 2500); return () => window.clearTimeout(t); }
+      const poll = async () => { if (stop) return; if (await realDemoKeyAdded()) done(); else setChecks((n) => n + 1); };
+      poll();
+      const id = window.setInterval(poll, 8000);
+      return () => { stop = true; window.clearInterval(id); };
     }
     check();
     const id = window.setInterval(() => { if (Date.now() - (keyTapped(token) ?? 0) < 4 * 60e3) check(); }, 12000);

@@ -33,7 +33,7 @@ import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./lax/Li
 import { PhoneHandoff } from "./lax/PhoneHandoff";
 import { UnlockStart } from "./lax/Valet";
 import { renderPassImage } from "./lax/passImage";
-import { DemoBar, demoKind, demoPub, isDemo, useDemoStage } from "./lax/demo";
+import { DemoBar, demoKind, demoPub, isDemo, useDemoStage, useRealDemoKey } from "./lax/demo";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
 type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; car_connected_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
@@ -161,6 +161,8 @@ export default function LaxGuest() {
   const [stage, setStage] = useDemoStage(dKind, demo);
   // The minute timer below keeps its first closure: read the demo stage from a ref so it never snaps back to an old stage.
   const stageRef = useRef(stage); stageRef.current = stage;
+  // Host only: a real Tesla key on the demo (null for everyone else).
+  useRealDemoKey(demo, () => setPub(demoPub(dKind, stageRef.current) as Pub));
   // Errors on guests' phones go to the trip-apps health board (max 3 per visit; never from the host).
   useEffect(() => {
     let n = 0;

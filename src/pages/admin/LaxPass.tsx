@@ -18,6 +18,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { TripHealth } from "./TripHealth";
+import { DemoKeyCard } from "./DemoKeyCard";
 import { GuestHelperCard } from "./AskCard";
 import { TripSettingsBody } from "./TripSettings";
 import { HostPassCard } from "./TeslaCard";
@@ -303,13 +304,14 @@ export default function LaxPass() {
         <div className={cn(card, "flex flex-col gap-3")}>
           <div>
             <p className={cn("text-[15px] font-semibold", label)}>Preview the guest pages</p>
-            <p className={cn("text-[13px]", secondary)}>Demo trips with a stage switcher. Nothing touches real guests, keys or the car.</p>
+            <p className={cn("text-[13px]", secondary)}>Demo trips with a stage switcher. Nothing touches real guests or the car. The key is real for you only (below).</p>
           </div>
           <div className="flex gap-2">
             <a href="/t/demo-home?stage=key-ready" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>Home pickup</a>
             <a href="/t/demo-lax?stage=day-of" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>LAX</a>
           </div>
         </div>
+        <DemoKeyCard />
         <div id="health"><TripHealth /></div>
       </Section>
       </div>

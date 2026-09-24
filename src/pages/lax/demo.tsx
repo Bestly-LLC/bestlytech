@@ -1,10 +1,54 @@
 /**
  * Demo trip pages for the host: /t/demo-home and /t/demo-lax. Everything is faked in the browser, so nothing
- * touches a real guest, key, car or message. ?stage=… jumps to a point in the trip; the bar at the bottom switches it.
+ * touches a real guest, car or message. ?stage=… jumps to a point in the trip; the bar at the bottom switches it.
+ * One exception: for the host (signed-in admin, or the host link with ?dk=…) the "Add the car" button is a REAL
+ * Tesla key for Blue Steel. Anyone who adds it is removed automatically (2 hours by default; Turo settings > Demo key).
  */
 import { useEffect, useState } from "react";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, KeyRound } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { DEMO_CAR } from "./GuestExtras";
+
+const PASS_KEY = "bestly-demo-dk";
+/** Host pass from the host link (?dk=…), remembered on this device and stripped from the address bar. */
+export function demoPass(): string | null {
+  try {
+    const u = new URL(window.location.href);
+    const q = u.searchParams.get("dk");
+    if (q) { localStorage.setItem(PASS_KEY, q); u.searchParams.delete("dk"); history.replaceState(null, "", u.pathname + u.search + u.hash); }
+    return localStorage.getItem(PASS_KEY);
+  } catch { return null; }
+}
+type RealKey = { state: string; link: string | null; keep_minutes?: number } | null;
+/** null = not the host, so the pretend key is used. */
+export let realKey: RealKey = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rpc = (fn: string, args: Record<string, unknown>) => supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: any }>;
+
+/** Asks for the real demo key; re-asks every 10s while it's being made, every 5 min after. */
+export function useRealDemoKey(enabled: boolean, onChange: () => void) {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    let stop = false; let t = 0;
+    const load = async () => {
+      const { data } = await rpc("demo_key_get", { p_pass: demoPass() }).catch(() => ({ data: null }));
+      if (stop) return;
+      const next: RealKey = data && data.state !== "off" ? { state: data.state, link: data.link ?? null, keep_minutes: data.keep_minutes } : null;
+      if (JSON.stringify(next) !== JSON.stringify(realKey)) { realKey = next; bump((n) => n + 1); onChange(); }
+      t = window.setTimeout(load, next && !next.link ? 10e3 : 5 * 60e3);
+    };
+    load();
+    return () => { stop = true; window.clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
+  return realKey;
+}
+/** After the tap on a real demo key: true once Tesla shows a new driver. */
+export async function realDemoKeyAdded(): Promise<boolean> {
+  const { data } = await rpc("demo_key_check", { p_pass: demoPass() }).catch(() => ({ data: null }));
+  return data?.state === "added";
+}
 
 export const isDemo = (token?: string) => !!token && token.startsWith("demo-");
 export const demoKind = (token: string): "home" | "lax" => (token.startsWith("demo-lax") ? "lax" : "home");
@@ -62,8 +106,11 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
   let added = false; try { added = sessionStorage.getItem("demo-key-added") === "1"; } catch { /* ignore */ }
   const controlsOn = (now >= s - H && now < e) || added;
   const controls_state = now >= e ? "ended" : controlsOn ? "on" : "soon";
-  const keyState = stage === "booked" || stage === "key-soon" ? "soon" : stage === "key-ready" || stage === "day-of" ? (added ? "added" : "ready") : stage === "ended" ? "ended" : "added";
-  const key = { state: keyState, opens_at: iso(keyOpens), link: keyState === "ready" ? "#demo-key" : null, expires_at: keyState === "ready" ? iso(now + 23 * H) : null, unlock: false };
+  let keyState = stage === "booked" || stage === "key-soon" ? "soon" : stage === "key-ready" || stage === "day-of" ? (added ? "added" : "ready") : stage === "ended" ? "ended" : "added";
+  // Host: the button is a real Tesla key ("making" for the few seconds a fresh invite takes).
+  const real = keyState === "ready" && realKey ? realKey : null;
+  if (real && !real.link) keyState = "making";
+  const key = { state: keyState, opens_at: iso(keyOpens), link: keyState === "ready" ? (real?.link ?? "#demo-key") : null, expires_at: keyState === "ready" ? iso(now + 23 * H) : null, unlock: false, real: !!real };
   const base = {
     ok: true, kind, trip, car: { ...DEMO_CAR, observed_at: iso(now - 3 * 60e3) }, controls: controls_state === "on", controls_state,
     controls_opens_at: iso(s - H), email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: now >= s ? 80 : null, pickup_battery_at: now >= s ? iso(s) : null, car_connected_at: now >= s ? iso(s + 10 * 60e3) : null, demo: true,
@@ -107,6 +154,12 @@ export function DemoBar({ kind, stage, onStage }: { kind: "home" | "lax"; stage:
         <select value={stage} onChange={(e) => onStage(e.target.value)} className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1.5 text-[14px] text-white">
           {STAGES[kind].map((s) => <option key={s.id} value={s.id} className="text-black">{s.label}</option>)}
         </select>
+        {realKey && (
+          <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-1 text-[12px] font-semibold text-emerald-300 ring-1 ring-emerald-300/30"
+            title={`Real Tesla key. Anyone who adds it is removed after ${Math.round((realKey.keep_minutes ?? 120) / 60 * 10) / 10} hr.`}>
+            <KeyRound className="h-3.5 w-3.5" aria-hidden /> Real key
+          </span>
+        )}
       </label>
     </div>
   );
