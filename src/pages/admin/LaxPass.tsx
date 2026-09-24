@@ -239,7 +239,7 @@ export default function LaxPass() {
         </div>
       )}
 
-      <LaxGuests />
+      <div id="keys"><LaxGuests /></div>
 
       {st && <GuideCard guide={st.guide ?? {}} onSaved={load} />}
       <HostPassCard />

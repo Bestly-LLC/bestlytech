@@ -13,12 +13,13 @@ import { ArrowRight, Check, Download, Loader2, MapPin, Phone, Sun } from "lucide
 import { supabase } from "@/integrations/supabase/client";
 import { TagBar, TripSheet } from "./lax/TripSheet";
 import { AskButton, AskSheet } from "./lax/AskSheet";
-import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type ClimateAction, type Trip } from "./lax/GuestExtras";
+import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type Trip } from "./lax/GuestExtras";
 import { WalletLoader } from "./lax/WalletLoader";
+import HomeGuest, { type CarAction, type HomeInfo, type KeyInfo } from "./lax/HomeGuest";
 import { renderPassImage } from "./lax/passImage";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -168,7 +169,7 @@ export default function LaxGuest() {
   // Personal link acts for its own trip; the shared Turo link acts for the trip happening now (unlocked by the guest's phone key).
   const reload = () => (token ? rpc("lax_guest_public", { p_token: token }) : rpc("lax_pass_public", { p_slug: slug }))
     .then(({ data }) => data && setPub(data as Pub));
-  const carCommand = async (action: ClimateAction | "refresh", onStage?: (s: string) => void) => {
+  const carCommand = async (action: CarAction, onStage?: (s: string) => void) => {
     const { data, error } = token
       ? await rpc("lax_guest_car_command", { p_token: token, p_action: action })
       : await rpc("lax_shared_car_command", { p_slug: slug, p_action: action });
@@ -235,6 +236,9 @@ export default function LaxGuest() {
   };
 
   const shadow = { textShadow: "0 2px 12px rgba(26,17,64,0.85), 0 1px 2px rgba(26,17,64,0.9)" };
+
+  // Home pickup (733 N Kings Rd): same page system, home look. No QR code, shuttle or garage.
+  if (token && pub?.ok && pub.kind === "home") return <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} />;
 
   return (
     <div className="min-h-screen bg-[#1A1140] text-white" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>

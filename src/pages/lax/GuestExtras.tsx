@@ -165,10 +165,10 @@ const sameHour = (a: string, b: string) => Math.abs(+new Date(a) - +new Date(b))
 const rainPct = (p: number) => (p >= 0.3 ? `${Math.round(p * 10) * 10}%` : null);
 
 /** Apple Weather at LAX, laid out like the Weather app: big temp, hourly strip with the pickup hour marked, then pickup/return rows. */
-export function WeatherCard({ trip, compact = false, onNow }: { trip: Trip | null; compact?: boolean; onNow?: (f: number) => void }) {
+export function WeatherCard({ trip, compact = false, onNow, lat = 33.947, lon = -118.3816 }: { trip: Trip | null; compact?: boolean; onNow?: (f: number) => void; lat?: number; lon?: number }) {
   const [wx, setWx] = useState<Wx | null | "loading">("loading");
   useEffect(() => {
-    supabase.functions.invoke("weatherkit-proxy", { body: { lat: 33.947, lon: -118.3816, dataSets: "currentWeather,forecastHourly,forecastDaily" } })
+    supabase.functions.invoke("weatherkit-proxy", { body: { lat, lon, dataSets: "currentWeather,forecastHourly,forecastDaily" } })
       .then(({ data }) => { setWx((data as Wx) ?? null); const c = (data as Wx | null)?.currentWeather?.temperature; if (c != null) onNow?.(cToF(c)); }).catch(() => setWx(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

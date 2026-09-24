@@ -5,16 +5,16 @@
  *    or by dragging the three-bar handle down (like closing a suitcase lid).
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { BaggageClaim, PlaneTakeoff, X } from "lucide-react";
+import { BaggageClaim, Car, House, PlaneTakeoff, X } from "lucide-react";
 
 const PEACH = "#FFB878";
 
 type Which = "pickup" | "return";
 
 /** A luggage tag: punched eyelet, strap loop, stitched edge. */
-function Tag({ which, active, onClick }: { which: Which; active: boolean; onClick: () => void }) {
+function Tag({ which, active, onClick, home }: { which: Which; active: boolean; onClick: () => void; home?: boolean }) {
   const pickup = which === "pickup";
-  const Icon = pickup ? BaggageClaim : PlaneTakeoff;
+  const Icon = home ? (pickup ? Car : House) : pickup ? BaggageClaim : PlaneTakeoff;
   return (
     <button
       type="button"
@@ -42,7 +42,7 @@ function Tag({ which, active, onClick }: { which: Which; active: boolean; onClic
   );
 }
 
-export function TagBar({ open, onOpen, top }: { open: Which | null; onOpen: (w: Which) => void; top?: ReactNode }) {
+export function TagBar({ open, onOpen, top, variant }: { open: Which | null; onOpen: (w: Which) => void; top?: ReactNode; variant?: "lax" | "home" }) {
   return (
     <nav aria-label="Trip steps" className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#140c33]/90 backdrop-blur-md"
       style={{ paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
@@ -50,8 +50,8 @@ export function TagBar({ open, onOpen, top }: { open: Which | null; onOpen: (w: 
       <div aria-hidden className="h-[3px] w-full" style={{ background: `repeating-linear-gradient(90deg, ${PEACH}55 0 10px, transparent 10px 16px)` }} />
       {top && <div className="mx-auto max-w-md px-4 pt-2.5">{top}</div>}
       <div className="mx-auto flex max-w-md gap-3 px-4 pt-2.5">
-        <Tag which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} />
-        <Tag which="return" active={open === "return"} onClick={() => onOpen("return")} />
+        <Tag which="pickup" home={variant === "home"} active={open === "pickup"} onClick={() => onOpen("pickup")} />
+        <Tag which="return" home={variant === "home"} active={open === "return"} onClick={() => onOpen("return")} />
       </div>
     </nav>
   );
