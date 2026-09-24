@@ -28,7 +28,7 @@ import { InstallToast } from "./lax/InstallToast";
 import { Fold } from "./lax/HomeGuide";
 import ExtraDrivers from "./lax/ExtraDrivers";
 import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
-import { BatteryReturn, ChargingCard, ChargingFab, type Charging } from "./lax/Charging";
+import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./lax/Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./lax/LiveCharge";
 import { PhoneHandoff } from "./lax/PhoneHandoff";
 import { UnlockStart } from "./lax/Valet";
@@ -36,7 +36,7 @@ import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPub, isDemo, useDemoStage, useRealDemoKey } from "./lax/demo";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; car_connected_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -477,10 +477,10 @@ export default function LaxGuest() {
 
 
 
-            {pub.charging && <ChargingCard charging={pub.charging} token={token || undefined} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery}>
+            {pub.charging && <ChargingCard charging={pub.charging} token={token || undefined} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery} health={pub.battery_health} charging_now={["Charging", "Starting"].includes((demoCar ? demoState : pub.car)?.charging ?? "")}>
               <ChargeNow state={(demoCar ? demoState : pub.car)?.charging} battery={(demoCar ? demoState : pub.car)?.battery} detail={(demoCar ? demoState : pub.car)?.charge_detail} target={pub.pickup_battery} />
               <OpenStalls token={token || undefined} live={live} demo={demo} />
-              <RangeCheck rc={pub.range_check} kind="lax" className="mt-3" />
+              <RangeCheck rc={pub.range_check} kind="lax" className="mt-3" warnOnly />
             </ChargingCard>}
 
             <HomeGuide pickupBattery={pub.pickup_battery} kind="lax" valet={token ? (demo ? (key?.state === "added" ? <UnlockStart demo /> : null) : <UnlockStart token={token} />) : null}>
