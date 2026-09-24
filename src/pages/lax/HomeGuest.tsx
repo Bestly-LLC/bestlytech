@@ -55,7 +55,7 @@ function DecoRule({ className = "" }: { className?: string }) {
   );
 }
 
-export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock" | "nav_charger" | "nav_charger_lax";
+export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock" | "nav_charger" | "nav_charger_lax" | "nav_garage_lax";
 export type HomeInfo = { address: string; lat: number; lon: number; parking_note?: string | null; return_note?: string | null; host_note?: string | null };
 export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" | "problem" | "off"; opens_at?: string; link?: string | null; expires_at?: string | null; unlock?: boolean };
 export type HomePub = {

@@ -97,25 +97,26 @@ export const ChargerLine = ({ kind }: { kind: TripKind }) => {
   return <>Closest Supercharger: {c.name}, <a href={chargerMaps(c)} onClick={() => track(undefined, "charger_maps", { kind })} className="font-semibold text-white underline decoration-white/40 underline-offset-2">{c.street}</a>.</>;
 };
 
-type NavRun = (a: "nav_charger" | "nav_charger_lax", onStage?: (s: string) => void) => Promise<void>;
+type NavAction = "nav_charger" | "nav_charger_lax" | "nav_garage_lax";
+type NavRun = (a: NavAction, onStage?: (s: string) => void) => Promise<void>;
 /** "Send to car": puts the closest Supercharger in the car's navigation (TezLab first, Tesla backup). */
-export function SendToCar({ run, kind }: { run?: NavRun; kind: TripKind }) {
+export function SendToCar({ run, kind, action, label = "Send to car's navigation", full }: { run?: NavRun; kind: TripKind; action?: NavAction; label?: string; full?: boolean }) {
   const [st, setSt] = useState<"idle" | "busy" | "done" | "err">("idle");
   const [msg, setMsg] = useState<string | null>(null);
   if (!run) return null;
   const go = async () => {
     setSt("busy"); setMsg(null);
-    try { await run(CHARGERS[kind].action, (s) => setMsg(s)); setSt("done"); setMsg("It's in the car's navigation."); }
+    try { await run(action ?? CHARGERS[kind].action, (s) => setMsg(s)); setSt("done"); setMsg("It's in the car's navigation."); }
     catch (e) { setSt("err"); setMsg((e as Error).message || "Couldn't reach the car. Tap the address instead."); }
   };
   return (
-    <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+    <div className={full ? "" : "mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1"}>
       <button type="button" onClick={() => void go()} disabled={st === "busy"}
-        className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-[#1A1140] shadow-md shadow-black/20 active:scale-95 disabled:opacity-60" style={{ background: ACCENT }}>
+        className={full ? "flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-[#1A1140] shadow-md shadow-black/20 active:scale-[0.98] disabled:opacity-60" : "inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-[#1A1140] shadow-md shadow-black/20 active:scale-95 disabled:opacity-60"} style={{ background: ACCENT }}>
         {st === "busy" ? <Loader2 className="h-4 w-4 animate-spin" /> : st === "done" ? <CheckCircle2 className="h-4 w-4" /> : <Navigation className="h-4 w-4" />}
-        {st === "done" ? "Sent to your car" : "Send to car's navigation"}
+        {st === "done" ? "Sent to your car" : label}
       </button>
-      {msg && <p className={`min-w-0 flex-1 text-[12px] leading-snug ${st === "err" ? "text-red-300" : "text-white/65"}`} aria-live="polite">{msg}</p>}
+      {msg && <p className={`min-w-0 flex-1 text-[12px] leading-snug ${full ? "mt-1 text-center" : ""} ${st === "err" ? "text-red-300" : "text-white/65"}`} aria-live="polite">{msg}</p>}
     </div>
   );
 }
