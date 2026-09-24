@@ -14,8 +14,9 @@ import { ArrowRight, BellRing, CheckCircle2, ExternalLink, Flashlight, KeyRound,
 import { TagBar, TripSheet } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
 import { CarCard, ClimateAdvice, DEMO_CAR, TripCard, WeatherCard, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
+import { HomeGuide, VIDEOS } from "./HomeGuide";
 
-// WeHo theme: Sunset Strip neon pink + mint on a late-night purple, with the rainbow crosswalk.
+// WeHo / LA theme: Sunset Strip at night. Neon pink + mint on late-night purple, palms, city lights.
 const PEACH = "var(--trip-accent)";
 const WEHO = {
   "--trip-accent": "#FF5DB1",
@@ -23,18 +24,13 @@ const WEHO = {
   "--trip-bg": "#140826",
   "--trip-bar": "rgba(20,8,38,0.92)",
   "--trip-sheet-head": "linear-gradient(180deg, #3a1260, #140826)",
-  "--trip-strap": "linear-gradient(90deg, #E40303 0 16.66%, #FF8C00 0 33.33%, #FFED00 0 50%, #008026 0 66.66%, #004DFF 0 83.33%, #750787 0)",
+  "--trip-strap": "repeating-linear-gradient(90deg, #FF5DB166 0 10px, transparent 10px 16px)",
 } as CSSProperties;
 const NEON = { textShadow: "0 0 6px rgba(255,93,177,0.9), 0 0 18px rgba(255,93,177,0.6), 0 2px 10px rgba(20,8,38,0.9)" };
 
-/** Rainbow crosswalk, like the ones at Santa Monica Blvd and San Vicente. */
-function Crosswalk({ className = "" }: { className?: string }) {
-  const c = ["#E40303", "#FF8C00", "#FFED00", "#008026", "#004DFF", "#750787"];
-  return (
-    <div aria-hidden className={`flex h-2.5 gap-1.5 ${className}`}>
-      {c.map((x) => <span key={x} className="flex-1 -skew-x-[20deg] rounded-[2px]" style={{ background: x }} />)}
-    </div>
-  );
+/** Neon tube under the hero, like a Sunset Strip sign. */
+function NeonLine({ className = "" }: { className?: string }) {
+  return <div aria-hidden className={`h-[3px] rounded-full ${className}`} style={{ background: "linear-gradient(90deg, transparent, #FF5DB1 20%, #8FF3E4 80%, transparent)", boxShadow: "0 0 12px rgba(255,93,177,0.7)" }} />;
 }
 
 export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock";
@@ -42,7 +38,7 @@ export type HomeInfo = { address: string; lat: number; lon: number; parking_note
 export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" | "problem" | "off"; opens_at?: string; link?: string | null; expires_at?: string | null; unlock?: boolean };
 export type HomePub = {
   trip?: Trip; car?: CarState | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null;
-  home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null;
+  pickup_battery?: number | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null;
 };
 
 function platform(): "apple" | "android" | "other" {
@@ -108,7 +104,7 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
     <Section kicker="Your key" title={k.state === "added" ? "You're all set. Your phone is the key." : "Your phone is the key"} id="key">
       {k.state === "soon" && (
         <p className="text-[15px] leading-relaxed text-white/80">
-          Your key shows up here <b className="text-white">{k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"}</b>. You'll add the car to the free Tesla app with one tap. In the meantime, download the Tesla app and sign in or make a free account.
+          Your key shows up here <b className="text-white">{k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"}</b>. You'll add the car to the free Tesla app with one tap. There's no key card with this car. In the meantime, download the Tesla app and sign in or make a free account.
           <a href={appStore} className="mt-3 flex h-12 items-center justify-center gap-2 rounded-xl bg-white text-[15px] font-semibold text-[#1A1140]"><Smartphone className="h-4 w-4" /> Get the Tesla app</a>
         </p>
       )}
@@ -148,13 +144,6 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
   );
 }
 
-const VIDEOS: { title: string; sub: string; href: string }[] = [
-  { title: "Your phone as the key", sub: "Set up and use the phone key", href: "https://www.tesla.com/support/videos/watch/phone-key-set-model-3-and-model-y" },
-  { title: "Keys, doors and getting in", sub: "Meet your Model 3: Keys", href: "https://www.tesla.com/support/videos/watch/meet-your-model-3-keys" },
-  { title: "Driving and shifting", sub: "Brake pedal, then the right stalk: down for Drive, up for Reverse", href: "https://www.tesla.com/support/meet-your-tesla/2017-2023-model-3" },
-  { title: "Autopilot and Full Self-Driving", sub: "Controls > Self-Driving. Hands on the wheel, eyes on the road", href: "https://www.tesla.com/support/autopilot" },
-  { title: "Charging at a Supercharger", sub: "Plug in, it bills to the host. Cost is added to your Turo trip", href: "https://www.tesla.com/support/meet-your-tesla/2017-2023-model-3" },
-];
 
 export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; token: string; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; demo: string | null }) {
   const [sheet, setSheet] = useState<"pickup" | "return" | "ask" | null>(() => {
@@ -193,7 +182,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
           <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={shadow}>Your Tesla in <span className="text-[#FFD6EC]" style={NEON}>WeHo</span></h1>
         </div>
       </div>
-      <Crosswalk className="px-5 pt-1" />
+      <NeonLine className="mx-5" />
 
       <main className="mx-auto max-w-md px-5 pb-48 pt-5">
         <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">Tesla Model 3</b> on <b className="text-white">Turo</b>. It's parked on the street at <b className="text-white">{street}</b>. Your phone is the key: no meetup, no keys to hand over. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for the steps.</p>
@@ -223,7 +212,9 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
           <CarCard trip={pub.trip ?? null} car={car} demo={demoCar} compact onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
         </div>
 
-        <Section kicker="Learn your Tesla" title="Two-minute videos from Tesla">
+        <HomeGuide pickupBattery={pub.pickup_battery} />
+
+        <Section kicker="Learn your Tesla" title="Short videos from Tesla">
           <ul className="divide-y divide-white/10">
             {VIDEOS.map((v) => (
               <li key={v.title}>
@@ -235,9 +226,6 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
               </li>
             ))}
           </ul>
-          <p className="mt-2 rounded-xl bg-white/[0.06] p-3 text-[13px] leading-snug text-white/70 ring-1 ring-white/10">
-            <b className="text-white">Full Self-Driving (Supervised)</b> is on this car. It still needs you: hands on the wheel, eyes on the road. You're the driver and responsible for the car.
-          </p>
         </Section>
 
         {pub.home?.host_note && (
@@ -259,7 +247,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
           <p className="text-[15px] leading-relaxed text-white/75">{home.return_note}</p>
           <ol className="mt-5 space-y-4">
-            <Step n={1}><b className="text-white">Charge:</b> bring it back with about the charge you picked it up with. Nearest Superchargers are a few minutes away; ask the helper.</Step>
+            <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the same charge you picked it up with"} to avoid Turo's recharge fee. Closest: Tesla Diner Supercharger, 7001 Santa Monica Blvd (free parking, 24/7).</Step>
             <Step n={2}><b className="text-white">Park on N Kings Rd</b> near the building. Legal spot, not blocking a driveway or hydrant.</Step>
             <Step n={3}><b className="text-white">Street sweeping:</b> don't leave it on the <b className="text-white">west side Monday 8–10 AM</b> or the <b className="text-white">east side Tuesday 8–10 AM</b>. Tickets are $75.</Step>
             <Step n={4}><b className="text-white">Photos + lock:</b> take your return photos in the Turo app, grab your stuff, and lock it in the Tesla app.</Step>
