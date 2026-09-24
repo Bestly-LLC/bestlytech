@@ -174,7 +174,15 @@ function EmergencyTile() {
       onClick={async () => {
         if (busy) return;
         setBusy(true);
-        try { await startEmergency("general"); } catch { /* the page says what went wrong */ }
+        // Swallowing this and navigating anyway made a failed emergency look like a started one,
+        // which is the worst possible thing for this particular button to get wrong.
+        try {
+          await startEmergency("general");
+        } catch (e) {
+          setBusy(false);
+          toast.error("Couldn't start it", { description: (e as Error).message });
+          return;
+        }
         setBusy(false);
         nav("/admin/emergency");
       }}

@@ -193,7 +193,10 @@ function ClipCard({
         if (!live) return;
         if (data?.signedUrl) setUrl(data.signedUrl);
         else setNoUrl(true);
-      });
+      })
+      // Without this the promise rejects unhandled, noUrl never flips, and the player sits on
+      // its skeleton for good.
+      .catch(() => { if (live) setNoUrl(true); });
     return () => {
       live = false;
     };

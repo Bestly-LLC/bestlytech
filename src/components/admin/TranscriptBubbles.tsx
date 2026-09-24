@@ -11,6 +11,8 @@
 import { useMemo, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/lib/copyForClaude";
+import { toast } from "sonner";
 
 export interface Line { t: number; stamp: string; who: string; guess: boolean; text: string }
 
@@ -124,11 +126,14 @@ export function CopyTranscriptButton({ text, className }: { text: string; classN
   const [done, setDone] = useState(false);
   const copy = async () => {
     const { lines } = parseTranscript(text);
-    try {
-      await navigator.clipboard.writeText(lines.length ? cleanTranscript(lines) : text);
+    // copyText has the textarea fallback for a blocked or insecure clipboard, and says whether
+    // it worked. Silently doing nothing just reads as a broken button.
+    if (await copyText(lines.length ? cleanTranscript(lines) : text)) {
       setDone(true);
       setTimeout(() => setDone(false), 1600);
-    } catch { /* clipboard blocked */ }
+    } else {
+      toast.error("Couldn't copy the transcript", { description: "Your browser blocked the clipboard." });
+    }
   };
   return (
     <button

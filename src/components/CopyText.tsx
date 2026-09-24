@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { copyText } from "@/lib/copyForClaude";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 /**
  * Text Jared may need to paste somewhere, with ONE copy button.
@@ -28,6 +29,8 @@ export function CopyButton({ text, label = "Copy", className }: { text: string; 
         if (await copyText(text)) {
           setDone(true);
           window.setTimeout(() => setDone(false), 1600);
+        } else {
+          toast.error("Couldn't copy that", { description: "Your browser blocked the clipboard." });
         }
       }}
       aria-label={done ? "Copied" : label}

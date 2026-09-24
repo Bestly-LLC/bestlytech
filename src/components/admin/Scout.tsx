@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -382,8 +383,8 @@ export function Scout() {
   useEffect(() => {
     let gone = false;
     (async () => {
-      const { data } = await (supabase.rpc as any)("admin_today");
-      if (gone) return;
+      const { data, error } = await (supabase.rpc as any)("admin_today");
+      if (gone || error) return; // a failed count is not a count of zero: leave the badge alone
       const urgent = ((data ?? []) as { rank: number }[]).filter((r) => r.rank <= 1).length;
       setWaiting(urgent);
       if (urgent > 0) {
@@ -607,13 +608,17 @@ export function Scout() {
   const dropFrom = async (m: Msg) => {
     if (!m.id || !threadId) return;
     if (!window.confirm("Delete this message and everything after it?")) return;
-    await (supabase.rpc as any)("admin_chat_truncate", { p_message_id: m.id });
+    const { error } = await (supabase.rpc as any)("admin_chat_truncate", { p_message_id: m.id });
+    if (error) { toast.error("Couldn't delete those", { description: error.message }); return; }
     await loadThread(threadId);
   };
 
   const removeThread = async (id: string) => {
     if (!window.confirm("Delete this conversation for good?")) return;
-    await (supabase.rpc as any)("admin_chat_delete_thread", { p_thread_id: id });
+    // Clearing it from the list before knowing the delete landed is how a "deleted" conversation
+    // comes back on the next load.
+    const { error } = await (supabase.rpc as any)("admin_chat_delete_thread", { p_thread_id: id });
+    if (error) { toast.error("Couldn't delete that conversation", { description: error.message }); return; }
     if (id === threadId) {
       setThreadId(null);
       setMsgs([]);
@@ -623,8 +628,9 @@ export function Scout() {
   };
 
   const saveRename = async (id: string) => {
-    await (supabase.rpc as any)("admin_chat_rename", { p_thread_id: id, p_title: renameText });
+    const { error } = await (supabase.rpc as any)("admin_chat_rename", { p_thread_id: id, p_title: renameText });
     setRenaming(null);
+    if (error) { toast.error("Couldn't rename that", { description: error.message }); loadThreads(); return; }
     if (id === threadId) setTitle(renameText.trim() || null);
     loadThreads();
   };

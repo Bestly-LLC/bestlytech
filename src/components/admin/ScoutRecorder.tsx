@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { Mic, Square, Plus, X, Loader2, FileText, Sparkles } from "lucide-react";
 
 /**
@@ -401,8 +402,11 @@ export function RecordingPill() {
   }
   const stop = async () => {
     setStopping(true);
-    await supabase.functions.invoke("meeting-recorder", { body: { op: "stop" } });
+    const { data, error } = await supabase.functions.invoke("meeting-recorder", { body: { op: "stop" } });
     setStopping(false);
+    if (error || (data as any)?.ok === false) {
+      toast.error("Couldn't stop the recording", { description: error?.message ?? (data as any)?.error });
+    }
     refresh();
   };
   return (

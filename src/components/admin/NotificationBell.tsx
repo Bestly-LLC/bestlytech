@@ -121,7 +121,10 @@ export function NotificationBell() {
     if (!n.read_at) {
       const at = new Date().toISOString();
       setItems((xs) => xs.map((x) => (x.id === n.id ? { ...x, read_at: at } : x)));
-      await supabase.from("admin_notifications" as any).update({ read_at: at } as any).eq("id", n.id).select("id");
+      // If the write failed, put the unread mark back rather than letting the badge and the
+      // database quietly disagree until the next reload.
+      const { error } = await supabase.from("admin_notifications" as any).update({ read_at: at } as any).eq("id", n.id).select("id");
+      if (error) setItems((xs) => xs.map((x) => (x.id === n.id ? { ...x, read_at: null } : x)));
     }
     // Open the alert in a reading pane with suggested next moves for Scout (it has a link to the page).
     setPane({ ...n, kindLabel: metaFor(n).label });

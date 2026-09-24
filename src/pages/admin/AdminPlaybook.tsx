@@ -36,9 +36,14 @@ export default function AdminPlaybook() {
   const [q, setQ] = useState("");
   const [scope, setScope] = useState("all");
   const [running, setRunning] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from("scout_lessons" as never).select("*").order("active", { ascending: false }).order("wins", { ascending: false }).order("updated_at", { ascending: false });
+    const { data, error } = await supabase.from("scout_lessons" as never).select("*").order("active", { ascending: false }).order("wins", { ascending: false }).order("updated_at", { ascending: false });
+    // A query that failed is not an empty playbook. Saying "nothing learned yet" to a broken
+    // query is how a real outage reads as a quiet, healthy morning.
+    if (error) { setLoadError(error.message); setRows([]); return; }
+    setLoadError(null);
     setRows(((data ?? []) as unknown) as Lesson[]);
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -114,7 +119,11 @@ export default function AdminPlaybook() {
       )}
 
       {rows === null ? <div className={cn(card, "h-40 animate-pulse")} /> : shown.length === 0 ? (
-        <p className={cn(card, "px-5 py-4 text-white/60")}>{rows.length ? "No lessons match." : "Nothing learned yet. The first reflection runs tonight at 2am."}</p>
+        <p className={cn(card, "px-5 py-4", loadError ? "text-red-300 bento:text-red-700" : "text-white/60")}>
+          {loadError
+            ? `Couldn't load the playbook: ${loadError}`
+            : rows.length ? "No lessons match." : "Nothing learned yet. The first reflection runs tonight at 2am."}
+        </p>
       ) : (
         <ul className="space-y-2">
           {shown.map((l) => (

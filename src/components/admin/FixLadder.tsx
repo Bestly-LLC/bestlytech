@@ -35,9 +35,12 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from("monitor_issues" as any)
+    const { data, error } = await supabase.from("monitor_issues" as any)
       .select("key, status, title, fix_stage, fix_log, fix_note, scout_ask, claude_prompt, ai_diagnosis")
       .eq("key", issueKey).maybeSingle();
+    // On a failed read this component used to return null and disappear from its pane, which
+    // looks exactly like "there is nothing wrong". Say the read failed instead.
+    if (error) { setErr(`Couldn't read this issue: ${error.message}`); return; }
     setIss((data as unknown as Issue) ?? null);
   }, [issueKey]);
 
@@ -55,7 +58,9 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
     setBusy(false);
   };
 
-  if (!iss) return null;
+  if (!iss) {
+    return err ? <p className="text-sm text-red-300 bento:text-red-700">{err}</p> : null;
+  }
   const fixed = iss.status === "resolved" || iss.fix_stage === "fixed";
   const at = fixed ? 4 : ORDER[iss.fix_stage] ?? 0;
   const log = (iss.fix_log ?? []).slice(-8).reverse();
