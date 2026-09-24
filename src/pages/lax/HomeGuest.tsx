@@ -19,7 +19,7 @@ import { ScrollFx } from "./ScrollFx";
 import { track } from "./track";
 import ExtraDrivers from "./ExtraDrivers";
 import { Collapse } from "./Collapse";
-import { KeyNextSteps, KeyPending, keyTapped, markKeyTapped } from "./KeyNext";
+import { KeyNextSteps, KeyPending, keyTapped, markKeyTapped, useKeyWatch } from "./KeyNext";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -114,6 +114,7 @@ function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; trip: Tri
   const inviteFrom = k.expires_at ? Date.parse(k.expires_at) - 24 * 3600e3 - 120e3 : Date.now() - 24 * 3600e3;
   const [tapped, setTapped] = useState(() => (keyTapped(token) ?? 0) > inviteFrom);
   useEffect(() => { setTapped((keyTapped(token) ?? 0) > inviteFrom); }, [k.link, inviteFrom, token]);
+  useKeyWatch(token, k.state, k.opens_at, onAdded);
   // Guest says they already have the Tesla app: skip that step and show what's next instead.
   const [hasApp, setHasApp] = useState(() => { try { return localStorage.getItem("hasTeslaApp") === "1"; } catch { return false; } });
   const haveIt = () => { track(undefined, "have_app"); setHasApp(true); try { localStorage.setItem("hasTeslaApp", "1"); } catch { /* private mode */ } };
@@ -264,7 +265,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
             <a href={mapsFor(home.address)} onClick={() => track(undefined, "directions")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#132726] active:scale-[0.98]"><Navigation className="h-4 w-4" /> Directions</a>
             {spot
               ? <a href={mapsFor("Your Turo Tesla", spot.lat, spot.lon)} onClick={() => track(undefined, "spot")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold ring-1 ring-white/15 active:scale-[0.98]"><MapPin className="h-4 w-4" style={{ color: PEACH }} /> Exact spot</a>
-              : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">Exact spot shows 2 hours before pickup</span>}
+              : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">{pub.trip && Date.now() >= +new Date(pub.trip.starts_at) - 2 * 3600e3 ? "Car location updating… use Honk to find it" : "Exact spot shows 2 hours before pickup"}</span>}
           </div>
           {spot && <p className="mt-1.5 px-1 text-[12px] text-white/65">Car location updated {ago(spot.observed_at)}</p>}
           <div className="mt-3 flex gap-2.5">

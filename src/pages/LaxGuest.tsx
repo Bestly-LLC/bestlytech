@@ -194,6 +194,14 @@ export default function LaxGuest() {
   const reload = () => (token ? rpc("lax_guest_public", { p_token: token }) : rpc("lax_pass_public", { p_slug: slug }))
     .then(({ data }) => data && setPub(data as Pub));
   useEffect(() => { const f = () => { void reload(); }; window.addEventListener("trip-reload", f); return () => window.removeEventListener("trip-reload", f); });
+  // Keep time-based parts fresh (buttons open 1h before pickup, key 2h before, exact spot, etc.) without a manual refresh.
+  useEffect(() => {
+    const f = () => { if (document.visibilityState === "visible") void reload(); };
+    const id = window.setInterval(f, 60000);
+    document.addEventListener("visibilitychange", f);
+    return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", f); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, slug]);
   const carCommand = async (action: CarAction, onStage?: (s: string) => void) => {
     if (action !== "refresh") track(token || undefined, ["cool", "warm", "seat", "off"].includes(action) ? "climate" : action, { action });
     const { data, error } = token

@@ -16,6 +16,24 @@ const tapKey = (t: string) => `keytap:${t}`;
 export function keyTapped(token: string): number | null {
   try { const v = localStorage.getItem(tapKey(token)); return v ? Number(v) : null; } catch { return null; }
 }
+/** While the key is due or being made, ask the server every 15s (it makes the key right away if the scheduler hasn't yet). */
+export function useKeyWatch(token: string, state: string, opensAt: string | undefined, onChange: () => void) {
+  const cb = useRef(onChange);
+  cb.current = onChange;
+  useEffect(() => {
+    if (state !== "making" && state !== "soon") return;
+    let stop = false;
+    const tick = async () => {
+      if (stop || document.visibilityState !== "visible") return;
+      if (state === "soon" && opensAt && Date.parse(opensAt) > Date.now()) return;
+      const { data } = await (supabase.rpc("lax_guest_key_check" as never, { p_token: token } as never) as unknown as Promise<{ data: { state?: string } | null }>);
+      if (!stop && data?.state && data.state !== state) cb.current();
+    };
+    void tick();
+    const id = window.setInterval(tick, 15000);
+    return () => { stop = true; window.clearInterval(id); };
+  }, [token, state, opensAt]);
+}
 export function markKeyTapped(token: string) { try { localStorage.setItem(tapKey(token), String(Date.now())); } catch { /* private mode */ } }
 
 export function KeyPending({ token, link, onAdded }: { token: string; link: string | null | undefined; onAdded: () => void }) {
