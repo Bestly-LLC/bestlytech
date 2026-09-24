@@ -14,12 +14,15 @@
 //                                          member; read actions for anyone,
 //                                          writes need can_promote
 //
+// v10 (2026-09-23): captions come from the free, no-training AI (_shared/free-llm.ts: Groq -> Cloudflare), $0.
+// No OpenAI, no paid fallback. The compliance gate below is unchanged and still checks every word.
 // v9 (2026-09-23): no keys in this file any more. The x-gen-key's sha256 lives in
 // Vault as content_gen_key_sha256 and edge_key_ok() (service-role only) checks it.
 // The burned legacy key (accepted until 2026-09-10) is gone for good.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { llm } from "../_shared/free-llm.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -27,7 +30,7 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
 const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
 const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
 
-const AI_MODEL = "gpt-4o";
+const AI_MODEL = "free:gpt-oss-120b"; // label for hoku_content_log; the actual model is whichever free provider answered
 const BRAND = "hoku";
 
 const cors = {
@@ -170,25 +173,23 @@ async function sendAlert(subject: string, html: string) {
   }
 }
 
-async function callOpenAI(apiKey: string, system: string, user: string, schema: unknown, fnName: string) {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      tools: [{ type: "function", function: { name: fnName, description: "Submit results.", parameters: schema } }],
-      tool_choice: { type: "function", function: { name: fnName } },
-    }),
+// Kept the name so the callers read the same. It now asks the free AI for JSON matching `schema`.
+async function callOpenAI(_apiKey: string, system: string, user: string, schema: unknown, fnName: string) {
+  const listKey = fnName === "submit_posts" ? "posts" : "items";
+  const need = fnName === "submit_posts" ? ["headline", "caption"] : ["id", "headline"];
+  const r = await llm({
+    task: "summarize", json: true, maxTokens: 8000, deadlineMs: 110_000, paid: "never",
+    job: `hoku-${fnName}`, fn: "bestly-content-gen", scope: "background",
+    system: `${system}\n\nReply with ONE JSON object that matches this JSON Schema exactly (no extra keys, no markdown):\n${JSON.stringify(schema)}`,
+    user,
+    validate: (o) => {
+      const list = o?.[listKey];
+      if (!Array.isArray(list) || !list.length) return `no ${listKey}`;
+      for (const x of list) for (const k of need) if (typeof x?.[k] !== "string" || !x[k].trim()) return `${listKey} item missing ${k}`;
+      return null;
+    },
   });
-  if (!res.ok) throw new Error(`OpenAI ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const data = await res.json();
-  const call = data.choices?.[0]?.message?.tool_calls?.[0];
-  if (!call?.function?.arguments) throw new Error("no tool call in OpenAI response");
-  return { parsed: JSON.parse(call.function.arguments), usage: data.usage ?? {} };
+  return { parsed: r.json, usage: {} as Record<string, number> };
 }
 
 interface Draft {
@@ -376,8 +377,7 @@ Deno.serve(async (req) => {
     // parameters from each caption's OWN language (never new claims) so they
     // can be re-rendered through /api/og with the brand mark on them.
     if (action === "rewrite") {
-      const apiKey = Deno.env.get("OPENAI_API_KEY");
-      if (!apiKey) return json({ error: "OPENAI_API_KEY not configured" }, 500);
+      const apiKey = ""; // v10: free AI, no key needed here
 
       const limit = Math.min(Math.max(Number(body.limit ?? 10), 1), 30);
       const apply = Boolean(body.apply ?? false);
@@ -473,8 +473,7 @@ Deno.serve(async (req) => {
 
     // ---------------------------------------------------------- generate
     if (action === "generate" || action === "run") {
-      const apiKey = Deno.env.get("OPENAI_API_KEY");
-      if (!apiKey) return json({ error: "OPENAI_API_KEY not configured" }, 500);
+      const apiKey = ""; // v10: free AI, no key needed here
 
       const want = Math.min(Math.max(Number(body.count ?? 6), 1), 12);
 
