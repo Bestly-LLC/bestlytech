@@ -7,7 +7,7 @@
  *  - RangeCheck: real-world range vs road miles back to the return spot (lax_guest_public.range_check).
  */
 import { useState } from "react";
-import { BatteryCharging, CheckCircle2, Loader2, MapPin, Navigation, Route, TriangleAlert, Zap } from "lucide-react";
+import { ArrowDown, BatteryCharging, Car, CheckCircle2, Loader2, MapPin, Route, TriangleAlert, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
 
@@ -111,7 +111,7 @@ export function OpenStalls({ token, live, demo }: { token?: string; live: boolea
                 {live && (
                   <button type="button" onClick={() => void send(s)} aria-label={`Send ${nice(s.name)} to the car`}
                     className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-[#1A1140] active:scale-95" style={{ background: ACCENT }}>
-                    {sent === s.name ? <CheckCircle2 className="h-5 w-5" /> : <Navigation className="h-5 w-5" />}
+                    {sent === s.name ? <CheckCircle2 className="h-5 w-5" /> : <SendToCarIcon />}
                   </button>
                 )}
               </li>
@@ -137,5 +137,15 @@ export function RangeCheck({ rc, kind, className = "" }: { rc: RangeCheckData | 
         About <b className="text-white">{rc.range_mi} mi</b> of real-world range. The return spot ({kind === "home" ? "N Kings Rd" : "98th St garage"}) is about <b className="text-white">{rc.miles} mi</b> away by road.
       </p>
     </div>
+  );
+}
+
+/** "Send to car" without words: a car with an arrow dropping into it. */
+export function SendToCarIcon({ className = "" }: { className?: string }) {
+  return (
+    <span className={`relative grid h-7 w-7 place-items-end justify-items-center ${className}`} aria-hidden>
+      <ArrowDown className="absolute -top-0.5 left-1/2 h-3.5 w-3.5 -translate-x-1/2" strokeWidth={3} />
+      <Car className="h-5 w-5" strokeWidth={2.4} />
+    </span>
   );
 }

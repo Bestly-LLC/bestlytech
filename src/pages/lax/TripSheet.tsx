@@ -66,7 +66,7 @@ export function TagBar({ open, onOpen, top, variant, hideTags, glow, badge }: { 
     <span className={`relative flex flex-1 ${variant === "home" ? "rounded-[18px]" : "rounded-[12px]"} ${glow === w ? "trip-glow" : ""}`}>
       {el}
       {w === "pickup" && badge && (
-        <span className="pointer-events-none absolute -top-5 right-3 z-10" role="img" aria-label={badge}>
+        <span className="pointer-events-none absolute -top-1.5 right-3 z-10" role="img" aria-label={badge}>
           <span className="trip-key-float grid h-10 w-10 place-items-center rounded-full bg-white text-[#1A1140] ring-2 ring-white/70"
             style={{ boxShadow: "0 6px 18px -6px rgba(0,0,0,.6), 0 0 16px var(--trip-accent, #FFB878)" }}>
             <KeyRound className="h-5 w-5" strokeWidth={2.4} />
