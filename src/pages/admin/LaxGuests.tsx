@@ -19,7 +19,7 @@ type Row = {
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
-const SITE = "https://www.bestly.tech";
+const SITE = "https://bestly.tech"; // short guest links: bestly.tech/t/<7 chars>
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 
 function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
@@ -33,7 +33,7 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
     toast.success(action === "send_now" ? "Sending now from support@bestly.tech." : action === "email" ? "Saved. The reminder is scheduled." : "Link made.");
     reload();
   };
-  const link = r.token ? `${SITE}/lax/t/${r.token}` : null;
+  const link = r.token ? `${SITE}/t/${r.token}` : null;
   const msg = link ? `Hi ${r.first ?? ""}! Here's how to pick up your Turo car at LAX, plus the QR code that opens the lobby door (you can add it to Apple or Google Wallet): ${link}` : "";
   const status = r.reminder_sent_at ? `Reminder sent ${when(r.reminder_sent_at)}`
     : r.reminder_error ? `Reminder failed: ${r.reminder_error.replace(/^gave up: /, "")}`
@@ -54,7 +54,7 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <CopyButton text={msg} label="Copy message for Turo" />
             <CopyButton text={link} label="Copy link" />
-            <a href={`/lax/t/${r.token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white bento:text-neutral-500">Open <ExternalLink className="h-3.5 w-3.5" /></a>
+            <a href={`/t/${r.token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white bento:text-neutral-500">Open <ExternalLink className="h-3.5 w-3.5" /></a>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Mail className="h-4 w-4 text-white/40 bento:text-neutral-400" />

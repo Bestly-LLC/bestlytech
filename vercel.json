@@ -18,6 +18,14 @@
       "destination": "/admin.html"
     },
     {
+      "source": "/w/:token",
+      "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass?t=:token"
+    },
+    {
+      "source": "/t/(.*)",
+      "destination": "/lax.html"
+    },
+    {
       "source": "/lax",
       "destination": "/lax.html"
     },
