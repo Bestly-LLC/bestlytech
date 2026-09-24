@@ -805,7 +805,7 @@ async function freeAgent(threadId: string, text: string, page: unknown): Promise
   const queue = ((today ?? []) as any[]).slice(0, 12).map((q) => `- [${q.key}] rank ${q.rank} ${q.title}${q.detail ? `: ${String(q.detail).slice(0, 140)}` : ""}`).join("\n");
 
   const head = `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You DO things with tools; you do not describe what someone else should do.
-Answer with ONE JSON object and nothing else (no prose, no code fences), one of:
+You have no function-calling API. Write your decision as ONE JSON object in plain text and nothing else (no prose, no code fences), one of:
 {"tool": "<name>", "args": {...}}                      run a tool; you will see its result, then choose the next step
 {"reply": "<text for Jared>", "options": ["Do it", "Not now"]}   finish: plain text under 70 words, lead with the answer; options = 2-4 short buttons he can tap
 {"escalate": "CODE" | "DATA" | "ACTION", "why": "<one line>"}    hand to paid Scout when the job needs a code change or build, a data change (INSERT/UPDATE/DELETE), or more than you can finish here
@@ -854,20 +854,22 @@ ${convo}`;
     const name = String(s.tool ?? "");
     if (!FREE_TOOLS.has(name)) {
       if (["commit_files", "db_write", "mac_command"].includes(name)) return { why: name === "commit_files" ? FREE_WHY.CODE : FREE_WHY.ACTION, tools: used };
-      steps.push(`${JSON.stringify(s)} -> error: unknown tool. Use one from the list.`);
+      steps.push(`Step ${steps.length + 1}: you asked for "${name}", which is not a tool you have. Use one from the list.`);
       if (++fails > 2) break;
       continue;
     }
     const args = (s.args && typeof s.args === "object") ? s.args as Record<string, any> : {};
     if (name === "mac_run" && args.action === "propose") args.__free = true;   // never auto-run a free-model script
-    const out = await runTool(name, args, threadId);
+    let out = await runTool(name, args, threadId);
+    if ((out as any)?.ok === false && name !== "learn") out = await heal(name, args, out, {});  // real columns + past lessons
     used.push(name);
     const ok = (out as any)?.ok !== false;
     if (ok && !FREE_READS.has(name) && !(name === "mac_run" && args.action === "get") && !(name === "pi_command" && PI_READ_ONLY.has(`${args.target}.${args.action}`))) acted = true;
     if (!ok) fails++;
     let res = JSON.stringify(out);
     if (res.length > 2500) res = res.slice(0, 2500) + "...(cut)";
-    steps.push(`${JSON.stringify({ tool: name, args }).slice(0, 600)} -> ${res}`);
+    // Prose, not call-shaped JSON: gpt-oss otherwise answers with a native function call and the content comes back empty.
+    steps.push(`Step ${steps.length + 1}: you used ${name} with ${JSON.stringify(args).slice(0, 500)}. Result: ${res}`);
     if (fails > 3) break;
   }
   return { why: used.length ? "The free AI got partway but couldn't finish this." : FREE_WHY.ACTION, tools: used };
