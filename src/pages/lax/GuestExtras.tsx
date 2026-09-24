@@ -132,22 +132,22 @@ export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | 
       style={{ paddingTop: "max(8px, env(safe-area-inset-top))" }}>
       <button type="button" tabIndex={pinned ? 0 : -1} onClick={() => cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
         aria-label={`Your Turo trip: ${big} ${label}. Tap to show details.`}
-        className={`w-full max-w-md rounded-[22px] px-3.5 py-2 text-left backdrop-blur-xl transition-[transform,opacity] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${pinned ? "pointer-events-auto translate-y-0 scale-100 opacity-100" : "-translate-y-[130%] scale-95 opacity-0"}`}
+        className={`w-full max-w-md rounded-[30px] px-5 py-3.5 text-left backdrop-blur-xl transition-[transform,opacity] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${pinned ? "pointer-events-auto translate-y-0 scale-100 opacity-100" : "-translate-y-[140%] scale-95 opacity-0"}`}
         style={{ background: home ? "rgba(19,39,38,0.94)" : "rgba(10,10,12,0.9)", boxShadow: `0 10px 30px -12px rgba(0,0,0,.7), inset 0 0 0 1px ${C.ring}`, fontFamily: C.font, color: C.text }}>
-        <span className="flex items-center gap-2.5">
-          <Car className="h-4 w-4 shrink-0" style={{ color: C.hot }} aria-hidden />
+        <span className="flex items-center gap-3.5">
+          <Car className="h-7 w-7 shrink-0" style={{ color: C.hot }} aria-hidden />
           <span className="min-w-0 flex-1">
-            <span className="flex items-center justify-between text-[12px] font-semibold tabular-nums" style={{ color: C.sub }}>
+            <span className="flex items-center justify-between text-[17px] font-bold tabular-nums" style={{ color: C.sub }}>
               <span style={{ color: before ? C.hot : C.text }}>{hm(trip.starts_at)}</span>
               <span style={{ color: during ? C.hot : C.text }}>{hm(trip.ends_at)}</span>
             </span>
-            <span className="mt-1 block h-[3px] overflow-hidden rounded-full" style={{ background: C.track }}>
+            <span className="mt-2 block h-[6px] overflow-hidden rounded-full style={{ background: C.track }}>
               <span className="block h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.round(linear(s, e, now) * 100)}%`, background: C.accent }} />
             </span>
           </span>
           <span className="shrink-0 text-right leading-none">
-            <span className="block text-[17px] font-bold tabular-nums" style={{ color: numColor }}>{big}</span>
-            <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: C.sub }}>{before ? "to pickup" : during ? "left" : "done"}</span>
+            <span className="block text-[30px] font-bold tabular-nums" style={{ color: numColor }}>{big}</span>
+            <span className="mt-1 block text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: C.sub }}>{before ? "to pickup" : during ? "left" : "done"}</span>
           </span>
         </span>
       </button>
