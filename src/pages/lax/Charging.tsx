@@ -3,7 +3,8 @@
  * Live during the trip from TezLab (estimate), replaced by Tesla's billed amounts after the trip (final).
  * Data: lax_guest_public(token).charging ← trip_charges_for(reservation) ← trip_charges (synced by trip_charges_tick).
  */
-import { BatteryCharging, CheckCircle2, Clock, FileDown, Receipt, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BatteryCharging, CheckCircle2, ChevronRight, Clock, FileDown, Receipt, Zap } from "lucide-react";
 import { track } from "./track";
 
 export type ChargeSession = { at: string; end?: string | null; place?: string | null; address?: string | null; kwh?: number | null; from?: number | null; to?: number | null; cost?: number | null; idle?: number | null; final?: boolean; invoices?: { id: string; name?: string }[] | null };
@@ -88,5 +89,42 @@ export function ChargingCard({ charging, battery, pickupBattery, ended, embedded
         {c.updated_at ? ` Updated ${ago(c.updated_at)}.` : ""}
       </p>
     </section>
+  );
+}
+
+/** Small bolt button on the right edge during the trip. Every so often it slides open with
+ *  "See your true Supercharging cost" (or the running total). Tap: jumps to the charging card. Hidden while that card is on screen. */
+export function ChargingFab({ charging }: { charging: Charging }) {
+  const [open, setOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    const el = document.getElementById("charging");
+    if (!el || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(([en]) => setHidden(en.isIntersecting), { threshold: 0.15 });
+    io.observe(el); return () => io.disconnect();
+  });
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    let t2 = 0;
+    const peek = () => { setOpen(true); t2 = window.setTimeout(() => setOpen(false), 5000); };
+    const first = window.setTimeout(peek, 3500);
+    const every = window.setInterval(peek, 28000);
+    return () => { window.clearTimeout(first); window.clearTimeout(t2); window.clearInterval(every); };
+  }, []);
+  const label = charging.count > 0 ? `${money(charging.total)} so far · see details` : "See your true Supercharging cost";
+  const go = () => { track(undefined, "charging_fab"); document.getElementById("charging")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  return (
+    <button type="button" onClick={go} aria-label={label}
+      className={`fixed right-3 z-30 flex h-[52px] items-center overflow-hidden rounded-full text-left text-white shadow-xl shadow-black/40 ring-1 ring-white/25 backdrop-blur-xl transition-all duration-500 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${hidden ? "pointer-events-none translate-x-24 opacity-0" : "opacity-100"}`}
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 212px)", background: "linear-gradient(160deg, rgba(255,255,255,.22), rgba(255,255,255,.08))", maxWidth: open ? 300 : 52 }}>
+      <span className="grid h-[52px] w-[52px] shrink-0 place-items-center">
+        <span className="grid h-9 w-9 place-items-center rounded-full" style={{ background: ACCENT, boxShadow: "0 0 14px -2px var(--trip-accent)" }}>
+          <Zap className="h-5 w-5 fill-[#1A1140] text-[#1A1140]" aria-hidden />
+        </span>
+      </span>
+      <span className={`flex items-center gap-1 whitespace-nowrap pr-4 text-[14px] font-semibold transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}>
+        {label}<ChevronRight className="h-4 w-4 opacity-70" aria-hidden />
+      </span>
+    </button>
   );
 }

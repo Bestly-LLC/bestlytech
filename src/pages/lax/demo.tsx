@@ -13,16 +13,14 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
   home: [
     { id: "booked", label: "Booked (3 days out)" },
     { id: "key-soon", label: "3 hours before" },
-    { id: "key-ready", label: "Key ready (90 min before)" },
-    { id: "key-added", label: "Key added (30 min before)" },
+    { id: "key-ready", label: "Pickup soon: key ready (tap it to add)" },
     { id: "on-trip", label: "On the trip" },
     { id: "returning", label: "Return in 90 min" },
     { id: "ended", label: "Trip ended" },
   ],
   lax: [
     { id: "booked", label: "Booked (3 days out)" },
-    { id: "day-of", label: "Pickup in 2 hours (key ready)" },
-    { id: "key-added", label: "Key added (30 min before)" },
+    { id: "day-of", label: "Pickup soon: key ready (tap it to add)" },
     { id: "on-trip", label: "On the trip" },
     { id: "returning", label: "Return in 90 min" },
     { id: "ended", label: "Trip ended" },
@@ -47,14 +45,15 @@ function demoCharging(start: number, ended: boolean) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function demoPub(kind: "home" | "lax", stage: string): any {
   const now = Date.now();
-  const startIn: Record<string, number> = { booked: 72 * H, "key-soon": 3 * H, "key-ready": 1.5 * H, "key-added": 0.5 * H, "day-of": 2 * H, "on-trip": -24 * H, returning: -70.5 * H, ended: -74 * H };
+  const startIn: Record<string, number> = { booked: 72 * H, "key-soon": 3 * H, "key-ready": 1.5 * H, "key-added": 0.5 * H, "day-of": 1.5 * H, "on-trip": -24 * H, returning: -70.5 * H, ended: -74 * H };
   const s = now + (startIn[stage] ?? 72 * H);
   const e = s + 72 * H;
   const trip = { first: "Demo", starts_at: iso(s), ends_at: iso(e), car_opens_at: iso(s - H) };
   const keyOpens = s - 2 * H;
-  const controlsOn = now >= s - H && now < e || stage === "key-added";
+  let added = false; try { added = sessionStorage.getItem("demo-key-added") === "1"; } catch { /* ignore */ }
+  const controlsOn = (now >= s - H && now < e) || added;
   const controls_state = now >= e ? "ended" : controlsOn ? "on" : "soon";
-  const keyState = stage === "booked" || stage === "key-soon" ? "soon" : stage === "key-ready" || stage === "day-of" ? "ready" : stage === "ended" ? "ended" : "added";
+  const keyState = stage === "booked" || stage === "key-soon" ? "soon" : stage === "key-ready" || stage === "day-of" ? (added ? "added" : "ready") : stage === "ended" ? "ended" : "added";
   const key = { state: keyState, opens_at: iso(keyOpens), link: keyState === "ready" ? "#demo-key" : null, expires_at: keyState === "ready" ? iso(now + 23 * H) : null, unlock: false };
   const base = {
     ok: true, kind, trip, car: { ...DEMO_CAR, observed_at: iso(now - 3 * 60e3) }, controls: controls_state === "on", controls_state,
@@ -80,9 +79,11 @@ export function useDemoStage(kind: "home" | "lax", enabled: boolean) {
   const [stage, setStage] = useState(() => new URLSearchParams(window.location.search).get("stage") ?? STAGES[kind][0].id);
   useEffect(() => {
     if (!enabled) return;
+    // Each stage starts fresh: the key isn't added/tapped until the host taps it again.
+    try { sessionStorage.removeItem("demo-key-added"); localStorage.removeItem(`keytap:demo-${kind}`); } catch { /* ignore */ }
     const u = new URL(window.location.href); u.searchParams.set("stage", stage);
     history.replaceState(null, "", u.pathname + u.search + u.hash);
-  }, [stage, enabled]);
+  }, [stage, enabled, kind]);
   return [stage, setStage] as const;
 }
 

@@ -23,7 +23,7 @@ import { HomeGuide, VideoList, VideoPlayer } from "./lax/HomeGuide";
 import { ChargerLine, KeyNextSteps } from "./lax/KeyNext";
 import { laxPlace } from "./lax/places";
 import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
-import { ChargingCard, type Charging } from "./lax/Charging";
+import { ChargingCard, ChargingFab, type Charging } from "./lax/Charging";
 import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPub, isDemo, useDemoStage } from "./lax/demo";
 
@@ -481,8 +481,8 @@ export default function LaxGuest() {
                   <Warn><b className="text-white">{level} only.</b> Please don't park on other levels. If the QR doesn't scan, there's an intercom right next to the door; someone will buzz you in.</Warn>
                 </Step>
                 {key && (
-                  <Step n={6} when="At the car" title="Unlock with the Tesla app.">
-                    Add the car in <a href="#key" onClick={() => openSheet(null)} className="underline decoration-white/40 underline-offset-2">Your key</a> on the main page first (it shows up 2 hours before pickup). At the car, open the Tesla app and tap Unlock, then take your check-in photos in the Turo app.
+                  <Step n={6} when="At the car" title={"Tap \u201cSet Up\u201d, then Unlock."}>
+                    Add the car in <a href="#key" onClick={() => openSheet(null)} className="underline decoration-white/40 underline-offset-2">Your key</a> on the main page first (it shows up 2 hours before pickup). At the car, with Bluetooth on, open the Tesla app and tap <b className="text-white">&ldquo;Set Up&rdquo;</b>. Follow the steps, then tap <b className="text-white">Unlock</b>. Take your check-in photos in the Turo app.
                     <span className="mt-1 block text-white/60">Not sure which one is yours? Tap Honk or Flash lights on the main page.</span>
                   </Step>
                 )}
@@ -548,6 +548,7 @@ export default function LaxGuest() {
             <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} hideTags={ended} />
             {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} />}
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
+            {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
             <VideoPlayer />
             <ScrollFx />
 

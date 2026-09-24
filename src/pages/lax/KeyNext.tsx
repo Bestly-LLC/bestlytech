@@ -55,6 +55,11 @@ export function KeyPending({ token, link, onAdded }: { token: string; link: stri
         if (data?.state === "added") { stop = true; onAdded(); }
       } finally { busy.current = false; setChecks((n) => n + 1); }
     };
+    // Demo pages: pretend Tesla accepted it a moment later, so the host sees the whole flow.
+    if (token.startsWith("demo-")) {
+      const t = window.setTimeout(() => { try { sessionStorage.setItem("demo-key-added", "1"); } catch { /* ignore */ } onAdded(); }, 2500);
+      return () => window.clearTimeout(t);
+    }
     check();
     const id = window.setInterval(() => { if (Date.now() - (keyTapped(token) ?? 0) < 4 * 60e3) check(); }, 12000);
     const back = () => { if (document.visibilityState === "visible") check(); };
@@ -133,7 +138,7 @@ export function KeyNextSteps({ trip, pickupBattery, place, kind, maps, go, run }
   } else if (now < s + H) {
     title = "At the car";
     steps = [
-      { icon: Smartphone, title: "Open the Tesla app and tap Unlock", body: "First time? The app asks you to set up your phone as the key. Keep Bluetooth on." },
+      { icon: Smartphone, title: "Open the Tesla app: tap \u201cSet Up\u201d, then Unlock", body: "First time only: stand next to the car with Bluetooth on, tap \u201cSet Up\u201d and follow the steps. After that, just tap Unlock." },
       { icon: MapPin, title: "Not sure which car?", body: "Tap Honk or Flash lights and it'll beep or blink.", action: { label: "Find the car", onClick: () => go("climate") } },
       { icon: CheckCircle2, title: "Take your check-in photos", body: "All around the car, in the Turo app, before you drive off.", action: TURO },
     ];

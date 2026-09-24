@@ -22,7 +22,7 @@ import { Collapse } from "./Collapse";
 import { ChargerLine, KeyNextSteps, KeyPending, keyTapped, markKeyTapped, useKeyWatch } from "./KeyNext";
 import { homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
-import { ChargingCard, type Charging } from "./Charging";
+import { ChargingCard, ChargingFab, type Charging } from "./Charging";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -154,8 +154,8 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
             <li className="flex gap-3 rounded-2xl p-3 ring-1 ring-white/10">
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/15 text-[14px] font-bold text-white">3</span>
               <div className="min-w-0 flex-1">
-                <p className="text-[16px] font-semibold text-white">At the car: tap Unlock</p>
-                <p className="mt-0.5 text-[14px] leading-snug text-white/70">Open the Tesla app and tap Unlock. Then drive. That's it.</p>
+                <p className="text-[16px] font-semibold text-white">At the car: tap &ldquo;Set Up&rdquo;, then Unlock</p>
+                <p className="mt-0.5 text-[14px] leading-snug text-white/70">Stand next to the car with Bluetooth on. Open the Tesla app and tap <b className="text-white">&ldquo;Set Up&rdquo;</b>. Follow the steps. Then tap <b className="text-white">Unlock</b> and drive.</p>
               </div>
             </li>
           </ol>
@@ -179,8 +179,8 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
             {hasApp
               ? <li className="flex items-center gap-3 text-[15px] text-white/60"><CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-300" /><span className="line-through decoration-white/30">Get the Tesla app</span> <span className="no-underline">You have it</span></li>
               : <Step n={1}>Get the free <a href={appStore} className="font-semibold text-white underline decoration-white/40 underline-offset-2">Tesla app</a> and sign in, or make an account. It takes a minute. <button type="button" onClick={haveIt} className="ml-1 font-semibold underline decoration-white/40 underline-offset-2" style={{ color: PEACH }}>I already have it</button></Step>}
-            <Step n={2}>Tap the button below on this phone and accept. The car shows up in your Tesla app.</Step>
-            <Step n={3}>At the car, open the Tesla app and tap <b className="text-white">Unlock</b>. The app walks you through turning on your phone key.</Step>
+            <Step n={2}>Tap the button below on this phone, then tap <b className="text-white">Accept</b> in the Tesla app. The car shows up in your app.</Step>
+            <Step n={3}>At the car (Bluetooth on), open the Tesla app and tap <b className="text-white">&ldquo;Set Up&rdquo;</b>. Follow the steps. Then tap <b className="text-white">Unlock</b>.</Step>
           </ol>
           {k.link
             ? tapped ? <KeyPending token={token} link={k.link} onAdded={onAdded} /> : <a href={k.link} onClick={() => { track(undefined, "key_tap"); markKeyTapped(token); window.setTimeout(() => setTapped(true), 600); }} className="mt-4 flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#132726] shadow-lg shadow-black/30 active:scale-[0.99]" style={{ background: PEACH }}>
@@ -324,7 +324,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
             <Step n={1}><b className="text-white">Before you come:</b> add the car to your Tesla app. The button is in <a href="#key" onClick={() => openSheet(null)} className="underline decoration-white/40 underline-offset-2">Your key</a> on the main page, 2 hours before pickup.</Step>
             <Step n={2}><b className="text-white">Get here:</b> <a href={mapsFor(home.address)} className="underline decoration-white/40 underline-offset-2">{home.address}</a>. Rideshare can drop you right on N Kings Rd.</Step>
             <Step n={3}><b className="text-white">Find the car</b> on N Kings Rd near the building. Not sure which one? Tap <b className="text-white">Honk</b> or <b className="text-white">Flash lights</b>.</Step>
-            <Step n={4}><b className="text-white">Unlock</b> with the Tesla app, then take your check-in photos all around the car in the Turo app.</Step>
+            <Step n={4}><b className="text-white">Unlock:</b> open the Tesla app next to the car. First time, tap <b className="text-white">&ldquo;Set Up&rdquo;</b> and follow the steps. Then tap <b className="text-white">Unlock</b> and take your check-in photos all around the car in the Turo app.</Step>
             <Step n={5}><b className="text-white">Drive:</b> sit down, press the brake, and push the <b className="text-white">right stalk</b> down for Drive. Up is Reverse.</Step>
           </ol>
           <OpenTuro className="mt-5 w-full" label="Open Turo for check-in photos" />
@@ -344,6 +344,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
         </TripSheet>
 
         <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended} />
+        {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
         <VideoPlayer />
         <ScrollFx />
         <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home />
