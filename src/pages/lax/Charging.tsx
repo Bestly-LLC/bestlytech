@@ -136,3 +136,28 @@ export function ChargingFab({ charging }: { charging: Charging }) {
     </button>
   );
 }
+
+/** "Return it at 80%+ · Now 62%": the pickup charge as the target, with the car's live battery against it. */
+export function BatteryReturn({ target, now, observedAt, className = "" }: { target?: number | null; now?: number | null; observedAt?: string | null; className?: string }) {
+  if (target == null && now == null) return null;
+  const goal = target ?? now!;
+  const ok = now != null && now >= goal;
+  return (
+    <div className={`rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10 ${className}`}>
+      <div className="flex items-center justify-between gap-2 text-[14px]">
+        <span className="flex items-center gap-1.5 text-white/85"><BatteryCharging className="h-4 w-4 text-emerald-300" aria-hidden /> Return it at <b className="tabular-nums text-white">{goal}%+</b></span>
+        {now != null && <span className="text-white/70">Now <b className={`tabular-nums ${ok ? "text-emerald-300" : "text-amber-200"}`}>{now}%</b></span>}
+      </div>
+      {now != null && (
+        <div className="relative mt-2 h-2.5 rounded-full bg-white/10" aria-hidden>
+          <div className={`h-2.5 rounded-full transition-[width] duration-700 ${ok ? "bg-emerald-400" : "bg-amber-300"}`} style={{ width: `${Math.min(100, Math.max(3, now))}%` }} />
+          <span className="absolute -top-1 h-[18px] w-[3px] rounded bg-white shadow" style={{ left: `calc(${Math.min(100, goal)}% - 1px)` }} />
+        </div>
+      )}
+      <p className="mt-1.5 text-[12px] text-white/60">
+        {now == null ? "That's the charge it had at pickup." : ok ? "You're good on charge." : `Add about ${goal - now}% before you return.`}
+        {observedAt ? ` Updated ${ago(observedAt)}.` : ""}
+      </p>
+    </div>
+  );
+}

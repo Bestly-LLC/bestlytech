@@ -21,12 +21,12 @@ import { track } from "./track";
 import ExtraDrivers from "./ExtraDrivers";
 import { Collapse } from "./Collapse";
 import { ChargerLine, KeyPending, SendToCar, keyTapped, markKeyTapped, useKeyWatch } from "./KeyNext";
-import { KeySteps, NextStep, guideFor, useHasApp } from "./Guide";
+import { KeySteps, NextStep, ProfileTip, guideFor, useHasApp } from "./Guide";
 import { Carousel, TripSlides } from "./Carousel";
 import { Fold } from "./HomeGuide";
 import { homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
-import { ChargingCard, ChargingFab, type Charging } from "./Charging";
+import { BatteryReturn, ChargingCard, ChargingFab, type Charging } from "./Charging";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -245,7 +245,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
   // What to do now + what glows (next-step card, Pickup/Return ticket, key button, climate controls).
   const [hasApp, markHasApp] = useHasApp();
   useKeyWatch(token, key?.state ?? "off", key?.opens_at, () => reload?.());
-  const { next, glow } = guideFor({ trip: pub.trip, keyInfo: key, hasApp, car, controlsOn: !!pub.controls, kind: "home" });
+  const { next, glow } = guideFor({ trip: pub.trip, keyInfo: key, hasApp, car, controlsOn: !!pub.controls, kind: "home", pickupBattery: pub.pickup_battery });
   const keySteps = !!key && key.state !== "off" && key.state !== "ended";
   const n0 = keySteps ? 2 : 0;
   const doNext = (a: string) => {
@@ -348,17 +348,18 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
               <p className="mt-7 text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Then: at the car</p>
             </>
           )}
-          <Carousel id="home-pickup" className="mt-4" labels={["Go to the car", "\u201cSet Up\u201d + Unlock", "Photos", "Drive"]}>
+          <Carousel id="home-pickup" className="mt-4" labels={["Go to the car", "\u201cSet Up\u201d + Unlock", "Turo Guest profile", "Photos", "Drive"]}>
             <Step n={n0 + 1}><b className="text-white">Go to</b> <a href={mapsFor(home.address)} className="underline decoration-white/40 underline-offset-2">{home.address}</a>. It's on N Kings Rd near the building. Not sure which car? Tap <b className="text-white">Honk</b> on the main page.</Step>
             <Step n={n0 + 2}>Next to the car (Bluetooth on), open the Tesla app. Tap <b className="text-white">&ldquo;Set Up&rdquo;</b> and follow the steps. Then tap <b className="text-white">Unlock</b>.</Step>
-            <Step n={n0 + 3}><b className="text-white">Take check-in photos</b> all around the car in the Turo app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
-            <Step n={n0 + 4}><b className="text-white">Drive:</b> sit down, press the brake, push the <b className="text-white">right stalk</b> down. Up is Reverse.</Step>
+            <Step n={n0 + 3}><b className="text-white">Get in and pick your profile.</b><ProfileTip /></Step>
+            <Step n={n0 + 4}><b className="text-white">Take check-in photos</b> all around the car in the Turo app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
+            <Step n={n0 + 5}><b className="text-white">Drive:</b> press the brake, push the <b className="text-white">right stalk</b> down. Up is Reverse.<BatteryReturn className="mt-3" target={pub.pickup_battery ?? car?.battery} now={car?.battery} observedAt={car?.observed_at} /></Step>
           </Carousel>
         </TripSheet>
 
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
           <Carousel id="home-return" labels={["Charge", "Park", "Photos + lock"]}>
-            <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"}. <ChargerLine kind="home" /><SendToCar run={live ? run : undefined} kind="home" /></Step>
+            <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"}.<BatteryReturn className="mt-3" target={pub.pickup_battery} now={car?.battery} observedAt={car?.observed_at} /><span className="mt-3 block"><ChargerLine kind="home" /></span><SendToCar run={live ? run : undefined} kind="home" /></Step>
             <Step n={2}><b className="text-white">Park on N Kings Rd</b> near the building. <b className="text-white">Avoid the Joybird street parking.</b> Watch for <b className="text-white">street sweeping on Mondays and Tuesdays</b>: west side Monday 8–10 AM, east side Tuesday 8–10 AM ($75 tickets).<span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span></Step>
             <Step n={3}><b className="text-white">Return photos</b> in the Turo app, grab your stuff, lock it in the Tesla app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
           </Carousel>

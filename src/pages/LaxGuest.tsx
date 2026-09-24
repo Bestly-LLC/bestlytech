@@ -21,12 +21,12 @@ import { track } from "./lax/track";
 import HomeGuest, { CarButton, type CarAction, type HomeInfo, type KeyInfo } from "./lax/HomeGuest";
 import { HomeGuide, VideoList, VideoPlayer } from "./lax/HomeGuide";
 import { ChargerLine, SendToCar, useKeyWatch } from "./lax/KeyNext";
-import { KeySteps, NextStep, guideFor, useHasApp } from "./lax/Guide";
+import { KeySteps, NextStep, ProfileTip, guideFor, useHasApp } from "./lax/Guide";
 import { Carousel, TripSlides } from "./lax/Carousel";
 import { Fold } from "./lax/HomeGuide";
 import ExtraDrivers from "./lax/ExtraDrivers";
 import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
-import { ChargingCard, ChargingFab, type Charging } from "./lax/Charging";
+import { BatteryReturn, ChargingCard, ChargingFab, type Charging } from "./lax/Charging";
 import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPub, isDemo, useDemoStage } from "./lax/demo";
 
@@ -276,7 +276,7 @@ export default function LaxGuest() {
   // What to do now + what glows (same rules as the home page).
   const [hasApp, markHasApp] = useHasApp();
   useKeyWatch(token, pub?.kind === "lax" ? key?.state ?? "off" : "off", key?.opens_at, () => void reload());
-  const guide = guideFor({ trip: pub?.trip, keyInfo: pub?.kind === "lax" ? key : null, hasApp, car: demoCar ? demoState : pub?.car ?? null, controlsOn: !!pub?.controls, kind: "lax", qrReady: !!pub?.ready });
+  const guide = guideFor({ trip: pub?.trip, keyInfo: pub?.kind === "lax" ? key : null, hasApp, car: demoCar ? demoState : pub?.car ?? null, controlsOn: !!pub?.controls, kind: "lax", qrReady: !!pub?.ready, pickupBattery: pub?.pickup_battery });
   const glow = guide.glow;
   const doNext = (a: string) => {
     if (a === "pickup" || a === "return") openSheet(a);
@@ -376,7 +376,7 @@ export default function LaxGuest() {
             <NextStep next={guide.next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? carCommand : undefined} kind="lax" />
 
             {/* QR */}
-            <Collapse id="qr" kicker="Your QR code · opens the lobby door" title={pub.ready ? "Scan it at the lobby door" : undefined} accent={PEACH} className={guide.next?.action === "qr" ? "trip-glow trip-glow-card" : ""} summary={pub.ready ? "Tap to show your QR code." : "Shows up here before your trip."}>
+            <Collapse id={onTrip ? "qr-trip" : "qr"} defaultOpen={!onTrip} kicker={onTrip ? "Park My Share QR code" : "Your QR code · opens the lobby door"} title={pub.ready && !onTrip ? "Scan it at the lobby door" : undefined} accent={PEACH} className={guide.next?.action === "qr" ? "trip-glow trip-glow-card" : ""} summary={onTrip ? "Opens the garage lobby door. Tap if you need it again." : pub.ready ? "Tap to show your QR code." : "Shows up here before your trip."}>
               {pub.ready ? (
                 <>
                   <div className="mt-3 rounded-3xl bg-white p-6 text-center text-[#1A1140] shadow-2xl shadow-black/40">
@@ -494,7 +494,7 @@ export default function LaxGuest() {
 
               <p className="mt-1 text-[15px] leading-relaxed text-white/75">About 20 minutes from landing to driving away.</p>
 
-              <Carousel id="lax-pickup" className="mt-4" labels={["After landing", "On the curb", "Shuttle", "Walk over", "Lobby door", ...(keySteps ? ["At the car"] : [])]}>
+              <Carousel id="lax-pickup" className="mt-4" labels={["After landing", "On the curb", "Shuttle", "Walk over", "Lobby door", ...(keySteps ? ["At the car"] : []), "Turo Guest profile"]}>
                 <Step n={n0 + 1} when="After landing" title="Head to Level 2, then to the curb.">
                   From your terminal, go up to Level 2 (Departures) and step outside.
                   <span className="mt-1 block text-white/60">Yes, departures: that's where the off-airport shuttles board.</span>
@@ -523,6 +523,10 @@ export default function LaxGuest() {
                     <OpenTuro className="mt-3 w-full" label="Open Turo for photos" />
                   </Step>
                 )}
+                <Step n={n0 + (keySteps ? 7 : 6)} when="Inside the car" title="Pick your driver profile.">
+                  <ProfileTip />
+                  <BatteryReturn className="mt-3" target={pub.pickup_battery ?? (demoCar ? demoState : pub.car)?.battery} now={(demoCar ? demoState : pub.car)?.battery} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
+                </Step>
               </Carousel>
 
               {phone && (
@@ -547,7 +551,9 @@ export default function LaxGuest() {
               </p>
 
               <p className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[14px] leading-relaxed text-white/80 ring-1 ring-white/10">
-                <b className="text-white">Charge first:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"} to avoid Turo's recharge fee. <ChargerLine kind="lax" /><SendToCar run={live ? carCommand : undefined} kind="lax" />
+                <b className="text-white">Charge first:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"} to avoid Turo's recharge fee.
+                <BatteryReturn className="mt-3" target={pub.pickup_battery} now={(demoCar ? demoState : pub.car)?.battery} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
+                <span className="mt-3 block"><ChargerLine kind="lax" /></span><SendToCar run={live ? carCommand : undefined} kind="lax" />
               </p>
 
               <Carousel id="lax-return" className="mt-4" labels={["Drive in", "Park", "Walk out", "Shuttle"]}>

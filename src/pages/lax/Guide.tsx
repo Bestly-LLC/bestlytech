@@ -7,7 +7,7 @@
  *  - useHasApp: "I already have the Tesla app", shared by every place that asks.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, CheckCircle2, KeyRound, Loader2, Lock, ShieldAlert, Smartphone, Snowflake, Undo2, Zap } from "lucide-react";
+import { ArrowRight, CheckCircle2, KeyRound, Loader2, Lock, ShieldAlert, Smartphone, Snowflake, Undo2, UserRound, Zap } from "lucide-react";
 import { fmtWhen, climateNeed, type CarState, type Trip } from "./GuestExtras";
 import type { KeyInfo } from "./HomeGuest";
 import { KeyPending, SendToCar, keyTapped, markKeyTapped } from "./KeyNext";
@@ -31,8 +31,8 @@ export type GlowTarget = "next" | "pickup" | "return" | "key" | "climate";
 export type Next = { icon: typeof Zap; title: string; sub?: string; action?: "getapp" | "pickup" | "return" | "climate" | "send" | "qr"; label?: string } | null;
 
 /** One place decides what the guest should do now, and what glows. */
-export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady, now = Date.now() }: {
-  trip?: Trip | null; keyInfo?: KeyInfo | null; hasApp: boolean; car?: CarState | null; controlsOn?: boolean; kind: TripKind; qrReady?: boolean; now?: number;
+export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady, pickupBattery, now = Date.now() }: {
+  trip?: Trip | null; keyInfo?: KeyInfo | null; hasApp: boolean; car?: CarState | null; controlsOn?: boolean; kind: TripKind; qrReady?: boolean; pickupBattery?: number | null; now?: number;
 }): { next: Next; glow: Set<GlowTarget> } {
   const glow = new Set<GlowTarget>();
   if (!trip) return { next: null, glow };
@@ -46,9 +46,11 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
   if (now >= s + 45 * 60e3) {
     if (now >= e - 3 * H) {
       glow.add("return"); glow.add("next");
-      return { next: { icon: Undo2, title: "Time to head back", sub: `Return by ${fmtWhen(trip.ends_at)}. Charge it back up first.`, action: "return", label: "Return steps" }, glow };
+      return { next: { icon: Undo2, title: "Time to head back", sub: `Return by ${fmtWhen(trip.ends_at)}.${pickupBattery != null ? ` Charge it to ${pickupBattery}%+ first${car?.battery != null ? ` (now ${car.battery}%)` : ""}.` : " Charge it back up first."}`, action: "return", label: "Return steps" }, glow };
     }
-    return { next: { icon: Zap, title: `Return by ${fmtWhen(trip.ends_at)}`, sub: "Bring it back with the charge you picked it up with.", action: "send", label: "Send charger to car" }, glow };
+    const bat = car?.battery, goal = pickupBattery;
+    const sub = goal != null ? `Bring it back at ${goal}%+.${bat != null ? ` It's at ${bat}% now.` : ""}` : "Bring it back with the charge you picked it up with.";
+    return { next: { icon: Zap, title: `Return by ${fmtWhen(trip.ends_at)}`, sub, action: "send", label: "Send charger to car" }, glow };
   }
   // Key: not ready yet
   if (k && !added && now < opens) {
@@ -174,3 +176,13 @@ export function GlowWrap({ on, children, className = "" }: { on: boolean; childr
   return <span className={`relative flex flex-1 rounded-[18px] ${on ? "trip-glow" : ""} ${className}`}>{children}</span>;
 }
 
+
+/** The car can't be switched to the "Turo Guest" driver profile remotely (Tesla has no API for it), so we ask once, clearly. */
+export function ProfileTip() {
+  return (
+    <span className="mt-3 flex items-start gap-2.5 rounded-2xl bg-white/[0.08] p-3 text-[15px] leading-snug text-white/85 ring-1 ring-white/10">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/15"><UserRound className="h-4 w-4 text-white" aria-hidden /></span>
+      <span>Tap the <b className="text-white">person icon</b> at the top of the car's screen and pick <b className="text-white">&ldquo;Turo Guest&rdquo;</b>. It's your driver profile for the trip.</span>
+    </span>
+  );
+}
