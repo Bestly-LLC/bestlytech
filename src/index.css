@@ -987,3 +987,24 @@ body.admin-bento { background-color: var(--bento-page); }
 @keyframes trip-glow-spin { to { --glow-a: 360deg; } }
 @keyframes trip-glow-breathe { 0%, 100% { box-shadow: 0 0 20px -6px var(--trip-accent, #FFB878); } 50% { box-shadow: 0 0 38px -4px var(--trip-accent, #FFB878); } }
 @media (prefers-reduced-motion: reduce) { .trip-glow, .trip-glow::before { animation: none; } .trip-glow { box-shadow: 0 0 24px -6px var(--trip-accent, #FFB878) !important; } }
+
+/* Trip pages: glass card (review ask). Frosted fill, bright top edge, and a light sweep that crosses every few seconds. */
+.trip-glass {
+  position: relative; isolation: isolate;
+  background: linear-gradient(160deg, rgba(255,255,255,.20), rgba(255,255,255,.06) 45%, rgba(255,255,255,.10));
+  -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 0 0 1px rgba(255,255,255,.18), 0 18px 40px -18px rgba(0,0,0,.7);
+}
+.trip-glass::before { /* soft reflection on the top half */
+  content: ""; position: absolute; inset: 0 0 50% 0; border-radius: inherit; pointer-events: none; z-index: -1;
+  background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0));
+}
+.trip-glass::after { /* the moving shine */
+  content: ""; position: absolute; top: -40%; bottom: -40%; width: 38%; left: -60%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.55) 50%, transparent);
+  transform: skewX(-18deg); animation: trip-shine 4.2s ease-in-out infinite;
+}
+@keyframes trip-shine { 0%, 55% { left: -60%; } 85%, 100% { left: 130%; } }
+.trip-star { filter: drop-shadow(0 0 6px rgba(255,214,10,.55)); animation: trip-star-pop 4.2s ease-in-out infinite; }
+@keyframes trip-star-pop { 0%, 60%, 100% { transform: scale(1); } 68% { transform: scale(1.18); } 76% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .trip-glass::after, .trip-star { animation: none; } .trip-glass::after { display: none; } }

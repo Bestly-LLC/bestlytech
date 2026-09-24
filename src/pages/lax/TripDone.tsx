@@ -3,7 +3,7 @@
  * and (once the charging summary ships) what was charged at Superchargers during the trip.
  * The car, climate, key, guide and videos are hidden: none of it applies any more.
  */
-import { CheckCircle2, ExternalLink, KeyRound, Camera } from "lucide-react";
+import { CheckCircle2, ExternalLink, KeyRound, Camera, Star } from "lucide-react";
 import { fmtWhen, type Trip } from "./GuestExtras";
 import { TURO_TRIPS } from "./places";
 import { track } from "./track";
@@ -43,8 +43,27 @@ export function TripDone({ trip, titleFont, charging, token }: { trip: Trip; tit
         ))}
       </ol>
       <OpenTuro primary className="mt-2 w-full" label="Open the Turo app" />
-      <p className="mt-2 text-center text-[12px] text-white/60">A review in Turo helps a lot. Thank you.</p>
+      <ReviewAsk titleFont={titleFont} />
     </section>
+  );
+}
+
+/** Glass card asking for a Turo review: five gold stars, a light sweep across the glass, one button. */
+function ReviewAsk({ titleFont }: { titleFont?: string }) {
+  return (
+    <a href={TURO_TRIPS} target="_blank" rel="noreferrer" onClick={() => track(undefined, "review_tap")}
+      className="trip-glass mt-4 block overflow-hidden rounded-3xl p-5 text-center active:scale-[0.99]">
+      <span className="flex justify-center gap-1.5" aria-label="5 stars">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Star key={i} className="trip-star h-9 w-9 fill-[#FFD60A] text-[#FFD60A]" style={{ animationDelay: `${i * 90}ms` }} strokeWidth={1.25} aria-hidden />
+        ))}
+      </span>
+      <span className="mt-3 block text-[22px] font-bold leading-tight text-white" style={{ fontFamily: titleFont }}>Enjoyed the ride?</span>
+      <span className="mt-1.5 block text-[15px] leading-snug text-white/80">A 5-star review in Turo helps a lot. It takes 30 seconds.</span>
+      <span className="mt-4 inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-white px-6 text-[16px] font-bold text-[#1A1140] shadow-lg shadow-black/30">
+        <Star className="h-4 w-4 fill-[#FFB800] text-[#FFB800]" aria-hidden /> Leave a review in Turo
+      </span>
+    </a>
   );
 }
 
