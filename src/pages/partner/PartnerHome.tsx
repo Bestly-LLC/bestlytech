@@ -16,11 +16,12 @@ import type { Session } from "@supabase/supabase-js";
 import {
   ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, Eye, ExternalLink, FileArchive, FileImage, FileSpreadsheet, FileText,
   Files as FilesIcon, Home as HomeIcon, Inbox, LayoutGrid, Link2, Loader2, LogOut, Mail, Mic, Paperclip, Presentation,
-  Bell, Binoculars, Fingerprint, Plug, Search, Users, Video,
+  Bell, Binoculars, Fingerprint, Moon, Plug, Search, Sun, Users, Video,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
+import { Switch } from "@/components/ui/switch";
 import { TranscriptBubbles, CopyTranscriptButton } from "@/components/admin/TranscriptBubbles";
 import { CopyButton } from "@/components/CopyText";
 import { AdminMark } from "@/components/AdminMark";
@@ -132,7 +133,16 @@ function Linked({ text }: { text: string }) {
 /* ───────── shell ───────── */
 
 export function PartnerHome({ session }: { session: Session }) {
-  const { bento } = useAdminTheme();
+  const { bento, toggle: toggleTheme } = useAdminTheme();
+  // Theme on <body> too: menus, sheets and toasts render there, and the page scrollbar follows it.
+  useEffect(() => {
+    document.body.classList.add("admin-shell");
+    return () => document.body.classList.remove("admin-shell");
+  }, []);
+  useEffect(() => {
+    document.body.classList.toggle("admin-bento", bento);
+    return () => document.body.classList.remove("admin-bento");
+  }, [bento]);
   const [partner, setPartner] = useState<Partner | null | undefined>(undefined);
   const [admin, setAdmin] = useState(false);
   const [viewAs, setViewAs] = useState(false);
@@ -309,6 +319,10 @@ export function PartnerHome({ session }: { session: Session }) {
             <span className="flex items-center gap-2"><Video className="h-[18px] w-[18px]" /> {nextMtg ? "Join next meeting" : "Join our call"}</span>
             {nextMtg && <span className="text-xs font-medium opacity-85">{whenLabel(nextMtg.start)}</span>}
           </a>
+          <label className="flex h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
+            <Moon className="h-[18px] w-[18px]" /> Dark mode
+            <Switch className="ml-auto data-[state=checked]:bg-[#30D158]" checked={!bento} onCheckedChange={toggleTheme} aria-label="Dark mode" />
+          </label>
           <PasskeyRow userId={session.user.id} />
           <button onClick={signOut} className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-sm text-white/50 hover:bg-white/[0.05] hover:text-white">
             <LogOut className="h-4 w-4" /> Sign out
@@ -328,6 +342,9 @@ export function PartnerHome({ session }: { session: Session }) {
               className="inline-flex h-9 items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 text-sm font-semibold text-[#fff] active:scale-95">
               <Video className="h-4 w-4" /> Call
             </a>
+            <button onClick={toggleTheme} aria-label={bento ? "Switch to dark mode" : "Switch to light mode"} className="grid h-10 w-10 place-items-center rounded-full text-white/55 hover:bg-white/[0.06]">
+              {bento ? <Moon className="h-[18px] w-[18px]" /> : <Sun className="h-[18px] w-[18px]" />}
+            </button>
             <button onClick={signOut} aria-label="Sign out" className="grid h-10 w-10 place-items-center rounded-full text-white/55 hover:bg-white/[0.06]">
               <LogOut className="h-[18px] w-[18px]" />
             </button>
@@ -417,10 +434,10 @@ function HomeTab(props: {
         <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
             <PartnerMark className="h-16 w-16 shrink-0 sm:h-20 sm:w-20" label="Globe" excited={excited} />
-            <div>
+            <div className="min-w-0">
               <p className="text-sm text-white/50">{today}</p>
               <GreetingSwap greeting={greeting()} name={first} company={company} onExcite={setExcited}
-                className="text-[1.9rem] font-bold leading-tight tracking-tight sm:text-[2.3rem]" />
+                className="whitespace-nowrap text-[clamp(1.35rem,6.4vw,2.3rem)] font-bold leading-tight tracking-tight" />
               <p className="mt-0.5 text-[0.95rem] text-white/60">
                 {mine.length ? `${mine.length} to-do${mine.length === 1 ? "" : "s"} on you` : "Nothing on you right now"}
                 {deals ? ` · ${deals} deal${deals === 1 ? "" : "s"} in motion` : ""}

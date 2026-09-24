@@ -86,7 +86,7 @@ export function GreetingSwap({ greeting, name, company, onExcite, className }: {
   useEffect(() => () => { clear(); if (touchTimer.current) window.clearTimeout(touchTimer.current); }, []);
 
   if (!company) {
-    return <h1 className={className}>{line}</h1>;
+    return <h1 className={cn("whitespace-nowrap", className)}>{line}</h1>;
   }
 
   return (
@@ -104,9 +104,11 @@ export function GreetingSwap({ greeting, name, company, onExcite, className }: {
       aria-label={on ? company : line}
     >
       <style>{CSS}</style>
-      <span aria-hidden style={{ display: "grid" }}>
+      {/* The greeting alone sets the size (one line, never wraps). The company is laid over it,
+          so the swap never pushes the stats line, the weather or the call button around. */}
+      <span aria-hidden className="relative block whitespace-nowrap">
         {/* the greeting, letter by letter so it can peel away */}
-        <span style={{ gridArea: "1 / 1" }} className={cn(on && "gs-away")}>
+        <span className={cn("inline-block whitespace-nowrap", on && "gs-away")}>
           {[...line].map((c, i) => (
             <span key={i} className="gs-letter" style={{ transitionDelay: on ? `${i * 14}ms` : `${Math.max(0, 200 - i * 6)}ms` }}>
               {c === " " ? " " : c}
@@ -114,7 +116,7 @@ export function GreetingSwap({ greeting, name, company, onExcite, className }: {
           ))}
         </span>
         {/* the company, decoding in */}
-        <span style={{ gridArea: "1 / 1", transition: "opacity .3s", opacity: on ? 1 : 0 }}>
+        <span className="pointer-events-none absolute left-0 top-0 whitespace-nowrap" style={{ transition: "opacity .3s", opacity: on ? 1 : 0 }}>
           {on && (
             <span className="gs-co">
               {[...shown].map((c, i) => <span key={`s${i}`} className="gs-lock">{c === " " ? " " : c}</span>)}

@@ -7,6 +7,7 @@
 //   op tick                   hourly cron; queues the nightly pass at 10 PM Los Angeles, once a day.
 //   op nightly {force?}       the nightly pass (the watchdog calls this with force when tick missed).
 //
+// v3: obeys the Paid AI switch. Off = free AI only (Mac mini); asleep = no-AI read, never paid.
 // v2: everything goes through todo_check_jobs so a check finishes even if Jared closes the page;
 // the page reads progress from todo_check_runs / todo_check_jobs, and a finished run sends a notification.
 //   op learn   {check_id}     after a thumbs down / put back: write a lesson Scout reads next time.
@@ -80,8 +81,51 @@ function cleanKey(raw: string | undefined) {
   const m = (raw ?? "").match(/sk-ant-[A-Za-z0-9_\-]{20,}/);
   return (m ? m[0] : raw ?? "").trim();
 }
-async function llm(o: { task: string; system: string; user: string; maxTokens: number; json: boolean; job: string; ref: string | null }):
-  Promise<{ text: string; json?: any; model: string; provider: string; cost_usd: number }> {
+type LlmReq = { task: string; system: string; user: string; maxTokens: number; json: boolean; job: string; ref: string | null };
+type LlmOut = { text: string; json?: any; model: string; provider: string; cost_usd: number };
+const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+const parseJson = (text: string) => {
+  const t = text.replace(/<think>[\s\S]*?<\/think>/g, "");
+  const s = t.indexOf("{"), e = t.lastIndexOf("}");
+  if (s < 0 || e < s) throw new Error("model did not return JSON");
+  return JSON.parse(t.slice(s, e + 1));
+};
+
+// v3: "Paid AI" off (scout_settings.paid_ai_ok = false) means free AI only: the model on Jared's
+// Mac mini (fix_ai_jobs queue, same one the Scout chat uses). If the Mac is asleep, no paid
+// fallback: the check becomes a no-AI read and the nightly pass tries again.
+async function paidAllowed() {
+  const { data } = await db.from("scout_settings").select("paid_ai_ok").limit(1).maybeSingle();
+  return (data as any)?.paid_ai_ok === true;
+}
+class FreeOffline extends Error { quiet = true; }
+async function macLlm(o: LlmReq): Promise<LlmOut> {
+  const { data: st } = await db.from("partner_ai_status").select("seen_at, model").eq("id", 1).maybeSingle();
+  const seen = (st as any)?.seen_at ? Date.parse((st as any).seen_at) : 0;
+  if (Date.now() - seen > 3 * 60_000) throw new FreeOffline("free AI on the Mac mini is offline");
+  const prompt = `${o.system}\n\n${o.user}\n\nReply with the JSON object only.`;
+  const { data: job, error } = await db.from("fix_ai_jobs").insert({ issue_key: `todo-check:${o.ref ?? o.job}`, prompt }).select("id").single();
+  if (error || !job) throw new FreeOffline("free AI queue unavailable");
+  const until = Date.now() + 100_000;
+  while (Date.now() < until) {
+    await sleep(2000);
+    const { data: row } = await db.from("fix_ai_jobs").select("status, answer").eq("id", (job as any).id).maybeSingle();
+    if ((row as any)?.status === "done") {
+      const text = String((row as any).answer ?? "");
+      const model = `mac:${(st as any)?.model ?? "local"}`;
+      await db.from("ai_spend").insert({ fn: "todo-check", scope: "background", job: o.job, model, input_tokens: Math.round(prompt.length / 4), output_tokens: Math.round(text.length / 4), cost_usd: 0, ref: o.ref });
+      return { text, json: o.json ? parseJson(text) : undefined, model, provider: "mac-mini", cost_usd: 0 };
+    }
+  }
+  throw new FreeOffline("free AI on the Mac mini took too long");
+}
+
+async function llm(o: LlmReq): Promise<LlmOut> {
+  if (!(await paidAllowed())) return macLlm(o);
+  return haiku(o);
+}
+
+async function haiku(o: LlmReq): Promise<LlmOut> {
   const key = cleanKey(Deno.env.get("ANTHROPIC_API_KEY"));
   if (!key) throw new Error("no ANTHROPIC_API_KEY");
   const { data: budget } = await db.rpc("ai_budget", { p_scope: "background" });
@@ -266,10 +310,12 @@ async function check(id: string, trigger: "button" | "sweep" | "nightly", allowC
       les.length ? "Lessons from Jared's past corrections (follow them):\n" + les.map((l) => `- ${l.title}: when ${l.when_text ?? "judging"}, ${l.do_text ?? ""}${l.avoid_text ? `; avoid ${l.avoid_text}` : ""}`).join("\n") : "",
       'Return JSON only: {"verdict":"done|partly|not_done|unknown","confidence":0-1,"evidence_ids":["..."],"summary":"one plain sentence","remaining":"what is left, or empty","next_step":"the one next action, or empty"}',
     ].filter(Boolean).join("\n");
+    // the free Mac model has a small context window: fewer, shorter snippets when it's the judge
+    const paid = await paidAllowed();
     const user = JSON.stringify({
       todo: { title: todo.title, detail: todo.why, owner: todo.action?.owner ?? "Jared", due: todo.action?.due ?? null, created: time12(todo.created_at) },
       jared_said_before: ((past ?? []) as any[]).map((p) => ({ verdict_was: p.verdict, he_said: p.feedback, note: p.feedback_note })),
-      evidence: items.map((i) => ({ id: i.id, source: i.src, when: time12(i.at), title: i.title, text: String(i.quote ?? "").replace(/[«»]/g, "").slice(0, 500) })),
+      evidence: (paid ? items : items.slice(0, 12)).map((i) => ({ id: i.id, source: i.src, when: time12(i.at), title: i.title, text: String(i.quote ?? "").replace(/[«»]/g, "").slice(0, paid ? 500 : 240) })),
     });
     const out = await llm({ task: "judge", system, user, maxTokens: 500, json: true, job: "todo-check", ref: id });
     const j = out.json ?? {};
@@ -286,10 +332,12 @@ async function check(id: string, trigger: "button" | "sweep" | "nightly", allowC
   } catch (e) {
     const quiet = (e as any).quiet;
     if (!quiet) err = (e as Error).message.slice(0, 300);
+    const offline = e instanceof FreeOffline;
     const deck = items.find((i) => i.src === "deck" && /moved to/.test(i.quote));
     if (deck) { verdict = "done"; confidence = 0.7; cited = [deck.id]; summary = "The Deck card was moved to Done."; }
     else { verdict = "unknown"; summary = items.length ? "Found some related things but could not judge them." : "Nothing found about this yet."; cited = items.slice(0, 4).map((i) => i.id); }
     if (err) summary += " (Judge unavailable, so this is a no-AI read.)";
+    else if (offline) summary += " (Paid AI is off and the free AI on the Mac mini isn't answering, so this is a no-AI read. Scout tries again tonight.)";
     model = "no-ai";
   }
 
@@ -383,11 +431,14 @@ async function notifyRun(r: any) {
 }
 
 // Work the queue until the time budget runs out; todo_check_drain() (every minute) picks up the rest.
-async function drain(budgetMs = 120_000) {
+async function drain(budgetMs = 140_000) {
   const stop = Date.now() + budgetMs;
+  const paid = await paidAllowed();
+  // the Mac mini answers one at a time and can take ~30-90s, so leave room for a whole job
+  const margin = paid ? 25_000 : 105_000;
   let n = 0;
-  while (Date.now() < stop - 25_000) {
-    const { data: jobs, error } = await db.rpc("todo_check_claim", { p_n: 3 });
+  while (Date.now() < stop - margin) {
+    const { data: jobs, error } = await db.rpc("todo_check_claim", { p_n: paid ? 3 : 1 });
     if (error) throw new Error(error.message);
     const list = (jobs ?? []) as any[];
     if (!list.length) break;
