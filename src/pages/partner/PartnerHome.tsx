@@ -431,13 +431,15 @@ function HomeTab(props: {
       <section className={cn(card, "relative overflow-hidden p-5 sm:p-7")}>
         <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#0A84FF]/20 blur-3xl bento:bg-[#0A84FF]/10" />
         <div aria-hidden className="pointer-events-none absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-emerald-400/10 blur-3xl" />
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
             <PartnerMark className="h-16 w-16 shrink-0 sm:h-20 sm:w-20" label="Globe" excited={excited} />
-            <div className="min-w-0">
+            {/* never narrower than the greeting: the hover target must cover the whole name, or the
+                swap can't start. The weather / call button wrap below instead. */}
+            <div className="shrink-0">
               <p className="text-sm text-white/50">{today}</p>
               <GreetingSwap greeting={greeting()} name={first} company={company} onExcite={setExcited}
-                className="whitespace-nowrap text-[clamp(1.35rem,6.4vw,2.3rem)] font-bold leading-tight tracking-tight" />
+                className="whitespace-nowrap text-[clamp(1.3rem,6vw,2.3rem)] font-bold leading-tight tracking-tight" />
               <p className="mt-0.5 text-[0.95rem] text-white/60">
                 {mine.length ? `${mine.length} to-do${mine.length === 1 ? "" : "s"} on you` : "Nothing on you right now"}
                 {deals ? ` · ${deals} deal${deals === 1 ? "" : "s"} in motion` : ""}
