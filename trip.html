@@ -52,6 +52,7 @@
           ["ic", "ati"].forEach(function (id) { var l = document.getElementById(id); if (l) l.href = ico; });
           s.style.background = bg; document.documentElement.style.background = bg; img.style.visibility = "visible";
         }
+        if (m && /^demo-/.test(m[1])) return show(/^demo-lax/.test(m[1]) ? "lax" : "home");
         var k = null;
         try { k = m && localStorage.getItem("tripkind:" + m[1]); } catch (e) {}
         if (k) return show(k);

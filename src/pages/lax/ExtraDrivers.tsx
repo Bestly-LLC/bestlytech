@@ -4,7 +4,7 @@
  * (2) the key is made only after Turo's "has added another driver ... approved to drive" email arrives for this trip.
  */
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Clock, Copy, Loader2, Share2, ShieldAlert, UserPlus, X } from "lucide-react";
+import { CheckCircle2, Clock, Copy, FlaskConical, Loader2, MessageSquare, Share2, ShieldAlert, UserPlus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
 
@@ -34,8 +34,10 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
+  const demo = token.startsWith("demo-");  // host demo page: the whole flow runs locally
 
   const load = useCallback(async () => {
+    if (token.startsWith("demo-")) { setData((d) => d ?? { drivers: [], turo_approved: [] }); return; }
     const { data } = await rpc<Data>("lax_guest_drivers", { p_token: token });
     if (data) setData(data);
   }, [token]);
@@ -53,6 +55,13 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
     if (name.trim().length < 2) { setErr("Enter their name as it shows in Turo."); return; }
     if (!ack) { setErr("Please confirm they're added and approved in Turo."); return; }
     setBusy(true);
+    if (demo) {
+      await new Promise((r) => setTimeout(r, 500));
+      setBusy(false);
+      setData((d) => ({ drivers: [...(d?.drivers ?? []), { id: Date.now(), name: name.trim(), state: "waiting" }], turo_approved: [] }));
+      setName(""); setAck(false); setOpen(false);
+      return;
+    }
     const { data, error } = await rpc<Data>("lax_guest_driver_add", { p_token: token, p_name: name.trim(), p_ack: true, p_ack_text: ackText(name.trim()), p_device: navigator.userAgent.slice(0, 120) });
     setBusy(false);
     if (error) { setErr(error.message.replace(/^.*?: /, "")); return; }
@@ -60,10 +69,15 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
     if (data) setData(data);
     setName(""); setAck(false); setOpen(false);
   };
-  const cancel = async (id: number) => { const { data } = await rpc<Data>("lax_guest_driver_cancel", { p_token: token, p_id: id }); if (data) setData(data); };
+  const cancel = async (id: number) => {
+    if (demo) { setData((d) => d && { ...d, drivers: d.drivers.filter((x) => x.id !== id) }); return; }
+    const { data } = await rpc<Data>("lax_guest_driver_cancel", { p_token: token, p_id: id }); if (data) setData(data);
+  };
+  const demoStep = (id: number, state: Drv["state"], link?: string) => setData((d) => d && { ...d, drivers: d.drivers.map((x) => x.id === id ? { ...x, state, link: link ?? x.link } : x) });
+  const shareText = (d: Drv) => `Hi ${d.name}! Here's your own Tesla key for our trip. Open it on your phone and tap Accept, signed in to your Tesla app: ${d.link}`;
   const share = async (d: Drv) => {
     if (!d.link) return;
-    const text = `Your Tesla key for our trip: tap to add the car to your Tesla app. ${d.link}`;
+    const text = shareText(d);
     track(token, "driver_share", { id: d.id });
     try { if (navigator.share) { await navigator.share({ title: "Tesla key", text }); return; } } catch { /* cancelled */ }
     try { await navigator.clipboard.writeText(d.link); setCopied(d.id); window.setTimeout(() => setCopied(null), 2500); } catch { /* ignore */ }
@@ -99,8 +113,26 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
                 {d.state === "problem" && <>Something went wrong making this key. Jared's been notified and will fix it.</>}
               </p>
               {d.state === "ready" && d.link && (
-                <button type="button" onClick={() => void share(d)} className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[15px] font-bold text-[#132726] active:scale-[0.99]" style={{ background: ACCENT }}>
-                  {copied === d.id ? <><Copy className="h-4 w-4" />Link copied</> : <><Share2 className="h-4 w-4" />Send {d.name} their key</>}
+                <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                  <a href={`sms:?&body=${encodeURIComponent(shareText(d))}`} onClick={() => track(token, "driver_share", { id: d.id, via: "sms" })}
+                    className="flex h-12 items-center justify-center gap-2 rounded-2xl text-[15px] font-bold text-[#132726] active:scale-[0.99]" style={{ background: ACCENT }}>
+                    <MessageSquare className="h-4 w-4" />Text {d.name} their key
+                  </a>
+                  <button type="button" onClick={() => void share(d)} aria-label={`More ways to send ${d.name} the key`} className="flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-white/[0.09] px-4 text-[14px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.99]">
+                    {copied === d.id ? <><Copy className="h-4 w-4" />Copied</> : <><Share2 className="h-4 w-4" />Share</>}
+                  </button>
+                </div>
+              )}
+              {demo && d.state === "waiting" && (
+                <button type="button" onClick={() => { demoStep(d.id, "making"); window.setTimeout(() => demoStep(d.id, "ready", "https://www.tesla.com/_rs/1/DEMO-KEY"), 1500); }}
+                  className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-amber-300/60 text-[13px] font-semibold text-amber-200">
+                  <FlaskConical className="h-4 w-4" />Demo: pretend Turo's approval email arrived
+                </button>
+              )}
+              {demo && d.state === "ready" && (
+                <button type="button" onClick={() => demoStep(d.id, "added")}
+                  className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-amber-300/60 text-[13px] font-semibold text-amber-200">
+                  <FlaskConical className="h-4 w-4" />Demo: pretend {d.name} accepted it
                 </button>
               )}
             </li>

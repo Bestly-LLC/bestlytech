@@ -20,6 +20,7 @@ import { ScrollFx } from "./lax/ScrollFx";
 import { track } from "./lax/track";
 import HomeGuest, { type CarAction, type HomeInfo, type KeyInfo } from "./lax/HomeGuest";
 import { renderPassImage } from "./lax/passImage";
+import { DemoBar, demoKind, demoPub, isDemo, useDemoStage } from "./lax/demo";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
 type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
@@ -136,6 +137,10 @@ export default function LaxGuest() {
   const { slug = "", token = "" } = useParams();
   const [pub, setPub] = useState<Pub | null>(null);
   const viewed = useRef(false);
+  // /t/demo-home and /t/demo-lax: host previews, faked in the browser (no real guest, key, car or message is touched).
+  const demo = isDemo(token);
+  const dKind = demoKind(token || "");
+  const [stage, setStage] = useDemoStage(dKind, demo);
   // Errors on guests' phones go to the trip-apps health board (max 3 per visit; never from the host).
   useEffect(() => {
     let n = 0;
@@ -171,6 +176,7 @@ export default function LaxGuest() {
   const demoSoon = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "soon" ? new Date(Date.now() + 3 * 3600 * 1000).toISOString() : null, []);
 
   useEffect(() => {
+    if (demo) { setPub(demoPub(dKind, stage) as Pub); return; }
     const load = () => (token
       ? rpc("lax_guest_public", { p_token: token })
       : rpc("lax_pass_public", { p_slug: slug })).then(({ data }) => {
@@ -188,11 +194,11 @@ export default function LaxGuest() {
     // Keep the live car card fresh while the page is open.
     const id = token ? window.setInterval(load, 5 * 60 * 1000) : 0;
     return () => window.clearInterval(id);
-  }, [slug, token]);
+  }, [slug, token, demo, dKind, stage]);
 
   // Car buttons: queue the command, then wait for the Mac mini helper to send it (signed) and report back.
   // Personal link acts for its own trip; the shared Turo link acts for the trip happening now (unlocked by the guest's phone key).
-  const reload = () => (token ? rpc("lax_guest_public", { p_token: token }) : rpc("lax_pass_public", { p_slug: slug }))
+  const reload = () => demo ? Promise.resolve(setPub(demoPub(dKind, stage) as Pub)) : (token ? rpc("lax_guest_public", { p_token: token }) : rpc("lax_pass_public", { p_slug: slug }))
     .then(({ data }) => data && setPub(data as Pub));
   // Home-screen icon + tab icon match the trip's look (home = midcentury sunset, LAX = the LAX mark).
   useEffect(() => {
@@ -210,6 +216,7 @@ export default function LaxGuest() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, slug]);
   const carCommand = async (action: CarAction, onStage?: (s: string) => void) => {
+    if (demo) { onStage?.("Demo: nothing is sent to the car"); await new Promise((r) => setTimeout(r, 1200)); return; }
     if (action !== "refresh") track(token || undefined, ["cool", "warm", "seat", "off"].includes(action) ? "climate" : action, { action });
     const { data, error } = token
       ? await rpc("lax_guest_car_command", { p_token: token, p_action: action })
@@ -286,7 +293,10 @@ export default function LaxGuest() {
     </div>
   );
   // Home pickup (733 N Kings Rd): same page system, home look. No QR code, shuttle or garage.
-  if (token && pub?.ok && pub.kind === "home") return <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} reload={reload} />;
+  if (token && pub?.ok && pub.kind === "home") return <>
+    <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} reload={reload} />
+    {demo && <DemoBar kind="home" stage={stage} onStage={setStage} />}
+  </>;
 
   return (
     <div className="trip min-h-dvh bg-[#1A1140] text-white" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
@@ -466,6 +476,7 @@ export default function LaxGuest() {
             
             </TripSheet>
             <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} />
+            {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} />}
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
             <ScrollFx />
 

@@ -150,6 +150,12 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
     track(token, "ask");
     const tmp = `a${Date.now()}`;
     setMsgs((xs) => [...xs, { id: `u${Date.now()}`, role: "user", content: q }, { id: tmp, role: "assistant", content: "", status: "pending" }]);
+    if (token?.startsWith("demo-")) {  // host demo page: no real trip behind it
+      await new Promise((r) => setTimeout(r, 900));
+      patch(tmp, { content: "This is a demo page, so I can't look up a real trip. On a guest's page I answer from their live trip: key status, the car's temperature, pickup and return steps, and I can resend their key if it's stuck.", status: "done" });
+      setBusy(false);
+      return;
+    }
     try {
       const { data, error } = await supabase.functions.invoke("lax-ask", { body: { token: token || undefined, slug: token ? undefined : slug, question: q } });
       const r = data as { ok: boolean; error?: string; reply_id?: number; status?: string; content?: string; left?: number; urgent?: boolean; fixed?: boolean } | null;

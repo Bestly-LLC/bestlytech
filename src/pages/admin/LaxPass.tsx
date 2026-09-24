@@ -199,6 +199,16 @@ export default function LaxPass() {
       <div className="gap-8 [column-fill:balance] columns-1 md:columns-[28rem] [&>section]:mb-8 [&>section]:break-inside-avoid">
 
       <Section title="Trips" id="trips" className="[column-span:all]">
+        <div className={cn(card, "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between")}>
+          <div>
+            <p className={cn("text-[15px] font-semibold", label)}>Preview the guest pages</p>
+            <p className={cn("text-[13px]", secondary)}>Demo trips with a stage switcher. Nothing touches real guests, keys or the car.</p>
+          </div>
+          <div className="flex gap-2">
+            <a href="/t/demo-home?stage=key-ready" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>Home pickup</a>
+            <a href="/t/demo-lax?stage=day-of" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>LAX</a>
+          </div>
+        </div>
         <TripHealth />
         <div id="keys"><LaxGuests /></div>
       </Section>

@@ -31,7 +31,7 @@ const pathToken = () => (typeof window === "undefined" ? undefined : /\/t\/([^/?
 
 export function track(token: string | undefined, kind: string, detail?: Record<string, unknown>) {
   token = token || pathToken();
-  if (!token || isHostDevice()) return;
+  if (!token || token.startsWith("demo-") || isHostDevice()) return;
   void (supabase.rpc("lax_track" as never, { p_token: token, p_kind: kind, p_detail: detail ?? null, p_device: device() } as never) as unknown as Promise<unknown>)
     .then(() => {}, () => {});
 }
