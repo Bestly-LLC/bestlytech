@@ -66,7 +66,7 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
   if (now >= s - H && controlsOn) {
     glow.add("pickup");
     const need = climateNeed(car?.inside_f, car?.outside_f);
-    if (now < s - 10 * 60e3 && (need === "cool" || need === "warm")) {
+    if (now < s - 10 * 60e3 && !added && (need === "cool" || need === "warm")) {
       glow.add("climate");
       return { next: { icon: Snowflake, title: need === "cool" ? "On your way? Cool the car first." : "On your way? Warm the car first.", sub: car?.inside_f != null ? `It's ${Math.round(car.inside_f)}° inside right now.` : undefined, action: "climate", label: need === "cool" ? "Cool it down" : "Warm it up" }, glow };
     }

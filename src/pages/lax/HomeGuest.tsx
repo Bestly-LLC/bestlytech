@@ -249,6 +249,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
   const key: KeyInfo | null = demo === "key" ? { state: "ready", link: null, expires_at: null, unlock: false }
     : demo === "added" ? { state: "added" } : demo === "soon" ? { state: "soon", opens_at: pub.trip ? new Date(+new Date(pub.trip.starts_at) - 2 * 3600e3).toISOString() : undefined } : pub.key ?? null;
   const live = !!pub.controls && !demo;
+  const carConnected = key?.state === "added";
   const spot = pub.spot ?? (demoCar ? { lat: home.lat, lon: home.lon, observed_at: new Date(Date.now() - 4 * 60e3).toISOString() } : null);
   const street = home.address.split(",")[0];
   const shadow = { textShadow: "0 2px 14px rgba(19,39,38,0.9), 0 1px 2px rgba(19,39,38,0.9)" };
@@ -297,7 +298,9 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
         <NextStep next={next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? run : undefined} kind="home" />
 
         {/* On the trip these three swipe (Your car · Supercharging · Help & guides); before it they stack. */}
-        <TripSlides on={onTrip} id="home-trip" labels={pub.charging ? ["Your car", "Supercharging", "Help & guides"] : ["Your car", "Help & guides"]}>
+        <TripSlides on={onTrip} id="home-trip" labels={[...(carConnected ? [] : ["Your car"]), ...(pub.charging ? ["Supercharging"] : []), "Help & guides"]}>
+        {/* Once their phone key is connected to the car, they use the Tesla app for the car; this card goes away. */}
+        {!carConnected && (
         <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${glow.has("climate") || doClimate ? "trip-glow trip-glow-card" : "ring-white/10"}`}
           style={{ background: "linear-gradient(160deg, rgba(232,169,58,0.10), rgba(255,255,255,0.04) 40%, rgba(42,107,102,0.18))" }}>
           <div className="flex items-start justify-between gap-3 px-1 pt-1">
@@ -328,6 +331,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
             <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? run : undefined} hint={live ? "Good at night" : " "} />
           </div>
         </section>
+        )}
 
         {pub.charging && <ChargingCard charging={pub.charging} token={token} battery={car?.battery} pickupBattery={pub.pickup_battery} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif">
           <ChargeNow state={car?.charging} battery={car?.battery} detail={car?.charge_detail} target={pub.pickup_battery} />

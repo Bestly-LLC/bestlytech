@@ -314,6 +314,7 @@ export default function LaxGuest() {
   const keySteps = !!token && !!key && key.state !== "off" && key.state !== "ended";
   const n0 = keySteps ? 2 : 0;
   const live = !!pub?.controls || demo;
+  const carConnected = key?.state === "added";
   const g = pub?.guide ?? {};
   const garage = g.garage || "5730 W 98th St, LA 90045";
   const level = g.level || "P3";
@@ -436,7 +437,9 @@ export default function LaxGuest() {
             </Collapse>
 
             {/* On the trip these three swipe (Your car · Supercharging · Help & guides); before it they stack. */}
-            <TripSlides on={onTrip} id="lax-trip" labels={pub.charging ? ["Your car", "Supercharging", "Help & guides"] : ["Your car", "Help & guides"]}>
+            <TripSlides on={onTrip} id="lax-trip" labels={[...(carConnected ? [] : ["Your car"]), ...(pub.charging ? ["Supercharging"] : []), "Help & guides"]}>
+            {/* Once their phone key is connected to the car, they use the Tesla app for the car; this card goes away. */}
+            {!carConnected && (
             <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${glow.has("climate") || doClimate ? "trip-glow trip-glow-card" : "ring-white/10"}`}
               style={{ background: "linear-gradient(160deg, rgba(255,184,120,0.10), rgba(255,255,255,0.04) 40%, rgba(122,46,158,0.22))" }}>
               <div className="px-1 pt-1">
@@ -467,6 +470,7 @@ export default function LaxGuest() {
                 </div>
               )}
             </section>
+            )}
 
 
 
