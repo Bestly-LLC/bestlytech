@@ -114,7 +114,7 @@ export function SendToCar({ run, kind, action, label = "Send to car's navigation
       <button type="button" onClick={() => void go()} disabled={st === "busy"}
         className={full ? "flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-[#1A1140] shadow-md shadow-black/20 active:scale-[0.98] disabled:opacity-60" : "inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-[#1A1140] shadow-md shadow-black/20 active:scale-95 disabled:opacity-60"} style={{ background: ACCENT }}>
         {st === "busy" ? <Loader2 className="h-4 w-4 animate-spin" /> : st === "done" ? <CheckCircle2 className="h-4 w-4" /> : <Navigation className="h-4 w-4" />}
-        {st === "done" ? "Sent to your car" : label}
+        {st === "done" ? (full ? "Sent" : "Sent to your car") : label}
       </button>
       {msg && <p className={`min-w-0 flex-1 text-[12px] leading-snug ${full ? "mt-1 text-center" : ""} ${st === "err" ? "text-red-300" : "text-white/65"}`} aria-live="polite">{msg}</p>}
     </div>
