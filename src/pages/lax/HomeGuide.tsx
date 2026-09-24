@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { BeforeYouDrive } from "./BeforeYouDrive";
 import { track } from "./track";
 import { AlertTriangle, BatteryCharging, ChevronDown, Cpu, Download, ExternalLink, FileText, KeySquare, Phone, Play, PlayCircle, X } from "lucide-react";
+import { CHARGERS, chargerMaps, type TripKind } from "./places";
 
 const ACCENT = "var(--trip-accent)";
 const yt = (id: string) => `https://www.youtube.com/watch?v=${id}`;
@@ -85,9 +86,6 @@ export const VIDEOS: Video[] = [
 const FSD = VIDEOS[5];
 
 const INCIDENT_CARD = "https://support-resources.turo.com/incidents/US%20Incident%20Information%20Card.pdf";
-const DINER = "7001 Santa Monica Blvd, West Hollywood, CA";
-const maps = (q: string) => /android/i.test(typeof navigator === "undefined" ? "" : navigator.userAgent)
-  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : `https://maps.apple.com/?q=${encodeURIComponent(q)}`;
 
 function Fold({ icon: Icon, title, sub, children, tone, open: start = false }: { icon: typeof Cpu; title: string; sub: string; children: ReactNode; tone?: "alert"; open?: boolean }) {
   const [open, setOpen] = useState(start);
@@ -127,11 +125,12 @@ export function ChargeBadge({ pct }: { pct: number | null | undefined }) {
   );
 }
 
-export function HomeGuide({ pickupBattery }: { pickupBattery?: number | null }) {
+export function HomeGuide({ pickupBattery, kind = "home" }: { pickupBattery?: number | null; kind?: TripKind }) {
+  const ch = CHARGERS[kind];
   return (
     <section className="mt-6 rounded-3xl bg-white/[0.06] px-4 pt-3 ring-1 ring-white/10" aria-label="Car guide">
       <p className="pt-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Your car guide</p>
-      <h2 className="mt-1 text-[20px] font-bold leading-snug text-white" style={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>Everything you need, at a glance</h2>
+      <h2 className="mt-1 text-[20px] font-bold leading-snug text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>Everything you need, at a glance</h2>
 
       <BeforeYouDrive />
 
@@ -141,8 +140,8 @@ export function HomeGuide({ pickupBattery }: { pickupBattery?: number | null }) 
           : <p><b className="text-white">Return it at the same charge level as pickup</b> to avoid Turo's recharge fee. Note the % in your pickup photos.</p>}
         <H>Nearest Supercharger</H>
         <Bullets items={[
-          <><a href={maps(DINER)} className="font-semibold text-white underline decoration-white/40 underline-offset-2">Tesla Diner, 7001 Santa Monica Blvd</a>: 80 fast stalls, open 24/7, free parking while you charge.</>,
-          "The Sunset Blvd Supercharger charges for parking. The Diner doesn't.",
+          <><a href={chargerMaps(ch)} className="font-semibold text-white underline decoration-white/40 underline-offset-2">{ch.name}, {ch.street}</a>: {ch.note}</>,
+          ch.tip,
         ]} />
         <H>At a Supercharger: 4 steps, no card</H>
         <Numbered items={[

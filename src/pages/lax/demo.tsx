@@ -21,7 +21,8 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
   ],
   lax: [
     { id: "booked", label: "Booked (3 days out)" },
-    { id: "day-of", label: "Pickup in 2 hours" },
+    { id: "day-of", label: "Pickup in 2 hours (key ready)" },
+    { id: "key-added", label: "Key added (30 min before)" },
     { id: "on-trip", label: "On the trip" },
     { id: "returning", label: "Return in 90 min" },
     { id: "ended", label: "Trip ended" },
@@ -42,7 +43,8 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
   const keyOpens = s - 2 * H;
   const controlsOn = now >= s - H && now < e || stage === "key-added";
   const controls_state = now >= e ? "ended" : controlsOn ? "on" : "soon";
-  const keyState = stage === "booked" || stage === "key-soon" ? "soon" : stage === "key-ready" ? "ready" : stage === "ended" ? "ended" : "added";
+  const keyState = stage === "booked" || stage === "key-soon" ? "soon" : stage === "key-ready" || stage === "day-of" ? "ready" : stage === "ended" ? "ended" : "added";
+  const key = { state: keyState, opens_at: iso(keyOpens), link: keyState === "ready" ? "#demo-key" : null, expires_at: keyState === "ready" ? iso(now + 23 * H) : null, unlock: false };
   const base = {
     ok: true, kind, trip, car: { ...DEMO_CAR, observed_at: iso(now - 3 * 60e3) }, controls: controls_state === "on", controls_state,
     controls_opens_at: iso(s - H), email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: 80, demo: true,
@@ -52,11 +54,11 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
       ...base,
       home: { address: "733 N Kings Rd, West Hollywood, CA 90069", lat: 34.0838, lon: -118.3708, parking_note: "It's parked on N Kings Rd, right by the building. Tap Exact spot to see where, or Honk to find it.", return_note: "Park on N Kings Rd near 733, lock it in the Tesla app, and take your return photos in the Turo app.", host_note: null },
       spot: now >= s - 2 * H && now < e ? { lat: 34.0836, lon: -118.3712, observed_at: iso(now - 4 * 60e3) } : null,
-      key: { state: keyState, opens_at: iso(keyOpens), link: keyState === "ready" ? "#demo-key" : null, expires_at: keyState === "ready" ? iso(now + 23 * H) : null, unlock: false },
+      key,
     };
   }
   return {
-    ...base, ready: stage !== "booked", payload: "BESTLY-DEMO-QR", note: null, google: false, code_for_trip_month: true,
+    ...base, key, ready: stage !== "booked", payload: "BESTLY-DEMO-QR", note: null, google: false, code_for_trip_month: true,
     valid_through: iso(now + 20 * 24 * H).slice(0, 10),
     guide: { car: "Tesla Model 3", garage: "5730 W 98th St, LA 90045", level: "P3", spot: "", shuttle: "The Parking Spot — Century", after_hours: "310-642-0947", shuttle_stop: "5701 W Century Blvd" },
   };

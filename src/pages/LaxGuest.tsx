@@ -5,11 +5,11 @@
  * Data: lax_pass_public(slug) → code + guide (garage, level, spot, shuttle, after_hours, car), all edited
  * at /admin/turo/lax-pass. Returns nothing unless the slug matches.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
-import { ArrowRight, Check, Download, Loader2, MapPin, Phone, Sun } from "lucide-react";
+import { ArrowRight, BellRing, Check, Download, Flashlight, Loader2, MapPin, Phone, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TagBar, TripSheet } from "./lax/TripSheet";
 import { AskButton, AskSheet } from "./lax/AskSheet";
@@ -18,17 +18,22 @@ import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, typ
 import { WalletLoader } from "./lax/WalletLoader";
 import { ScrollFx } from "./lax/ScrollFx";
 import { track } from "./lax/track";
-import HomeGuest, { type CarAction, type HomeInfo, type KeyInfo } from "./lax/HomeGuest";
+import HomeGuest, { CarButton, KeyCard, Section, type CarAction, type HomeInfo, type KeyInfo } from "./lax/HomeGuest";
+import { HomeGuide, VideoList, VideoPlayer } from "./lax/HomeGuide";
+import { ChargerLine, KeyNextSteps } from "./lax/KeyNext";
+import { laxPlace } from "./lax/places";
 import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPub, isDemo, useDemoStage } from "./lax/demo";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 const PEACH = "#FFB878";
+// Shared components (key card, next steps, car guide) read the theme from these variables; the home page sets its own.
+const LAXVARS = { "--trip-accent": PEACH, "--trip-accent-2": "#E4527A", "--trip-title-font": "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" } as CSSProperties;
 
 function platform(): "apple" | "android" | "other" {
   const ua = navigator.userAgent;
@@ -172,6 +177,17 @@ export default function LaxGuest() {
     : demoParam === "ending" ? { ...DEMO_CAR, inside_f: 76, climate_on: true, climate_mode: "cool", climate_until: new Date(Date.now() + 8000).toISOString() }
     : demoParam === "cold" ? { ...DEMO_CAR, inside_f: 54, outside_f: 49 } : DEMO_CAR, [demoParam]);
   const [outsideF, setOutsideF] = useState<number | null>(null);
+  // From the reminder email: ?do=cool|warm#climate scrolls to the climate buttons and highlights them (never auto-sends).
+  const [doClimate] = useState<"cool" | "warm" | null>(() => {
+    if (typeof window === "undefined") return null;
+    const d = new URLSearchParams(window.location.search).get("do");
+    return d === "cool" || d === "warm" ? d : null;
+  });
+  useEffect(() => {
+    if (!doClimate || !pub?.ok) return;
+    const t = window.setTimeout(() => document.getElementById("climate")?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
+    return () => window.clearTimeout(t);
+  }, [doClimate, pub?.ok]);
   // ?demo=soon previews the greyed-out buttons (before they open).
   const demoSoon = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "soon" ? new Date(Date.now() + 3 * 3600 * 1000).toISOString() : null, []);
 
@@ -246,6 +262,8 @@ export default function LaxGuest() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pub?.controls, pub?.car, token, slug]);
 
+  const key: KeyInfo | null = pub?.key ?? null;
+  const live = !!pub?.controls || demo;
   const g = pub?.guide ?? {};
   const garage = g.garage || "5730 W 98th St, LA 90045";
   const level = g.level || "P3";
@@ -299,12 +317,15 @@ export default function LaxGuest() {
   </>;
 
   return (
-    <div className="trip min-h-dvh bg-[#1A1140] text-white" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
+    <div className="trip min-h-dvh bg-[#1A1140] text-white" style={{ ...LAXVARS, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
       <Helmet>
         <title>Picking up your Turo car at LAX</title>
         <meta name="robots" content="noindex, nofollow" />
         <meta name="theme-color" content="#2B1A73" />
         <link rel="apple-touch-icon" href="/wallet/lax/apple-touch-icon.png" />
+        <style>{`.trip :is(a,button):focus-visible{outline:2px solid ${PEACH};outline-offset:3px;border-radius:14px}
+.trip :is(a,button){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.trip :is(a,button):not(:disabled):active{filter:brightness(1.08)}`}</style>
       </Helmet>
 
       <div className="relative overflow-hidden">
@@ -325,21 +346,43 @@ export default function LaxGuest() {
           </div>
         ) : (
           <>
-            <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Your QR code that opens the lobby door is below. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for step-by-step directions.</p>
+            <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Your QR code that opens the lobby door is below{key ? <>, and your phone is the car key</> : null}. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for step-by-step directions.</p>
 
             {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" /></div>}
-            {/* Weather next to the car: see how hot it is, then turn on the A/C right there. */}
-            {(pub.trip || pub.car) && (
-              <div className="mt-5"><ClimateAdvice car={demoCar ? demoState : pub.car ?? null} outsideF={outsideF} /></div>
+
+            {/* Same key card as the home page: phone key, extra drivers, and what to do next (with Send to car). */}
+            {key && key.state !== "off" && token && (
+              <KeyCard k={key} trip={pub.trip} run={live ? carCommand : undefined} token={token} onAdded={() => void reload()}
+                next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} place={laxPlace(garage, level)} kind="lax" maps={maps} run={live || demo ? carCommand : undefined}
+                  go={(w) => { if (w === "return" || w === "pickup") openSheet(w); else { if (w === "before") window.dispatchEvent(new Event("open-before")); document.getElementById(w)?.scrollIntoView({ behavior: "smooth", block: "start" }); } }} /> : null} />
             )}
-            {pub.trip || pub.car ? (
-              <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
-                <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} />
-                <CarCard trip={pub.trip ?? null} car={demoCar ? demoState : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && !demoSoon && pub.controls ? carCommand : undefined} lockedUntil={demoSoon ?? (demoCar || pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending")} />
+
+            {/* One widget for the car: weather + cabin + climate buttons, then find-it buttons (same as the home page). */}
+            <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${doClimate ? "ring-2 ring-[#FFB878]" : "ring-white/10"}`}
+              style={{ background: "linear-gradient(160deg, rgba(255,184,120,0.10), rgba(255,255,255,0.04) 40%, rgba(122,46,158,0.22))" }}>
+              <div className="px-1 pt-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Your car · find it + get it comfy</p>
+                <h2 className="mt-0.5 text-[20px] font-bold leading-tight text-white">{garage.split(",")[0]} · {level}</h2>
               </div>
-            ) : (
-              <div className="mt-2.5"><WeatherCard trip={null} /></div>
-            )}
+              {doClimate && <p className="mt-2 px-1 text-[15px] font-semibold" style={{ color: PEACH }}>{doClimate === "warm" ? "Tap Warm it up below to start the heat." : "Tap Cool it down below to start the A/C."}</p>}
+              {(pub.trip || pub.car) && (
+                <div className="mt-3 px-1"><ClimateAdvice car={demoCar ? demoState : pub.car ?? null} outsideF={outsideF} /></div>
+              )}
+              {pub.trip || pub.car ? (
+                <div className="mt-3 grid grid-cols-2 items-stretch gap-2.5">
+                  <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} />
+                  <CarCard trip={pub.trip ?? null} car={demoCar ? demoState : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && !demoSoon && (pub.controls || demo) ? carCommand : undefined} lockedUntil={demoSoon ?? (demoCar || pub.controls || demo ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending")} />
+                </div>
+              ) : (
+                <div className="mt-3"><WeatherCard trip={null} /></div>
+              )}
+              {pub.trip && (
+                <div className="mt-3 flex gap-2.5">
+                  <CarButton action="honk" label="Honk" icon={BellRing} run={live ? carCommand : undefined} hint={live ? "Short beep" : "Works 1 hour before pickup"} />
+                  <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? carCommand : undefined} hint={live ? "Good in the garage" : " "} />
+                </div>
+              )}
+            </section>
 
             {/* Quick facts */}
             <div className="mt-5 grid grid-cols-2 gap-2.5">
@@ -383,7 +426,7 @@ export default function LaxGuest() {
               )}
             </Collapse>
 
-            {token && pub.trip && (
+            {token && pub.trip && new Date(pub.trip.starts_at) > new Date() && (
               <div className="mt-6"><EmailCard token={token} email={pub.email ?? null} reminderAt={pub.reminder_at ?? null} sentAt={pub.reminder_sent_at ?? null} /></div>
             )}
             {pub.trip && pub.ready && pub.code_for_trip_month === false && (
@@ -395,6 +438,12 @@ export default function LaxGuest() {
                 <p className="text-white/90">{pub.note}</p>
               </Collapse>
             )}
+
+            <HomeGuide pickupBattery={pub.pickup_battery} kind="lax" />
+
+            <Section kicker="Learn your Tesla" title="Short videos from Tesla" id="videos">
+              <VideoList />
+            </Section>
 
             <TripSheet open={sheet === "pickup"} onClose={() => openSheet(null)} kicker="Baggage claim → your car" title="Pickup: plane → shuttle → garage">
 
@@ -422,6 +471,12 @@ export default function LaxGuest() {
                   {g.spot ? <> Your space is <b className="text-white">{level} · {g.spot}</b>.</> : <> I'll text your exact {level} space the day before your trip.</>}
                   <Warn><b className="text-white">{level} only.</b> Please don't park on other levels. If the QR doesn't scan, there's an intercom right next to the door; someone will buzz you in.</Warn>
                 </Step>
+                {key && (
+                  <Step n={6} when="At the car" title="Unlock with the Tesla app.">
+                    Add the car in <a href="#key" onClick={() => openSheet(null)} className="underline decoration-white/40 underline-offset-2">Your key</a> on the main page first (it shows up 2 hours before pickup). At the car, open the Tesla app and tap Unlock, then take your check-in photos in the Turo app.
+                    <span className="mt-1 block text-white/60">Not sure which one is yours? Tap Honk or Flash lights on the main page.</span>
+                  </Step>
+                )}
               </ol>
 
               {phone && (
@@ -442,6 +497,10 @@ export default function LaxGuest() {
 
               <p className="text-[15px] leading-relaxed text-white/75">
                 Reverse of the morning. The two things to watch: <b className="text-white">which entrance you use</b>, and <b className="text-white">which address you drive to</b>. Get those right and you're done.
+              </p>
+
+              <p className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[14px] leading-relaxed text-white/80 ring-1 ring-white/10">
+                <b className="text-white">Charge first:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"} to avoid Turo's recharge fee. <ChargerLine kind="lax" />
               </p>
 
               <ol className="mt-6 space-y-7">
@@ -478,6 +537,7 @@ export default function LaxGuest() {
             <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} />
             {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} />}
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
+            <VideoPlayer />
             <ScrollFx />
 
             <p className="mt-10 text-center text-sm text-white/50">Questions? Tap Ask a question, or message your host in the Turo app.</p>
@@ -488,7 +548,7 @@ export default function LaxGuest() {
               style={{ background: "linear-gradient(135deg, rgba(122,46,158,0.35), rgba(43,26,115,0.6))" }}>
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Who made this page?</p>
               <p className="mt-1 text-lg font-semibold text-white">Bestly built it. We can build one for you.</p>
-              <p className="mt-1.5 text-[15px] leading-relaxed text-white/75">We make websites, apps, and tools for small businesses. Like this page: live car info, A/C buttons, and a lobby door pass right in your phone.</p>
+              <p className="mt-1.5 text-[15px] leading-relaxed text-white/75">We make websites, apps, and tools for small businesses. Like this page: a phone key that shows up by itself, live car info, A/C buttons, and a lobby door pass right in your phone.</p>
               <span className="mt-4 inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-[15px] font-semibold text-[#1A1140]">Tell us what you need <ArrowRight className="h-4 w-4" aria-hidden /></span>
               <span className="mt-3 block text-[12px] text-white/45">bestly.tech · Los Angeles</span>
             </a>

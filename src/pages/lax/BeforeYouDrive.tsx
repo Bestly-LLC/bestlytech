@@ -139,7 +139,7 @@ export function BeforeYouDrive() {
             <div className="h-[132px] bg-[#183433] px-4 pt-3"><s.art /></div>
             <div className="p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--trip-accent)" }}>{s.kicker}</p>
-              <h3 className="mt-1 text-[18px] font-bold leading-snug text-white" style={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>{s.title}</h3>
+              <h3 className="mt-1 text-[18px] font-bold leading-snug text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>{s.title}</h3>
               <p className="mt-1.5 text-[15px] leading-relaxed text-white/80">{s.body}</p>
               {s.cta && (
                 <a href={s.cta.href || turoApp()} onClick={() => trackEvent(undefined, "turo_app")} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold text-[#132726]" style={{ background: "var(--trip-accent)" }}>

@@ -19,7 +19,8 @@ import { ScrollFx } from "./ScrollFx";
 import { track } from "./track";
 import ExtraDrivers from "./ExtraDrivers";
 import { Collapse } from "./Collapse";
-import { KeyNextSteps, KeyPending, keyTapped, markKeyTapped, useKeyWatch } from "./KeyNext";
+import { ChargerLine, KeyNextSteps, KeyPending, keyTapped, markKeyTapped, useKeyWatch } from "./KeyNext";
+import { homePlace } from "./places";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -48,7 +49,7 @@ function DecoRule({ className = "" }: { className?: string }) {
   );
 }
 
-export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock" | "nav_charger";
+export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock" | "nav_charger" | "nav_charger_lax";
 export type HomeInfo = { address: string; lat: number; lon: number; parking_note?: string | null; return_note?: string | null; host_note?: string | null };
 export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" | "problem" | "off"; opens_at?: string; link?: string | null; expires_at?: string | null; unlock?: boolean };
 export type HomePub = {
@@ -72,9 +73,9 @@ const ago = (iso: string) => {
   return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} hr ago`;
 };
 
-function Section({ kicker, title, children, id, summary, defaultOpen }: { kicker: string; title?: string; children: ReactNode; id?: string; summary?: ReactNode; defaultOpen?: boolean }) {
+export function Section({ kicker, title, children, id, summary, defaultOpen }: { kicker: string; title?: string; children: ReactNode; id?: string; summary?: ReactNode; defaultOpen?: boolean }) {
   return <Collapse id={id ?? `s-${kicker.toLowerCase().replace(/[^a-z]+/g, "-")}`} kicker={kicker} title={title} summary={summary} defaultOpen={defaultOpen}
-    accent={PEACH} titleStyle={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>{children}</Collapse>;
+    accent={PEACH} titleStyle={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>{children}</Collapse>;
 }
 
 function Step({ n, children }: { n: number; children: ReactNode }) {
@@ -87,7 +88,7 @@ function Step({ n, children }: { n: number; children: ReactNode }) {
 }
 
 /** Runs a car button (honk, flash, unlock) and shows what happened. */
-function CarButton({ action, label, icon: Icon, run, disabled, hint }: { action: CarAction; label: string; icon: typeof BellRing; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; disabled?: boolean; hint?: string }) {
+export function CarButton({ action, label, icon: Icon, run, disabled, hint }: { action: CarAction; label: string; icon: typeof BellRing; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; disabled?: boolean; hint?: string }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const press = async () => {
@@ -108,7 +109,7 @@ function CarButton({ action, label, icon: Icon, run, disabled, hint }: { action:
   );
 }
 
-function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; trip: Trip | undefined; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; token: string; onAdded: () => void; next?: ReactNode }) {
+export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; trip: Trip | undefined; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; token: string; onAdded: () => void; next?: ReactNode }) {
   // After the guest taps the key button, grey it out and keep checking with Tesla until it says added.
   // Only a tap on THIS invite counts: a host "Resend key" makes a new invite (new 24h expiry), so the button comes back.
   const inviteFrom = k.expires_at ? Date.parse(k.expires_at) - 24 * 3600e3 - 5e3 : Date.now() - 24 * 3600e3;
@@ -241,7 +242,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
         {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" /></div>}
 
         {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} token={token} onAdded={() => reload?.()}
-          next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} address={home.address} maps={mapsFor(home.address)} run={live ? run : undefined}
+          next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} place={homePlace(home.address)} kind="home" maps={mapsFor(home.address)} run={live ? run : undefined}
             go={(w) => { if (w === "return" || w === "pickup") openSheet(w); else { if (w === "before") window.dispatchEvent(new Event("open-before")); document.getElementById(w)?.scrollIntoView({ behavior: "smooth", block: "start" }); } }} /> : null} />}
 
         {/* One widget for the car: where it is, weather + cabin + climate buttons, find-it buttons. */}
@@ -250,7 +251,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
           <div className="flex items-start justify-between gap-3 px-1 pt-1">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Your car · find it + get it comfy</p>
-              <h2 className="mt-0.5 text-[20px] font-bold leading-tight text-white" style={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>{street}</h2>
+              <h2 className="mt-0.5 text-[20px] font-bold leading-tight text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>{street}</h2>
             </div>
             <Starburst className="mt-1 h-6 w-6 shrink-0 text-[#E8A93A]" />
           </div>
@@ -303,7 +304,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
           <p className="text-[15px] leading-relaxed text-white/75">{home.return_note}</p>
           <ol className="mt-5 space-y-4">
-            <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the same charge you picked it up with"} to avoid Turo's recharge fee. Closest: Tesla Diner Supercharger, 7001 Santa Monica Blvd (free parking, 24/7).</Step>
+            <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the same charge you picked it up with"} to avoid Turo's recharge fee. <ChargerLine kind="home" /> Free parking, 24/7.</Step>
             <Step n={2}><b className="text-white">Park on N Kings Rd</b> near the building. Legal spot, not blocking a driveway or hydrant.</Step>
             <Step n={3}><b className="text-white">Street sweeping:</b> don't leave it on the <b className="text-white">west side Monday 8–10 AM</b> or the <b className="text-white">east side Tuesday 8–10 AM</b>. Tickets are $75.</Step>
             <Step n={4}><b className="text-white">Photos + lock:</b> take your return photos in the Turo app, grab your stuff, and lock it in the Tesla app.</Step>

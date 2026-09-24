@@ -10,6 +10,7 @@ import { BatteryCharging, CheckCircle2, Clock, KeyRound, Loader2, MapPin, Naviga
 import { supabase } from "@/integrations/supabase/client";
 import { fmtWhen, type Trip } from "./GuestExtras";
 import { track } from "./track";
+import { CHARGERS, chargerMaps, type Place, type TripKind } from "./places";
 
 const ACCENT = "var(--trip-accent)";
 const tapKey = (t: string) => `keytap:${t}`;
@@ -84,20 +85,21 @@ export function KeyPending({ token, link, onAdded }: { token: string; link: stri
 
 type Step = { icon: typeof Clock; title: string; body: ReactNode; action?: { label: string; onClick?: () => void; href?: string }; send?: boolean };
 
-const DINER = "7001 Santa Monica Blvd, West Hollywood, CA";
-const dinerMaps = `https://maps.apple.com/?q=${encodeURIComponent("Tesla Supercharger, Tesla Diner")}&address=${encodeURIComponent(DINER)}&ll=34.0909484,-118.3418798`;
-const ChargerLine = () => (
-  <>Closest Supercharger: Tesla Diner, <a href={dinerMaps} className="font-semibold text-white underline decoration-white/40 underline-offset-2">7001 Santa Monica Blvd</a>.</>
-);
+/** "Closest Supercharger: <name>, <street>" with the street linked to Maps. */
+export const ChargerLine = ({ kind }: { kind: TripKind }) => {
+  const c = CHARGERS[kind];
+  return <>Closest Supercharger: {c.name}, <a href={chargerMaps(c)} onClick={() => track(undefined, "charger_maps", { kind })} className="font-semibold text-white underline decoration-white/40 underline-offset-2">{c.street}</a>.</>;
+};
 
-/** "Send to car": puts the Supercharger in the car's navigation (TezLab first, Tesla backup). */
-function SendToCar({ run }: { run?: (a: "nav_charger", onStage?: (s: string) => void) => Promise<void> }) {
+type NavRun = (a: "nav_charger" | "nav_charger_lax", onStage?: (s: string) => void) => Promise<void>;
+/** "Send to car": puts the closest Supercharger in the car's navigation (TezLab first, Tesla backup). */
+function SendToCar({ run, kind }: { run?: NavRun; kind: TripKind }) {
   const [st, setSt] = useState<"idle" | "busy" | "done" | "err">("idle");
   const [msg, setMsg] = useState<string | null>(null);
   if (!run) return null;
   const go = async () => {
     setSt("busy"); setMsg(null);
-    try { await run("nav_charger", (s) => setMsg(s)); setSt("done"); setMsg("It's in the car's navigation."); }
+    try { await run(CHARGERS[kind].action, (s) => setMsg(s)); setSt("done"); setMsg("It's in the car's navigation."); }
     catch (e) { setSt("err"); setMsg((e as Error).message || "Couldn't reach the car. Tap the address instead."); }
   };
   return (
@@ -112,10 +114,10 @@ function SendToCar({ run }: { run?: (a: "nav_charger", onStage?: (s: string) => 
   );
 }
 
-export function KeyNextSteps({ trip, pickupBattery, address, maps, go, run }: {
-  trip: Trip; pickupBattery?: number | null; address: string; maps: string;
+export function KeyNextSteps({ trip, pickupBattery, place, kind, maps, go, run }: {
+  trip: Trip; pickupBattery?: number | null; place: Place; kind: TripKind; maps: string;
   go: (where: "climate" | "before" | "return" | "pickup") => void;
-  run?: (a: "nav_charger", onStage?: (s: string) => void) => Promise<void>;
+  run?: NavRun;
 }) {
   const now = Date.now(), s = +new Date(trip.starts_at), e = +new Date(trip.ends_at);
   const H = 3600e3;
@@ -123,7 +125,7 @@ export function KeyNextSteps({ trip, pickupBattery, address, maps, go, run }: {
   if (now < s - H) {
     title = "Up next";
     steps = [
-      { icon: Clock, title: `Pickup ${fmtWhen(trip.starts_at)}`, body: `It's parked on N Kings Rd by ${address.split(",")[0]}.`, action: { label: "Directions", href: maps } },
+      { icon: Clock, title: `Pickup ${fmtWhen(trip.starts_at)}`, body: place.parked, action: { label: "Directions", href: maps } },
       { icon: Snowflake, title: "1 hour before: get it comfy", body: "The Cool it down and Warm it up buttons turn on then.", action: { label: "Car controls", onClick: () => go("climate") } },
       { icon: KeyRound, title: "Skim Before you drive", body: "Trip changes, the Turo Guest profile, paperwork. 1 minute.", action: { label: "Open", onClick: () => go("before") } },
     ];
@@ -137,14 +139,14 @@ export function KeyNextSteps({ trip, pickupBattery, address, maps, go, run }: {
   } else if (now < e - 3 * H) {
     title = "Enjoy the drive";
     steps = [
-      { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, body: "Back on N Kings Rd near the building. Changes go through the Turo app." },
-      { icon: BatteryCharging, title: pickupBattery != null ? `Bring it back with at least ${pickupBattery}%` : "Bring it back with the charge you picked up", body: <ChargerLine />, send: true },
+      { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, body: place.returnTo },
+      { icon: BatteryCharging, title: pickupBattery != null ? `Bring it back with at least ${pickupBattery}%` : "Bring it back with the charge you picked up", body: <ChargerLine kind={kind} />, send: true },
     ];
   } else {
     title = "Almost time to return";
     steps = [
-      { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, body: "Park on N Kings Rd near the building, legal spot. Watch the sweeping signs.", action: { label: "Return steps", onClick: () => go("return") } },
-      { icon: BatteryCharging, title: pickupBattery != null ? `Charge to at least ${pickupBattery}%` : "Charge back to pickup level", body: <>Avoids Turo's recharge fee. <ChargerLine /></>, send: true },
+      { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, body: place.returnSoon, action: { label: "Return steps", onClick: () => go("return") } },
+      { icon: BatteryCharging, title: pickupBattery != null ? `Charge to at least ${pickupBattery}%` : "Charge back to pickup level", body: <>Avoids Turo's recharge fee. <ChargerLine kind={kind} /></>, send: true },
       { icon: CheckCircle2, title: "Photos, grab your stuff, lock it", body: "Return photos in the Turo app, then lock in the Tesla app. Your access ends by itself." },
     ];
   }
@@ -159,7 +161,7 @@ export function KeyNextSteps({ trip, pickupBattery, address, maps, go, run }: {
               <p className="text-[15px] font-semibold leading-snug text-white">{st.title}</p>
               <p className="mt-0.5 text-[14px] leading-snug text-white/75">{st.body}</p>
             </div>
-            {st.send && <SendToCar run={run} />}
+            {st.send && <SendToCar run={run} kind={kind} />}
             {st.action && (st.action.href
               ? <a href={st.action.href} className="shrink-0 rounded-full bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95"><Navigation className="mr-1 inline h-3.5 w-3.5" />{st.action.label}</a>
               : <button type="button" onClick={st.action.onClick} className="min-h-[36px] shrink-0 rounded-full bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95">{st.action.label}</button>)}

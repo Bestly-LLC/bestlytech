@@ -88,7 +88,7 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
   return (
     <section id="drivers" className={embedded ? "mt-5 scroll-mt-4 border-t border-white/10 pt-4" : "mt-6 scroll-mt-4 rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10"}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Extra drivers</p>
-      <h3 className={`mt-1 font-bold leading-snug text-white ${embedded ? "text-[17px]" : "text-[20px]"}`} style={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>
+      <h3 className={`mt-1 font-bold leading-snug text-white ${embedded ? "text-[17px]" : "text-[20px]"}`} style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>
         {drivers.length ? "Your drivers" : "Someone else driving?"}
       </h3>
 
