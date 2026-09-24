@@ -2,15 +2,14 @@
  * "Before you walk away": live return checklist at the top of the Return steps (Home + LAX).
  * Reads the car (lax_return_check): parked in the right place, charged back to the pickup level, trunk/frunk shut, locked.
  * Each miss comes with its fix right there: Send the spot to the car, Send the charger to the car, Lock.
- * Plus Close windows (the car also closes them by itself when it locks) and the Turo return photos (a tick the guest sets).
- * Live from 3 hours before return until 6 hours after; while open it asks the car for a fresh reading every 90 s
+ * Plus Close windows (the car also closes them by itself when it locks).
+ * Live from 48 hours before return until 30 minutes after (then the page shows "Trip ended"); while open it asks the car for a fresh reading every 90 s
  * (a TezLab status read, which never wakes the car).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, ChevronsUp, Circle, Loader2, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SendToCar } from "./KeyNext";
-import { OpenTuro } from "./TripDone";
 import { fmtWhen } from "./GuestExtras";
 import type { TripKind } from "./places";
 import { track } from "./track";
@@ -29,10 +28,10 @@ const DEMO: Check = { ok: true, live: true, fresh: true, controls: true, observe
 const ago = (iso: string) => { const m = Math.max(0, Math.round((Date.now() - +new Date(iso)) / 60000)); return m < 1 ? "just now" : `${m} min ago`; };
 
 export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { token: string; kind: TripKind; run?: Run; demo?: boolean; endsAt?: string; compact?: boolean }) {
-  // Demo follows the demo trip's clock: live only from 3 hours before return (like the real one).
+  // Demo follows the demo trip's clock: live only from 48 hours before return (like the real one).
   const demoCheck = (): Check => {
     const e = endsAt ? +new Date(endsAt) : Date.now();
-    return Date.now() < e - 3 * 3600e3 ? { ok: true, live: false, opens_at: new Date(e - 3 * 3600e3).toISOString() } : DEMO;
+    return Date.now() < e - 48 * 3600e3 ? { ok: true, live: false, opens_at: new Date(e - 48 * 3600e3).toISOString() } : DEMO;
   };
   const [c, setC] = useState<Check | null>(demo ? demoCheck() : null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -40,9 +39,14 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
   const [local, setLocal] = useState<Partial<Record<Item["id"], boolean>>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const photosKey = `return-photos:${token}`;
-  const [photos, setPhotos] = useState(() => { try { return localStorage.getItem(photosKey) === "1"; } catch { return false; } });
   const lastRefresh = useRef(0);
+  const box = useRef<HTMLDivElement>(null);
+  const onScreen = useRef(true);
+  useEffect(() => {
+    const el = box.current; if (!el || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(([en]) => { onScreen.current = en.isIntersecting; }, { threshold: 0.2 });
+    io.observe(el); return () => io.disconnect();
+  });
 
   const load = useCallback(async () => {
     if (demo) return;
@@ -53,7 +57,7 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
     if (demo) return;
     let stop = false;
     const tick = async () => {
-      if (stop || document.visibilityState !== "visible") return;
+      if (stop || document.visibilityState !== "visible" || !onScreen.current) return;
       await load();
       // Ask the car for a fresh reading (location, lock, trunks) at most every 90 s while this is on screen.
       if (run && Date.now() - lastRefresh.current > 90e3) { lastRefresh.current = Date.now(); run("refresh").then(load).catch(() => {}); }
@@ -64,17 +68,17 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
   }, [load, run, demo]);
 
   if (!c?.ok) return null;
-  if (!c.live && compact) return <p className="mt-3 text-[13px] text-white/55">A live car check (parked, charged, locked) shows here {c.opens_at ? fmtWhen(c.opens_at) : "3 hours before your return"}.</p>;
+  if (!c.live && compact) return <p ref={box as never} className="mt-3 text-[13px] text-white/55">A live car check (parked, charged, locked) turns on here {c.opens_at ? fmtWhen(c.opens_at) : "2 days before your return"}.</p>;
   if (!c.live) return (
     <div className="rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Return checklist</p>
-      <p className="mt-1 text-[15px] text-white/80">It checks the car for you (parked, charged, locked). It turns on {c.opens_at ? fmtWhen(c.opens_at) : "3 hours before your return"}.</p>
+      <p className="mt-1 text-[15px] text-white/80">It checks the car for you (parked, charged, locked). It turns on {c.opens_at ? fmtWhen(c.opens_at) : "2 days before your return"}.</p>
     </div>
   );
 
   // Right after a Lock tap the next car reading can lag a minute: show what we just did.
   const items = (c.items ?? []).map((i) => (local[i.id] && !i.ok ? { ...i, ok: true, detail: i.id === "locked" ? "Locked just now." : "Done just now." } : i));
-  const done = items.filter((i) => i.ok).length + (photos ? 1 : 0), total = items.length + 1;
+  const done = items.filter((i) => i.ok).length, total = items.length;
   const all = done === total;
   const act = async (id: string, a: Parameters<Run>[0], okItem?: Item["id"]) => {
     if (!run) return;
@@ -84,13 +88,12 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
     finally { setBusy(null); }
   };
 
-  const setPhoto = (v: boolean) => { setPhotos(v); try { localStorage.setItem(photosKey, v ? "1" : "0"); } catch { /* ignore */ } };
   // Compact: one small live row inside the Park step. The other fixes (send spot / charger) live in their own steps.
   if (compact) {
     const short: Record<Item["id"], string> = { parked: "Parked", charge: "Charged", trunks: "Trunks shut", locked: "Locked" };
     const needLock = items.some((i) => i.id === "locked" && !i.ok);
     return (
-      <div aria-label="Live car check" className={`mt-3 rounded-2xl p-3 ring-1 ${all ? "bg-emerald-400/10 ring-emerald-300/40" : "bg-white/[0.06] ring-white/10"}`}>
+      <div ref={box} aria-label="Live car check" className={`mt-3 rounded-2xl p-3 ring-1 ${all ? "bg-emerald-400/10 ring-emerald-300/40" : "bg-white/[0.06] ring-white/10"}`}>
         <div className="flex items-center justify-between gap-2">
           <p className="text-[13px] font-bold text-white">{all ? "All set. You're good to go." : `Car check · ${done} of ${total}`}</p>
           <span className="text-[11px] text-white/50">{c.observed_at ? ago(c.observed_at) : ""}</span>
@@ -101,12 +104,6 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
               {i.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}{short[i.id]}
             </li>
           ))}
-          <li>
-            <button type="button" aria-pressed={photos} onClick={() => setPhoto(!photos)}
-              className={`inline-flex min-h-[28px] items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${photos ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-300/15 text-amber-100"}`}>
-              {photos ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}Photos
-            </button>
-          </li>
         </ul>
         {needLock && run && (
           <button type="button" onClick={() => void act("lock", "lock", "locked")} disabled={!!busy}
@@ -146,16 +143,6 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
             </div>
           </li>
         ))}
-        <li className="flex items-start gap-3 py-3">
-          <button type="button" aria-pressed={photos} onClick={() => { const v = !photos; setPhotos(v); try { localStorage.setItem(photosKey, v ? "1" : "0"); } catch { /* ignore */ } }} className="mt-0.5 shrink-0" aria-label="I took my return photos">
-            {photos ? <CheckCircle2 className="h-6 w-6 text-emerald-300" /> : <Circle className="h-6 w-6 text-amber-200" />}
-          </button>
-          <div className="min-w-0 flex-1">
-            <p className={`text-[16px] font-semibold ${photos ? "text-white/70" : "text-white"}`}>Return photos in Turo</p>
-            <p className="text-[13px] text-white/60">{photos ? "Thanks. They protect you." : "All around the car and the dashboard. Tap the circle when done."}</p>
-            {!photos && <OpenTuro className="mt-2" label="Open Turo" />}
-          </div>
-        </li>
       </ul>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
         <button type="button" onClick={() => void act("win", "windows_close")} disabled={!run || !!busy}

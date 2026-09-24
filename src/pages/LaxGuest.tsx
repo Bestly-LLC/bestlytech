@@ -156,6 +156,8 @@ export default function LaxGuest() {
   const demo = isDemo(token);
   const dKind = demoKind(token || "");
   const [stage, setStage] = useDemoStage(dKind, demo);
+  // The minute timer below keeps its first closure: read the demo stage from a ref so it never snaps back to an old stage.
+  const stageRef = useRef(stage); stageRef.current = stage;
   // Errors on guests' phones go to the trip-apps health board (max 3 per visit; never from the host).
   useEffect(() => {
     let n = 0;
@@ -230,7 +232,7 @@ export default function LaxGuest() {
 
   // Car buttons: queue the command, then wait for the Mac mini helper to send it (signed) and report back.
   // Personal link acts for its own trip; the shared Turo link acts for the trip happening now (unlocked by the guest's phone key).
-  const reload = () => demo ? Promise.resolve(setPub(demoPub(dKind, stage) as Pub)) : (token ? rpc("lax_guest_public", { p_token: token }) : rpc("lax_pass_public", { p_slug: slug }))
+  const reload = () => demo ? Promise.resolve(setPub(demoPub(dKind, stageRef.current) as Pub)) : (token ? rpc("lax_guest_public", { p_token: token }) : rpc("lax_pass_public", { p_slug: slug }))
     .then(({ data }) => data && setPub(data as Pub));
   // Home-screen icon + tab icon match the trip's look (home = midcentury sunset, LAX = the LAX mark).
   useEffect(() => {

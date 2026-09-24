@@ -15,17 +15,21 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
     { id: "key-soon", label: "3 hours before" },
     { id: "key-ready", label: "Pickup soon: key ready (tap it to add)" },
     { id: "on-way", label: "On the way (30 min before, key added)" },
-    { id: "on-trip", label: "On the trip" },
+    { id: "on-trip", label: "On the trip (2½ days left)" },
+    { id: "return-2d", label: "2 days before return (car check turns on)" },
     { id: "returning", label: "Return in 90 min" },
-    { id: "ended", label: "Trip ended" },
+    { id: "grace", label: "Just past return time (30-min buffer)" },
+    { id: "ended", label: "Trip ended (30+ min after)" },
   ],
   lax: [
     { id: "booked", label: "Booked (3 days out)" },
     { id: "day-of", label: "Pickup soon: key ready (tap it to add)" },
     { id: "on-way", label: "On the way (30 min before, key added)" },
-    { id: "on-trip", label: "On the trip" },
+    { id: "on-trip", label: "On the trip (2½ days left)" },
+    { id: "return-2d", label: "2 days before return (car check turns on)" },
     { id: "returning", label: "Return in 90 min" },
-    { id: "ended", label: "Trip ended" },
+    { id: "grace", label: "Just past return time (30-min buffer)" },
+    { id: "ended", label: "Trip ended (30+ min after)" },
   ],
 };
 
@@ -43,12 +47,15 @@ function demoCharging(start: number, ended: boolean) {
     count: sessions.length, final: ended, updated_at: iso(Date.now() - 12 * 60e3) };
 }
 
+const anchor = { stage: "", t: 0 };
 /** A fake lax_guest_public() answer for the chosen stage. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function demoPub(kind: "home" | "lax", stage: string): any {
   const now = Date.now();
-  const startIn: Record<string, number> = { booked: 72 * H, "key-soon": 3 * H, "key-ready": 1.5 * H, "key-added": 0.5 * H, "day-of": 1.5 * H, "on-way": 0.5 * H, "on-trip": -24 * H, returning: -70.5 * H, ended: -74 * H };
-  const s = now + (startIn[stage] ?? 72 * H);
+  // Trip times are pinned when a stage is picked, so the minute refresh never shifts them; the page then runs in real time.
+  if (anchor.stage !== stage) { anchor.stage = stage; anchor.t = now; }
+  const startIn: Record<string, number> = { booked: 72 * H, "key-soon": 3 * H, "key-ready": 1.5 * H, "key-added": 0.5 * H, "day-of": 1.5 * H, "on-way": 0.5 * H, "on-trip": -12 * H, "return-2d": -26 * H, returning: -70.5 * H, grace: -72.25 * H, ended: -74 * H };
+  const s = anchor.t + (startIn[stage] ?? 72 * H);
   const e = s + 72 * H;
   const trip = { first: "Demo", starts_at: iso(s), ends_at: iso(e), car_opens_at: iso(s - H) };
   const keyOpens = s - 2 * H;

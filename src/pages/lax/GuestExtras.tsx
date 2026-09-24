@@ -52,6 +52,7 @@ function tripStatus(trip: Trip, now: number) {
   const rel = (ms: number) => { const m = Math.round(ms / 60000); return m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} hr` : `${Math.round(m / 1440)} day${Math.round(m / 1440) === 1 ? "" : "s"}`; };
   if (now < s) return { text: `Starts in ${rel(s - now)}`, live: false };
   if (now < e) return { text: `On trip · ${rel(e - now)} left`, live: true };
+  if (now < e + 30 * 60e3) return { text: "Return time", live: true };
   return { text: "Trip ended", live: false };
 }
 function Stop({ label, iso, align }: { label: string; iso: string; align: "left" | "right" }) {
@@ -174,20 +175,21 @@ export function TripCard({ trip, theme = "lax", recap }: { trip: Trip; theme?: "
   // Tick every 30s, every second in the last 2 minutes before pickup/return, and exactly at each boundary,
   // so it flips from "until pickup" to "left on your trip" the moment the trip starts (never a stuck "0m").
   useEffect(() => {
-    const next = [s, e].map((b) => b - now).filter((d) => d > 0).sort((a, b) => a - b)[0];
+    const next = [s, e, e + 30 * 60e3].map((b) => b - now).filter((d) => d > 0).sort((a, b) => a - b)[0];
     const wait = next == null ? 30000 : next <= 120000 ? Math.min(1000, next) : Math.min(30000, next - 120000 || 30000);
     const t = window.setTimeout(() => setNow(Date.now()), Math.max(250, wait));
     return () => window.clearTimeout(t);
   }, [now, s, e]);
   useEffect(() => { const f = () => document.visibilityState === "visible" && setNow(Date.now()); document.addEventListener("visibilitychange", f); return () => document.removeEventListener("visibilitychange", f); }, []);
-  const before = now < s, during = now >= s && now < e;
+  // 30 min grace after the official end (matches tripEnded): still "on the trip", then the Done badge.
+  const before = now < s, during = now >= s && now < e + 30 * 60e3, late = during && now >= e;
   const pos = position(s, e, now);
   const home = theme === "home";
   const C = home
     ? { bg: "linear-gradient(160deg,#1c3a38,#132726)", ring: "rgba(232,169,58,0.28)", hot: "#E8A93A", accent: "#E36F3C", track: "rgba(244,234,213,0.18)", sub: "rgba(244,234,213,0.62)", text: "#F4EAD5", font: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }
     : { bg: "rgba(10,10,12,0.92)", ring: "rgba(255,255,255,0.08)", hot: "#30D158", accent: "#30D158", track: "rgba(255,255,255,0.22)", sub: "rgba(255,255,255,0.55)", text: "#fff", font: "-apple-system, 'SF Pro Display', Inter, system-ui, sans-serif" };
-  const big = before ? short(s - now) : during ? short(e - now) : "Done";
-  const label = before ? "until pickup" : during ? "left on your trip" : "trip complete · thanks!";
+  const big = before ? short(s - now) : late ? "Now" : during ? short(e - now) : "Done";
+  const label = before ? "until pickup" : late ? "return time · lock it and you're done" : during ? "left on your trip" : "trip complete · thanks!";
   const soon = during && e - now < 2 * 3600e3;
   const numColor = soon ? "#FF9F0A" : C.hot;
   // Scrolled past the card -> it squishes into a slim bar pinned to the top (like a Live Activity in the island).

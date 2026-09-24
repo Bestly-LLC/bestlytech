@@ -37,7 +37,7 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
   const glow = new Set<GlowTarget>();
   if (!trip) return { next: null, glow };
   const s = +new Date(trip.starts_at), e = +new Date(trip.ends_at);
-  if (now >= e) return { next: null, glow };
+  if (now >= e + 30 * 60e3) return { next: null, glow };
   const k = keyInfo && keyInfo.state !== "off" ? keyInfo : null;
   const added = k?.state === "added";
   const opens = k?.opens_at ? +new Date(k.opens_at) : s - 2 * H;
@@ -46,7 +46,7 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
   if (now >= s + 45 * 60e3) {
     if (now >= e - 3 * H) {
       glow.add("return"); glow.add("next");
-      return { next: { icon: Undo2, title: "Time to head back", sub: `Return by ${fmtWhen(trip.ends_at)}.${pickupBattery != null ? ` Charge it to ${pickupBattery}%+ first${car?.battery != null ? ` (now ${car.battery}%)` : ""}.` : " Charge it back up first."}`, action: "return", label: "Return steps" }, glow };
+      return { next: { icon: Undo2, title: now >= e ? "Return time: park and lock it" : "Time to head back", sub: `${now >= e ? "It was due" : "Return by"} ${fmtWhen(trip.ends_at)}.${pickupBattery != null ? ` Charge it to ${pickupBattery}%+ first${car?.battery != null ? ` (now ${car.battery}%)` : ""}.` : " Charge it back up first."}`, action: "return", label: "Return steps" }, glow };
     }
     const bat = car?.battery, goal = pickupBattery;
     const sub = goal != null ? `Bring it back at ${goal}%+.${bat != null ? ` It's at ${bat}% now.` : ""}` : "Bring it back with the charge you picked it up with.";

@@ -67,4 +67,6 @@ function ReviewAsk({ titleFont }: { titleFont?: string }) {
   );
 }
 
-export const tripEnded = (trip?: Trip | null) => !!trip && Date.now() >= +new Date(trip.ends_at);
+/** The page keeps its return mode for 30 minutes after the official end (a guest still parking/locking), then shows "Trip ended". */
+export const END_GRACE = 30 * 60e3;
+export const tripEnded = (trip?: Trip | null) => !!trip && Date.now() >= +new Date(trip.ends_at) + END_GRACE;
