@@ -14,12 +14,6 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-// Key rotated 2026-09-15. WORKER_KEY_PREV exists only so the hourly transcode
-// run that fires mid-rotation does not get a 401; it is emptied in the very
-// next deploy, once the scheduled task carries the new one. If you are reading
-// this and WORKER_KEY_PREV is NOT empty, the rotation was left half-done.
-const WORKER_KEY = "r3SA9Q1v3FudP_J2j5C2EXTmmu_s6XQw";
-const WORKER_KEY_PREV = "";
 const RAW_BUCKET = "client-media";
 const OUT_BUCKET = "review";
 const TALK_ROOM = "fyqvdsa4";
@@ -36,8 +30,16 @@ function sameSecret(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return d === 0;
 }
-function okWorkerKey(k: string): boolean {
-  return sameSecret(k, WORKER_KEY) || (WORKER_KEY_PREV.length > 0 && sameSecret(k, WORKER_KEY_PREV));
+// Inbound key (2026-09-24): no key literal in this file. Vault holds only sha256
+// fingerprints (client_media_worker_key_sha256, plus client_media_worker_key_prev_sha256 while callers move
+// over); edge_key_ok() (service-role only) checks them.
+async function okWorkerKey(k: string | null | undefined): Promise<boolean> {
+  if (!k) return false;
+  for (const n of ["client_media_worker_key_sha256", "client_media_worker_key_prev_sha256"]) {
+    const { data } = await db.rpc("edge_key_ok", { p_name: n, p_key: k });
+    if (data === true) return true;
+  }
+  return false;
 }
 
 const CORS = {
@@ -136,7 +138,7 @@ Deno.serve(async (req) => {
 
   // ── worker: everything below needs this function's own key ────────────────
   const k = req.headers.get("x-worker-key") ?? String(body.workerKey ?? "");
-  if (!k || !okWorkerKey(k)) return J({ ok: false, error: "unauthorized" }, 401);
+  if (!k || !(await okWorkerKey(k))) return J({ ok: false, error: "unauthorized" }, 401);
 
   if (action === "pending") {
     const { data, error } = await db.rpc("client_media_pending");

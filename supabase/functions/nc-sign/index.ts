@@ -21,7 +21,18 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const PROXY_KEY = "WymtRea6BSdO9eUCTdIaTxdz5BMWHwxksO_0__GeqRgrk6Qr";
+// Inbound key (2026-09-24): no key literal in this file. Vault holds only sha256
+// fingerprints (nc_sign_key_sha256, plus nc_sign_key_prev_sha256 while callers move
+// over); edge_key_ok() (service-role only) checks them.
+const __keyDb = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
+async function keyOk(k: string | null | undefined): Promise<boolean> {
+  if (!k) return false;
+  for (const n of ["nc_sign_key_sha256", "nc_sign_key_prev_sha256"]) {
+    const { data } = await __keyDb.rpc("edge_key_ok", { p_name: n, p_key: k });
+    if (data === true) return true;
+  }
+  return false;
+}
 
 const db = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -61,7 +72,7 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const key = req.headers.get("x-proxy-key") ?? "";
-  if (!key || !sameSecret(key, PROXY_KEY)) return J({ error: "unauthorized" }, 401);
+  if (!key || !(await keyOk(key))) return J({ error: "unauthorized" }, 401);
 
   let c: Creds;
   try { c = await creds(); } catch (e) { return J({ error: String(e) }, 500); }

@@ -18,8 +18,10 @@
 // address from Suppressions before concluding anything about delivery.
 //
 // KEY ROTATION: this shared the old shop key, which shipped as a literal
-// fallback in the hoku-clean repo and is therefore burned. The old value is
-// accepted only until LEGACY_UNTIL, then dies with no further deploy.
+// fallback in the hoku-clean repo and is therefore burned. The expired legacy
+// key was deleted from this file on 2026-09-24.
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -27,11 +29,18 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
 const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
 const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
 
-const OWN_KEY = "tLDXwk5x0KR4CPON28k7jP3eJEZLRNrF5Rqb7oLZLR4Zwaav";
-const LEGACY_KEY = "Xn7pQ2vK9mR4tY6wZ1aB3cD5eF8gH0jL2nP4qS6uV8xA1bC3";
-const LEGACY_UNTIL = Date.parse("2026-09-10T02:00:00Z");
-const keyOk = (k: string) =>
-  k === OWN_KEY || (Date.now() < LEGACY_UNTIL && k === LEGACY_KEY);
+// Inbound key (2026-09-24): no key literal in this file. Vault holds only sha256
+// fingerprints (shop_key_sha256, plus shop_key_prev_sha256 while callers move
+// over); edge_key_ok() (service-role only) checks them.
+const __keyDb = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
+async function keyOk(k: string | null | undefined): Promise<boolean> {
+  if (!k) return false;
+  for (const n of ["shop_key_sha256", "shop_key_prev_sha256"]) {
+    const { data } = await __keyDb.rpc("edge_key_ok", { p_name: n, p_key: k });
+    if (data === true) return true;
+  }
+  return false;
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -43,7 +52,7 @@ const json = (b: unknown, s = 200) =>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
-  const ok = keyOk(req.headers.get("x-shop-key") || "") || isSvc(req);
+  const ok = isSvc(req) || await keyOk(req.headers.get("x-shop-key"));
   if (!ok) return json({ error: "Unauthorized" }, 401);
 
   const key = Deno.env.get("RESEND_API_KEY");

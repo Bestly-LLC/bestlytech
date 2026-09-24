@@ -28,10 +28,27 @@ const PLATFORM = "instagram";
 const AUTO = new Set(["cookieyeti", "inventoryproof"]);
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const PROXY_KEY = Deno.env.get("SOCIAL_PROXY_KEY") ||
-  "HZW143PPv0ezYqQ2Ww9tQGar_ywER6dHPXG6yvalpv84jRBR";
-
 const db = createClient(SUPABASE_URL, SB_SECRET, { auth: { persistSession: false } });
+
+// Inbound key (2026-09-24): no key literal in this file. The x-proxy-key that
+// invoke_edge_function sends (Vault edge_proxy_key) is checked by fingerprint
+// through edge_key_ok() (edge_proxy_key_sha256, plus edge_proxy_key_prev_sha256
+// during a rotation). SOCIAL_PROXY_KEY, if set in the function env, still counts.
+const SOCIAL_PROXY_KEY = Deno.env.get("SOCIAL_PROXY_KEY") ?? "";
+async function edgeProxyKeyOk(k: string): Promise<boolean> {
+  for (const n of ["edge_proxy_key_sha256", "edge_proxy_key_prev_sha256"]) {
+    const { data } = await db.rpc("edge_key_ok", { p_name: n, p_key: k });
+    if (data === true) return true;
+  }
+  return false;
+}
+// Outbound (the dryrun rehearsal on bestly-ig-poster): the current Vault value,
+// read per call, so a rotation needs no redeploy here.
+async function outboundProxyKey(): Promise<string> {
+  if (SOCIAL_PROXY_KEY) return SOCIAL_PROXY_KEY;
+  const { data } = await db.rpc("get_edge_proxy_key");
+  return typeof data === "string" ? data : "";
+}
 
 // The anon key is public, so verify_jwt alone is not authorization - it only
 // proves the caller found a key anyone can read. Real callers are pg_cron
@@ -49,9 +66,10 @@ function sameSecret(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return d === 0;
 }
-function callerAuthorized(req: Request): boolean {
+async function callerAuthorized(req: Request): Promise<boolean> {
   const k = req.headers.get("x-proxy-key");
-  if (k && sameSecret(k, PROXY_KEY)) return true;
+  if (k && SOCIAL_PROXY_KEY && sameSecret(k, SOCIAL_PROXY_KEY)) return true;
+  if (k && await edgeProxyKeyOk(k)) return true;
   const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   const parts = jwt.split(".");
   if (parts.length === 3) {
@@ -84,7 +102,7 @@ async function rehearse(brand: string, post: Record<string, unknown>) {
     headers: {
       "Content-Type": "application/json",
       ...sbHeaders(SB_SECRET),
-      "x-proxy-key": PROXY_KEY,
+      "x-proxy-key": await outboundProxyKey(),
     },
     body: JSON.stringify(body),
   });
@@ -95,7 +113,7 @@ Deno.serve(async (req) => {
   const J = (o: unknown, s = 200) =>
     new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json" } });
 
-  if (!callerAuthorized(req)) return J({ error: "unauthorized" }, 401);
+  if (!(await callerAuthorized(req))) return J({ error: "unauthorized" }, 401);
 
   const master = await db.rpc("get_meta_master_token");
   const masterTok = master.data ? String(master.data) : "";

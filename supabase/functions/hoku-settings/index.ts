@@ -17,7 +17,18 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
 const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
 const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
 
-const OWN_KEY = "mgfxesLIxLPxO8SqiWLDIkVehXtHAEAO7LRrzSnX6uZYwVGb";
+// Inbound key (2026-09-24): no key literal in this file. Vault holds only sha256
+// fingerprints (hoku_settings_key_sha256, plus hoku_settings_key_prev_sha256 while callers move
+// over); edge_key_ok() (service-role only) checks them.
+const __keyDb = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
+async function keyOk(k: string | null | undefined): Promise<boolean> {
+  if (!k) return false;
+  for (const n of ["hoku_settings_key_sha256", "hoku_settings_key_prev_sha256"]) {
+    const { data } = await __keyDb.rpc("edge_key_ok", { p_name: n, p_key: k });
+    if (data === true) return true;
+  }
+  return false;
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -48,7 +59,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
   const svc = SB_SECRET;
-  const ok = (req.headers.get("x-settings-key") || "") === OWN_KEY || isSvc(req);
+  const ok = isSvc(req) || await keyOk(req.headers.get("x-settings-key"));
   if (!ok) return json({ error: "Unauthorized" }, 401);
 
   const db = createClient(Deno.env.get("SUPABASE_URL")!, svc);

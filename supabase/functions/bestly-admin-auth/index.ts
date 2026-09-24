@@ -40,11 +40,11 @@
 //
 // KEY ROTATION
 // ------------
-// The old proxy key shipped as a literal fallback inside the hoku-clean repo,
-// so it is readable by anyone who can read that repo or its history. It is
-// therefore treated as burned. Both keys are accepted only until LEGACY_UNTIL;
-// after that instant the old value is refused with no further deploy needed,
-// so an interrupted cutover still ends with the burned key dead.
+// 2026-09-24: no key literal in this file any more. The proxy key is checked by
+// fingerprint through edge_key_ok() (service-role only): Vault holds
+// admin_proxy_key_sha256, plus admin_proxy_key_prev_sha256 while the
+// hoku-clean.com proxy moves to the new key. Deleting the _prev secret ends
+// the rollover with no deploy. The expired legacy key was removed outright.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 // Key switch (2026-09-24): new keys first, legacy as fallback.
@@ -68,9 +68,6 @@ const ORIGIN_RP: Record<string, string> = {
 const DEFAULT_RP = "hoku-clean.com";
 
 const SESSION_DAYS = 30;
-const PROXY_KEY = "IsIGFT3B8lbMFmIA6NAHTOeilEhsllTEsgmSs8HmT877eVad";
-const LEGACY_PROXY_KEY = "HZW143PPv0ezYqQ2Ww9tQGar_ywER6dHPXG6yvalpv84jRBR";
-const LEGACY_UNTIL = Date.parse("2026-09-10T02:00:00Z");
 
 const PUBLIC_ACTIONS = new Set(["status", "auth-begin", "auth-finish", "enrol-redeem"]);
 const ADMIN_ONLY = new Set([
@@ -107,12 +104,14 @@ function sameSecret(a: string, b: string): boolean {
   return d === 0;
 }
 
-// Accepts the current key always, and the burned one only until the cutover
-// instant. Both comparisons are constant-time.
-function proxyKeyOk(pk: string | null): boolean {
+// Accepts the current key, and the previous one only while its fingerprint is
+// still in Vault. Only sha256 fingerprints are compared, in the database.
+async function proxyKeyOk(pk: string | null): Promise<boolean> {
   if (!pk) return false;
-  if (sameSecret(pk, PROXY_KEY)) return true;
-  if (Date.now() < LEGACY_UNTIL && sameSecret(pk, LEGACY_PROXY_KEY)) return true;
+  for (const n of ["admin_proxy_key_sha256", "admin_proxy_key_prev_sha256"]) {
+    const { data } = await db.rpc("edge_key_ok", { p_name: n, p_key: pk });
+    if (data === true) return true;
+  }
   return false;
 }
 
@@ -212,7 +211,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action ?? "");
 
-    const viaProxy = proxyKeyOk(req.headers.get("x-proxy-key"));
+    const viaProxy = await proxyKeyOk(req.headers.get("x-proxy-key"));
 
     // Login endpoints are reachable without the proxy key so a site with no
     // server-side secret store can host the admin. Everything that changes who
