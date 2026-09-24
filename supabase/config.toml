@@ -99,3 +99,6 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.partner-admin]
   verify_jwt = false
+
+[functions.tesla-invoice]
+    verify_jwt = false
