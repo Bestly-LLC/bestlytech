@@ -217,6 +217,12 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
     const h = window.location.hash;
     return h === "#return" ? "return" : h === "#pickup" ? "pickup" : h === "#ask" ? "ask" : null;
   });
+  // #pickup / #return / #ask open the sheet, also when the page is already open (a notification tap, an in-page link).
+  useEffect(() => {
+    const f = () => { const h = window.location.hash; if (h === "#pickup" || h === "#return" || h === "#ask") setSheet(h.slice(1) as "pickup" | "return" | "ask"); };
+    window.addEventListener("hashchange", f);
+    return () => window.removeEventListener("hashchange", f);
+  }, []);
   const openSheet = (t: "pickup" | "return" | "ask" | null) => {
     setSheet(t);
     try { history.replaceState(null, "", t ? `#${t}` : window.location.pathname + window.location.search); } catch { /* ignore */ }

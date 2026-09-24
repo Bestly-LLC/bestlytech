@@ -97,6 +97,9 @@ export function ChargingCard({ charging, battery, pickupBattery, ended, embedded
 export function ChargingFab({ charging }: { charging: Charging }) {
   const [open, setOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
+  // Stays out of the way until the guest scrolls past the trip card + Next step (it used to sit on top of their buttons).
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => { const f = () => setScrolled(window.scrollY > 650); f(); window.addEventListener("scroll", f, { passive: true }); return () => window.removeEventListener("scroll", f); }, []);
   useEffect(() => {
     // Hide while the charging card or the lobby-door QR code is on screen (never cover the QR).
     const els = ["charging", "qr"].map((id) => document.getElementById(id)).filter(Boolean) as HTMLElement[];
@@ -123,8 +126,8 @@ export function ChargingFab({ charging }: { charging: Charging }) {
   };
   return (
     <button type="button" onClick={go} aria-label={label}
-      className={`fixed right-3 z-30 flex h-[52px] items-center overflow-hidden rounded-full text-left text-white shadow-xl shadow-black/40 ring-1 ring-white/25 backdrop-blur-xl transition-all duration-500 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${hidden ? "pointer-events-none translate-x-24 opacity-0" : "opacity-100"}`}
-      style={{ bottom: "calc(env(safe-area-inset-bottom) + 212px)", background: "linear-gradient(160deg, rgba(255,255,255,.24), rgba(255,255,255,.08)), rgba(12,10,24,.62)", maxWidth: open ? 300 : 52 }}>
+      className={`fixed right-3 z-30 flex h-[52px] items-center overflow-hidden rounded-full text-left text-white shadow-xl shadow-black/40 ring-1 ring-white/25 backdrop-blur-xl transition-all duration-500 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${hidden || !scrolled ? "pointer-events-none translate-x-24 opacity-0" : "opacity-100"}`}
+      style={{ top: "46%", background: "linear-gradient(160deg, rgba(255,255,255,.24), rgba(255,255,255,.08)), rgba(12,10,24,.62)", maxWidth: open ? 300 : 52 }}>
       <span className="grid h-[52px] w-[52px] shrink-0 place-items-center">
         <span className="grid h-9 w-9 place-items-center rounded-full" style={{ background: ACCENT, boxShadow: "0 0 14px -2px var(--trip-accent)" }}>
           <Zap className="h-5 w-5 fill-[#1A1140] text-[#1A1140]" aria-hidden />

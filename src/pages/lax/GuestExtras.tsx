@@ -649,7 +649,7 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car }: 
         {busy ? <>{stage ?? "Working"}… <span className="tabular-nums text-white/65">{secs}s</span>{stage === "Waking up the car" && <span className="block text-white/65">Can take up to a minute.</span>}</> : done}
       </p>
       <p className="text-[11px] leading-snug text-white/65">
-        {demo ? "Preview only. Not connected to the car yet."
+        {demo ? "Demo: nothing is sent to the car."
           : lockedUntil === "pending" ? "Turns on when your Tesla phone key is connected, or 1 hour before pickup."
           : lockedUntil ? <>Turns on <b className="text-white/80">{fmtWhen(lockedUntil)}</b>, or as soon as your phone key is connected.</>
           : `Runs ${CLIMATE_MINUTES} minutes, then turns off by itself.`}
