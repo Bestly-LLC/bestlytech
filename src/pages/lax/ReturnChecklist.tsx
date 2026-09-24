@@ -28,8 +28,15 @@ const DEMO: Check = { ok: true, live: true, fresh: true, controls: true, observe
 ] };
 const ago = (iso: string) => { const m = Math.max(0, Math.round((Date.now() - +new Date(iso)) / 60000)); return m < 1 ? "just now" : `${m} min ago`; };
 
-export function ReturnChecklist({ token, kind, run, demo }: { token: string; kind: TripKind; run?: Run; demo?: boolean }) {
-  const [c, setC] = useState<Check | null>(demo ? DEMO : null);
+export function ReturnChecklist({ token, kind, run, demo, endsAt }: { token: string; kind: TripKind; run?: Run; demo?: boolean; endsAt?: string }) {
+  // Demo follows the demo trip's clock: live only from 3 hours before return (like the real one).
+  const demoCheck = (): Check => {
+    const e = endsAt ? +new Date(endsAt) : Date.now();
+    return Date.now() < e - 3 * 3600e3 ? { ok: true, live: false, opens_at: new Date(e - 3 * 3600e3).toISOString() } : DEMO;
+  };
+  const [c, setC] = useState<Check | null>(demo ? demoCheck() : null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (demo) setC(demoCheck()); }, [demo, endsAt]);
   const [local, setLocal] = useState<Partial<Record<Item["id"], boolean>>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);

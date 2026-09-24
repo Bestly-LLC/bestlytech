@@ -552,7 +552,7 @@ export default function LaxGuest() {
             
             </TripSheet>
             <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Drop the car → catch your flight" title="Return: car → shuttle → LAX">
-              {token && <div className="mb-5"><ReturnChecklist token={token} kind="lax" run={live ? carCommand : undefined} demo={demo} /></div>}
+              {token && <div className="mb-5"><ReturnChecklist token={token} kind="lax" run={live ? carCommand : undefined} demo={demo} endsAt={pub.trip?.ends_at} /></div>}
 
               <p className="text-[15px] leading-relaxed text-white/75">
                 Reverse of the morning. The two things to watch: <b className="text-white">which entrance you use</b>, and <b className="text-white">which address you drive to</b>. Get those right and you're done.

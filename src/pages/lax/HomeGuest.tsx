@@ -365,7 +365,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
         </TripSheet>
 
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
-          <ReturnChecklist token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} />
+          <ReturnChecklist token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} />
           <p className="mt-6 text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>The steps</p>
           <Carousel id="home-return" className="mt-3" labels={["Charge", "Park", "Photos + lock"]}>
             <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"}.<BatteryReturn className="mt-3" target={pub.pickup_battery} now={car?.battery} observedAt={car?.observed_at} /><span className="mt-3 block"><ChargerLine kind="home" /></span><SendToCar run={live ? run : undefined} kind="home" /></Step>
