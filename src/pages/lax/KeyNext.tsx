@@ -104,7 +104,7 @@ export const ChargerLine = ({ kind }: { kind: TripKind }) => {
 };
 
 type NavAction = "nav_charger" | "nav_charger_lax" | "nav_garage_lax" | "nav_home";
-type NavRun = (a: NavAction, onStage?: (s: string) => void) => Promise<void>;
+export type NavRun = (a: NavAction, onStage?: (s: string) => void) => Promise<void>;
 /** "Send to car": puts the closest Supercharger in the car's navigation (TezLab first, Tesla backup). */
 export function SendToCar({ run, kind, action, label = "Send to car's navigation", full }: { run?: NavRun; kind: TripKind; action?: NavAction; label?: string; full?: boolean }) {
   const [st, setSt] = useState<"idle" | "busy" | "done" | "err">("idle");
@@ -162,13 +162,13 @@ export function KeyNextSteps({ trip, pickupBattery, place, kind, maps, go, run }
     title = "Enjoy the drive";
     steps = [
       { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, body: place.returnTo, action: TURO },
-      { icon: BatteryCharging, title: pickupBattery != null ? `Bring it back with at least ${pickupBattery}%` : "Bring it back with the charge you picked up", body: <ChargerLine kind={kind} />, send: true },
+      { icon: BatteryCharging, title: pickupBattery != null ? `Bring it back at ${pickupBattery}%, same as pickup` : "Bring it back with the same charge as pickup", body: <ChargerLine kind={kind} />, send: true },
     ];
   } else {
     title = "Almost time to return";
     steps = [
       { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, body: place.returnSoon, action: { label: "Return steps", onClick: () => go("return") } },
-      { icon: BatteryCharging, title: pickupBattery != null ? `Charge to at least ${pickupBattery}%` : "Charge back to pickup level", body: <>Avoids Turo's recharge fee. <ChargerLine kind={kind} /></>, send: true },
+      { icon: BatteryCharging, title: pickupBattery != null ? `Charge back to ${pickupBattery}%, same as pickup` : "Charge back to pickup level", body: <>Avoids Turo's recharge fee. <ChargerLine kind={kind} /></>, send: true },
       { icon: CheckCircle2, title: "Photos, grab your stuff, lock it", body: "Return photos in the Turo app, then lock in the Tesla app. Your access ends by itself.", action: TURO },
     ];
   }

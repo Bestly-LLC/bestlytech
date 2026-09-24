@@ -107,6 +107,9 @@ export function Carousel({ id, labels, children, className = "" }: { id: string;
               aria-label={`${i + 1} of ${n}${labels?.[i] ? `: ${labels[i]}` : ""}`}
               className="w-[calc(100%-2.25rem)] shrink-0 snap-start snap-always [&>*]:!mt-0">{s}</div>
           ))}
+          {/* Room after the last card so it can snap to the same left edge as the others
+              (browsers ignore the scroller's right padding, and a 0-height box adds no scroll room: keep h-px). */}
+          {n > 1 && <div aria-hidden className="h-px w-[44px] shrink-0" />}
         </div>
       </div>
       {n > 1 && (

@@ -30,6 +30,7 @@ import ExtraDrivers from "./lax/ExtraDrivers";
 import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./lax/Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./lax/LiveCharge";
+import { ReturnChargeBlock, returnCharge } from "./lax/ReturnCharge";
 import { PhoneHandoff } from "./lax/PhoneHandoff";
 import { UnlockStart } from "./lax/Valet";
 import { renderPassImage } from "./lax/passImage";
@@ -306,7 +307,7 @@ export default function LaxGuest() {
   // What to do now + what glows (same rules as the home page).
   const [hasApp, markHasApp] = useHasApp();
   useKeyWatch(token, pub?.kind === "lax" ? key?.state ?? "off" : "off", key?.opens_at, () => void reload());
-  const guide = guideFor({ trip: pub?.trip, keyInfo: pub?.kind === "lax" ? key : null, hasApp, car: demoCar ? demoState : pub?.car ?? null, controlsOn: !!pub?.controls, kind: "lax", qrReady: !!pub?.ready, pickupBattery: pub?.pickup_battery });
+  const guide = guideFor({ trip: pub?.trip, keyInfo: pub?.kind === "lax" ? key : null, hasApp, car: demoCar ? demoState : pub?.car ?? null, controlsOn: !!pub?.controls, kind: "lax", qrReady: !!pub?.ready, pickupBattery: pub?.pickup_battery, rc: pub?.range_check });
   const glow = guide.glow;
   const doNext = (a: string) => {
     if (a === "pickup" || a === "return") openSheet(a);
@@ -487,7 +488,8 @@ export default function LaxGuest() {
 
             {pub.charging && <ChargingCard charging={pub.charging} token={token || undefined} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery} health={pub.battery_health} charging_now={["Charging", "Starting"].includes((demoCar ? demoState : pub.car)?.charging ?? "")}>
               <ChargeNow state={(demoCar ? demoState : pub.car)?.charging} battery={(demoCar ? demoState : pub.car)?.battery} detail={(demoCar ? demoState : pub.car)?.charge_detail} target={pub.pickup_battery} />
-              <OpenStalls token={token || undefined} live={live} demo={demo} />
+              {/* Stalls only when they likely need a charge (would return under the pickup level, or running low). */}
+              {(returnCharge((demoCar ? demoState : pub.car)?.battery, pub.pickup_battery, pub.range_check).needs || ((demoCar ? demoState : pub.car)?.battery ?? 100) < 30) && <OpenStalls token={token || undefined} live={live} demo={demo} />}
               <RangeCheck rc={pub.range_check} kind="lax" className="mt-3" warnOnly />
             </ChargingCard>}
 
@@ -596,12 +598,10 @@ export default function LaxGuest() {
                 Reverse of the morning. The two things to watch: <b className="text-white">which entrance you use</b>, and <b className="text-white">which address you drive to</b>. Get those right and you're done.
               </p>
 
-              <p className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[14px] leading-relaxed text-white/80 ring-1 ring-white/10">
-                <b className="text-white">Charge first:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"} to avoid Turo's recharge fee.
-                <RangeCheck rc={pub.range_check} kind="lax" className="mt-3" />
-                <BatteryReturn className="mt-3" startsAt={pub.trip?.starts_at} setAt={pub.pickup_battery_at} target={pub.pickup_battery} now={(demoCar ? demoState : pub.car)?.battery} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
-                <span className="mt-3 block"><ChargerLine kind="lax" /></span><SendToCar run={live ? carCommand : undefined} kind="lax" />
-              </p>
+              <div className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[14px] leading-relaxed text-white/80 ring-1 ring-white/10">
+                <ReturnChargeBlock kind="lax" pickup={pub.pickup_battery} battery={(demoCar ? demoState : pub.car)?.battery} rc={pub.range_check} run={live ? carCommand : undefined}
+                  setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
+              </div>
 
               <Carousel id="lax-return" className="mt-4" labels={["Drive in", "Park", "Walk out", "Shuttle"]}>
                 <Step n={1} when="Drive in" title="Use the carshare return lane on 98th St.">

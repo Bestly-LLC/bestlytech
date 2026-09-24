@@ -73,7 +73,7 @@ export function ChargingCard({ charging, battery, pickupBattery, health, chargin
             <>
               <div className="flex items-baseline justify-between text-[14px]">
                 <span className="text-white/80">Battery <b className="text-[17px] tabular-nums text-white">{battery}%</b></span>
-                {pickupBattery != null && <span className="text-white/65">Return at <b className="tabular-nums text-white">{pickupBattery}%+</b></span>}
+                {pickupBattery != null && <span className="text-white/65">Pickup level <b className="tabular-nums text-white">{pickupBattery}%</b></span>}
               </div>
               <div className="relative mt-2 h-2 rounded-full bg-white/10" aria-hidden>
                 <div className="h-2 rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, Math.max(2, battery))}%`, background: ok || pickupBattery == null ? ACCENT : "#FCD34D" }} />
@@ -182,13 +182,13 @@ export function ChargingFab({ charging }: { charging: Charging }) {
   );
 }
 
-/** "Return it at 80%+ · Now 62%": the pickup charge as the target, with the car's live battery against it. */
+/** "Return it at 76% · Now 62%": the pickup charge as the target, with the car's live battery against it. */
 const at12 = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 
 /** The return charge line = the battery level when the trip started (snapshotted at the reservation start time).
  *  Before the trip starts there's no line yet: it says when it gets set and shows today's level. */
-export function BatteryReturn({ target, now, observedAt, startsAt, setAt, className = "" }: {
-  target?: number | null; now?: number | null; observedAt?: string | null; startsAt?: string | null; setAt?: string | null; className?: string;
+export function BatteryReturn({ target, now, arrive, observedAt, startsAt, setAt, className = "" }: {
+  target?: number | null; now?: number | null; arrive?: number | null; observedAt?: string | null; startsAt?: string | null; setAt?: string | null; className?: string;
 }) {
   const before = target == null && !!startsAt && Date.now() < +new Date(startsAt);
   if (target == null && now == null) return null;
@@ -205,18 +205,19 @@ export function BatteryReturn({ target, now, observedAt, startsAt, setAt, classN
           </div>
         )}
         <p className="mt-1.5 text-[12px] leading-snug text-white/65">
-          {before ? <>It's set when your trip starts{startsAt ? <> (<b className="text-white/85">{at12(startsAt)}</b>)</> : null}: bring it back with at least the charge it has then.</>
-            : "Bring it back with at least the charge it had when your trip started."}
+          {before ? <>It's set when your trip starts{startsAt ? <> (<b className="text-white/85">{at12(startsAt)}</b>)</> : null}: bring it back with that same charge.</>
+            : "Bring it back with the same charge it had when your trip started."}
           {observedAt ? ` Updated ${ago(observedAt)}.` : ""}
         </p>
       </div>
     );
   }
-  const ok = now != null && now >= target;
+  const at = arrive ?? now; // estimated % on arrival at the return spot, when known
+  const ok = at != null && at >= target;
   return (
     <div className={`rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10 ${className}`}>
       <div className="flex items-center justify-between gap-2 text-[14px]">
-        <span className="flex items-center gap-1.5 text-white/85"><BatteryCharging className="h-4 w-4 text-emerald-300" aria-hidden /> Return it at <b className="tabular-nums text-white">{target}%+</b></span>
+        <span className="flex items-center gap-1.5 text-white/85"><BatteryCharging className="h-4 w-4 text-emerald-300" aria-hidden /> Return it at <b className="tabular-nums text-white">{target}%</b></span>
         {now != null && <span className="text-white/70">Now <b className={`tabular-nums ${ok ? "text-emerald-300" : "text-amber-200"}`}>{now}%</b></span>}
       </div>
       {now != null && (
@@ -226,7 +227,7 @@ export function BatteryReturn({ target, now, observedAt, startsAt, setAt, classN
         </div>
       )}
       <p className="mt-1.5 text-[12px] leading-snug text-white/60">
-        The line is the charge it had when your trip started{setAt ? ` (${at12(setAt)})` : ""}. {now == null ? "" : ok ? "You're good on charge." : `Add about ${target - now}% before you return.`}
+        The line is the charge it had at pickup{setAt ? ` (${at12(setAt)})` : ""}. {at == null ? "" : ok ? "You're good on charge." : `Add about ${target - at}% before you return.`}
         {observedAt ? ` Updated ${ago(observedAt)}.` : ""}
       </p>
     </div>

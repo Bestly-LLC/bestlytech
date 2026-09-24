@@ -30,6 +30,7 @@ import { homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./LiveCharge";
+import { ReturnChargeBlock, returnCharge } from "./ReturnCharge";
 import { PhoneHandoff } from "./PhoneHandoff";
 import { UnlockStart } from "./Valet";
 
@@ -259,7 +260,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
   // What to do now + what glows (next-step card, Pickup/Return ticket, key button, climate controls).
   const [hasApp, markHasApp] = useHasApp();
   useKeyWatch(token, key?.state ?? "off", key?.opens_at, () => reload?.());
-  const { next, glow } = guideFor({ trip: pub.trip, keyInfo: key, hasApp, car, controlsOn: !!pub.controls, kind: "home", pickupBattery: pub.pickup_battery });
+  const { next, glow } = guideFor({ trip: pub.trip, keyInfo: key, hasApp, car, controlsOn: !!pub.controls, kind: "home", pickupBattery: pub.pickup_battery, rc: pub.range_check });
   const keySteps = !!key && key.state !== "off" && key.state !== "ended";
   const n0 = keySteps ? 2 : 0;
   const doNext = (a: string) => {
@@ -336,7 +337,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
 
         {pub.charging && <ChargingCard charging={pub.charging} token={token} battery={car?.battery} pickupBattery={pub.pickup_battery} health={pub.battery_health} charging_now={car?.charging === "Charging" || car?.charging === "Starting"} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif">
           <ChargeNow state={car?.charging} battery={car?.battery} detail={car?.charge_detail} target={pub.pickup_battery} />
-          <OpenStalls token={token} live={live} demo={!!demoPage} />
+          {(returnCharge(car?.battery, pub.pickup_battery, pub.range_check).needs || (car?.battery ?? 100) < 30) && <OpenStalls token={token} live={live} demo={!!demoPage} />}
           <RangeCheck rc={pub.range_check} kind="home" className="mt-3" warnOnly />
         </ChargingCard>}
 
@@ -379,7 +380,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
 
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
           <Carousel id="home-return" className="mt-1" labels={["Charge", "Park", "Photos + lock"]}>
-            <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"}.<RangeCheck rc={pub.range_check} kind="home" className="mt-3" /><BatteryReturn className="mt-3" setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} target={pub.pickup_battery} now={car?.battery} observedAt={car?.observed_at} /><span className="mt-3 block"><ChargerLine kind="home" /></span><SendToCar run={live ? run : undefined} kind="home" /></Step>
+            <Step n={1}><ReturnChargeBlock kind="home" lead={<b className="text-white">Charge: </b>} pickup={pub.pickup_battery} battery={car?.battery} rc={pub.range_check} run={live ? run : undefined} setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={car?.observed_at} /></Step>
             <Step n={2}><b className="text-white">Park on N Kings Rd</b> near the building. <b className="text-white">Avoid the Joybird street parking.</b> Watch for <b className="text-white">street sweeping on Mondays and Tuesdays</b>: west side Monday 8–10 AM, east side Tuesday 8–10 AM ($75 tickets).<span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span><ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} /></Step>
             <Step n={3}><b className="text-white">Return photos</b> in the Turo app, grab your stuff, lock it in the Tesla app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
           </Carousel>

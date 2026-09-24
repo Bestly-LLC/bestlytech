@@ -21,7 +21,7 @@ type Run = (a: "refresh" | "lock" | "windows_close" | "nav_charger" | "nav_charg
 const ACCENT = "var(--trip-accent)";
 const DEMO: Check = { ok: true, live: true, fresh: true, controls: true, observed_at: new Date(Date.now() - 60e3).toISOString(), items: [
   { id: "parked", ok: false, label: "Park at the return spot", detail: "About 0.4 miles away." },
-  { id: "charge", ok: true, label: "Charged to 80%+", detail: "It's at 82% now." },
+  { id: "charge", ok: true, label: "Charged to 76% (same as pickup)", detail: "It's at 82% now." },
   { id: "trunks", ok: true, label: "Trunk and frunk closed", detail: "Both closed." },
   { id: "locked", ok: false, label: "Locked", detail: "The car is unlocked." },
 ] };

@@ -12,6 +12,8 @@ import { fmtWhen, climateNeed, type CarState, type Trip } from "./GuestExtras";
 import type { KeyInfo } from "./HomeGuest";
 import { KeyPending, SendToCar, keyTapped, markKeyTapped } from "./KeyNext";
 import { openCharging } from "./Charging";
+import type { RangeCheckData } from "./LiveCharge";
+import { returnCharge } from "./ReturnCharge";
 import type { TripKind } from "./places";
 import { track } from "./track";
 
@@ -32,8 +34,8 @@ export type GlowTarget = "next" | "pickup" | "return" | "key" | "climate";
 export type Next = { icon: typeof Zap; title: string; sub?: string; action?: "getapp" | "pickup" | "return" | "climate" | "send" | "qr"; label?: string; charging?: boolean } | null;
 
 /** One place decides what the guest should do now, and what glows. */
-export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady, pickupBattery, now = Date.now() }: {
-  trip?: Trip | null; keyInfo?: KeyInfo | null; hasApp: boolean; car?: CarState | null; controlsOn?: boolean; kind: TripKind; qrReady?: boolean; pickupBattery?: number | null; now?: number;
+export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady, pickupBattery, rc, now = Date.now() }: {
+  trip?: Trip | null; keyInfo?: KeyInfo | null; hasApp: boolean; car?: CarState | null; controlsOn?: boolean; kind: TripKind; qrReady?: boolean; pickupBattery?: number | null; rc?: RangeCheckData; now?: number;
 }): { next: Next; glow: Set<GlowTarget> } {
   const glow = new Set<GlowTarget>();
   if (!trip) return { next: null, glow };
@@ -45,13 +47,15 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
 
   // After pickup
   if (now >= s + 45 * 60e3) {
+    // Charging only comes up when the car would likely get back under the pickup level (= Turo recharge fee).
+    const r = returnCharge(car?.battery, pickupBattery, rc);
+    const chargeLine = !r.known ? "" : r.needs ? ` Charge to ${pickupBattery}% (same as pickup) first: add about ${r.add}%.` : " You're good on charge.";
     if (now >= e - 3 * H) {
       glow.add("return"); glow.add("next");
-      return { next: { icon: Undo2, title: now >= e ? "Return time: park and lock it" : "Time to head back", sub: `${now >= e ? "It was due" : "Return by"} ${fmtWhen(trip.ends_at)}.${pickupBattery != null ? ` Charge it to ${pickupBattery}%+ first${car?.battery != null ? ` (now ${car.battery}%)` : ""}.` : " Charge it back up first."}`, action: "return", label: "Return steps" }, glow };
+      return { next: { icon: Undo2, title: now >= e ? "Return time: park and lock it" : "Time to head back", sub: `${now >= e ? "It was due" : "Return by"} ${fmtWhen(trip.ends_at)}.${chargeLine}`, action: "return", label: "Return steps" }, glow };
     }
-    const bat = car?.battery, goal = pickupBattery;
-    const sub = goal != null ? `Bring it back at ${goal}%+.${bat != null ? ` It's at ${bat}% now.` : ""}` : "Bring it back with the charge you picked it up with.";
-    return { next: { icon: Zap, title: `Return by ${fmtWhen(trip.ends_at)}`, sub, action: "send", label: "Send charger to car", charging: true }, glow };
+    if (r.needs) return { next: { icon: Zap, title: `Return by ${fmtWhen(trip.ends_at)}`, sub: `Bring it back at ${pickupBattery}%, same as pickup. Add about ${r.add}% before you return.`, action: "send", label: "Send charger to car", charging: true }, glow };
+    return { next: { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, sub: `Bring it back at the same charge as pickup${pickupBattery != null ? ` (${pickupBattery}%)` : ""}.${r.known ? " You're good on charge right now." : ""}`, charging: true }, glow };
   }
   // Key: not ready yet
   if (k && !added && now < opens) {
