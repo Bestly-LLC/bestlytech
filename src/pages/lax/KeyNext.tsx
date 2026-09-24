@@ -103,7 +103,16 @@ type NavRun = (a: NavAction, onStage?: (s: string) => void) => Promise<void>;
 export function SendToCar({ run, kind, action, label = "Send to car's navigation", full }: { run?: NavRun; kind: TripKind; action?: NavAction; label?: string; full?: boolean }) {
   const [st, setSt] = useState<"idle" | "busy" | "done" | "err">("idle");
   const [msg, setMsg] = useState<string | null>(null);
-  if (!run) return null;
+  // Always shown so guests know it exists; greyed out until the car buttons open (1 hour before pickup).
+  if (!run) return (
+    <div className={full ? "" : "mt-2.5"}>
+      <button type="button" disabled aria-disabled
+        className={full ? "flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.08] text-[15px] font-semibold text-white/50 ring-1 ring-white/10" : "inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white/[0.08] px-4 text-[14px] font-semibold text-white/50 ring-1 ring-white/10"}>
+        <Navigation className="h-4 w-4" /> {label}
+      </button>
+      <p className={`mt-1 text-[12px] text-white/50 ${full ? "text-center" : ""}`}>Works from 1 hour before pickup.</p>
+    </div>
+  );
   const go = async () => {
     setSt("busy"); setMsg(null);
     try { await run(action ?? CHARGERS[kind].action, (s) => setMsg(s)); setSt("done"); setMsg("It's in the car's navigation."); }

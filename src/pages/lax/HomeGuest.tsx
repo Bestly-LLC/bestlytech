@@ -303,8 +303,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2.5">
             <a href={mapsFor(home.address)} onClick={() => track(undefined, "directions")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#132726] active:scale-[0.98]"><Navigation className="h-4 w-4" /> Directions</a>
-            {live ? <SendToCar run={run} kind="home" action="nav_home" label="Send to car" full />
-              : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">Send to car works 1 hour before pickup</span>}
+            <SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send to car" full />
           </div>
           <p className="mt-1.5 px-1 text-[12px] text-white/60">Send to car puts {street} in the car's navigation. Handy for the return.</p>
           <div className="mt-2.5">

@@ -429,8 +429,7 @@ export default function LaxGuest() {
               )}
               <div className="mt-3 grid grid-cols-2 gap-2.5">
                 <a href={maps} onClick={() => track(token || undefined, "directions")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#1A1140] active:scale-[0.98]"><MapPin className="h-4 w-4" /> Directions</a>
-                {live ? <SendToCar run={carCommand} kind="lax" action="nav_garage_lax" label="Send to car" full />
-                  : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">Send to car works 1 hour before pickup</span>}
+                <SendToCar run={live ? carCommand : undefined} kind="lax" action="nav_garage_lax" label="Send to car" full />
               </div>
               <p className="mt-1.5 px-1 text-[12px] text-white/60">Send to car puts the garage ({garage.split(",")[0]}) in the car's navigation. Handy for the return.</p>
               {pub.trip && (
