@@ -21,7 +21,7 @@ export function OpenTuro({ label = "Open the Turo app", className = "", primary 
   );
 }
 
-export function TripDone({ trip, titleFont, charging }: { trip: Trip; titleFont?: string; charging?: Charging | null }) {
+export function TripDone({ trip, titleFont, charging, token }: { trip: Trip; titleFont?: string; charging?: Charging | null; token?: string }) {
   const rows = [
     { icon: Camera, title: "Return photos", body: "If you haven't yet, add your return photos in the Turo app. They protect you." },
     { icon: KeyRound, title: "Your key is off", body: "Tesla access turned off by itself. Nothing to hand back." },
@@ -33,7 +33,7 @@ export function TripDone({ trip, titleFont, charging }: { trip: Trip; titleFont?
     <section aria-label="Trip complete" className="mt-5 rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Trip complete · {fmtWhen(trip.ends_at)}</p>
       <h2 className="mt-1 text-[22px] font-bold leading-snug text-white" style={{ fontFamily: titleFont }}>Thanks for driving with us{trip.first ? `, ${trip.first}` : ""}.</h2>
-      {charging && <div className="mt-4 rounded-2xl bg-white/[0.05] p-3.5 ring-1 ring-white/10"><ChargingCard charging={charging} ended embedded titleFont={titleFont} /></div>}
+      {charging && <div className="mt-4 rounded-2xl bg-white/[0.05] p-3.5 ring-1 ring-white/10"><ChargingCard charging={charging} ended embedded titleFont={titleFont} token={token} /></div>}
       <ol className="mt-3 divide-y divide-white/10">
         {rows.map((r) => (
           <li key={r.title} className="flex items-start gap-3 py-3">

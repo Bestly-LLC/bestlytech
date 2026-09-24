@@ -353,7 +353,7 @@ export default function LaxGuest() {
 
             {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" /></div>}
 
-            {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} /> : <>
+            {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token || undefined} /> : <>
             {/* Same key card as the home page: phone key, extra drivers, and what to do next (with Send to car). */}
             {key && key.state !== "off" && token && (
               <KeyCard k={key} trip={pub.trip} run={live ? carCommand : undefined} token={token} onAdded={() => void reload()}
@@ -431,7 +431,7 @@ export default function LaxGuest() {
               )}
             </Collapse>
 
-            {pub.charging && <ChargingCard charging={pub.charging} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery} />}
+            {pub.charging && <ChargingCard charging={pub.charging} token={token || undefined} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery} />}
 
             {token && pub.trip && new Date(pub.trip.starts_at) > new Date() && (
               <div className="mt-6"><EmailCard token={token} email={pub.email ?? null} reminderAt={pub.reminder_at ?? null} sentAt={pub.reminder_sent_at ?? null} /></div>

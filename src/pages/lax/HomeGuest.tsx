@@ -265,7 +265,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
 
         {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" /></div>}
 
-        {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" /> : <>
+        {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" /> : <>
         {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} token={token} onAdded={() => reload?.()}
           next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} place={homePlace(home.address)} kind="home" maps={mapsFor(home.address)} run={live ? run : undefined}
             go={(w) => { if (w === "return" || w === "pickup") openSheet(w); else { if (w === "before") window.dispatchEvent(new Event("open-before")); document.getElementById(w)?.scrollIntoView({ behavior: "smooth", block: "start" }); } }} /> : null} />}
@@ -300,7 +300,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
           </div>
         </section>
 
-        {pub.charging && <ChargingCard charging={pub.charging} battery={car?.battery} pickupBattery={pub.pickup_battery} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" />}
+        {pub.charging && <ChargingCard charging={pub.charging} token={token} battery={car?.battery} pickupBattery={pub.pickup_battery} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" />}
 
         {pub.trip && new Date(pub.trip.starts_at) > new Date() && (
           <div className="mt-6"><EmailCard token={token} email={pub.email ?? null} reminderAt={pub.reminder_at ?? null} sentAt={pub.reminder_sent_at ?? null} home /></div>

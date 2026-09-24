@@ -35,8 +35,8 @@ const iso = (ms: number) => new Date(ms).toISOString();
 /** Two sample Supercharger stops (the real numbers come from TezLab during the trip, then Tesla's bill). */
 function demoCharging(start: number, ended: boolean) {
   const sessions = [
-    { at: iso(start + 4 * H), place: "Los Angeles, CA - Venice Boulevard", kwh: 14.5, from: 42, to: 77, cost: 7.19, idle: 0, final: ended },
-    { at: iso(start + 20 * H), place: "Santa Monica, CA", kwh: 15.3, from: 42, to: 80, cost: 8.19, idle: ended ? 1.0 : 0, final: ended },
+    { at: iso(start + 4 * H), place: "Los Angeles, CA - Venice Boulevard", kwh: 14.5, from: 42, to: 77, cost: 7.19, idle: 0, final: ended, invoices: ended ? [{ id: "demo-1" }] : null },
+    { at: iso(start + 20 * H), place: "Santa Monica, CA", kwh: 15.3, from: 42, to: 80, cost: 8.19, idle: ended ? 1.0 : 0, final: ended, invoices: ended ? [{ id: "demo-2" }] : null },
   ].filter((x) => +new Date(x.at) < Date.now());
   const total = sessions.reduce((a, x) => a + x.cost + x.idle, 0);
   return { sessions, total: Math.round(total * 100) / 100, idle: ended ? 1 : 0, kwh: Math.round(sessions.reduce((a, x) => a + x.kwh, 0) * 10) / 10,
