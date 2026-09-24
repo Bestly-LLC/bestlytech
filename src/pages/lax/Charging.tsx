@@ -23,22 +23,13 @@ const shortPlace = (p?: string | null) => (p ?? "Supercharger").replace(/, CA\b/
 export type BatteryHealth = { score: "excellent" | "good" | "average" | "poor"; pct: number; range_full: number } | null;
 const HEALTH_WORD: Record<string, string> = { excellent: "Excellent", good: "Good", average: "Normal", poor: "Worn" };
 
-/** One quiet row: how much the battery still holds (ring, in the page's accent) and how far a full charge goes. */
-export function BatteryHealthRow({ h, titleFont }: { h: BatteryHealth | undefined; titleFont?: string }) {
+/** Sub text under the battery bar: "Battery health: Good · 192 mi when full". */
+export function BatteryHealthRow({ h, className = "" }: { h: BatteryHealth | undefined; className?: string }) {
   if (!h) return null;
-  const r = 15, len = 2 * Math.PI * r, pct = Math.max(0, Math.min(100, h.pct));
   return (
-    <div className="flex items-center gap-3" role="group" aria-label={`Battery health ${HEALTH_WORD[h.score]}, holds ${pct}% of new, full charge about ${h.range_full} miles`}>
-      <svg viewBox="0 0 36 36" className="h-11 w-11 shrink-0" aria-hidden>
-        <circle cx="18" cy="18" r={r} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="3.5" />
-        <circle cx="18" cy="18" r={r} fill="none" stroke={ACCENT} strokeWidth="3.5" strokeLinecap="round" strokeDasharray={`${(len * pct) / 100} ${len}`} transform="rotate(-90 18 18)" />
-        <text x="18" y="21" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#fff" style={{ fontFamily: titleFont }}>{pct}%</text>
-      </svg>
-      <div className="min-w-0">
-        <p className="text-[15px] font-semibold text-white">Battery health: <span style={{ color: ACCENT }}>{HEALTH_WORD[h.score]}</span></p>
-        <p className="text-[13px] text-white/65">A full charge goes about <b className="font-semibold text-white/90">{Math.round(h.range_full)} mi</b></p>
-      </div>
-    </div>
+    <p className={`text-[12px] leading-snug text-white/55 ${className}`}>
+      Battery health: <span className="font-semibold" style={{ color: ACCENT }}>{HEALTH_WORD[h.score]}</span> · <span className="whitespace-nowrap">{Math.round(h.range_full)} mi when full</span>
+    </p>
   );
 }
 
@@ -65,11 +56,11 @@ export function ChargingCard({ charging, battery, pickupBattery, health, chargin
         </span>
       </div>
 
-      {/* 2. Battery: now vs the return line, then health. (Hidden while charging: the live charging box shows it.) */}
+      {/* 2. Battery: now vs the return line, health as sub text. (Bar hidden while charging: the live charging box shows it.) */}
       {!ended && (battery != null || health) && (
-        <div className="mt-4 space-y-3 rounded-2xl bg-white/[0.05] p-3 ring-1 ring-white/10">
+        <div className="mt-4 rounded-2xl bg-white/[0.05] p-3 ring-1 ring-white/10">
           {battery != null && !charging_now && (
-            <div>
+            <>
               <div className="flex items-baseline justify-between text-[14px]">
                 <span className="text-white/80">Battery <b className="text-[17px] tabular-nums text-white">{battery}%</b></span>
                 {pickupBattery != null && <span className="text-white/65">Return at <b className="tabular-nums text-white">{pickupBattery}%+</b></span>}
@@ -79,10 +70,9 @@ export function ChargingCard({ charging, battery, pickupBattery, health, chargin
                 {pickupBattery != null && <span className="absolute -top-1 h-4 w-[2px] rounded bg-white" style={{ left: `${Math.min(100, pickupBattery)}%` }} />}
               </div>
               {short != null && short > 0 && <p className="mt-1.5 text-[13px] text-white/65">Add about {short}% before you return.</p>}
-            </div>
+            </>
           )}
-          {battery != null && !charging_now && health && <div className="h-px bg-white/10" aria-hidden />}
-          <BatteryHealthRow h={health} titleFont={titleFont} />
+          <BatteryHealthRow h={health} className={battery != null && !charging_now ? "mt-1.5" : ""} />
         </div>
       )}
 
