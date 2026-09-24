@@ -1,42 +1,43 @@
 /**
- * Luggage-themed trip navigation for the LAX guest page:
- *  - TagBar: sticky bottom bar with two luggage-tag buttons (Pickup / Return).
+ * Trip navigation for the guest pages:
+ *  - TagBar: sticky bottom bar with two buttons (Pickup / Return): boarding passes on LAX, midcentury tiles at home.
  *  - TripSheet: bottom sheet with the steps. Close with the X, the backdrop, Escape,
  *    or by dragging the three-bar handle down (like closing a suitcase lid).
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { BaggageClaim, Car, House, PlaneTakeoff, X } from "lucide-react";
+import { PlaneLanding, PlaneTakeoff, X } from "lucide-react";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 
 type Which = "pickup" | "return";
 
-/** A luggage tag: punched eyelet, strap loop, stitched edge. */
-function Tag({ which, active, onClick, home }: { which: Which; active: boolean; onClick: () => void; home?: boolean }) {
+/** LAX: a boarding pass. Main part (Arriving / Pickup), a perforated tear line with punched notches, and a stub
+ *  with the route like a flight (LAX → CAR, CAR → LAX). */
+function Tag({ which, active, onClick }: { which: Which; active: boolean; onClick: () => void }) {
   const pickup = which === "pickup";
-  const Icon = home ? (pickup ? Car : House) : pickup ? BaggageClaim : PlaneTakeoff;
+  const Icon = pickup ? PlaneLanding : PlaneTakeoff;
+  const bg = pickup ? PEACH : "var(--trip-accent-2, #E4527A)";
+  const notch = "var(--trip-notch, #150d38)";
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded={active}
-      className="group relative flex h-[60px] flex-1 items-center gap-2.5 rounded-[14px] pl-9 pr-3 text-left shadow-lg shadow-black/30 transition active:scale-[0.97] motion-reduce:transition-none"
-      style={{
-        background: pickup ? PEACH : "var(--trip-accent-2, #EDE7FF)",
-        color: "#1A1140",
-        // notched tag corners on the eyelet side
-        clipPath: "polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px), 0 14px)",
-      }}
-    >
-      {/* stitching */}
-      <span aria-hidden className="pointer-events-none absolute inset-[4px] rounded-[11px] border border-dashed border-[#1A1140]/30"
-        style={{ clipPath: "polygon(11px 0, 100% 0, 100% 100%, 11px 100%, 0 calc(100% - 11px), 0 11px)" }} />
-      {/* eyelet + strap */}
-      <span aria-hidden className="absolute left-[11px] top-1/2 h-[12px] w-[12px] -translate-y-1/2 rounded-full bg-[#1A1140] ring-[3px] ring-[#1A1140]/25" />
-      <Icon className="h-6 w-6 shrink-0" strokeWidth={2} aria-hidden />
-      <span className="min-w-0">
-        <span className="block text-[10px] font-bold uppercase tracking-[0.16em] opacity-60">{pickup ? "Arriving" : "Leaving"}</span>
-        <span className="block text-[17px] font-bold leading-tight">{pickup ? "Pickup" : "Return"}</span>
+    <button type="button" onClick={onClick} aria-expanded={active} aria-label={pickup ? "Pickup steps" : "Return steps"}
+      className="relative flex h-[60px] flex-1 overflow-hidden rounded-[12px] text-left text-[#1A1140] shadow-lg shadow-black/30 transition active:scale-[0.97] motion-reduce:transition-none"
+      style={{ background: bg }}>
+      <span className="flex min-w-0 flex-1 items-center gap-2 pl-3 pr-1">
+        <Icon className="h-6 w-6 shrink-0" strokeWidth={2} aria-hidden />
+        <span className="min-w-0">
+          <span className="block text-[9px] font-bold uppercase tracking-[0.18em] opacity-60">{pickup ? "Arriving" : "Leaving"}</span>
+          <span className="block text-[17px] font-bold leading-tight">{pickup ? "Pickup" : "Return"}</span>
+        </span>
+      </span>
+      {/* tear line: dashed, with half-circle punches top and bottom */}
+      <span aria-hidden className="relative w-0 border-l-2 border-dashed border-[#1A1140]/30">
+        <span className="absolute -left-[8px] -top-[7px] h-[14px] w-[14px] rounded-full" style={{ background: notch }} />
+        <span className="absolute -bottom-[7px] -left-[8px] h-[14px] w-[14px] rounded-full" style={{ background: notch }} />
+      </span>
+      <span aria-hidden className="flex w-[52px] shrink-0 flex-col items-center justify-center font-mono leading-none">
+        <span className="text-[12px] font-bold tracking-wider">{pickup ? "LAX" : "CAR"}</span>
+        <span className="my-[3px] text-[9px] opacity-60">▼</span>
+        <span className="text-[12px] font-bold tracking-wider">{pickup ? "CAR" : "LAX"}</span>
       </span>
     </button>
   );
@@ -59,17 +60,17 @@ function Ticket({ which, active, onClick }: { which: Which; active: boolean; onC
   );
 }
 
-export function TagBar({ open, onOpen, top, variant }: { open: Which | null; onOpen: (w: Which) => void; top?: ReactNode; variant?: "lax" | "home" }) {
+export function TagBar({ open, onOpen, top, variant, hideTags }: { open: Which | null; onOpen: (w: Which) => void; top?: ReactNode; variant?: "lax" | "home"; hideTags?: boolean }) {
   return (
     <nav aria-label="Trip steps" className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[color:var(--trip-bar,rgba(20,12,51,0.9))] backdrop-blur-md"
       style={{ paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
       {/* luggage strap across the bar */}
       <div aria-hidden className="h-[3px] w-full" style={{ background: "var(--trip-strap, repeating-linear-gradient(90deg, #FFB87855 0 10px, transparent 10px 16px))" }} />
       {top && <div className="mx-auto max-w-md px-4 pt-2.5">{top}</div>}
-      <div className="mx-auto flex max-w-md gap-3 px-4 pt-2.5">
+      {!hideTags && <div className="mx-auto flex max-w-md gap-3 px-4 pt-2.5">
         {variant === "home" ? <Ticket which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} /> : <Tag which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} />}
         {variant === "home" ? <Ticket which="return" active={open === "return"} onClick={() => onOpen("return")} /> : <Tag which="return" active={open === "return"} onClick={() => onOpen("return")} />}
-      </div>
+      </div>}
     </nav>
   );
 }

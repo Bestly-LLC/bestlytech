@@ -22,6 +22,7 @@ import HomeGuest, { CarButton, KeyCard, Section, type CarAction, type HomeInfo, 
 import { HomeGuide, VideoList, VideoPlayer } from "./lax/HomeGuide";
 import { ChargerLine, KeyNextSteps } from "./lax/KeyNext";
 import { laxPlace } from "./lax/places";
+import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
 import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPub, isDemo, useDemoStage } from "./lax/demo";
 
@@ -263,6 +264,7 @@ export default function LaxGuest() {
   }, [pub?.controls, pub?.car, token, slug]);
 
   const key: KeyInfo | null = pub?.key ?? null;
+  const ended = tripEnded(pub?.trip);
   const live = !!pub?.controls || demo;
   const g = pub?.guide ?? {};
   const garage = g.garage || "5730 W 98th St, LA 90045";
@@ -346,10 +348,11 @@ export default function LaxGuest() {
           </div>
         ) : (
           <>
-            <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Your QR code that opens the lobby door is below{key ? <>, and your phone is the car key</> : null}. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for step-by-step directions.</p>
+            {!ended && <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Your QR code that opens the lobby door is below{key ? <>, and your phone is the car key</> : null}. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for step-by-step directions.</p>}
 
             {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" /></div>}
 
+            {ended && pub.trip ? <TripDone trip={pub.trip} /> : <>
             {/* Same key card as the home page: phone key, extra drivers, and what to do next (with Send to car). */}
             {key && key.state !== "off" && token && (
               <KeyCard k={key} trip={pub.trip} run={live ? carCommand : undefined} token={token} onAdded={() => void reload()}
@@ -446,6 +449,8 @@ export default function LaxGuest() {
               <VideoList />
             </Section>
 
+            </>}
+
             <TripSheet open={sheet === "pickup"} onClose={() => openSheet(null)} kicker="Baggage claim → your car" title="Pickup: plane → shuttle → garage">
 
               <p className="text-[15px] leading-relaxed text-white/75">About 20 minutes from wheels-down to driving away. Follow the steps in order.</p>
@@ -491,6 +496,7 @@ export default function LaxGuest() {
                 </div>
               )}
 
+              <OpenTuro className="mt-6 w-full" label="Open Turo for check-in photos" />
               <p className="mt-6 flex items-center gap-2 text-sm text-white/60"><Sun className="h-4 w-4" style={{ color: PEACH }} /> Screen brightness up helps the QR scan on the first try.</p>
             
             </TripSheet>
@@ -522,6 +528,7 @@ export default function LaxGuest() {
                   <Ok>Allow <b className="text-white">at least 1 hour</b> before your terminal arrival for return + shuttle + TSA buffer.</Ok>
                 </Step>
               </ol>
+              <OpenTuro className="mt-6 w-full" label="Open Turo for return photos" />
 
               {phone && (
                 <div className="mt-8 rounded-2xl p-4 ring-1 ring-white/10" style={{ background: "linear-gradient(135deg, rgba(122,46,158,0.35), rgba(228,82,122,0.25))" }}>
@@ -535,7 +542,7 @@ export default function LaxGuest() {
               )}
             
             </TripSheet>
-            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} />
+            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} hideTags={ended} />
             {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} />}
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
             <VideoPlayer />

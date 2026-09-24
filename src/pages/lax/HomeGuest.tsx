@@ -21,6 +21,7 @@ import ExtraDrivers from "./ExtraDrivers";
 import { Collapse } from "./Collapse";
 import { ChargerLine, KeyNextSteps, KeyPending, keyTapped, markKeyTapped, useKeyWatch } from "./KeyNext";
 import { homePlace } from "./places";
+import { OpenTuro, TripDone, tripEnded } from "./TripDone";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -212,6 +213,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
   const spot = pub.spot ?? (demoCar ? { lat: home.lat, lon: home.lon, observed_at: new Date(Date.now() - 4 * 60e3).toISOString() } : null);
   const street = home.address.split(",")[0];
   const shadow = { textShadow: "0 2px 14px rgba(19,39,38,0.9), 0 1px 2px rgba(19,39,38,0.9)" };
+  const ended = tripEnded(pub.trip);
   const lockedUntil = demoCar ? null : pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending";
 
   return (
@@ -237,10 +239,11 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
       <DecoRule className="mx-5 -mt-px" />
 
       <main className="mx-auto max-w-md px-5 pb-48 pt-5">
-        <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">Tesla Model 3</b> on <b className="text-white">Turo</b>. It's parked on the street at <b className="text-white">{street}</b>. Your phone is the key: no meetup, no keys to hand over. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for the steps.</p>
+        {!ended && <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">Tesla Model 3</b> on <b className="text-white">Turo</b>. It's parked on the street at <b className="text-white">{street}</b>. Your phone is the key: no meetup, no keys to hand over. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for the steps.</p>}
 
         {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" /></div>}
 
+        {ended && pub.trip ? <TripDone trip={pub.trip} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" /> : <>
         {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} token={token} onAdded={() => reload?.()}
           next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} place={homePlace(home.address)} kind="home" maps={mapsFor(home.address)} run={live ? run : undefined}
             go={(w) => { if (w === "return" || w === "pickup") openSheet(w); else { if (w === "before") window.dispatchEvent(new Event("open-before")); document.getElementById(w)?.scrollIntoView({ behavior: "smooth", block: "start" }); } }} /> : null} />}
@@ -289,6 +292,8 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
           <Section kicker="From your host"><p className="text-white/90">{pub.home.host_note}</p></Section>
         )}
 
+        </>}
+
         <TripSheet open={sheet === "pickup"} onClose={() => openSheet(null)} kicker="Street → your car" title={`Pickup at ${street}`}>
           <p className="text-[15px] leading-relaxed text-white/75">About 5 minutes once you're here. Follow the steps in order.</p>
           <ol className="mt-5 space-y-4">
@@ -298,7 +303,8 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
             <Step n={4}><b className="text-white">Unlock</b> with the Tesla app, then take your check-in photos all around the car in the Turo app.</Step>
             <Step n={5}><b className="text-white">Drive:</b> sit down, press the brake, and push the <b className="text-white">right stalk</b> down for Drive. Up is Reverse.</Step>
           </ol>
-          <p className="mt-5 text-[14px] text-white/60">Hot or cold out? Use Cool it down or Warm it up on the main page before you walk over.</p>
+          <OpenTuro className="mt-5 w-full" label="Open Turo for check-in photos" />
+          <p className="mt-4 text-[14px] text-white/60">Hot or cold out? Use Cool it down or Warm it up on the main page before you walk over.</p>
         </TripSheet>
 
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
@@ -309,10 +315,11 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
             <Step n={3}><b className="text-white">Street sweeping:</b> don't leave it on the <b className="text-white">west side Monday 8–10 AM</b> or the <b className="text-white">east side Tuesday 8–10 AM</b>. Tickets are $75.</Step>
             <Step n={4}><b className="text-white">Photos + lock:</b> take your return photos in the Turo app, grab your stuff, and lock it in the Tesla app.</Step>
           </ol>
-          <p className="mt-5 text-[14px] text-white/60">Your Tesla access turns off by itself after the trip. Nothing to hand back.</p>
+          <OpenTuro className="mt-5 w-full" label="Open Turo for return photos" />
+          <p className="mt-4 text-[14px] text-white/60">Your Tesla access turns off by itself after the trip. Nothing to hand back.</p>
         </TripSheet>
 
-        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" />
+        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended} />
         <VideoPlayer />
         <ScrollFx />
         <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home />

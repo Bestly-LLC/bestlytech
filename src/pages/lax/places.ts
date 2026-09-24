@@ -38,3 +38,6 @@ export const laxPlace = (garage: string, level: string): Place => ({
   returnTo: `Back to ${garage.split(",")[0]}, level ${level}, through the carshare return lane. Changes go through the Turo app.`,
   returnSoon: `Carshare return lane on 98th St, park on ${level} only, then the shuttle to LAX. Allow 1 hour before your terminal.`,
 });
+
+/** Opens the Turo app when it's installed (turo.com universal link), otherwise the Trips page on turo.com. */
+export const TURO_TRIPS = "https://turo.com/us/en/trips";

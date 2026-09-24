@@ -83,8 +83,8 @@ const ArtPhoneKey = () => (
 
 type Slide = { art: () => JSX.Element; kicker: string; title: string; body: ReactNode; cta?: { label: string; href: string } };
 
-const turoApp = () => /android/i.test(typeof navigator === "undefined" ? "" : navigator.userAgent)
-  ? "https://play.google.com/store/apps/details?id=com.relayrides.android.relayrides" : "https://apps.apple.com/us/app/turo-better-car-rental/id555063314";
+// turo.com universal link: opens the Turo app when installed, otherwise the Trips page.
+const turoApp = () => "https://turo.com/us/en/trips";
 
 const SLIDES: Slide[] = [
   { art: ArtChanges, kicker: "1 · Changes to your trip", title: "Change it in the Turo app",

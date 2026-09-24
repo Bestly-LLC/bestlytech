@@ -6,11 +6,11 @@
  *  - KeyNextSteps: once the key is added, what to do next based on where they are in the trip.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { BatteryCharging, CheckCircle2, Clock, KeyRound, Loader2, MapPin, Navigation, RotateCcw, Snowflake, Smartphone, Undo2 } from "lucide-react";
+import { BatteryCharging, CheckCircle2, Clock, ExternalLink, KeyRound, Loader2, MapPin, Navigation, RotateCcw, Snowflake, Smartphone, Undo2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtWhen, type Trip } from "./GuestExtras";
 import { track } from "./track";
-import { CHARGERS, chargerMaps, type Place, type TripKind } from "./places";
+import { CHARGERS, TURO_TRIPS, chargerMaps, type Place, type TripKind } from "./places";
 
 const ACCENT = "var(--trip-accent)";
 const tapKey = (t: string) => `keytap:${t}`;
@@ -83,7 +83,8 @@ export function KeyPending({ token, link, onAdded }: { token: string; link: stri
   );
 }
 
-type Step = { icon: typeof Clock; title: string; body: ReactNode; action?: { label: string; onClick?: () => void; href?: string }; send?: boolean };
+type Step = { icon: typeof Clock; title: string; body: ReactNode; action?: { label: string; onClick?: () => void; href?: string; ext?: boolean }; send?: boolean };
+const TURO = { label: "Open Turo", href: TURO_TRIPS, ext: true };
 
 /** "Closest Supercharger: <name>, <street>" with the street linked to Maps. */
 export const ChargerLine = ({ kind }: { kind: TripKind }) => {
@@ -134,12 +135,12 @@ export function KeyNextSteps({ trip, pickupBattery, place, kind, maps, go, run }
     steps = [
       { icon: Smartphone, title: "Open the Tesla app and tap Unlock", body: "First time? The app asks you to set up your phone as the key. Keep Bluetooth on." },
       { icon: MapPin, title: "Not sure which car?", body: "Tap Honk or Flash lights and it'll beep or blink.", action: { label: "Find the car", onClick: () => go("climate") } },
-      { icon: CheckCircle2, title: "Take your check-in photos", body: "All around the car, in the Turo app, before you drive off." },
+      { icon: CheckCircle2, title: "Take your check-in photos", body: "All around the car, in the Turo app, before you drive off.", action: TURO },
     ];
   } else if (now < e - 3 * H) {
     title = "Enjoy the drive";
     steps = [
-      { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, body: place.returnTo },
+      { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, body: place.returnTo, action: TURO },
       { icon: BatteryCharging, title: pickupBattery != null ? `Bring it back with at least ${pickupBattery}%` : "Bring it back with the charge you picked up", body: <ChargerLine kind={kind} />, send: true },
     ];
   } else {
@@ -147,7 +148,7 @@ export function KeyNextSteps({ trip, pickupBattery, place, kind, maps, go, run }
     steps = [
       { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, body: place.returnSoon, action: { label: "Return steps", onClick: () => go("return") } },
       { icon: BatteryCharging, title: pickupBattery != null ? `Charge to at least ${pickupBattery}%` : "Charge back to pickup level", body: <>Avoids Turo's recharge fee. <ChargerLine kind={kind} /></>, send: true },
-      { icon: CheckCircle2, title: "Photos, grab your stuff, lock it", body: "Return photos in the Turo app, then lock in the Tesla app. Your access ends by itself." },
+      { icon: CheckCircle2, title: "Photos, grab your stuff, lock it", body: "Return photos in the Turo app, then lock in the Tesla app. Your access ends by itself.", action: TURO },
     ];
   }
   return (
@@ -163,7 +164,7 @@ export function KeyNextSteps({ trip, pickupBattery, place, kind, maps, go, run }
               {st.send && <SendToCar run={run} kind={kind} />}
             </div>
             {st.action && (st.action.href
-              ? <a href={st.action.href} className="shrink-0 rounded-full bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95"><Navigation className="mr-1 inline h-3.5 w-3.5" />{st.action.label}</a>
+              ? <a href={st.action.href} {...(st.action.ext ? { target: "_blank", rel: "noreferrer", onClick: () => track(undefined, "turo_app") } : {})} className="inline-flex min-h-[36px] shrink-0 items-center rounded-full bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95">{st.action.ext ? <ExternalLink className="mr-1 h-3.5 w-3.5" /> : <Navigation className="mr-1 h-3.5 w-3.5" />}{st.action.label}</a>
               : <button type="button" onClick={st.action.onClick} className="min-h-[36px] shrink-0 rounded-full bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95">{st.action.label}</button>)}
           </li>
         ))}
