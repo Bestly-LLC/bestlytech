@@ -4,7 +4,7 @@
  * Data comes from lax_guest_public (page) and weatherkit-proxy (Apple WeatherKit, public, cached).
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { Armchair, BatteryMedium, Car, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSun, Flame, Loader2, Lock, LockOpen, Mail, Moon, Power, Snowflake, Sun, Thermometer, Wind, Zap } from "lucide-react";
+import { Armchair, ArrowRight, BatteryMedium, Car, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSun, Fan, Flame, Loader2, Lock, LockOpen, Mail, Moon, Power, Snowflake, Sun, Thermometer, Wind, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const PEACH = "#FFB878";
@@ -21,6 +21,7 @@ export type Trip = { first: string | null; starts_at: string; ends_at: string; c
 export type CarState = {
   battery: number | null; range: number | null; inside_f: number | null; outside_f: number | null;
   locked: boolean | null; charging: string | null; online: string | null; observed_at: string; name: string | null; climate_on?: boolean | null;
+  climate_mode?: string | null; climate_until?: string | null;
 };
 
 function Card({ label, icon, children }: { label: string; icon: ReactNode; children: ReactNode }) {
@@ -32,16 +33,94 @@ function Card({ label, icon, children }: { label: string; icon: ReactNode; child
   );
 }
 
-export function TripCard({ trip }: { trip: Trip }) {
+const dayPart = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: LA });
+const timeParts = (iso: string) => {
+  const t = fmtTime(iso); // "9:00 PM"
+  const i = t.lastIndexOf(" ");
+  return { hm: t.slice(0, i), ap: t.slice(i + 1) };
+};
+function span(ms: number) {
+  const h = Math.round(ms / 3600000);
+  if (h < 24) return `${h} hr`;
+  const d = Math.round(h / 24);
+  return `${d} day${d === 1 ? "" : "s"}`;
+}
+function tripStatus(trip: Trip, now: number) {
+  const s = +new Date(trip.starts_at), e = +new Date(trip.ends_at);
+  const rel = (ms: number) => { const m = Math.round(ms / 60000); return m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} hr` : `${Math.round(m / 1440)} day${Math.round(m / 1440) === 1 ? "" : "s"}`; };
+  if (now < s) return { text: `Starts in ${rel(s - now)}`, live: false };
+  if (now < e) return { text: `On trip · ${rel(e - now)} left`, live: true };
+  return { text: "Trip ended", live: false };
+}
+function Stop({ label, iso, align }: { label: string; iso: string; align: "left" | "right" }) {
+  const { hm, ap } = timeParts(iso);
   return (
-    <Card label="Your Turo trip" icon={<Car className="h-3.5 w-3.5" />}>
-      <img src="/wallet/lax/car.jpg" alt="Your Tesla Model 3" className="mb-3 aspect-[16/10] w-full rounded-xl object-cover" />
-      <div className="grid grid-cols-2 gap-3 text-[15px]">
-        <div><p className="text-xs text-white/55">Pickup</p><p className="font-semibold text-white">{fmtWhen(trip.starts_at)}</p></div>
-        <div><p className="text-xs text-white/55">Return</p><p className="font-semibold text-white">{fmtWhen(trip.ends_at)}</p></div>
-      </div>
-    </Card>
+    <div className={align === "right" ? "text-right" : ""}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/55">{label}</p>
+      <p className="mt-0.5 font-semibold leading-none text-white tabular-nums"><span className="text-[30px] tracking-tight">{hm}</span><span className="ml-1 text-[13px] text-white/70">{ap}</span></p>
+      <p className="mt-1 text-[14px] text-white/75">{dayPart(iso)}</p>
+    </div>
   );
+}
+
+/** Trip dates, laid out like a boarding pass in Apple Wallet: pickup → return, with the length of the trip between. */
+export function TripCard({ trip }: { trip: Trip }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 60000); return () => window.clearInterval(t); }, []);
+  const st = tripStatus(trip, now);
+  return (
+    <section aria-label="Your Turo trip" className="rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}><Car className="h-3.5 w-3.5" />Your Turo trip</p>
+        <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${st.live ? "bg-emerald-400/15 text-emerald-300" : "bg-white/10 text-white/80"}`}>{st.text}</span>
+      </div>
+      <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <Stop label="Pickup" iso={trip.starts_at} align="left" />
+        <div className="flex flex-col items-center gap-1 px-1 text-white/55" aria-label={`Trip length ${span(+new Date(trip.ends_at) - +new Date(trip.starts_at))}`}>
+          <div className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-white/40" />
+            <span className="w-6 border-t border-dashed border-white/35" />
+            <ArrowRight className="h-4 w-4" style={{ color: PEACH }} aria-hidden />
+          </div>
+          <span className="text-[12px] font-medium tabular-nums">{span(+new Date(trip.ends_at) - +new Date(trip.starts_at))}</span>
+        </div>
+        <Stop label="Return" iso={trip.ends_at} align="right" />
+      </div>
+    </section>
+  );
+}
+
+// ---------- Comfort: what to suggest, based on the car's inside temp (target ~72°F) ----------
+export type Need = "cool" | "warm" | "comfy" | null;
+export function climateNeed(inside?: number | null, outside?: number | null): Need {
+  if (inside != null) {
+    if (inside >= 77 || (outside != null && outside >= 85 && inside >= 74)) return "cool";
+    if (inside <= 65 || (outside != null && outside <= 55 && inside <= 68)) return "warm";
+    return "comfy";
+  }
+  if (outside == null) return null;
+  if (outside >= 80) return "cool";
+  if (outside <= 60) return "warm";
+  return "comfy";
+}
+const seatNeeded = (inside?: number | null, outside?: number | null) => (inside ?? outside ?? 99) <= 60;
+
+/** One line above the weather + car tiles: what to do before heading over. */
+export function ClimateAdvice({ car, outsideF }: { car: CarState | null; outsideF: number | null }) {
+  const inside = car?.inside_f ?? null;
+  const outside = car?.outside_f ?? outsideF;
+  if (car?.climate_until && +new Date(car.climate_until) > Date.now()) {
+    return <p className="flex items-center gap-2 text-[15px] font-medium text-white/90"><Fan className="h-4 w-4 shrink-0 animate-spin text-sky-300 motion-reduce:animate-none" aria-hidden />Climate is on. The car will be comfy when you get there.</p>;
+  }
+  const need = climateNeed(inside, outside);
+  if (!need) return null;
+  const t = Math.round((inside ?? outside)!);
+  const where = inside != null ? "in the car" : "outside";
+  const [Icon, color, text] =
+    need === "cool" ? [Snowflake, "text-sky-300", `It's ${t}° ${where}. Turn on the A/C before you head over.`] :
+    need === "warm" ? [Flame, "text-orange-300", `It's chilly: ${t}° ${where}. Warm it up before you head over.`] :
+    [Thermometer, "text-emerald-300", `The car's a comfortable ${t}°. No need for the A/C.`];
+  return <p className="flex items-start gap-2 text-[15px] font-medium leading-snug text-white/90"><Icon className={`mt-0.5 h-4 w-4 shrink-0 ${color}`} aria-hidden />{text}</p>;
 }
 
 type Hour = { forecastStart: string; temperature: number; conditionCode: string; precipitationChance: number; daylight?: boolean };
@@ -86,11 +165,12 @@ const sameHour = (a: string, b: string) => Math.abs(+new Date(a) - +new Date(b))
 const rainPct = (p: number) => (p >= 0.3 ? `${Math.round(p * 10) * 10}%` : null);
 
 /** Apple Weather at LAX, laid out like the Weather app: big temp, hourly strip with the pickup hour marked, then pickup/return rows. */
-export function WeatherCard({ trip, compact = false }: { trip: Trip | null; compact?: boolean }) {
+export function WeatherCard({ trip, compact = false, onNow }: { trip: Trip | null; compact?: boolean; onNow?: (f: number) => void }) {
   const [wx, setWx] = useState<Wx | null | "loading">("loading");
   useEffect(() => {
     supabase.functions.invoke("weatherkit-proxy", { body: { lat: 33.947, lon: -118.3816, dataSets: "currentWeather,forecastHourly,forecastDaily" } })
-      .then(({ data }) => setWx((data as Wx) ?? null)).catch(() => setWx(null));
+      .then(({ data }) => { setWx((data as Wx) ?? null); const c = (data as Wx | null)?.currentWeather?.temperature; if (c != null) onNow?.(cToF(c)); }).catch(() => setWx(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (wx === "loading") return <div className={`${compact ? "h-full min-h-[220px]" : "h-[260px]"} animate-pulse rounded-3xl bg-white/[0.06] motion-reduce:animate-none`} aria-label="Loading weather" />;
   if (!wx?.currentWeather) return null;
@@ -223,52 +303,129 @@ const CLIMATE: { id: ClimateAction; label: string; sub: string; icon: typeof Sno
   { id: "seat", label: "Heated seat", sub: "Driver seat, high", icon: Armchair },
   { id: "off", label: "Turn off", sub: "Stop climate", icon: Power },
 ];
+const CLIMATE_MINUTES = 20;
+const MODE_TEXT: Record<string, string> = { cool: "Cooling to 68°", warm: "Heating to 74°", seat: "Seat heat + climate" };
 
-/** Climate buttons. Live mode is wired once Tesla access is connected; demo mode only shows what would happen. */
-function ClimateControls({ demo, onAction, compact = false, lockedUntil }: { demo: boolean; onAction?: (a: ClimateAction, onStage?: (s: string) => void) => Promise<void>; compact?: boolean; lockedUntil?: string | null }) {
+function useNow(active: boolean) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [active]);
+  return now;
+}
+const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+
+/** Climate running: spinning fan, what it's doing, and a countdown to the automatic 20-minute shut-off. */
+function ClimateOn({ mode, until, onOff, busy }: { mode: string; until: string; onOff: () => void; busy: boolean }) {
+  const now = useNow(true);
+  const left = +new Date(until) - now;
+  const frac = Math.min(1, Math.max(0, left / (CLIMATE_MINUTES * 60000)));
+  const cool = mode === "cool";
+  return (
+    <div role="status" aria-live="polite" className={`overflow-hidden rounded-2xl p-3 ring-1 ${cool ? "bg-sky-400/10 ring-sky-300/30" : "bg-orange-400/10 ring-orange-300/30"}`}>
+      <div className="flex items-center gap-2.5">
+        <Fan className={`h-8 w-8 shrink-0 animate-[spin_1.1s_linear_infinite] motion-reduce:animate-none ${cool ? "text-sky-300" : "text-orange-300"}`} aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${cool ? "text-sky-200" : "text-orange-200"}`}>Climate on</p>
+          <p className="truncate text-[13px] font-medium text-white/85">{MODE_TEXT[mode] ?? "Running"}</p>
+        </div>
+        <p className="text-[22px] font-semibold leading-none text-white tabular-nums" aria-label={`${mmss(left)} left`}>{mmss(left)}</p>
+      </div>
+      <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-white/10">
+        <div className={`h-full w-full origin-left rounded-full transition-transform duration-1000 ease-linear ${cool ? "bg-sky-300" : "bg-orange-300"}`} style={{ transform: `scaleX(${frac})` }} />
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="text-[11px] leading-snug text-white/55">Turns off by itself at {fmtTime(until)}</p>
+        <button type="button" onClick={onOff} disabled={busy}
+          className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-white/10 px-3 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95 disabled:opacity-50">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" style={{ color: PEACH }} />} Turn off
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Climate buttons. Only the ones that make sense for the temperature right now (72° is the goal); "More" shows the rest. */
+function ClimateControls({ demo, onAction, compact = false, lockedUntil, car }: { demo: boolean; onAction?: (a: ClimateAction, onStage?: (s: string) => void) => Promise<void>; compact?: boolean; lockedUntil?: string | null; car?: CarState | null }) {
   const [busy, setBusy] = useState<ClimateAction | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [stage, setStage] = useState<string | null>(null);
   const [secs, setSecs] = useState(0);
+  const [all, setAll] = useState(false);
+  // Demo: pretend the car turned on, so the countdown can be previewed.
+  const [demoOn, setDemoOn] = useState<{ mode: string; until: string } | null>(null);
   useEffect(() => {
     if (!busy) return;
     setSecs(0);
     const t = window.setInterval(() => setSecs((x) => x + 1), 1000);
     return () => window.clearInterval(t);
   }, [busy]);
-  const press = async (a: (typeof CLIMATE)[number]) => {
-    setBusy(a.id); setDone(null); setStage("Sending your request");
+  const now = useNow(true);
+  const session = demoOn ?? (car?.climate_until && car.climate_mode ? { mode: car.climate_mode, until: car.climate_until } : null);
+  const running = session && +new Date(session.until) > now ? session : null;
+
+  const press = async (id: ClimateAction) => {
+    const a = CLIMATE.find((x) => x.id === id)!;
+    setBusy(id); setDone(null); setStage("Sending your request");
     try {
-      if (demo || !onAction) await new Promise((r) => setTimeout(r, 900));
-      else await onAction(a.id, setStage);
-      setDone(a.id === "off" ? "Climate is off." : `${a.label}: on. Give it about 10 minutes.`);
+      if (demo || !onAction) {
+        await new Promise((r) => setTimeout(r, 900));
+        setDemoOn(id === "off" ? null : { mode: id, until: new Date(Date.now() + CLIMATE_MINUTES * 60000).toISOString() });
+      } else await onAction(id, setStage);
+      setDone(id === "off" ? "Climate is off." : `${a.label}: on for ${CLIMATE_MINUTES} minutes.`);
     } catch (e) {
       setDone(`Couldn't reach the car. ${(e as Error).message ?? ""}`.trim());
     } finally { setBusy(null); setStage(null); }
   };
+
+  const inside = car?.inside_f ?? null, outside = car?.outside_f ?? null;
+  const need = climateNeed(inside, outside);
+  const suggested: ClimateAction[] =
+    need === "cool" ? ["cool"] :
+    need === "warm" ? (seatNeeded(inside, outside) ? ["warm", "seat"] : ["warm"]) :
+    need === "comfy" ? [] : ["cool", "warm"];
+  const shown: ClimateAction[] = all ? ["cool", "warm", "seat"] : suggested;
+  const locked = !!lockedUntil;
+
   return (
     <div className={compact ? "mt-3" : "mt-4 border-t border-white/10 pt-4"}>
       {!compact && <p className="text-[13px] font-semibold text-white">Get the car comfortable before you arrive</p>}
-      <div className={compact ? "grid gap-1.5" : "mt-2.5 grid grid-cols-2 gap-2"}>
-        {CLIMATE.map((a) => {
-          const Icon = a.icon;
-          return (
-            <button key={a.id} type="button" onClick={() => press(a)} disabled={busy !== null || !!lockedUntil} aria-disabled={!!lockedUntil}
-              className={`flex items-center gap-2.5 rounded-xl bg-white/[0.08] text-left ring-1 ring-white/10 transition active:scale-[0.98] disabled:opacity-40 disabled:saturate-0 ${compact ? "min-h-[44px] px-2.5 py-1.5" : "min-h-[56px] px-3 py-2.5"}`}>
-              {busy === a.id ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" style={{ color: PEACH }} /> : <Icon className="h-5 w-5 shrink-0" style={{ color: PEACH }} />}
-              <span><span className="block text-[14px] font-semibold leading-tight text-white">{a.label}</span>{!compact && <span className="block text-[12px] text-white/55">{a.sub}</span>}</span>
-            </button>
-          );
-        })}
-      </div>
-      <p className={`mt-2 min-h-[1.25rem] text-[12px] leading-snug ${busy ? "text-white/75" : done?.startsWith("Couldn't") ? "text-red-300" : "text-emerald-300"}`} aria-live="polite">
+      {running && !locked ? (
+        <ClimateOn mode={running.mode} until={running.until} busy={busy === "off"} onOff={() => press("off")} />
+      ) : (
+        <>
+          {need === "comfy" && !all && (
+            <p className="rounded-xl bg-emerald-400/10 px-3 py-2 text-[13px] leading-snug text-emerald-200 ring-1 ring-emerald-300/25">Already comfortable inside. No A/C needed.</p>
+          )}
+          <div className={compact ? "grid gap-1.5" : "mt-2.5 grid grid-cols-2 gap-2"}>
+            {shown.map((id, i) => {
+              const a = CLIMATE.find((x) => x.id === id)!;
+              const Icon = a.icon;
+              const primary = i === 0 && !all && need !== "comfy";
+              return (
+                <button key={id} type="button" onClick={() => press(id)} disabled={busy !== null || locked} aria-disabled={locked}
+                  className={`flex items-center gap-2.5 rounded-xl text-left ring-1 transition active:scale-[0.98] disabled:opacity-40 disabled:saturate-0 ${primary ? (id === "cool" ? "bg-sky-400/20 ring-sky-300/40" : "bg-orange-400/20 ring-orange-300/40") : "bg-white/[0.08] ring-white/10"} ${compact ? "min-h-[48px] px-2.5 py-1.5" : "min-h-[56px] px-3 py-2.5"}`}>
+                  {busy === id ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" style={{ color: PEACH }} /> : <Icon className="h-5 w-5 shrink-0" style={{ color: id === "cool" ? "#7dd3fc" : PEACH }} />}
+                  <span><span className="block text-[14px] font-semibold leading-tight text-white">{a.label}</span><span className="block text-[11px] text-white/55">{a.sub}</span></span>
+                </button>
+              );
+            })}
+          </div>
+          <button type="button" onClick={() => setAll((x) => !x)} className="mt-1.5 min-h-[32px] text-[12px] font-medium text-white/55 underline decoration-white/25 underline-offset-2">
+            {all ? "Show fewer" : need === "comfy" ? "Show A/C controls" : "More controls"}
+          </button>
+        </>
+      )}
+      <p className={`mt-1 min-h-[1.25rem] text-[12px] leading-snug ${busy ? "text-white/75" : done?.startsWith("Couldn't") ? "text-red-300" : "text-emerald-300"}`} aria-live="polite">
         {busy ? <>{stage ?? "Working"}… <span className="tabular-nums text-white/45">{secs}s</span>{stage === "Waking up the car" && <span className="block text-white/45">Can take up to a minute.</span>}</> : done}
       </p>
       <p className="text-[11px] leading-snug text-white/55">
         {demo ? "Preview only. Not connected to the car yet."
           : lockedUntil === "pending" ? "Turns on when your Tesla phone key is connected, or 1 hour before pickup."
           : lockedUntil ? <>Turns on <b className="text-white/80">{fmtWhen(lockedUntil)}</b>, or as soon as your phone key is connected.</>
-          : "Works until your trip ends."}
+          : `Runs ${CLIMATE_MINUTES} minutes, then turns off by itself.`}
       </p>
     </div>
   );
@@ -292,14 +449,13 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
             {car.battery != null && (
               <p className="mt-1 flex items-center gap-1.5 text-[13px] text-white/80"><BatteryMedium className="h-4 w-4 shrink-0 text-emerald-300" /><b className="text-white">{car.battery}%</b>{car.range != null && <span className="whitespace-nowrap">· {Math.round(car.range)} mi</span>}</p>
             )}
-            {car.climate_on && <p className="mt-1 flex items-center gap-1.5 text-[12px] font-semibold text-sky-200"><Snowflake className="h-3.5 w-3.5" />Climate is on</p>}
             <p className="mt-1 text-[11px] text-white/45">{asleep ? "Parked · " : ""}Updated {ago(car.observed_at)}</p>
           </>
         ) : (
           <p className="mt-1.5 text-[13px] leading-snug text-white/70">{onClimate ? "Parked and asleep. Tap a button and it wakes up." : "Car info isn't available right now."}</p>
         )}
         {(demo || onClimate || lockedUntil) ? (
-          <ClimateControls demo={demo} onAction={onClimate} compact lockedUntil={lockedUntil} />
+          <ClimateControls demo={demo} onAction={onClimate} compact lockedUntil={lockedUntil} car={car} />
         ) : null}
       </div>
     );
@@ -325,7 +481,7 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
         {car.locked != null && <p className="flex items-center gap-2 text-white/80">{car.locked ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}{car.locked ? "Locked" : "Unlocked"}</p>}
       </div>
       <p className="mt-2 text-[12px] text-white/45">Updated {ago(car.observed_at)}{car.charging && car.charging !== "Disconnected" ? ` · ${car.charging.toLowerCase()}` : ""}</p>
-      {(demo || onClimate) && <ClimateControls demo={demo} onAction={onClimate} />}
+      {(demo || onClimate) && <ClimateControls demo={demo} onAction={onClimate} car={car} />}
     </Card>
   );
 }

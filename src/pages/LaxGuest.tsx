@@ -13,7 +13,8 @@ import { ArrowRight, Check, Download, Loader2, MapPin, Phone, Sun } from "lucide
 import { supabase } from "@/integrations/supabase/client";
 import { TagBar, TripSheet } from "./lax/TripSheet";
 import { AskButton, AskSheet } from "./lax/AskSheet";
-import { CarCard, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type ClimateAction, type Trip } from "./lax/GuestExtras";
+import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type ClimateAction, type Trip } from "./lax/GuestExtras";
+import { WalletLoader } from "./lax/WalletLoader";
 import { renderPassImage } from "./lax/passImage";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
@@ -35,8 +36,26 @@ const dotted = (phone: string) => phone.replace(/[^\d]/g, "").replace(/^1?(\d{3}
 const telHref = (phone: string) => `tel:+1${phone.replace(/[^\d]/g, "").replace(/^1(?=\d{10}$)/, "")}`;
 
 function AppleWalletButton({ href }: { href: string }) {
+  const [loading, setLoading] = useState(false);
+  const cancelled = useRef(false);
+  const open = async (e: { preventDefault: () => void }) => {
+    e.preventDefault();
+    if (loading) return;
+    cancelled.current = false;
+    setLoading(true);
+    const t0 = Date.now();
+    try {
+      // Build the pass first (the slow part), so tapping never looks broken. Then hand it to Wallet.
+      await fetch(href, { cache: "no-store" }).catch(() => null);
+    } finally {
+      const wait = Math.max(0, 900 - (Date.now() - t0)); // let the animation land
+      window.setTimeout(() => { if (cancelled.current) return; window.location.href = href; window.setTimeout(() => setLoading(false), 2500); }, wait);
+    }
+  };
   return (
-    <a href={href} className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-black text-white shadow-lg shadow-black/30 ring-1 ring-white/15 active:scale-[0.99]">
+    <>
+    <WalletLoader open={loading} onCancel={() => { cancelled.current = true; setLoading(false); }} />
+    <a href={href} onClick={open} aria-busy={loading} className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-black text-white shadow-lg shadow-black/30 ring-1 ring-white/15 active:scale-[0.99]">
       <svg viewBox="0 0 32 24" className="h-6 w-8" aria-hidden>
         <rect x="1" y="1" width="30" height="22" rx="4" fill="#fff" />
         <rect x="1" y="4" width="30" height="5" fill="#2E9BF0" /><rect x="1" y="8" width="30" height="5" fill="#F5B83D" />
@@ -44,6 +63,7 @@ function AppleWalletButton({ href }: { href: string }) {
       </svg>
       <span className="text-left leading-tight"><span className="block text-[11px] text-white/80">Add to</span><span className="block text-lg font-semibold">Apple Wallet</span></span>
     </a>
+    </>
   );
 }
 
@@ -124,7 +144,12 @@ export default function LaxGuest() {
   const canvasWrap = useRef<HTMLDivElement>(null);
   const plat = useMemo(platform, []);
   // ?demo=car shows the car card with sample data and the climate buttons (preview only, nothing is sent to the car).
-  const demoCar = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "car", []);
+  const demoParam = useMemo(() => typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("demo") : null, []);
+  const demoCar = demoParam === "car" || demoParam === "climate" || demoParam === "cold";
+  const demoState: CarState = useMemo(() => demoParam === "climate"
+    ? { ...DEMO_CAR, inside_f: 84, climate_on: true, climate_mode: "cool", climate_until: new Date(Date.now() + 17 * 60000 + 42000).toISOString() }
+    : demoParam === "cold" ? { ...DEMO_CAR, inside_f: 54, outside_f: 49 } : DEMO_CAR, [demoParam]);
+  const [outsideF, setOutsideF] = useState<number | null>(null);
   // ?demo=soon previews the greyed-out buttons (before they open).
   const demoSoon = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "soon" ? new Date(Date.now() + 3 * 3600 * 1000).toISOString() : null, []);
 
@@ -241,10 +266,13 @@ export default function LaxGuest() {
 
             {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} /></div>}
             {/* Weather next to the car: see how hot it is, then turn on the A/C right there. */}
+            {(pub.trip || pub.car) && (
+              <div className="mt-5"><ClimateAdvice car={demoCar ? demoState : pub.car ?? null} outsideF={outsideF} /></div>
+            )}
             {pub.trip || pub.car ? (
               <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
-                <WeatherCard trip={pub.trip ?? null} compact />
-                <CarCard trip={pub.trip ?? null} car={demoCar ? DEMO_CAR : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && !demoSoon && pub.controls ? carCommand : undefined} lockedUntil={demoSoon ?? (demoCar || pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending")} />
+                <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} />
+                <CarCard trip={pub.trip ?? null} car={demoCar ? demoState : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && !demoSoon && pub.controls ? carCommand : undefined} lockedUntil={demoSoon ?? (demoCar || pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending")} />
               </div>
             ) : (
               <div className="mt-2.5"><WeatherCard trip={null} /></div>
