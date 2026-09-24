@@ -31,6 +31,7 @@ import { OpenTuro, TripDone, tripEnded } from "./TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./LiveCharge";
 import { ReturnChargeBlock, returnCharge } from "./ReturnCharge";
+import { BestlyAd } from "./BestlyAd";
 import { PhoneHandoff } from "./PhoneHandoff";
 import { UnlockStart } from "./Valet";
 
@@ -102,7 +103,7 @@ function Step({ n, children }: { n: number; children: ReactNode }) {
 }
 
 /** Runs a car button (honk, flash, unlock) and shows what happened. */
-export function CarButton({ action, label, icon: Icon, run, disabled, hint }: { action: CarAction; label: string; icon: typeof BellRing; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; disabled?: boolean; hint?: string }) {
+export function CarButton({ action, label, icon: Icon, run, disabled, hint, small }: { action: CarAction; label: string; icon: typeof BellRing; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; disabled?: boolean; hint?: string; small?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const press = async () => {
@@ -112,6 +113,13 @@ export function CarButton({ action, label, icon: Icon, run, disabled, hint }: { 
     catch (e) { setMsg(`Couldn't: ${(e as Error).message}`); }
     finally { setBusy(false); }
   };
+  if (small) return (
+    <button type="button" onClick={press} disabled={disabled || !run || busy} aria-label={msg ? `${label}: ${msg}` : label}
+      className="flex min-h-[52px] w-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl bg-white/[0.09] px-1 text-[12px] font-semibold text-white ring-1 ring-white/15 transition active:scale-[0.97] disabled:opacity-40">
+      {busy ? <Loader2 className="h-5 w-5 animate-spin" style={{ color: PEACH }} /> : <Icon className="h-5 w-5" style={{ color: PEACH }} />}
+      <span className={`truncate ${msg?.startsWith("Couldn't") ? "text-red-300" : ""}`}>{msg === "Done" ? "Done" : label}</span>
+    </button>
+  );
   return (
     <div className="min-w-0 flex-1">
       <button type="button" onClick={press} disabled={disabled || !run || busy}
@@ -316,21 +324,20 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           {(pub.trip || car) && <div className="mt-2 px-1"><ClimateAdvice car={car} outsideF={outsideF} /></div>}
           <div className="mt-3 grid grid-cols-2 items-stretch gap-2.5">
             <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} place="WeHo" />
-            <CarCard trip={pub.trip ?? null} car={car} demo={demoCar || !!demoPage} compact onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
+            <CarCard trip={pub.trip ?? null} car={car} demo={demoCar || !!demoPage} compact outsideF={outsideF}
+              actions={<>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <CarButton small action="honk" label="Honk" icon={BellRing} run={live ? run : undefined} />
+                  <CarButton small action="flash" label="Flash" icon={Flashlight} run={live ? run : undefined} />
+                </div>
+                {!live && <p className="mt-1 text-center text-[11px] leading-snug text-white/60">Honk and Flash work 1 hour before pickup.</p>}
+                <a href={mapsFor(home.address)} onClick={() => track(undefined, "directions")} className="mt-1.5 flex min-h-[48px] items-center justify-center gap-1.5 rounded-xl bg-white text-[14px] font-semibold text-[#132726] active:scale-[0.98]"><Navigation className="h-4 w-4" /> Directions</a>
+              </>} onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2.5">
-            <a href={mapsFor(home.address)} onClick={() => track(undefined, "directions")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#132726] active:scale-[0.98]"><Navigation className="h-4 w-4" /> Directions</a>
-            <SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send to car" full />
-          </div>
-          <p className="mt-1.5 px-1 text-[12px] text-white/60">Send to car puts {street} in the car's navigation. Handy for the return.</p>
           <div className="mt-2.5">
             {spot
               ? <a href={mapsFor("Your Turo Tesla", spot.lat, spot.lon)} onClick={() => track(undefined, "spot")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold ring-1 ring-white/15 active:scale-[0.98]"><MapPin className="h-4 w-4" style={{ color: PEACH }} /> Exact spot of the car</a>
               : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">{pub.trip && Date.now() >= +new Date(pub.trip.starts_at) - 2 * 3600e3 ? "Car location updating… use Honk to find it" : "Exact spot of the car shows 2 hours before pickup"}</span>}
-          </div>
-          <div className="mt-3 flex gap-2.5">
-            <CarButton action="honk" label="Honk" icon={BellRing} run={live ? run : undefined} hint={live ? "Short beep" : "Works 1 hour before pickup"} />
-            <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? run : undefined} hint={live ? "Good at night" : " "} />
           </div>
         </section>
         )}
@@ -396,14 +403,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
         <ScrollFx />
         <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home />
 
-        <a href="https://www.bestly.tech/hire?utm_source=turo&utm_medium=guest-page&utm_campaign=home-trip-page" target="_blank" rel="noopener"
-          className="mt-8 block rounded-3xl p-5 ring-1 ring-white/15 transition active:scale-[0.99]"
-          style={{ background: "linear-gradient(135deg, rgba(122,46,158,0.35), rgba(43,26,115,0.6))" }}>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Who made this page?</p>
-          <p className="mt-1 text-lg font-semibold text-white">Bestly built it. We can build one for you.</p>
-          <p className="mt-1.5 text-[15px] leading-relaxed text-white/75">We make websites, apps, and tools for small businesses. Like this page: a phone key that shows up by itself, live car info and A/C buttons.</p>
-          <span className="mt-4 inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-[15px] font-semibold text-[#1A1140]">Tell us what you need <ArrowRight className="h-4 w-4" aria-hidden /></span>
-        </a>
+        <BestlyAd campaign="home-trip-page" blurb="We make websites, apps, and tools for small businesses. Like this page: a phone key that shows up by itself, live car info and A/C buttons." />
       </main>
     </div>
   );

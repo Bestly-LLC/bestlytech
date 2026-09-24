@@ -31,6 +31,7 @@ import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./lax/Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./lax/LiveCharge";
 import { ReturnChargeBlock, returnCharge } from "./lax/ReturnCharge";
+import { BestlyAd } from "./lax/BestlyAd";
 import { PhoneHandoff } from "./lax/PhoneHandoff";
 import { UnlockStart } from "./lax/Valet";
 import { renderPassImage } from "./lax/passImage";
@@ -465,22 +466,20 @@ export default function LaxGuest() {
               {pub.trip || pub.car ? (
                 <div className="mt-3 grid grid-cols-2 items-stretch gap-2.5">
                   <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} />
-                  <CarCard trip={pub.trip ?? null} car={demoCar ? demoState : pub.car ?? null} demo={demoCar || demo} compact onClimate={!demoCar && !demoSoon && (pub.controls || demo) ? carCommand : undefined} lockedUntil={demoSoon ?? (demoCar || pub.controls || demo ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending")} />
+                  <CarCard trip={pub.trip ?? null} car={demoCar ? demoState : pub.car ?? null} demo={demoCar || demo} compact outsideF={outsideF}
+                    actions={<>
+                      {pub.trip && <div className="grid grid-cols-2 gap-1.5">
+                        <CarButton small action="honk" label="Honk" icon={BellRing} run={live ? carCommand : undefined} />
+                        <CarButton small action="flash" label="Flash" icon={Flashlight} run={live ? carCommand : undefined} />
+                      </div>}
+                      {pub.trip && !live && <p className="mt-1 text-center text-[11px] leading-snug text-white/60">Honk and Flash work 1 hour before pickup.</p>}
+                      <a href={maps} onClick={() => track(token || undefined, "directions")} className="mt-1.5 flex min-h-[48px] items-center justify-center gap-1.5 rounded-xl bg-white text-[14px] font-semibold text-[#1A1140] active:scale-[0.98]"><MapPin className="h-4 w-4" /> Directions</a>
+                    </>} onClimate={!demoCar && !demoSoon && (pub.controls || demo) ? carCommand : undefined} lockedUntil={demoSoon ?? (demoCar || pub.controls || demo ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending")} />
                 </div>
               ) : (
                 <div className="mt-3"><WeatherCard trip={null} /></div>
               )}
-              <div className="mt-3 grid grid-cols-2 gap-2.5">
-                <a href={maps} onClick={() => track(token || undefined, "directions")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#1A1140] active:scale-[0.98]"><MapPin className="h-4 w-4" /> Directions</a>
-                <SendToCar run={live ? carCommand : undefined} kind="lax" action="nav_garage_lax" label="Send to car" full />
-              </div>
-              <p className="mt-1.5 px-1 text-[12px] text-white/60">Send to car puts the garage ({garage.split(",")[0]}) in the car's navigation. Handy for the return.</p>
-              {pub.trip && (
-                <div className="mt-3 flex gap-2.5">
-                  <CarButton action="honk" label="Honk" icon={BellRing} run={live ? carCommand : undefined} hint={live ? "Short beep" : "Works 1 hour before pickup"} />
-                  <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? carCommand : undefined} hint={live ? "Good in the garage" : " "} />
-                </div>
-              )}
+              {!(pub.trip || pub.car) && <a href={maps} onClick={() => track(token || undefined, "directions")} className="mt-2.5 flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#1A1140] active:scale-[0.98]"><MapPin className="h-4 w-4" /> Directions</a>}
             </section>
             )}
 
@@ -648,16 +647,7 @@ export default function LaxGuest() {
             <ScrollFx />
 
 
-            {/* Small Bestly ad: guests who like this page may want one for their own business. */}
-            <a href="https://www.bestly.tech/hire?utm_source=turo&utm_medium=guest-page&utm_campaign=lax-trip-page" target="_blank" rel="noopener"
-              className="mt-8 block rounded-3xl p-5 ring-1 ring-white/15 transition active:scale-[0.99]"
-              style={{ background: "linear-gradient(135deg, rgba(122,46,158,0.35), rgba(43,26,115,0.6))" }}>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Who made this page?</p>
-              <p className="mt-1 text-lg font-semibold text-white">Bestly built it. We can build one for you.</p>
-              <p className="mt-1.5 text-[15px] leading-relaxed text-white/75">We make websites, apps, and tools for small businesses. Like this page: a phone key that shows up by itself, live car info, A/C buttons, and a lobby door pass right in your phone.</p>
-              <span className="mt-4 inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-[15px] font-semibold text-[#1A1140]">Tell us what you need <ArrowRight className="h-4 w-4" aria-hidden /></span>
-              <span className="mt-3 block text-[12px] text-white/45">bestly.tech · Los Angeles</span>
-            </a>
+            <BestlyAd campaign="lax-trip-page" blurb="We make websites, apps, and tools for small businesses. Like this page: a phone key that shows up by itself, live car info, A/C buttons, and a lobby door pass right in your phone." />
           </>
         )}
       </main>

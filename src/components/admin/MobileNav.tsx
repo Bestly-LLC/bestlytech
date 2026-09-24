@@ -9,14 +9,14 @@
  * Hidden from md up - the sidebar is the right answer on a real screen.
  */
 import { Link, useLocation } from "react-router-dom";
-import { Binoculars, LayoutDashboard, Menu, Mic, Users } from "lucide-react";
+import { Binoculars, Car, LayoutDashboard, Menu, Mic } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { openScout } from "@/components/admin/scoutBus";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { label: "Home", to: "/admin", icon: LayoutDashboard, exact: true },
-  { label: "Leads", to: "/admin/leads", icon: Users },
+  { label: "Turo Watch", to: "/admin/turo", icon: Car },
   { label: "Meetings", to: "/admin/meetings", icon: Mic },
 ];
 

@@ -4,7 +4,7 @@
  * Opens in the same luggage bottom sheet as Pickup / Return.
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Download, ExternalLink, FileText, MapPin, MessageCircleQuestion, Phone } from "lucide-react";
+import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Loader2, MapPin, MessageCircleQuestion, Navigation, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
 import { track } from "./track";
@@ -114,6 +114,44 @@ function CallButtons({ text, onAsk }: { text: string; onAsk?: (q: string) => voi
   );
 }
 
+/** Free car wash (Jared's LUV membership): the LUV nearest the car right now, sent to the car or opened in Maps. */
+type Wash = { name: string; address: string; miles: number };
+const WASH_RE = /\bluv car ?wash\b|\blove car ?wash\b/i;
+function CarWashButtons({ token }: { token?: string }) {
+  const [site, setSite] = useState<Wash | null>(null);
+  const [state, setState] = useState<"idle" | "busy" | "sent" | string>("idle");
+  useEffect(() => {
+    if (!token) return;
+    rpc("trip_car_wash", { p_token: token }).then(({ data }) => {
+      const s = (data as { sites?: Wash[] } | null)?.sites?.[0]; if (s) setSite(s);
+    }).catch(() => {});
+  }, [token]);
+  if (!site) return null;
+  const send = async () => {
+    if (!token || state === "busy") return;
+    setState("busy"); track(token, "car_wash_send");
+    const { data, error } = await rpc("trip_car_wash_nav", { p_token: token });
+    const r = data as { ok?: boolean; error?: string } | null;
+    setState(error ? "Couldn't reach the car" : r?.ok ? "sent" : r?.error ?? "Couldn't send");
+  };
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={send} disabled={state === "busy" || state === "sent"}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold text-[#1A1140] active:scale-95 disabled:opacity-70" style={{ background: PEACH }}>
+          {state === "busy" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : state === "sent" ? <CheckCircle2 className="h-4 w-4" aria-hidden /> : <Navigation className="h-4 w-4" aria-hidden />}
+          {state === "sent" ? "Sent to the car" : "Send to car"}
+        </button>
+        <a href={mapsTo(site.address)} target="_blank" rel="noreferrer" onClick={() => track(token, "car_wash_directions")}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white/10 px-4 text-[15px] font-semibold text-white ring-1 ring-white/20 active:scale-95">
+          <MapPin className="h-4 w-4" aria-hidden /> Directions
+        </a>
+      </div>
+      <p className="mt-1 text-[12px] text-white/60">{site.name} · {site.miles} mi{state !== "idle" && state !== "busy" && state !== "sent" ? ` · ${state}` : ""}</p>
+    </div>
+  );
+}
+
 function Dots() {
   return (
     <span className="inline-flex gap-1 py-1" aria-label="Thinking">
@@ -218,6 +256,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
                 style={m.role === "user" ? { background: PEACH } : undefined}>
                 {m.content || (m.status === "pending" || m.status === "working" ? <Dots /> : "")}
                 {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && m.content && <CallButtons text={m.content} onAsk={busy ? undefined : send} />}
+                {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && WASH_RE.test(m.content) && <CarWashButtons token={token} />}
               </div>
             </li>
           ))}

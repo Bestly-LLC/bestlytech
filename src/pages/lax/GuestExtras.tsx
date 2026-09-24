@@ -304,19 +304,19 @@ const seatNeeded = (inside?: number | null, outside?: number | null) => (inside 
 
 /** One line above the weather + car tiles: what to do before heading over. */
 export function ClimateAdvice({ car, outsideF }: { car: CarState | null; outsideF: number | null }) {
-  const inside = car?.inside_f ?? null;
-  const outside = car?.outside_f ?? outsideF;
+  // Suggestion is based on the temperature OUTSIDE only (what the guest feels walking up).
+  const outside = outsideF ?? car?.outside_f ?? null;
   if (car?.climate_until && +new Date(car.climate_until) > Date.now()) {
     return <p className="flex items-center gap-2 text-[15px] font-medium text-white/90"><Fan className="h-4 w-4 shrink-0 animate-spin text-sky-300 motion-reduce:animate-none" aria-hidden />Climate is on. The car will be comfy when you get there.</p>;
   }
-  const need = climateNeed(inside, outside);
+  const need = climateNeed(null, outside);
   if (!need) return null;
-  const t = Math.round((inside ?? outside)!);
-  const where = inside != null ? "in the car" : "outside";
+  const t = Math.round(outside!);
+  const where = "outside";
   const [Icon, color, text] =
     need === "cool" ? [Snowflake, "text-sky-300", `It's ${t}° ${where}. Turn on the A/C before you head over.`] :
     need === "warm" ? [Flame, "text-orange-300", `It's chilly: ${t}° ${where}. Warm it up before you head over.`] :
-    [Thermometer, "text-emerald-300", `The car's a comfortable ${t}°. No need for the A/C.`];
+    [Thermometer, "text-emerald-300", `It's a nice ${t}° outside. No need for the A/C.`];
   return <p className="flex items-start gap-2 text-[15px] font-medium leading-snug text-white/90"><Icon className={`mt-0.5 h-4 w-4 shrink-0 ${color}`} aria-hidden />{text}</p>;
 }
 
@@ -556,12 +556,11 @@ function ClimateOn({ mode, until, onOff, busy, stoppedAt, auto }: { mode: string
 }
 
 /** Climate buttons. Only the ones that make sense for the temperature right now (72° is the goal); "More" shows the rest. */
-function ClimateControls({ demo, onAction, compact = false, lockedUntil, car }: { demo: boolean; onAction?: (a: ClimateAction, onStage?: (s: string) => void) => Promise<void>; compact?: boolean; lockedUntil?: string | null; car?: CarState | null }) {
+function ClimateControls({ demo, onAction, compact = false, lockedUntil, car, outsideF }: { demo: boolean; onAction?: (a: ClimateAction, onStage?: (s: string) => void) => Promise<void>; compact?: boolean; lockedUntil?: string | null; car?: CarState | null; outsideF?: number | null }) {
   const [busy, setBusy] = useState<ClimateAction | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [stage, setStage] = useState<string | null>(null);
   const [secs, setSecs] = useState(0);
-  const [all, setAll] = useState(false);
   // Demo: pretend the car turned on, so the countdown can be previewed.
   const [demoOn, setDemoOn] = useState<{ mode: string; until: string } | null>(null);
   useEffect(() => {
@@ -602,19 +601,19 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car }: 
         setDemoOn(id === "off" ? null : { mode: id, until: new Date(Date.now() + CLIMATE_MINUTES * 60000).toISOString() });
       } else await onAction(id, setStage);
       if (id === "off" && was) { shownFor.current = was.until; setStopped({ ...was, at: Date.now(), auto: false }); lastSession.current = null; }
-      setDone(id === "off" ? "Climate is off." : `${a.label}: on for ${CLIMATE_MINUTES} minutes.`);
+      setDone(id === "off" ? "Climate is off." : null);
     } catch (e) {
       setDone(`Couldn't reach the car. ${(e as Error).message ?? ""}`.trim());
     } finally { setBusy(null); setStage(null); }
   };
 
-  const inside = car?.inside_f ?? null, outside = car?.outside_f ?? null;
-  const need = climateNeed(inside, outside);
-  const suggested: ClimateAction[] =
+  // Only the button the weather calls for (outside temp): hot = Cool it down, cold = Warm it up (+ seats when cold).
+  const outside = outsideF ?? car?.outside_f ?? null;
+  const need = climateNeed(null, outside);
+  const shown: ClimateAction[] =
     need === "cool" ? ["cool"] :
-    need === "warm" ? (seatNeeded(inside, outside) ? ["warm", "seat"] : ["warm"]) :
+    need === "warm" ? (seatNeeded(null, outside) ? ["warm", "seat"] : ["warm"]) :
     need === "comfy" ? [] : ["cool", "warm"];
-  const shown: ClimateAction[] = all ? ["cool", "warm", "seat"] : suggested;
   const locked = !!lockedUntil;
 
   return (
@@ -626,14 +625,14 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car }: 
         <ClimateOn mode={running.mode} until={running.until} busy={busy === "off"} onOff={() => press("off")} />
       ) : (
         <>
-          {need === "comfy" && !all && (
-            <p className="rounded-xl bg-emerald-400/10 px-3 py-2 text-[13px] leading-snug text-emerald-200 ring-1 ring-emerald-300/25">Already comfortable inside. No A/C needed.</p>
+          {need === "comfy" && (
+            <p className="rounded-xl bg-emerald-400/10 px-3 py-2 text-[13px] leading-snug text-emerald-200 ring-1 ring-emerald-300/25">Nice out. No A/C needed.</p>
           )}
           <div className={compact ? "grid gap-1.5" : "mt-2.5 grid grid-cols-2 gap-2"}>
             {shown.map((id, i) => {
               const a = CLIMATE.find((x) => x.id === id)!;
               const Icon = a.icon;
-              const primary = i === 0 && !all && need !== "comfy";
+              const primary = i === 0 && need !== "comfy";
               return (
                 <button key={id} type="button" onClick={() => press(id)} disabled={busy !== null || locked} aria-disabled={locked}
                   className={`flex items-center gap-2.5 rounded-xl text-left ring-1 transition active:scale-[0.98] disabled:opacity-40 disabled:saturate-0 ${primary ? (id === "cool" ? "bg-sky-400/20 ring-sky-300/40" : "bg-orange-400/20 ring-orange-300/40") : "bg-white/[0.08] ring-white/10"} ${compact ? "min-h-[48px] px-2.5 py-1.5" : "min-h-[56px] px-3 py-2.5"}`}>
@@ -643,9 +642,6 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car }: 
               );
             })}
           </div>
-          <button type="button" onClick={() => setAll((x) => !x)} className="mt-1.5 min-h-[32px] text-[12px] font-medium text-white/65 underline decoration-white/25 underline-offset-2">
-            {all ? "Show fewer" : need === "comfy" ? "Show A/C controls" : "More controls"}
-          </button>
         </>
       )}
       <p className={`mt-1 min-h-[1.25rem] text-[12px] leading-snug ${busy ? "text-white/75" : done?.startsWith("Couldn't") ? "text-red-300" : "text-emerald-300"}`} aria-live="polite">
@@ -655,13 +651,13 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car }: 
         {demo ? "Demo: nothing is sent to the car."
           : lockedUntil === "pending" ? "Turns on when your Tesla phone key is connected, or 1 hour before pickup."
           : lockedUntil ? <>Turns on <b className="text-white/80">{fmtWhen(lockedUntil)}</b>, or as soon as your phone key is connected.</>
-          : `Runs ${CLIMATE_MINUTES} minutes, then turns off by itself.`}
+          : null}
       </p>
     </div>
   );
 }
 
-export function CarCard({ trip, car, demo = false, onClimate, compact = false, lockedUntil }: { trip: Trip | null; car: CarState | null; demo?: boolean; onClimate?: (a: ClimateAction, onStage?: (s: string) => void) => Promise<void>; compact?: boolean; lockedUntil?: string | null }) {
+export function CarCard({ trip, car, demo = false, onClimate, compact = false, lockedUntil, outsideF, actions }: { trip: Trip | null; car: CarState | null; demo?: boolean; onClimate?: (a: ClimateAction, onStage?: (s: string) => void) => Promise<void>; compact?: boolean; lockedUntil?: string | null; outsideF?: number | null; actions?: ReactNode }) {
   if (compact) {
     const asleep = car?.online === "asleep" || car?.online === "offline";
     return (
@@ -685,8 +681,10 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
           <p className="mt-1.5 text-[13px] leading-snug text-white/70">{onClimate ? "Parked and asleep. Tap a button and it wakes up." : "Car info isn't available right now."}</p>
         )}
         {(demo || onClimate || lockedUntil) ? (
-          <ClimateControls demo={demo} onAction={onClimate} compact lockedUntil={lockedUntil} car={car} />
+          <ClimateControls demo={demo} onAction={onClimate} compact lockedUntil={lockedUntil} car={car} outsideF={outsideF} />
         ) : null}
+        {/* Honk + Flash side by side, Directions under them (where "More controls" used to be). */}
+        {actions && <div className="mt-auto pt-2">{actions}</div>}
       </div>
     );
   }
@@ -711,7 +709,7 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
         {car.locked != null && <p className="flex items-center gap-2 text-white/80">{car.locked ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}{car.locked ? "Locked" : "Unlocked"}</p>}
       </div>
       <p className="mt-2 text-[12px] text-white/65">Updated {ago(car.observed_at)}{car.charging && car.charging !== "Disconnected" ? ` · ${car.charging.toLowerCase()}` : ""}</p>
-      {(demo || onClimate) && <ClimateControls demo={demo} onAction={onClimate} car={car} />}
+      {(demo || onClimate) && <ClimateControls demo={demo} onAction={onClimate} car={car} outsideF={outsideF} />}
     </Card>
   );
 }
