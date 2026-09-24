@@ -31,7 +31,7 @@ export function ChargingCard({ charging, battery, pickupBattery, ended, embedded
           <p className="mt-1.5 text-[13px] text-white/65">{c.count === 0 ? "No stops yet" : `${c.count} stop${c.count === 1 ? "" : "s"} · ${c.kwh} kWh`}{c.idle > 0 ? ` · incl. ${money(c.idle)} idle fees` : ""}</p>
         </div>
         <span className={`mt-1 inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${c.final ? "bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-300/30" : "bg-white/10 text-white/75 ring-1 ring-white/15"}`}>
-          {c.final ? <><CheckCircle2 className="h-3.5 w-3.5" /> Final from Tesla</> : <><Clock className="h-3.5 w-3.5" /> Estimate</>}
+          {c.final ? <><CheckCircle2 className="h-3.5 w-3.5" /> Final</> : <><Clock className="h-3.5 w-3.5" /> Estimate</>}
         </span>
       </div>
 
