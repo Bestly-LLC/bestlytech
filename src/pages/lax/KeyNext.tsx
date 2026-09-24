@@ -97,7 +97,7 @@ export const ChargerLine = ({ kind }: { kind: TripKind }) => {
   return <>Closest Supercharger: {c.name}, <a href={chargerMaps(c)} onClick={() => track(undefined, "charger_maps", { kind })} className="font-semibold text-white underline decoration-white/40 underline-offset-2">{c.street}</a>.</>;
 };
 
-type NavAction = "nav_charger" | "nav_charger_lax" | "nav_garage_lax";
+type NavAction = "nav_charger" | "nav_charger_lax" | "nav_garage_lax" | "nav_home";
 type NavRun = (a: NavAction, onStage?: (s: string) => void) => Promise<void>;
 /** "Send to car": puts the closest Supercharger in the car's navigation (TezLab first, Tesla backup). */
 export function SendToCar({ run, kind, action, label = "Send to car's navigation", full }: { run?: NavRun; kind: TripKind; action?: NavAction; label?: string; full?: boolean }) {
