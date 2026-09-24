@@ -116,7 +116,7 @@ export function ChargingFab({ charging }: { charging: Charging }) {
   return (
     <button type="button" onClick={go} aria-label={label}
       className={`fixed right-3 z-30 flex h-[52px] items-center overflow-hidden rounded-full text-left text-white shadow-xl shadow-black/40 ring-1 ring-white/25 backdrop-blur-xl transition-all duration-500 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${hidden ? "pointer-events-none translate-x-24 opacity-0" : "opacity-100"}`}
-      style={{ bottom: "calc(env(safe-area-inset-bottom) + 212px)", background: "linear-gradient(160deg, rgba(255,255,255,.22), rgba(255,255,255,.08))", maxWidth: open ? 300 : 52 }}>
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 212px)", background: "linear-gradient(160deg, rgba(255,255,255,.24), rgba(255,255,255,.08)), rgba(12,10,24,.62)", maxWidth: open ? 300 : 52 }}>
       <span className="grid h-[52px] w-[52px] shrink-0 place-items-center">
         <span className="grid h-9 w-9 place-items-center rounded-full" style={{ background: ACCENT, boxShadow: "0 0 14px -2px var(--trip-accent)" }}>
           <Zap className="h-5 w-5 fill-[#1A1140] text-[#1A1140]" aria-hidden />
