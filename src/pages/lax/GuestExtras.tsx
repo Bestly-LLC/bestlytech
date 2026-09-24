@@ -141,7 +141,7 @@ export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | 
               <span style={{ color: before ? C.hot : C.text }}>{hm(trip.starts_at)}</span>
               <span style={{ color: during ? C.hot : C.text }}>{hm(trip.ends_at)}</span>
             </span>
-            <span className="mt-2 block h-[6px] overflow-hidden rounded-full style={{ background: C.track }}>
+            <span className="mt-2 block h-[6px] overflow-hidden rounded-full" style={{ background: C.track }}>
               <span className="block h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.round(linear(s, e, now) * 100)}%`, background: C.accent }} />
             </span>
           </span>
