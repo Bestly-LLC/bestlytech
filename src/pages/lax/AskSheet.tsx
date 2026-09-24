@@ -4,7 +4,7 @@
  * Opens in the same luggage bottom sheet as Pickup / Return.
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, MessageCircleQuestion, Phone } from "lucide-react";
+import { ArrowUp, Download, ExternalLink, FileText, MapPin, MessageCircleQuestion, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
 
@@ -52,9 +52,38 @@ function phones(text: string) {
   }
   return out;
 }
+// Apps, places and documents the helper mentions become one-tap buttons (store links checked 2026-09-23).
+const android = () => typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
+const mapsTo = (q: string) => android() ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : `https://maps.apple.com/?q=${encodeURIComponent(q)}`;
+type Act = { key: string; test: RegExp; label: string; icon: typeof Download; href: () => string };
+const ACTS: Act[] = [
+  { key: "tesla", test: /\btesla (mobile )?app\b|\btesla account\b/i, label: "Get the Tesla app", icon: Download,
+    href: () => android() ? "https://play.google.com/store/apps/details?id=com.teslamotors.tesla" : "https://apps.apple.com/us/app/tesla/id582007913" },
+  { key: "chargepoint", test: /\bchargepoint\b/i, label: "Get the ChargePoint app", icon: Download,
+    href: () => android() ? "https://play.google.com/store/apps/details?id=com.coulombtech" : "https://apps.apple.com/us/app/chargepoint/id356866743" },
+  { key: "turo", test: /\bturo app\b/i, label: "Open the Turo app", icon: ExternalLink,
+    href: () => android() ? "https://play.google.com/store/apps/details?id=com.relayrides.android.relayrides" : "https://apps.apple.com/us/app/turo-better-car-rental/id555063314" },
+  { key: "diner", test: /tesla diner|7001 santa monica/i, label: "Directions: Tesla Diner Supercharger", icon: MapPin, href: () => mapsTo("7001 Santa Monica Blvd, West Hollywood, CA") },
+  { key: "home", test: /733 n(orth)? kings/i, label: "Directions: 733 N Kings Rd", icon: MapPin, href: () => mapsTo("733 N Kings Rd, West Hollywood, CA 90069") },
+  { key: "incident", test: /incident (information )?card/i, label: "Turo incident card (PDF)", icon: FileText, href: () => "https://support-resources.turo.com/incidents/US%20Incident%20Information%20Card.pdf" },
+];
+function links(text: string) {
+  const out: { key: string; label: string; href: string; icon: typeof Download }[] = [];
+  for (const a of ACTS) if (a.test.test(text)) out.push({ key: a.key, label: a.label, href: a.href(), icon: a.icon });
+  for (const m of text.matchAll(/https?:\/\/[^\s)<>"]+/g)) {
+    const url = m[0].replace(/[.,;:!?]+$/, "");
+    if (out.some((o) => o.href === url)) continue;
+    let host = "link"; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep "link" */ }
+    out.push({ key: url, label: `Open ${host}`, href: url, icon: ExternalLink });
+  }
+  return out.slice(0, 4);
+}
+
+/** Every action the answer suggests: phone numbers, apps, places, documents, links. */
 function CallButtons({ text }: { text: string }) {
   const list = phones(text);
-  if (!list.length) return null;
+  const acts = links(text);
+  if (!list.length && !acts.length) return null;
   return (
     <div className="mt-2 flex flex-wrap gap-2">
       {list.map((p) => (
@@ -62,6 +91,13 @@ function CallButtons({ text }: { text: string }) {
           className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold text-[#1A1140] active:scale-95"
           style={{ background: p.digits === "911" ? "#FF6B6B" : "#7CE0A5" }}>
           <Phone className="h-4 w-4" aria-hidden /> {p.label}{p.digits !== "911" && <span className="font-medium opacity-70">{p.shown}</span>}
+        </a>
+      ))}
+      {acts.map(({ key, label, href, icon: Icon }) => (
+        <a key={key} href={href} target="_blank" rel="noreferrer"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold text-[#1A1140] active:scale-95"
+          style={{ background: PEACH }}>
+          <Icon className="h-4 w-4" aria-hidden /> {label}
         </a>
       ))}
     </div>

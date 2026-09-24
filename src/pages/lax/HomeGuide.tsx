@@ -4,7 +4,7 @@
  * and the video links (all checked: Tesla's own YouTube channels).
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, BatteryCharging, ChevronDown, ClipboardList, Cpu, ExternalLink, FileText, KeySquare, Phone, Play, PlayCircle, X } from "lucide-react";
+import { AlertTriangle, BatteryCharging, ChevronDown, ClipboardList, Cpu, Download, ExternalLink, FileText, KeySquare, Phone, Play, PlayCircle, X } from "lucide-react";
 
 const ACCENT = "var(--trip-accent)";
 const yt = (id: string) => `https://www.youtube.com/watch?v=${id}`;
@@ -150,6 +150,9 @@ export function HomeGuide({ pickupBattery }: { pickupBattery?: number | null }) 
         <H>Good to know</H>
         <Bullets items={[
           "The charge port is on the driver side. A J1772 adapter for regular chargers is in the driver-side door pocket.",
+          <>Not near a Supercharger? The <b className="text-white">ChargePoint app</b> finds and pays for regular chargers around LA. Use the J1772 adapter to plug in.
+            <a href={/android/i.test(typeof navigator === "undefined" ? "" : navigator.userAgent) ? "https://play.google.com/store/apps/details?id=com.coulombtech" : "https://apps.apple.com/us/app/chargepoint/id356866743"} target="_blank" rel="noreferrer"
+              className="mt-2 flex min-h-[44px] w-fit items-center gap-2 rounded-full bg-white px-4 text-[15px] font-semibold text-[#132726]"><Download className="h-4 w-4" /> Get the ChargePoint app</a></>,
           "Real range is well below the rated number: speed, A/C, hills and cold all cut it.",
           "Driving over ~100 miles? Enter the destination in Navigation. The Trip Planner picks your charging stops and shows your arrival %.",
           "65–70 mph is the sweet spot. 80 mph can cost 25–30% of your range.",
