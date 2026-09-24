@@ -125,6 +125,38 @@ function ExtraDriversAdmin({ res }: { res: number }) {
     </div>
   );
 }
+
+type LinkMsg = { status: string; sent_at?: string | null; verified?: boolean; error?: string | null; attempts?: number; source?: string; queued_at?: string } | null;
+/** Did the "here's your trip page" message go out in Turo? (sent by the Mac mini through Chrome) */
+function LinkSentRow({ res }: { res: number }) {
+  const [m, setM] = useState<LinkMsg | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async (action?: string) => {
+    if (action) setBusy(true);
+    const { data, error } = await rpc("turo_link_admin", { p_reservation: res, p_action: action ?? null });
+    setBusy(false);
+    if (error) { if (action) toast.error(error.message); return; }
+    setM((data as LinkMsg) ?? null);
+    if (action) toast.success("Queued. The Mac mini sends it in Turo within ~3 minutes.");
+  }, [res]);
+  useEffect(() => { void load(); }, [load]);
+  if (m === undefined || res < 0) return null;
+  const btn = "inline-flex h-7 items-center gap-1 rounded-full border border-white/15 px-2.5 text-[11px] text-white disabled:opacity-50 bento:border-neutral-200 bento:text-neutral-800";
+  const text = !m ? "Trip link not sent in Turo yet"
+    : m.status === "sent" ? `Trip link sent in Turo ${m.sent_at ? when(m.sent_at) : ""}${m.verified ? " ✓ confirmed in thread" : ""}`
+    : m.status === "queued" || m.status === "sending" ? "Trip link message queued (sends within ~3 min)"
+    : m.status === "skipped" ? "Trip link message skipped"
+    : `Trip link message failed${m.error ? `: ${m.error}` : ""} (retrying)`;
+  return (
+    <div className={cn("mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/[0.03] px-3 py-2 text-sm bento:bg-neutral-50",
+      m?.status === "failed" ? "text-red-300 bento:text-red-600" : "text-white/80 bento:text-neutral-700")}>
+      <span className="flex items-center gap-1.5"><Send className="h-4 w-4 shrink-0" />{text}</span>
+      <button type="button" className={btn} disabled={busy} onClick={() => { if (!m || window.confirm("Send the trip page message in Turo again?")) void load(m ? "resend" : "send"); }}>
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}{m ? "Send again" : "Send now"}
+      </button>
+    </div>
+  );
+}
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
@@ -168,6 +200,7 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
             <CopyButton text={link} label="Copy link" />
             <a href={`/t/${r.token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white bento:text-neutral-500">Open <ExternalLink className="h-3.5 w-3.5" /></a>
           </div>
+          <LinkSentRow res={r.reservation_id} />
           <ActivityRow a={r.activity} />
           {home && <KeyRow r={r} reload={reload} />}
           {<><div className="mt-3 flex flex-wrap items-center gap-2">
