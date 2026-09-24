@@ -1,3 +1,4 @@
+import { SECRET_KEY, isServiceRequest } from "../_shared/keys.ts";
 // admin-chat — Scout, the assistant inside bestly.tech/admin.
 //
 // Rules, in order of how much trouble breaking them causes:
@@ -117,7 +118,7 @@ const PI_READ_ONLY = new Set([
   "network.dns", "network.wifi_scan", "network.speed", "router.probe",
 ]);
 
-const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+const db = createClient(Deno.env.get("SUPABASE_URL")!, SECRET_KEY!, { auth: { persistSession: false } });
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -1059,11 +1060,12 @@ Deno.serve(async (req) => {
 
   const auth = req.headers.get("Authorization") ?? "";
   const jwt = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!jwt) return J({ ok: false, error: "unauthorized" }, 401);
+  const svcCall = await isServiceRequest(req);
+  if (!jwt && !svcCall) return J({ ok: false, error: "unauthorized" }, 401);
 
   // v13 autopilot: the fix ladder (service key only) runs Scout as the admin with no one watching.
   // Nothing that needs a yes can run on autopilot; that is enforced below, not left to the model.
-  const autopilot = body.autopilot === true && jwt === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const autopilot = body.autopilot === true && svcCall;
   let uid: string | undefined;
   if (autopilot) {
     const { data: adm } = await db.from("user_roles").select("user_id").eq("role", "admin").order("user_id").limit(1).maybeSingle();
