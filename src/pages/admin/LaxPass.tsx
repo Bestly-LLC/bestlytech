@@ -7,9 +7,9 @@
  * Guests use one permanent link, bestly.tech/lax/<slug> (pages/LaxGuest.tsx), which always shows the newest code.
  * lax_pass_reminder() (cron, 9 AM PT daily) nudges Scout when this month's code isn't in yet.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { AlertTriangle, CheckCircle2, ExternalLink, ImageUp, Loader2, RefreshCw, Smartphone } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, ImageUp, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -19,6 +19,7 @@ import { LaxGuests } from "./LaxGuests";
 import { TripHealth } from "./TripHealth";
 import { HostPassCard, TeslaCard } from "./TeslaCard";
 import { AskCard } from "./AskCard";
+import { Section, Segmented, btnPlain, btnPrimary, btnTinted, btnDestructivePlain, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
 
 type CodeRow = { id: string; payload: string; valid_month: string; note: string | null; created_at: string; is_this_month?: boolean };
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string };
@@ -29,7 +30,6 @@ type State = {
 
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
-const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
 const SITE = "https://www.bestly.tech";
 
 const monthLabel = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -80,25 +80,46 @@ function GuideCard({ guide, onSaved }: { guide: Guide; onSaved: () => void }) {
     if (error) toast.error(error.message); else { toast.success("Guide updated. The guest page and saved passes show it now."); onSaved(); }
   };
   return (
-    <div className={cn(card, "space-y-4")}>
+    <div className={cn(card, "space-y-5")}>
       <div>
-        <p className="text-sm font-medium text-white bento:text-neutral-900">Pickup guide</p>
-        <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Shows on the guest page and the back of the Wallet pass. Already filled in; change the space per trip.</p>
+        <p className={cn("text-[17px] font-semibold", label)}>Pickup guide</p>
+        <p className={cn("mt-1 text-[13px] leading-snug", secondary)}>Shows on the guest page and the back of the Wallet pass. Change the space for each trip.</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {GUIDE_FIELDS.map(({ key, label, hint }) => (
-          <label key={key} className={cn("block text-sm", key === "spot" && "sm:col-span-2")}>
-            <span className="text-white/60 bento:text-neutral-600">{label}</span>
-            <input value={g[key] ?? ""} onChange={(e) => setG({ ...g, [key]: e.target.value })} maxLength={120}
-              className="mt-1 w-full rounded-lg border border-white/10 bg-transparent px-2.5 py-2 text-white bento:border-neutral-200 bento:text-neutral-900" />
-            {hint && <span className="mt-1 block text-xs text-white/40 bento:text-neutral-400">{hint}</span>}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {GUIDE_FIELDS.map(({ key, label: l, hint }) => (
+          <label key={key} className={cn("block", key === "spot" && "sm:col-span-2")}>
+            <span className={cn("mb-1.5 block text-[13px] font-medium", secondary)}>{l}</span>
+            <input value={g[key] ?? ""} onChange={(e) => setG({ ...g, [key]: e.target.value })} maxLength={120} className={field} />
+            {hint && <span className={cn("mt-1.5 block text-[12px]", tertiary)}>{hint}</span>}
           </label>
         ))}
       </div>
-      <button type="button" onClick={save} disabled={!dirty || saving}
-        className="inline-flex items-center gap-2 rounded-full bg-violet-500 px-5 py-2 text-sm font-medium text-white hover:bg-violet-400 disabled:opacity-40">
-        {saving && <Loader2 className="h-4 w-4 animate-spin" />} Save guide
-      </button>
+      <div className="flex justify-end">
+        <button type="button" onClick={save} disabled={!dirty || saving} className={btnTinted}>
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />} {dirty ? "Save guide" : "Saved"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** The live code, drawn like the Wallet pass guests get. */
+function PassArt({ month, payload }: { month: string | null; payload: string | null }) {
+  return (
+    <div className="relative w-full max-w-[240px] shrink-0 overflow-hidden rounded-[18px] bg-[linear-gradient(165deg,#0B2545_0%,#13315C_52%,#3E5C8A_100%)] p-4 text-[#fff] shadow-[0_12px_30px_-12px_#0B254599] ring-1 ring-[#ffffff1a]"
+      aria-label={month ? `Parking pass for ${month}` : "No parking pass yet"}>
+      <div className="flex items-start justify-between text-[11px] font-semibold uppercase tracking-[0.08em] text-[#ffffffb3]">
+        <span>Park My Share</span><span>LAX</span>
+      </div>
+      <p className="mt-2 text-[20px] font-semibold leading-tight tracking-[-0.01em]">{month ?? "No code yet"}</p>
+      <p className="text-[12px] text-[#ffffff99]">Opens the lobby door</p>
+      <div className="mt-4 flex justify-center">
+        <div className="rounded-[12px] bg-[#fff] p-2.5">
+          {payload ? <QRCodeSVG value={payload} size={132} /> : (
+            <div className="grid h-[132px] w-[132px] place-items-center rounded-[6px] border-2 border-dashed border-[#C6C6C8] text-[12px] text-[#3C3C4399]">Drop a code</div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -166,120 +187,146 @@ export default function LaxPass() {
   const cur = st?.current;
   const missing = st && (!cur || !cur.is_this_month);
 
+  const dropProps = {
+    onDragOver: (e: DragEvent) => { e.preventDefault(); setDrag(true); },
+    onDragLeave: () => setDrag(false),
+    onDrop: (e: DragEvent) => { e.preventDefault(); setDrag(false); take(e.dataTransfer.files?.[0]); },
+  };
+
   return (
-    <div className="space-y-6 max-w-3xl">
-      <PageHeader title="LAX parking pass" description="Drop this month's Park My Share QR. Guests get it on one link and can add it to their phone's wallet." />
+    <div className="mx-auto max-w-3xl space-y-9">
+      <PageHeader title="LAX Parking Pass" description="This month's Park My Share code, the trips using it, and the guest page." />
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { take(e.target.files?.[0]); e.target.value = ""; }} />
 
-      {/* Status */}
-      <div className={cn(card, "flex items-start gap-3")}>
-        {!st ? <Loader2 className="h-5 w-5 animate-spin text-white/50" /> : missing
-          ? <AlertTriangle className="h-5 w-5 shrink-0 text-amber-300 bento:text-amber-600" />
-          : <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-300 bento:text-emerald-600" />}
-        <div className="min-w-0 text-sm">
-          {st && (missing ? (
-            <p className="font-medium text-white bento:text-neutral-900">
-              {cur ? `Guests are seeing ${monthLabel(cur.valid_month)}'s code.` : "No code yet."} Add {monthLabel(st.month_now)}'s below.
-            </p>
-          ) : (
-            <p className="font-medium text-white bento:text-neutral-900">{monthLabel(cur!.valid_month)}'s code is live.</p>
-          ))}
-          {cur && <p className="mt-1 text-white/55 bento:text-neutral-500">Added {when(cur.created_at)} · {st?.wallet_devices ?? 0} phone{st?.wallet_devices === 1 ? "" : "s"} with the Apple Wallet pass</p>}
-        </div>
-      </div>
-
-      {/* Drop zone / confirm */}
-      {!draft ? (
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); take(e.dataTransfer.files?.[0]); }}
-          className={cn(card, "w-full border-dashed py-12 text-center transition-colors",
-            drag ? "border-violet-400 bg-violet-500/10 bento:bg-violet-50" : "hover:border-white/20 bento:hover:bg-neutral-50")}
-        >
-          {busy === "read" ? <Loader2 className="mx-auto h-8 w-8 animate-spin text-white/60" /> : <ImageUp className="mx-auto h-8 w-8 text-white/60 bento:text-neutral-400" />}
-          <p className="mt-3 font-medium text-white bento:text-neutral-900">Drop the QR screenshot here</p>
-          <p className="mt-1 text-sm text-white/50 bento:text-neutral-500">or click to choose it, or just paste it (⌘V)</p>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { take(e.target.files?.[0]); e.target.value = ""; }} />
-        </button>
-      ) : (
-        <div className={cn(card, "space-y-5")}>
-          <div className="flex flex-wrap items-center gap-6">
-            <img src={draft.preview} alt="Your screenshot" className="h-36 w-36 rounded-lg object-contain bg-white" />
-            <div className="rounded-lg bg-white p-2"><QRCodeSVG value={draft.payload} size={128} /></div>
-            <div className="min-w-0 flex-1 text-sm">
-              <p className="font-medium text-white bento:text-neutral-900">Read it. The two codes match.</p>
-              <p className="mt-1 break-all font-mono text-xs text-white/50 bento:text-neutral-500">{draft.payload.length > 140 ? draft.payload.slice(0, 140) + "…" : draft.payload}</p>
+      <Section title="This month's code" footer={<>Paste a screenshot of the new QR anywhere on this page (⌘V), drop it on the card, or choose the file. Only the code is read; the picture isn't saved.</>}>
+        {!draft ? (
+          <div {...dropProps}
+            className={cn(card, "transition-[box-shadow,background-color] duration-200", drag && "ring-2 ring-[#0A84FF] bg-[#0A84FF14] bento:ring-[#007AFF] bento:bg-[#007AFF0d]")}>
+            {!st ? (
+              <div className="flex h-40 items-center justify-center"><Loader2 className={cn("h-6 w-6 animate-spin", tertiary)} aria-label="Loading" /></div>
+            ) : (
+              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
+                <PassArt month={cur ? monthLabel(cur.valid_month) : null} payload={cur?.payload ?? null} />
+                <div className="w-full min-w-0 flex-1 space-y-4 text-center sm:text-left">
+                  <div className="space-y-2">
+                    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold", missing ? pill.orange : pill.green)}>
+                      {missing ? <AlertTriangle className="h-3.5 w-3.5" aria-hidden /> : <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}
+                      {missing ? "Needs this month's code" : "Live for guests"}
+                    </span>
+                    <p className={cn("text-[22px] font-semibold leading-tight tracking-[-0.01em]", label)}>
+                      {missing
+                        ? (cur ? `Guests still see ${monthLabel(cur.valid_month)}.` : "No code yet.")
+                        : `${monthLabel(cur!.valid_month)} is live.`}
+                    </p>
+                    <p className={cn("text-[15px] leading-snug", secondary)}>
+                      {missing
+                        ? `Add ${monthLabel(st.month_now)}'s code from the Park My Share portal.`
+                        : <>Added {when(cur!.created_at)}. On {st.wallet_devices} phone{st.wallet_devices === 1 ? "" : "s"} in Apple Wallet; they update by themselves.</>}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-center sm:gap-4">
+                    <button type="button" onClick={() => fileRef.current?.click()} disabled={busy === "read"} className={cn(missing ? btnPrimary : btnTinted, "w-full sm:w-auto")}>
+                      {busy === "read" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" aria-hidden />}
+                      {busy === "read" ? "Reading the code…" : missing ? `Add ${monthLabel(st.month_now).split(" ")[0]}'s code` : "Replace code"}
+                    </button>
+                    <a href={`/lax/${st.slug}`} target="_blank" rel="noreferrer" className={btnPlain}>
+                      See guest page <ChevronRight className="h-4 w-4" aria-hidden />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className={cn(card, "space-y-6")}>
+            <div className="grid grid-cols-2 gap-3 sm:gap-5">
+              <figure className="space-y-2 text-center">
+                <div className="grid aspect-square place-items-center overflow-hidden rounded-[14px] bg-[#fff] p-3"><img src={draft.preview} alt="Your screenshot" className="max-h-full max-w-full object-contain" /></div>
+                <figcaption className={cn("text-[13px]", secondary)}>Your screenshot</figcaption>
+              </figure>
+              <figure className="space-y-2 text-center">
+                <div className="grid aspect-square place-items-center rounded-[14px] bg-[#fff] p-3"><QRCodeSVG value={draft.payload} size={160} className="h-full max-h-[160px] w-full" /></div>
+                <figcaption className={cn("text-[13px]", secondary)}>What guests get</figcaption>
+              </figure>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <Check className={cn("mt-0.5 h-5 w-5 shrink-0", tint.green)} aria-hidden />
+              <div className="min-w-0">
+                <p className={cn("text-[15px] font-semibold", label)}>Code read. Both match.</p>
+                <p className={cn("mt-0.5 break-all font-mono text-[12px]", tertiary)}>{draft.payload.length > 120 ? draft.payload.slice(0, 120) + "…" : draft.payload}</p>
+              </div>
+            </div>
+            {st && (
+              <div className="space-y-2">
+                <p className={cn("text-[13px] font-medium", secondary)}>Which month is it for?</p>
+                <Segmented<"this" | "next"> ariaLabel="Month" value={month} onChange={setMonth}
+                  options={[{ value: "this", label: monthLabel(st.month_now) }, { value: "next", label: monthLabel(nextMonth(st.month_now)) }]} />
+              </div>
+            )}
+            <label className="block">
+              <span className={cn("mb-1.5 block text-[13px] font-medium", secondary)}>Note for guests <span className={tertiary}>(optional, shows on the pass)</span></span>
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={300}
+                placeholder="e.g. Car is in row C. Keys are in the lockbox." className={cn(field, "resize-none")} />
+            </label>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
+              <button type="button" onClick={() => setDraft(null)} className={cn(btnPlain, "justify-center")}>Cancel</button>
+              <button type="button" onClick={save} disabled={busy === "save"} className={cn(btnPrimary, "w-full sm:w-auto")}>
+                {busy === "save" && <Loader2 className="h-4 w-4 animate-spin" />} Save and send to guests
+              </button>
             </div>
           </div>
-          {st && (
-            <div className="flex flex-wrap gap-2">
-              {(["this", "next"] as const).map((m) => (
-                <button key={m} type="button" onClick={() => setMonth(m)}
-                  className={cn("rounded-full px-3 py-1.5 text-sm border",
-                    month === m ? "border-violet-400 bg-violet-500/20 text-white bento:bg-violet-100 bento:text-violet-900" : "border-white/10 text-white/60 bento:border-neutral-200 bento:text-neutral-600")}>
-                  Code for {monthLabel(m === "this" ? st.month_now : nextMonth(st.month_now))}
-                </button>
-              ))}
-            </div>
-          )}
-          <label className="block text-sm">
-            <span className="text-white/60 bento:text-neutral-600">Note for guests (optional, shows on the pass)</span>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={300}
-              placeholder="e.g. Car is in row C. Keys are in the lockbox."
-              className="mt-1 w-full rounded-lg border border-white/10 bg-transparent p-2 text-white bento:border-neutral-200 bento:text-neutral-900" />
-          </label>
-          <div className="flex gap-2">
-            <button type="button" onClick={save} disabled={busy === "save"}
-              className="inline-flex items-center gap-2 rounded-full bg-violet-500 px-5 py-2 text-sm font-medium text-white hover:bg-violet-400 disabled:opacity-60">
-              {busy === "save" && <Loader2 className="h-4 w-4 animate-spin" />} Save code
-            </button>
-            <button type="button" onClick={() => setDraft(null)} className="rounded-full px-4 py-2 text-sm text-white/60 bento:text-neutral-500">Cancel</button>
-          </div>
-        </div>
-      )}
+        )}
+      </Section>
 
-      <TripHealth />
-      <div id="keys"><LaxGuests /></div>
+      <Section title="Trips" id="trips">
+        <TripHealth />
+        <div id="keys"><LaxGuests /></div>
+      </Section>
 
-      {st && <GuideCard guide={st.guide ?? {}} onSaved={load} />}
-      <HostPassCard />
-      <TeslaCard />
-      <AskCard />
-
-      {/* Guest link */}
       {st && (
-        <div className={cn(card, "space-y-4")}>
-          <div className="flex items-center gap-2 text-sm font-medium text-white bento:text-neutral-900"><Smartphone className="h-4 w-4" /> Guest link. It never changes, so paste it into Turo once.</div>
-          <div className="flex flex-wrap items-center gap-2">
-            <code className="rounded-lg bg-white/[0.05] px-3 py-2 text-sm text-white bento:bg-neutral-100 bento:text-neutral-900">{link.replace("https://", "")}</code>
-            <CopyButton text={link} label="Copy link" />
-            <a href={`/lax/${st.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white bento:text-neutral-500">Open <ExternalLink className="h-3.5 w-3.5" /></a>
+        <Section title="Guest page" footer="The link never changes, so paste it into Turo once. Making a new one turns the old one off.">
+          <GuideCard guide={st.guide ?? {}} onSaved={load} />
+          <div className={cn(card, "space-y-4")}>
+            <div>
+              <p className={cn("text-[17px] font-semibold", label)}>Guest link</p>
+              <p className={cn("mt-1 text-[13px]", secondary)}>Always shows the newest code.</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <code className={cn(field, "truncate font-mono text-[14px] sm:flex-1")}>{link.replace("https://", "")}</code>
+              <CopyButton text={link} label="Copy link" className={cn(btnTinted, "h-auto")} />
+            </div>
+            <div className="rounded-[14px] bg-[#2C2C2E] p-3.5 bento:bg-[#F2F2F7]">
+              <p className={cn("text-[13px] font-medium", secondary)}>Message for Turo</p>
+              <p className={cn("mt-1 text-[15px] leading-snug", label)}>{message}</p>
+              <div className="mt-3"><CopyButton text={message} label="Copy message" className={cn(btnTinted, "h-auto")} /></div>
+            </div>
+            <button type="button" onClick={rotate} className={btnDestructivePlain}>
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Make a new link
+            </button>
           </div>
-          <div className="rounded-lg border border-white/[0.07] p-3 text-sm text-white/70 bento:border-neutral-200 bento:text-neutral-700">
-            <p>{message}</p>
-            <div className="mt-2"><CopyButton text={message} label="Copy message for Turo" /></div>
-          </div>
-          <button type="button" onClick={rotate} className="inline-flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 bento:text-neutral-400">
-            <RefreshCw className="h-3 w-3" /> Make a new link (turns off the old one)
-          </button>
-        </div>
+        </Section>
       )}
 
-      {/* History */}
+      <Section title="Keys and passes" id="passes">
+        <HostPassCard />
+        <TeslaCard />
+      </Section>
+
+      <Section title="Guest questions">
+        <AskCard />
+      </Section>
+
       {st && st.history.length > 0 && (
-        <div className={card}>
-          <p className="mb-3 text-sm font-medium text-white bento:text-neutral-900">Past codes</p>
-          <ul className="divide-y divide-white/[0.06] text-sm bento:divide-neutral-100">
+        <Section title="Past codes">
+          <ul className={cn(card, "divide-y p-0", separator)}>
             {st.history.map((h) => (
-              <li key={h.id} className="flex items-center justify-between gap-3 py-2">
-                <span className="text-white/80 bento:text-neutral-800">{monthLabel(h.valid_month)}</span>
-                <span className="text-white/45 bento:text-neutral-500">added {when(h.created_at)}</span>
+              <li key={h.id} className="flex min-h-[44px] items-center justify-between gap-3 px-5 py-3">
+                <span className={cn("text-[15px]", label)}>{monthLabel(h.valid_month)}</span>
+                <span className={cn("text-[13px]", secondary)}>Added {when(h.created_at)}</span>
               </li>
             ))}
           </ul>
-        </div>
+        </Section>
       )}
     </div>
   );

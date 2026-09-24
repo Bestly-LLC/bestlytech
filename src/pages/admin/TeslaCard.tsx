@@ -3,11 +3,12 @@ import { CheckCircle2, KeyRound, Loader2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { card } from "./laxUi";
 
 // Bound call: supabase.rpc unbound loses `this` ("reading 'rest'").
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
-const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
+
 
 type Car = { observed_at: string | null; battery: number | null; inside_f: number | null; outside_f: number | null; climate_on: boolean | null; online: string | null };
 type TState = { worker_online: boolean; worker_seen_at: string | null; car: Car | null; client_id: string | null; has_secret: boolean; connected: boolean; vehicle_name: string | null; vin_last4: string | null; last_error: string | null; enabled: boolean; monthly_cap_usd: number; per_trip_cap_usd: number; spent_usd: number };
@@ -80,9 +81,9 @@ export function TeslaCard() {
   return (
     <div id="tesla" className={cn(card, "space-y-3")}>
       <div className="flex items-start gap-3">
-        <KeyRound className="mt-0.5 h-4 w-4 text-violet-300 bento:text-violet-600" />
+        <KeyRound className="mt-0.5 h-4 w-4 text-[#409CFF] bento:text-[#007AFF]" />
         <div>
-          <p className="text-sm font-medium text-white bento:text-neutral-900">Tesla car controls</p>
+          <p className="text-[17px] font-semibold text-white bento:text-neutral-900">Tesla car controls</p>
           <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">
             Free-only: stops at ${Number(st.monthly_cap_usd).toFixed(2)}/month (Tesla gives $10 free). This month: ${Number(st.spent_usd).toFixed(2)}.
           </p>
@@ -127,7 +128,7 @@ export function TeslaCard() {
             placeholder="Paste the Tesla Client Secret"
             className="w-full rounded-lg border border-white/10 bg-transparent px-2.5 py-2 text-sm text-white bento:border-neutral-200 bento:text-neutral-900" />
           <button type="button" onClick={save} disabled={saving || secret.trim().length < 10}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-violet-500 px-5 py-2 text-sm font-medium text-white hover:bg-violet-400 disabled:opacity-40">
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#0A84FF] bento:bg-[#007AFF] px-5 py-2 text-sm font-medium text-white hover:bg-[#409CFF] disabled:opacity-40">
             {saving && <Loader2 className="h-4 w-4 animate-spin" />} Save to Vault
           </button>
         </div>
@@ -147,7 +148,7 @@ export function HostPassCard() {
       <div className="flex items-start gap-3">
         <Wallet className="mt-0.5 h-4 w-4 text-teal-300 bento:text-teal-600" />
         <div>
-          <p className="text-sm font-medium text-white bento:text-neutral-900">My host pass</p>
+          <p className="text-[17px] font-semibold text-white bento:text-neutral-900">My host pass</p>
           <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Your own lobby door pass. Add it once on your iPhone. When you save the new code on the 1st, it updates itself.</p>
         </div>
       </div>

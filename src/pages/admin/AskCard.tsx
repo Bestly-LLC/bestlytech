@@ -3,13 +3,14 @@ import { AlertTriangle, CheckCircle2, Loader2, MessageCircleQuestion } from "luc
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { card, field } from "./laxUi";
 
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
-const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
+
 const muted = "text-xs text-white/60 bento:text-neutral-600";
 const btn = "inline-flex items-center gap-1.5 rounded-full bg-[#111114] px-4 py-2 text-xs font-medium text-[#fff] ring-1 ring-[#ffffff26] disabled:opacity-60";
-const input = "w-full rounded-xl bg-[#0b0b0e] px-3 py-2 text-sm text-[#fff] ring-1 ring-[#ffffff26] placeholder:text-[#ffffff66] outline-none focus:ring-2 focus:ring-violet-400";
+const input = field;
 
 type Row = { at: string; q: string; a: string | null; source: string | null; unanswered: boolean; urgent: boolean; shared: boolean };
 type St = {
@@ -29,7 +30,7 @@ export function AskCard() {
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     const { data, error } = await rpc("lax_ask_admin_state");
-    if (!error) { setSt(data as St); setRules((r) => r ?? ((data as St).house_rules ?? "")); }
+    if (!error && data) { setSt(data as St); setRules((r) => r ?? ((data as St).house_rules ?? "")); }
   }, []);
   useEffect(() => { load(); }, [load]);
   if (!st) return null;
@@ -64,9 +65,9 @@ export function AskCard() {
   return (
     <div id="ask" className={cn(card, "space-y-4")}>
       <div className="flex items-start gap-3">
-        <MessageCircleQuestion className="mt-0.5 h-4 w-4 text-violet-300 bento:text-violet-600" />
+        <MessageCircleQuestion className="mt-0.5 h-4 w-4 text-[#409CFF] bento:text-[#007AFF]" />
         <div>
-          <p className="text-sm font-medium text-white bento:text-neutral-900">Guest helper: Ask a question</p>
+          <p className="text-[17px] font-semibold text-white bento:text-neutral-900">Guest helper: Ask a question</p>
           <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">
             Free chat on the guest page. Last 7 days: {st.week.asked} asked · {st.week.gemini} Gemini · {st.week.local} Mac mini · {st.week.faq} FAQ · {st.week.unanswered} sent to you.
           </p>
@@ -91,7 +92,7 @@ export function AskCard() {
       )}
 
       <div className="space-y-2">
-        <p className="text-sm font-medium text-white bento:text-neutral-900">House rules the helper should know</p>
+        <p className="text-[15px] font-semibold text-white bento:text-neutral-900">House rules the helper should know</p>
         <textarea rows={4} value={rules ?? ""} onChange={(e) => setRules(e.target.value)} className={input}
           placeholder={"e.g. No smoking or vaping. Pets OK with a crate. Return with at least 40% charge. Charging cable is in the frunk."} />
         <button type="button" onClick={saveRules} disabled={busy} className={btn}>Save rules</button>
@@ -104,11 +105,11 @@ export function AskCard() {
 
       {st.recent.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-white bento:text-neutral-900">Recent questions</p>
+          <p className="text-[15px] font-semibold text-white bento:text-neutral-900">Recent questions</p>
           <ul className="max-h-80 space-y-2 overflow-y-auto pr-1">
             {st.recent.map((r, i) => (
               <li key={i} className={cn("rounded-xl p-3 ring-1", r.urgent ? "ring-red-400/60" : r.unanswered ? "ring-amber-400/50" : "ring-white/10 bento:ring-neutral-200")}>
-                <p className="text-sm font-medium text-white bento:text-neutral-900">{r.q}</p>
+                <p className="text-[15px] font-semibold text-white bento:text-neutral-900">{r.q}</p>
                 <p className="mt-1 text-xs text-white/70 bento:text-neutral-700">{r.a || "…"}</p>
                 <p className="mt-1 text-[11px] text-white/45 bento:text-neutral-500">
                   {when(r.at)} · {r.source ? SRC[r.source] ?? r.source : "pending"}{r.shared ? " · shared link" : " · personal link"}{r.unanswered ? " · couldn't answer" : ""}{r.urgent ? " · urgent" : ""}

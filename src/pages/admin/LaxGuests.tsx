@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
+import { card } from "./laxUi";
 
 type Row = {
   reservation_id: number; first: string | null; last: string | null; starts_at: string; ends_at: string; lax: boolean;
@@ -159,7 +160,7 @@ function LinkSentRow({ res }: { res: number }) {
 }
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
-const card = "rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 bento:border-transparent bento:bg-[#fff] bento:rounded-[1.5rem]";
+
 const SITE = "https://bestly.tech"; // short guest links: bestly.tech/t/<7 chars>
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 
@@ -188,7 +189,7 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="font-medium text-white bento:text-neutral-900">
           {r.first ?? "Guest"} {r.last ? r.last.slice(0, 1) + "." : ""}
-          {r.lax ? <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-violet-500/20 px-2 py-0.5 text-[11px] text-violet-200 bento:bg-violet-100 bento:text-violet-800"><Plane className="h-3 w-3" />LAX</span>
+          {r.lax ? <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#0A84FF26] px-2 py-0.5 text-[11px] text-[#409CFF] bento:bg-[#007AFF1a] bento:text-[#007AFF]"><Plane className="h-3 w-3" />LAX</span>
             : <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/60 bento:bg-neutral-100 bento:text-neutral-500"><House className="h-3 w-3" />Home pickup</span>}
         </p>
         <p className="text-sm text-white/55 bento:text-neutral-500">{when(r.starts_at)} → {when(r.ends_at)}</p>
@@ -208,7 +209,7 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
             <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={home ? "guest email for the cool-down reminder (optional)" : "guest email (optional)"} type="email"
               className="h-9 w-64 max-w-full rounded-lg border border-white/10 bg-transparent px-2.5 text-sm text-white bento:border-neutral-200 bento:text-neutral-900" />
             {email !== (r.email ?? "") && (
-              <button type="button" onClick={() => act("email", email)} disabled={!!busy} className="h-9 rounded-full bg-violet-500 px-4 text-sm font-medium text-white disabled:opacity-60">
+              <button type="button" onClick={() => act("email", email)} disabled={!!busy} className="h-9 rounded-full bg-[#0A84FF] bento:bg-[#007AFF] px-4 text-sm font-medium text-white disabled:opacity-60">
                 {busy === "email" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
               </button>
             )}
@@ -221,7 +222,7 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
           <p className={cn("mt-1.5 text-xs", r.reminder_error ? "text-red-300 bento:text-red-600" : "text-white/45 bento:text-neutral-500")}>{status}</p></>}
         </>
       ) : (
-        <button type="button" onClick={() => act("link")} disabled={!!busy} className="mt-2 text-sm text-violet-300 underline underline-offset-2 bento:text-violet-700">
+        <button type="button" onClick={() => act("link")} disabled={!!busy} className="mt-2 text-sm text-[#409CFF] underline underline-offset-2 bento:text-[#007AFF]">
           {busy === "link" ? "Making…" : "Make guest link"}
         </button>
       )}
@@ -241,7 +242,7 @@ export function LaxGuests() {
   useEffect(() => { try { localStorage.setItem("bestly-host", "1"); } catch { /* private mode */ } }, []);
   return (
     <div className={card}>
-      <p className="text-sm font-medium text-white bento:text-neutral-900">Guests</p>
+      <p className="text-[17px] font-semibold text-white bento:text-neutral-900">Guests</p>
       <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Each trip gets its own page: their name, times, weather, and the car's battery and cabin temp from an hour before pickup. Reminder emails come from support@bestly.tech.</p>
       {!rows ? <Loader2 className="mt-4 h-5 w-5 animate-spin text-white/50" /> : rows.length === 0
         ? <p className="mt-4 text-sm text-white/55 bento:text-neutral-500">No upcoming trips.</p>
