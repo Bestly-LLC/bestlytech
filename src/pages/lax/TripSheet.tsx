@@ -13,7 +13,7 @@ type Which = "pickup" | "return";
 
 /** LAX: a boarding pass. Main part (Arriving / Pickup), a perforated tear line with punched notches, and a stub
  *  with the route like a flight (LAX → CAR, CAR → LAX). */
-function Tag({ which, active, onClick }: { which: Which; active: boolean; onClick: () => void }) {
+function Tag({ which, active, onClick, keyOn }: { which: Which; active: boolean; onClick: () => void; keyOn?: boolean }) {
   const pickup = which === "pickup";
   const Icon = pickup ? PlaneLanding : PlaneTakeoff;
   const bg = pickup ? PEACH : "var(--trip-accent-2, #E4527A)";
@@ -34,7 +34,8 @@ function Tag({ which, active, onClick }: { which: Which; active: boolean; onClic
         <span className="absolute -left-[8px] -top-[7px] h-[14px] w-[14px] rounded-full" style={{ background: notch }} />
         <span className="absolute -bottom-[7px] -left-[8px] h-[14px] w-[14px] rounded-full" style={{ background: notch }} />
       </span>
-      <span aria-hidden className="flex w-[52px] shrink-0 flex-col items-center justify-center font-mono leading-none">
+      {/* When the key badge sits on the stub, the route text steps aside so no letters peek out. */}
+      <span aria-hidden className={`flex w-[52px] shrink-0 flex-col items-center justify-center font-mono leading-none ${keyOn ? "invisible" : ""}`}>
         <span className="text-[12px] font-bold tracking-wider">{pickup ? "LAX" : "CAR"}</span>
         <span className="my-[3px] text-[9px] opacity-60">▼</span>
         <span className="text-[12px] font-bold tracking-wider">{pickup ? "CAR" : "LAX"}</span>
@@ -66,7 +67,7 @@ export function TagBar({ open, onOpen, top, variant, hideTags, glow, badge }: { 
     <span className={`relative flex flex-1 ${variant === "home" ? "rounded-[18px]" : "rounded-[12px]"} ${glow === w ? "trip-glow" : ""}`}>
       {el}
       {w === "pickup" && badge && (
-        <span className="pointer-events-none absolute -top-1.5 right-3 z-10" role="img" aria-label={badge}>
+        <span className={`pointer-events-none absolute top-2.5 z-10 ${variant === "home" ? "right-3" : "right-1.5"}`} role="img" aria-label={badge}>
           <span className="trip-key-float grid h-10 w-10 place-items-center rounded-full bg-white text-[#1A1140] ring-2 ring-white/70"
             style={{ boxShadow: "0 6px 18px -6px rgba(0,0,0,.6), 0 0 16px var(--trip-accent, #FFB878)" }}>
             <KeyRound className="h-5 w-5" strokeWidth={2.4} />
@@ -82,7 +83,7 @@ export function TagBar({ open, onOpen, top, variant, hideTags, glow, badge }: { 
       <div aria-hidden className="h-[3px] w-full" style={{ background: "var(--trip-strap, repeating-linear-gradient(90deg, #FFB87855 0 10px, transparent 10px 16px))" }} />
       {top && <div className="mx-auto max-w-md px-4 pt-2.5">{top}</div>}
       {!hideTags && <div className="mx-auto flex max-w-md gap-3 px-4 pt-2.5">
-        {wrap("pickup", variant === "home" ? <Ticket which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} /> : <Tag which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} />)}
+        {wrap("pickup", variant === "home" ? <Ticket which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} /> : <Tag which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} keyOn={!!badge} />)}
         {wrap("return", variant === "home" ? <Ticket which="return" active={open === "return"} onClick={() => onOpen("return")} /> : <Tag which="return" active={open === "return"} onClick={() => onOpen("return")} />)}
       </div>}
     </nav>
