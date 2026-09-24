@@ -92,7 +92,7 @@ export function useDemoStage(kind: "home" | "lax", enabled: boolean) {
 /** Floating switcher so the host can walk the trip from booking to return. */
 export function DemoBar({ kind, stage, onStage }: { kind: "home" | "lax"; stage: string; onStage: (s: string) => void }) {
   return (
-    <div className="fixed inset-x-0 bottom-[8.5rem] z-50 flex justify-center px-3" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+    <div className="fixed inset-x-0 bottom-[8.5rem] z-40 flex justify-center px-3" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
       <label className="flex w-full max-w-md items-center gap-2 rounded-2xl bg-black/85 px-3 py-2 text-white shadow-2xl ring-1 ring-white/20 backdrop-blur">
         <FlaskConical className="h-4 w-4 shrink-0 text-amber-300" aria-hidden />
         <span className="shrink-0 text-[12px] font-semibold uppercase tracking-[0.12em] text-amber-300">Demo</span>
