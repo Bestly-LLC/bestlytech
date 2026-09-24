@@ -98,7 +98,7 @@ export function GuestFunnel() {
                   const skip = skipped(t, i);
                   const overdue = !s.at && !skip && due != null && Date.now() > due;
                   return (
-                    <li key={s.id} title={s.guessed ? `${s.label}: likely done (she drove the car; Set Up tracking started after this trip began)` : s.at ? `${s.label}: ${t12(s.at)}${s.count && s.count > 1 ? ` (${s.count}×)` : ""}` : due ? `${s.label}: expected by ${t12(new Date(due).toISOString())}` : s.label}
+                    <li key={s.id} title={s.guessed ? `${s.label}: likely done (the guest drove the car; Set Up tracking started after this trip began)` : s.at ? `${s.label}: ${t12(s.at)}${s.count && s.count > 1 ? ` (${s.count}×)` : ""}` : due ? `${s.label}: expected by ${t12(new Date(due).toISOString())}` : s.label}
                       className={cn("inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium",
                         s.at ? pill.green : overdue ? pill.orange : "bg-[#2C2C2E] text-[#EBEBF599] bento:bg-[#7676801a] bento:text-[#3C3C4399]")}>
                       {s.at ? <Check className="h-3.5 w-3.5" aria-hidden /> : overdue ? <Clock className="h-3.5 w-3.5" aria-hidden /> : <Minus className="h-3.5 w-3.5" aria-hidden />}
