@@ -136,7 +136,16 @@ export function CarHealth() {
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
         <Tile icon={<BatteryCharging className="h-4 w-4" />} k="Battery" v={h.battery != null ? `${h.battery}%${h.range ? ` · ${Math.round(h.range)} mi` : ""}` : "?"} sub={h.charging && h.charging !== "Disconnected" ? h.charging : h.plugged_in ? "Plugged in" : "Not plugged in"} />
         <Tile icon={h.locked ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />} k="Doors" v={h.locked == null ? "?" : h.locked ? "Locked" : "Unlocked"} bad={h.locked === false} sub={h.online ?? ""} />
-        <Tile icon={<Gauge className="h-4 w-4" />} k="Tires (psi)" v={tires ? `${tires.fl ?? "?"} ${tires.fr ?? "?"} / ${tires.rl ?? "?"} ${tires.rr ?? "?"}` : "Not read yet"} bad={low != null && low < 37} sub={h.health_at ? `Read ${when(h.health_at)}` : "Reads when the car is awake"} />
+        <Tile
+          icon={<Gauge className="h-4 w-4" />}
+          k="Tires (psi)"
+          v={tires
+            ? <><TireGrid tires={tires} low={LOW_PSI} />{low != null && low < LOW_PSI && (
+                <span className={cn("mt-1 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", tint.orange)}>Low</span>
+              )}</>
+            : "Not read yet"}
+          sub={h.health_at ? `Read ${when(h.health_at)}` : "Reads when the car is awake"}
+        />
         <Tile icon={<ShieldCheck className="h-4 w-4" />} k="Software" v={h.software ?? "?"} bad={!!upd && upd !== "" } sub={upd ? `Update ${upd}` : "Up to date"} />
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -165,7 +174,35 @@ export function CarHealth() {
   );
 }
 
-function Tile({ icon, k, v, sub, bad }: { icon: React.ReactNode; k: string; v: string; sub?: string; bad?: boolean }) {
+/** Below this, Tesla's own warning is close; flag the tyre rather than the whole card. */
+const LOW_PSI = 37;
+
+function TireGrid({ tires, low }: { tires: Record<string, number | null>; low: number }) {
+  const cell = (pos: "fl" | "fr" | "rl" | "rr", name: string) => {
+    const v = tires[pos];
+    const under = typeof v === "number" && v < low;
+    return (
+      <span className={cn("tabular-nums", under ? tint.orange : label)}>
+        <span className="sr-only">{name}: </span>
+        {v ?? "?"}
+        {under && <span className="sr-only"> (low)</span>}
+      </span>
+    );
+  };
+  return (
+    // A hairline cross reads as the car from above, so left stays left without a legend.
+    <div className="mt-1 grid w-fit grid-cols-2 text-[15px] font-semibold leading-tight
+                    [&>span]:px-2 [&>span]:py-0.5
+                    [&>span:nth-child(even)]:border-l [&>span:nth-child(odd)]:pl-0
+                    [&>span:nth-child(n+3)]:border-t
+                    [&>span]:border-white/[0.10] bento:[&>span]:border-black/10">
+      {cell("fl", "Front left")}{cell("fr", "Front right")}
+      {cell("rl", "Rear left")}{cell("rr", "Rear right")}
+    </div>
+  );
+}
+
+function Tile({ icon, k, v, sub, bad }: { icon: React.ReactNode; k: string; v: React.ReactNode; sub?: string; bad?: boolean }) {
   return (
     <div className="rounded-2xl bg-white/[0.04] p-3 bento:bg-neutral-50">
       <p className={cn("flex items-center gap-1.5 text-[11px] uppercase tracking-wide", secondary)}>{icon}{k}</p>
