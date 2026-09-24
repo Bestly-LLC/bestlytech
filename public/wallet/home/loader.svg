@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a1420"/><stop offset=".6" stop-color="#c8662e"/><stop offset="1" stop-color="#f7d58e"/></linearGradient><clipPath id="c"><rect width="256" height="256" rx="56"/></clipPath></defs>
+<g clip-path="url(#c)"><rect width="256" height="256" fill="url(#s)"/>
+<path d="M-10 190 C60 150 140 146 270 170 L270 270 L-10 270Z" fill="#2b1a17"/>
+<g transform="translate(-26 168) rotate(-4)"><text x="0" y="0" font-family="Helvetica Neue, Arial Black, Arial, sans-serif" font-weight="900" font-size="132" fill="#f6f1e6">HO</text></g>
+<path d="M-10 214 C80 196 170 200 270 212 L270 270 L-10 270Z" fill="#150c0a"/>
+</g></svg>

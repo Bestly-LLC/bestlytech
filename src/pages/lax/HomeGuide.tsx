@@ -3,22 +3,84 @@
  * charging (+ the pickup % to return with), rules, Full Self-Driving, valet, accidents & roadside,
  * and the video links (all checked: Tesla's own YouTube channels).
  */
-import { useState, type ReactNode } from "react";
-import { AlertTriangle, BatteryCharging, ChevronDown, ClipboardList, Cpu, ExternalLink, FileText, KeySquare, Phone, PlayCircle } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { AlertTriangle, BatteryCharging, ChevronDown, ClipboardList, Cpu, ExternalLink, FileText, KeySquare, Phone, Play, PlayCircle, X } from "lucide-react";
 
 const ACCENT = "var(--trip-accent)";
 const yt = (id: string) => `https://www.youtube.com/watch?v=${id}`;
+const PLAYLIST = "PLk81eR51-zheKxIvRMA-b3FLZaIPfDCni";
+
+export type Video = { title: string; sub: string; href: string; id?: string; list?: string; thumb: string };
+const thumb = (id: string) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+
+/** Opens the in-page player (VideoPlayer listens). */
+export function playVideo(v: Video) { window.dispatchEvent(new CustomEvent("trip-video", { detail: v })); }
+
+/** In-page YouTube player (privacy-enhanced embed), opened by playVideo(). */
+export function VideoPlayer() {
+  const [v, setV] = useState<Video | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => setV((e as CustomEvent<Video>).detail);
+    window.addEventListener("trip-video", on);
+    return () => window.removeEventListener("trip-video", on);
+  }, []);
+  useEffect(() => {
+    if (!v) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") setV(null); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [v]);
+  if (!v) return null;
+  const src = v.list
+    ? `https://www.youtube-nocookie.com/embed/videoseries?list=${v.list}&autoplay=1&playsinline=1&rel=0`
+    : `https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&playsinline=1&rel=0&modestbranding=1`;
+  return (
+    <div role="dialog" aria-modal="true" aria-label={v.title} className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm" onClick={() => setV(null)}>
+      <div className="w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 flex items-center gap-3">
+          <p className="min-w-0 flex-1 truncate text-[16px] font-semibold text-white">{v.title}</p>
+          <button type="button" onClick={() => setV(null)} aria-label="Close video" className="grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="relative w-full overflow-hidden rounded-2xl bg-black ring-1 ring-white/15" style={{ aspectRatio: "16 / 9" }}>
+          <iframe src={src} title={v.title} className="absolute inset-0 h-full w-full" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
+        </div>
+        <a href={v.href} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[13px] text-white/60">Open in YouTube <ExternalLink className="h-3.5 w-3.5" /></a>
+      </div>
+    </div>
+  );
+}
+
+/** Video list with thumbnails; tapping plays it right here. */
+export function VideoList() {
+  return (
+    <ul className="grid gap-2.5">
+      {VIDEOS.map((v) => (
+        <li key={v.title}>
+          <button type="button" onClick={() => playVideo(v)} className="flex w-full items-center gap-3 rounded-2xl p-1.5 text-left active:bg-white/[0.06]">
+            <span className="relative block h-[64px] w-[114px] shrink-0 overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
+              <img src={v.thumb} alt="" loading="lazy" className="h-full w-full object-cover" />
+              <span className="absolute inset-0 grid place-items-center bg-black/25"><span className="grid h-8 w-8 place-items-center rounded-full" style={{ background: "var(--trip-accent)" }}><Play className="ml-0.5 h-4 w-4 fill-current text-[#120E0B]" /></span></span>
+            </span>
+            <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold leading-snug text-white">{v.title}</span><span className="block text-[13px] leading-snug text-white/60">{v.sub}</span></span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 // Checked 2026-09-23 with YouTube oEmbed: every one is live on Tesla's official channels.
-export const VIDEOS: { title: string; sub: string; href: string }[] = [
-  { title: "Full tutorial playlist", sub: "Tesla Tutorials · Model 3 and Model Y, 8 short videos", href: "https://www.youtube.com/playlist?list=PLk81eR51-zheKxIvRMA-b3FLZaIPfDCni" },
-  { title: "Essentials", sub: "Getting in, keys and the basics", href: yt("uhZf67ttS3U") },
-  { title: "Physical controls", sub: "Shifting (right stalk), wipers, lights", href: yt("C5p4RlS09D0") },
-  { title: "Touchscreen", sub: "Climate, seats, mirrors, profiles", href: yt("esjtcjujV54") },
-  { title: "Charging", sub: "Superchargers and the charge port", href: yt("CN40_NNziCo") },
-  { title: "Full Self-Driving (Supervised)", sub: "3-minute overview from Tesla", href: yt("TUDiG7PcLBs") },
-  { title: "Autopilot", sub: "Cruise control and lane keeping", href: yt("-FeMwPUAOLM") },
+const v = (title: string, sub: string, id: string): Video => ({ title, sub, id, href: yt(id), thumb: thumb(id) });
+export const VIDEOS: Video[] = [
+  { title: "Full tutorial playlist", sub: "Tesla Tutorials · 8 short videos, plays in order", list: PLAYLIST, href: `https://www.youtube.com/playlist?list=${PLAYLIST}`, thumb: thumb("uhZf67ttS3U") },
+  v("Essentials", "Getting in, keys and the basics", "uhZf67ttS3U"),
+  v("Physical controls", "Shifting (right stalk), wipers, lights", "C5p4RlS09D0"),
+  v("Touchscreen", "Climate, seats, mirrors, profiles", "esjtcjujV54"),
+  v("Charging", "Superchargers and the charge port", "CN40_NNziCo"),
+  v("Full Self-Driving (Supervised)", "3-minute overview from Tesla", "TUDiG7PcLBs"),
+  v("Autopilot", "Cruise control and lane keeping", "-FeMwPUAOLM"),
 ];
+const FSD = VIDEOS[5];
 
 const INCIDENT_CARD = "https://support-resources.turo.com/incidents/US%20Incident%20Information%20Card.pdf";
 const DINER = "7001 Santa Monica Blvd, West Hollywood, CA";
@@ -114,7 +176,7 @@ export function HomeGuide({ pickupBattery }: { pickupBattery?: number | null }) 
         <H>Take back over: any one of these</H>
         <Bullets items={["Press the brake", "Turn the wheel", "Tap Cancel on the screen"]} />
         <p className="mt-2 text-[14px] text-white/70">No blue steering-wheel icon or blue path? It isn't available, so drive normally. Not sure? Don't turn it on: nothing about this trip needs FSD. Skip it in heavy construction, storms and tight parking garages. Speed Profiles (Sloth for calm city driving) and Arrival Options are in the same menu.</p>
-        <a href={yt("TUDiG7PcLBs")} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white px-4 text-[15px] font-semibold text-[#140826]"><PlayCircle className="h-4 w-4" /> Watch the 3-minute video</a>
+        <button type="button" onClick={() => playVideo(FSD)} className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white px-4 text-[15px] font-semibold text-[#140826]"><PlayCircle className="h-4 w-4" /> Watch the 3-minute video</button>
       </Fold>
 
       <Fold icon={KeySquare} title="Valet parking" sub="You keep your phone. No key card to hand over">

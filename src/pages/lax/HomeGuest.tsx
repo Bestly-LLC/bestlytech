@@ -10,27 +10,32 @@
  */
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
-import { ArrowRight, BellRing, CheckCircle2, ExternalLink, Flashlight, KeyRound, Loader2, LockOpen, MapPin, Navigation, PlayCircle, ShieldAlert, Smartphone } from "lucide-react";
+import { ArrowRight, BellRing, CheckCircle2, Flashlight, KeyRound, Loader2, LockOpen, MapPin, Navigation, ShieldAlert, Smartphone } from "lucide-react";
 import { TagBar, TripSheet } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
 import { CarCard, ClimateAdvice, DEMO_CAR, TripCard, WeatherCard, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
-import { HomeGuide, VIDEOS } from "./HomeGuide";
+import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
 
-// WeHo / LA theme: Sunset Strip at night. Neon pink + mint on late-night purple, palms, city lights.
+// Hollywood theme: golden hour over the hills. Gold + cream on warm black, Art Deco touches.
 const PEACH = "var(--trip-accent)";
-const WEHO = {
-  "--trip-accent": "#FF5DB1",
-  "--trip-accent-2": "#8FF3E4",
-  "--trip-bg": "#140826",
-  "--trip-bar": "rgba(20,8,38,0.92)",
-  "--trip-sheet-head": "linear-gradient(180deg, #3a1260, #140826)",
-  "--trip-strap": "repeating-linear-gradient(90deg, #FF5DB166 0 10px, transparent 10px 16px)",
+const HOLLYWOOD = {
+  "--trip-accent": "#E8B44C",
+  "--trip-accent-2": "#F3E6CC",
+  "--trip-bg": "#120E0B",
+  "--trip-bar": "rgba(18,14,11,0.94)",
+  "--trip-sheet-head": "linear-gradient(180deg, #2b1a10, #120E0B)",
+  "--trip-strap": "repeating-linear-gradient(90deg, #E8B44C66 0 10px, transparent 10px 16px)",
 } as CSSProperties;
-const NEON = { textShadow: "0 0 6px rgba(255,93,177,0.9), 0 0 18px rgba(255,93,177,0.6), 0 2px 10px rgba(20,8,38,0.9)" };
 
-/** Neon tube under the hero, like a Sunset Strip sign. */
-function NeonLine({ className = "" }: { className?: string }) {
-  return <div aria-hidden className={`h-[3px] rounded-full ${className}`} style={{ background: "linear-gradient(90deg, transparent, #FF5DB1 20%, #8FF3E4 80%, transparent)", boxShadow: "0 0 12px rgba(255,93,177,0.7)" }} />;
+/** Art Deco gold rule under the hero. */
+function DecoRule({ className = "" }: { className?: string }) {
+  return (
+    <div aria-hidden className={`flex items-center gap-2 ${className}`}>
+      <span className="h-px flex-1" style={{ background: "linear-gradient(90deg, transparent, #E8B44C)" }} />
+      <span className="h-2 w-2 rotate-45" style={{ background: "#E8B44C" }} />
+      <span className="h-px flex-1" style={{ background: "linear-gradient(90deg, #E8B44C, transparent)" }} />
+    </div>
+  );
 }
 
 export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock";
@@ -119,7 +124,7 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
             <Step n={3}>At the car, open the Tesla app and tap <b className="text-white">Unlock</b>. The app walks you through turning on your phone key.</Step>
           </ol>
           {k.link
-            ? <a href={k.link} className="mt-4 flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#1A1140] shadow-lg shadow-black/30 active:scale-[0.99]" style={{ background: PEACH }}>
+            ? <a href={k.link} className="mt-4 flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#120E0B] shadow-lg shadow-black/30 active:scale-[0.99]" style={{ background: PEACH }}>
                 <KeyRound className="h-5 w-5" /> Add the car to my Tesla app
               </a>
             : <p className="mt-4 rounded-xl bg-white/10 p-3 text-[14px] text-white/80">Preview: the real button appears here 2 hours before pickup.</p>}
@@ -164,25 +169,27 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
   const live = !!pub.controls && !demo;
   const spot = pub.spot ?? (demoCar ? { lat: home.lat, lon: home.lon, observed_at: new Date(Date.now() - 4 * 60e3).toISOString() } : null);
   const street = home.address.split(",")[0];
-  const shadow = { textShadow: "0 2px 12px rgba(26,17,64,0.85), 0 1px 2px rgba(26,17,64,0.9)" };
+  const shadow = { textShadow: "0 2px 14px rgba(14,10,20,0.9), 0 1px 2px rgba(14,10,20,0.9)" };
   const lockedUntil = demoCar ? null : pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending";
 
   return (
-    <div className="min-h-screen text-white" style={{ ...WEHO, background: "radial-gradient(120% 60% at 50% 0%, #2a0f4d 0%, #140826 60%)", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
+    <div className="min-h-screen text-white" style={{ ...HOLLYWOOD, background: "radial-gradient(120% 60% at 50% 0%, #2b1a10 0%, #120E0B 62%)", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
       <Helmet>
         <title>Picking up your Turo Tesla in West Hollywood</title>
         <meta name="robots" content="noindex, nofollow" />
-        <meta name="theme-color" content="#140826" />
+        <meta name="theme-color" content="#120E0B" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Limelight&display=swap" />
       </Helmet>
 
       <div className="relative">
-        <img src="/wallet/home/hero-night.svg" alt="" className="block h-48 w-full object-cover object-[55%_center] sm:h-60" />
+        <img src="/wallet/home/hero-hills.svg" alt="" className="block h-52 w-full object-cover object-[62%_center] sm:h-64" />
         <div className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: PEACH, ...shadow }}>{pub.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={shadow}>Your Tesla in <span className="text-[#FFD6EC]" style={NEON}>WeHo</span></h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: PEACH, ...shadow }}>{pub.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
+          <h1 className="mt-1 text-[32px] leading-[1.05] sm:text-5xl" style={{ ...shadow, fontFamily: "Limelight, Georgia, serif", color: "#F7E7C4" }}>Your Tesla,<br />West Hollywood</h1>
         </div>
       </div>
-      <NeonLine className="mx-5" />
+      <DecoRule className="mx-5 -mt-px" />
 
       <main className="mx-auto max-w-md px-5 pb-48 pt-5">
         <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">Tesla Model 3</b> on <b className="text-white">Turo</b>. It's parked on the street at <b className="text-white">{street}</b>. Your phone is the key: no meetup, no keys to hand over. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for the steps.</p>
@@ -214,18 +221,8 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
 
         <HomeGuide pickupBattery={pub.pickup_battery} />
 
-        <Section kicker="Learn your Tesla" title="Short videos from Tesla">
-          <ul className="divide-y divide-white/10">
-            {VIDEOS.map((v) => (
-              <li key={v.title}>
-                <a href={v.href} target="_blank" rel="noreferrer" className="flex items-center gap-3 py-3 active:opacity-70">
-                  <PlayCircle className="h-8 w-8 shrink-0" style={{ color: PEACH }} strokeWidth={1.5} />
-                  <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold text-white">{v.title}</span><span className="block text-[13px] leading-snug text-white/60">{v.sub}</span></span>
-                  <ExternalLink className="h-4 w-4 shrink-0 text-white/40" />
-                </a>
-              </li>
-            ))}
-          </ul>
+        <Section kicker="Now showing" title="Short videos from Tesla">
+          <VideoList />
         </Section>
 
         {pub.home?.host_note && (
@@ -256,6 +253,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
         </TripSheet>
 
         <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" />
+        <VideoPlayer />
         <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home />
 
         <p className="mt-10 text-center text-sm text-white/50">Questions? Tap Ask a question, or message your host in the Turo app.</p>

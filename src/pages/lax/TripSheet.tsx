@@ -42,6 +42,29 @@ function Tag({ which, active, onClick, home }: { which: Which; active: boolean; 
   );
 }
 
+/** Home pickup: vintage cinema tickets instead of luggage tags. */
+function Ticket({ which, active, onClick }: { which: Which; active: boolean; onClick: () => void }) {
+  const pickup = which === "pickup";
+  return (
+    <button type="button" onClick={onClick} aria-expanded={active}
+      className="relative flex h-[60px] flex-1 items-stretch overflow-hidden rounded-[10px] text-left text-[#1c140e] shadow-lg shadow-black/40 transition active:scale-[0.97] motion-reduce:transition-none"
+      style={{
+        background: pickup ? "var(--trip-accent, #E8B44C)" : "var(--trip-accent-2, #F3E6CC)",
+        // punched half-circles on both sides, like a torn-off ticket
+        WebkitMaskImage: "radial-gradient(circle 8px at 0 50%, transparent 7.5px, #000 8px), radial-gradient(circle 8px at 100% 50%, transparent 7.5px, #000 8px)",
+        WebkitMaskComposite: "source-in", maskImage: "radial-gradient(circle 8px at 0 50%, transparent 7.5px, #000 8px), radial-gradient(circle 8px at 100% 50%, transparent 7.5px, #000 8px)", maskComposite: "intersect",
+      }}>
+      <span className="flex w-10 shrink-0 items-center justify-center border-r-2 border-dashed border-[#1c140e]/35">
+        <span className="-rotate-90 whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.18em] opacity-70">{pickup ? "Scene 1" : "Scene 2"}</span>
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col justify-center pl-3">
+        <span className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-60">Admit one</span>
+        <span className="text-[19px] leading-tight" style={{ fontFamily: "Limelight, Georgia, serif" }}>{pickup ? "Pickup" : "Return"}</span>
+      </span>
+    </button>
+  );
+}
+
 export function TagBar({ open, onOpen, top, variant }: { open: Which | null; onOpen: (w: Which) => void; top?: ReactNode; variant?: "lax" | "home" }) {
   return (
     <nav aria-label="Trip steps" className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[color:var(--trip-bar,rgba(20,12,51,0.9))] backdrop-blur-md"
@@ -50,8 +73,8 @@ export function TagBar({ open, onOpen, top, variant }: { open: Which | null; onO
       <div aria-hidden className="h-[3px] w-full" style={{ background: "var(--trip-strap, repeating-linear-gradient(90deg, #FFB87855 0 10px, transparent 10px 16px))" }} />
       {top && <div className="mx-auto max-w-md px-4 pt-2.5">{top}</div>}
       <div className="mx-auto flex max-w-md gap-3 px-4 pt-2.5">
-        <Tag which="pickup" home={variant === "home"} active={open === "pickup"} onClick={() => onOpen("pickup")} />
-        <Tag which="return" home={variant === "home"} active={open === "return"} onClick={() => onOpen("return")} />
+        {variant === "home" ? <Ticket which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} /> : <Tag which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} />}
+        {variant === "home" ? <Ticket which="return" active={open === "return"} onClick={() => onOpen("return")} /> : <Tag which="return" active={open === "return"} onClick={() => onOpen("return")} />}
       </div>
     </nav>
   );

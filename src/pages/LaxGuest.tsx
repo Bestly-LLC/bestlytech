@@ -158,7 +158,11 @@ export default function LaxGuest() {
   useEffect(() => {
     const load = () => (token
       ? rpc("lax_guest_public", { p_token: token })
-      : rpc("lax_pass_public", { p_slug: slug })).then(({ data }) => setPub((data as Pub) ?? { ok: false }));
+      : rpc("lax_pass_public", { p_slug: slug })).then(({ data }) => {
+        const p = (data as Pub) ?? { ok: false };
+        if (token && p.kind) { try { localStorage.setItem(`tripkind:${token}`, p.kind); } catch { /* private mode */ } }
+        setPub(p);
+      });
     load();
     // Keep the live car card fresh while the page is open.
     const id = token ? window.setInterval(load, 5 * 60 * 1000) : 0;
@@ -237,6 +241,13 @@ export default function LaxGuest() {
 
   const shadow = { textShadow: "0 2px 12px rgba(26,17,64,0.85), 0 1px 2px rgba(26,17,64,0.9)" };
 
+  // Home pickup: while loading, show the Hollywood-hills loader if we know it's a home trip (matches trip.html's splash).
+  const knownKind = (() => { try { return token ? localStorage.getItem(`tripkind:${token}`) : null; } catch { return null; } })();
+  if (token && !pub && knownKind !== "lax") return (
+    <div className="flex min-h-screen items-center justify-center" style={{ background: "#120E0B" }} role="status" aria-label="Loading">
+      <img src="/wallet/home/loader.svg" alt="" className="h-[88px] w-[88px] animate-pulse rounded-[20px] motion-reduce:animate-none" />
+    </div>
+  );
   // Home pickup (733 N Kings Rd): same page system, home look. No QR code, shuttle or garage.
   if (token && pub?.ok && pub.kind === "home") return <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} />;
 

@@ -36,6 +36,8 @@ export default defineConfig(() => ({
         admin: path.resolve(__dirname, "admin.html"),
         // Turo guest page: its own link preview + share-sheet identity (see lax.html).
         lax: path.resolve(__dirname, "lax.html"),
+        // Personal trip pages /t/:token (LAX or home pickup), see trip.html.
+        trip: path.resolve(__dirname, "trip.html"),
       },
     },
   },
