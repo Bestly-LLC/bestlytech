@@ -1,4 +1,5 @@
 import { SECRET_KEY, isServiceRequest } from "../_shared/keys.ts";
+import { llm } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0
 // admin-chat — Scout, the assistant inside bestly.tech/admin.
 //
 // Rules, in order of how much trouble breaking them causes:
@@ -685,9 +686,7 @@ const ASKS_FOR_WORK = /^take this off my plate|^keep going|^do it\b|\b(are|is) (
 const CLAIMS_WORK = /\b(scout|i)\s*(will|'ll|would|am going to|can'?t|cannot|can not|won'?t|is unable|am unable|don'?t have|doesn'?t have)\b|\bi'll\b|\bmanually\b|\byou('ll| will)? (need|have) to\b|\b(it'?s|it is|all|now) (done|fixed|resolved|pushed)\b|\bno action (is )?needed\b|\btakes? (a few )?minutes\b/i;
 
 async function freeTry(threadId: string, text: string, page: unknown): Promise<{ answer?: string; why: string }> {
-  const { data: st } = await db.from("partner_ai_status").select("seen_at").eq("id", 1).maybeSingle();
-  const seen = (st as any)?.seen_at ? Date.parse((st as any).seen_at) : 0;
-  if (Date.now() - seen > 3 * 60_000) return { why: "The free AI on your Mac mini isn't answering right now." };
+  // v26: the free AI is now Groq -> Cloudflare -> Mac mini (_shared/free-llm.ts), so the Mac being asleep no longer matters.
   // v23: work goes to the model with tools. So does every follow-up in a thread that began as a hand-off.
   if (ASKS_FOR_WORK.test(text.trim())) return { why: FREE_WHY.ACTION };
   const { data: first } = await db.from("admin_chat_messages").select("body").eq("thread_id", threadId).eq("role", "user")
@@ -711,21 +710,20 @@ ${FREE_FACTS}
 Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}
 Conversation:
 ${convo}`;
-  const { data: job, error } = await db.from("fix_ai_jobs").insert({ issue_key: `scout-chat:${threadId}`, prompt }).select("id").single();
-  if (error || !job) return { why: "The free AI couldn't take it." };
-  const until = Date.now() + 45_000;
-  while (Date.now() < until) {
-    await sleep(1500);
-    const { data: row } = await db.from("fix_ai_jobs").select("status, answer").eq("id", job.id).maybeSingle();
-    if ((row as any)?.status === "done") {
-      const a = String((row as any).answer ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-      const m = a.match(/NEEDS_TOOLS:\s*([A-Z]+)?/i);
-      if (m || !a) return { why: FREE_WHY[(m?.[1] ?? "").toUpperCase()] ?? "The free AI can't do this one." };
-      if (CLAIMS_WORK.test(a)) return { why: FREE_WHY.ACTION }; // v23: it tried to promise/refuse work anyway
-      return { answer: a, why: "" };
-    }
+  let a = "";
+  try {
+    const r = await llm({
+      task: "summarize", system: prompt, user: "Reply to Jared's last message now, following the rules above.",
+      job: "chat-free", ref: threadId, fn: "admin-chat", scope: "chat", paid: "never", maxTokens: 1200, deadlineMs: 30_000,
+    });
+    a = r.text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  } catch {
+    return { why: "The free AI isn't answering right now." };
   }
-  return { why: "The free AI on your Mac mini took too long." };
+  const m = a.match(/NEEDS_TOOLS:\s*([A-Z]+)?/i);
+  if (m || !a) return { why: FREE_WHY[(m?.[1] ?? "").toUpperCase()] ?? "The free AI can't do this one." };
+  if (CLAIMS_WORK.test(a)) return { why: FREE_WHY.ACTION }; // v23: it tried to promise/refuse work anyway
+  return { answer: a, why: "" };
 }
 
 /**
