@@ -11,7 +11,7 @@ import { Brush,
   Car,
   Mic,
   Handshake,
-  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, Siren, QrCode, SlidersHorizontal,
+  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, Siren, CarFront,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -70,8 +70,7 @@ const homeHubItems = [
 
 const turoItems = [
   { title: "Turo Watch", url: "/admin/turo", icon: Car },
-  { title: "LAX Parking Pass", url: "/admin/turo/lax-pass", icon: QrCode },
-  { title: "Trip settings", url: "/admin/turo/settings", icon: SlidersHorizontal },
+  { title: "Guest Trips", url: "/admin/turo/lax-pass", icon: CarFront },
   { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Brush },
 ];
 
@@ -212,7 +211,7 @@ export function AdminSidebar() {
     if (path === "/admin/home-hub") return currentPath === "/admin/home-hub";
     // Lead detail pages (a cloud deal, a marketplace submission) belong to Leads.
     if (path === "/admin/leads") return ["/admin/leads", "/admin/cloud", "/admin/submissions", "/admin/hires"].some((p) => currentPath.startsWith(p));
-    // A deeper nav item wins: on /admin/turo/lax-pass only "LAX Parking Pass" lights up, not "Turo Watch".
+    // A deeper nav item wins: on /admin/turo/lax-pass only "Guest Trips" lights up, not "Turo Watch".
     const under = (p: string) => currentPath === p || currentPath.startsWith(p + "/");
     if (!under(path)) return false;
     return !ALL_NAV_URLS.some((u) => u.length > path.length && u.startsWith(path + "/") && under(u));

@@ -8,17 +8,16 @@
  * lax_pass_reminder() (cron, 9 AM PT daily) nudges Scout when this month's code isn't in yet.
  */
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
-import { Link } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, ImageUp, Loader2, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { LaxGuests } from "./LaxGuests";
 import { TripHealth } from "./TripHealth";
 import { GuestHelperCard } from "./AskCard";
+import { TripSettingsBody } from "./TripSettings";
 import { Section, Segmented, btnPlain, btnPrimary, btnTinted, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
 
 type CodeRow = { id: string; payload: string; valid_month: string; note: string | null; created_at: string; is_this_month?: boolean };
@@ -177,8 +176,9 @@ export default function LaxPass() {
   };
 
 
+  // Settings stay folded unless a link points into them (e.g. back from Tesla sign-in: #tesla).
+  const [openSettings, setOpenSettings] = useState(() => typeof window !== "undefined" && /^#(tesla|ask|settings|helper)/.test(window.location.hash));
   const link = st ? `${SITE}/lax/${st.slug}` : "";
-  const message = `How to pick up your Turo car at LAX: shuttle steps, the garage address, and the QR code that opens the lobby door (you can add it to Apple or Google Wallet). ${link}`;
   const cur = st?.current;
   const missing = st && (!cur || !cur.is_this_month);
 
@@ -190,14 +190,19 @@ export default function LaxPass() {
 
   return (
     <div className="w-full space-y-8">
-      <PageHeader title="LAX Parking Pass" description="This month's Park My Share code, the trips using it, and the guest page."
-        actions={<Link to="/admin/turo/settings" className={cn(btnTinted, "px-4")}><Settings className="h-4 w-4" aria-hidden /> Settings</Link>} />
+      <PageHeader title="Guest Trips" description="Every Turo trip: its guest page, Tesla key, Turo message and health. Plus the LAX garage code."
+        actions={<button type="button" onClick={() => { setOpenSettings(true); window.setTimeout(() => document.getElementById("settings")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }} className={cn(btnTinted, "px-4")}><Settings className="h-4 w-4" aria-hidden /> Settings</button>} />
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { take(e.target.files?.[0]); e.target.value = ""; }} />
 
       {/* Fills the width: sections flow into as many ~30rem columns as fit (1 on phones, 2-3 on wide screens). */}
       <div className="gap-8 [column-fill:balance] columns-1 md:columns-[28rem] [&>section]:mb-8 [&>section]:break-inside-avoid">
 
-      <Section title="This month's code" className="[column-span:all]" footer={<>Paste a screenshot of the new QR anywhere on this page (⌘V), drop it on the card, or choose the file. Only the code is read; the picture isn't saved.</>}>
+      <Section title="Trips" id="trips" className="[column-span:all]">
+        <TripHealth />
+        <div id="keys"><LaxGuests /></div>
+      </Section>
+
+      <Section title="LAX garage code · this month" className="[column-span:all]" footer={<>Paste a screenshot of the new QR anywhere on this page (⌘V), drop it on the card, or choose the file. Only the code is read; the picture isn't saved.</>}>
         {!draft ? (
           <div {...dropProps}
             className={cn(card, "transition-[box-shadow,background-color] duration-200", drag && "ring-2 ring-[#0A84FF] bg-[#0A84FF14] bento:ring-[#007AFF] bento:bg-[#007AFF0d]")}>
@@ -245,14 +250,6 @@ export default function LaxPass() {
                       <dd className={cn("text-[15px] font-medium tabular-nums", label)}>{v}</dd>
                     </div>
                   ))}
-                  <div className="space-y-2 py-3">
-                    <dt className={cn("text-[15px]", secondary)}>Guest link</dt>
-                    <dd className="flex items-center gap-2">
-                      <code className={cn("min-w-0 flex-1 truncate font-mono text-[13px]", label)}>{link.replace("https://www.", "")}</code>
-                      <CopyButton text={link} label="Copy" className={cn(btnTinted, "h-auto px-3.5")} />
-                    </dd>
-                    <dd><CopyButton text={message} label="Copy message for Turo" className={cn(btnPlain, "h-auto bg-transparent px-0 hover:bg-transparent bento:bg-transparent")} /></dd>
-                  </div>
                 </dl>
               </div>
             )}
@@ -298,21 +295,12 @@ export default function LaxPass() {
         )}
       </Section>
 
-      <Section title="Trips" id="trips">
-        <TripHealth />
-        <div id="keys"><LaxGuests /></div>
-      </Section>
-
       {st && (
         <Section title="Guest page">
           <GuideCard guide={st.guide ?? {}} onSaved={load} />
         </Section>
       )}
 
-
-      <Section title="Guest questions">
-        <GuestHelperCard />
-      </Section>
 
       {st && st.history.length > 0 && (
         <Section title="Past codes">
@@ -326,6 +314,28 @@ export default function LaxPass() {
           </ul>
         </Section>
       )}
+      <section id="settings" className="scroll-mt-24 [column-span:all]">
+        <details open={openSettings} onToggle={(e) => setOpenSettings((e.target as HTMLDetailsElement).open)} className={cn(card, "p-0")}>
+          <summary className={cn("flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 [&::-webkit-details-marker]:hidden")}>
+            <span className="flex items-center gap-2.5">
+              <Settings className={cn("h-5 w-5", tertiary)} aria-hidden />
+              <span>
+                <span className={cn("block text-[17px] font-semibold", label)}>Settings</span>
+                <span className={cn("block text-[13px]", secondary)}>Tesla car controls, guest questions, Apple Wallet</span>
+              </span>
+            </span>
+            <ChevronRight className={cn("h-5 w-5 transition-transform duration-200", openSettings && "rotate-90", tertiary)} aria-hidden />
+          </summary>
+          {openSettings && (
+            <div className="gap-8 border-t px-2 pb-2 pt-5 columns-1 md:columns-[28rem] md:px-3 [&>section]:mb-8 [&>section]:break-inside-avoid" style={{ borderColor: "rgba(127,127,127,.2)" }}>
+              <Section title="Guest questions">
+                <GuestHelperCard />
+              </Section>
+              <TripSettingsBody />
+            </div>
+          )}
+        </details>
+      </section>
       </div>
     </div>
   );

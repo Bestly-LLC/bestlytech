@@ -46,24 +46,33 @@ function GuestLinkSettings() {
   );
 }
 
+/** The settings sections, shared with the folded Settings on the Guest Trips page. */
+export function TripSettingsBody() {
+  return (
+    <>
+      <Section title="Tesla car controls" footer="Tesla gives $10 of free API use a month; the helper stops at the cap so it stays free.">
+        <TeslaCard />
+      </Section>
+      <Section title="Guest questions (trip helper)" footer="All free. Keys go straight into Vault and can't be read back here.">
+        <HelperSettings />
+      </Section>
+      <Section title="Apple Wallet">
+        <HostPassCard />
+        <p className={cn("px-4 text-[13px]", secondary)}>Guests' passes update by themselves when you save a new code.</p>
+      </Section>
+    </>
+  );
+}
+
 export default function TripSettings() {
   return (
     <div className="w-full space-y-8">
       <div className="space-y-2">
-        <Link to="/admin/turo/lax-pass" className={cn(btnPlain, "-ml-1")}><ChevronLeft className="h-5 w-5" aria-hidden /> LAX Parking Pass</Link>
+        <Link to="/admin/turo/lax-pass" className={cn(btnPlain, "-ml-1")}><ChevronLeft className="h-5 w-5" aria-hidden /> Guest Trips</Link>
         <PageHeader title="Trip settings" description="Keys, connections and switches for the guest trip pages." />
       </div>
       <div className="gap-8 columns-1 md:columns-[28rem] [&>section]:mb-8 [&>section]:break-inside-avoid">
-        <Section title="Guest helper" footer="All free. Keys go straight into Vault and can't be read back here.">
-          <HelperSettings />
-        </Section>
-        <Section title="Tesla" footer="Tesla gives $10 of free API use a month; the helper stops at the cap so it stays free.">
-          <TeslaCard />
-        </Section>
-        <Section title="Apple Wallet">
-          <HostPassCard />
-          <p className={cn("px-4 text-[13px]", secondary)}>Guests' passes update by themselves when you save a new code.</p>
-        </Section>
+        <TripSettingsBody />
         <Section title="Guest link" footer="The same link always shows the newest code.">
           <GuestLinkSettings />
         </Section>
