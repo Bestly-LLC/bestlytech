@@ -9,16 +9,18 @@
  */
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, ImageUp, Loader2, Settings } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, ImageUp, Loader2, RefreshCw, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { LaxGuests } from "./LaxGuests";
 import { TripHealth } from "./TripHealth";
 import { GuestHelperCard } from "./AskCard";
 import { TripSettingsBody } from "./TripSettings";
-import { Section, Segmented, btnPlain, btnPrimary, btnTinted, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
+import { HostPassCard } from "./TeslaCard";
+import { Section, Segmented, btnDestructivePlain, btnPlain, btnPrimary, btnTinted, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
 
 type CodeRow = { id: string; payload: string; valid_month: string; note: string | null; created_at: string; is_this_month?: boolean };
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string };
@@ -179,7 +181,14 @@ export default function LaxPass() {
   // Settings stay folded unless a link points into them (e.g. back from Tesla sign-in: #tesla).
   const [openSettings, setOpenSettings] = useState(false);
   useEffect(() => { if (/^#(tesla|tezlab|ask|settings|helper)/.test(window.location.hash)) setOpenSettings(true); }, []);
+  const rotate = async () => {
+    if (!window.confirm("Make a new guest link? The old link stops working, so update it anywhere you pasted it.")) return;
+    const { error } = await rpc("lax_pass_rotate_slug");
+    if (error) toast.error(error.message); else { toast.success("New link made."); load(); }
+  };
+
   const link = st ? `${SITE}/lax/${st.slug}` : "";
+  const message = `How to pick up your Turo car at LAX: shuttle steps, the garage address, and the QR code that opens the lobby door (you can add it to Apple or Google Wallet). ${link}`;
   const cur = st?.current;
   const missing = st && (!cur || !cur.is_this_month);
 
@@ -198,20 +207,6 @@ export default function LaxPass() {
       {/* Fills the width: sections flow into as many ~30rem columns as fit (1 on phones, 2-3 on wide screens). */}
       <div className="gap-8 [column-fill:balance] columns-1 md:columns-[28rem] [&>section]:mb-8 [&>section]:break-inside-avoid">
 
-      <Section title="Trips" id="trips" className="[column-span:all]">
-        <div className={cn(card, "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between")}>
-          <div>
-            <p className={cn("text-[15px] font-semibold", label)}>Preview the guest pages</p>
-            <p className={cn("text-[13px]", secondary)}>Demo trips with a stage switcher. Nothing touches real guests, keys or the car.</p>
-          </div>
-          <div className="flex gap-2">
-            <a href="/t/demo-home?stage=key-ready" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>Home pickup</a>
-            <a href="/t/demo-lax?stage=day-of" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>LAX</a>
-          </div>
-        </div>
-        <TripHealth />
-        <div id="keys"><LaxGuests /></div>
-      </Section>
 
       <Section title="LAX garage code · this month" className="[column-span:all]" footer={<>Paste a screenshot of the new QR anywhere on this page (⌘V), drop it on the card, or choose the file. Only the code is read; the picture isn't saved.</>}>
         {!draft ? (
@@ -261,6 +256,13 @@ export default function LaxPass() {
                       <dd className={cn("text-[15px] font-medium tabular-nums", label)}>{v}</dd>
                     </div>
                   ))}
+                  <div className="space-y-2 py-3">
+                    <dt className={cn("text-[15px]", secondary)}>Guest link</dt>
+                    <dd className="flex items-center gap-2">
+                      <code className={cn("min-w-0 flex-1 truncate font-mono text-[13px]", label)}>{link.replace("https://www.", "")}</code>
+                      <CopyButton text={link} label="Copy" className={cn(btnTinted, "h-auto px-3.5")} />
+                    </dd>
+                  </div>
                 </dl>
               </div>
             )}
@@ -306,11 +308,54 @@ export default function LaxPass() {
         )}
       </Section>
 
+      <Section title="Trips" id="trips">
+        <div className={cn(card, "flex flex-col gap-3")}>
+          <div>
+            <p className={cn("text-[15px] font-semibold", label)}>Preview the guest pages</p>
+            <p className={cn("text-[13px]", secondary)}>Demo trips with a stage switcher. Nothing touches real guests, keys or the car.</p>
+          </div>
+          <div className="flex gap-2">
+            <a href="/t/demo-home?stage=key-ready" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>Home pickup</a>
+            <a href="/t/demo-lax?stage=day-of" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>LAX</a>
+          </div>
+        </div>
+        <TripHealth />
+        <div id="keys"><LaxGuests /></div>
+      </Section>
+
       {st && (
         <Section title="Guest page">
           <GuideCard guide={st.guide ?? {}} onSaved={load} />
         </Section>
       )}
+
+      {st && (
+        <Section title="Guest link" footer="The link never changes, so paste it into Turo once. Making a new one turns the old one off.">
+          <div className={cn(card, "space-y-4")}>
+            <p className={cn("text-[15px]", secondary)}>Always shows the newest code.</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <code className={cn(field, "truncate font-mono text-[14px] sm:flex-1")}>{link.replace("https://", "")}</code>
+              <CopyButton text={link} label="Copy link" className={cn(btnTinted, "h-auto")} />
+            </div>
+            <div className="rounded-[14px] bg-[#2C2C2E] p-3.5 bento:bg-[#F2F2F7]">
+              <p className={cn("text-[13px] font-medium", secondary)}>Message for Turo</p>
+              <p className={cn("mt-1 text-[15px] leading-snug", label)}>{message}</p>
+              <div className="mt-3"><CopyButton text={message} label="Copy message" className={cn(btnTinted, "h-auto")} /></div>
+            </div>
+            <button type="button" onClick={rotate} className={btnDestructivePlain}>
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Make a new link
+            </button>
+          </div>
+        </Section>
+      )}
+
+      <Section title="Keys and passes" id="passes">
+        <HostPassCard />
+      </Section>
+
+      <Section title="Guest questions" id="ask">
+        <GuestHelperCard />
+      </Section>
 
 
       {st && st.history.length > 0 && (
@@ -332,16 +377,13 @@ export default function LaxPass() {
               <Settings className={cn("h-5 w-5", tertiary)} aria-hidden />
               <span>
                 <span className={cn("block text-[17px] font-semibold", label)}>Settings</span>
-                <span className={cn("block text-[13px]", secondary)}>Tesla car controls, guest questions, Apple Wallet</span>
+                <span className={cn("block text-[13px]", secondary)}>TezLab, Tesla car controls, guest helper AI, Apple Wallet</span>
               </span>
             </span>
             <ChevronRight className={cn("h-5 w-5 transition-transform duration-200", openSettings && "rotate-90", tertiary)} aria-hidden />
           </summary>
           {openSettings && (
             <div className="gap-8 border-t px-2 pb-2 pt-5 columns-1 md:columns-[28rem] md:px-3 [&>section]:mb-8 [&>section]:break-inside-avoid" style={{ borderColor: "rgba(127,127,127,.2)" }}>
-              <Section title="Guest questions">
-                <GuestHelperCard />
-              </Section>
               <TripSettingsBody />
             </div>
           )}
