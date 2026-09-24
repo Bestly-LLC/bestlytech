@@ -13,6 +13,7 @@ import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { HelperSettings } from "./AskCard";
 import { HostPassCard, TeslaCard } from "./TeslaCard";
+import { TezLabCard } from "./TezLabCard";
 import { Section, btnDestructivePlain, btnPlain, btnTinted, card, field, secondary } from "./laxUi";
 
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -50,7 +51,10 @@ function GuestLinkSettings() {
 export function TripSettingsBody() {
   return (
     <>
-      <Section title="Tesla car controls" footer="Tesla gives $10 of free API use a month; the helper stops at the cap so it stays free.">
+      <Section title="TezLab (first choice for car buttons)" footer="Guest A/C, honk and flash use your TezLab allowance. If TezLab fails, the Tesla API below takes over by itself.">
+        <TezLabCard />
+      </Section>
+      <Section title="Tesla car controls (backup + keys)" footer="Tesla gives $10 of free API use a month; the helper stops at the cap so it stays free.">
         <TeslaCard />
       </Section>
       <Section title="Guest questions (trip helper)" footer="All free. Keys go straight into Vault and can't be read back here.">

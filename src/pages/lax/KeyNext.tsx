@@ -16,12 +16,15 @@ const tapKey = (t: string) => `keytap:${t}`;
 export function keyTapped(token: string): number | null {
   try { const v = localStorage.getItem(tapKey(token)); return v ? Number(v) : null; } catch { return null; }
 }
-/** While the key is due or being made, ask the server every 15s (it makes the key right away if the scheduler hasn't yet). */
+/** Keeps the key card in sync with Tesla (via the server): makes the key when due, spots acceptance, spots self-removal. */
 export function useKeyWatch(token: string, state: string, opensAt: string | undefined, onChange: () => void) {
   const cb = useRef(onChange);
   cb.current = onChange;
   useEffect(() => {
-    if (state !== "making" && state !== "soon") return;
+    // soon/making/ready: every 15s (key appears / gets accepted). added: every 60s, to catch a guest who removed
+    // the car from their own Tesla app (the server makes a fresh key and the card resets to "add it").
+    if (!["making", "soon", "ready", "added"].includes(state)) return;
+    const every = state === "added" ? 60000 : 15000;
     let stop = false;
     const tick = async () => {
       if (stop || document.visibilityState !== "visible") return;
@@ -30,8 +33,10 @@ export function useKeyWatch(token: string, state: string, opensAt: string | unde
       if (!stop && data?.state && data.state !== state) cb.current();
     };
     void tick();
-    const id = window.setInterval(tick, 15000);
-    return () => { stop = true; window.clearInterval(id); };
+    const id = window.setInterval(tick, every);
+    const vis = () => { if (document.visibilityState === "visible") void tick(); };
+    document.addEventListener("visibilitychange", vis);
+    return () => { stop = true; window.clearInterval(id); document.removeEventListener("visibilitychange", vis); };
   }, [token, state, opensAt]);
 }
 export function markKeyTapped(token: string) { try { localStorage.setItem(tapKey(token), String(Date.now())); } catch { /* private mode */ } }

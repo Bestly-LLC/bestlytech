@@ -194,6 +194,12 @@ export default function LaxGuest() {
   // Personal link acts for its own trip; the shared Turo link acts for the trip happening now (unlocked by the guest's phone key).
   const reload = () => (token ? rpc("lax_guest_public", { p_token: token }) : rpc("lax_pass_public", { p_slug: slug }))
     .then(({ data }) => data && setPub(data as Pub));
+  // Home-screen icon + tab icon match the trip's look (home = midcentury sunset, LAX = the LAX mark).
+  useEffect(() => {
+    if (!pub?.ok || !pub.kind) return;
+    const ico = pub.kind === "home" ? "/wallet/home/apple-touch-icon.png" : "/wallet/lax/apple-touch-icon.png";
+    document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="apple-touch-icon"]').forEach((l) => { l.href = ico; });
+  }, [pub?.ok, pub?.kind]);
   useEffect(() => { const f = () => { void reload(); }; window.addEventListener("trip-reload", f); return () => window.removeEventListener("trip-reload", f); });
   // Keep time-based parts fresh (buttons open 1h before pickup, key 2h before, exact spot, etc.) without a manual refresh.
   useEffect(() => {

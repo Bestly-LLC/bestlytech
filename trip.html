@@ -13,8 +13,8 @@
       Own HTML so link previews show a trip page, not the Bestly site. The splash picks the right icon:
       remembered kind first (instant), else a tiny lookup (lax_trip_kind_for). Vercel rewrites /t/* here.
     -->
-    <link rel="icon" type="image/png" sizes="180x180" href="/wallet/lax/apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/wallet/lax/apple-touch-icon.png" />
+    <link id="ic" rel="icon" type="image/png" sizes="180x180" href="/wallet/home/apple-touch-icon.png" />
+    <link id="ati" rel="apple-touch-icon" sizes="180x180" href="/wallet/home/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-title" content="Turo Trip" />
 
     <meta property="og:type" content="website" />
@@ -48,6 +48,8 @@
         function show(kind) {
           var lax = kind === "lax", bg = lax ? "#1A1140" : "#132726";
           img.src = lax ? "/wallet/lax/apple-touch-icon.png" : "/wallet/home/loader-mcm.svg";
+          var ico = lax ? "/wallet/lax/apple-touch-icon.png" : "/wallet/home/apple-touch-icon.png";
+          ["ic", "ati"].forEach(function (id) { var l = document.getElementById(id); if (l) l.href = ico; });
           s.style.background = bg; document.documentElement.style.background = bg; img.style.visibility = "visible";
         }
         var k = null;
