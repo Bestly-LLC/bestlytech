@@ -194,11 +194,14 @@ export default function LaxPass() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-9">
+    <div className="w-full space-y-8">
       <PageHeader title="LAX Parking Pass" description="This month's Park My Share code, the trips using it, and the guest page." />
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { take(e.target.files?.[0]); e.target.value = ""; }} />
 
-      <Section title="This month's code" footer={<>Paste a screenshot of the new QR anywhere on this page (⌘V), drop it on the card, or choose the file. Only the code is read; the picture isn't saved.</>}>
+      {/* Fills the width: sections flow into as many ~30rem columns as fit (1 on phones, 2-3 on wide screens). */}
+      <div className="gap-8 [column-fill:balance] columns-1 md:columns-[28rem] [&>section]:mb-8 [&>section]:break-inside-avoid">
+
+      <Section title="This month's code" className="[column-span:all]" footer={<>Paste a screenshot of the new QR anywhere on this page (⌘V), drop it on the card, or choose the file. Only the code is read; the picture isn't saved.</>}>
         {!draft ? (
           <div {...dropProps}
             className={cn(card, "transition-[box-shadow,background-color] duration-200", drag && "ring-2 ring-[#0A84FF] bg-[#0A84FF14] bento:ring-[#007AFF] bento:bg-[#007AFF0d]")}>
@@ -234,6 +237,26 @@ export default function LaxPass() {
                     </a>
                   </div>
                 </div>
+                {/* At a glance: fills the wide hero on big screens */}
+                <dl className={cn("hidden w-full max-w-[340px] shrink-0 divide-y self-stretch rounded-[16px] bg-[#2C2C2E] px-4 lg:block bento:bg-[#F2F2F7]", separator)}>
+                  {[
+                    ["Next code due", monthLabel(nextMonth(st.month_now)).replace(" ", " 1, ")],
+                    ["In Apple Wallet", `${st.wallet_devices} phone${st.wallet_devices === 1 ? "" : "s"}`],
+                    ["Past codes", String(st.history.length)],
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex min-h-[44px] items-center justify-between gap-3 py-2.5">
+                      <dt className={cn("text-[15px]", secondary)}>{k}</dt>
+                      <dd className={cn("text-[15px] font-medium tabular-nums", label)}>{v}</dd>
+                    </div>
+                  ))}
+                  <div className="space-y-2 py-3">
+                    <dt className={cn("text-[15px]", secondary)}>Guest link</dt>
+                    <dd className="flex items-center gap-2">
+                      <code className={cn("min-w-0 flex-1 truncate font-mono text-[13px]", label)}>{link.replace("https://www.", "")}</code>
+                      <CopyButton text={link} label="Copy" className={cn(btnTinted, "h-auto px-3.5")} />
+                    </dd>
+                  </div>
+                </dl>
               </div>
             )}
           </div>
@@ -284,13 +307,15 @@ export default function LaxPass() {
       </Section>
 
       {st && (
-        <Section title="Guest page" footer="The link never changes, so paste it into Turo once. Making a new one turns the old one off.">
+        <Section title="Guest page">
           <GuideCard guide={st.guide ?? {}} onSaved={load} />
+        </Section>
+      )}
+
+      {st && (
+        <Section title="Guest link" footer="The link never changes, so paste it into Turo once. Making a new one turns the old one off.">
           <div className={cn(card, "space-y-4")}>
-            <div>
-              <p className={cn("text-[17px] font-semibold", label)}>Guest link</p>
-              <p className={cn("mt-1 text-[13px]", secondary)}>Always shows the newest code.</p>
-            </div>
+            <p className={cn("text-[15px]", secondary)}>Always shows the newest code.</p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <code className={cn(field, "truncate font-mono text-[14px] sm:flex-1")}>{link.replace("https://", "")}</code>
               <CopyButton text={link} label="Copy link" className={cn(btnTinted, "h-auto")} />
@@ -328,6 +353,7 @@ export default function LaxPass() {
           </ul>
         </Section>
       )}
+      </div>
     </div>
   );
 }

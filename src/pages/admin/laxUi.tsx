@@ -44,9 +44,9 @@ export const pill = {
 };
 
 /** A grouped section: small header above, optional footnote below (like Settings.app). */
-export function Section({ title, footer, id, children }: { title: string; footer?: ReactNode; id?: string; children: ReactNode }) {
+export function Section({ title, footer, id, className, children }: { title: string; footer?: ReactNode; id?: string; className?: string; children: ReactNode }) {
   return (
-    <section id={id} className="scroll-mt-24 space-y-2">
+    <section id={id} className={cn("scroll-mt-24 space-y-2", className)}>
       <h2 className={cn("px-4 text-[13px] font-semibold uppercase tracking-[0.02em]", secondary)}>{title}</h2>
       <div className="space-y-3">{children}</div>
       {footer && <p className={cn("px-4 text-[13px] leading-snug", secondary)}>{footer}</p>}
