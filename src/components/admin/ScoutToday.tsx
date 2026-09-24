@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Binoculars, Check, ChevronDown, Clock3, Copy, ExternalLink, Mail, MoreHorizontal, RefreshCw, Sparkles, Undo2, X } from "lucide-react";
-import { CheckButton, CheckResult, useTodoCheck } from "@/components/admin/todoCheck";
+import { CheckButton, CheckResult, useRemembered, useTodoCheck } from "@/components/admin/todoCheck";
 import { supabase } from "@/integrations/supabase/client";
 import { askScout } from "@/components/admin/scoutBus";
 import { cn } from "@/lib/utils";
@@ -114,6 +114,7 @@ export function ScoutToday() {
 
   // "Check if it's done": shared with the top card (todoCheck.tsx); checks run on the server queue.
   const tc = useTodoCheck(load);
+  const [callsOpen, toggleCalls] = useRemembered("admin.fromCalls.open", true);
 
   const doneCount = picks.filter((p) => p.status === "done").length;
   // Everyone who has owned a call to-do lately, so a wrong owner is one tap to fix.
@@ -231,10 +232,18 @@ export function ScoutToday() {
       {/* From calls */}
       {calls.length > 0 && (
         <section aria-labelledby="calls-title">
-          <h2 id="calls-title" className="mb-3 text-xs font-semibold uppercase tracking-widest text-white/55">From your calls · {calls.length}</h2>
+          <h2 id="calls-title" className="mb-3">
+            <button onClick={toggleCalls} aria-expanded={callsOpen} aria-controls="calls-list"
+              className="-mx-2 flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-semibold uppercase tracking-widest text-white/55 transition hover:bg-white/[0.06] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80">
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !callsOpen && "-rotate-90")} aria-hidden />
+              From your calls · {calls.length}
+              {!callsOpen && <span className="normal-case tracking-normal text-white/40">(tap to show)</span>}
+            </button>
+          </h2>
           {/* A to-do is one short line; on a wide screen a single column of them is a
               long thin ribbon. Let them flow into as many columns as fit. */}
-          <ul className={cn(card, "grid grid-cols-[repeat(auto-fit,minmax(min(24rem,100%),1fr))] overflow-hidden")}>
+          {callsOpen && (
+          <ul id="calls-list" className={cn(card, "grid grid-cols-[repeat(auto-fit,minmax(min(24rem,100%),1fr))] overflow-hidden")}>
             {calls.map((c) => {
               const owner = String(c.action?.owner ?? "Jared");
               const mine = owner.toLowerCase() === "jared";
@@ -265,6 +274,7 @@ export function ScoutToday() {
               );
             })}
           </ul>
+          )}
         </section>
       )}
 

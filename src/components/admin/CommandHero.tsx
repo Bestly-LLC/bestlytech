@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Binoculars, CalendarClock, Check, ExternalLink, Loader2, MessagesSquare, Siren, Users, Video, X } from "lucide-react";
+import { Bell, Binoculars, CalendarClock, Check, ChevronDown, ExternalLink, Loader2, MessagesSquare, Siren, Users, Video, X } from "lucide-react";
 import { startEmergency } from "@/pages/admin/Emergency";
 import { supabase } from "@/integrations/supabase/client";
 import { openScout } from "@/components/admin/scoutBus";
@@ -14,7 +14,7 @@ import { AdminMark } from "@/components/AdminMark";
 import { WeatherNow } from "@/components/admin/WeatherNow";
 import { useNextMeeting, whenLabel } from "@/pages/partner/PartnerExtras";
 import { cn } from "@/lib/utils";
-import { CheckAllPanel, CheckButton, CheckResult, ClosedByScout, useTodoCheck, type CheckRow } from "@/components/admin/todoCheck";
+import { CheckAllPanel, CheckButton, CheckResult, ClosedByScout, useRemembered, useTodoCheck, type CheckRow } from "@/components/admin/todoCheck";
 
 interface Todo { id: string; title: string; status: string; action: Record<string, any>; done_at?: string | null }
 
@@ -69,6 +69,7 @@ export function CommandHero() {
     setClosed((shut ?? []) as unknown as Todo[]);
   }, []);
   const tc = useTodoCheck(load);
+  const [todosOpen, toggleTodos] = useRemembered("admin.todosCard.open", true);
   useEffect(() => { load(); }, [load]);
   const tick = async (t: Todo) => {
     setTodos((xs) => (xs ?? []).filter((x) => x.id !== t.id));
@@ -139,7 +140,15 @@ export function CommandHero() {
 
       {/* Your to-dos, with Scout's "did it get done?" check right on top: it's the thing to use here. */}
       <div className={cn(card, "p-5")}>
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Check className="h-4 w-4 text-white/50" /> Your to-dos from calls</h3>
+        <h3 className={cn(todosOpen && "mb-3")}>
+          <button onClick={toggleTodos} aria-expanded={todosOpen} aria-controls="hero-todos"
+            className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-xl px-2 py-1 text-left text-sm font-semibold text-white transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80">
+            <Check className="h-4 w-4 text-white/50" aria-hidden />
+            <span className="flex-1">Your to-dos from calls{todos?.length ? <span className="font-normal text-white/50"> · {todos.length}</span> : null}</span>
+            <ChevronDown className={cn("h-4 w-4 text-white/50 transition-transform", !todosOpen && "-rotate-90")} aria-hidden />
+          </button>
+        </h3>
+        {todosOpen && (<div id="hero-todos">
         <CheckAllPanel tc={tc} />
         {todos === null ? <div className="mt-3 h-16 animate-pulse rounded-xl bg-white/[0.04]" /> : todos.length === 0 ? (
           <p className="mt-3 text-sm text-white/50">All clear.</p>
@@ -168,6 +177,7 @@ export function CommandHero() {
           </ul>
         )}
         <ClosedByScout rows={closed as CheckRow[]} tc={tc} />
+        </div>)}
       </div>
     </section>
   );

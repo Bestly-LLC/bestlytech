@@ -26,6 +26,18 @@ export const time12 = (iso?: string | null) => iso
   : "";
 const clock12 = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }) : "";
 
+/** Open/closed that survives a reload (this browser only). */
+export function useRemembered(key: string, initial: boolean): [boolean, () => void] {
+  const [v, setV] = useState<boolean>(() => {
+    try { const x = localStorage.getItem(key); return x === null ? initial : x === "1"; } catch { return initial; }
+  });
+  const toggle = () => setV((o) => {
+    try { localStorage.setItem(key, o ? "0" : "1"); } catch { /* private mode */ }
+    return !o;
+  });
+  return [v, toggle];
+}
+
 /* ───────── state ───────── */
 
 export function useTodoCheck(onChange: () => void) {
