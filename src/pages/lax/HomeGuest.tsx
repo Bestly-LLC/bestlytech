@@ -229,8 +229,8 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
           </div>
         </Section>
 
-        <div id="climate" className={`scroll-mt-4 rounded-3xl transition ${doClimate ? "ring-2 ring-[#E8A93A] ring-offset-4 ring-offset-[#132726]" : ""}`}>
-        {doClimate && <p className="mt-6 text-[15px] font-semibold text-[#E8A93A]">{doClimate === "warm" ? "Tap Warm it up below to start the heat." : "Tap Cool it down below to start the A/C."}</p>}
+        <div id="climate" className={`scroll-mt-4 rounded-3xl transition ${doClimate ? "-mx-2 mt-4 px-2 pb-2 ring-2 ring-[#E8A93A] ring-offset-2 ring-offset-[#132726]" : ""}`}>
+        {doClimate && <p className="pt-3 text-[15px] font-semibold text-[#E8A93A]">{doClimate === "warm" ? "Tap Warm it up below to start the heat." : "Tap Cool it down below to start the A/C."}</p>}
         {(pub.trip || car) && <div className="mt-6"><ClimateAdvice car={car} outsideF={outsideF} /></div>}
         <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
           <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} place="WeHo" />
