@@ -162,6 +162,26 @@ function stripThink(t: string) {
   return t.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 }
 
+/**
+ * gpt-oss (Groq + Cloudflare) sometimes leaves `content` empty and puts its answer elsewhere:
+ * a native tool call (even with no tools offered), or only the reasoning field. Recover it instead of failing -
+ * 2026-09-24 these "empty reply" misses tripped the provider watchdog on both rungs while both were healthy.
+ */
+function salvage(msg: any): string {
+  const text = stripThink(String(msg?.content ?? ""));
+  if (text) return text;
+  const tc = msg?.tool_calls?.[0]?.function;
+  if (tc?.name) {
+    let args: unknown = {};
+    try { args = typeof tc.arguments === "string" ? JSON.parse(tc.arguments || "{}") : (tc.arguments ?? {}); } catch { args = {}; }
+    return JSON.stringify({ tool: String(tc.name).replace(/^functions\./, ""), args });
+  }
+  const r = String(msg?.reasoning ?? msg?.reasoning_content ?? "");
+  const objs = r.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g);
+  for (const o of (objs ?? []).reverse()) { try { JSON.parse(o); return o; } catch { /* next */ } }
+  return "";
+}
+
 function parseJson(t: string): any {
   const c = t.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
   const s = c.indexOf("{"), a = c.indexOf("[");
@@ -218,8 +238,8 @@ async function openaiCompat(url: string, key: string, model: string, req: LlmReq
   }
   if (!r.ok) throw new Fail("error", `${r.status} ${(await r.text()).slice(0, 200)}`, r.status >= 500 ? 0 : -1);
   const j = await r.json();
-  const text = stripThink(String(j.choices?.[0]?.message?.content ?? ""));
-  if (!text) throw new Fail("error", "empty reply");
+  const text = salvage(j.choices?.[0]?.message);
+  if (!text) throw new Fail("error", `empty reply (finish ${j.choices?.[0]?.finish_reason ?? "?"})`);
   return { text, model: String(j.model ?? model), inT: Number(j.usage?.prompt_tokens ?? 0), outT: Number(j.usage?.completion_tokens ?? 0), cost: 0 };
 }
 
