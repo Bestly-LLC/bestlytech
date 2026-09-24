@@ -6,7 +6,7 @@
  * Reminders go out from support@bestly.tech (wallet-pass op remind_due, cron lax-guest-tick every 10 min).
  */
 import { useCallback, useEffect, useState } from "react";
-import { Activity, ExternalLink, House, KeyRound, Loader2, Mail, Plane, Send } from "lucide-react";
+import { Activity, ExternalLink, House, KeyRound, Loader2, Mail, Plane, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
@@ -57,7 +57,7 @@ function KeyRow({ r, reload }: { r: Row; reload: () => void }) {
     const { error } = await rpc("tesla_key_admin", { p_reservation: r.reservation_id, p_action: a });
     setBusy(null);
     if (error) { toast.error(error.message); return; }
-    toast.success(a === "make" ? "Making the key now." : a === "remove" ? "Removing their access now." : a === "off" ? "Auto key off for this trip." : "Auto key on.");
+    toast.success(a === "make" ? "Making the key now." : a === "resend" ? "Resetting: old invite cancelled, a fresh key link lands on their page in about a minute." : a === "remove" ? "Removing their access now." : a === "off" ? "Auto key off for this trip." : "Auto key on.");
     reload();
   };
   const st = k?.status ?? "scheduled";
@@ -72,6 +72,9 @@ function KeyRow({ r, reload }: { r: Row; reload: () => void }) {
       {k?.error && st === "failed" && <p className="mt-1 text-xs text-red-300/80 bento:text-red-600">{k.error}</p>}
       <div className="mt-2 flex flex-wrap gap-2">
         {["scheduled", "failed", "expired"].includes(st) && <button type="button" className={btn} disabled={!!busy} onClick={() => act("make")}>{busy === "make" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}Make key now</button>}
+        {["ready", "accepted", "expired", "failed", "removed"].includes(st) && <button type="button" className={cn(btn, "border-amber-300/40 text-amber-200 bento:border-amber-300 bento:text-amber-700")} disabled={!!busy}
+          onClick={() => { if (window.confirm("Resend the key? This cancels their current Tesla invite (and removes the car from their app if they added it), then sends a brand-new link to their trip page in about a minute.")) act("resend"); }}>
+          {busy === "resend" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}Resend key</button>}
         {["ready", "accepted", "expired", "failed"].includes(st) && <button type="button" className={btn} disabled={!!busy} onClick={() => act("remove")}>{busy === "remove" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}Remove access now</button>}
         {["scheduled", "failed", "removed"].includes(st) && <button type="button" className={btn} disabled={!!busy} onClick={() => act("off")}>Turn off auto key</button>}
         {st === "off" && <button type="button" className={btn} disabled={!!busy} onClick={() => act("on")}>Turn on auto key</button>}

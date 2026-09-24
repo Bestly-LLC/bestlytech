@@ -281,7 +281,7 @@ export default function LaxGuest() {
       </Helmet>
 
       <div className="relative overflow-hidden">
-        <img data-fx-hero src="/wallet/lax/hero.svg" alt="" className="block h-44 w-full object-cover object-[65%_center] will-change-transform sm:h-56" />
+        <img data-fx-hero src="/wallet/lax/hero-live.svg" alt="" className="block h-44 w-full object-cover object-[65%_center] will-change-transform sm:h-56" />
         <div data-fx-title className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: PEACH, ...shadow }}>{pub?.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={shadow}>Picking up your Turo car at LAX</h1>

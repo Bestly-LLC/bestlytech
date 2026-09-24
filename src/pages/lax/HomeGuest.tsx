@@ -113,7 +113,10 @@ function CarButton({ action, label, icon: Icon, run, disabled, hint }: { action:
 
 function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; trip: Trip | undefined; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; token: string; onAdded: () => void; next?: ReactNode }) {
   // After the guest taps the key button, grey it out and keep checking with Tesla until it says added.
-  const [tapped, setTapped] = useState(() => (keyTapped(token) ?? 0) > Date.now() - 24 * 3600e3);
+  // Only a tap on THIS invite counts: a host "Resend key" makes a new invite (new 24h expiry), so the button comes back.
+  const inviteFrom = k.expires_at ? Date.parse(k.expires_at) - 24 * 3600e3 - 120e3 : Date.now() - 24 * 3600e3;
+  const [tapped, setTapped] = useState(() => (keyTapped(token) ?? 0) > inviteFrom);
+  useEffect(() => { setTapped((keyTapped(token) ?? 0) > inviteFrom); }, [k.link, inviteFrom, token]);
   // Guest says they already have the Tesla app: skip that step and show what's next instead.
   const [hasApp, setHasApp] = useState(() => { try { return localStorage.getItem("hasTeslaApp") === "1"; } catch { return false; } });
   const haveIt = () => { track(undefined, "have_app"); setHasApp(true); try { localStorage.setItem("hasTeslaApp", "1"); } catch { /* private mode */ } };
@@ -230,7 +233,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
       </Helmet>
 
       <div className="relative overflow-hidden">
-        <img data-fx-hero src="/wallet/home/hero-mcm.svg" alt="" className="block h-52 w-full object-cover object-[60%_70%] will-change-transform sm:h-64" />
+        <img data-fx-hero src="/wallet/home/hero-mcm-live.svg" alt="" className="block h-52 w-full object-cover object-[60%_70%] will-change-transform sm:h-64" />
         <div data-fx-title className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
           <p className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: PEACH, ...shadow }}>{pub.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
           <h1 className="mt-1 text-[32px] leading-[1.05] sm:text-5xl" style={{ ...shadow, fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif", fontWeight: 700, color: "#F4EAD5" }}>Your Tesla in<br />West Hollywood</h1>
