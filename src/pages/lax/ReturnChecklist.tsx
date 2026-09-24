@@ -28,7 +28,7 @@ const DEMO: Check = { ok: true, live: true, fresh: true, controls: true, observe
 ] };
 const ago = (iso: string) => { const m = Math.max(0, Math.round((Date.now() - +new Date(iso)) / 60000)); return m < 1 ? "just now" : `${m} min ago`; };
 
-export function ReturnChecklist({ token, kind, run, demo, endsAt }: { token: string; kind: TripKind; run?: Run; demo?: boolean; endsAt?: string }) {
+export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { token: string; kind: TripKind; run?: Run; demo?: boolean; endsAt?: string; compact?: boolean }) {
   // Demo follows the demo trip's clock: live only from 3 hours before return (like the real one).
   const demoCheck = (): Check => {
     const e = endsAt ? +new Date(endsAt) : Date.now();
@@ -64,6 +64,7 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt }: { token: str
   }, [load, run, demo]);
 
   if (!c?.ok) return null;
+  if (!c.live && compact) return <p className="mt-3 text-[13px] text-white/55">A live car check (parked, charged, locked) shows here {c.opens_at ? fmtWhen(c.opens_at) : "3 hours before your return"}.</p>;
   if (!c.live) return (
     <div className="rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Return checklist</p>
@@ -82,6 +83,41 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt }: { token: str
     catch (e) { setMsg((e as Error).message || "Couldn't reach the car."); }
     finally { setBusy(null); }
   };
+
+  const setPhoto = (v: boolean) => { setPhotos(v); try { localStorage.setItem(photosKey, v ? "1" : "0"); } catch { /* ignore */ } };
+  // Compact: one small live row inside the Park step. The other fixes (send spot / charger) live in their own steps.
+  if (compact) {
+    const short: Record<Item["id"], string> = { parked: "Parked", charge: "Charged", trunks: "Trunks shut", locked: "Locked" };
+    const needLock = items.some((i) => i.id === "locked" && !i.ok);
+    return (
+      <div aria-label="Live car check" className={`mt-3 rounded-2xl p-3 ring-1 ${all ? "bg-emerald-400/10 ring-emerald-300/40" : "bg-white/[0.06] ring-white/10"}`}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[13px] font-bold text-white">{all ? "All set. You're good to go." : `Car check · ${done} of ${total}`}</p>
+          <span className="text-[11px] text-white/50">{c.observed_at ? ago(c.observed_at) : ""}</span>
+        </div>
+        <ul className="mt-2 flex flex-wrap gap-1.5">
+          {items.map((i) => (
+            <li key={i.id} title={i.detail} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${i.ok ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-300/15 text-amber-100"}`}>
+              {i.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}{short[i.id]}
+            </li>
+          ))}
+          <li>
+            <button type="button" aria-pressed={photos} onClick={() => setPhoto(!photos)}
+              className={`inline-flex min-h-[28px] items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${photos ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-300/15 text-amber-100"}`}>
+              {photos ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}Photos
+            </button>
+          </li>
+        </ul>
+        {needLock && run && (
+          <button type="button" onClick={() => void act("lock", "lock", "locked")} disabled={!!busy}
+            className="mt-2.5 inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[14px] font-bold text-[#1A1140] disabled:opacity-50" style={{ background: ACCENT }}>
+            {busy === "lock" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Lock it
+          </button>
+        )}
+        {msg && <p className="mt-1.5 text-[12px] text-white/70" aria-live="polite">{msg}</p>}
+      </div>
+    );
+  }
 
   return (
     <section aria-label="Return checklist" className={`rounded-3xl p-4 ring-1 ${all ? "bg-emerald-400/10 ring-emerald-300/40" : "bg-white/[0.07] ring-white/10"}`}>

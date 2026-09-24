@@ -15,8 +15,12 @@ const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 
 // Fallback chips; the live ones come from lax_ask_suggest (trip phase, LA time of day, car state, last question).
-const SUGGEST = ["Where do I catch the shuttle after I land?", "How do I get into the garage?", "How do I unlock and start the Tesla?", "How do I return the car?"];
-const SUGGEST_HOME = ["How do I get the key?", "Where is the car?", "Which car is mine?", "Where do I return the car?"];
+// Pinned on every chip list (the server adds it too): early pickup/return is always a Turo-app change.
+const EARLY_Q = "Can I pick up or return the car early?";
+const EARLY_A = "Yes! Just change your trip times in the Turo app (Manage trip → Change trip). Your host can't change them for you, and this chat can't either.";
+const SUGGEST = ["Where do I catch the shuttle after I land?", "How do I get into the garage?", "How do I unlock and start the Tesla?", EARLY_Q];
+const SUGGEST_HOME = ["How do I get the key?", "Where is the car?", "Where do I return the car?", EARLY_Q];
+const withEarly = (xs: string[]) => (xs.includes(EARLY_Q) ? xs : [...xs.slice(0, 3), EARLY_Q]);
 
 function Chips({ list, onPick, disabled }: { list: string[]; onPick: (s: string) => void; disabled?: boolean }) {
   if (!list.length) return null;
@@ -129,7 +133,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
   const body = useRef<HTMLDivElement>(null);
   const who = { p_token: token || null, p_slug: token ? null : slug || null };
   const refreshChips = () =>
-    rpc("lax_ask_suggest", who).then(({ data }) => { if (Array.isArray(data) && data.length) setChips(data as string[]); }).catch(() => {});
+    rpc("lax_ask_suggest", who).then(({ data }) => { if (Array.isArray(data) && data.length) setChips(withEarly(data as string[])); }).catch(() => {});
 
   useEffect(() => {
     if (!open || loaded.current) return;
@@ -151,6 +155,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
     setMsgs((xs) => [...xs, { id: `u${Date.now()}`, role: "user", content: q }, { id: tmp, role: "assistant", content: "", status: "pending" }]);
     if (token?.startsWith("demo-")) {  // host demo page: no real trip behind it
       await new Promise((r) => setTimeout(r, 900));
+      if (/\bearl(y|ier)\b/i.test(q) && !/flight|terminal|airport/i.test(q)) { patch(tmp, { content: EARLY_A, status: "done" }); setBusy(false); return; }
       patch(tmp, { content: "This is a demo page, so I can't look up a real trip. On a guest's page I answer from their live trip: key status, the car's temperature, pickup and return steps, and I can resend their key if it's stuck.", status: "done" });
       setBusy(false);
       return;

@@ -990,24 +990,29 @@ body.admin-bento { background-color: var(--bento-page); }
 
 /* Trip pages: glass card (review ask). Frosted fill, bright top edge, and a light sweep that crosses every few seconds. */
 .trip-glass {
-  position: relative; isolation: isolate;
-  background: linear-gradient(160deg, rgba(255,255,255,.20), rgba(255,255,255,.06) 45%, rgba(255,255,255,.10));
-  -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 0 0 1px rgba(255,255,255,.18), 0 18px 40px -18px rgba(0,0,0,.7);
+  position: relative; isolation: isolate; overflow: hidden; /* keep the sheen inside the rounded corners */
+  background: linear-gradient(160deg, rgba(255,255,255,.18), rgba(255,255,255,.05) 45%, rgba(255,255,255,.08));
+  -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 0 0 .5px rgba(255,255,255,.22), 0 20px 44px -16px rgba(0,0,0,.65);
 }
-.trip-glass::before { /* soft reflection on the top half */
-  content: ""; position: absolute; inset: 0 0 50% 0; border-radius: inherit; pointer-events: none; z-index: -1;
-  background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0));
+/* Darker glass for floating toasts over busy content: keeps text at 4.5:1+. */
+.trip-glass-dark { background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.03)), rgba(18,16,34,.78); }
+.trip-glass::before { /* soft top highlight, like light on the edge of glass */
+  content: ""; position: absolute; inset: 0 0 55% 0; pointer-events: none; z-index: -1;
+  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,0));
 }
-.trip-glass::after { /* the moving shine */
-  content: ""; position: absolute; top: -40%; bottom: -40%; width: 38%; left: -60%; pointer-events: none;
-  background: linear-gradient(100deg, transparent, rgba(255,255,255,.55) 50%, transparent);
-  transform: skewX(-18deg); animation: trip-shine 4.2s ease-in-out infinite;
+.trip-glass::after { /* one gentle sheen pass (transform only), then a long rest */
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 45%; pointer-events: none; z-index: 1;
+  background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.16) 50%, transparent 80%);
+  transform: translateX(-120%); animation: trip-shine 7s cubic-bezier(.4,0,.2,1) 1.2s infinite;
 }
-@keyframes trip-shine { 0%, 55% { left: -60%; } 85%, 100% { left: 130%; } }
+@keyframes trip-shine { 0% { transform: translateX(-120%); } 22%, 100% { transform: translateX(260%); } }
+/* Toast entrance: spring up from below. */
+@keyframes trip-pop-in { 0% { opacity: 0; transform: translateY(24px) scale(.97); } 60% { opacity: 1; transform: translateY(-3px) scale(1.005); } 100% { opacity: 1; transform: none; } }
+.trip-pop-in { animation: trip-pop-in 480ms cubic-bezier(.2,.9,.3,1.1) both; }
 .trip-star { filter: drop-shadow(0 0 6px rgba(255,214,10,.55)); animation: trip-star-pop 4.2s ease-in-out infinite; }
 @keyframes trip-star-pop { 0%, 60%, 100% { transform: scale(1); } 68% { transform: scale(1.18); } 76% { transform: scale(1); } }
-@media (prefers-reduced-motion: reduce) { .trip-glass::after, .trip-star { animation: none; } .trip-glass::after { display: none; } }
+@media (prefers-reduced-motion: reduce) { .trip-glass::after, .trip-star, .trip-pop-in { animation: none; } .trip-glass::after { display: none; } }
 
 /* Trip carousels: "swipe me" spring nudge the first time a carousel is on screen. */
 @keyframes trip-nudge { 0% { transform: translateX(0); } 28% { transform: translateX(-64px); } 52% { transform: translateX(12px); } 70% { transform: translateX(-5px); } 86% { transform: translateX(2px); } 100% { transform: translateX(0); } }

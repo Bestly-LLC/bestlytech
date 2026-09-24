@@ -552,7 +552,6 @@ export default function LaxGuest() {
             
             </TripSheet>
             <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Drop the car → catch your flight" title="Return: car → shuttle → LAX">
-              {token && <div className="mb-5"><ReturnChecklist token={token} kind="lax" run={live ? carCommand : undefined} demo={demo} endsAt={pub.trip?.ends_at} /></div>}
 
               <p className="text-[15px] leading-relaxed text-white/75">
                 Reverse of the morning. The two things to watch: <b className="text-white">which entrance you use</b>, and <b className="text-white">which address you drive to</b>. Get those right and you're done.
@@ -573,6 +572,7 @@ export default function LaxGuest() {
                 <Step n={2} when="Inside" title={`Park on ${level}. Designated carshare area only.`}>
                   Same level you picked up from. The carshare zone is marked.
                   <Warn><b className="text-white">Do not return to The Parking Spot Century at {stop.replace(/ Blvd$/, "")}.</b> Your car won't have access there and you may be charged an improper-return fee.</Warn>
+                  {token && <ReturnChecklist compact token={token} kind="lax" run={live ? carCommand : undefined} demo={demo} endsAt={pub.trip?.ends_at} />}
                 </Step>
                 <Step n={3} when="Walk out" title="Elevator down, exit on 98th St.">
                   From {level}, take the elevator down, exit onto 98th St, and follow the Park My Share signs.

@@ -9,7 +9,7 @@
  * Shows once after a short delay; "Not now" hides it for 3 days. Never in the demo's first seconds of a stage switch.
  */
 import { useEffect, useState } from "react";
-import { BellRing, Plus, Puzzle, Share, X } from "lucide-react";
+import { BellRing, Puzzle, Share, SquarePlus, X } from "lucide-react";
 import { track } from "./track";
 import { enableTripPush, refreshTripPush, tripPushState } from "./tripPush";
 
@@ -20,7 +20,24 @@ const ua = () => (typeof navigator === "undefined" ? "" : navigator.userAgent);
 const isIOS = () => /iPhone|iPad|iPod/.test(ua()) || (/Macintosh/.test(ua()) && navigator.maxTouchPoints > 1);
 const isIPad = () => /iPad/.test(ua()) || (/Macintosh/.test(ua()) && navigator.maxTouchPoints > 1);
 const isSafari = () => isIOS() && !/CriOS|FxiOS|EdgiOS|GSA\//.test(ua());
-const standalone = () => typeof window !== "undefined" && (window.matchMedia?.("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true);
+// "Installed" = any of: iOS standalone flag, a standalone/fullscreen/minimal-ui display mode, or the ?hs=1 marker we put in
+// the URL while the toast is showing (iOS saves the current URL as the Home Screen icon's link, so launches from the icon
+// carry it even when iOS opens the icon in a Safari tab). Remembered in localStorage once seen.
+const INSTALLED = "a2hs-installed";
+const standalone = () => {
+  if (typeof window === "undefined") return false;
+  const mq = (m: string) => window.matchMedia?.(`(display-mode: ${m})`).matches;
+  if ((navigator as unknown as { standalone?: boolean }).standalone === true || mq("standalone") || mq("fullscreen") || mq("minimal-ui")) return true;
+  if (new URLSearchParams(window.location.search).get("hs") === "1") { try { localStorage.setItem(INSTALLED, "1"); } catch { /* ignore */ } return true; }
+  try { return localStorage.getItem(INSTALLED) === "1"; } catch { return false; }
+};
+const setMarker = (on: boolean) => {
+  try {
+    const u = new URL(window.location.href);
+    if (on) u.searchParams.set("hs", "1"); else u.searchParams.delete("hs");
+    window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+  } catch { /* ignore */ }
+};
 const snoozed = () => { try { return Date.now() - Number(localStorage.getItem(KEY) ?? 0) < 3 * 864e5; } catch { return false; } };
 
 export function InstallToast({ token, kind }: { token: string; kind: "home" | "lax" }) {
@@ -47,13 +64,13 @@ export function InstallToast({ token, kind }: { token: string; kind: "home" | "l
         if (st === "off") { setMode("alerts"); t = window.setTimeout(() => setShow(true), 2500); }
         return;
       }
-      if (isSafari()) { setMode("ios"); t = window.setTimeout(() => setShow(true), 6000); }
+      if (isSafari()) { setMode("ios"); t = window.setTimeout(() => { setMarker(true); setShow(true); }, 6000); }
     })();
     const t2 = window.setTimeout(() => { if (!isSafari() && !standalone()) setShow(true); }, 6000);
     return () => { window.removeEventListener("beforeinstallprompt", f); window.clearTimeout(t); window.clearTimeout(t2); };
   }, [token]);
 
-  const close = () => { setShow(false); try { localStorage.setItem(KEY, String(Date.now())); } catch { /* ignore */ } track(token, "a2hs_dismiss", { mode }); };
+  const close = () => { setShow(false); if (mode === "ios") setMarker(false); try { localStorage.setItem(KEY, String(Date.now())); } catch { /* ignore */ } track(token, "a2hs_dismiss", { mode }); };
   if (!show || !mode) return null;
 
   const turnOn = async () => {
@@ -76,7 +93,7 @@ export function InstallToast({ token, kind }: { token: string; kind: "home" | "l
       )}
       <div role="dialog" aria-label="Add this trip to your Home Screen" className="fixed inset-x-0 z-[60] flex justify-center px-3"
         style={{ bottom: isIPad() ? "auto" : "calc(env(safe-area-inset-bottom) + 64px)", top: isIPad() ? 64 : "auto" }}>
-        <div className="trip-glass w-full max-w-md rounded-3xl p-4 text-white shadow-2xl" style={{ background: "linear-gradient(160deg, rgba(255,255,255,.22), rgba(255,255,255,.08)), rgba(14,12,28,.86)" }}>
+        <div className="trip-glass trip-glass-dark trip-pop-in w-full max-w-md rounded-[28px] p-4 text-white">
           <div className="flex items-start gap-3">
             <img src={icon} alt="" className="h-14 w-14 shrink-0 rounded-[14px] shadow-lg ring-1 ring-white/20" />
             <div className="min-w-0 flex-1">
@@ -85,20 +102,20 @@ export function InstallToast({ token, kind }: { token: string; kind: "home" | "l
                 {mode === "alerts" ? "Get a nudge when your key is ready and when it's time to return." : "One tap to open it, and alerts when your key is ready and when it's time to return."}
               </p>
             </div>
-            <button type="button" onClick={close} aria-label="Not now" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10"><X className="h-4 w-4" /></button>
+            <button type="button" onClick={close} aria-label="Not now" className="-mr-1.5 -mt-1.5 grid h-11 w-11 shrink-0 place-items-center rounded-full"><span className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.12] text-white/80"><X className="h-4 w-4" strokeWidth={2.5} /></span></button>
           </div>
           {mode === "ios" && (
             <ol className="mt-3 grid grid-cols-3 gap-2 text-center text-[12px] leading-tight text-white/85">
-              <li className="rounded-2xl bg-white/10 px-1.5 py-2.5"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><Puzzle className="h-4 w-4" /></span>1. Tap the <b className="text-white">puzzle piece</b> next to bestly.tech</li>
-              <li className="rounded-2xl bg-white/10 px-1.5 py-2.5"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><Share className="h-4 w-4" /></span>2. Tap <b className="text-white">Share</b></li>
-              <li className="rounded-2xl bg-white/10 px-1.5 py-2.5"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><Plus className="h-4 w-4" /></span>3. <b className="text-white">Add to Home Screen</b> (scroll down if needed)</li>
+              <li className="rounded-2xl bg-white/[0.08] px-1.5 py-2.5 ring-1 ring-inset ring-white/10"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><Puzzle className="h-4 w-4" /></span>1. Tap the <b className="text-white">puzzle piece</b> next to bestly.tech</li>
+              <li className="rounded-2xl bg-white/[0.08] px-1.5 py-2.5 ring-1 ring-inset ring-white/10"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><Share className="h-4 w-4" /></span>2. Tap <b className="text-white">Share</b></li>
+              <li className="rounded-2xl bg-white/[0.08] px-1.5 py-2.5 ring-1 ring-inset ring-white/10"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><SquarePlus className="h-[18px] w-[18px]" /></span>3. <b className="text-white">Add to Home Screen</b> (scroll down if needed)</li>
             </ol>
           )}
           {mode === "ios" && <p className="mt-2 text-center text-[12px] text-white/60">No puzzle piece? Tap the Share button <Share className="inline h-3 w-3" /> in Safari's toolbar instead.</p>}
           {mode === "android" && bip && (
             <button type="button" onClick={async () => { await bip.prompt(); const c = await bip.userChoice; track(token, "a2hs_android", { outcome: c.outcome }); setShow(false); }}
               className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#1A1140]" style={{ background: ACCENT }}>
-              <Plus className="h-4 w-4" /> Add to Home Screen
+              <SquarePlus className="h-4 w-4" /> Add to Home Screen
             </button>
           )}
           {mode === "alerts" && (
