@@ -372,7 +372,7 @@ export default function LaxGuest() {
           <>
             {!ended && <p className="text-[17px] leading-relaxed text-white/85">Your Turo Tesla is in a garage 5 minutes from LAX. <b className="text-white">Your phone is the key</b>, and a QR code opens the lobby door.</p>}
 
-            {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" /></div>}
+            {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /></div>}
 
             {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token || undefined} /> : <>
             <NextStep next={guide.next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? carCommand : undefined} kind="lax" />

@@ -1020,3 +1020,11 @@ body.admin-bento { background-color: var(--bento-page); }
 .trip-a2hs-arrow.rotate-180 { animation-name: trip-a2hs-bounce-up; }
 @keyframes trip-a2hs-bounce-up { 0%, 100% { transform: rotate(180deg) translateY(0); } 50% { transform: rotate(180deg) translateY(10px); } }
 @media (prefers-reduced-motion: reduce) { .trip-a2hs-arrow { animation: none; } }
+
+/* Live Activity "Trip complete": ring + check draw themselves, then sparkles pop. */
+.trip-draw { stroke-dasharray: 1 1; stroke-dashoffset: 1; animation: trip-draw .9s cubic-bezier(.2,.8,.2,1) forwards; }
+.trip-draw-2 { animation-delay: .55s; }
+@keyframes trip-draw { to { stroke-dashoffset: 0; } }
+.trip-spark { opacity: 0; animation: trip-spark 2.8s ease-in-out infinite; }
+@keyframes trip-spark { 0% { opacity: 0; transform: scale(.4); } 18% { opacity: 1; transform: scale(1.15); } 40% { opacity: .9; transform: scale(1); } 70%, 100% { opacity: .35; transform: scale(.9); } }
+@media (prefers-reduced-motion: reduce) { .trip-draw { animation: none; stroke-dashoffset: 0; } .trip-spark { animation: none; opacity: .8; } }

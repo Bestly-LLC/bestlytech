@@ -138,9 +138,37 @@ function DayStrip({ startsAt, now, C }: { startsAt: number; now: number; C: { ho
   );
 }
 
+/** After the trip: a check that draws itself inside a ring, sparkles, and a short recap (days, returned, charging). */
+function DoneBadge({ s, e, C, home, recap, endsAt }: { s: number; e: number; C: { hot: string; text: string; sub: string; track: string }; home: boolean; recap?: { charging?: number | null; stops?: number | null }; endsAt: string }) {
+  const days = Math.max(1, Math.round((e - s) / 864e5));
+  const chips = [`${days} day${days === 1 ? "" : "s"}`, `Returned ${hm(endsAt)}`, recap?.charging != null && recap.charging > 0 ? `$${recap.charging.toFixed(2)} Supercharging` : null].filter(Boolean) as string[];
+  const fx = { transformBox: "fill-box", transformOrigin: "center" } as const;
+  const spark = (x: number, y: number, r: number, d: number) => (
+    <g key={`${x}${y}`} transform={`translate(${x} ${y})`}>
+      {home
+        ? <polygon className="trip-spark" style={{ ...fx, animationDelay: `${d}ms` }} fill={C.hot} points={[0, -1, 0.23, -0.23, 1, 0, 0.23, 0.23, 0, 1, -0.23, 0.23, -1, 0, -0.23, -0.23].map((v) => v * r).join(" ")} />
+        : <circle className="trip-spark" style={{ ...fx, animationDelay: `${d}ms` }} r={r / 2.5} fill={C.hot} />}
+    </g>
+  );
+  return (
+    <div className="mt-2 flex flex-col items-center" aria-label="Trip complete">
+      <svg viewBox="0 0 160 110" className="h-[100px] w-auto overflow-visible" aria-hidden>
+        <circle cx="80" cy="55" r="44" fill={C.hot} opacity=".12" />
+        <circle cx="80" cy="55" r="38" fill="none" stroke={C.hot} strokeWidth="5" strokeLinecap="round" pathLength={1} className="trip-draw" transform="rotate(-90 80 55)" />
+        <path d="M62 56 L75 69 L99 43" fill="none" stroke={C.hot} strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" pathLength={1} className="trip-draw trip-draw-2" />
+        {spark(22, 30, 7, 900)}{spark(138, 24, 9, 1050)}{spark(142, 84, 6, 1200)}{spark(16, 82, 5, 1350)}{spark(118, 100, 4, 1500)}
+      </svg>
+      <p className="-mt-1 text-[24px] font-bold leading-none" style={{ color: C.hot }}>Trip complete</p>
+      <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
+        {chips.map((c) => <span key={c} className="rounded-full px-2.5 py-1 text-[12px] font-semibold tabular-nums" style={{ background: C.track, color: C.text }}>{c}</span>)}
+      </div>
+    </div>
+  );
+}
+
 /** "Your Turo trip" as a Live Activity: pickup → return, one time track, a big countdown. Ticks every 30s.
  *  theme "lax" = iOS Live Activity (black glass, green); "home" = midcentury (teal, mustard, orange). */
-export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | "home"; battery?: number | null; keyState?: TripKeyState; insideF?: number | null }) {
+export function TripCard({ trip, theme = "lax", recap }: { trip: Trip; theme?: "lax" | "home"; battery?: number | null; keyState?: TripKeyState; insideF?: number | null; recap?: { charging?: number | null; stops?: number | null } }) {
   const [now, setNow] = useState(Date.now());
   const s = +new Date(trip.starts_at), e = +new Date(trip.ends_at);
   // Tick every 30s, every second in the last 2 minutes before pickup/return, and exactly at each boundary,
@@ -197,8 +225,10 @@ export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | 
     </div>, document.body) : null;
   // Where "now" sits on the track (the glowing dot / starburst).
   const trackRef = useRef<SVGPathElement>(null);
-  const [dot, setDot] = useState<{ x: number; y: number } | null>(null);
-  useEffect(() => { const el = trackRef.current; if (!el) return; const L = el.getTotalLength(); const pt = el.getPointAtLength(L * pos); setDot({ x: pt.x, y: pt.y }); }, [pos]);
+  // The fill and the dot both come from the same measured length, in the SVG's own units (no non-scaling-stroke,
+  // which measures dashes in screen pixels and made the fill stop short of / run past the dot).
+  const [dot, setDot] = useState<{ x: number; y: number; L: number } | null>(null);
+  useEffect(() => { const el = trackRef.current; if (!el) return; const L = el.getTotalLength(); const pt = el.getPointAtLength(L * pos); setDot({ x: pt.x, y: pt.y, L }); }, [pos]);
   return (
     <>{mini}
     <section ref={cardRef} aria-label={`Your Turo trip: ${big} ${label}`} className="relative overflow-hidden rounded-[30px] px-4 pb-4 pt-3.5"
@@ -232,11 +262,14 @@ export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | 
             <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: C.sub }}>{label}</p>
           </div>
         </>
+      ) : !before && !during ? (
+        <DoneBadge s={s} e={e} C={C} home={home} recap={recap} endsAt={trip.ends_at} />
       ) : (<>
       <svg viewBox="0 0 320 48" className="mt-2 block h-auto w-full overflow-visible" aria-hidden>
-        <path ref={trackRef} d={TRACK} fill="none" stroke={C.track} strokeWidth="3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        {pos > 0.004 && <path d={TRACK} fill="none" stroke={C.accent} strokeWidth="3.5" strokeLinecap="round" pathLength={1} strokeDasharray={`${Math.min(1, pos)} 2`}
-          vectorEffect="non-scaling-stroke" style={{ transition: "stroke-dasharray 900ms cubic-bezier(.2,.8,.2,1)", filter: home ? undefined : "drop-shadow(0 0 4px rgba(48,209,88,.55))" }} />}
+        <path ref={trackRef} d={TRACK} fill="none" stroke={C.track} strokeWidth="3" strokeLinecap="round" />
+        {dot && pos > 0.004 && <path d={TRACK} fill="none" stroke={C.accent} strokeWidth="3.5" strokeLinecap="butt" strokeDasharray={`${Math.min(1, pos) * dot.L} ${dot.L + 20}`}
+          style={{ transition: "stroke-dasharray 900ms cubic-bezier(.2,.8,.2,1)", filter: home ? undefined : "drop-shadow(0 0 4px rgba(48,209,88,.55))" }} />}
+        {dot && pos > 0.004 && <circle cx={4} cy={44} r={1.75} fill={C.accent} />}
         {dot && (pos > 0 && pos < 1) && (home
           ? <polygon transform={`translate(${dot.x} ${dot.y})`} fill={C.hot} points="0,-7 1.6,-1.6 7,0 1.6,1.6 0,7 -1.6,1.6 -7,0 -1.6,-1.6" />
           : <><circle cx={dot.x} cy={dot.y} r="7" fill={C.accent} opacity=".25" className="motion-safe:animate-ping" style={{ transformOrigin: `${dot.x}px ${dot.y}px` }} /><circle cx={dot.x} cy={dot.y} r="4" fill={C.accent} /></>)}

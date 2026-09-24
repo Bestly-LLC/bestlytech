@@ -281,7 +281,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
       <main className="mx-auto max-w-md px-5 pb-48 pt-5">
         {!ended && <p className="text-[17px] leading-relaxed text-white/85">Your Turo Tesla is parked on <b className="text-white">{street.replace(/^\d+\s*/, "")}</b>. <b className="text-white">Your phone is the key.</b> No meetup, no keys.</p>}
 
-        {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" /></div>}
+        {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /></div>}
 
         {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" /> : <>
         <NextStep next={next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? run : undefined} kind="home" />
