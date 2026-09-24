@@ -22,6 +22,36 @@ const PUPIL_REACH = { x: 5.4, y: 3.6 };
 export type Stare = { x: number; y: number; a?: number } | null;
 
 /**
+ * "Couldn't check admin access": the binoculars get sad (droopy lids, eyes down, two tears, a little
+ * quiver), squeeze shut, then get angry (lids slam inward, turn red, anger mark, shaking) and stay mad.
+ * One 6s performance, then the anger keeps simmering. Reduced motion: just the final angry face.
+ */
+const MOOD_CSS = `
+.am-mood{animation:am-sm-color 6s linear forwards}
+.am-mood .am-lidL,.am-mood .am-lidR,.am-mood .am-look{transform-box:view-box;animation-duration:6s;animation-iteration-count:1;animation-fill-mode:forwards;animation-delay:0s;animation-timing-function:cubic-bezier(.4,1.2,.5,1)}
+.am-mood .am-lidL{animation-name:am-sm-lidL}.am-mood .am-lidR{animation-name:am-sm-lidR}.am-mood .am-look{animation-name:am-sm-look}
+@keyframes am-sm-color{0%,62%{color:#fff}76%,100%{color:#FF453A}}
+@keyframes am-sm-lidL{0%{transform:translateY(-13px) rotate(0)}12%,54%{transform:translateY(-6px) rotate(-16deg)}58%{transform:translateY(-5px) rotate(-18deg)}62%,67%{transform:translateY(12px) rotate(0)}76%,100%{transform:translateY(-4px) rotate(20deg)}}
+@keyframes am-sm-lidR{0%{transform:translateY(-13px) rotate(0)}12%,54%{transform:translateY(-6px) rotate(16deg)}58%{transform:translateY(-5px) rotate(18deg)}62%,67%{transform:translateY(12px) rotate(0)}76%,100%{transform:translateY(-4px) rotate(-20deg)}}
+@keyframes am-sm-look{0%{transform:translate(0,0)}12%,30%{transform:translate(-1.5px,3.4px)}40%,58%{transform:translate(1.5px,3.4px)}76%,100%{transform:translate(0,.6px)}}
+.am-mood .am-quiver{animation:am-sm-quiver .2s ease-in-out .9s 14 alternate}
+@keyframes am-sm-quiver{from{transform:translateY(0)}to{transform:translateY(.7px)}}
+.am-mood .am-rage{animation:am-sm-rage 1.8s linear 4.5s infinite}
+@keyframes am-sm-rage{0%{transform:translateX(0)}4%{transform:translateX(-1.8px)}8%{transform:translateX(1.8px)}12%{transform:translateX(-1.4px)}16%{transform:translateX(1.4px)}20%{transform:translateX(-.7px)}24%,100%{transform:translateX(0)}}
+.am-mood .am-tear{opacity:0;animation:am-sm-tear 6s cubic-bezier(.5,0,.8,.6) forwards}
+.am-mood .am-tear2{animation-delay:.9s}
+@keyframes am-sm-tear{0%,18%{opacity:0;transform:translateY(0) scale(.4)}24%{opacity:1;transform:translateY(0) scale(1)}46%{opacity:1;transform:translateY(15px) scale(1)}52%,100%{opacity:0;transform:translateY(19px) scale(.8)}}
+.am-mood .am-vein{transform-box:fill-box;transform-origin:center;opacity:0;animation:am-sm-vein 6s ease-out forwards,am-sm-throb 1.8s ease-in-out 6s infinite}
+@keyframes am-sm-vein{0%,72%{opacity:0;transform:scale(.2)}80%{opacity:1;transform:scale(1.35)}86%,100%{opacity:1;transform:scale(1)}}
+@keyframes am-sm-throb{0%,100%{opacity:1;transform:scale(1)}50%{opacity:1;transform:scale(1.25)}}
+@media (prefers-reduced-motion:reduce){
+  .am-mood,.am-mood *{animation:none!important}
+  .am-mood{color:#FF453A}
+  .am-mood .am-lidL{transform:translateY(-4px) rotate(20deg)}.am-mood .am-lidR{transform:translateY(-4px) rotate(-20deg)}
+  .am-mood .am-look{transform:translate(0,.6px)}.am-mood .am-tear{opacity:0}.am-mood .am-vein{opacity:1}
+}`;
+
+/**
  * Pupils follow the pointer while it is within STARE_RADIUS_PX of the mark. Outside that, the
  * normal glance animation runs. Mouse/pen only (touch has no hover), one rAF per frame.
  */
@@ -70,6 +100,7 @@ export function AdminMark({
   animated = true,
   watchCursor = true,
   stareRadius = STARE_RADIUS_PX,
+  mood,
 }: {
   className?: string;
   label?: string;
@@ -78,16 +109,18 @@ export function AdminMark({
   watchCursor?: boolean;
   /** How close, in CSS px, before it stares. ~96px per inch. */
   stareRadius?: number;
+  /** A one-off emotional performance instead of the glance (see MOOD_CSS). */
+  mood?: "sad-angry";
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const stare = useStare(svgRef, watchCursor, PUPIL_REACH, 0.61, stareRadius);
+  const stare = useStare(svgRef, watchCursor && !mood, PUPIL_REACH, 0.61, stareRadius);
   const uid = useId().replace(/:/g, "");
   // Negative delay = "already this far into the cycle", so remounts continue instead of restarting.
   const delay = useMemo(
     () => `-${Math.round((typeof performance !== "undefined" ? performance.now() : 0) % ADMIN_MARK_PERIOD_MS)}ms`,
     [],
   );
-  const anim = stare ? " am-watching" : animated ? "" : " am-still";
+  const anim = mood ? " am-mood" : stare ? " am-watching" : animated ? "" : " am-still";
   // Staring: pupils on the cursor, lids lowered and tilted in, a suspicious squint.
   const look = stare ? { transform: `translate(${stare.x}px, ${stare.y}px)` } : undefined;
   const lidL = stare ? { transform: "translateY(-3px) rotate(7deg)" } : undefined;
@@ -119,6 +152,8 @@ export function AdminMark({
           <g className="am-lidR" style={lidR}><rect x="32" y="10" width="40" height="34.8" /></g>
         </mask>
       </defs>
+      {mood && <style>{MOOD_CSS}</style>}
+      <g className="am-rage"><g className="am-quiver">
       <g mask={`url(#m${uid})`}>
         <path className="am-st" d="M9 37L13.5 21Q14 18 17 18H21Q24 18 24.5 21L29 37M43 37L47.5 21Q48 18 51 18H55Q58 18 58.5 21L63 37" />
         <path className="am-st" d="M25.5 27H46.5M30 42H42" />
@@ -133,6 +168,15 @@ export function AdminMark({
       </g>
       <g clipPath={`url(#cl${uid})`}><g className="am-lidL" style={lidL}><rect className="am-fl" x="0" y="10" width="40" height="32" /></g></g>
       <g clipPath={`url(#cr${uid})`}><g className="am-lidR" style={lidR}><rect className="am-fl" x="32" y="10" width="40" height="32" /></g></g>
+      {mood && (
+        <>
+          <g transform="translate(13 51)"><path className="am-tear" fill="#64D2FF" d="M0-3.4C1.7-.9 2.5.6 2.5 1.6a2.5 2.5 0 0 1-5 0C-2.5.6-1.7-.9 0-3.4Z" /></g>
+          <g transform="translate(59 51)"><path className="am-tear am-tear2" fill="#64D2FF" d="M0-3.4C1.7-.9 2.5.6 2.5 1.6a2.5 2.5 0 0 1-5 0C-2.5.6-1.7-.9 0-3.4Z" /></g>
+          <g transform="translate(64 8)"><path className="am-vein" fill="none" stroke="#FF453A" strokeWidth="2.2" strokeLinecap="round"
+            d="M-5-1.6Q-1.6-1.6-1.6-5M1.6-5Q1.6-1.6 5-1.6M5 1.6Q1.6 1.6 1.6 5M-1.6 5Q-1.6 1.6-5 1.6" /></g>
+        </>
+      )}
+      </g></g>
     </svg>
   );
 }

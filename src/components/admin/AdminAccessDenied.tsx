@@ -39,7 +39,7 @@ export function AdminAccessDenied({ email, checkFailed = false, onRetry, onSignO
     <div className="admin-shell min-h-screen flex items-center justify-center bg-black text-white p-4">
       <div role="alert" className="w-full max-w-sm text-center space-y-5">
         <div className="flex justify-center">
-          <AdminMark className="h-16 w-16" />
+          {checkFailed ? <AdminMark className="h-24 w-24" mood="sad-angry" /> : <AdminMark className="h-16 w-16" />}
         </div>
         <div className="space-y-2">
           <h1 className="text-xl font-semibold tracking-tight">
