@@ -70,6 +70,9 @@ export function useRecorder(active: boolean) {
   const [latest, setLatest] = useState<RecentRecording | null>(null);
 
   const refresh = useCallback(async () => {
+    // Signed-out tabs (expired session) polled as anon and filled the logs with permission errors (2026-09-24).
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
     const [{ data: s }, { data: r }] = await Promise.all([
       supabase.from("meeting_recorder_status" as any).select("*").maybeSingle(),
       supabase
