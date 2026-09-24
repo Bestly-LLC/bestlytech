@@ -375,12 +375,12 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car }: 
   }, [busy]);
   const now = useNow(true);
   const session = demoOn ?? (car?.climate_until && car.climate_mode ? { mode: car.climate_mode, until: car.climate_until } : null);
-  const running = session && +new Date(session.until) > now ? session : null;
+  const shownFor = useRef<string | null>(null); // a session we've already shown as ended never comes back
+  const running = session && +new Date(session.until) > now && shownFor.current !== session.until ? session : null;
   // After "off" (or the 20-minute auto-off), keep the panel up for a few seconds: fan winds down, timer freezes.
   const [stopped, setStopped] = useState<{ mode: string; until: string; at: number; auto: boolean } | null>(null);
   const lastSession = useRef<{ mode: string; until: string } | null>(null);
   if (running) lastSession.current = running;
-  const shownFor = useRef<string | null>(null);
   useEffect(() => {
     const s = lastSession.current;
     if (!stopped && s && !running && +new Date(s.until) <= now && shownFor.current !== s.until) {
