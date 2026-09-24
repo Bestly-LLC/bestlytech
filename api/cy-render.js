@@ -17,7 +17,7 @@ import puppeteer from "puppeteer-core";
 import { AsyncLocalStorage } from "node:async_hooks";
 const config = { maxDuration: 120 };
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://rcqfqhguwpmaarseifqg.supabase.co";
-const SUPABASE_ANON = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTc1OTUsImV4cCI6MjA5MDkzMzU5NX0.MHwsTd3CmaTViv3HoFRbeF1t6hmlf5W-p_4eHFBQP9k";
+const SUPABASE_ANON = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw";
 const ENGINE = "vercel-chromium";
 const DESKTOP = {
   viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
@@ -39,7 +39,7 @@ async function keyValid(key) {
   if (h === keyOkHash && Date.now() < keyOkUntil) return true;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/cy_render_key_ok`, {
     method: "POST",
-    headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}`, "Content-Type": "application/json" },
+    headers: { apikey: SUPABASE_ANON, ...(SUPABASE_ANON.startsWith("sb_") ? {} : { Authorization: `Bearer ${SUPABASE_ANON}` }), "Content-Type": "application/json" },
     body: JSON.stringify({ p_key: key })
   });
   if (!res.ok) return false;

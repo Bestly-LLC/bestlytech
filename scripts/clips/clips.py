@@ -17,8 +17,7 @@ VERSION = "1.5.0"   # 1.5: every recording is a meeting (Calls); no Clips list a
 # 1.2: big files go up and come down in parts (storage caps one object at 50MB)
 HOME = os.path.expanduser("~")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
-ANON = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6"
-        "ImFub24iLCJpYXQiOjE3NzUzNTc1OTUsImV4cCI6MjA5MDkzMzU5NX0.MHwsTd3CmaTViv3HoFRbeF1t6hmlf5W-p_4eHFBQP9k")
+ANON = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"  # publishable key: apikey header only (key switch 2026-09-24)
 KEY = open(f"{HOME}/PartnerAI/.key").read().strip()
 OLLAMA = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 MODEL = os.environ.get("PARTNER_AI_MODEL", "qwen3:8b")
@@ -42,7 +41,7 @@ def log(*a):
 
 def rpc(name, body, timeout=30):
     req = urllib.request.Request(f"{SB}/rest/v1/rpc/{name}", data=json.dumps(body).encode(), method="POST",
-                                 headers={"apikey": ANON, "Authorization": f"Bearer {ANON}", "Content-Type": "application/json"})
+                                 headers={"apikey": ANON, "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode() or "null")
 
@@ -87,7 +86,7 @@ def upload(path, source="airdrop"):
     """Send the bytes to clip-ingest (in parts when big); returns the clip id."""
     size = os.path.getsize(path)
     made = datetime.fromtimestamp(os.path.getmtime(path), timezone.utc).isoformat()
-    base = {"Authorization": f"Bearer {ANON}", "x-worker-key": KEY, "x-file-name": os.path.basename(path),
+    base = {"apikey": ANON, "x-worker-key": KEY, "x-file-name": os.path.basename(path),
             "x-source": source, "x-recorded-at": made, "Content-Type": "application/octet-stream"}
     if size <= PART:
         return _post(open(path, "rb").read(), base)["id"]
@@ -106,7 +105,7 @@ def upload(path, source="airdrop"):
 def download(storage_path, to, parts=None):
     """One object, or <path>.part000.. stitched back into the original bytes."""
     # The bucket is admin-only: ask clip-ingest (worker key) for signed links, one per part.
-    h = {"Authorization": f"Bearer {ANON}", "x-worker-key": KEY, "x-sign": storage_path}
+    h = {"apikey": ANON, "x-worker-key": KEY, "x-sign": storage_path}
     if parts:
         h["x-parts"] = str(parts)
     urls = _post(b"", h)["urls"]
@@ -171,7 +170,7 @@ def playable(src, clip):
                         "-movflags", "+faststart", out], capture_output=True, timeout=1800, check=True)
         if os.path.getsize(out) > PLAY_MAX:
             raise RuntimeError(f"playable copy still {os.path.getsize(out)} bytes")
-        _post(open(out, "rb").read(), {"Authorization": f"Bearer {ANON}", "x-worker-key": KEY,
+        _post(open(out, "rb").read(), {"apikey": ANON, "x-worker-key": KEY,
               "x-attach": clip["id"], "Content-Type": "audio/mp4"})
         log("playable copy", clip["id"], f"{kbps}k", os.path.getsize(out))
     finally:

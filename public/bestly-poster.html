@@ -40,10 +40,10 @@
  </div>
 <script>
  const FN_BASE="https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/bestly-poster";
- const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTc1OTUsImV4cCI6MjA5MDkzMzU5NX0.MHwsTd3CmaTViv3HoFRbeF1t6hmlf5W-p_4eHFBQP9k";
+ const ANON="sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw";
  const REELS={cookieyeti:"https://www.bestly.tech/cookie-yeti-today-reel.mp4"};
  const LV={PUBLIC_TO_EVERYONE:"Everyone (public)",MUTUAL_FOLLOW_FRIENDS:"Friends",SELF_ONLY:"Only me (private)"};
- const hdr={"Content-Type":"application/json","Authorization":"Bearer "+ANON,"apikey":ANON};
+ const hdr={"Content-Type":"application/json","apikey":ANON};
  const $=id=>document.getElementById(id);
  let brand="";
  fetch(FN_BASE+"?action=brands",{headers:hdr}).then(r=>r.json()).then(d=>{

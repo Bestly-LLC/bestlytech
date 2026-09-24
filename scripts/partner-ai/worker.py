@@ -17,8 +17,7 @@ from datetime import datetime
 VERSION = "1.2.0"
 HOME = os.path.expanduser("~/PartnerAI")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co/rest/v1/rpc/"
-ANON = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6"
-        "ImFub24iLCJpYXQiOjE3NzUzNTc1OTUsImV4cCI6MjA5MDkzMzU5NX0.MHwsTd3CmaTViv3HoFRbeF1t6hmlf5W-p_4eHFBQP9k")
+ANON = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"  # publishable key: apikey header only (key switch 2026-09-24)
 KEY = open(f"{HOME}/.key").read().strip()
 OLLAMA = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 MODEL = os.environ.get("PARTNER_AI_MODEL", "qwen3:8b")
@@ -41,7 +40,7 @@ def log(*a):
 
 def rpc(name, body, timeout=20):
     req = urllib.request.Request(SB + name, data=json.dumps(body).encode(), method="POST", headers={
-        "apikey": ANON, "Authorization": f"Bearer {ANON}", "Content-Type": "application/json"})
+        "apikey": ANON, "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         raw = r.read().decode() or "null"
     return json.loads(raw)

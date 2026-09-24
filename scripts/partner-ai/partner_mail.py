@@ -14,8 +14,7 @@ from email.header import decode_header, make_header
 HOME = os.path.expanduser("~/PartnerAI")
 KEY = open(f"{HOME}/.key").read().strip()
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
-ANON = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6"
-        "ImFub24iLCJpYXQiOjE3NzUzNTc1OTUsImV4cCI6MjA5MDkzMzU5NX0.MHwsTd3CmaTViv3HoFRbeF1t6hmlf5W-p_4eHFBQP9k")
+ANON = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"  # publishable key: apikey header only (key switch 2026-09-24)
 LOG = f"{HOME}/mail.log"
 ACCOUNTS = [
     {"host": "mail.privateemail.com", "addr": "jared@bestly.tech", "folders": ["Sent"]},
@@ -47,7 +46,7 @@ def post(url, body, headers, timeout=120):
 
 
 def rpc(name, body):
-    return post(f"{SB}/rest/v1/rpc/{name}", body, {"apikey": ANON, "Authorization": f"Bearer {ANON}"})
+    return post(f"{SB}/rest/v1/rpc/{name}", body, {"apikey": ANON})
 
 
 def dec(v):
@@ -146,7 +145,7 @@ def sync(acc, targets):
                     "skipped": skipped,
                 }
                 try:
-                    res = post(f"{SB}/functions/v1/partner-mail-ingest", body, {"apikey": ANON, "Authorization": f"Bearer {ANON}"}, timeout=300)
+                    res = post(f"{SB}/functions/v1/partner-mail-ingest", body, {"apikey": ANON}, timeout=300)
                     stored += 1 if res.get("ok") else 0
                     if not res.get("ok"): log("  ingest failed", mid, res)
                 except Exception as e:

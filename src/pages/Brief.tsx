@@ -69,8 +69,7 @@ const YN_OPTIONS = [
 
 const SUPABASE_URL = "https://rcqfqhguwpmaarseifqg.supabase.co";
 const FN = `${SUPABASE_URL}/functions/v1/cloud-brief`;
-const ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTc1OTUsImV4cCI6MjA5MDkzMzU5NX0.MHwsTd3CmaTViv3HoFRbeF1t6hmlf5W-p_4eHFBQP9k";
+const ANON_KEY = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"; // publishable key (key switch 2026-09-24): send on apikey only
 
 type Brief = {
   id: string;
@@ -121,7 +120,7 @@ export default function Brief() {
 
     const ctrl = new AbortController();
     fetch(`${FN}?token=${encodeURIComponent(token)}`, {
-      headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
+      headers: { apikey: ANON_KEY },
       signal: ctrl.signal,
     })
       .then(async (r) => {
@@ -166,7 +165,6 @@ export default function Brief() {
         headers: {
           "Content-Type": "application/json",
           apikey: ANON_KEY,
-          Authorization: `Bearer ${ANON_KEY}`,
         },
         body: JSON.stringify(payload),
       });
@@ -228,7 +226,6 @@ export default function Brief() {
         headers: {
           "Content-Type": "application/json",
           apikey: ANON_KEY,
-          Authorization: `Bearer ${ANON_KEY}`,
         },
         body: JSON.stringify({ token }),
       });

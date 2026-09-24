@@ -42,9 +42,9 @@
  // CONFIG — set before deploy:
  const FN_BASE = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/tiktok-poster";
  const REEL_URL = "https://www.bestly.tech/cookie-yeti-today-reel.mp4";
- const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTc1OTUsImV4cCI6MjA5MDkzMzU5NX0.MHwsTd3CmaTViv3HoFRbeF1t6hmlf5W-p_4eHFBQP9k";
+ const ANON = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw";
  const LV={PUBLIC_TO_EVERYONE:"Everyone (public)",MUTUAL_FOLLOW_FRIENDS:"Friends",SELF_ONLY:"Only me (private)"};
- const hdr={"Content-Type":"application/json","Authorization":"Bearer "+ANON,"apikey":ANON};
+ const hdr={"Content-Type":"application/json","apikey":ANON};
  document.getElementById('preview').src=REEL_URL;
  fetch(FN_BASE+"?action=creator-info",{headers:hdr}).then(r=>r.json()).then(d=>{
    const sel=document.getElementById('privacy');sel.innerHTML='';
