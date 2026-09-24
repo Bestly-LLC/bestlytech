@@ -59,7 +59,7 @@ export function VideoList() {
           <button type="button" onClick={() => playVideo(v)} className="flex w-full items-center gap-3 rounded-2xl p-1.5 text-left active:bg-white/[0.06]">
             <span className="relative block h-[64px] w-[114px] shrink-0 overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
               <img src={v.thumb} alt="" loading="lazy" className="h-full w-full object-cover" />
-              <span className="absolute inset-0 grid place-items-center bg-black/25"><span className="grid h-8 w-8 place-items-center rounded-full" style={{ background: "var(--trip-accent)" }}><Play className="ml-0.5 h-4 w-4 fill-current text-[#120E0B]" /></span></span>
+              <span className="absolute inset-0 grid place-items-center bg-black/25"><span className="grid h-8 w-8 place-items-center rounded-full" style={{ background: "var(--trip-accent)" }}><Play className="ml-0.5 h-4 w-4 fill-current text-[#132726]" /></span></span>
             </span>
             <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold leading-snug text-white">{v.title}</span><span className="block text-[13px] leading-snug text-white/60">{v.sub}</span></span>
           </button>

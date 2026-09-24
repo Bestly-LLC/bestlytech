@@ -244,8 +244,8 @@ export default function LaxGuest() {
   // Home pickup: while loading, show the Hollywood-hills loader if we know it's a home trip (matches trip.html's splash).
   const knownKind = (() => { try { return token ? localStorage.getItem(`tripkind:${token}`) : null; } catch { return null; } })();
   if (token && !pub && knownKind !== "lax") return (
-    <div className="flex min-h-screen items-center justify-center" style={{ background: "#120E0B" }} role="status" aria-label="Loading">
-      <img src="/wallet/home/loader.svg" alt="" className="h-[88px] w-[88px] animate-pulse rounded-[20px] motion-reduce:animate-none" />
+    <div className="flex min-h-screen items-center justify-center" style={{ background: "#132726" }} role="status" aria-label="Loading">
+      <img src="/wallet/home/loader-mcm.svg" alt="" className="h-[88px] w-[88px] animate-pulse rounded-[20px] motion-reduce:animate-none" />
     </div>
   );
   // Home pickup (733 N Kings Rd): same page system, home look. No QR code, shuttle or garage.

@@ -16,24 +16,29 @@ import { AskButton, AskSheet } from "./AskSheet";
 import { CarCard, ClimateAdvice, DEMO_CAR, TripCard, WeatherCard, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
 
-// Hollywood theme: golden hour over the hills. Gold + cream on warm black, Art Deco touches.
+// Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
+// Mustard + burnt orange + cream on deep teal.
 const PEACH = "var(--trip-accent)";
-const HOLLYWOOD = {
-  "--trip-accent": "#E8B44C",
-  "--trip-accent-2": "#F3E6CC",
-  "--trip-bg": "#120E0B",
-  "--trip-bar": "rgba(18,14,11,0.94)",
-  "--trip-sheet-head": "linear-gradient(180deg, #2b1a10, #120E0B)",
-  "--trip-strap": "repeating-linear-gradient(90deg, #E8B44C66 0 10px, transparent 10px 16px)",
+const MCM = {
+  "--trip-accent": "#E8A93A",
+  "--trip-accent-2": "#E36F3C",
+  "--trip-bg": "#132726",
+  "--trip-bar": "rgba(19,39,38,0.95)",
+  "--trip-sheet-head": "linear-gradient(180deg, #1f4442, #132726)",
+  "--trip-strap": "radial-gradient(circle, #E8A93A 1.5px, transparent 2px) 0 50% / 12px 3px repeat-x",
 } as CSSProperties;
 
-/** Art Deco gold rule under the hero. */
+export function Starburst({ className = "" }: { className?: string }) {
+  return <svg viewBox="-10 -10 20 20" className={className} aria-hidden><polygon points="0,-10 1.6,-1.6 10,0 1.6,1.6 0,10 -1.6,1.6 -10,0 -1.6,-1.6" fill="currentColor" /></svg>;
+}
+
+/** Midcentury rule under the hero: two lines and an atomic star. */
 function DecoRule({ className = "" }: { className?: string }) {
   return (
     <div aria-hidden className={`flex items-center gap-2 ${className}`}>
-      <span className="h-px flex-1" style={{ background: "linear-gradient(90deg, transparent, #E8B44C)" }} />
-      <span className="h-2 w-2 rotate-45" style={{ background: "#E8B44C" }} />
-      <span className="h-px flex-1" style={{ background: "linear-gradient(90deg, #E8B44C, transparent)" }} />
+      <span className="h-[2px] flex-1 rounded-full bg-[#E8A93A]/60" />
+      <Starburst className="h-4 w-4 text-[#E8A93A]" />
+      <span className="h-[2px] w-10 rounded-full bg-[#E36F3C]" />
     </div>
   );
 }
@@ -124,7 +129,7 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
             <Step n={3}>At the car, open the Tesla app and tap <b className="text-white">Unlock</b>. The app walks you through turning on your phone key.</Step>
           </ol>
           {k.link
-            ? <a href={k.link} className="mt-4 flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#120E0B] shadow-lg shadow-black/30 active:scale-[0.99]" style={{ background: PEACH }}>
+            ? <a href={k.link} className="mt-4 flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#132726] shadow-lg shadow-black/30 active:scale-[0.99]" style={{ background: PEACH }}>
                 <KeyRound className="h-5 w-5" /> Add the car to my Tesla app
               </a>
             : <p className="mt-4 rounded-xl bg-white/10 p-3 text-[14px] text-white/80">Preview: the real button appears here 2 hours before pickup.</p>}
@@ -169,24 +174,24 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
   const live = !!pub.controls && !demo;
   const spot = pub.spot ?? (demoCar ? { lat: home.lat, lon: home.lon, observed_at: new Date(Date.now() - 4 * 60e3).toISOString() } : null);
   const street = home.address.split(",")[0];
-  const shadow = { textShadow: "0 2px 14px rgba(14,10,20,0.9), 0 1px 2px rgba(14,10,20,0.9)" };
+  const shadow = { textShadow: "0 2px 14px rgba(19,39,38,0.9), 0 1px 2px rgba(19,39,38,0.9)" };
   const lockedUntil = demoCar ? null : pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending";
 
   return (
-    <div className="min-h-screen text-white" style={{ ...HOLLYWOOD, background: "radial-gradient(120% 60% at 50% 0%, #2b1a10 0%, #120E0B 62%)", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
+    <div className="min-h-screen text-white" style={{ ...MCM, background: "radial-gradient(120% 60% at 50% 0%, #1f4442 0%, #132726 62%)", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
       <Helmet>
         <title>Picking up your Turo Tesla in West Hollywood</title>
         <meta name="robots" content="noindex, nofollow" />
-        <meta name="theme-color" content="#120E0B" />
+        <meta name="theme-color" content="#132726" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Limelight&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@600;700&display=swap" />
       </Helmet>
 
       <div className="relative">
-        <img src="/wallet/home/hero-hills.svg" alt="" className="block h-52 w-full object-cover object-[62%_center] sm:h-64" />
+        <img src="/wallet/home/hero-mcm.svg" alt="" className="block h-52 w-full object-cover object-[60%_70%] sm:h-64" />
         <div className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
           <p className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: PEACH, ...shadow }}>{pub.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
-          <h1 className="mt-1 text-[32px] leading-[1.05] sm:text-5xl" style={{ ...shadow, fontFamily: "Limelight, Georgia, serif", color: "#F7E7C4" }}>Your Tesla,<br />West Hollywood</h1>
+          <h1 className="mt-1 text-[32px] leading-[1.05] sm:text-5xl" style={{ ...shadow, fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif", fontWeight: 700, color: "#F4EAD5" }}>Your Tesla in<br />West Hollywood</h1>
         </div>
       </div>
       <DecoRule className="mx-5 -mt-px" />
@@ -221,7 +226,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
 
         <HomeGuide pickupBattery={pub.pickup_battery} />
 
-        <Section kicker="Now showing" title="Short videos from Tesla">
+        <Section kicker="Learn your Tesla" title="Short videos from Tesla">
           <VideoList />
         </Section>
 

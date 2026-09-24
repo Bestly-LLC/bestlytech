@@ -42,24 +42,18 @@ function Tag({ which, active, onClick, home }: { which: Which; active: boolean; 
   );
 }
 
-/** Home pickup: vintage cinema tickets instead of luggage tags. */
+/** Home pickup: midcentury tiles (mustard / burnt orange) with an atomic star. */
 function Ticket({ which, active, onClick }: { which: Which; active: boolean; onClick: () => void }) {
   const pickup = which === "pickup";
   return (
     <button type="button" onClick={onClick} aria-expanded={active}
-      className="relative flex h-[60px] flex-1 items-stretch overflow-hidden rounded-[10px] text-left text-[#1c140e] shadow-lg shadow-black/40 transition active:scale-[0.97] motion-reduce:transition-none"
-      style={{
-        background: pickup ? "var(--trip-accent, #E8B44C)" : "var(--trip-accent-2, #F3E6CC)",
-        // punched half-circles on both sides, like a torn-off ticket
-        WebkitMaskImage: "radial-gradient(circle 8px at 0 50%, transparent 7.5px, #000 8px), radial-gradient(circle 8px at 100% 50%, transparent 7.5px, #000 8px)",
-        WebkitMaskComposite: "source-in", maskImage: "radial-gradient(circle 8px at 0 50%, transparent 7.5px, #000 8px), radial-gradient(circle 8px at 100% 50%, transparent 7.5px, #000 8px)", maskComposite: "intersect",
-      }}>
-      <span className="flex w-10 shrink-0 items-center justify-center border-r-2 border-dashed border-[#1c140e]/35">
-        <span className="-rotate-90 whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.18em] opacity-70">{pickup ? "Scene 1" : "Scene 2"}</span>
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col justify-center pl-3">
-        <span className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-60">Admit one</span>
-        <span className="text-[19px] leading-tight" style={{ fontFamily: "Limelight, Georgia, serif" }}>{pickup ? "Pickup" : "Return"}</span>
+      className="relative flex h-[60px] flex-1 items-center gap-3 overflow-hidden rounded-[18px] pl-4 pr-3 text-left text-[#132726] shadow-lg shadow-black/40 transition active:scale-[0.97] motion-reduce:transition-none"
+      style={{ background: pickup ? "var(--trip-accent, #E8A93A)" : "var(--trip-accent-2, #E36F3C)" }}>
+      <span aria-hidden className="pointer-events-none absolute -right-6 -top-8 h-20 w-20 rounded-full border-[6px] border-[#F4EAD5]/35" />
+      <svg viewBox="-10 -10 20 20" className="h-6 w-6 shrink-0 text-[#F4EAD5]" aria-hidden><polygon points="0,-10 1.6,-1.6 10,0 1.6,1.6 0,10 -1.6,1.6 -10,0 -1.6,-1.6" fill="currentColor" /></svg>
+      <span className="min-w-0">
+        <span className="block text-[10px] font-bold uppercase tracking-[0.18em] opacity-70">{pickup ? "Arriving" : "Leaving"}</span>
+        <span className="block text-[19px] font-bold leading-tight" style={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>{pickup ? "Pickup" : "Return"}</span>
       </span>
     </button>
   );
