@@ -673,8 +673,8 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
               {car.inside_f != null ? (
                 <p className="flex flex-col text-[12px] leading-tight text-white/70">Inside <b className="mt-0.5 text-[28px] font-semibold leading-none text-white tabular-nums">{Math.round(car.inside_f)}°</b></p>
               ) : <span />}
-              <img src="/wallet/lax/car-cutout.webp" alt="Your Tesla Model 3" width={300} height={206} loading="lazy" decoding="async"
-                className="-mr-1 h-auto w-[76px] shrink-0 drop-shadow-[0_6px_10px_rgba(0,0,0,0.45)]" />
+              <img src="/wallet/lax/car-cutout-v2.webp" alt="Your Tesla Model 3" width={600} height={432} loading="lazy" decoding="async"
+                className="h-auto w-[84px] min-w-0 shrink drop-shadow-[0_6px_10px_rgba(0,0,0,0.45)]" />
             </div>
             {car.battery != null && (
               <p className="mt-1 flex items-center gap-1.5 text-[13px] text-white/80"><BatteryMedium className="h-4 w-4 shrink-0 text-emerald-300" /><b className="text-white">{car.battery}%</b>{car.range != null && <span className="whitespace-nowrap">· {Math.round(car.range)} mi</span>}</p>
@@ -702,7 +702,7 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
   }
   return (
     <Card label={car.name ? `Your car · ${car.name}` : "Your car"} icon={<Zap className="h-3.5 w-3.5" />}>
-      <img src="/wallet/lax/car-cutout.webp" alt="Your Tesla Model 3" width={300} height={206} loading="lazy" decoding="async"
+      <img src="/wallet/lax/car-cutout-v2.webp" alt="Your Tesla Model 3" width={600} height={432} loading="lazy" decoding="async"
         className="float-right -mt-2 ml-2 h-auto w-[110px] drop-shadow-[0_6px_10px_rgba(0,0,0,0.45)]" />
       <div className="grid grid-cols-2 gap-3 text-[15px]">
         {car.battery != null && <p className="flex items-center gap-2 text-white"><BatteryMedium className="h-4 w-4 text-emerald-300" /><b>{car.battery}%</b>{car.range != null && <span className="text-white/60">· {Math.round(car.range)} mi</span>}</p>}
