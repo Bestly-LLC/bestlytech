@@ -8,12 +8,12 @@
  * Data: lax_guest_public(token) → kind 'home' + home, spot, key.
  * Previews: ?demo=key (key ready), ?demo=added, ?demo=car (car card), ?demo=soon.
  */
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
 import { ArrowRight, BellRing, CheckCircle2, Flashlight, KeyRound, Loader2, LockOpen, MapPin, Navigation, ShieldAlert, Smartphone } from "lucide-react";
 import { TagBar, TripSheet } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
-import { CarCard, ClimateAdvice, DEMO_CAR, TripCard, WeatherCard, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
+import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
@@ -48,7 +48,7 @@ export type HomeInfo = { address: string; lat: number; lon: number; parking_note
 export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" | "problem" | "off"; opens_at?: string; link?: string | null; expires_at?: string | null; unlock?: boolean };
 export type HomePub = {
   trip?: Trip; car?: CarState | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null;
-  pickup_battery?: number | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null;
+  pickup_battery?: number | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null;
 };
 
 function platform(): "apple" | "android" | "other" {
@@ -166,6 +166,17 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
     try { history.replaceState(null, "", t ? `#${t}` : window.location.pathname + window.location.search); } catch { /* ignore */ }
   };
   const [outsideF, setOutsideF] = useState<number | null>(null);
+  // From the reminder email: ?do=cool|warm#climate scrolls to the climate buttons and highlights them (never auto-sends).
+  const [doClimate] = useState<"cool" | "warm" | null>(() => {
+    if (typeof window === "undefined") return null;
+    const d = new URLSearchParams(window.location.search).get("do");
+    return d === "cool" || d === "warm" ? d : null;
+  });
+  useEffect(() => {
+    if (!doClimate) return;
+    const t = window.setTimeout(() => document.getElementById("climate")?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
+    return () => window.clearTimeout(t);
+  }, [doClimate]);
   const home: HomeInfo = pub.home ?? { address: "733 N Kings Rd, West Hollywood, CA 90069", lat: 34.0838, lon: -118.3708 };
   const demoCar = demo === "car" || demo === "key" || demo === "added";
   const car = demoCar ? DEMO_CAR : pub.car ?? null;
@@ -218,11 +229,18 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
           </div>
         </Section>
 
+        <div id="climate" className={`scroll-mt-4 rounded-3xl transition ${doClimate ? "ring-2 ring-[#E8A93A] ring-offset-4 ring-offset-[#132726]" : ""}`}>
+        {doClimate && <p className="mt-6 text-[15px] font-semibold text-[#E8A93A]">{doClimate === "warm" ? "Tap Warm it up below to start the heat." : "Tap Cool it down below to start the A/C."}</p>}
         {(pub.trip || car) && <div className="mt-6"><ClimateAdvice car={car} outsideF={outsideF} /></div>}
         <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
           <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} place="WeHo" />
           <CarCard trip={pub.trip ?? null} car={car} demo={demoCar} compact onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
         </div>
+        </div>
+
+        {pub.trip && new Date(pub.trip.starts_at) > new Date() && (
+          <div className="mt-6"><EmailCard token={token} email={pub.email ?? null} reminderAt={pub.reminder_at ?? null} sentAt={pub.reminder_sent_at ?? null} home /></div>
+        )}
 
         <HomeGuide pickupBattery={pub.pickup_battery} />
 

@@ -98,9 +98,9 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
             <a href={`/t/${r.token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white bento:text-neutral-500">Open <ExternalLink className="h-3.5 w-3.5" /></a>
           </div>
           {home && <KeyRow r={r} reload={reload} />}
-          {!home && <><div className="mt-3 flex flex-wrap items-center gap-2">
+          {<><div className="mt-3 flex flex-wrap items-center gap-2">
             <Mail className="h-4 w-4 text-white/40 bento:text-neutral-400" />
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="guest email (optional)" type="email"
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={home ? "guest email for the cool-down reminder (optional)" : "guest email (optional)"} type="email"
               className="h-9 w-64 max-w-full rounded-lg border border-white/10 bg-transparent px-2.5 text-sm text-white bento:border-neutral-200 bento:text-neutral-900" />
             {email !== (r.email ?? "") && (
               <button type="button" onClick={() => act("email", email)} disabled={!!busy} className="h-9 rounded-full bg-violet-500 px-4 text-sm font-medium text-white disabled:opacity-60">

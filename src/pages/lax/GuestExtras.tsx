@@ -520,7 +520,7 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
 }
 
 /** Guest opts in to the pickup-day email (sent from support@bestly.tech). */
-export function EmailCard({ token, email, reminderAt, sentAt }: { token: string; email: string | null; reminderAt: string | null; sentAt: string | null }) {
+export function EmailCard({ token, email, reminderAt, sentAt, home = false }: { token: string; email: string | null; reminderAt: string | null; sentAt: string | null; home?: boolean }) {
   const [shown, setShown] = useState<{ email: string | null; at: string | null }>({ email, at: reminderAt });
   const [editing, setEditing] = useState(!email);
   const [value, setValue] = useState("");
@@ -535,23 +535,23 @@ export function EmailCard({ token, email, reminderAt, sentAt }: { token: string;
     setShown({ email: d.email, at: d.reminder_at }); setEditing(false); setValue("");
   };
   return (
-    <Card label="Reminder email" icon={<Mail className="h-3.5 w-3.5" />}>
+    <Card label={home ? "Cool-down / warm-up reminder" : "Reminder email"} icon={<Mail className="h-3.5 w-3.5" />}>
       {!editing && shown.email ? (
         <div className="text-[14px] text-white/80">
           {sentAt ? <>Sent to <b className="text-white">{shown.email}</b>.</> : shown.at
-            ? <>We'll email <b className="text-white">{shown.email}</b> {new Date(shown.at) <= new Date(Date.now() + 5 * 60000) ? "in a few minutes" : <>on {fmtWhen(shown.at)}</>} with your QR code and steps.</>
+            ? <>We'll email <b className="text-white">{shown.email}</b> {new Date(shown.at) <= new Date(Date.now() + 5 * 60000) ? "in a few minutes" : <>on {fmtWhen(shown.at)}</>} {home ? "with one-tap buttons to cool it down or warm it up before you walk over" : "with your QR code and steps"}.</>
             : <>Saved: <b className="text-white">{shown.email}</b>.</>}
           <button type="button" onClick={() => setEditing(true)} className="ml-2 text-[13px] underline decoration-white/40 underline-offset-2">Change</button>
         </div>
       ) : (
         <div>
-          <p className="text-[14px] text-white/75">Get this page's QR code and steps by email on pickup day.</p>
+          <p className="text-[14px] text-white/75">{home ? "Get an email 1 hour before pickup with the car's temperature and a one-tap button to cool it down or warm it up." : "Get this page's QR code and steps by email on pickup day."}</p>
           <div className="mt-3 flex gap-2">
             <input type="email" inputMode="email" autoComplete="email" value={value} onChange={(e) => setValue(e.target.value)} placeholder="you@email.com"
               className="h-11 min-w-0 flex-1 rounded-xl bg-white px-3 text-[16px] text-[#1A1140] placeholder:text-[#1A1140]/40" />
             <button type="button" onClick={save} disabled={busy || !value.includes("@")}
               className="h-11 shrink-0 rounded-xl px-4 text-[15px] font-semibold text-[#1A1140] disabled:opacity-50" style={{ background: PEACH }}>
-              {busy ? "Saving…" : "Email me"}
+              {busy ? "Saving…" : home ? "Remind me" : "Email me"}
             </button>
           </div>
           {err && <p className="mt-2 text-[13px] text-[#FF8FA8]">{err}</p>}
