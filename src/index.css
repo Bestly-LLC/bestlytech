@@ -970,3 +970,16 @@ body.admin-bento { background-color: var(--bento-page); }
 @media (prefers-reduced-motion: reduce) {
   .brand-loader-mark { animation: none; opacity: 1; }
 }
+
+/* Trip pages: the "do this" card (Your key before pickup) gets a light that runs around its border + a soft glow. */
+@property --glow-a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.trip-glow { position: relative; isolation: isolate; background: linear-gradient(rgba(255,255,255,.07), rgba(255,255,255,.07)), var(--trip-bg, #1A1140) !important; }
+.trip-glow::before, .trip-glow::after {
+  content: ""; position: absolute; inset: -2px; border-radius: inherit; pointer-events: none;
+  background: conic-gradient(from var(--glow-a), transparent 0deg 190deg, var(--trip-accent, #FFB878) 280deg, #fff 315deg, var(--trip-accent, #FFB878) 335deg, transparent 360deg);
+  animation: trip-glow-spin 3.4s linear infinite;
+}
+.trip-glow::before { padding: 2px; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.trip-glow::after { z-index: -1; inset: 4px; filter: blur(18px); opacity: .55; }
+@keyframes trip-glow-spin { to { --glow-a: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .trip-glow::before, .trip-glow::after { animation: none; --glow-a: 300deg; } }

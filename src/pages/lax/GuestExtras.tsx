@@ -104,6 +104,40 @@ function linear(s: number, e: number, now: number) {
   return 1;
 }
 
+/** More than a day before pickup: a week-style strip (today → pickup day) instead of a flat track.
+ *  Today is ringed, the pickup day is filled with the car under it. Long waits fold the middle days. */
+function DayStrip({ startsAt, now, C }: { startsAt: number; now: number; C: { hot: string; text: string; sub: string; track: string } }) {
+  const key = (ms: number) => new Date(ms).toLocaleDateString("en-CA", { timeZone: LA });
+  const days: number[] = [];
+  for (let t = now, i = 0; i < 90; i++, t += 864e5) { days.push(t); if (key(t) === key(startsAt)) break; }
+  if (key(days[days.length - 1]) !== key(startsAt)) days.push(startsAt);
+  const items: (number | "gap")[] = days.length > 7 ? [...days.slice(0, 3), "gap", ...days.slice(-3)] : days;
+  return (
+    <div className="relative mt-3" aria-hidden>
+      <span className="absolute inset-x-5 top-[34px] h-[2px] rounded-full" style={{ background: C.track }} />
+      <div className="relative flex items-start justify-between">
+        {items.map((d, i) => {
+          if (d === "gap") return <span key={`g${i}`} className="mt-[26px] px-1 text-[15px] font-bold tracking-widest" style={{ color: C.sub }}>···</span>;
+          const today = i === 0, pick = key(d) === key(startsAt);
+          return (
+            <div key={d} className="flex w-10 flex-col items-center">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: pick ? C.hot : C.sub }}>
+                {today ? "Today" : new Date(d).toLocaleDateString("en-US", { weekday: "short", timeZone: LA })}</span>
+              <span className="mt-1 grid h-9 w-9 place-items-center rounded-full text-[15px] font-bold tabular-nums"
+                style={pick ? { background: C.hot, color: "#0b0b0d", boxShadow: `0 0 16px -2px ${C.hot}` }
+                  : today ? { background: "#0000", color: C.text, boxShadow: `inset 0 0 0 2px ${C.text}` }
+                  : { background: C.track, color: C.text }}>
+                {new Date(d).toLocaleDateString("en-US", { day: "numeric", timeZone: LA })}
+              </span>
+              <span className="mt-1 h-4">{pick ? <Car className="h-4 w-4" style={{ color: C.hot }} /> : null}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** "Your Turo trip" as a Live Activity: pickup → return, one time track, a big countdown. Ticks every 30s.
  *  theme "lax" = iOS Live Activity (black glass, green); "home" = midcentury (teal, mustard, orange). */
 export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | "home"; battery?: number | null; keyState?: TripKeyState; insideF?: number | null }) {
@@ -190,10 +224,19 @@ export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | 
           <p className="text-[12px]" style={{ color: C.sub }}>{day(trip.ends_at)}</p>
         </div>
       </div>
+      {before && s - now > 24 * 3600e3 ? (
+        <>
+          <DayStrip startsAt={s} now={now} C={C} />
+          <div className="mt-2 text-center">
+            <p className="text-[28px] font-bold leading-none tabular-nums" style={{ color: numColor }}>{big}</p>
+            <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: C.sub }}>{label}</p>
+          </div>
+        </>
+      ) : (<>
       <svg viewBox="0 0 320 48" className="mt-2 block h-auto w-full overflow-visible" aria-hidden>
         <path ref={trackRef} d={TRACK} fill="none" stroke={C.track} strokeWidth="3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        <path d={TRACK} fill="none" stroke={C.accent} strokeWidth="3.5" strokeLinecap="round" pathLength={1} strokeDasharray={`${Math.max(0.001, pos)} 1`}
-          vectorEffect="non-scaling-stroke" style={{ transition: "stroke-dasharray 900ms cubic-bezier(.2,.8,.2,1)", filter: home ? undefined : "drop-shadow(0 0 4px rgba(48,209,88,.55))" }} />
+        {pos > 0.004 && <path d={TRACK} fill="none" stroke={C.accent} strokeWidth="3.5" strokeLinecap="round" pathLength={1} strokeDasharray={`${Math.min(1, pos)} 2`}
+          vectorEffect="non-scaling-stroke" style={{ transition: "stroke-dasharray 900ms cubic-bezier(.2,.8,.2,1)", filter: home ? undefined : "drop-shadow(0 0 4px rgba(48,209,88,.55))" }} />}
         {dot && (pos > 0 && pos < 1) && (home
           ? <polygon transform={`translate(${dot.x} ${dot.y})`} fill={C.hot} points="0,-7 1.6,-1.6 7,0 1.6,1.6 0,7 -1.6,1.6 -7,0 -1.6,-1.6" />
           : <><circle cx={dot.x} cy={dot.y} r="7" fill={C.accent} opacity=".25" className="motion-safe:animate-ping" style={{ transformOrigin: `${dot.x}px ${dot.y}px` }} /><circle cx={dot.x} cy={dot.y} r="4" fill={C.accent} /></>)}
@@ -202,6 +245,7 @@ export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | 
         <p className="text-[28px] font-bold leading-none tabular-nums" style={{ color: numColor }}>{big}</p>
         <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: C.sub }}>{label}</p>
       </div>
+      </>)}
     </section>
     </>
   );
