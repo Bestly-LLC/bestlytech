@@ -79,6 +79,49 @@ function KeyRow({ r, reload }: { r: Row; reload: () => void }) {
         {["scheduled", "failed", "removed"].includes(st) && <button type="button" className={btn} disabled={!!busy} onClick={() => act("off")}>Turn off auto key</button>}
         {st === "off" && <button type="button" className={btn} disabled={!!busy} onClick={() => act("on")}>Turn on auto key</button>}
       </div>
+      <ExtraDriversAdmin res={r.reservation_id} />
+    </div>
+  );
+}
+
+type XDrv = { id: number; name: string; status: string; approved_by?: string | null; ack_at: string; approved_at?: string | null; driver_name?: string | null; last_error?: string | null; share_link?: string | null };
+const X_TEXT: Record<string, string> = {
+  requested: "Waiting on Turo's approval email (no key yet)", approved: "Turo approved, key being made", creating: "Making key", ready: "Key sent, waiting for them to tap",
+  accepted: "Phone added", removing: "Removing", removed: "Removed", failed: "Key failed", cancelled: "Cancelled",
+};
+function ExtraDriversAdmin({ res }: { res: number }) {
+  const [d, setD] = useState<{ drivers: XDrv[]; turo: { name: string; approved: boolean; at: string }[] } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = useCallback(async () => { const { data } = await rpc("extra_drivers_admin", { p_reservation: res }); if (data) setD(data as never); }, [res]);
+  useEffect(() => { void load(); }, [load]);
+  if (!d || (!d.drivers.length && !d.turo.length)) return null;
+  const act = async (id: number, a: string) => {
+    if (a === "approve" && !window.confirm("Only approve if you've checked Turo and this driver is added AND approved on this trip. Unapproved drivers aren't covered by Turo's protection. Approve?")) return;
+    if (a === "remove" && !window.confirm("Remove this driver's Tesla access now?")) return;
+    setBusy(`${id}${a}`);
+    const { data, error } = await rpc("extra_driver_admin", { p_id: id, p_action: a });
+    setBusy(null);
+    if (error) { toast.error(error.message); return; }
+    setD(data as never);
+  };
+  const btn = "inline-flex h-7 items-center gap-1 rounded-full border border-white/15 px-2.5 text-[11px] text-white disabled:opacity-50 bento:border-neutral-200 bento:text-neutral-800";
+  return (
+    <div className="mt-3 border-t border-white/10 pt-3 bento:border-neutral-200">
+      <p className="text-xs font-medium text-white/60 bento:text-neutral-500">Extra drivers</p>
+      {d.turo.length > 0 && <p className="mt-1 text-xs text-white/50 bento:text-neutral-500">Turo emails: {d.turo.map((t) => `${t.name}${t.approved ? " ✓ approved" : ""}`).join(", ")}</p>}
+      <ul className="mt-1.5 space-y-1.5">
+        {d.drivers.map((x) => (
+          <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-white/80 bento:text-neutral-700">
+            <span><b>{x.name}</b> · {X_TEXT[x.status] ?? x.status}{x.approved_by === "host" ? " (you approved)" : x.approved_by === "turo_email" ? " (Turo email)" : ""}
+              <span className="block text-[11px] text-white/45 bento:text-neutral-400">Guest confirmed insurance terms {when(x.ack_at)}{x.driver_name ? ` · Tesla: ${x.driver_name}` : ""}{x.last_error ? ` · ${x.last_error}` : ""}</span></span>
+            <span className="flex gap-1.5">
+              {x.status === "requested" && <button type="button" className={btn} disabled={!!busy} onClick={() => void act(x.id, "approve")}>Approve (checked Turo)</button>}
+              {["ready", "accepted", "failed"].includes(x.status) && <button type="button" className={btn} disabled={!!busy} onClick={() => void act(x.id, "remove")}>Remove access</button>}
+              {["requested", "approved"].includes(x.status) && <button type="button" className={btn} disabled={!!busy} onClick={() => void act(x.id, "cancel")}>Cancel</button>}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

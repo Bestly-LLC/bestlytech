@@ -17,6 +17,7 @@ import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, fmt
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
 import { ScrollFx } from "./ScrollFx";
 import { track } from "./track";
+import ExtraDrivers from "./ExtraDrivers";
 import { KeyNextSteps, KeyPending, keyTapped, markKeyTapped } from "./KeyNext";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
@@ -233,7 +234,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
       </Helmet>
 
       <div className="relative overflow-hidden">
-        <img data-fx-hero src="/wallet/home/hero-mcm-live.svg" alt="" className="block h-52 w-full object-cover object-[60%_70%] will-change-transform sm:h-64" />
+        <img data-fx-hero src="/wallet/home/hero-mcm-v4.svg" alt="" className="block h-52 w-full object-cover object-[60%_70%] will-change-transform sm:h-64" />
         <div data-fx-title className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
           <p className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: PEACH, ...shadow }}>{pub.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
           <h1 className="mt-1 text-[32px] leading-[1.05] sm:text-5xl" style={{ ...shadow, fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif", fontWeight: 700, color: "#F4EAD5" }}>Your Tesla in<br />West Hollywood</h1>
@@ -249,6 +250,8 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
         {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} token={token} onAdded={() => reload?.()}
           next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} address={home.address} maps={mapsFor(home.address)}
             go={(w) => { if (w === "return" || w === "pickup") openSheet(w); else { if (w === "before") window.dispatchEvent(new Event("open-before")); document.getElementById(w)?.scrollIntoView({ behavior: "smooth", block: "start" }); } }} /> : null} />}
+
+        {key && key.state !== "off" && <ExtraDrivers token={token} ended={key.state === "ended"} />}
 
         {/* One widget for the car: where it is, weather + cabin + climate buttons, find-it buttons. */}
         <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${doClimate ? "ring-2 ring-[#E8A93A]" : "ring-white/10"}`}
