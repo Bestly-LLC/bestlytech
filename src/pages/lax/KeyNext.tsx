@@ -5,7 +5,7 @@
  *    when they come back from the Tesla app). When it flips to added, the page reloads its data.
  *  - KeyNextSteps: once the key is added, what to do next based on where they are in the trip.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BatteryCharging, CheckCircle2, Clock, KeyRound, Loader2, MapPin, Navigation, RotateCcw, Snowflake, Smartphone, Undo2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtWhen, type Trip } from "./GuestExtras";
@@ -82,11 +82,40 @@ export function KeyPending({ token, link, onAdded }: { token: string; link: stri
   );
 }
 
-type Step = { icon: typeof Clock; title: string; body: string; action?: { label: string; onClick?: () => void; href?: string } };
+type Step = { icon: typeof Clock; title: string; body: ReactNode; action?: { label: string; onClick?: () => void; href?: string }; send?: boolean };
 
-export function KeyNextSteps({ trip, pickupBattery, address, maps, go }: {
+const DINER = "7001 Santa Monica Blvd, West Hollywood, CA";
+const dinerMaps = `https://maps.apple.com/?q=${encodeURIComponent("Tesla Supercharger, Tesla Diner")}&address=${encodeURIComponent(DINER)}&ll=34.0909484,-118.3418798`;
+const ChargerLine = () => (
+  <>Closest Supercharger: Tesla Diner, <a href={dinerMaps} className="font-semibold text-white underline decoration-white/40 underline-offset-2">7001 Santa Monica Blvd</a>.</>
+);
+
+/** "Send to car": puts the Supercharger in the car's navigation (TezLab first, Tesla backup). */
+function SendToCar({ run }: { run?: (a: "nav_charger", onStage?: (s: string) => void) => Promise<void> }) {
+  const [st, setSt] = useState<"idle" | "busy" | "done" | "err">("idle");
+  const [msg, setMsg] = useState<string | null>(null);
+  if (!run) return null;
+  const go = async () => {
+    setSt("busy"); setMsg(null);
+    try { await run("nav_charger", (s) => setMsg(s)); setSt("done"); setMsg("It's in the car's navigation."); }
+    catch (e) { setSt("err"); setMsg((e as Error).message || "Couldn't reach the car. Tap the address instead."); }
+  };
+  return (
+    <div className="shrink-0 text-right">
+      <button type="button" onClick={() => void go()} disabled={st === "busy"}
+        className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95 disabled:opacity-60">
+        {st === "busy" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : st === "done" ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" /> : <Navigation className="h-3.5 w-3.5" />}
+        {st === "done" ? "Sent" : "Send to car"}
+      </button>
+      {msg && <p className={`mt-1 max-w-[9rem] text-[11px] leading-snug ${st === "err" ? "text-red-300" : "text-white/60"}`} aria-live="polite">{msg}</p>}
+    </div>
+  );
+}
+
+export function KeyNextSteps({ trip, pickupBattery, address, maps, go, run }: {
   trip: Trip; pickupBattery?: number | null; address: string; maps: string;
   go: (where: "climate" | "before" | "return" | "pickup") => void;
+  run?: (a: "nav_charger", onStage?: (s: string) => void) => Promise<void>;
 }) {
   const now = Date.now(), s = +new Date(trip.starts_at), e = +new Date(trip.ends_at);
   const H = 3600e3;
@@ -109,13 +138,13 @@ export function KeyNextSteps({ trip, pickupBattery, address, maps, go }: {
     title = "Enjoy the drive";
     steps = [
       { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, body: "Back on N Kings Rd near the building. Changes go through the Turo app." },
-      { icon: BatteryCharging, title: pickupBattery != null ? `Bring it back with at least ${pickupBattery}%` : "Bring it back with the charge you picked up", body: "Closest Supercharger: Tesla Diner, 7001 Santa Monica Blvd.", action: { label: "Directions", href: maps.replace(encodeURIComponent(address), encodeURIComponent("7001 Santa Monica Blvd, West Hollywood, CA")) } },
+      { icon: BatteryCharging, title: pickupBattery != null ? `Bring it back with at least ${pickupBattery}%` : "Bring it back with the charge you picked up", body: <ChargerLine />, send: true },
     ];
   } else {
     title = "Almost time to return";
     steps = [
       { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, body: "Park on N Kings Rd near the building, legal spot. Watch the sweeping signs.", action: { label: "Return steps", onClick: () => go("return") } },
-      { icon: BatteryCharging, title: pickupBattery != null ? `Charge to at least ${pickupBattery}%` : "Charge back to pickup level", body: "Avoids Turo's recharge fee." },
+      { icon: BatteryCharging, title: pickupBattery != null ? `Charge to at least ${pickupBattery}%` : "Charge back to pickup level", body: <>Avoids Turo's recharge fee. <ChargerLine /></>, send: true },
       { icon: CheckCircle2, title: "Photos, grab your stuff, lock it", body: "Return photos in the Turo app, then lock in the Tesla app. Your access ends by itself." },
     ];
   }
@@ -130,6 +159,7 @@ export function KeyNextSteps({ trip, pickupBattery, address, maps, go }: {
               <p className="text-[15px] font-semibold leading-snug text-white">{st.title}</p>
               <p className="mt-0.5 text-[14px] leading-snug text-white/75">{st.body}</p>
             </div>
+            {st.send && <SendToCar run={run} />}
             {st.action && (st.action.href
               ? <a href={st.action.href} className="shrink-0 rounded-full bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95"><Navigation className="mr-1 inline h-3.5 w-3.5" />{st.action.label}</a>
               : <button type="button" onClick={st.action.onClick} className="min-h-[36px] shrink-0 rounded-full bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95">{st.action.label}</button>)}

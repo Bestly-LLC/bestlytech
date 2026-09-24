@@ -48,7 +48,7 @@ function DecoRule({ className = "" }: { className?: string }) {
   );
 }
 
-export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock";
+export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock" | "nav_charger";
 export type HomeInfo = { address: string; lat: number; lon: number; parking_note?: string | null; return_note?: string | null; host_note?: string | null };
 export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" | "problem" | "off"; opens_at?: string; link?: string | null; expires_at?: string | null; unlock?: boolean };
 export type HomePub = {
@@ -241,7 +241,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
         {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" /></div>}
 
         {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} token={token} onAdded={() => reload?.()}
-          next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} address={home.address} maps={mapsFor(home.address)}
+          next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} address={home.address} maps={mapsFor(home.address)} run={live ? run : undefined}
             go={(w) => { if (w === "return" || w === "pickup") openSheet(w); else { if (w === "before") window.dispatchEvent(new Event("open-before")); document.getElementById(w)?.scrollIntoView({ behavior: "smooth", block: "start" }); } }} /> : null} />}
 
         {/* One widget for the car: where it is, weather + cabin + climate buttons, find-it buttons. */}
