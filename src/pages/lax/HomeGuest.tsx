@@ -111,7 +111,7 @@ function CarButton({ action, label, icon: Icon, run, disabled, hint }: { action:
 function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; trip: Trip | undefined; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; token: string; onAdded: () => void; next?: ReactNode }) {
   // After the guest taps the key button, grey it out and keep checking with Tesla until it says added.
   // Only a tap on THIS invite counts: a host "Resend key" makes a new invite (new 24h expiry), so the button comes back.
-  const inviteFrom = k.expires_at ? Date.parse(k.expires_at) - 24 * 3600e3 - 120e3 : Date.now() - 24 * 3600e3;
+  const inviteFrom = k.expires_at ? Date.parse(k.expires_at) - 24 * 3600e3 - 5e3 : Date.now() - 24 * 3600e3;
   const [tapped, setTapped] = useState(() => (keyTapped(token) ?? 0) > inviteFrom);
   useEffect(() => { setTapped((keyTapped(token) ?? 0) > inviteFrom); }, [k.link, inviteFrom, token]);
   useKeyWatch(token, k.state, k.opens_at, onAdded);

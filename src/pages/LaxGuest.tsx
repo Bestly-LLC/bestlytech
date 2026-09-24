@@ -139,7 +139,8 @@ export default function LaxGuest() {
   // Errors on guests' phones go to the trip-apps health board (max 3 per visit; never from the host).
   useEffect(() => {
     let n = 0;
-    const send = (msg: string) => { if (n++ < 3 && token) track(token, "error", { msg: msg.slice(0, 200), path: window.location.pathname }); };
+    // "Script error." = a cross-origin script (YouTube embed, a browser extension) failed; the browser hides the details and it is never ours.
+    const send = (msg: string) => { if (/^Script error\.?$/i.test(msg.trim())) return; if (n++ < 3 && token) track(token, "error", { msg: msg.slice(0, 200), path: window.location.pathname }); };
     const onErr = (e: ErrorEvent) => send(e.message || "error");
     const onRej = (e: PromiseRejectionEvent) => send(String((e.reason as Error)?.message ?? e.reason ?? "rejection"));
     window.addEventListener("error", onErr);
