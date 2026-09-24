@@ -686,26 +686,43 @@ const ASKS_FOR_WORK = /^take this off my plate|^keep going|^do it\b|\b(are|is) (
 const CLAIMS_WORK = /\b(scout|i)\s*(will|'ll|would|am going to|can'?t|cannot|can not|won'?t|is unable|am unable|don'?t have|doesn'?t have)\b|\bi'll\b|\bmanually\b|\byou('ll| will)? (need|have) to\b|\b(it'?s|it is|all|now) (done|fixed|resolved|pushed)\b|\bno action (is )?needed\b|\btakes? (a few )?minutes\b/i;
 
 async function freeTry(threadId: string, text: string, page: unknown): Promise<{ answer?: string; why: string }> {
+  // v27 (2026-09-23): the free AI now READS the same live snapshot the paid one starts from (admin_today + open
+  // incidents), and may draft messages. "What needs me?" and "Help me finish this to-do" were going to paid AI
+  // only because the free helper was blind. It still can't change anything.
   // v26: the free AI is now Groq -> Cloudflare -> Mac mini (_shared/free-llm.ts), so the Mac being asleep no longer matters.
   // v23: work goes to the model with tools. So does every follow-up in a thread that began as a hand-off.
-  if (ASKS_FOR_WORK.test(text.trim())) return { why: FREE_WHY.ACTION };
+  const todoHelp = /^help me finish this to-do:/i.test(text.trim());
+  if (!todoHelp && ASKS_FOR_WORK.test(text.trim())) return { why: FREE_WHY.ACTION };
   const { data: first } = await db.from("admin_chat_messages").select("body").eq("thread_id", threadId).eq("role", "user")
     .order("created_at", { ascending: true }).limit(1);
   if (/^take this off my plate/i.test(String((first as any)?.[0]?.body ?? ""))) return { why: FREE_WHY.ACTION };
   const { data: hist } = await db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId)
     .order("created_at", { ascending: false }).limit(7);
   const convo = ((hist ?? []) as any[]).reverse().map((m) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body).slice(0, 600)}`).join("\n");
-  const prompt = `You are Scout's free helper inside Jared's Bestly admin dashboard. You have NO access to his database, files, servers or the internet, and you cannot change anything.
-Answer Jared's last message ONLY if you can answer it fully and correctly from general knowledge, the facts below, or the conversation (for example: explaining a concept, rewording text, a quick calculation).
+  const [{ data: today }, { data: inc }] = await Promise.all([
+    db.rpc("admin_today"),
+    db.from("monitor_issues").select("key, severity, title, needs_jared, fix_stage, opened_at").eq("status", "open").limit(30),
+  ]);
+  const live = JSON.stringify({
+    needs_jared_today: ((today ?? []) as any[]).map((t) => ({ title: t.title, detail: String(t.detail ?? "").slice(0, 300), source: t.source,
+      severity: t.severity, since: String(t.since ?? "").slice(0, 10), count: t.item_count })),
+    open_incidents: ((inc ?? []) as any[]).map((i) => ({ title: i.title, severity: i.severity, stage: i.fix_stage, hint: String(i.needs_jared ?? "").slice(0, 200) })),
+  }).slice(0, 14000);
+  const prompt = `You are Scout's free helper inside Jared's Bestly admin dashboard. You can READ the live snapshot below (what needs him today and the open incidents). You cannot change anything, look anything else up, or reach the internet.
+Answer Jared's last message ONLY if you can answer it fully and correctly from the snapshot, general knowledge, the facts below, or the conversation (for example: what needs him most, explaining something, rewording text, a quick calculation).
+Writing is something you CAN do: drafting an email, text, reply, review request or short plan. Write it for Jared to send himself. For a to-do he wants help finishing, give the next step in one line, then draft any message it needs. Put a drafted message after a line that says exactly DRAFT:
 Never guess how the admin works or tell him to use settings or pages that are not in the facts.
 If he asks you to DO anything (move, change, add, delete, assign, fix, send, run, set, mark), you can't: reply NEEDS_TOOLS: ACTION. Never say you did something, that it's done, or that "no action is needed".
 If you can't answer, reply with exactly one line and nothing else:
-NEEDS_TOOLS: DATA    (it needs his live numbers, leads, orders, alerts, logs or status)
+NEEDS_TOOLS: DATA    (it needs data that is not in the snapshot below)
 NEEDS_TOOLS: ACTION  (it asks to do, fix, run, send, change or look something up)
 NEEDS_TOOLS: CODE    (it asks to build or change a feature, alert, page or behaviour of the admin)
-Otherwise answer in plain text, under 80 words, no markdown.
+Otherwise answer in plain text, under 80 words (a drafted message may add up to 150 more), no markdown. Rank by severity when asked what needs him.
 
 ${FREE_FACTS}
+
+Live snapshot (read a moment ago):
+${live}
 
 Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}
 Conversation:
@@ -722,8 +739,11 @@ ${convo}`;
   }
   const m = a.match(/NEEDS_TOOLS:\s*([A-Z]+)?/i);
   if (m || !a) return { why: FREE_WHY[(m?.[1] ?? "").toUpperCase()] ?? "The free AI can't do this one." };
-  if (CLAIMS_WORK.test(a)) return { why: FREE_WHY.ACTION }; // v23: it tried to promise/refuse work anyway
-  return { answer: a, why: "" };
+  // v27: a drafted message is written in Jared's voice ("I'll send it Friday"), so only the part before DRAFT: is checked.
+  const cut = a.search(/^\s*DRAFT:\s*$/im);
+  const own = cut >= 0 ? a.slice(0, cut) : a;
+  if (CLAIMS_WORK.test(own)) return { why: FREE_WHY.ACTION }; // v23: it tried to promise/refuse work anyway
+  return { answer: cut >= 0 ? `${own.trim()}\n\nDraft:\n${a.slice(cut).replace(/^\s*DRAFT:\s*$/im, "").trim()}` : a, why: "" };
 }
 
 /**
