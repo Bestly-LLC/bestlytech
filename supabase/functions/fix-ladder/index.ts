@@ -11,6 +11,7 @@
 // At most one Scout run starts per tick and one per incident episode (plus "Try again"), so the
 // paid rung can't run away. Scout runs in the background and is read on the next tick.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { llm } from "../_shared/free-llm.ts";
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -219,7 +220,21 @@ async function climb(i: Issue, opts: { scoutOk: boolean; force: boolean }): Prom
   if (i.fix_stage === "free_ai") {
     const { data: job } = await db.from("fix_ai_jobs").select("id, status, answer, created_at").eq("issue_key", i.key)
       .gte("created_at", i.opened_at).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    // v6 (2026-09-23): try the cloud free AI first (Groq -> Cloudflare via _shared/free-llm.ts, $0, seconds not minutes);
+    // the Mac mini queue below is the fallback when both are down.
+    let cloud: string | null = null;
     if (!job) {
+      try {
+        const r = await llm({ task: "summarize", system: freePrompt(i, ctx), user: "Diagnose it now, in the format above.", job: "fix-diagnose", ref: i.key,
+          fn: "fix-ladder", scope: "background", paid: "never", maxTokens: 1500, deadlineMs: 40_000 });
+        cloud = r.text.trim() || null;
+      } catch { cloud = null; }
+    }
+    if (!job && cloud) {
+      await log(i.key, "free_ai", `Diagnosed it: ${cloud.split("\n").find((l: string) => /^CAUSE/i.test(l))?.replace(/^CAUSE:\s*/i, "") ?? cloud.slice(0, 200)}`, null);
+      await db.from("monitor_issues").update({ ai_diagnosis: cloud }).eq("key", i.key);
+      i.ai_diagnosis = cloud;
+    } else if (!job) {
       if (!(await freeAiOnline())) {
         await log(i.key, "free_ai", "The free AI on the Mac mini is offline, so this went straight to Scout.", null);
       } else {
