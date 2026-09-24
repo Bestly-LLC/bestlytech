@@ -8,14 +8,34 @@
  * Data: lax_guest_public(token) → kind 'home' + home, spot, key.
  * Previews: ?demo=key (key ready), ?demo=added, ?demo=car (car card), ?demo=soon.
  */
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
 import { ArrowRight, BellRing, CheckCircle2, ExternalLink, Flashlight, KeyRound, Loader2, LockOpen, MapPin, Navigation, PlayCircle, ShieldAlert, Smartphone } from "lucide-react";
 import { TagBar, TripSheet } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
 import { CarCard, ClimateAdvice, DEMO_CAR, TripCard, WeatherCard, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
 
-const PEACH = "#FFB878";
+// WeHo theme: Sunset Strip neon pink + mint on a late-night purple, with the rainbow crosswalk.
+const PEACH = "var(--trip-accent)";
+const WEHO = {
+  "--trip-accent": "#FF5DB1",
+  "--trip-accent-2": "#8FF3E4",
+  "--trip-bg": "#140826",
+  "--trip-bar": "rgba(20,8,38,0.92)",
+  "--trip-sheet-head": "linear-gradient(180deg, #3a1260, #140826)",
+  "--trip-strap": "linear-gradient(90deg, #E40303 0 16.66%, #FF8C00 0 33.33%, #FFED00 0 50%, #008026 0 66.66%, #004DFF 0 83.33%, #750787 0)",
+} as CSSProperties;
+const NEON = { textShadow: "0 0 6px rgba(255,93,177,0.9), 0 0 18px rgba(255,93,177,0.6), 0 2px 10px rgba(20,8,38,0.9)" };
+
+/** Rainbow crosswalk, like the ones at Santa Monica Blvd and San Vicente. */
+function Crosswalk({ className = "" }: { className?: string }) {
+  const c = ["#E40303", "#FF8C00", "#FFED00", "#008026", "#004DFF", "#750787"];
+  return (
+    <div aria-hidden className={`flex h-2.5 gap-1.5 ${className}`}>
+      {c.map((x) => <span key={x} className="flex-1 -skew-x-[20deg] rounded-[2px]" style={{ background: x }} />)}
+    </div>
+  );
+}
 
 export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock";
 export type HomeInfo = { address: string; lat: number; lon: number; parking_note?: string | null; return_note?: string | null; host_note?: string | null };
@@ -159,20 +179,21 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
   const lockedUntil = demoCar ? null : pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending";
 
   return (
-    <div className="min-h-screen bg-[#1A1140] text-white" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
+    <div className="min-h-screen text-white" style={{ ...WEHO, background: "radial-gradient(120% 60% at 50% 0%, #2a0f4d 0%, #140826 60%)", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
       <Helmet>
         <title>Picking up your Turo Tesla in West Hollywood</title>
         <meta name="robots" content="noindex, nofollow" />
-        <meta name="theme-color" content="#2B1A73" />
+        <meta name="theme-color" content="#140826" />
       </Helmet>
 
       <div className="relative">
-        <img src="/wallet/lax/hero.svg" alt="" className="block h-44 w-full object-cover object-[35%_center] sm:h-56" />
+        <img src="/wallet/home/hero.svg" alt="" className="block h-48 w-full object-cover object-[55%_center] sm:h-60" />
         <div className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: PEACH, ...shadow }}>{pub.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={shadow}>Your Tesla in West Hollywood</h1>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={shadow}>Your Tesla in <span className="text-[#FFD6EC]" style={NEON}>WeHo</span></h1>
         </div>
       </div>
+      <Crosswalk className="px-5 pt-1" />
 
       <main className="mx-auto max-w-md px-5 pb-48 pt-5">
         <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">Tesla Model 3</b> on <b className="text-white">Turo</b>. It's parked on the street at <b className="text-white">{street}</b>. Your phone is the key: no meetup, no keys to hand over. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for the steps.</p>

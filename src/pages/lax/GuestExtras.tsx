@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Armchair, ArrowRight, BatteryMedium, Car, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSun, Fan, Flame, Loader2, Lock, LockOpen, Mail, Moon, Power, Snowflake, Sun, Thermometer, Wind, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-const PEACH = "#FFB878";
+const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 const LA = "America/Los_Angeles";
 export const fmtWhen = (iso: string) =>
   new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: LA });
@@ -248,9 +248,9 @@ export function WeatherCard({ trip, compact = false, onNow, lat = 33.947, lon = 
               const r = rainPct(h.precipitationChance);
               return (
                 <li key={h.forecastStart}
-                  className={`flex min-w-[52px] snap-start flex-col items-center gap-1.5 rounded-xl px-1.5 py-1.5 ${isPickup ? "bg-white/20 ring-1 ring-[#FFB878]/70" : ""}`}
+                  className={`flex min-w-[52px] snap-start flex-col items-center gap-1.5 rounded-xl px-1.5 py-1.5 ${isPickup ? "bg-white/20 ring-1 ring-[color:var(--trip-accent,#FFB878)]" : ""}`}
                   aria-label={`${isPickup ? "Pickup, " : ""}${label}: ${cToF(h.temperature)} degrees, ${cond(h.conditionCode)}${r ? `, ${r} chance of rain` : ""}`}>
-                  <span className={`text-[13px] font-medium ${isPickup ? "text-[#FFB878]" : "text-white/90"}`}>{isPickup ? "Pickup" : label}</span>
+                  <span className={`text-[13px] font-medium ${isPickup ? "text-[color:var(--trip-accent,#FFB878)]" : "text-white/90"}`}>{isPickup ? "Pickup" : label}</span>
                   <WxIcon code={h.conditionCode} day={h.daylight ?? true} className="h-6 w-6" />
                   <span className="h-3 text-[11px] font-semibold text-sky-200">{r ?? ""}</span>
                   <span className="text-[17px] font-medium tabular-nums">{cToF(h.temperature)}°</span>
