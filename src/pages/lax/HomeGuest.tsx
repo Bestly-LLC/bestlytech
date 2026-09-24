@@ -247,7 +247,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
         </TripSheet>
 
         <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" />
-        <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} />
+        <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home />
 
         <p className="mt-10 text-center text-sm text-white/50">Questions? Tap Ask a question, or message your host in the Turo app.</p>
 

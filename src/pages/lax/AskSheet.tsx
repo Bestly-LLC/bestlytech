@@ -15,6 +15,7 @@ const rpc = (fn: string, args?: Record<string, unknown>) =>
 
 // Fallback chips; the live ones come from lax_ask_suggest (trip phase, LA time of day, car state, last question).
 const SUGGEST = ["Where do I catch the shuttle after I land?", "How do I get into the garage?", "How do I unlock and start the Tesla?", "How do I return the car?"];
+const SUGGEST_HOME = ["How do I get the key?", "Where is the car?", "Which car is mine?", "Where do I return the car?"];
 
 function Chips({ list, onPick, disabled }: { list: string[]; onPick: (s: string) => void; disabled?: boolean }) {
   if (!list.length) return null;
@@ -75,13 +76,13 @@ function Dots() {
   );
 }
 
-export function AskSheet({ open, onClose, token, slug }: { open: boolean; onClose: () => void; token?: string; slug?: string }) {
+export function AskSheet({ open, onClose, token, slug, home = false }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState<number | null>(null);
   const [urgent, setUrgent] = useState(false);
-  const [chips, setChips] = useState<string[]>(SUGGEST);
+  const [chips, setChips] = useState<string[]>(home ? SUGGEST_HOME : SUGGEST);
   const loaded = useRef(false);
   const body = useRef<HTMLDivElement>(null);
   const who = { p_token: token || null, p_slug: token ? null : slug || null };
@@ -128,7 +129,7 @@ export function AskSheet({ open, onClose, token, slug }: { open: boolean; onClos
   const footer = (
     <form onSubmit={(e) => { e.preventDefault(); send(text); }} className="flex items-end gap-2">
       <label className="sr-only" htmlFor="ask-input">Your question</label>
-      <textarea id="ask-input" rows={1} value={text} maxLength={500} placeholder="Ask about the shuttle, garage, car…"
+      <textarea id="ask-input" rows={1} value={text} maxLength={500} placeholder={home ? "Ask about the key, the car, parking…" : "Ask about the shuttle, garage, car…"}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(text); } }}
         className="max-h-28 min-h-[48px] flex-1 resize-none rounded-2xl bg-white/[0.08] px-4 py-3 text-[16px] text-white placeholder:text-white/40 outline-none ring-1 ring-white/15 focus:ring-2 focus:ring-[#FFB878]" />
@@ -148,7 +149,7 @@ export function AskSheet({ open, onClose, token, slug }: { open: boolean; onClos
       )}
       {msgs.length === 0 ? (
         <div>
-          <p className="text-[15px] leading-relaxed text-white/75">Ask anything about getting to the garage, the lobby door, the car, or returning it. Answers come from your trip guide.</p>
+          <p className="text-[15px] leading-relaxed text-white/75">{home ? "Ask anything about your phone key, finding the car, driving it, or returning it." : "Ask anything about getting to the garage, the lobby door, the car, or returning it."} Answers come from your trip guide.</p>
           <Chips list={chips} onPick={send} />
         </div>
       ) : (
