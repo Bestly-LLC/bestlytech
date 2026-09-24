@@ -116,6 +116,7 @@ function ExtraDriversAdmin({ res }: { res: number }) {
             <span><b>{x.name}</b> · {X_TEXT[x.status] ?? x.status}{x.approved_by === "host" ? " (you approved)" : x.approved_by === "turo_email" ? " (Turo email)" : ""}
               <span className="block text-[11px] text-white/45 bento:text-neutral-400">Guest confirmed insurance terms {when(x.ack_at)}{x.driver_name ? ` · Tesla: ${x.driver_name}` : ""}{x.last_error ? ` · ${x.last_error}` : ""}</span></span>
             <span className="flex gap-1.5">
+              {x.status === "requested" && res < 0 && <button type="button" className={btn} disabled={!!busy} onClick={() => void act(x.id, "simulate")}>Simulate Turo email (test)</button>}
               {x.status === "requested" && <button type="button" className={btn} disabled={!!busy} onClick={() => void act(x.id, "approve")}>Approve (checked Turo)</button>}
               {["ready", "accepted", "failed"].includes(x.status) && <button type="button" className={btn} disabled={!!busy} onClick={() => void act(x.id, "remove")}>Remove access</button>}
               {["requested", "approved"].includes(x.status) && <button type="button" className={btn} disabled={!!busy} onClick={() => void act(x.id, "cancel")}>Cancel</button>}
