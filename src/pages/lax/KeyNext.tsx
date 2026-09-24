@@ -103,13 +103,13 @@ function SendToCar({ run, kind }: { run?: NavRun; kind: TripKind }) {
     catch (e) { setSt("err"); setMsg((e as Error).message || "Couldn't reach the car. Tap the address instead."); }
   };
   return (
-    <div className="shrink-0 text-right">
+    <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
       <button type="button" onClick={() => void go()} disabled={st === "busy"}
-        className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95 disabled:opacity-60">
-        {st === "busy" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : st === "done" ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" /> : <Navigation className="h-3.5 w-3.5" />}
-        {st === "done" ? "Sent" : "Send to car"}
+        className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-[#1A1140] shadow-md shadow-black/20 active:scale-95 disabled:opacity-60" style={{ background: ACCENT }}>
+        {st === "busy" ? <Loader2 className="h-4 w-4 animate-spin" /> : st === "done" ? <CheckCircle2 className="h-4 w-4" /> : <Navigation className="h-4 w-4" />}
+        {st === "done" ? "Sent to your car" : "Send to car's navigation"}
       </button>
-      {msg && <p className={`mt-1 max-w-[9rem] text-[11px] leading-snug ${st === "err" ? "text-red-300" : "text-white/60"}`} aria-live="polite">{msg}</p>}
+      {msg && <p className={`min-w-0 flex-1 text-[12px] leading-snug ${st === "err" ? "text-red-300" : "text-white/65"}`} aria-live="polite">{msg}</p>}
     </div>
   );
 }
@@ -160,8 +160,8 @@ export function KeyNextSteps({ trip, pickupBattery, place, kind, maps, go, run }
             <div className="min-w-0 flex-1">
               <p className="text-[15px] font-semibold leading-snug text-white">{st.title}</p>
               <p className="mt-0.5 text-[14px] leading-snug text-white/75">{st.body}</p>
+              {st.send && <SendToCar run={run} kind={kind} />}
             </div>
-            {st.send && <SendToCar run={run} kind={kind} />}
             {st.action && (st.action.href
               ? <a href={st.action.href} className="shrink-0 rounded-full bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95"><Navigation className="mr-1 inline h-3.5 w-3.5" />{st.action.label}</a>
               : <button type="button" onClick={st.action.onClick} className="min-h-[36px] shrink-0 rounded-full bg-white/10 px-3 py-2 text-[13px] font-semibold text-white ring-1 ring-white/15 active:scale-95">{st.action.label}</button>)}

@@ -376,6 +376,7 @@ export default function LaxGuest() {
               ) : (
                 <div className="mt-3"><WeatherCard trip={null} /></div>
               )}
+              <a href={maps} onClick={() => track(token || undefined, "directions")} className="mt-3 flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#1A1140] active:scale-[0.98]"><MapPin className="h-4 w-4" /> Directions to the garage</a>
               {pub.trip && (
                 <div className="mt-3 flex gap-2.5">
                   <CarButton action="honk" label="Honk" icon={BellRing} run={live ? carCommand : undefined} hint={live ? "Short beep" : "Works 1 hour before pickup"} />
