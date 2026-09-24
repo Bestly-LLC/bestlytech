@@ -334,7 +334,7 @@ export default function LaxGuest() {
   );
   // Home pickup (733 N Kings Rd): same page system, home look. No QR code, shuttle or garage.
   if (token && pub?.ok && pub.kind === "home") return <>
-    <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} reload={reload} />
+    <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} demoPage={demo} reload={reload} />
     {demo && <DemoBar kind="home" stage={stage} onStage={setStage} />}
   </>;
 
@@ -422,7 +422,7 @@ export default function LaxGuest() {
               {pub.trip || pub.car ? (
                 <div className="mt-3 grid grid-cols-2 items-stretch gap-2.5">
                   <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} />
-                  <CarCard trip={pub.trip ?? null} car={demoCar ? demoState : pub.car ?? null} demo={demoCar} compact onClimate={!demoCar && !demoSoon && (pub.controls || demo) ? carCommand : undefined} lockedUntil={demoSoon ?? (demoCar || pub.controls || demo ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending")} />
+                  <CarCard trip={pub.trip ?? null} car={demoCar ? demoState : pub.car ?? null} demo={demoCar || demo} compact onClimate={!demoCar && !demoSoon && (pub.controls || demo) ? carCommand : undefined} lockedUntil={demoSoon ?? (demoCar || pub.controls || demo ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending")} />
                 </div>
               ) : (
                 <div className="mt-3"><WeatherCard trip={null} /></div>

@@ -209,7 +209,7 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
 }
 
 
-export default function HomeGuest({ pub, token, run, demo, reload }: { pub: HomePub; token: string; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; demo: string | null; reload?: () => void }) {
+export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: { pub: HomePub; token: string; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; demo: string | null; demoPage?: boolean; reload?: () => void }) {
   const [sheet, setSheet] = useState<"pickup" | "return" | "ask" | null>(() => {
     if (typeof window === "undefined") return null;
     const h = window.location.hash;
@@ -299,7 +299,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
           {(pub.trip || car) && <div className="mt-2 px-1"><ClimateAdvice car={car} outsideF={outsideF} /></div>}
           <div className="mt-3 grid grid-cols-2 items-stretch gap-2.5">
             <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} place="WeHo" />
-            <CarCard trip={pub.trip ?? null} car={car} demo={demoCar} compact onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
+            <CarCard trip={pub.trip ?? null} car={car} demo={demoCar || !!demoPage} compact onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2.5">
             <a href={mapsFor(home.address)} onClick={() => track(undefined, "directions")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#132726] active:scale-[0.98]"><Navigation className="h-4 w-4" /> Directions</a>
