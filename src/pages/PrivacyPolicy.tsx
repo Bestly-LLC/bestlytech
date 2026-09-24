@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { AnimatedSection } from "@/components/AnimatedSection";
 
 export default function PrivacyPolicy() {
-  const lastUpdated = "December 4, 2024";
+  const lastUpdated = "September 24, 2026";
 
   const sections = [
     { id: "1", title: "1. Introduction", content: (
@@ -248,43 +248,68 @@ export default function PrivacyPolicy() {
         <a href="mailto:privacy@bestly.tech" className="text-foreground underline">privacy@bestly.tech</a>.
       </p>
     )},
-    { id: "15", title: "15. Cookie Yeti Extension – Community Pattern Sharing", content: (
+    { id: "15", title: "15. Cookie Yeti Browser Extension (Chrome and Safari)", content: (
       <>
         <p className="text-muted-foreground leading-relaxed mb-4">
-          The Cookie Yeti browser extension includes an optional community pattern sharing feature. 
-          When enabled, the extension shares anonymized cookie banner detection patterns with our 
-          community database to improve cookie consent detection for all users.
+          Cookie Yeti closes cookie pop-ups on the websites you visit and picks the most private option for you.
+          This section explains exactly what data the extension collects, how we handle it, where and how long
+          we store it, and who we share it with. It applies to the Chrome extension and the Safari extension
+          for Mac, iPhone and iPad.
         </p>
-        <h3 className="text-xl font-medium text-foreground mb-3 mt-6">Data Shared</h3>
+
+        <h3 className="text-xl font-medium text-foreground mb-3 mt-6">15.1 Data the extension collects</h3>
+        <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
+          <li><strong className="text-foreground">Website domain and address (origin only).</strong> When Cookie Yeti handles, misses or gets stuck on a cookie banner, it sends the site's domain (for example "example.com") and origin. It never sends the full page address, page path, search terms or page content outside the banner.</li>
+          <li><strong className="text-foreground">Cookie banner details.</strong> The CSS selector of the banner button, the action taken (accept, reject, necessary, save or close), the consent platform's name, and, when a banner is missed or you tap "Report", up to 5,000 characters of the banner's own HTML so we can teach Cookie Yeti to handle it.</li>
+          <li><strong className="text-foreground">Page-guard reports.</strong> If Cookie Yeti notices it scrolled a page or kept reopening something on a site, it sends the domain, a short reason (for example "scroll_jump"), the extension version and the browser type (Chrome or Safari).</li>
+          <li><strong className="text-foreground">Anonymous usage analytics.</strong> A random install ID created on your device and simple events such as "installed", "banner handled today" or "upgrade started", with the extension version and platform. No email, web address, domain or IP address is stored with these events. You can turn this off in the extension's settings.</li>
+          <li><strong className="text-foreground">Email address (Pro only).</strong> If you buy Cookie Yeti Pro or activate it on another device, we collect your email address to send an activation code and confirm your subscription. Payment card details go directly to Stripe; we never see or store them.</li>
+          <li><strong className="text-foreground">Cookies on your device.</strong> The extension reads the names of cookies on the sites you visit, only on your device, to remove known tracking cookies. Cookie names and values are never sent to us.</li>
+        </ul>
         <p className="text-muted-foreground leading-relaxed mb-4">
-          The only data shared through this feature includes:
+          Cookie Yeti does not collect your name, browsing history, full web addresses, page content (other than the
+          cookie banner itself), passwords, form entries, location, or financial information, and it does not track
+          you across websites.
+        </p>
+
+        <h3 className="text-xl font-medium text-foreground mb-3 mt-6">15.2 How we use and handle this data</h3>
+        <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
+          <li>Domains, selectors and banner HTML are used only to recognize and close cookie banners for all Cookie Yeti users, and to switch off a banner rule that misbehaves.</li>
+          <li>Page-guard reports are used only to stop Cookie Yeti acting on a site where it causes problems. When several reports arrive for the same site, Cookie Yeti leaves that site alone for everyone for a period, then tries again.</li>
+          <li>Anonymous analytics are used only to count installs and usage and to find bugs.</li>
+          <li>Your email is used only to send activation codes, confirm Pro access and answer your support requests. We do not send marketing email to it unless you ask us to.</li>
+          <li>Banner HTML may be processed by an AI service to write a new banner rule. Only the banner snippet is sent, never your identity.</li>
+          <li>We never sell this data, never use it for advertising, and never use it to build a profile of you.</li>
+        </ul>
+
+        <h3 className="text-xl font-medium text-foreground mb-3 mt-6">15.3 How and where we store it, and for how long</h3>
+        <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
+          <li>Data sent by the extension is stored in our database hosted by Supabase in the United States. It is encrypted in transit (HTTPS/TLS) and at rest, and only Bestly LLC staff who run Cookie Yeti can access it.</li>
+          <li>Your settings, your own learned banner rules, your Pro status and sites Cookie Yeti has paused are stored only in your browser's extension storage on your device. Removing the extension deletes them.</li>
+          <li>Page-guard reports are deleted after 90 days. Banner rules and banner reports are kept while they help Cookie Yeti work and are deleted when a rule is retired. Anonymous analytics events are kept for up to 24 months. Your email is kept while you have Pro access and deleted on request after that.</li>
+        </ul>
+
+        <h3 className="text-xl font-medium text-foreground mb-3 mt-6">15.4 Who we share it with</h3>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          We do not sell, rent or trade Cookie Yeti data. We share it only with the service providers that run
+          Cookie Yeti for us, under contracts that limit them to that purpose:
         </p>
         <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
-          <li><strong className="text-foreground">Website domain names</strong> (e.g., "example.com")</li>
-          <li><strong className="text-foreground">CSS selectors</strong> used to identify cookie consent banners</li>
-          <li><strong className="text-foreground">Action types</strong> (accept, reject, necessary, save, or close)</li>
-          <li><strong className="text-foreground">CMP fingerprints</strong> (consent management platform identifiers)</li>
+          <li><strong className="text-foreground">Supabase</strong> — database and server hosting for all of the data above.</li>
+          <li><strong className="text-foreground">Stripe</strong> — payment processing for Cookie Yeti Pro (your email and payment details).</li>
+          <li><strong className="text-foreground">Resend</strong> — sending activation-code emails (your email address).</li>
+          <li><strong className="text-foreground">OpenAI</strong> — writing new banner rules from cookie banner HTML snippets (no identity or email is sent).</li>
         </ul>
-        <h3 className="text-xl font-medium text-foreground mb-3 mt-6">Data NOT Collected</h3>
         <p className="text-muted-foreground leading-relaxed mb-4">
-          This feature does <strong className="text-foreground">not</strong> collect any of the following:
+          Banner rules (domain, selector and action) are shared with other Cookie Yeti users so their extension can
+          close the same banners. We may also disclose data if required by law.
         </p>
-        <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
-          <li>Personal information of any kind</li>
-          <li>Browsing history or page content</li>
-          <li>IP addresses or geolocation data</li>
-          <li>Cookies or cookie values from websites</li>
-          <li>User identifiers, accounts, or device fingerprints</li>
-        </ul>
-        <h3 className="text-xl font-medium text-foreground mb-3 mt-6">Opt-In & Control</h3>
+
+        <h3 className="text-xl font-medium text-foreground mb-3 mt-6">15.5 Your choices</h3>
         <p className="text-muted-foreground leading-relaxed mb-4">
-          Community pattern sharing is entirely <strong className="text-foreground">opt-in</strong> and 
-          can be disabled at any time in the Cookie Yeti extension settings. Shared pattern data is 
-          stored securely and used solely to improve cookie banner detection accuracy for all Cookie 
-          Yeti users.
-        </p>
-        <p className="text-muted-foreground leading-relaxed">
-          For Cookie Yeti's complete privacy policy, see the{" "}
+          You can turn off anonymous analytics in the extension's settings, pause Cookie Yeti on any site, or remove the
+          extension at any time. To see or delete data tied to your email or install ID, email{" "}
+          <a href="mailto:privacy@bestly.tech" className="text-foreground underline">privacy@bestly.tech</a>. See also the{" "}
           <Link to="/cookie-yeti/privacy" className="text-foreground underline">Cookie Yeti Privacy Policy</Link>.
         </p>
       </>
