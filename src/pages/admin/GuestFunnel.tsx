@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { card, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
 
-type Step = { id: string; label: string; at: string | null; count?: number; late_min?: number | null };
+type Step = { id: string; label: string; at: string | null; count?: number; late_min?: number | null; guessed?: boolean };
 type Trip = { reservation_id: number; guest: string; kind: "home" | "lax"; starts_at: string; ends_at: string; phase: "upcoming" | "on_trip" | "ended"; steps: Step[]; asked: number; resends: number };
 
 const H = 3600e3;
@@ -21,10 +21,12 @@ function dueBy(id: string, t: Trip): number | null {
   const s = +new Date(t.starts_at), e = +new Date(t.ends_at);
   return ({ sent: s - 48 * H, opened: s - 2 * H, tapped: s, added: s, setup: s + H, returned: e + 0.5 * H } as Record<string, number>)[id] ?? null;
 }
+/** A step is skipped when a later one is done (e.g. you added the guest in the Tesla app yourself). */
+const skipped = (t: Trip, i: number) => !t.steps[i].at && t.steps.slice(i + 1).some((s) => s.at);
 function stuckAt(t: Trip): Step | null {
   const now = Date.now();
-  for (const st of t.steps) {
-    if (st.at) continue;
+  for (const [i, st] of t.steps.entries()) {
+    if (st.at || skipped(t, i)) continue;
     const due = dueBy(st.id, t);
     return due != null && now > due ? st : null;
   }
@@ -44,7 +46,7 @@ export function GuestFunnel() {
     if (!trips?.length) return null;
     const ids = trips[0].steps.map((s) => ({ id: s.id, label: s.label }));
     const rows = ids.map(({ id, label: l }) => {
-      const due = trips.filter((t) => { const d = dueBy(id, t); return d != null && Date.now() > d; });
+      const due = trips.filter((t) => { const d = dueBy(id, t); const i = t.steps.findIndex((s) => s.id === id); return d != null && Date.now() > d && !skipped(t, i); });
       const done = due.filter((t) => t.steps.find((s) => s.id === id)?.at);
       return { id, label: l, done: done.length, of: due.length };
     });
@@ -91,15 +93,16 @@ export function GuestFunnel() {
                 </span>
               </div>
               <ol className="mt-2 flex flex-wrap gap-x-1 gap-y-1.5" aria-label={`${t.guest}'s steps`}>
-                {t.steps.map((s) => {
+                {t.steps.map((s, i) => {
                   const due = dueBy(s.id, t);
-                  const overdue = !s.at && due != null && Date.now() > due;
+                  const skip = skipped(t, i);
+                  const overdue = !s.at && !skip && due != null && Date.now() > due;
                   return (
-                    <li key={s.id} title={s.at ? `${s.label}: ${t12(s.at)}${s.count && s.count > 1 ? ` (${s.count}×)` : ""}` : due ? `${s.label}: expected by ${t12(new Date(due).toISOString())}` : s.label}
+                    <li key={s.id} title={s.guessed ? `${s.label}: likely done (she drove the car; Set Up tracking started after this trip began)` : s.at ? `${s.label}: ${t12(s.at)}${s.count && s.count > 1 ? ` (${s.count}×)` : ""}` : due ? `${s.label}: expected by ${t12(new Date(due).toISOString())}` : s.label}
                       className={cn("inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium",
                         s.at ? pill.green : overdue ? pill.orange : "bg-[#2C2C2E] text-[#EBEBF599] bento:bg-[#7676801a] bento:text-[#3C3C4399]")}>
                       {s.at ? <Check className="h-3.5 w-3.5" aria-hidden /> : overdue ? <Clock className="h-3.5 w-3.5" aria-hidden /> : <Minus className="h-3.5 w-3.5" aria-hidden />}
-                      {s.label}
+                      {s.label}{skip ? " · skipped" : ""}{s.guessed ? " · likely" : ""}
                       {s.id === "returned" && s.late_min ? ` · ${s.late_min} min late` : ""}
                       <span className="sr-only">{s.at ? `done ${t12(s.at)}` : overdue ? "not done, overdue" : "not yet"}</span>
                     </li>
