@@ -10,6 +10,10 @@
 // (accept | reject | necessary | save | close). The robot browser key never reaches the browser.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -19,7 +23,7 @@ const json = (b: unknown, status = 200) =>
 
 const RENDER_URL = Deno.env.get("CY_RENDER_URL") ?? "https://www.bestly.tech/api/cy-render";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SERVICE = SB_SECRET;
 const FINAL_ACTIONS = new Set(["accept", "reject", "necessary", "save", "close"]);
 
 type Step = { selector: string; action?: string };
@@ -50,9 +54,10 @@ async function engine(key: string, body: Record<string, unknown>) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-render-key": key },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(62_000),
+      signal: AbortSignal.timeout(125_000),
     });
     const out = await res.json().catch(() => null);
+    console.log(JSON.stringify({ cyGuide: body.action, url: body.url, viewport: body.viewport, status: res.status, ok: !!out?.ok, slow: !!out?.slow, error: out?.error ?? null }));
     if (!res.ok || !out?.ok) {
       const fallback = res.status === 504
         ? "That site took too long for the robot browser. Try again, or try the phone view."

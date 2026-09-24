@@ -1,5 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
 /**
  * Generate a Stripe Payment Link for a deal's deposit.
  * Auth: admin role required (uses service role behind admin-auth gate).
@@ -72,7 +76,7 @@ Deno.serve(async (req) => {
   if (!token) return bad("authentication required", 401);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const serviceKey = SB_SECRET;
 
   // Verify the caller's JWT and get their user_id, then check has_role(uid, 'admin')
   const sbAuth = createClient(supabaseUrl, serviceKey);

@@ -1,5 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const sbHeaders = (k: string): Record<string, string> => k.startsWith("sb_") ? { apikey: k } : { apikey: k, Authorization: `Bearer ${k}` };
+
 // v14 (2026-09-23 spend audit): this endpoint is public (the Cookie Yeti extension calls it), and every
 // report started ai-generate-pattern, which pays OpenAI. Reports are still always saved, but the AI
 // only starts when ai_gate allows it (ai_caps: per-day cap, and per hashed IP per hour). Otherwise the
@@ -39,8 +44,7 @@ Deno.serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl, SB_SECRET);
 
   try {
     const { domain, page_url, banner_html, cmp_fingerprint } = await req.json();
@@ -84,7 +88,7 @@ Deno.serve(async (req) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${serviceRoleKey}`,
+            ...sbHeaders(SB_SECRET),
           },
           body: JSON.stringify({
             domain: trimmedDomain,

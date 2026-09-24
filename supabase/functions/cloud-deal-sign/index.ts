@@ -1,5 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
 /**
  * cloud-deal-sign — programmatic e-sign envelope creation via Libresign on
  * cloud.bestly.tech. Replaces the manual "open Libresign UI / paste request
@@ -192,7 +196,7 @@ Deno.serve(async (req) => {
   if (!callerToken) return bad("authentication required", 401);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const serviceKey = SB_SECRET;
   const sbAuth = createClient(supabaseUrl, serviceKey);
   const { data: userRes } = await sbAuth.auth.getUser(callerToken);
   const uid = userRes?.user?.id;

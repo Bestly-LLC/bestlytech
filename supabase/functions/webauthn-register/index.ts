@@ -1,4 +1,9 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SB_PUBLISHABLE: string = __keys("SUPABASE_PUBLISHABLE_KEYS") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -112,38 +117,24 @@ function extractPublicKeyFromAttestation(attestationObjectB64: string): {
   algorithm: number;
 } {
   const attObj = decodeCBOR(base64urlToBuffer(attestationObjectB64));
-  // attObj is a Map: { "fmt", "attStmt", "authData" }
   const authData: Uint8Array = attObj.get("authData");
-
-  // authData layout:
-  // 32 bytes rpIdHash
-  // 1 byte flags
-  // 4 bytes signCount
-  // if AT flag (bit 6) set: credentialData follows
   const flags = authData[32];
   const hasAttestedCredentialData = (flags & 0x40) !== 0;
   if (!hasAttestedCredentialData) {
     throw new Error("No attested credential data in authData");
   }
 
-  let pos = 37; // after rpIdHash(32) + flags(1) + signCount(4)
-  // AAGUID: 16 bytes
+  let pos = 37;
   pos += 16;
-  // credentialIdLength: 2 bytes big-endian
   const credIdLen = (authData[pos] << 8) | authData[pos + 1];
   pos += 2;
-  // credentialId
   pos += credIdLen;
-  // remaining bytes = CBOR-encoded COSE public key
   const coseKeyBytes = authData.slice(pos);
   const coseKey: Map<number, any> = decodeCBOR(coseKeyBytes);
 
-  // COSE key map keys:
-  // 1 = kty, 3 = alg, -1 = crv, -2 = x, -3 = y (for EC2)
-  const alg = coseKey.get(3); // -7 for ES256, -257 for RS256
+  const alg = coseKey.get(3);
 
   if (alg === -7) {
-    // ES256 (ECDSA P-256)
     const x = coseKey.get(-2) as Uint8Array;
     const y = coseKey.get(-3) as Uint8Array;
     return {
@@ -156,7 +147,6 @@ function extractPublicKeyFromAttestation(attestationObjectB64: string): {
       },
     };
   } else if (alg === -257) {
-    // RS256
     const n = coseKey.get(-1) as Uint8Array;
     const e = coseKey.get(-2) as Uint8Array;
     return {
@@ -180,7 +170,7 @@ Deno.serve(async (req) => {
   try {
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      SB_SECRET
     );
 
     const authHeader = req.headers.get("Authorization");
@@ -193,7 +183,7 @@ Deno.serve(async (req) => {
 
     const supabaseUser = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      SB_PUBLISHABLE,
       { global: { headers: { Authorization: authHeader } } }
     );
 
@@ -235,8 +225,8 @@ Deno.serve(async (req) => {
         },
         challenge,
         pubKeyCredParams: [
-          { alg: -7, type: "public-key" },   // ES256
-          { alg: -257, type: "public-key" },  // RS256
+          { alg: -7, type: "public-key" },
+          { alg: -257, type: "public-key" },
         ],
         timeout: 60000,
         authenticatorSelection: {
@@ -314,7 +304,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Extract the actual COSE public key from the attestationObject
       let publicKeyData: { publicKeyJwk: JsonWebKey; algorithm: number };
       try {
         publicKeyData = extractPublicKeyFromAttestation(credResponse.attestationObject);
@@ -326,7 +315,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Store the JWK public key (not the raw attestationObject)
       const detectedType = credential.authenticatorAttachment || (keyType === "cross-platform" ? "cross-platform" : "platform");
       const deviceName = detectedType === "cross-platform" ? "Security Key" : "Platform Passkey";
 
@@ -350,7 +338,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Clean up challenge
       await supabaseAdmin
         .from("webauthn_challenges")
         .delete()

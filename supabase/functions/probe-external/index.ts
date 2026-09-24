@@ -1,18 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
+const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
+
 /**
  * probe-external v4 (2026-05-03) - optional NTFY_TOKEN auth.
  * v3 (2026-05-01) - ntfy push on flip-to-down.
  * v2 (2026-04-30) - probe + DB write.
- *
- * Scheduled every 5 minutes by the external_health_probe migration.
- *
- * Status rules:
- *   ok    - HTTP 2xx within timeout
- *   warn  - HTTP 3xx (unexpected), 4xx, or latency > 4000ms
- *   down  - TCP fail, TLS fail, timeout, DNS fail, or HTTP 5xx (after 2 fails)
- *
- * Sends ONE ntfy push when a service flips ok/warn -> down (after hysteresis).
  */
 
 const corsHeaders = {
@@ -103,7 +100,7 @@ Deno.serve(async (req) => {
   if (secret && secret === Deno.env.get("MAINTENANCE_SECRET")) authorized = true;
   if (!authorized && authHeader?.startsWith("Bearer ")) {
     const token = authHeader.replace("Bearer ", "");
-    if (token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) authorized = true;
+    if (isSvc(req)) authorized = true;
     if (!authorized && token === Deno.env.get("MAINTENANCE_SECRET")) authorized = true;
   }
   const isCronCall = !authHeader && !secret && req.method === "POST";
@@ -115,7 +112,7 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    SB_SECRET,
   );
 
   const { data: services, error: loadErr } = await supabase

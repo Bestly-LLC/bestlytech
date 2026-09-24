@@ -1,4 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // v12 (2026-09-23 spend audit): this endpoint is public (the Cookie Yeti extension calls it) and asked
 // Gemini 2.5 Pro on every request. The free layer (known-CMP detection) still runs for everyone; the
@@ -86,7 +89,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      SB_SECRET
     );
 
     // Pick the best probe result: visible, largest HTML

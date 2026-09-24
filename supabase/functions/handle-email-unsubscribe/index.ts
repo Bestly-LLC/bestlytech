@@ -1,5 +1,9 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
@@ -24,7 +28,7 @@ Deno.serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  const supabaseServiceKey = SB_SECRET
 
   if (!supabaseUrl || !supabaseServiceKey) {
     return jsonResponse({ error: 'Server configuration error' }, 500)

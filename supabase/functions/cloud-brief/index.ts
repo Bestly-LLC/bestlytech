@@ -1,5 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
 /**
  * Token-bound brief CRUD for /brief/:token.
  *  GET    ?token=<>           → fetch brief + lead summary (no PII beyond company/name)
@@ -128,12 +132,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const serviceKey = SB_SECRET;
   const sb = createClient(supabaseUrl, serviceKey);
 
-  // ──────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
   // GET — fetch brief by token
-  // ──────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
   if (req.method === "GET") {
     const url = new URL(req.url);
     const token = url.searchParams.get("token");
@@ -159,9 +163,9 @@ Deno.serve(async (req) => {
     return ok({ ok: true, brief, lead });
   }
 
-  // ──────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
   // PATCH — partial save
-  // ──────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
   if (req.method === "PATCH") {
     let body: any;
     try {
@@ -200,9 +204,9 @@ Deno.serve(async (req) => {
     return ok({ ok: true, saved: Object.keys(patch).length });
   }
 
-  // ──────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
   // POST — final submit
-  // ──────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
   if (req.method === "POST") {
     let body: any;
     try {

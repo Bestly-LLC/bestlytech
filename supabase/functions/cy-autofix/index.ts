@@ -12,6 +12,13 @@
 // and records one outcome, so the admin only asks Jared for the one thing a robot can't do.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const sbHeaders = (k: string): Record<string, string> => k.startsWith("sb_") ? { apikey: k } : { apikey: k, Authorization: `Bearer ${k}` };
+const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
+const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -21,7 +28,7 @@ const json = (b: unknown, status = 200) =>
 
 const RENDER_URL = Deno.env.get("CY_RENDER_URL") ?? "https://www.bestly.tech/api/cy-render";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SERVICE = SB_SECRET;
 
 // Ad-tech / consent-vendor hosts: a "missed banner" filed against these is a script
 // running inside some other site, not a site anyone visits.
@@ -82,7 +89,7 @@ const originOf = (u?: string | null) => { try { return u ? new URL(u).origin : n
 
 async function isAdmin(req: Request, svc: any): Promise<boolean> {
   const auth = req.headers.get("Authorization") || "";
-  if (auth === `Bearer ${SERVICE}`) return true;
+  if (isSvc(req)) return true;
   const token = auth.replace(/^Bearer\s+/i, "");
   if (!token) return false;
   const { data } = await svc.auth.getUser(token);
@@ -141,7 +148,7 @@ async function autofix(svc: any, key: string, domain: string, urlOverride?: stri
   try {
     const r = await fetch(`${SUPABASE_URL}/functions/v1/ai-generate-pattern`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE}` },
+      headers: { "Content-Type": "application/json", ...sbHeaders(SB_SECRET) },
       body: JSON.stringify({ domain }),
       signal: AbortSignal.timeout(60_000),
     });

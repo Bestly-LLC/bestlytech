@@ -6,7 +6,10 @@
 // use the production service-role key (stored as the CY_PROD_SERVICE_KEY
 // function secret — never in the repo) to perform RLS-restricted reads and
 // grant/revoke writes against production via its REST API.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_PUBLISHABLE: string = __keys("SUPABASE_PUBLISHABLE_KEYS") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,14 +20,14 @@ const corsHeaders = {
 
 const CY_PROD_URL = "https://keowunrxpxlbgebujbao.supabase.co";
 
-function json(body: unknown, status = 200) {
+function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
-async function prodFetch(path: string, serviceKey: string, init: RequestInit = {}) {
+async function prodFetch(path, serviceKey, init = {}) {
   const res = await fetch(`${CY_PROD_URL}/rest/v1/${path}`, {
     ...init,
     headers: {
@@ -35,7 +38,7 @@ async function prodFetch(path: string, serviceKey: string, init: RequestInit = {
     },
   });
   const text = await res.text();
-  let data: unknown = null;
+  let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
   return { ok: res.ok, status: res.status, data };
 }
@@ -44,12 +47,11 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  // 1. Verify caller is an authenticated admin on THIS (website) project.
   const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
 
-  const localUrl = Deno.env.get("SUPABASE_URL")!;
-  const localAnon = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const localUrl = Deno.env.get("SUPABASE_URL");
+  const localAnon = SB_PUBLISHABLE;
   const authed = createClient(localUrl, localAnon, {
     global: { headers: { Authorization: authHeader } },
   });
@@ -62,7 +64,6 @@ Deno.serve(async (req) => {
   });
   if (!isAdmin) return json({ error: "forbidden" }, 403);
 
-  // 2. Production service key (function secret).
   const serviceKey = Deno.env.get("CY_PROD_SERVICE_KEY");
   if (!serviceKey) {
     return json(
@@ -71,20 +72,15 @@ Deno.serve(async (req) => {
     );
   }
 
-  // 3. Dispatch.
-  let body: Record<string, unknown> = {};
+  let body = {};
   try { body = await req.json(); } catch { /* empty */ }
   const action = String(body.action ?? "");
 
   try {
     if (action === "list_granted") {
-      const r = await prodFetch(
-        "granted_access?select=*&order=created_at.desc",
-        serviceKey,
-      );
+      const r = await prodFetch("granted_access?select=*&order=created_at.desc", serviceKey);
       return json({ ok: r.ok, data: r.data }, r.ok ? 200 : 502);
     }
-
     if (action === "grant") {
       const email = String(body.email ?? "").trim().toLowerCase();
       const reason = String(body.reason ?? "admin grant");
@@ -96,7 +92,6 @@ Deno.serve(async (req) => {
       });
       return json({ ok: r.ok, data: r.data }, r.ok ? 200 : 502);
     }
-
     if (action === "revoke") {
       const email = String(body.email ?? "").trim().toLowerCase();
       if (!email) return json({ error: "invalid_email" }, 400);
@@ -107,15 +102,10 @@ Deno.serve(async (req) => {
       );
       return json({ ok: r.ok, data: r.data }, r.ok ? 200 : 502);
     }
-
     if (action === "list_activation_codes") {
-      const r = await prodFetch(
-        "activation_codes?select=*&order=created_at.desc&limit=100",
-        serviceKey,
-      );
+      const r = await prodFetch("activation_codes?select=*&order=created_at.desc&limit=100", serviceKey);
       return json({ ok: r.ok, data: r.data }, r.ok ? 200 : 502);
     }
-
     return json({ error: "unknown_action", action }, 400);
   } catch (e) {
     return json({ error: "proxy_error", message: String(e) }, 500);

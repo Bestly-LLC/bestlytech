@@ -11,7 +11,13 @@
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
+const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
+
+const SERVICE = SB_SECRET;
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE, { auth: { persistSession: false } });
 
 const CORS = {
@@ -26,8 +32,8 @@ const J = (o: unknown, s = 200) =>
 async function caller(req: Request): Promise<"service" | "admin" | null> {
   const auth = req.headers.get("Authorization") ?? "";
   const jwt = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (isSvc(req)) return "service";
   if (!jwt) return null;
-  if (jwt === SERVICE) return "service";
   const { data: vaultKey } = await db.rpc("push_service_key_ok", { p_key: jwt });
   if (vaultKey === true) return "service";
   const { data: who } = await db.auth.getUser(jwt);

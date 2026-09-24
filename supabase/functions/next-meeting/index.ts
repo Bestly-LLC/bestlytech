@@ -4,6 +4,10 @@
 // that mention them (their email or name), plus their standing call room.
 // verify_jwt = false (checks the caller itself).
 import { createClient } from "npm:@supabase/supabase-js@2";
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SB_PUBLISHABLE: string = __keys("SUPABASE_PUBLISHABLE_KEYS") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-worker-key", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const J = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "content-type": "application/json", ...CORS } });
@@ -49,13 +53,13 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const auth = req.headers.get("Authorization") ?? "";
   const url = Deno.env.get("SUPABASE_URL")!;
-  const svc = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+  const svc = createClient(url, SB_SECRET, { auth: { persistSession: false } });
   // The Mac mini worker key also works (acts as the admin): lets Scout and health checks read the calendar.
   const wk = req.headers.get("x-worker-key");
   const viaWorker = !!wk && !!(await svc.rpc("partner_ai_key_ok", { p_key: wk })).data;
   let isAdmin = viaWorker, partner: { name: string; email: string; roster_name: string; call_url: string | null } | null = null;
   if (!viaWorker) {
-    const me = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: auth } } });
+    const me = createClient(url, SB_PUBLISHABLE, { global: { headers: { Authorization: auth } } });
     const { data: u } = await me.auth.getUser();
     if (!u?.user) return J({ ok: false, error: "unauthorized" }, 401);
     const [{ data: a }, { data: p }] = await Promise.all([

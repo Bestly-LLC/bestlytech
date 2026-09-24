@@ -19,10 +19,14 @@
 // worker key with {as}. verify_jwt = false (checked here, CORS preflight carries no auth).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-worker-key", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const J = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "content-type": "application/json", ...CORS } });
 const URL_ = Deno.env.get("SUPABASE_URL")!;
-const svc = createClient(URL_, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+const svc = createClient(URL_, SB_SECRET, { auth: { persistSession: false } });
 const OPS_BOARD = 2;
 
 type Cred = { base: string; user: string; auth: string };

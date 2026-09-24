@@ -19,9 +19,9 @@ const BRAND = {
   successBg: "#f0fdf4",
 };
 
-const LOGO_URL = "https://keowunrxpxlbgebujbao.supabase.co/storage/v1/object/public/email-assets/bestly-logo.png";
-const YETI_ICON_URL = "https://keowunrxpxlbgebujbao.supabase.co/storage/v1/object/public/email-assets/cookieyeti-icon.png";
-const DASHBOARD_URL = "https://bestlytech.lovable.app/admin";
+const LOGO_URL = "https://rcqfqhguwpmaarseifqg.supabase.co/storage/v1/object/public/email-assets/bestly-logo.png";
+const YETI_ICON_URL = "https://rcqfqhguwpmaarseifqg.supabase.co/storage/v1/object/public/email-assets/cookieyeti-icon.png";
+const DASHBOARD_URL = "https://bestly.tech/admin";
 
 // Google Fonts import for Plus Jakarta Sans
 const FONT_IMPORT = `<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">`;

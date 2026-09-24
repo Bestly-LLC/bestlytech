@@ -10,6 +10,10 @@
 // version/platform (extension version, "chrome" | "safari") show which release is out in the wild.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -32,7 +36,7 @@ Deno.serve(async (req) => {
     return json({ error: "domain and selector required" }, 400);
   }
 
-  const svc = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const svc = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET);
   const { data: rows } = await svc.from("cookie_patterns")
     .select("id, domain, selector, source, is_active, confidence, validation_status")
     .in("domain", [domain, `www.${domain}`]).eq("selector", selector);

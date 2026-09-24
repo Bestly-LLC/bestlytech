@@ -90,7 +90,7 @@ export const template = {
     contact_name: 'Jane Cooper',
     company_name: 'Acme Co',
     brief_url: 'https://bestly.tech/brief/abc123',
-    cal_url: 'https://cloud.bestly.tech/apps/calendar/appointment/BtktQYtGFocY',
+    cal_url: 'https://cal.com/jared-best/discovery',
   },
 } satisfies TemplateEntry
 

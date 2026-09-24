@@ -11,9 +11,15 @@
 // At most one Scout run starts per tick and one per incident episode (plus "Try again"), so the
 // paid rung can't run away. Scout runs in the background and is read on the next tick.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const sbHeaders = (k: string): Record<string, string> => k.startsWith("sb_") ? { apikey: k } : { apikey: k, Authorization: `Bearer ${k}` };
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
-const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SERVICE = SB_SECRET;
+const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
+const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
 const db = createClient(URL_, SERVICE, { auth: { persistSession: false } });
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -144,7 +150,7 @@ async function scoutStart(i: Issue, ctx: string) {
   await db.from("monitor_issues").update({ scout_thread: th.id, scout_started_at: new Date().toISOString(), fix_next_at: later(3) }).eq("key", i.key);
   const run = fetch(`${URL_}/functions/v1/admin-chat`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${SERVICE}`, "Content-Type": "application/json" },
+    headers: { ...sbHeaders(SB_SECRET), "Content-Type": "application/json" },
     body: JSON.stringify({ body: scoutAsk(i, ctx), autopilot: true, thread_id: th.id }),
   }).then((r) => r.text()).catch(() => "");
   // deno-lint-ignore no-explicit-any
@@ -282,7 +288,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return J({ ok: false, error: "POST only" }, 405);
   const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-  const service = await isService(jwt);
+  const service = isSvc(req) || await isService(jwt);
   if (!service && !(jwt && (await isAdmin(jwt)))) return J({ ok: false, error: "unauthorized" }, 401);
   let body: Record<string, any> = {};
   try { body = await req.json(); } catch { /* empty */ }

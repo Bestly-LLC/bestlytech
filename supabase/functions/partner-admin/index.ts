@@ -2,7 +2,8 @@
 //
 //   op list                 partners, whether they have a login, last sign-in
 //   op link    {partner_id} creates the login the first time (no email is sent),
-//                           then returns a one-time sign-in link for Jared to text them
+//                           then returns a sign-in link for Jared to text them
+//   op claim   {code}       the partner's own browser trades his link's code for a sign-in token
 //   op disable {partner_id} turns their access off (the login is kept, but blocked)
 //   op enable  {partner_id}
 //
@@ -15,7 +16,11 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+const db = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
 const SITE = "https://bestly.tech";
 const CORS = {
   "Access-Control-Allow-Origin": "*",

@@ -7,9 +7,14 @@
 // never stop real alerts (bluesteel_sweep_ack and acked_today ignore via starting with "test").
 // Deployed with verify_jwt = false: the ntfy iOS app can't attach a Supabase JWT to a tap.
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const sbHeaders = (k: string): Record<string, string> => k.startsWith("sb_") ? { apikey: k } : { apikey: k, Authorization: `Bearer ${k}` };
+
 const base = Deno.env.get("SUPABASE_URL")!;
-const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const svcHeaders = { apikey: svc, Authorization: `Bearer ${svc}`, "Content-Type": "application/json" };
+const svc = SB_SECRET;
+const svcHeaders = { ...sbHeaders(svc), "Content-Type": "application/json" };
 
 let cachedKey: string | null = null;
 async function ackKey(): Promise<string | null> {

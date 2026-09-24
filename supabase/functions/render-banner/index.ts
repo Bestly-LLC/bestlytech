@@ -8,6 +8,12 @@
 // Chromium). Its key lives in Supabase Vault (cy_render_key), read via RPC.
 // Scheduled by pg_cron 'render-missed-banners' every 10 min via invoke_edge_function.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const sbHeaders = (k: string): Record<string, string> => k.startsWith("sb_") ? { apikey: k } : { apikey: k, Authorization: `Bearer ${k}` };
+const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
+const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,10 +55,10 @@ async function renderHtml(key: string, url: string): Promise<string | null> {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const SERVICE = SB_SECRET;
   const auth = req.headers.get("Authorization") || "";
   const maint = req.headers.get("x-maintenance-secret");
-  const ok = auth === `Bearer ${SERVICE}` || (!!maint && maint === Deno.env.get("MAINTENANCE_SECRET"));
+  const ok = isSvc(req) || (!!maint && maint === Deno.env.get("MAINTENANCE_SECRET"));
   if (!ok) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
@@ -113,7 +119,7 @@ Deno.serve(async (req) => {
       try {
         await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-generate-pattern`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE}` },
+          headers: { "Content-Type": "application/json", ...sbHeaders(SERVICE) },
           body: JSON.stringify({ domain: r.domain }),
         });
       } catch (_e) { /* the periodic AI cron will still pick it up */ }

@@ -2,10 +2,17 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { activationCodeEmail } from "../_shared/email-template.ts";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Valid platforms per DB constraint
+const VALID_PLATFORMS = ["chrome", "safari", "firefox", "ios", "macos", "unknown"];
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -22,8 +29,15 @@ serve(async (req: Request) => {
       });
     }
 
+    // Normalize platform - map any variant to valid value
+    let safePlatform = (platform || "unknown").toLowerCase().replace(/_extension$/, "");
+    if (!VALID_PLATFORMS.includes(safePlatform)) {
+      safePlatform = "unknown";
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const serviceRoleKey = SB_SECRET;
+    const resendApiKey = Deno.env.get("RESEND_API_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // Rate limit: max 5 codes per email per hour
@@ -56,7 +70,7 @@ serve(async (req: Request) => {
     const { error: insertError } = await supabase.from("activation_codes").insert({
       email: email.toLowerCase(),
       code,
-      platform: platform || "unknown",
+      platform: safePlatform,
       active: false,
       expires_at: expiresAt,
     });
@@ -65,49 +79,67 @@ serve(async (req: Request) => {
 
     // Render the branded HTML email
     const html = activationCodeEmail(code);
-    const messageId = crypto.randomUUID();
-    const lowerEmail = email.toLowerCase();
+    const textContent = `Your Cookie Yeti activation code is: ${code}\n\nThis code expires in 15 minutes.\nEnter this code in the Cookie Yeti extension to activate Pro.\n\nIf you didn't request this code, you can safely ignore this email.`;
 
-    // Get or create unsubscribe token for this email
-    const { data: existingToken } = await supabase
-      .from("email_unsubscribe_tokens")
-      .select("token")
-      .eq("email", lowerEmail)
-      .is("used_at", null)
-      .limit(1)
-      .single();
+    // --- SEND IMMEDIATELY via Resend API (no queue delay) ---
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${resendApiKey}`,
+      },
+      body: JSON.stringify({
+        from: "Cookie Yeti <noreply@bestly.tech>",
+        to: [email.toLowerCase()],
+        subject: "Your Cookie Yeti activation code",
+        html,
+        text: textContent,
+      }),
+    });
 
-    let unsubscribeToken = existingToken?.token;
-    if (!unsubscribeToken) {
-      unsubscribeToken = crypto.randomUUID();
-      await supabase.from("email_unsubscribe_tokens").insert({
-        email: lowerEmail,
-        token: unsubscribeToken,
+    const resendData = await resendResponse.json();
+
+    if (!resendResponse.ok) {
+      console.error("Resend API error:", resendData);
+      // Fall back to queue if direct send fails
+      const messageId = crypto.randomUUID();
+      await supabase.rpc("enqueue_email", {
+        queue_name: "transactional_emails",
+        payload: {
+          message_id: messageId,
+          idempotency_key: messageId,
+          to: email,
+          from: "Cookie Yeti <noreply@bestly.tech>",
+          subject: "Your Cookie Yeti activation code",
+          html,
+          text: textContent,
+          purpose: "transactional",
+          label: "activation_code",
+          queued_at: new Date().toISOString(),
+        },
+      });
+      // Still return success - email will be sent by cron
+      return new Response(JSON.stringify({ success: true, delivery: "queued" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Enqueue via the Lovable email queue (sends from noreply@bestly.tech)
-    const { error: enqueueError } = await supabase.rpc("enqueue_email", {
+    // Log successful send
+    await supabase.from("email_send_log").insert({
       queue_name: "transactional_emails",
-      payload: {
-        message_id: messageId,
-        idempotency_key: messageId,
-        to: email,
-        from: "Cookie Yeti <noreply@bestly.tech>",
-        sender_domain: "notify.bestly.tech",
-        subject: "Your Cookie Yeti activation code",
-        html,
-        text: `Your Cookie Yeti activation code is: ${code}\n\nThis code expires in 15 minutes.\nEnter this code in the Cookie Yeti extension to activate Pro.\n\nIf you didn't request this code, you can safely ignore this email.`,
-        unsubscribe_token: unsubscribeToken,
-        purpose: "transactional",
-        label: "activation_code",
-        queued_at: new Date().toISOString(),
-      },
+      queue_message_id: 0,
+      to_email: email.toLowerCase(),
+      subject: "Your Cookie Yeti activation code",
+      status: "sent",
+      provider: "resend",
+      provider_message_id: resendData.id,
+      sent_at: new Date().toISOString(),
     });
 
-    if (enqueueError) throw new Error(`Enqueue failed: ${enqueueError.message}`);
+    console.log(`✓ Activation code sent instantly to ${email} via Resend (ID: ${resendData.id})`);
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, delivery: "instant" }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

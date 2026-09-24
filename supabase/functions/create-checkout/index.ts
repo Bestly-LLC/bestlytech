@@ -1,21 +1,45 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
-// SEC-01: Lock CORS to known first-party origins instead of '*'.
-// This endpoint is intentionally public (pre-signup Cookie Yeti checkout),
-// so JWT verification stays off, but we defense-in-depth via Origin allowlist
-// + email format validation.
-// CY-01: Cookie Yeti lives under bestly.tech/cookie-yeti; the standalone
-// cookieyeti.app domain is not registered, so we don't accept it as an origin.
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+// SEC-01 / CY-MIG-01: This endpoint is intentionally public (pre-signup Cookie
+// Yeti checkout), so JWT verification stays off and we defend in depth via an
+// Origin gate + email validation.
+//
+// First-party *web* origins are allowlisted below. First-party *extension /
+// native* callers are ALSO first-party and must be allowed: the Chrome / Firefox
+// / Safari web-extension popups send an extension-scheme Origin
+// (chrome-extension:// | moz-extension:// | safari-web-extension://), and the
+// background service worker (and native apps) send NO Origin header at all.
+// Those are exactly the clients that start checkout from "Upgrade to Pro".
+//
+// Only a genuine third-party website doing a browser CORS call — Origin present,
+// not on the allowlist, and not an extension scheme — is rejected with 403.
 const ALLOWED_ORIGINS = new Set([
   "https://bestly.tech",
   "https://www.bestly.tech",
 ]);
 
+const EXTENSION_ORIGIN_RE = /^(chrome-extension|moz-extension|safari-web-extension):\/\//i;
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+// A first-party caller is: no Origin (extension service worker / native fetch),
+// an allowlisted first-party web origin, or a browser-extension-scheme origin.
+function isFirstPartyOrigin(origin: string | null): boolean {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  if (EXTENSION_ORIGIN_RE.test(origin)) return true;
+  return false;
+}
+
 function corsHeadersFor(origin: string | null): Record<string, string> {
-  const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://bestly.tech";
+  // Echo back a first-party origin so browser callers receive a valid ACAO;
+  // fall back to the canonical site for everything else.
+  const allowed = origin && isFirstPartyOrigin(origin) ? origin : "https://bestly.tech";
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -39,8 +63,8 @@ serve(async (req) => {
     });
   }
 
-  // Reject requests that don't originate from a known first-party host.
-  if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+  // Reject genuine third-party web callers; allow first-party web + extension/native.
+  if (!isFirstPartyOrigin(origin)) {
     console.warn("create-checkout: rejected origin", { origin });
     return new Response(JSON.stringify({ error: "Forbidden" }), {
       status: 403,
@@ -76,15 +100,22 @@ serve(async (req) => {
       });
     }
 
-    // CY-01: Pull price IDs from Vault via the get_stripe_config() RPC, with
-    // env-var fallback for backwards compatibility.
+    // CY-LIVE-01: Resolve the price set that matches the ACTIVE Stripe key's mode.
+    // get_stripe_config(p_livemode) returns the LIVE price slot when the key is a
+    // live key (sk_live_ / rk_live_) and the TEST slot otherwise. This keeps test
+    // checkout working and makes live prices take effect automatically the instant
+    // a live STRIPE_SECRET_KEY is set — no code change or redeploy needed.
+    const isLiveMode = /^(sk|rk)_live_/.test(STRIPE_SECRET_KEY);
+
+    // Pull price IDs from Vault via the get_stripe_config() RPC, with env-var
+    // fallback for backwards compatibility.
     let priceMap: Record<string, string | undefined> = {};
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseServiceKey = SB_SECRET;
     if (supabaseUrl && supabaseServiceKey) {
       try {
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
-        const { data: cfg, error: cfgErr } = await supabase.rpc("get_stripe_config");
+        const { data: cfg, error: cfgErr } = await supabase.rpc("get_stripe_config", { p_livemode: isLiveMode });
         if (cfgErr) {
           console.warn("get_stripe_config rpc failed, falling back to env vars:", cfgErr.message);
         } else if (cfg) {
@@ -104,7 +135,7 @@ serve(async (req) => {
 
     const priceId = priceMap[plan];
     if (!priceId) {
-      console.error("create-checkout: no price ID for plan", { plan, hasMonthly: !!priceMap.monthly, hasYearly: !!priceMap.yearly, hasLifetime: !!priceMap.lifetime });
+      console.error("create-checkout: no price ID for plan", { plan, livemode: isLiveMode, hasMonthly: !!priceMap.monthly, hasYearly: !!priceMap.yearly, hasLifetime: !!priceMap.lifetime });
       return new Response(JSON.stringify({ error: "Invalid plan. Must be monthly, yearly, or lifetime." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -122,6 +153,8 @@ serve(async (req) => {
     // landing page routes since cookieyeti.app isn't a registered domain.
     params.append("success_url", "https://www.bestly.tech/cookie-yeti/success?session_id={CHECKOUT_SESSION_ID}");
     params.append("cancel_url", "https://www.bestly.tech/cookie-yeti/cancel");
+    params.append("metadata[source]", "extension");
+    params.append("metadata[plan]", plan);
 
     const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",

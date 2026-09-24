@@ -1,5 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SB_PUBLISHABLE: string = __keys("SUPABASE_PUBLISHABLE_KEYS") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
+const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
+
 // Cookie Yeti — turn repeated user dismissals into patterns.
 // 2026-09-16: only learns from real cookie banners and never from Bestly's own sites. Selectors
 // that aren't obviously cookie controls are held OFF by the cy_pattern_gate trigger until the
@@ -25,16 +32,18 @@ Deno.serve(async (req) => {
 
   const secret = req.headers.get("x-maintenance-secret");
   const authHeader = req.headers.get("Authorization");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const serviceRoleKey = SB_SECRET;
   let authorized = false;
   if (secret && secret === Deno.env.get("MAINTENANCE_SECRET")) {
+    authorized = true;
+  } else if (isSvc(req)) {
     authorized = true;
   } else if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.replace("Bearer ", "");
     if (token === serviceRoleKey) {
       authorized = true;
     } else {
-      const authClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      const authClient = createClient(Deno.env.get("SUPABASE_URL")!, SB_PUBLISHABLE, {
         global: { headers: { Authorization: authHeader } },
       });
       const { data: userData } = await authClient.auth.getUser(token);

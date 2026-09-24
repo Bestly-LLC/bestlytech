@@ -1,6 +1,10 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { WebhookError, verifyWebhookRequest } from 'npm:@lovable.dev/webhooks-js'
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
 // Suppression event payload sent by the Go API when Mailgun reports
 // a bounce, complaint, or unsubscribe.
 interface SuppressionPayload {
@@ -38,7 +42,7 @@ Deno.serve(async (req) => {
 
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  const supabaseServiceKey = SB_SECRET
 
   if (!apiKey || !supabaseUrl || !supabaseServiceKey) {
     console.error('Missing required environment variables')

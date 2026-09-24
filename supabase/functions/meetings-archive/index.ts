@@ -17,7 +17,12 @@
 // bug here cannot damage the archive. Audio is deliberately not proxied; the
 // archive is large and the UI only needs transcripts.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SB_PUBLISHABLE: string = __keys("SUPABASE_PUBLISHABLE_KEYS") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,8 +44,8 @@ function json(body: unknown, status = 200) {
 type NcEntry = { name: string; size: number; isDir: boolean; rel: string };
 
 /**
- * depth "1" lists one folder. depth "infinity" returns the whole tree in one request,
- * which is the difference between eleven round trips to a self-hosted Nextcloud and one.
+ * depth "1" lists one folder. depth "infinity" returns the whole tree in a single
+ * request, which is the difference between eleven round trips to Nextcloud and one.
  * `rel` is the entry's path below the requested folder, so callers can group by day
  * without asking for each day separately.
  */
@@ -158,7 +163,7 @@ Deno.serve(async (req) => {
 
   const authed = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
+    SB_PUBLISHABLE,
     { global: { headers: { Authorization: authHeader } } },
   );
 
@@ -177,7 +182,7 @@ Deno.serve(async (req) => {
   let ncPass = Deno.env.get("NEXTCLOUD_APP_PASSWORD") ?? "";
   let ncUser = Deno.env.get("NEXTCLOUD_USER") ?? "";
   if (!ncPass) {
-    const svc = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const svc = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET);
     const { data: cred } = await svc.rpc("get_nextcloud_credentials");
     const row = Array.isArray(cred) ? cred[0] : cred;
     ncPass = row?.app_password ?? "";
@@ -199,7 +204,7 @@ Deno.serve(async (req) => {
   // every one on every list was ~1MB of text and about 15 seconds - long enough that the
   // page looked empty and the meetings looked lost. Keyed by file name + size: same name
   // and size means the same bytes.
-  const cacheDb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const cacheDb = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET);
 
   let body: Record<string, unknown> = {};
   try {
@@ -211,10 +216,10 @@ Deno.serve(async (req) => {
 
   // --- 3a. list: enumerate meetings and summarise each transcript ---
   if (op === "list") {
-    // One request for the whole tree. Asking per day meant eleven round trips to
-    // Nextcloud, which was most of the wall clock once parsing was cached. Some servers
-    // refuse Depth: infinity, so fall back to walking day by day rather than show nothing.
-    const tree = await propfind(`${ARCHIVE}/`, auth, "infinity");
+    // One request for the whole tree. Asking per day meant eleven round trips to a
+    // self-hosted Nextcloud, which was most of the wall clock. Some servers refuse
+    // Depth: infinity, so fall back to walking day by day rather than showing nothing.
+    let tree = await propfind(`${ARCHIVE}/`, auth, "infinity");
     let filesByDay: Record<string, NcEntry[]> = {};
 
     const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -233,7 +238,7 @@ Deno.serve(async (req) => {
       filesByDay = Object.fromEntries(walked);
     }
 
-    // One cache read covering every transcript, instead of a query per meeting.
+    // One cache read for every transcript at once, instead of a query per meeting.
     const wanted: string[] = [];
     for (const files of Object.values(filesByDay)) {
       for (const f of files) if (f.name.endsWith("-transcript-named.txt") || f.name.endsWith("-transcript.txt")) wanted.push(f.name);

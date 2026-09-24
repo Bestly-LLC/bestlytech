@@ -1,15 +1,14 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// SEC-04: DB-backed rate limit — the previous in-memory Map reset on every
-// Deno isolate cold start, letting an attacker with patience brute-force a
-// 6-digit code. Now gated by public.check_activation_rate_limit() which
-// stores attempts in the activation_code_attempts table.
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -30,16 +29,19 @@ serve(async (req: Request) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      SB_SECRET
     );
 
-    // DB-backed rate limit (SEC-04).
+    // SEC-04: DB-backed rate limit survives Deno isolate cold starts.
+    // Previously the in-memory Map here reset on every restart, making a
+    // 6-digit code brute-forceable with patience.
     const { data: rl, error: rlError } = await supabase.rpc(
       "check_activation_rate_limit",
       { p_email: normalizedEmail, p_action: "validate" }
     );
     if (rlError) {
       console.error("rate-limit rpc error:", rlError);
+      // Fail-closed on RPC error: deny rather than letting attempts through.
       return new Response(
         JSON.stringify({ error: "rate_limit_unavailable" }),
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -109,8 +111,8 @@ serve(async (req: Request) => {
       );
     }
 
-    // Reset the rate-limit counter on success so legitimate retries after
-    // a successful activation aren't penalised.
+    // Reset the rate-limit counter on success so legitimate retries after a
+    // successful activation aren't penalised.
     await supabase
       .from("activation_code_attempts")
       .delete()

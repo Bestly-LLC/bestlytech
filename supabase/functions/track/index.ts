@@ -5,13 +5,15 @@
 //
 // Privacy-first by construction:
 //   - Only allowlisted event names + platforms are accepted.
-//   - props are aggressively PII-scrubbed: any key that looks like email/url/
-//     domain/ip/name is dropped, and any value that looks like an email/URL/IP
-//     is dropped. Values are length-capped and only scalars are kept.
+//   - props are aggressively PII-scrubbed.
 //   - We NEVER log request bodies or prop values.
 // Returns 204 on success (best-effort ingest; never blocks the client UX).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const ALLOWED_EVENTS = new Set([
   "install", "onboarding_complete", "extension_enabled", "first_dismiss",
@@ -30,9 +32,7 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
-// Keys that must never be persisted (PII / re-identifying / free-form).
 const PII_KEY = /(email|e-mail|mail|url|uri|link|href|domain|host|hostname|ip|ipaddr|address|name|user|first|last|full_?name|phone|tel|zip|postal|lat|lon|geo|token|secret|password|cookie|query|search|referrer|referer|path)/i;
-// Value shapes that are PII even under an innocuous key.
 const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 const URL_RE = /\b(?:https?:\/\/|www\.)\S+/i;
 const IP_RE = /\b\d{1,3}(?:\.\d{1,3}){3}\b/;
@@ -43,21 +43,17 @@ function scrubProps(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) return out;
   let kept = 0;
   for (const [rawKey, rawVal] of Object.entries(input as Record<string, unknown>)) {
-    if (kept >= 20) break;                       // cap breadth
+    if (kept >= 20) break;
     const key = String(rawKey).slice(0, 40);
-    if (PII_KEY.test(key)) continue;             // drop PII-ish keys outright
-    // Only keep small scalars: string (enum-ish), number, boolean.
-    if (typeof rawVal === "number" && Number.isFinite(rawVal)) {
-      out[key] = rawVal; kept++; continue;
-    }
+    if (PII_KEY.test(key)) continue;
+    if (typeof rawVal === "number" && Number.isFinite(rawVal)) { out[key] = rawVal; kept++; continue; }
     if (typeof rawVal === "boolean") { out[key] = rawVal; kept++; continue; }
     if (typeof rawVal === "string") {
-      const v = rawVal.trim().slice(0, 64);      // cap length
+      const v = rawVal.trim().slice(0, 64);
       if (!v) continue;
-      if (EMAIL_RE.test(v) || URL_RE.test(v) || IP_RE.test(v)) continue; // drop PII values
+      if (EMAIL_RE.test(v) || URL_RE.test(v) || IP_RE.test(v)) continue;
       out[key] = v; kept++; continue;
     }
-    // objects/arrays/null are dropped (keep props flat + tiny).
   }
   return out;
 }
@@ -82,7 +78,6 @@ Deno.serve(async (req) => {
     const app_version_raw = (body as any).app_version;
     const app_version = app_version_raw == null ? null : String(app_version_raw).slice(0, 32);
 
-    // Strict validation against the allowlists.
     if (!UUID_RE.test(anon_id)) {
       return new Response(JSON.stringify({ error: "invalid_anon_id" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -98,15 +93,13 @@ Deno.serve(async (req) => {
 
     const props = scrubProps((body as any).props);
 
-    // Optional client timestamp; only accept a sane ISO value, else server now().
     let created_at: string | undefined;
     const ts = (body as any).ts;
     if (typeof ts === "string") {
       const t = Date.parse(ts);
       if (Number.isFinite(t)) {
-        // clamp to a plausible window (no far-future / ancient backfill abuse)
         const now = Date.now();
-        if (t <= now + 5 * 60_000 && t >= now - 30 * 86400_000) {
+        if (t <= now + 5 * 60000 && t >= now - 30 * 86400000) {
           created_at = new Date(t).toISOString();
         }
       }
@@ -114,7 +107,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      SB_SECRET,
     );
 
     const row: Record<string, unknown> = { anon_id, platform, event, props, app_version };
@@ -122,7 +115,6 @@ Deno.serve(async (req) => {
 
     const { error } = await supabase.from("product_events").insert(row);
     if (error) {
-      // Never log the body/props. Log only a coarse marker.
       console.error("[track] insert failed:", error.code ?? "unknown");
       return new Response(JSON.stringify({ error: "insert_failed" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -130,7 +122,6 @@ Deno.serve(async (req) => {
 
     return new Response(null, { status: 204, headers: corsHeaders });
   } catch (_err) {
-    // Do not surface or log internals (may contain body fragments).
     return new Response(JSON.stringify({ error: "server_error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

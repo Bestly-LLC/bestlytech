@@ -1,6 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SB_PUBLISHABLE: string = __keys("SUPABASE_PUBLISHABLE_KEYS") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
+const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -12,7 +19,7 @@ const corsHeaders = {
 // auto-retry-failed-patterns (two of which reset the per-domain attempt count). Now every OpenAI call
 // first asks ai_gate (ai_caps: calls per day, and per domain per hour) and is logged with its cost in
 // ai_spend. Over the cap the call is skipped, never paid.
-const gateDb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+const gateDb = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET);
 const OPENAI_PRICE: Record<string, [number, number]> = { "gpt-4o-mini": [0.15, 0.6], "gpt-4o": [2.5, 10] }; // $ per million in/out
 async function aiAllowed(domain: string): Promise<boolean> {
   const { data, error } = await gateDb.rpc("ai_gate", { p_fn: "ai-generate-pattern", p_who: domain });
@@ -260,15 +267,17 @@ Deno.serve(async (req) => {
 
   if (maintenanceSecret && maintenanceSecret === Deno.env.get("MAINTENANCE_SECRET")) {
     authorized = true;
+  } else if (isSvc(req)) {
+    authorized = true;
   } else if (authHeader?.startsWith("Bearer ")) {
-    const serviceRoleKey2 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const serviceRoleKey2 = SB_SECRET;
     const token = authHeader.replace("Bearer ", "");
     if (token === serviceRoleKey2) {
       authorized = true;
     } else {
       const authClient = createClient(
         Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_ANON_KEY")!,
+        SB_PUBLISHABLE,
         { global: { headers: { Authorization: authHeader } } }
       );
       const { data: userData } = await authClient.auth.getUser(token);
@@ -284,7 +293,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const serviceRoleKey = SB_SECRET;
   const svcClient = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
 
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");

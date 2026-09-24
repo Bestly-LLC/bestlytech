@@ -17,6 +17,12 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+// Key switch (2026-09-24): new keys first, legacy as fallback.
+const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
+const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
+const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
+
 // v4: background jobs run on the cheapest Claude model, are logged in ai_spend and stop at the daily
 // background cap (scout_settings.background_cap_usd). They used to run on Sonnet with no check at all.
 const MODEL = Deno.env.get("SCOUT_DAILY_MODEL") ?? "claude-haiku-4-5";
@@ -24,7 +30,7 @@ const PRICE: Record<string, [number, number]> = { haiku: [1, 5], sonnet: [3, 15]
 const priceOf = (m: string) => PRICE[Object.keys(PRICE).find((k) => m.includes(k)) ?? "sonnet"];
 const TZ = "America/Los_Angeles";
 const DECK_BOARD = "Bestly Ops";
-const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SERVICE = SB_SECRET;
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE, { auth: { persistSession: false } });
 
 const CORS = {
@@ -391,7 +397,7 @@ async function mirrorPlaybook() {
 // The cron sends the service key from the vault; it may not be byte-identical to this
 // function's env copy, so a key that can use the admin API counts as the service key too.
 async function isService(jwt: string) {
-  if (jwt === SERVICE) return true;
+  if (__svc.has(jwt)) return true;
   if (!jwt || jwt.split(".").length !== 3) return false;
   try {
     const role = JSON.parse(atob(jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).role;
@@ -427,7 +433,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return J({ ok: false, error: "POST only" }, 405);
   const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-  const service = await isService(jwt);
+  const service = isSvc(req) || await isService(jwt);
   if (!service && !(jwt && (await isAdmin(jwt)))) return J({ ok: false, error: "unauthorized" }, 401);
   let body: Record<string, any> = {};
   try { body = await req.json(); } catch { /* empty */ }
