@@ -818,7 +818,20 @@ Rules:
 - mac_run: propose a short, safe, idempotent zsh script with a plain title and why. It waits for his Run tap. Say the Run card is up.
 - Only say something is done if a tool result in THIS turn shows ok:true for it.
 - If a tool fails, change approach; after two failures, escalate.
-- run_sql is one SELECT/WITH on the public schema.
+- run_sql is one SELECT/WITH on the public schema. Times are UTC; show them to Jared in Pacific time, 12-hour (3:05 PM).
+- If a query fails because a table or column doesn't exist, look it up first: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND table_name ILIKE '%word%'. Never answer from a failed query.
+- Never answer with placeholders like X, [Name] or [Date]: every number and name must come from a tool result.
+- Only add options when there is something for him to do or approve; a plain answer needs none.
+
+Main tables (public schema):
+- turo_trips: reservation_id, guest_first, guest_last, starts_at, ends_at, status, earnings, airport_code (LAX trips), pickup_city. Upcoming = starts_at > now().
+- turo_vehicle_state: battery_pct, range_real, inside_temp, locked, charging_state, observed_at (the Tesla).
+- trip_health: check_key, label, status, detail, checked_at (guest trip apps health).
+- monitor_issues: key, title, severity, status ('open'), fix_stage, opened_at (incidents Scout watches).
+- scout_daily: id, day, kind ('call' = to-do), title, status, action (his to-dos).
+- admin_notifications: title, body, created_at, read_at (the bell).
+- db_metrics: at, mem_avail_mb, swap_used_mb, load1 (database memory, every 5 min).
+- ai_spend: at, provider, job, ok, cost_usd (AI calls and cost).
 
 Tools:
 ${toolDocs}
@@ -849,6 +862,12 @@ ${convo}`;
     if (typeof s.reply === "string") {
       const r = s.reply.trim();
       if (!r) break;
+      // v28.4: "There are X upcoming trips; the next is [Name]" came back after a failed query. Make it look it up.
+      if (/\[(?:[A-Z][A-Za-z ]{1,20})\]|(?<!Model )\bX\b(?=\s+[a-z])|<[a-z_ ]{2,20}>/.test(r)) {
+        steps.push(`Step ${steps.length + 1}: your reply used placeholders instead of real values. Get the real values with a tool (fix the query if it failed), then reply.`);
+        if (++fails > 2) break;
+        continue;
+      }
       if (REFUSES.test(r)) return { why: FREE_WHY.ACTION, tools: used };          // let paid Scout try instead
       if (CLAIMS_DONE.test(r) && !acted && !/\?\s*$/.test(r)) return { why: FREE_WHY.ACTION, tools: used }; // claimed work nothing did
       const opts = Array.isArray(s.options) ? s.options.map((o: unknown) => String(o).replace(/\|/g, "/").trim()).filter(Boolean).slice(0, 4) : [];
