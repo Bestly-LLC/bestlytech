@@ -64,20 +64,6 @@ function Stop({ label, iso, align }: { label: string; iso: string; align: "left"
   );
 }
 
-/** 270° gauge ring (Live Activity style). value 0..1 */
-function Arc({ value, size = 64, stroke = 7, color, label, children }: { value: number; size?: number; stroke?: number; color: string; label: string; children?: ReactNode }) {
-  const r = (size - stroke) / 2, c = 2 * Math.PI * r, arc = c * 0.75, v = Math.max(0, Math.min(1, value));
-  return (
-    <div className="relative grid shrink-0 place-items-center" style={{ width: size, height: size }} role="img" aria-label={label}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(135deg)" }} aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={stroke} strokeDasharray={`${arc} ${c}`} strokeLinecap="round" />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeDasharray={`${Math.max(0.001, arc * v)} ${c}`} strokeLinecap="round"
-          style={{ transition: "stroke-dasharray 900ms cubic-bezier(.2,.8,.2,1)" }} />
-      </svg>
-      <div className="absolute inset-0 grid place-items-center text-center leading-none">{children}</div>
-    </div>
-  );
-}
 const short = (ms: number) => {
   const m = Math.max(0, Math.round(ms / 60000));
   if (m < 60) return `${m}m`;
@@ -86,73 +72,76 @@ const short = (ms: number) => {
   return h ? `${d}d ${h}h` : `${d}d`;
 };
 export type TripKeyState = "soon" | "making" | "ready" | "added" | "ended" | "problem" | "off" | null | undefined;
+const hm = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" }).replace(" ", "");
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/Los_Angeles" });
 
-/** "Your Turo trip" as a Live Activity: a countdown / progress ring, battery + key gauges, pickup → return. Ticks every 30s. */
-export function TripCard({ trip, battery, keyState, insideF }: { trip: Trip; battery?: number | null; keyState?: TripKeyState; insideF?: number | null }) {
+// One track for the whole trip: ramp up = the last 24h before pickup, plateau = the trip, ramp down = after return.
+const TRACK = "M4 44 C 34 44, 40 12, 74 12 L 246 12 C 280 12, 286 44, 316 44";
+function position(s: number, e: number, now: number) {
+  if (now < s) return 0.2 * Math.max(0, 1 - (s - now) / (24 * 3600e3));
+  if (now < e) return 0.2 + 0.6 * ((now - s) / (e - s));
+  return 1;
+}
+
+/** "Your Turo trip" as a Live Activity: pickup → return, one time track, a big countdown. Ticks every 30s.
+ *  theme "lax" = iOS Live Activity (black glass, green); "home" = midcentury (teal, mustard, orange). */
+export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | "home"; battery?: number | null; keyState?: TripKeyState; insideF?: number | null }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(t); }, []);
-  const st = tripStatus(trip, now);
   const s = +new Date(trip.starts_at), e = +new Date(trip.ends_at);
   const before = now < s, during = now >= s && now < e;
-  // Main ring: fills over the last 24h before pickup, then shows how much of the trip is used.
-  const main = before ? Math.max(0.04, 1 - (s - now) / (24 * 3600e3)) : during ? (now - s) / (e - s) : 1;
-  const mainColor = before ? "var(--trip-accent)" : during ? (e - now < 2 * 3600e3 ? "#f59e0b" : "#34d399") : "rgba(255,255,255,0.4)";
+  const pos = position(s, e, now);
+  const home = theme === "home";
+  const C = home
+    ? { bg: "linear-gradient(160deg,#1c3a38,#132726)", ring: "rgba(232,169,58,0.28)", hot: "#E8A93A", accent: "#E36F3C", track: "rgba(244,234,213,0.18)", sub: "rgba(244,234,213,0.62)", text: "#F4EAD5", font: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }
+    : { bg: "rgba(10,10,12,0.92)", ring: "rgba(255,255,255,0.08)", hot: "#30D158", accent: "#30D158", track: "rgba(255,255,255,0.22)", sub: "rgba(255,255,255,0.55)", text: "#fff", font: "-apple-system, 'SF Pro Display', Inter, system-ui, sans-serif" };
   const big = before ? short(s - now) : during ? short(e - now) : "Done";
-  const sub = before ? "to pickup" : during ? "left" : "thanks!";
-  const batt = battery ?? null;
-  const battColor = batt == null ? "rgba(255,255,255,0.3)" : batt >= 50 ? "#34d399" : batt >= 25 ? "#f59e0b" : "#f87171";
-  const keyV = keyState === "added" ? 1 : keyState === "ready" ? 0.66 : keyState === "making" ? 0.33 : keyState === "problem" ? 0.33 : 0;
-  const keyTxt = keyState === "added" ? "On" : keyState === "ready" ? "Tap" : keyState === "making" ? "…" : keyState === "problem" ? "!" : keyState === "ended" ? "Off" : "Soon";
+  const label = before ? "until pickup" : during ? "left on your trip" : "trip complete · thanks!";
+  const soon = during && e - now < 2 * 3600e3;
+  const numColor = soon ? "#FF9F0A" : C.hot;
+  // Where "now" sits on the track (the glowing dot / starburst).
+  const trackRef = useRef<SVGPathElement>(null);
+  const [dot, setDot] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => { const el = trackRef.current; if (!el) return; const L = el.getTotalLength(); const pt = el.getPointAtLength(L * pos); setDot({ x: pt.x, y: pt.y }); }, [pos]);
   return (
-    <section aria-label="Your Turo trip" className="relative overflow-hidden rounded-[28px] bg-black/35 p-4 ring-1 ring-white/10 backdrop-blur-xl"
-      style={{ boxShadow: "0 18px 40px -18px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08)" }}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}><Car className="h-3.5 w-3.5" />Your Turo trip</p>
-        <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ${st.live ? "bg-emerald-400/15 text-emerald-300" : "bg-white/10 text-white/80"}`}>
-          {(before || during) && <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 motion-reduce:hidden" style={{ background: during ? "#34d399" : "var(--trip-accent)" }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: during ? "#34d399" : "var(--trip-accent)" }} /></span>}
-          {st.text}
-        </span>
+    <section aria-label={`Your Turo trip: ${big} ${label}`} className="relative overflow-hidden rounded-[30px] px-4 pb-4 pt-3.5"
+      style={{ background: C.bg, boxShadow: `0 20px 44px -20px rgba(0,0,0,.7), inset 0 0 0 1px ${C.ring}`, fontFamily: C.font, color: C.text }}>
+      <div className="flex items-center justify-between text-[12px]" style={{ color: C.sub }}>
+        <span className="flex items-center gap-1.5 font-semibold uppercase tracking-[0.12em]"><Car className="h-3.5 w-3.5" style={{ color: C.hot }} />Your Turo trip</span>
+        <span className="tabular-nums">{home ? "Home pickup" : "LAX"}</span>
       </div>
-      <div className="mt-3 flex items-center gap-3">
-        <Arc value={main} size={92} stroke={9} color={mainColor} label={`${big} ${sub}`}>
-          <span className="text-[19px] font-bold tabular-nums text-white">{big}</span>
-          <span className="mt-1 block text-[11px] text-white/60">{sub}</span>
-        </Arc>
-        <div className="min-w-0 flex-1">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-2">
-              <Arc value={(batt ?? 0) / 100} size={46} stroke={5} color={battColor} label={batt == null ? "Battery unknown" : `Battery ${batt}%`}>
-                <span className="text-[12px] font-semibold tabular-nums text-white">{batt == null ? "–" : `${batt}`}</span>
-              </Arc>
-              <span className="text-[12px] leading-tight text-white/65">Battery<br /><span className="text-white/45">{batt == null ? "checking" : "%"}</span></span>
-            </div>
-            {keyState !== undefined ? (
-              <div className="flex items-center gap-2">
-                <Arc value={keyV} size={46} stroke={5} color={keyState === "problem" ? "#f59e0b" : "#60a5fa"} label={`Phone key: ${keyTxt}`}>
-                  <span className="text-[12px] font-semibold text-white">{keyTxt}</span>
-                </Arc>
-                <span className="text-[12px] leading-tight text-white/65">Phone<br /><span className="text-white/45">key</span></span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Arc value={insideF == null ? 0 : Math.max(0, Math.min(1, (insideF - 50) / 60))} size={46} stroke={5} color={insideF != null && insideF >= 80 ? "#fb923c" : "#60a5fa"} label={insideF == null ? "Cabin temperature unknown" : `Cabin ${Math.round(insideF)}°F`}>
-                  <span className="text-[12px] font-semibold tabular-nums text-white">{insideF == null ? "–" : `${Math.round(insideF)}°`}</span>
-                </Arc>
-                <span className="text-[12px] leading-tight text-white/65">Inside<br /><span className="text-white/45">the car</span></span>
-              </div>
-            )}
-          </div>
-          <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-1 text-[12px]">
-            <span className="text-white/60">Pickup<br /><b className="text-[13px] text-white">{when(trip.starts_at)}</b></span>
-            <ArrowRight className="h-3.5 w-3.5" style={{ color: PEACH }} aria-hidden />
-            <span className="text-right text-white/60">Return<br /><b className="text-[13px] text-white">{when(trip.ends_at)}</b></span>
-          </div>
+      <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.sub }}>Pickup</p>
+          <p className="text-[22px] font-bold leading-tight tabular-nums" style={{ color: before ? C.hot : C.text }}>{hm(trip.starts_at)}</p>
+          <p className="text-[12px]" style={{ color: C.sub }}>{day(trip.starts_at)}</p>
         </div>
+        <div className="flex items-center gap-1 pb-5" aria-hidden style={{ color: C.sub }}>
+          <span className="h-1 w-1 rounded-full bg-current" /><span className="h-1 w-1 rounded-full bg-current" />
+          <Car className="mx-0.5 h-4 w-4" style={{ color: C.text }} />
+          <span className="h-1 w-1 rounded-full bg-current" /><span className="h-1 w-1 rounded-full bg-current" />
+        </div>
+        <div className="text-right">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.sub }}>Return</p>
+          <p className="text-[22px] font-bold leading-tight tabular-nums" style={{ color: during ? C.hot : C.text }}>{hm(trip.ends_at)}</p>
+          <p className="text-[12px]" style={{ color: C.sub }}>{day(trip.ends_at)}</p>
+        </div>
+      </div>
+      <svg viewBox="0 0 320 48" className="mt-2 block h-auto w-full overflow-visible" aria-hidden>
+        <path ref={trackRef} d={TRACK} fill="none" stroke={C.track} strokeWidth="3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <path d={TRACK} fill="none" stroke={C.accent} strokeWidth="3.5" strokeLinecap="round" pathLength={1} strokeDasharray={`${Math.max(0.001, pos)} 1`}
+          vectorEffect="non-scaling-stroke" style={{ transition: "stroke-dasharray 900ms cubic-bezier(.2,.8,.2,1)", filter: home ? undefined : "drop-shadow(0 0 4px rgba(48,209,88,.55))" }} />
+        {dot && (pos > 0 && pos < 1) && (home
+          ? <polygon transform={`translate(${dot.x} ${dot.y})`} fill={C.hot} points="0,-7 1.6,-1.6 7,0 1.6,1.6 0,7 -1.6,1.6 -7,0 -1.6,-1.6" />
+          : <><circle cx={dot.x} cy={dot.y} r="7" fill={C.accent} opacity=".25" className="motion-safe:animate-ping" style={{ transformOrigin: `${dot.x}px ${dot.y}px` }} /><circle cx={dot.x} cy={dot.y} r="4" fill={C.accent} /></>)}
+      </svg>
+      <div className="-mt-7 text-center">
+        <p className="text-[28px] font-bold leading-none tabular-nums" style={{ color: numColor }}>{big}</p>
+        <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: C.sub }}>{label}</p>
       </div>
     </section>
   );
 }
-const when = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 
 // ---------- Comfort: what to suggest, based on the car's inside temp (target ~72°F) ----------
 export type Need = "cool" | "warm" | "comfy" | null;

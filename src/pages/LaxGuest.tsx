@@ -193,6 +193,7 @@ export default function LaxGuest() {
   // Personal link acts for its own trip; the shared Turo link acts for the trip happening now (unlocked by the guest's phone key).
   const reload = () => (token ? rpc("lax_guest_public", { p_token: token }) : rpc("lax_pass_public", { p_slug: slug }))
     .then(({ data }) => data && setPub(data as Pub));
+  useEffect(() => { const f = () => { void reload(); }; window.addEventListener("trip-reload", f); return () => window.removeEventListener("trip-reload", f); });
   const carCommand = async (action: CarAction, onStage?: (s: string) => void) => {
     if (action !== "refresh") track(token || undefined, ["cool", "warm", "seat", "off"].includes(action) ? "climate" : action, { action });
     const { data, error } = token
@@ -301,7 +302,7 @@ export default function LaxGuest() {
           <>
             <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">{pub.guide?.car || "Tesla Model 3"}</b> on <b className="text-white">Turo</b>. It's parked in a garage 5 minutes from LAX. Your QR code that opens the lobby door is below. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for step-by-step directions.</p>
 
-            {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} battery={(demoCar ? demoState : pub.car)?.battery ?? null} insideF={(demoCar ? demoState : pub.car)?.inside_f ?? null} /></div>}
+            {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" /></div>}
             {/* Weather next to the car: see how hot it is, then turn on the A/C right there. */}
             {(pub.trip || pub.car) && (
               <div className="mt-5"><ClimateAdvice car={demoCar ? demoState : pub.car ?? null} outsideF={outsideF} /></div>

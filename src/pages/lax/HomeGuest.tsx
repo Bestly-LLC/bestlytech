@@ -237,7 +237,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
       <main className="mx-auto max-w-md px-5 pb-48 pt-5">
         <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">Tesla Model 3</b> on <b className="text-white">Turo</b>. It's parked on the street at <b className="text-white">{street}</b>. Your phone is the key: no meetup, no keys to hand over. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for the steps.</p>
 
-        {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} battery={car?.battery ?? null} keyState={key && key.state !== "off" ? key.state : undefined} /></div>}
+        {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" /></div>}
 
         {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} token={token} onAdded={() => reload?.()}
           next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} address={home.address} maps={mapsFor(home.address)}

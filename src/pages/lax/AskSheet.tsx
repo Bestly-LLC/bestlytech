@@ -152,9 +152,11 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
     setMsgs((xs) => [...xs, { id: `u${Date.now()}`, role: "user", content: q }, { id: tmp, role: "assistant", content: "", status: "pending" }]);
     try {
       const { data, error } = await supabase.functions.invoke("lax-ask", { body: { token: token || undefined, slug: token ? undefined : slug, question: q } });
-      const r = data as { ok: boolean; error?: string; reply_id?: number; status?: string; content?: string; left?: number; urgent?: boolean } | null;
+      const r = data as { ok: boolean; error?: string; reply_id?: number; status?: string; content?: string; left?: number; urgent?: boolean; fixed?: boolean } | null;
       if (error || !r?.ok || !r.reply_id) { patch(tmp, { content: r?.error ?? "The helper hit a snag. Try again, or message your host in the Turo app.", status: "error" }); return; }
       if (r.left != null) setLeft(r.left);
+      // The helper fixed the key: refresh the page now, and again when the new invite lands.
+      if (r.fixed) { window.dispatchEvent(new Event("trip-reload")); window.setTimeout(() => window.dispatchEvent(new Event("trip-reload")), 30000); }
       if (r.urgent || /accident|crash|hurt|injur|emergency|911/i.test(q)) setUrgent(true);
       if (r.status === "done") { patch(tmp, { id: r.reply_id, content: r.content ?? "", status: "done" }); return; }
       patch(tmp, { id: r.reply_id });
