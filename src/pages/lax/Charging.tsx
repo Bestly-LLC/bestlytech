@@ -114,7 +114,13 @@ export function ChargingFab({ charging }: { charging: Charging }) {
     return () => { window.clearTimeout(first); window.clearTimeout(t2); window.clearInterval(every); };
   }, []);
   const label = charging.count > 0 ? `${money(charging.total)} so far · see details` : "See your true Supercharging cost";
-  const go = () => { track(undefined, "charging_fab"); document.getElementById("charging")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  const go = () => {
+    track(undefined, "charging_fab");
+    window.dispatchEvent(new CustomEvent("open-section", { detail: "charging" }));
+    const el = document.getElementById("charging");
+    const box = (el?.closest("[aria-roledescription=carousel]") as HTMLElement | null) ?? el;
+    box?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   return (
     <button type="button" onClick={go} aria-label={label}
       className={`fixed right-3 z-30 flex h-[52px] items-center overflow-hidden rounded-full text-left text-white shadow-xl shadow-black/40 ring-1 ring-white/25 backdrop-blur-xl transition-all duration-500 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${hidden ? "pointer-events-none translate-x-24 opacity-0" : "opacity-100"}`}

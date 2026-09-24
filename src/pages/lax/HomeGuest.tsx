@@ -22,6 +22,7 @@ import ExtraDrivers from "./ExtraDrivers";
 import { Collapse } from "./Collapse";
 import { ChargerLine, KeyPending, SendToCar, keyTapped, markKeyTapped, useKeyWatch } from "./KeyNext";
 import { KeySteps, NextStep, guideFor, useHasApp } from "./Guide";
+import { Carousel, TripSlides } from "./Carousel";
 import { Fold } from "./HomeGuide";
 import { homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
@@ -84,11 +85,12 @@ export function Section({ kicker, title, children, id, summary, defaultOpen, glo
 }
 
 function Step({ n, children }: { n: number; children: ReactNode }) {
+  // One swipeable card per step (Pickup / Return carousels).
   return (
-    <li className="flex gap-3">
-      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-[#1A1140]" style={{ background: PEACH }}>{n}</span>
-      <div className="text-[15px] leading-relaxed text-white/85">{children}</div>
-    </li>
+    <div className="flex h-full flex-col rounded-3xl bg-white/[0.07] p-5 ring-1 ring-white/10">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[18px] font-bold text-[#1A1140]" style={{ background: PEACH }}>{n}</span>
+      <div className="mt-3 text-[17px] leading-relaxed text-white/85">{children}</div>
+    </div>
   );
 }
 
@@ -239,6 +241,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
   const street = home.address.split(",")[0];
   const shadow = { textShadow: "0 2px 14px rgba(19,39,38,0.9), 0 1px 2px rgba(19,39,38,0.9)" };
   const ended = tripEnded(pub.trip);
+  const onTrip = !!pub.trip && !ended && Date.now() >= +new Date(pub.trip.starts_at);
   // What to do now + what glows (next-step card, Pickup/Return ticket, key button, climate controls).
   const [hasApp, markHasApp] = useHasApp();
   useKeyWatch(token, key?.state ?? "off", key?.opens_at, () => reload?.());
@@ -281,7 +284,8 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
         {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" /> : <>
         <NextStep next={next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? run : undefined} kind="home" />
 
-        {/* One widget for the car: weather + cabin + climate buttons, then find-it buttons. */}
+        {/* On the trip these three swipe (Your car · Supercharging · Help & guides); before it they stack. */}
+        <TripSlides on={onTrip} id="home-trip" labels={pub.charging ? ["Your car", "Supercharging", "Help & guides"] : ["Your car", "Help & guides"]}>
         <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${glow.has("climate") || doClimate ? "trip-glow trip-glow-card" : "ring-white/10"}`}
           style={{ background: "linear-gradient(160deg, rgba(232,169,58,0.10), rgba(255,255,255,0.04) 40%, rgba(42,107,102,0.18))" }}>
           <div className="flex items-start justify-between gap-3 px-1 pt-1">
@@ -324,6 +328,7 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
             </Fold>
           )}
         </HomeGuide>
+        </TripSlides>
 
         {pub.home?.host_note && (
           <Section kicker="From your host"><p className="text-white/90">{pub.home.host_note}</p></Section>
@@ -338,21 +343,21 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
               <p className="mt-7 text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Then: at the car</p>
             </>
           )}
-          <ol className="mt-4 space-y-4">
+          <Carousel id="home-pickup" className="mt-4" labels={["Go to the car", "\u201cSet Up\u201d + Unlock", "Photos", "Drive"]}>
             <Step n={n0 + 1}><b className="text-white">Go to</b> <a href={mapsFor(home.address)} className="underline decoration-white/40 underline-offset-2">{home.address}</a>. It's on N Kings Rd near the building. Not sure which car? Tap <b className="text-white">Honk</b> on the main page.</Step>
             <Step n={n0 + 2}>Next to the car (Bluetooth on), open the Tesla app. Tap <b className="text-white">&ldquo;Set Up&rdquo;</b> and follow the steps. Then tap <b className="text-white">Unlock</b>.</Step>
             <Step n={n0 + 3}><b className="text-white">Take check-in photos</b> all around the car in the Turo app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
             <Step n={n0 + 4}><b className="text-white">Drive:</b> sit down, press the brake, push the <b className="text-white">right stalk</b> down. Up is Reverse.</Step>
-          </ol>
+          </Carousel>
         </TripSheet>
 
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
-          <ol className="space-y-4">
+          <Carousel id="home-return" labels={["Charge", "Park", "Street sweeping", "Photos + lock"]}>
             <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"}. <ChargerLine kind="home" /><SendToCar run={live ? run : undefined} kind="home" /></Step>
             <Step n={2}><b className="text-white">Park on N Kings Rd</b> near the building. Not in front of a driveway or hydrant.</Step>
             <Step n={3}><b className="text-white">Street sweeping:</b> not on the <b className="text-white">west side Monday 8–10 AM</b> or the <b className="text-white">east side Tuesday 8–10 AM</b>. Tickets are $75.</Step>
             <Step n={4}><b className="text-white">Return photos</b> in the Turo app, grab your stuff, lock it in the Tesla app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
-          </ol>
+          </Carousel>
           <p className="mt-5 text-[14px] text-white/60">Your key turns off by itself after the trip. Nothing to hand back.</p>
         </TripSheet>
 

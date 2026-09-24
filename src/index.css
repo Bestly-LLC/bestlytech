@@ -1008,3 +1008,8 @@ body.admin-bento { background-color: var(--bento-page); }
 .trip-star { filter: drop-shadow(0 0 6px rgba(255,214,10,.55)); animation: trip-star-pop 4.2s ease-in-out infinite; }
 @keyframes trip-star-pop { 0%, 60%, 100% { transform: scale(1); } 68% { transform: scale(1.18); } 76% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .trip-glass::after, .trip-star { animation: none; } .trip-glass::after { display: none; } }
+
+/* Trip carousels: "swipe me" spring nudge the first time a carousel is on screen. */
+@keyframes trip-nudge { 0% { transform: translateX(0); } 28% { transform: translateX(-64px); } 52% { transform: translateX(12px); } 70% { transform: translateX(-5px); } 86% { transform: translateX(2px); } 100% { transform: translateX(0); } }
+.trip-nudge { animation: trip-nudge 1.2s cubic-bezier(.3,.7,.3,1) both; }
+@media (prefers-reduced-motion: reduce) { .trip-nudge { animation: none; } }

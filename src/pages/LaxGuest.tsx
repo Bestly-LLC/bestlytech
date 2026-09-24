@@ -22,6 +22,7 @@ import HomeGuest, { CarButton, type CarAction, type HomeInfo, type KeyInfo } fro
 import { HomeGuide, VideoList, VideoPlayer } from "./lax/HomeGuide";
 import { ChargerLine, SendToCar, useKeyWatch } from "./lax/KeyNext";
 import { KeySteps, NextStep, guideFor, useHasApp } from "./lax/Guide";
+import { Carousel, TripSlides } from "./lax/Carousel";
 import { Fold } from "./lax/HomeGuide";
 import ExtraDrivers from "./lax/ExtraDrivers";
 import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
@@ -132,13 +133,16 @@ function Chips({ items }: { items: string[] }) {
 }
 
 function Step({ n, when, title, children }: { n: number; when: string; title: string; children: ReactNode }) {
+  // One swipeable card per step (Pickup / Return carousels).
   return (
-    <li className="relative pl-12">
-      <span className="absolute left-0 top-0 flex h-8 w-8 items-center justify-center rounded-full bg-[#2B1A73] text-sm font-bold text-white ring-2" style={{ boxShadow: `0 0 0 2px ${PEACH}` }}>{n}</span>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">{when}</p>
-      <h3 className="mt-0.5 text-lg font-semibold text-white">{title}</h3>
-      <div className="mt-1 text-[15px] leading-relaxed text-white/80">{children}</div>
-    </li>
+    <div className="flex h-full flex-col rounded-3xl bg-white/[0.07] p-5 ring-1 ring-white/10">
+      <div className="flex items-center gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[18px] font-bold text-[#1A1140]" style={{ background: PEACH }}>{n}</span>
+        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/60">{when}</p>
+      </div>
+      <h3 className="mt-3 text-[21px] font-bold leading-snug text-white">{title}</h3>
+      <div className="mt-2 text-[16px] leading-relaxed text-white/80">{children}</div>
+    </div>
   );
 }
 
@@ -268,6 +272,7 @@ export default function LaxGuest() {
 
   const key: KeyInfo | null = pub?.key ?? null;
   const ended = tripEnded(pub?.trip);
+  const onTrip = !!pub?.trip && !ended && Date.now() >= +new Date(pub.trip.starts_at);
   // What to do now + what glows (same rules as the home page).
   const [hasApp, markHasApp] = useHasApp();
   useKeyWatch(token, pub?.kind === "lax" ? key?.state ?? "off" : "off", key?.opens_at, () => void reload());
@@ -402,7 +407,8 @@ export default function LaxGuest() {
               )}
             </Collapse>
 
-            {/* One widget for the car: weather + cabin + climate buttons, then find-it buttons (same as the home page). */}
+            {/* On the trip these three swipe (Your car · Supercharging · Help & guides); before it they stack. */}
+            <TripSlides on={onTrip} id="lax-trip" labels={pub.charging ? ["Your car", "Supercharging", "Help & guides"] : ["Your car", "Help & guides"]}>
             <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${glow.has("climate") || doClimate ? "trip-glow trip-glow-card" : "ring-white/10"}`}
               style={{ background: "linear-gradient(160deg, rgba(255,184,120,0.10), rgba(255,255,255,0.04) 40%, rgba(122,46,158,0.22))" }}>
               <div className="px-1 pt-1">
@@ -434,16 +440,6 @@ export default function LaxGuest() {
 
             {pub.charging && <ChargingCard charging={pub.charging} token={token || undefined} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery} />}
 
-            {pub.trip && pub.ready && pub.code_for_trip_month === false && (
-              <p className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[13px] text-white/70 ring-1 ring-white/10">Your trip is next month. The garage issues a new code on the 1st; this page and your Wallet pass switch to it automatically.</p>
-            )}
-
-            {pub.note && (
-              <Collapse id="host-note" kicker="From your host" accent={PEACH} summary={pub.note.slice(0, 60) + (pub.note.length > 60 ? "…" : "")}>
-                <p className="text-white/90">{pub.note}</p>
-              </Collapse>
-            )}
-
             <HomeGuide pickupBattery={pub.pickup_battery} kind="lax">
               {token && pub.kind === "lax" && key && (
                 <Fold icon={Users} title="Someone else driving?" sub="Add them in Turo first, then get their key here">
@@ -459,6 +455,19 @@ export default function LaxGuest() {
                 </Fold>
               )}
             </HomeGuide>
+            </TripSlides>
+
+            {pub.trip && pub.ready && pub.code_for_trip_month === false && (
+              <p className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[13px] text-white/70 ring-1 ring-white/10">Your trip is next month. The garage issues a new code on the 1st; this page and your Wallet pass switch to it automatically.</p>
+            )}
+
+            {pub.note && (
+              <Collapse id="host-note" kicker="From your host" accent={PEACH} summary={pub.note.slice(0, 60) + (pub.note.length > 60 ? "…" : "")}>
+                <p className="text-white/90">{pub.note}</p>
+              </Collapse>
+            )}
+
+
 
             </>}
 
@@ -480,7 +489,7 @@ export default function LaxGuest() {
 
               <p className="mt-1 text-[15px] leading-relaxed text-white/75">About 20 minutes from landing to driving away.</p>
 
-              <ol className="mt-6 space-y-7">
+              <Carousel id="lax-pickup" className="mt-4" labels={["After landing", "On the curb", "Shuttle", "Walk over", "Lobby door", ...(keySteps ? ["At the car"] : [])]}>
                 <Step n={n0 + 1} when="After landing" title="Head to Level 2, then to the curb.">
                   From your terminal, go up to Level 2 (Departures) and step outside.
                   <span className="mt-1 block text-white/60">Yes, departures: that's where the off-airport shuttles board.</span>
@@ -509,7 +518,7 @@ export default function LaxGuest() {
                     <OpenTuro className="mt-3 w-full" label="Open Turo for photos" />
                   </Step>
                 )}
-              </ol>
+              </Carousel>
 
               {phone && (
                 <div className="mt-8 rounded-2xl p-4 ring-1 ring-white/10" style={{ background: "linear-gradient(135deg, rgba(122,46,158,0.35), rgba(228,82,122,0.25))" }}>
@@ -536,7 +545,7 @@ export default function LaxGuest() {
                 <b className="text-white">Charge first:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"} to avoid Turo's recharge fee. <ChargerLine kind="lax" /><SendToCar run={live ? carCommand : undefined} kind="lax" />
               </p>
 
-              <ol className="mt-6 space-y-7">
+              <Carousel id="lax-return" className="mt-4" labels={["Drive in", "Park", "Walk out", "Shuttle"]}>
                 <Step n={1} when="Drive in" title="Use the carshare return lane on 98th St.">
                   Drive to <a href={maps} className="underline decoration-white/40 underline-offset-2">{garage.split(",")[0]}</a> and take the car share return lane on 98th St.
                   <span className="mt-1 block text-white/60"><b className="text-white/80">After 10 PM:</b> use the alley return lane between Century Blvd and 98th St instead.</span>
@@ -553,7 +562,7 @@ export default function LaxGuest() {
                   Signs point you right to it. Board <b className="text-white">The Parking Spot · {shuttleShort}</b> back to LAX.
                   <Ok>Allow <b className="text-white">at least 1 hour</b> before your terminal arrival for return + shuttle + TSA buffer.</Ok>
                 </Step>
-              </ol>
+              </Carousel>
               <OpenTuro className="mt-6 w-full" label="Open Turo for return photos" />
 
               {phone && (
