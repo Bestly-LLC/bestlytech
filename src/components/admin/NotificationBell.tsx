@@ -53,7 +53,7 @@ const kindMeta = (k: string) => KIND[k] ?? { icon: AlertTriangle, tint: "bg-whit
 // "LAX Parking Pass", Turo Watch runs under "Turo". Group drives the filter chips.
 type Meta = { icon: LucideIcon; tint: string; label: string; group: string };
 const TOPICS: { test: (n: Notification) => boolean; meta: Omit<Meta, "label"> & { label: string } }[] = [
-  { test: (n) => /\/admin\/turo\/lax-pass/.test(n.url ?? "") || /\blax (parking|pass)|parking code|host pass/i.test(n.title),
+  { test: (n) => /\/admin\/turo\/(lax-pass|settings)/.test(n.url ?? "") || /\blax (parking|pass)|parking code|host pass/i.test(n.title),
     meta: { icon: QrCode, tint: "bg-teal-400/15 text-teal-300", label: "Guest Trips", group: "Turo" } },
   { test: (n) => /\/admin\/turo/.test(n.url ?? "") || /\bturo\b/i.test(n.title),
     meta: { icon: Car, tint: "bg-orange-400/15 text-orange-300", label: "Turo", group: "Turo" } },

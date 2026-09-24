@@ -9,19 +9,19 @@
  */
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, ImageUp, Loader2, RefreshCw, Settings } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, ImageUp, Loader2 } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { RunHistory } from "@/components/admin/turo/RunHistory";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
-import { LaxGuests } from "./LaxGuests";
-import { CarHealth, SuperchargeAudit } from "./CarOps";
 import { TripHealth } from "./TripHealth";
 import { GuestHelperCard } from "./AskCard";
 import { TripSettingsBody } from "./TripSettings";
 import { HostPassCard } from "./TeslaCard";
-import { Section, Segmented, btnDestructivePlain, btnPlain, btnPrimary, btnTinted, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
+import { Section, Segmented, btnPlain, btnPrimary, btnTinted, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
 
 type CodeRow = { id: string; payload: string; valid_month: string; note: string | null; created_at: string; is_this_month?: boolean };
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string };
@@ -179,17 +179,9 @@ export default function LaxPass() {
   };
 
 
-  // Settings stay folded unless a link points into them (e.g. back from Tesla sign-in: #tesla).
-  const [openSettings, setOpenSettings] = useState(false);
-  useEffect(() => { if (/^#(tesla|tezlab|ask|settings|helper)/.test(window.location.hash)) setOpenSettings(true); }, []);
-  const rotate = async () => {
-    if (!window.confirm("Make a new guest link? The old link stops working, so update it anywhere you pasted it.")) return;
-    const { error } = await rpc("lax_pass_rotate_slug");
-    if (error) toast.error(error.message); else { toast.success("New link made."); load(); }
-  };
-
-  const link = st ? `${SITE}/lax/${st.slug}` : "";
-  const message = `How to pick up your Turo car at LAX: shuttle steps, the garage address, and the QR code that opens the lobby door (you can add it to Apple or Google Wallet). ${link}`;
+  // Old links into Turo Watch content (guests, car, audit) land there.
+  const loc = useLocation(); const nav = useNavigate();
+  useEffect(() => { if (/^#(keys|trips|sc-audit|car-health)/.test(loc.hash)) nav(`/admin/turo${loc.hash}`, { replace: true }); }, [loc.hash, nav]);
   const cur = st?.current;
   const missing = st && (!cur || !cur.is_this_month);
 
@@ -201,8 +193,10 @@ export default function LaxPass() {
 
   return (
     <div className="w-full space-y-8">
-      <PageHeader title="Guest Trips" description="Every Turo trip: its guest page, Tesla key, Turo message and health. Plus the LAX garage code."
-        actions={<button type="button" onClick={() => { setOpenSettings(true); window.setTimeout(() => document.getElementById("settings")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }} className={cn(btnTinted, "px-4")}><Settings className="h-4 w-4" aria-hidden /> Settings</button>} />
+      <div className="space-y-2">
+        <Link to="/admin/turo" className={cn(btnPlain, "-ml-1")}><ChevronLeft className="h-5 w-5" aria-hidden /> Turo Watch</Link>
+        <PageHeader title="Turo settings" description="The LAX garage code, the guest pages, keys and connections, and Turo Watch's run history. Day-to-day trips live on Turo Watch." />
+      </div>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { take(e.target.files?.[0]); e.target.value = ""; }} />
 
       {/* Fills the width: sections flow into as many ~30rem columns as fit (1 on phones, 2-3 on wide screens). */}
@@ -258,13 +252,6 @@ export default function LaxPass() {
                       <dd className={cn("text-[15px] font-medium tabular-nums", label)}>{v}</dd>
                     </div>
                   ))}
-                  <div className="space-y-2 py-3">
-                    <dt className={cn("text-[15px]", secondary)}>Guest link</dt>
-                    <dd className="flex items-center gap-2">
-                      <code className={cn("min-w-0 flex-1 truncate font-mono text-[13px]", label)}>{link.replace("https://www.", "")}</code>
-                      <CopyButton text={link} label="Copy" className={cn(btnTinted, "h-auto px-3.5")} />
-                    </dd>
-                  </div>
                 </dl>
               </div>
             )}
@@ -312,7 +299,7 @@ export default function LaxPass() {
 
       <div className="grid items-start gap-8 lg:grid-cols-2 2xl:grid-cols-3">
       <div className="min-w-0 space-y-8 lg:row-span-2 2xl:row-span-1">
-      <Section title="Trips" id="trips">
+      <Section title="Guest pages" id="guest-pages">
         <div className={cn(card, "flex flex-col gap-3")}>
           <div>
             <p className={cn("text-[15px] font-semibold", label)}>Preview the guest pages</p>
@@ -323,10 +310,7 @@ export default function LaxPass() {
             <a href="/t/demo-lax?stage=day-of" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>LAX</a>
           </div>
         </div>
-        <TripHealth />
-        <SuperchargeAudit />
-        <CarHealth />
-        <div id="keys"><LaxGuests /></div>
+        <div id="health"><TripHealth /></div>
       </Section>
       </div>
 
@@ -337,25 +321,6 @@ export default function LaxPass() {
         </Section>
       )}
 
-      {st && (
-        <Section title="Guest link" footer="The link never changes, so paste it into Turo once. Making a new one turns the old one off.">
-          <div className={cn(card, "space-y-4")}>
-            <p className={cn("text-[15px]", secondary)}>Always shows the newest code.</p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <code className={cn(field, "truncate font-mono text-[14px] sm:flex-1")}>{link.replace("https://", "")}</code>
-              <CopyButton text={link} label="Copy link" className={cn(btnTinted, "h-auto")} />
-            </div>
-            <div className="rounded-[14px] bg-[#2C2C2E] p-3.5 bento:bg-[#F2F2F7]">
-              <p className={cn("text-[13px] font-medium", secondary)}>Message for Turo</p>
-              <p className={cn("mt-1 text-[15px] leading-snug", label)}>{message}</p>
-              <div className="mt-3"><CopyButton text={message} label="Copy message" className={cn(btnTinted, "h-auto")} /></div>
-            </div>
-            <button type="button" onClick={rotate} className={btnDestructivePlain}>
-              <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Make a new link
-            </button>
-          </div>
-        </Section>
-      )}
 
       </div>
 
@@ -385,25 +350,15 @@ export default function LaxPass() {
       </div>
 
       <section id="settings" className="scroll-mt-24">
-        <details open={openSettings} className={cn(card, "p-0")}>
-          <summary onClick={(e) => { e.preventDefault(); setOpenSettings((o) => !o); }} aria-expanded={openSettings} className={cn("flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 [&::-webkit-details-marker]:hidden")}>
-            <span className="flex items-center gap-2.5">
-              <Settings className={cn("h-5 w-5", tertiary)} aria-hidden />
-              <span>
-                <span className={cn("block text-[17px] font-semibold", label)}>Settings</span>
-                <span className={cn("block text-[13px]", secondary)}>TezLab, Tesla car controls, guest helper AI, Apple Wallet</span>
-              </span>
-            </span>
-            <ChevronRight className={cn("h-5 w-5 transition-transform duration-200", openSettings && "rotate-90", tertiary)} aria-hidden />
-          </summary>
-          {openSettings && (
-            <div className="grid items-start gap-8 border-t px-2 pb-2 pt-5 md:px-3 lg:grid-cols-2 2xl:grid-cols-3" style={{ borderColor: "rgba(127,127,127,.2)" }}>
-              <TripSettingsBody />
-            </div>
-          )}
-        </details>
+        <div className="grid items-start gap-8 lg:grid-cols-2 2xl:grid-cols-3">
+          <TripSettingsBody />
+          <Section title="Turo Watch run history" id="runs">
+            <RunHistory />
+          </Section>
+        </div>
       </section>
       </div>
     </div>
   );
 }
+

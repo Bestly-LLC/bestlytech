@@ -9,7 +9,10 @@
  * The runbook Claude follows lives in bestly_private_memory area 'turo' (kept off this page on purpose).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Navigation, CheckCircle2, ExternalLink, Pause, Play, Send } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, Pause, Play, Send, Settings } from "lucide-react";
+import { Link } from "react-router-dom";
+import { GuestRow, useGuestRows } from "./LaxGuests";
+import { CarHealth, SuperchargeAudit } from "./CarOps";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -47,6 +50,7 @@ export default function AdminTuro() {
   const [vehicle, setVehicle] = useState<VehicleState | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const guests = useGuestRows();
 
   const load = useCallback(async () => {
     const [{ data: r }, { data: st }, { data: ps }, { data: tg }, { data: cp }, { data: dm }, { data: tp }, { data: vs }] = await Promise.all([
@@ -92,10 +96,21 @@ export default function AdminTuro() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-8">
-      <PageHeader title="Turo Watch" description="Blue Steel · Tesla Model 3 · who has it, what it's doing, and what it's priced at." />
+      <PageHeader title="Turo Watch" description="Blue Steel · Tesla Model 3 · who has it, their guest pages, the car, and what it's priced at."
+        actions={<Link to="/admin/turo/settings" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-white/[0.08] px-4 text-sm font-medium text-white bento:bg-[#0000000d] bento:text-[#111]"><Settings className="h-4 w-4" aria-hidden /> Turo settings</Link>} />
 
-      {/* Who has the car right now. Everything below this is pricing. */}
-      <FleetNow trips={trips} vehicle={vehicle} />
+      {/* Who has the car right now, with each trip's guest page / key / reminder controls. */}
+      <div id="keys" className="scroll-mt-24">
+        <FleetNow trips={trips} vehicle={vehicle}
+          guest={(t) => { const g = guests.rows?.find((x) => x.reservation_id === t.reservation_id); return g ? <ul><GuestRow r={g} reload={guests.reload} compact /></ul> : <p className="text-sm text-white/50">No guest page for this trip yet.</p>; }}
+          returnAt={(t) => { const g = guests.rows?.find((x) => x.reservation_id === t.reservation_id); return g ? { pct: g.pickup_battery ?? null, at: g.pickup_battery_at ?? null } : null; }} />
+      </div>
+
+      {/* Money + car health */}
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <SuperchargeAudit />
+        <CarHealth />
+      </div>
 
       {/* Status + controls */}
       {(() => {
@@ -178,31 +193,6 @@ export default function AdminTuro() {
 
       <Competitors targets={targets} prices={comp} />
 
-      {/* History */}
-      <section>
-        <h2 className="mb-2.5 px-1 text-xs font-semibold uppercase tracking-widest text-white/55">Run history</h2>
-        {runs === null ? <div className={cn(card, "h-32 animate-pulse")} /> : (
-          <ul className={cn(card, "divide-y divide-white/[0.06] overflow-hidden")}>
-            {runs.map((r) => {
-              const tripped = (r.gates ?? []).filter((g) => g.result === "TRIPPED").map((g) => g.gate);
-              return (
-                <li key={r.id} className="px-4 py-3 sm:px-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-2 text-[0.95rem] text-white"><Navigation className="h-4 w-4 text-white/40" /> {when(r.ran_at)}</span>
-                    <span className={cn("text-xs font-semibold", MODE[r.mode]?.tone ?? "text-white/60")}>{MODE[r.mode]?.label ?? r.mode}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-white/50">
-                    {r.runner} · market {money(r.market_base)} · n={r.comp_n ?? 0}
-                    {r.mode === "applied" ? ` · ${r.days_verified}/${r.days_written} days verified` : ""}
-                    {tripped.length ? ` · stopped by: ${tripped.join(", ")}` : ""}
-                  </p>
-                  {r.notes && <p className="mt-1 line-clamp-2 text-xs text-white/40">{r.notes.replace(/^CRASH:.*/s, "Runner crashed (fixed Sept 22).")}</p>}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
 
     </div>
   );

@@ -13,8 +13,8 @@ import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { card } from "./laxUi";
 
-type Row = {
-  reservation_id: number; first: string | null; last: string | null; starts_at: string; ends_at: string; lax: boolean;
+export type Row = {
+  reservation_id: number; pickup_battery?: number | null; pickup_battery_at?: string | null; first: string | null; last: string | null; starts_at: string; ends_at: string; lax: boolean;
   token: string | null; email: string | null; email_by: "guest" | "host" | null; reminder_at: string | null;
   reminder_sent_at: string | null; reminder_error: string | null; suggested_reminder_at: string; kind?: "lax" | "home";
   activity?: { views: number; first_seen: string | null; last_seen: string | null; devices: string[]; asks: number; recent: { kind: string; at: string; detail: Record<string, string> | null }[] } | null;
@@ -195,7 +195,7 @@ const rpc = (fn: string, args?: Record<string, unknown>) =>
 const SITE = "https://bestly.tech"; // short guest links: bestly.tech/t/<7 chars>
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 
-function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
+export function GuestRow({ r, reload, compact }: { r: Row; reload: () => void; compact?: boolean }) {
   const [email, setEmail] = useState(r.email ?? "");
   const [busy, setBusy] = useState<string | null>(null);
   const act = async (action: string, p_email?: string) => {
@@ -216,7 +216,8 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
     : r.email && r.reminder_at ? `Reminder ${when(r.reminder_at)}${r.email_by === "guest" ? " (guest signed up)" : ""}`
     : `No email yet. Guests can add one on their page, or paste it here.`;
   return (
-    <li className="py-4">
+    <li className={compact ? "" : "py-4"}>
+      {!compact && <>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="font-medium text-white bento:text-neutral-900">
           {r.first ?? "Guest"} {r.last ? r.last.slice(0, 1) + "." : ""}
@@ -225,6 +226,7 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
         </p>
         <p className="text-sm text-white/55 bento:text-neutral-500">{when(r.starts_at)} → {when(r.ends_at)}</p>
       </div>
+      </>}
       {link ? (
         <>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -260,6 +262,19 @@ function GuestRow({ r, reload }: { r: Row; reload: () => void }) {
       )}
     </li>
   );
+}
+
+/** Guest rows for every upcoming trip (one RPC), for Turo Watch's trip cards. */
+export function useGuestRows() {
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const load = useCallback(async () => {
+    const { data, error } = await rpc("lax_guest_admin_list");
+    if (error) { toast.error(error.message); return; }
+    setRows((data as Row[]) ?? []);
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { try { localStorage.setItem("bestly-host", "1"); } catch { /* private mode */ } }, []);
+  return { rows, reload: load };
 }
 
 export function LaxGuests() {

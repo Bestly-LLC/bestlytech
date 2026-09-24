@@ -11,9 +11,9 @@
  *  - Status never rides on color alone: every warning carries an icon and words, because a
  *    red ring means nothing to a colorblind reader or in a screenshot printed in grey.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
-  AlertTriangle, BatteryCharging, CalendarClock, Car, CheckCircle2, ExternalLink,
+  AlertTriangle, BatteryCharging, CalendarClock, Car, CheckCircle2, ChevronRight, ExternalLink,
   Gauge, Lock, MapPin, Plane, Thermometer, Unlock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -114,7 +114,11 @@ function Tile({ label, children, className }: { label: string; children: React.R
   );
 }
 
-export function FleetNow({ trips, vehicle }: { trips: Trip[]; vehicle: VehicleState | null }) {
+/** guest(t): that trip's guest page / key / reminder controls (from the guest trips admin), shown under each trip.
+ *  returnAt(t): the battery % at that trip's start = the level it must come back at. */
+export function FleetNow({ trips, vehicle, guest, returnAt }: {
+  trips: Trip[]; vehicle: VehicleState | null; guest?: (t: Trip) => ReactNode; returnAt?: (t: Trip) => { pct: number | null; at: string | null } | null;
+}) {
   // One tick a minute keeps every countdown on this page honest without a render storm.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -201,6 +205,27 @@ export function FleetNow({ trips, vehicle }: { trips: Trip[]; vehicle: VehicleSt
             </div>
           </div>
         )}
+        {current && (() => {
+          const rc = returnAt?.(current);
+          const ok = rc?.pct != null && pct != null && pct >= rc.pct;
+          return (
+            <div className="relative mt-5 space-y-4 border-t border-white/[0.06] pt-4 bento:border-[#e6e4de]">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className={cn("text-[0.7rem] font-semibold uppercase tracking-wide", muted)}>Must come back at</p>
+                  <p className={cn("mt-0.5 text-[1.6rem] font-bold leading-none tabular-nums", ink)}>{rc?.pct != null ? `${rc.pct}%+` : "Not set yet"}</p>
+                  <p className={cn("mt-1 text-xs", muted)}>{rc?.pct != null ? `The battery at the trip start${rc.at ? ` (${dayTime(rc.at)})` : ""}. Turo: same level back, or a recharge fee.` : "Set automatically from the battery at the trip start."}</p>
+                </div>
+                {rc?.pct != null && pct != null && (ok
+                  ? <Flag tone="ok" icon={CheckCircle2}>{`Now ${pct}%: on track`}</Flag>
+                  : <Flag tone="warn" icon={BatteryCharging}>{`Now ${pct}%: needs ${rc.pct - pct}% more`}</Flag>)}
+              </div>
+              {guest && <details className="group"><summary className={cn("flex min-h-[40px] cursor-pointer list-none items-center gap-1.5 text-sm font-medium [&::-webkit-details-marker]:hidden", ink)}>
+                <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden /> Guest page, key &amp; charging</summary>
+                <div className="pt-1">{guest(current)}</div></details>}
+            </div>
+          );
+        })()}
       </div>
 
       {/* ── The row: next up, the car, where it is ──────────────── */}
@@ -325,16 +350,21 @@ export function FleetNow({ trips, vehicle }: { trips: Trip[]; vehicle: VehicleSt
           </p>
           <ul className="mt-1 divide-y divide-white/[0.06] bento:divide-[#e6e4de]">
             {upcoming.map((t) => (
-              <li key={t.reservation_id} className="flex items-center gap-3 px-4 py-3">
-                <Car className={cn("h-4 w-4 shrink-0", muted)} aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p className={cn("truncate text-sm font-medium", ink)}>{name(t)}</p>
-                  <p className={cn("text-xs", muted)}>{dayTime(t.starts_at)} &rarr; {dayTime(t.ends_at)}</p>
+              <li key={t.reservation_id} className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <Car className={cn("h-4 w-4 shrink-0", muted)} aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className={cn("truncate text-sm font-medium", ink)}>{name(t)}{t.airport_code ? <span className={cn("ml-2 text-xs font-normal", muted)}>{t.airport_code}</span> : null}</p>
+                    <p className={cn("text-xs", muted)}>{dayTime(t.starts_at)} &rarr; {dayTime(t.ends_at)}</p>
+                  </div>
+                  <span className="shrink-0 text-right">
+                    {t.earnings != null && <span className={cn("block text-sm font-medium tabular-nums", ink)}>{money(t.earnings)}</span>}
+                    <span className={cn("block text-xs tabular-nums", muted)}>in {until(t.starts_at, now).text}</span>
+                  </span>
                 </div>
-                <span className="shrink-0 text-right">
-                  {t.earnings != null && <span className={cn("block text-sm font-medium tabular-nums", ink)}>{money(t.earnings)}</span>}
-                  <span className={cn("block text-xs tabular-nums", muted)}>in {until(t.starts_at, now).text}</span>
-                </span>
+                {guest && <details className="group mt-1 pl-7"><summary className={cn("flex min-h-[40px] cursor-pointer list-none items-center gap-1.5 text-[13px] font-medium [&::-webkit-details-marker]:hidden", ink)}>
+                  <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden /> Guest page, key &amp; reminder</summary>
+                  <div className="pb-1">{guest(t)}</div></details>}
               </li>
             ))}
           </ul>

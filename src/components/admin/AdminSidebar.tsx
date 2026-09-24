@@ -70,7 +70,7 @@ const homeHubItems = [
 
 const turoItems = [
   { title: "Turo Watch", url: "/admin/turo", icon: Car },
-  { title: "Guest Trips", url: "/admin/turo/lax-pass", icon: CarFront },
+  { title: "Turo Settings", url: "/admin/turo/settings", icon: CarFront },
   { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Brush },
 ];
 
