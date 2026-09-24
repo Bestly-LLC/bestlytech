@@ -84,7 +84,7 @@ export function ScoutToday() {
 
   const set = async (r: Row, status: Status, msg?: string) => {
     setBusy(r.id);
-    setRows((all) => all?.map((x) => (x.id === r.id ? { ...x, status } : x)) ?? null); // instant
+    setRows((all) => all?.map((x) => (x.id === r.id ? { ...x, status, done_at: status === "open" ? null : new Date().toISOString() } : x)) ?? null); // instant
     const { error } = await supabase.rpc("scout_daily_set" as never, { p_id: r.id, p_status: status } as never);
     setBusy(null);
     if (error) { toast.error(error.message); load(); return; }
@@ -101,13 +101,16 @@ export function ScoutToday() {
     load();
   };
 
-  const { picks, drafts, calls, wrap } = useMemo(() => {
+  const { picks, drafts, calls, justDone, wrap } = useMemo(() => {
     const r = rows ?? [];
     const order = { decision: 0, quick: 1, focus: 2 } as Record<string, number>;
     return {
       picks: r.filter((x) => x.kind === "pick" && x.day === today).sort((a, b) => order[a.slot ?? "focus"] - order[b.slot ?? "focus"]),
       drafts: r.filter((x) => x.kind === "draft" && x.status === "open"),
       calls: r.filter((x) => x.kind === "call" && x.status === "open"),
+      // ticked off in the last day, newest first: one tap puts a mistake back
+      justDone: r.filter((x) => x.kind === "call" && x.status === "done" && x.done_at && Date.now() - Date.parse(x.done_at) < 864e5)
+        .sort((a, b) => Date.parse(b.done_at!) - Date.parse(a.done_at!)).slice(0, 5),
       wrap: r.find((x) => x.kind === "wrap" && x.day === today),
     };
   }, [rows, today]);
@@ -115,6 +118,12 @@ export function ScoutToday() {
   // "Check if it's done": shared with the top card (todoCheck.tsx); checks run on the server queue.
   const tc = useTodoCheck(load);
   const [callsOpen, toggleCalls] = useRemembered("admin.fromCalls.open", true);
+
+  // Mark a call to-do done with an Undo right in the toast (and in "Done today" below the list).
+  const doneCall = (c: Row) => {
+    set(c, "done");
+    toast.success(`Done: ${c.title}`, { duration: 8000, action: { label: "Undo", onClick: () => set(c, "open", "Put back") } });
+  };
 
   const doneCount = picks.filter((p) => p.status === "done").length;
   // Everyone who has owned a call to-do lately, so a wrong owner is one tap to fix.
@@ -230,7 +239,7 @@ export function ScoutToday() {
       )}
 
       {/* From calls */}
-      {calls.length > 0 && (
+      {(calls.length > 0 || justDone.length > 0) && (
         <section aria-labelledby="calls-title">
           <h2 id="calls-title" className="mb-3">
             <button onClick={toggleCalls} aria-expanded={callsOpen} aria-controls="calls-list"
@@ -252,7 +261,7 @@ export function ScoutToday() {
                   <div className="flex items-start gap-3">
                   <button
                     aria-label="Mark done"
-                    onClick={() => set(c, "done", "Done")}
+                    onClick={() => doneCall(c)}
                     className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-white/25 text-transparent transition hover:border-emerald-400 hover:text-emerald-400 active:scale-90"
                   >
                     <Check className="h-3.5 w-3.5" />
@@ -269,11 +278,28 @@ export function ScoutToday() {
                     <a href={c.action.deck_url} target="_blank" rel="noreferrer" className={ghost} aria-label="Open on Deck">Deck <ExternalLink className="h-3.5 w-3.5" /></a>
                   )}
                   </div>
-                  {c.action?.check && !tc.pending.has(c.id) && <div className="pl-9"><CheckResult r={c} tc={tc} onDone={() => set(c, "done", "Done")} /></div>}
+                  {c.action?.check && !tc.pending.has(c.id) && <div className="pl-9"><CheckResult r={c} tc={tc} onDone={() => doneCall(c)} /></div>}
                 </li>
               );
             })}
           </ul>
+          )}
+          {callsOpen && justDone.length > 0 && (
+            <div className="mt-2 px-1">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-white/40">Done today · {justDone.length}</p>
+              <ul className="space-y-0.5">
+                {justDone.map((d) => (
+                  <li key={d.id} className="flex items-center gap-2">
+                    <Check className="h-3.5 w-3.5 shrink-0 text-emerald-300 bento:text-emerald-700" aria-hidden />
+                    <p className="min-w-0 flex-1 truncate text-sm text-white/55 line-through decoration-white/25">{d.title}</p>
+                    <span className="shrink-0 text-xs text-white/35">{new Date(d.done_at!).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}</span>
+                    <button className={cn(ghost, "min-h-[32px] px-2.5 text-xs")} onClick={() => set(d, "open", "Put back")} aria-label={`Undo: ${d.title}`}>
+                      <Undo2 className="h-3.5 w-3.5" /> Undo
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </section>
       )}

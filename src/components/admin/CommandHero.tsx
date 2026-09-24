@@ -14,6 +14,7 @@ import { AdminMark } from "@/components/AdminMark";
 import { WeatherNow } from "@/components/admin/WeatherNow";
 import { useNextMeeting, whenLabel } from "@/pages/partner/PartnerExtras";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { CheckAllPanel, CheckButton, CheckResult, ClosedByScout, useRemembered, useTodoCheck, type CheckRow } from "@/components/admin/todoCheck";
 
 interface Todo { id: string; title: string; status: string; action: Record<string, any>; done_at?: string | null }
@@ -74,7 +75,14 @@ export function CommandHero() {
   const tick = async (t: Todo) => {
     setTodos((xs) => (xs ?? []).filter((x) => x.id !== t.id));
     const { error } = await supabase.rpc("partner_task_set" as never, { p_id: t.id, p_status: "done" } as never);
-    if (error) load();
+    if (error) { load(); return; }
+    toast.success(`Done: ${t.title}`, {
+      duration: 8000,
+      action: { label: "Undo", onClick: async () => {
+        await supabase.rpc("partner_task_set" as never, { p_id: t.id, p_status: "open" } as never);
+        load();
+      } },
+    });
   };
 
   const h = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, ...PT }));
