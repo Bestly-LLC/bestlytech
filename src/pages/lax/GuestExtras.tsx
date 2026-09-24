@@ -66,7 +66,8 @@ function Stop({ label, iso, align }: { label: string; iso: string; align: "left"
 }
 
 const short = (ms: number) => {
-  const m = Math.max(0, Math.round(ms / 60000));
+  if (ms > 0 && ms < 60000) return `${Math.ceil(ms / 1000)}s`;
+  const m = Math.max(0, Math.ceil(ms / 60000));
   if (m < 60) return `${m}m`;
   if (m < 1440) return `${Math.floor(m / 60)}h ${m % 60}m`;
   const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
@@ -107,8 +108,16 @@ function linear(s: number, e: number, now: number) {
  *  theme "lax" = iOS Live Activity (black glass, green); "home" = midcentury (teal, mustard, orange). */
 export function TripCard({ trip, theme = "lax" }: { trip: Trip; theme?: "lax" | "home"; battery?: number | null; keyState?: TripKeyState; insideF?: number | null }) {
   const [now, setNow] = useState(Date.now());
-  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(t); }, []);
   const s = +new Date(trip.starts_at), e = +new Date(trip.ends_at);
+  // Tick every 30s, every second in the last 2 minutes before pickup/return, and exactly at each boundary,
+  // so it flips from "until pickup" to "left on your trip" the moment the trip starts (never a stuck "0m").
+  useEffect(() => {
+    const next = [s, e].map((b) => b - now).filter((d) => d > 0).sort((a, b) => a - b)[0];
+    const wait = next == null ? 30000 : next <= 120000 ? Math.min(1000, next) : Math.min(30000, next - 120000 || 30000);
+    const t = window.setTimeout(() => setNow(Date.now()), Math.max(250, wait));
+    return () => window.clearTimeout(t);
+  }, [now, s, e]);
+  useEffect(() => { const f = () => document.visibilityState === "visible" && setNow(Date.now()); document.addEventListener("visibilitychange", f); return () => document.removeEventListener("visibilitychange", f); }, []);
   const before = now < s, during = now >= s && now < e;
   const pos = position(s, e, now);
   const home = theme === "home";
