@@ -325,7 +325,7 @@ export function PartnerHome({ session }: { session: Session }) {
         </div>
         <div className="mt-auto space-y-2">
           <a href={joinUrl} target="_blank" rel="noreferrer"
-            className="flex min-h-11 flex-col items-center justify-center rounded-xl bg-emerald-500 px-3 py-2 text-center text-[0.95rem] font-semibold text-[#fff] transition hover:bg-emerald-400 active:scale-[0.98]">
+            className="flex min-h-11 flex-col items-center justify-center rounded-xl bg-emerald-500 px-3 py-2 text-center text-[0.95rem] font-semibold text-[#052E1F] transition hover:bg-emerald-400 active:scale-[0.98]">
             <span className="flex items-center gap-2"><Video className="h-[18px] w-[18px]" /> {nextMtg ? "Join next meeting" : "Join our call"}</span>
             {nextMtg && <span className="text-xs font-medium opacity-85">{whenLabel(nextMtg.start)}</span>}
           </a>
@@ -349,7 +349,7 @@ export function PartnerHome({ session }: { session: Session }) {
           <div className="flex items-center gap-1">
             <BellButton notifs={notifs} onClick={() => setBellOpen(true)} />
             <a href={joinUrl} target="_blank" rel="noreferrer" aria-label={nextMtg ? `Join next meeting, ${whenLabel(nextMtg.start)}` : "Join our call"}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 text-sm font-semibold text-[#fff] active:scale-95">
+              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 text-sm font-semibold text-[#052E1F] active:scale-95">
               <Video className="h-4 w-4" /> Call
             </a>
             <button onClick={toggleTheme} aria-label={bento ? "Switch to dark mode" : "Switch to light mode"} className="grid h-10 w-10 place-items-center rounded-full text-white/60 hover:bg-white/[0.06]">
@@ -463,7 +463,7 @@ function HomeTab(props: {
           <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
             <WeatherNow useDeviceLocation fixedPlace={wxFixed} fixedNote={wxNote} onPlace={onWxPlace} className="self-start" />
             <a href={joinUrl} target="_blank" rel="noreferrer"
-              className="inline-flex min-h-12 items-center justify-center gap-2.5 rounded-2xl bg-emerald-500 px-5 py-2 text-[#fff] shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)] transition hover:bg-emerald-400 active:scale-[0.98]">
+              className="inline-flex min-h-12 items-center justify-center gap-2.5 rounded-2xl bg-emerald-500 px-5 py-2 text-[#052E1F] shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)] transition hover:bg-emerald-400 active:scale-[0.98]">
               <Video className="h-5 w-5 shrink-0" />
               <span className="text-left leading-tight">
                 <span className="block text-[1rem] font-semibold">{nextMtg ? "Join next meeting" : "Join our call"}</span>
@@ -477,13 +477,47 @@ function HomeTab(props: {
           </div>
         </div>
         <div className="relative mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {stats.map(({ label, value, icon: Icon, tab }) => (
-            <button key={label} onClick={() => tab !== "home" && go(tab)}
-              className="rounded-2xl bg-white/[0.05] px-4 py-3 text-left transition hover:bg-white/[0.08] bento:bg-[#F3F2EE]">
-              <Icon className="h-4 w-4 text-white/60" />
+          {stats.map(({ label, value, icon: Icon, tab }) => {
+            const body = (<>
+              <Icon className="h-4 w-4 text-white/60" aria-hidden />
               <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
               <p className="text-xs text-white/60">{label}</p>
-            </button>
+            </>);
+            const box = "rounded-2xl bg-white/[0.05] px-4 py-3 text-left bento:bg-[#F3F2EE]";
+            // "On you" points at this very page, so as a button it was a control that looked
+            // tappable and did nothing. Only the ones that go somewhere are buttons.
+            return tab === "home"
+              ? <div key={label} className={box}>{body}</div>
+              : (
+                <button key={label} onClick={() => go(tab)} aria-label={`${value} ${label}`}
+                  className={cn(box, "transition hover:bg-white/[0.08] active:scale-[0.98]")}>
+                  {body}
+                </button>
+              );
+          })}
+        </div>
+      </section>
+
+      {/* Projects */}
+      <section>
+        <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-white/60">Our projects</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {PROJECTS.map((p) => (
+            <div key={p.name} className={cn(card, "relative overflow-hidden p-4")}>
+              <span aria-hidden className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br", p.tone)} />
+              <div className="relative">
+                <p className="text-[1.05rem] font-semibold leading-tight">{p.name}</p>
+                <p className="mt-0.5 text-xs text-white/60 bento:text-[#55525c]">{p.sub}{p.with ? ` \u00b7 ${p.with}` : ""}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {p.links.map((l) => (
+                    <a key={l.label} href={l.href} target="_blank" rel="noreferrer"
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white/[0.09] px-3 text-sm font-medium text-white transition hover:bg-white/[0.16] active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
+                      {l.label} <ExternalLink className="h-3.5 w-3.5 opacity-70" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </section>
@@ -616,30 +650,6 @@ function HomeTab(props: {
         </Panel>
       </div>
 
-      {/* Projects */}
-      <section>
-        <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-white/60">Our projects</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {PROJECTS.map((p) => (
-            <div key={p.name} className={cn(card, "relative overflow-hidden p-4")}>
-              <span aria-hidden className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br", p.tone)} />
-              <div className="relative">
-                <p className="text-[1.05rem] font-semibold leading-tight">{p.name}</p>
-                <p className="mt-0.5 text-xs text-white/60 bento:text-[#55525c]">{p.sub}{p.with ? ` \u00b7 ${p.with}` : ""}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {p.links.map((l) => (
-                    <a key={l.label} href={l.href} target="_blank" rel="noreferrer"
-                      className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white/[0.09] px-3 text-sm font-medium text-white transition hover:bg-white/[0.16] active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
-                      {l.label} <ExternalLink className="h-3.5 w-3.5 opacity-70" />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* Shortcuts */}
       <section>
         <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-white/60">Shortcuts</h2>
@@ -731,7 +741,7 @@ function DoneList({ done, tick }: { done: Todo[]; tick: (t: Todo, s: "done" | "o
           {shown.map((t) => (
             <li key={t.id} className="flex items-start gap-3 py-2.5">
               <button aria-label="Not done, put it back" title="Put it back on my list" onClick={() => tick(t, "open")}
-                className="relative before:absolute before:-inset-2.5 before:content-[''] mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-500 text-[#fff] transition hover:bg-white/20 active:scale-90">
+                className="relative before:absolute before:-inset-2.5 before:content-[''] mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-500 text-[#052E1F] transition hover:bg-white/20 active:scale-90">
                 <Check className="h-3.5 w-3.5" />
               </button>
               <div className="min-w-0">
@@ -820,7 +830,7 @@ function CallsTab({ meetings, open, upcoming = [] }: { meetings: Meeting[] | nul
                 </div>
                 {e.join_url && (
                   <a href={e.join_url} target="_blank" rel="noreferrer"
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 text-sm font-semibold text-[#fff] transition hover:bg-emerald-400">
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 text-sm font-semibold text-[#052E1F] transition hover:bg-emerald-400">
                     <Video className="h-4 w-4" /> Join
                   </a>
                 )}
