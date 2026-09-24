@@ -87,7 +87,7 @@ const FSD = VIDEOS[5];
 
 const INCIDENT_CARD = "https://support-resources.turo.com/incidents/US%20Incident%20Information%20Card.pdf";
 
-function Fold({ icon: Icon, title, sub, children, tone, open: start = false }: { icon: typeof Cpu; title: string; sub: string; children: ReactNode; tone?: "alert"; open?: boolean }) {
+export function Fold({ icon: Icon, title, sub, children, tone, open: start = false }: { icon: typeof Cpu; title: string; sub: string; children: ReactNode; tone?: "alert"; open?: boolean }) {
   const [open, setOpen] = useState(start);
   return (
     <div className={`border-b border-white/10 last:border-0 ${tone === "alert" ? "bg-[#E4527A]/[0.07] -mx-4 px-4" : ""}`}>
@@ -125,12 +125,12 @@ export function ChargeBadge({ pct }: { pct: number | null | undefined }) {
   );
 }
 
-export function HomeGuide({ pickupBattery, kind = "home" }: { pickupBattery?: number | null; kind?: TripKind }) {
+export function HomeGuide({ pickupBattery, kind = "home", children }: { pickupBattery?: number | null; kind?: TripKind; children?: ReactNode }) {
   const ch = CHARGERS[kind];
   return (
     <section className="mt-6 rounded-3xl bg-white/[0.06] px-4 pt-3 ring-1 ring-white/10" aria-label="Car guide">
-      <p className="pt-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Your car guide</p>
-      <h2 className="mt-1 text-[20px] font-bold leading-snug text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>Everything you need, at a glance</h2>
+      <p className="pt-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Help & guides</p>
+      <h2 className="mt-1 text-[20px] font-bold leading-snug text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>Everything else, when you need it</h2>
 
       <BeforeYouDrive />
 
@@ -205,6 +205,7 @@ export function HomeGuide({ pickupBattery, kind = "home" }: { pickupBattery?: nu
           "Roadside may not be available if someone not approved by Turo is driving.",
         ]} />
       </Fold>
+      {children}
     </section>
   );
 }

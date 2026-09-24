@@ -99,7 +99,7 @@ export const ChargerLine = ({ kind }: { kind: TripKind }) => {
 
 type NavRun = (a: "nav_charger" | "nav_charger_lax", onStage?: (s: string) => void) => Promise<void>;
 /** "Send to car": puts the closest Supercharger in the car's navigation (TezLab first, Tesla backup). */
-function SendToCar({ run, kind }: { run?: NavRun; kind: TripKind }) {
+export function SendToCar({ run, kind }: { run?: NavRun; kind: TripKind }) {
   const [st, setSt] = useState<"idle" | "busy" | "done" | "err">("idle");
   const [msg, setMsg] = useState<string | null>(null);
   if (!run) return null;

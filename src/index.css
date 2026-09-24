@@ -975,7 +975,6 @@ body.admin-bento { background-color: var(--bento-page); }
 @property --glow-a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 .trip-glow {
   position: relative;
-  background: linear-gradient(rgba(255,255,255,.07), rgba(255,255,255,.07)), var(--trip-bg, #1A1140) !important;
   animation: trip-glow-breathe 2.6s ease-in-out infinite; /* animations beat the card's ring shadow, so no !important needed */
 }
 .trip-glow::before {
@@ -984,6 +983,7 @@ body.admin-bento { background-color: var(--bento-page); }
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
   animation: trip-glow-spin 3s linear infinite;
 }
+.trip-glow-card { background: linear-gradient(rgba(255,255,255,.07), rgba(255,255,255,.07)), var(--trip-bg, #1A1140) !important; }
 @keyframes trip-glow-spin { to { --glow-a: 360deg; } }
 @keyframes trip-glow-breathe { 0%, 100% { box-shadow: 0 0 20px -6px var(--trip-accent, #FFB878); } 50% { box-shadow: 0 0 38px -4px var(--trip-accent, #FFB878); } }
 @media (prefers-reduced-motion: reduce) { .trip-glow, .trip-glow::before { animation: none; } .trip-glow { box-shadow: 0 0 24px -6px var(--trip-accent, #FFB878) !important; } }

@@ -60,7 +60,14 @@ function Ticket({ which, active, onClick }: { which: Which; active: boolean; onC
   );
 }
 
-export function TagBar({ open, onOpen, top, variant, hideTags }: { open: Which | null; onOpen: (w: Which) => void; top?: ReactNode; variant?: "lax" | "home"; hideTags?: boolean }) {
+export function TagBar({ open, onOpen, top, variant, hideTags, glow, badge }: { open: Which | null; onOpen: (w: Which) => void; top?: ReactNode; variant?: "lax" | "home"; hideTags?: boolean; glow?: Which | null; badge?: string }) {
+  // The ticket for the next step glows (same running light as the next-step card); "Key ready" badge on Pickup.
+  const wrap = (w: Which, el: ReactNode) => (
+    <span className={`relative flex flex-1 ${variant === "home" ? "rounded-[18px]" : "rounded-[12px]"} ${glow === w ? "trip-glow" : ""}`}>
+      {el}
+      {w === "pickup" && badge && <span className="pointer-events-none absolute -top-2.5 right-2 z-10 rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-[#1A1140] shadow-md">{badge}</span>}
+    </span>
+  );
   return (
     <nav aria-label="Trip steps" className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[color:var(--trip-bar,rgba(20,12,51,0.9))] backdrop-blur-md"
       style={{ paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
@@ -68,8 +75,8 @@ export function TagBar({ open, onOpen, top, variant, hideTags }: { open: Which |
       <div aria-hidden className="h-[3px] w-full" style={{ background: "var(--trip-strap, repeating-linear-gradient(90deg, #FFB87855 0 10px, transparent 10px 16px))" }} />
       {top && <div className="mx-auto max-w-md px-4 pt-2.5">{top}</div>}
       {!hideTags && <div className="mx-auto flex max-w-md gap-3 px-4 pt-2.5">
-        {variant === "home" ? <Ticket which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} /> : <Tag which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} />}
-        {variant === "home" ? <Ticket which="return" active={open === "return"} onClick={() => onOpen("return")} /> : <Tag which="return" active={open === "return"} onClick={() => onOpen("return")} />}
+        {wrap("pickup", variant === "home" ? <Ticket which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} /> : <Tag which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} />)}
+        {wrap("return", variant === "home" ? <Ticket which="return" active={open === "return"} onClick={() => onOpen("return")} /> : <Tag which="return" active={open === "return"} onClick={() => onOpen("return")} />)}
       </div>}
     </nav>
   );

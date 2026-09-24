@@ -15,11 +15,14 @@ import { TagBar, TripSheet } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
+import { Mail, PlayCircle, Users } from "lucide-react";
 import { ScrollFx } from "./ScrollFx";
 import { track } from "./track";
 import ExtraDrivers from "./ExtraDrivers";
 import { Collapse } from "./Collapse";
-import { ChargerLine, KeyNextSteps, KeyPending, keyTapped, markKeyTapped, useKeyWatch } from "./KeyNext";
+import { ChargerLine, KeyPending, SendToCar, keyTapped, markKeyTapped, useKeyWatch } from "./KeyNext";
+import { KeySteps, NextStep, guideFor, useHasApp } from "./Guide";
+import { Fold } from "./HomeGuide";
 import { homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
 import { ChargingCard, ChargingFab, type Charging } from "./Charging";
@@ -236,6 +239,16 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
   const street = home.address.split(",")[0];
   const shadow = { textShadow: "0 2px 14px rgba(19,39,38,0.9), 0 1px 2px rgba(19,39,38,0.9)" };
   const ended = tripEnded(pub.trip);
+  // What to do now + what glows (next-step card, Pickup/Return ticket, key button, climate controls).
+  const [hasApp, markHasApp] = useHasApp();
+  useKeyWatch(token, key?.state ?? "off", key?.opens_at, () => reload?.());
+  const { next, glow } = guideFor({ trip: pub.trip, keyInfo: key, hasApp, car, controlsOn: !!pub.controls, kind: "home" });
+  const keySteps = !!key && key.state !== "off" && key.state !== "ended";
+  const n0 = keySteps ? 2 : 0;
+  const doNext = (a: string) => {
+    if (a === "pickup" || a === "return") openSheet(a);
+    else if (a === "climate") document.getElementById("climate")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   const lockedUntil = demoCar ? null : pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending";
 
   return (
@@ -261,28 +274,25 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
       <DecoRule className="mx-5 -mt-px" />
 
       <main className="mx-auto max-w-md px-5 pb-48 pt-5">
-        {!ended && <p className="text-[17px] leading-relaxed text-white/85">You rented a <b className="text-white">Tesla Model 3</b> on <b className="text-white">Turo</b>. It's parked on the street at <b className="text-white">{street}</b>. Your phone is the key: no meetup, no keys to hand over. Tap <b className="text-white">Pickup</b> or <b className="text-white">Return</b> at the bottom for the steps.</p>}
+        {!ended && <p className="text-[17px] leading-relaxed text-white/85">Your Turo Tesla is parked on <b className="text-white">{street.replace(/^\d+\s*/, "")}</b>. <b className="text-white">Your phone is the key.</b> No meetup, no keys.</p>}
 
         {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" /></div>}
 
         {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" /> : <>
-        {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} token={token} onAdded={() => reload?.()}
-          next={pub.trip ? <KeyNextSteps trip={pub.trip} pickupBattery={pub.pickup_battery} place={homePlace(home.address)} kind="home" maps={mapsFor(home.address)} run={live ? run : undefined}
-            go={(w) => { if (w === "return" || w === "pickup") openSheet(w); else { if (w === "before") window.dispatchEvent(new Event("open-before")); document.getElementById(w)?.scrollIntoView({ behavior: "smooth", block: "start" }); } }} /> : null} />}
+        <NextStep next={next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? run : undefined} kind="home" />
 
-        {/* One widget for the car: where it is, weather + cabin + climate buttons, find-it buttons. */}
-        <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${doClimate ? "ring-2 ring-[#E8A93A]" : "ring-white/10"}`}
+        {/* One widget for the car: weather + cabin + climate buttons, then find-it buttons. */}
+        <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-3xl p-3 ring-1 transition ${glow.has("climate") || doClimate ? "trip-glow trip-glow-card" : "ring-white/10"}`}
           style={{ background: "linear-gradient(160deg, rgba(232,169,58,0.10), rgba(255,255,255,0.04) 40%, rgba(42,107,102,0.18))" }}>
           <div className="flex items-start justify-between gap-3 px-1 pt-1">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Your car · find it + get it comfy</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Your car</p>
               <h2 className="mt-0.5 text-[20px] font-bold leading-tight text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>{street}</h2>
             </div>
             <Starburst className="mt-1 h-6 w-6 shrink-0 text-[#E8A93A]" />
           </div>
-          <p className="mt-1 px-1 text-[14px] leading-relaxed text-white/75">{home.parking_note}</p>
           {doClimate && <p className="mt-2 px-1 text-[15px] font-semibold text-[#E8A93A]">{doClimate === "warm" ? "Tap Warm it up below to start the heat." : "Tap Cool it down below to start the A/C."}</p>}
-          {(pub.trip || car) && <div className="mt-3 px-1"><ClimateAdvice car={car} outsideF={outsideF} /></div>}
+          {(pub.trip || car) && <div className="mt-2 px-1"><ClimateAdvice car={car} outsideF={outsideF} /></div>}
           <div className="mt-3 grid grid-cols-2 items-stretch gap-2.5">
             <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} place="WeHo" />
             <CarCard trip={pub.trip ?? null} car={car} demo={demoCar} compact onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
@@ -293,7 +303,6 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
               ? <a href={mapsFor("Your Turo Tesla", spot.lat, spot.lon)} onClick={() => track(undefined, "spot")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold ring-1 ring-white/15 active:scale-[0.98]"><MapPin className="h-4 w-4" style={{ color: PEACH }} /> Exact spot</a>
               : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">{pub.trip && Date.now() >= +new Date(pub.trip.starts_at) - 2 * 3600e3 ? "Car location updating… use Honk to find it" : "Exact spot shows 2 hours before pickup"}</span>}
           </div>
-          {spot && <p className="mt-1.5 px-1 text-[12px] text-white/65">Car location updated {ago(spot.observed_at)}</p>}
           <div className="mt-3 flex gap-2.5">
             <CarButton action="honk" label="Honk" icon={BellRing} run={live ? run : undefined} hint={live ? "Short beep" : "Works 1 hour before pickup"} />
             <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? run : undefined} hint={live ? "Good at night" : " "} />
@@ -302,54 +311,57 @@ export default function HomeGuest({ pub, token, run, demo, reload }: { pub: Home
 
         {pub.charging && <ChargingCard charging={pub.charging} token={token} battery={car?.battery} pickupBattery={pub.pickup_battery} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" />}
 
-        {pub.trip && new Date(pub.trip.starts_at) > new Date() && (
-          <div className="mt-6"><EmailCard token={token} email={pub.email ?? null} reminderAt={pub.reminder_at ?? null} sentAt={pub.reminder_sent_at ?? null} home /></div>
-        )}
-
-        <HomeGuide pickupBattery={pub.pickup_battery} />
-
-        <Section kicker="Learn your Tesla" title="Short videos from Tesla" id="videos">
-          <VideoList />
-        </Section>
+        <HomeGuide pickupBattery={pub.pickup_battery}>
+          <Fold icon={Users} title="Someone else driving?" sub="Add them in Turo first, then get their key here">
+            <ExtraDrivers token={token} embedded />
+          </Fold>
+          <Fold icon={PlayCircle} title="How-to videos" sub="2-minute videos from Tesla">
+            <VideoList />
+          </Fold>
+          {pub.trip && new Date(pub.trip.starts_at) > new Date() && (
+            <Fold icon={Mail} title="Reminder email" sub="Get a nudge 1 hour before pickup">
+              <EmailCard token={token} email={pub.email ?? null} reminderAt={pub.reminder_at ?? null} sentAt={pub.reminder_sent_at ?? null} home />
+            </Fold>
+          )}
+        </HomeGuide>
 
         {pub.home?.host_note && (
           <Section kicker="From your host"><p className="text-white/90">{pub.home.host_note}</p></Section>
         )}
-
         </>}
 
-        <TripSheet open={sheet === "pickup"} onClose={() => openSheet(null)} kicker="Street → your car" title={`Pickup at ${street}`}>
-          <p className="text-[15px] leading-relaxed text-white/75">About 5 minutes once you're here. Follow the steps in order.</p>
-          <ol className="mt-5 space-y-4">
-            <Step n={1}><b className="text-white">Before you come:</b> add the car to your Tesla app. The button is in <a href="#key" onClick={() => openSheet(null)} className="underline decoration-white/40 underline-offset-2">Your key</a> on the main page, 2 hours before pickup.</Step>
-            <Step n={2}><b className="text-white">Get here:</b> <a href={mapsFor(home.address)} className="underline decoration-white/40 underline-offset-2">{home.address}</a>. Rideshare can drop you right on N Kings Rd.</Step>
-            <Step n={3}><b className="text-white">Find the car</b> on N Kings Rd near the building. Not sure which one? Tap <b className="text-white">Honk</b> or <b className="text-white">Flash lights</b>.</Step>
-            <Step n={4}><b className="text-white">Unlock:</b> open the Tesla app next to the car. First time, tap <b className="text-white">&ldquo;Set Up&rdquo;</b> and follow the steps. Then tap <b className="text-white">Unlock</b> and take your check-in photos all around the car in the Turo app.</Step>
-            <Step n={5}><b className="text-white">Drive:</b> sit down, press the brake, and push the <b className="text-white">right stalk</b> down for Drive. Up is Reverse.</Step>
+        <TripSheet open={sheet === "pickup"} onClose={() => openSheet(null)} kicker="Your key → your car" title={`Pickup at ${street}`}>
+          {key && keySteps && (
+            <>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>First: your phone is the key</p>
+              <div className="mt-3"><KeySteps k={key} token={token} hasApp={hasApp} onHasApp={markHasApp} onAdded={() => reload?.()} glow={glow.has("key")} /></div>
+              <p className="mt-7 text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Then: at the car</p>
+            </>
+          )}
+          <ol className="mt-4 space-y-4">
+            <Step n={n0 + 1}><b className="text-white">Go to</b> <a href={mapsFor(home.address)} className="underline decoration-white/40 underline-offset-2">{home.address}</a>. It's on N Kings Rd near the building. Not sure which car? Tap <b className="text-white">Honk</b> on the main page.</Step>
+            <Step n={n0 + 2}>Next to the car (Bluetooth on), open the Tesla app. Tap <b className="text-white">&ldquo;Set Up&rdquo;</b> and follow the steps. Then tap <b className="text-white">Unlock</b>.</Step>
+            <Step n={n0 + 3}><b className="text-white">Take check-in photos</b> all around the car in the Turo app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
+            <Step n={n0 + 4}><b className="text-white">Drive:</b> sit down, press the brake, push the <b className="text-white">right stalk</b> down. Up is Reverse.</Step>
           </ol>
-          <OpenTuro className="mt-5 w-full" label="Open Turo for check-in photos" />
-          <p className="mt-4 text-[14px] text-white/60">Hot or cold out? Use Cool it down or Warm it up on the main page before you walk over.</p>
         </TripSheet>
 
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
-          <p className="text-[15px] leading-relaxed text-white/75">{home.return_note}</p>
-          <ol className="mt-5 space-y-4">
-            <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the same charge you picked it up with"} to avoid Turo's recharge fee. <ChargerLine kind="home" /> Free parking, 24/7.</Step>
-            <Step n={2}><b className="text-white">Park on N Kings Rd</b> near the building. Legal spot, not blocking a driveway or hydrant.</Step>
-            <Step n={3}><b className="text-white">Street sweeping:</b> don't leave it on the <b className="text-white">west side Monday 8–10 AM</b> or the <b className="text-white">east side Tuesday 8–10 AM</b>. Tickets are $75.</Step>
-            <Step n={4}><b className="text-white">Photos + lock:</b> take your return photos in the Turo app, grab your stuff, and lock it in the Tesla app.</Step>
+          <ol className="space-y-4">
+            <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"}. <ChargerLine kind="home" /><SendToCar run={live ? run : undefined} kind="home" /></Step>
+            <Step n={2}><b className="text-white">Park on N Kings Rd</b> near the building. Not in front of a driveway or hydrant.</Step>
+            <Step n={3}><b className="text-white">Street sweeping:</b> not on the <b className="text-white">west side Monday 8–10 AM</b> or the <b className="text-white">east side Tuesday 8–10 AM</b>. Tickets are $75.</Step>
+            <Step n={4}><b className="text-white">Return photos</b> in the Turo app, grab your stuff, lock it in the Tesla app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
           </ol>
-          <OpenTuro className="mt-5 w-full" label="Open Turo for return photos" />
-          <p className="mt-4 text-[14px] text-white/60">Your Tesla access turns off by itself after the trip. Nothing to hand back.</p>
+          <p className="mt-5 text-[14px] text-white/60">Your key turns off by itself after the trip. Nothing to hand back.</p>
         </TripSheet>
 
-        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended} />
+        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended}
+          glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
         {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
         <VideoPlayer />
         <ScrollFx />
         <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home />
-
-        <p className="mt-10 text-center text-sm text-white/65">Questions? Tap Ask a question, or message your host in the Turo app.</p>
 
         <a href="https://www.bestly.tech/hire?utm_source=turo&utm_medium=guest-page&utm_campaign=home-trip-page" target="_blank" rel="noopener"
           className="mt-8 block rounded-3xl p-5 ring-1 ring-white/15 transition active:scale-[0.99]"
