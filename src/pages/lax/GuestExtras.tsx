@@ -165,7 +165,7 @@ const sameHour = (a: string, b: string) => Math.abs(+new Date(a) - +new Date(b))
 const rainPct = (p: number) => (p >= 0.3 ? `${Math.round(p * 10) * 10}%` : null);
 
 /** Apple Weather at LAX, laid out like the Weather app: big temp, hourly strip with the pickup hour marked, then pickup/return rows. */
-export function WeatherCard({ trip, compact = false, onNow, lat = 33.947, lon = -118.3816 }: { trip: Trip | null; compact?: boolean; onNow?: (f: number) => void; lat?: number; lon?: number }) {
+export function WeatherCard({ trip, compact = false, onNow, lat = 33.947, lon = -118.3816, place = "LAX" }: { trip: Trip | null; compact?: boolean; onNow?: (f: number) => void; lat?: number; lon?: number; place?: string }) {
   const [wx, setWx] = useState<Wx | null | "loading">("loading");
   useEffect(() => {
     supabase.functions.invoke("weatherkit-proxy", { body: { lat, lon, dataSets: "currentWeather,forecastHourly,forecastDaily" } })
@@ -200,8 +200,8 @@ export function WeatherCard({ trip, compact = false, onNow, lat = 33.947, lon = 
   if (compact) {
     const atPickup = rows.find((r) => r.label === "Pickup");
     return (
-      <section aria-label="Weather at LAX" className={`flex h-full flex-col rounded-3xl bg-gradient-to-b ${sky(now.conditionCode, day)} p-4 text-white shadow-lg shadow-black/20`}>
-        <p className="flex items-center justify-between text-[13px] font-medium"><span>LAX now</span><WxIcon code={now.conditionCode} day={day} className="h-5 w-5" /></p>
+      <section aria-label={`Weather at ${place}`} className={`flex h-full flex-col rounded-3xl bg-gradient-to-b ${sky(now.conditionCode, day)} p-4 text-white shadow-lg shadow-black/20`}>
+        <p className="flex items-center justify-between text-[13px] font-medium"><span>{place} now</span><WxIcon code={now.conditionCode} day={day} className="h-5 w-5" /></p>
         <p className="mt-1 text-[48px] font-extralight leading-none tracking-tight tabular-nums">{cToF(now.temperature)}°</p>
         <p className="mt-1 text-[14px] font-medium capitalize text-white/90">{cond(now.conditionCode)}</p>
         {today && <p className="text-[13px] text-white/75 tabular-nums">H:{cToF(today.temperatureMax)}°&nbsp; L:{cToF(today.temperatureMin)}°</p>}
@@ -228,9 +228,9 @@ export function WeatherCard({ trip, compact = false, onNow, lat = 33.947, lon = 
   }
 
   return (
-    <section aria-label="Weather at LAX" className={`overflow-hidden rounded-3xl bg-gradient-to-b ${sky(now.conditionCode, day)} text-white shadow-lg shadow-black/20`}>
+    <section aria-label={`Weather at ${place}`} className={`overflow-hidden rounded-3xl bg-gradient-to-b ${sky(now.conditionCode, day)} text-white shadow-lg shadow-black/20`}>
       <div className="px-5 pb-4 pt-5 text-center">
-        <p className="text-[15px] font-medium">LAX</p>
+        <p className="text-[15px] font-medium">{place}</p>
         <p className="mt-0.5 text-[64px] font-extralight leading-none tracking-tight tabular-nums">{cToF(now.temperature)}°</p>
         <p className="mt-1 text-[17px] font-medium capitalize text-white/90">{cond(now.conditionCode)}</p>
         {today && <p className="text-[15px] text-white/80 tabular-nums">H:{cToF(today.temperatureMax)}°&nbsp;&nbsp;L:{cToF(today.temperatureMin)}°</p>}

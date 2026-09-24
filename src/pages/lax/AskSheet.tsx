@@ -129,7 +129,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
   const footer = (
     <form onSubmit={(e) => { e.preventDefault(); send(text); }} className="flex items-end gap-2">
       <label className="sr-only" htmlFor="ask-input">Your question</label>
-      <textarea id="ask-input" rows={1} value={text} maxLength={500} placeholder={home ? "Ask about the key, the car, parking…" : "Ask about the shuttle, garage, car…"}
+      <textarea id="ask-input" rows={1} value={text} maxLength={500} placeholder={home ? "Ask about the key, car, parking…" : "Ask about the shuttle, garage, car…"}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(text); } }}
         className="max-h-28 min-h-[48px] flex-1 resize-none rounded-2xl bg-white/[0.08] px-4 py-3 text-[16px] text-white placeholder:text-white/40 outline-none ring-1 ring-white/15 focus:ring-2 focus:ring-[#FFB878]" />

@@ -186,7 +186,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
           <div className="mt-3 grid grid-cols-2 gap-2.5">
             <a href={mapsFor(home.address)} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#1A1140] active:scale-[0.98]"><Navigation className="h-4 w-4" /> Directions</a>
             {spot
-              ? <a href={mapsFor("Your Turo Tesla", spot.lat, spot.lon)} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold ring-1 ring-white/15 active:scale-[0.98]"><MapPin className="h-4 w-4" style={{ color: PEACH }} /> Where it's parked</a>
+              ? <a href={mapsFor("Your Turo Tesla", spot.lat, spot.lon)} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold ring-1 ring-white/15 active:scale-[0.98]"><MapPin className="h-4 w-4" style={{ color: PEACH }} /> Exact spot</a>
               : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/50 ring-1 ring-white/10">Exact spot shows 2 hours before pickup</span>}
           </div>
           {spot && <p className="mt-1.5 text-[12px] text-white/45">Car location updated {ago(spot.observed_at)}</p>}
@@ -198,7 +198,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
 
         {(pub.trip || car) && <div className="mt-6"><ClimateAdvice car={car} outsideF={outsideF} /></div>}
         <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
-          <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} />
+          <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} place="WeHo" />
           <CarCard trip={pub.trip ?? null} car={car} demo={demoCar} compact onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
         </div>
 
