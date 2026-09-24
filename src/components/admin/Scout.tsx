@@ -24,6 +24,7 @@ import { CopyBlock } from "@/components/CopyText";
 import { copyText } from "@/lib/copyForClaude";
 import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecording } from "./ScoutRecorder";
 import { ScoutJobs, useMacJobs, type MacJob } from "./ScoutJobs";
+import { AttachBar, AttachButton, useScoutFiles } from "./ScoutAttach";
 import { ScoutAutoRunBar } from "./ScoutAutoRun";
 import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
 
@@ -441,10 +442,14 @@ export function Scout() {
     saveScoutState({ open, threadId, text });
   }, [open, threadId, text]);
 
+  const attach = useScoutFiles();
+  const [overDrop, setOverDrop] = useState(false);
+
   const send = useCallback(
     async (body: string, replacing?: string | null, fresh?: boolean, about?: string) => {
       const asked = body.trim();
-      if (!asked || busy) return;
+      // A file on its own is a real ask ("read this"), so an empty box with an attachment sends.
+      if ((!asked && !attach.count) || busy || attach.busy) return;
 
       if (replacing) {
         await (supabase.rpc as any)("admin_chat_truncate", { p_message_id: replacing });
@@ -455,13 +460,17 @@ export function Scout() {
         setTitle(null);
         setEditing(null);
       }
-      setMsgs((m) => [...(fresh ? [] : m), { role: "user", body: asked }]);
+      // The files' text rides along in the message body, so the thread keeps the whole ask and
+      // Scout can refer back to a file later in the conversation without re-reading it.
+      const withFiles = attach.compose(asked);
+      setMsgs((m) => [...(fresh ? [] : m), { role: "user", body: withFiles }]);
       setText("");
+      attach.drop();
       requestAnimationFrame(toNewest); // you just asked: follow the answer
       setBusy(true);
 
       const { data, error } = await supabase.functions.invoke("admin-chat", {
-        body: { body: asked, thread_id: fresh ? null : threadId, page: pageContext(location.pathname + location.search, about) },
+        body: { body: withFiles, thread_id: fresh ? null : threadId, page: pageContext(location.pathname + location.search, about) },
       });
 
       const id = (data as { thread_id?: string })?.thread_id ?? (fresh ? null : threadId);
@@ -1083,13 +1092,27 @@ export function Scout() {
                 </button>
               </div>
             )}
+            <AttachBar files={attach.files} onRemove={attach.remove} />
             <div className="flex items-end gap-2">
+              <AttachButton onPick={attach.add} disabled={busy} />
               <textarea
                 ref={inputRef}
                 id="scout-input"
                 rows={1}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onPaste={(e) => {
+                  // Cmd+Shift+4 then paste: the commonest way to show Scout what you are looking at.
+                  const f = [...e.clipboardData.files];
+                  if (f.length) { e.preventDefault(); void attach.add(f); }
+                }}
+                onDragOver={(e) => { e.preventDefault(); setOverDrop(true); }}
+                onDragLeave={() => setOverDrop(false)}
+                onDrop={(e) => {
+                  e.preventDefault(); setOverDrop(false);
+                  const f = [...e.dataTransfer.files];
+                  if (f.length) void attach.add(f);
+                }}
                 onKeyDown={(e) => {
                   // On a phone Return is the only Return there is, so it types a newline
                   // and the button sends. On a keyboard, Enter sends and Shift+Enter wraps.
@@ -1099,13 +1122,13 @@ export function Scout() {
                   }
                 }}
                 enterKeyHint={phone ? "enter" : "send"}
-                placeholder="Ask, or say what to change..."
-                className="max-h-28 min-h-[2.75rem] flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-base sm:min-h-[2.375rem] sm:text-sm text-white transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-white/40 focus:border-white/25 focus:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                placeholder={attach.count ? "Ask about the file, or just send it..." : "Ask, or say what to change..."}
+                className={cn(overDrop && "border-[#0A84FF] bg-[#0A84FF]/10", "max-h-28 min-h-[2.75rem] flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-base sm:min-h-[2.375rem] sm:text-sm text-white transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-white/40 focus:border-white/25 focus:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
               />
               <Button
                 size="icon"
                 onClick={() => send(text, editing)}
-                disabled={busy || !text.trim()}
+                disabled={busy || attach.busy || (!text.trim() && !attach.count)}
                 aria-label="Send to Scout"
                 className="scout-press h-11 w-11 shrink-0 bg-white text-black transition-opacity hover:bg-white/90 disabled:opacity-40 sm:h-[2.375rem] sm:w-[2.375rem]"
               >
