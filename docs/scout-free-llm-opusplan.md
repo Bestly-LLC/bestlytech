@@ -1,6 +1,13 @@
-# Scout on free LLMs — plan (not built)
+# Scout on free LLMs — plan (built)
 
 Written 2026-09-23 (Cowork, Opus).
+
+**Status 2026-09-23, 9 PM PDT — all of Scout and Spark are free-first.** Keys in Vault, canary green (Groq, Cloudflare, Mac). $0 by default:
+- scout-daily v8 (paid "never"), todo-check v5, fix-ladder v6 (free diagnosis first), idea-tidy v2 (client "Tidy it up" button).
+- admin-chat v26: free answers via `llm()`; tools need a "Yes, use paid AI" tap (1 hour).
+- Spark (studio-chat v18.1, stub pinned to repo commit d6fcd2a): same rules as Scout for everyone. Questions free; actions ask first; `studio_requests.paid_ok_until`; `ai_budget('chat')` cap; paid calls logged to `ai_spend`.
+- Studio build 79a2c0f1: a small "i" next to Spark explains free vs paid; Yes/No buttons render in the chat.
+The status note below is the phase-1 record.
 
 **Status 2026-09-23 night — phase 1 BUILT and live:** `_shared/free-llm.ts` (interface §3, unchanged), edge fn `free-llm` v1 (ops canary / test / run), migration `20260923230000_free_llm_phase1.sql` (llm_providers, ai_spend provider/ok/ms/free_units/outcome, ai_spend_mix_today, llm_keys, llm_key_set, llm_shadow, free_llm_watch), crons `free-llm-watch` (every 15 min) and `free-llm-canary` (12:30 UTC = 5:30 AM PDT). Self-test passed on the Mac mini rung (qwen3:8b, 6–11 s): scrub, JSON judge, privacy default, size skip, paid-never. **Waiting on the 3 Vault secrets (§5)**; until then Groq/Cloudflare rungs report `skipped_nokey` and incident `ai.free.keys` stays open. scout-daily, admin-chat and the to-do UI are untouched (phases 2–4).
 Owner of `supabase/functions/_shared/free-llm.ts`: **this plan**. The to-do "Check if it's done" chat (`docs/todo-check-opusplan.md`) consumes it and must not edit it.
