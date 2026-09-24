@@ -30,6 +30,8 @@ import "@fontsource/plus-jakarta-sans/600.css";
 import "@fontsource/plus-jakarta-sans/700.css";
 import "@fontsource/plus-jakarta-sans/800.css";
 import "./index.css";
+// Build marker: a missing /assets file must 404, never fall back to index.html (a CDN cached that HTML under a .js URL once).
+(window as unknown as { __bestlyBuild?: string }).__bestlyBuild = "2026-09-24-assets-404";
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>

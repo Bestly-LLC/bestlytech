@@ -34,7 +34,7 @@
       "destination": "/lax.html"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|assets/|models/).*)",
       "destination": "/index.html"
     }
   ],
