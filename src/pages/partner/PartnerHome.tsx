@@ -27,6 +27,7 @@ import { CopyButton } from "@/components/CopyText";
 import { AdminMark } from "@/components/AdminMark";
 import { PartnerMark } from "@/components/PartnerMark";
 import { WeatherNow, type Place } from "@/components/admin/WeatherNow";
+import { CheckButton, CheckResult, usePartnerCheck, type CheckRow } from "@/components/admin/todoCheck";
 import { GreetingSwap } from "./GreetingSwap";
 import { cn } from "@/lib/utils";
 import { ART } from "./partnerArt";
@@ -377,7 +378,7 @@ export function PartnerHome({ session }: { session: Session }) {
           )}
 
           {tab === "home" && (
-            <HomeTab first={first} company={partner?.company ?? null} wxFixed={wxFixed} wxNote={wxNote} onWxPlace={viewAs || !partner ? undefined : savePlace} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} openCloud={setCloud} talkUnread={talkUnread} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
+            <HomeTab reload={load} canCheck={!!partner && !viewAs} first={first} company={partner?.company ?? null} wxFixed={wxFixed} wxNote={wxNote} onWxPlace={viewAs || !partner ? undefined : savePlace} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} openCloud={setCloud} talkUnread={talkUnread} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
               files={files} pipe={pipe} go={setTab} openCall={(m) => { setTab("calls"); setOpenCall(m); }}
               openMail={(m) => { setTab("mail"); setOpenMail(m); }} ask={askScout} scout={scout} />
           )}
@@ -418,12 +419,15 @@ export function PartnerHome({ session }: { session: Session }) {
 /* ───────── Home ───────── */
 
 function HomeTab(props: {
+  reload: () => void | Promise<void>; canCheck: boolean;
   wxFixed: Place | null; wxNote?: string; onWxPlace?: (p: Place) => void;
   first: string; company: string | null; callUrl: string; joinUrl: string; nextMtg: NextEvent | null; studioUnread: number; onConnect: () => void; openCloud: (v: CloudView) => void; talkUnread: number; mine: Todo[]; done: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
   meetings: Meeting[] | null; mail: MailRow[] | null; files: (Att & { mail: MailRow })[]; pipe: { deals: any[]; leads: any[] } | null;
   go: (t: Tab) => void; openCall: (m: Meeting) => void; openMail: (m: MailRow) => void; ask: (q?: string) => void; scout: ScoutState;
 }) {
-  const { wxFixed, wxNote, onWxPlace, first, company, callUrl, joinUrl, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
+  const { reload, canCheck, wxFixed, wxNote, onWxPlace, first, company, callUrl, joinUrl, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
+  // "Check if it's done" for his own to-dos: check only, never closes anything for him
+  const pc = usePartnerCheck(reload, mine as CheckRow[]);
   const [q, setQ] = useState("");
   const [excited, setExcited] = useState(false); // hovering the greeting: the mark reacts
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", ...PT });
@@ -489,18 +493,25 @@ function HomeTab(props: {
         <Panel title="Your to-dos" icon={Check} className="lg:col-span-2">
           {mine.length === 0 ? <Muted>All clear. Nothing from your calls is waiting on you.</Muted> : (
             <ul className="divide-y divide-white/[0.06]">
-              {mine.map((t) => (
+              {mine.map((t) => {
+                const checking = t.id in pc.pending;
+                return (
                 <li key={t.id} className="flex items-start gap-3 py-3">
                   <button aria-label="Mark done" onClick={() => tick(t, "done")}
                     className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 border-white/25 text-transparent transition hover:border-emerald-400 hover:text-emerald-400 active:scale-90">
                     <Check className="h-3.5 w-3.5" />
                   </button>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-[0.975rem]">{t.title}</p>
                     <p className="mt-0.5 text-xs text-white/45">{t.action?.due ? `Due ${t.action.due} · ` : ""}{String(t.action?.meeting ?? "")}</p>
+                    {t.action?.check && !checking && (
+                      <CheckResult r={t as CheckRow} tc={{ feedback: pc.feedback }} onDone={() => tick(t, "done")} onNext={(q) => ask(q)} />
+                    )}
                   </div>
+                  {canCheck && <CheckButton busy={checking} onClick={() => pc.checkOne(t as CheckRow)} />}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
           {done.length > 0 && <DoneList done={done} tick={tick} />}

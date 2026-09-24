@@ -9,7 +9,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Bell, Binoculars, CalendarClock, Check, ChevronDown, ExternalLink, Loader2, MessagesSquare, Siren, Users, Video, X } from "lucide-react";
 import { startEmergency } from "@/pages/admin/Emergency";
 import { supabase } from "@/integrations/supabase/client";
-import { openScout } from "@/components/admin/scoutBus";
+import { askScout, openScout } from "@/components/admin/scoutBus";
 import { AdminMark } from "@/components/AdminMark";
 import { WeatherNow } from "@/components/admin/WeatherNow";
 import { useNextMeeting, whenLabel } from "@/pages/partner/PartnerExtras";
@@ -174,7 +174,7 @@ export function CommandHero() {
                     <div className="min-w-0 flex-1">
                       <p className="text-[0.9375rem] leading-snug text-white">{t.title}</p>
                       <p className="mt-0.5 text-[0.75rem] text-white/40">{t.action?.due ? `Due ${t.action.due} · ` : ""}{String(t.action?.meeting ?? "")}</p>
-                      {t.action?.check && !checking && <CheckResult r={t as CheckRow} tc={tc} onDone={() => tick(t)} />}
+                      {t.action?.check && !checking && <CheckResult r={t as CheckRow} tc={tc} onDone={() => tick(t)} onNext={(q) => askScout(q, { about: t.title })} />}
                     </div>
                     <CheckButton busy={checking} onClick={() => tc.checkOne(t.id)} />
                   </div>

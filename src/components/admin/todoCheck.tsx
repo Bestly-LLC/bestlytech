@@ -214,7 +214,11 @@ export function Evidence({ items }: { items: any[] }) {
 }
 
 /** One quiet status line under a to-do; tap it for the summary, proof and thumbs. */
-export function CheckResult({ r, tc, onDone }: { r: CheckRow; tc: TodoCheck; onDone: () => void }) {
+export function CheckResult({ r, tc, onDone, onNext }: {
+  r: CheckRow; tc: Pick<TodoCheck, "feedback">; onDone: () => void;
+  /** "Not yet" / "Partly": hand Scout the one next step it found (opens Scout with it). */
+  onNext?: (text: string) => void;
+}) {
   const c = r.action?.check ?? {};
   const [open, setOpen] = useState(false);
   const [asking, setAsking] = useState(false);
@@ -236,11 +240,19 @@ export function CheckResult({ r, tc, onDone }: { r: CheckRow; tc: TodoCheck; onD
           <button onClick={() => { onDone(); tc.feedback(r, "up"); }}
             className={cn("text-[0.8125rem] font-semibold text-[#30D158] hover:underline bento:text-[#248A3D]", tap)}>Mark done</button>
         )}
+        {c.verdict !== "done" && c.next_step && onNext && r.status === "open" && (
+          <button onClick={() => onNext(`Help me finish this to-do: "${r.title}". The check found: ${c.summary ?? ""} Next step: ${c.next_step}`)}
+            title={`Next step: ${c.next_step}`}
+            className={cn("inline-flex items-center gap-1 text-[0.8125rem] font-semibold hover:underline", BLUE_TEXT, tap)}>
+            Next step <ChevronDown className="h-3.5 w-3.5 -rotate-90" aria-hidden />
+          </button>
+        )}
       </div>
       {open && (
         <div className="mt-1.5 rounded-[12px] bg-white/[0.04] px-3 py-2.5">
           {c.summary && <p className="text-[0.8125rem] leading-relaxed text-white/80">{c.summary}</p>}
           {c.remaining && c.verdict !== "done" && <p className="mt-1 text-[0.75rem] text-white/55">Still to do: {c.remaining}</p>}
+          {c.next_step && c.verdict !== "done" && <p className="mt-1 text-[0.75rem] text-white/70"><span className="font-semibold">Next:</span> {c.next_step}</p>}
           <ProofList items={c.evidence ?? []} />
           <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/[0.07] pt-2 text-[0.75rem] text-white/45">
             {c.at && <span>Checked {time12(c.at)}</span>}
@@ -292,4 +304,48 @@ export function ClosedByScout({ rows, tc }: { rows: CheckRow[]; tc: TodoCheck })
       </ul>
     </div>
   );
+}
+
+/* ───────── partner portal (Eli): check his own to-dos ───────── */
+
+/** Minimal check state for a partner: queue a check, then reload until the row's result changes. */
+export function usePartnerCheck(reload: () => void | Promise<void>, rows: CheckRow[]) {
+  const [pending, setPending] = useState<Record<string, string>>({}); // id -> the check.at it had before
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
+  useEffect(() => {
+    const ids = Object.keys(pending);
+    if (!ids.length) return;
+    const t = setInterval(() => reloadRef.current(), 4000);
+    return () => clearInterval(t);
+  }, [pending]);
+  useEffect(() => {
+    // a row whose check.at moved on is finished
+    setPending((p) => {
+      const next = { ...p };
+      let changed = false;
+      for (const r of rows) if (r.id in next && (r.action?.check?.at ?? "") !== next[r.id]) { delete next[r.id]; changed = true; }
+      return changed ? next : p;
+    });
+  }, [rows]);
+  const checkOne = async (r: CheckRow) => {
+    setPending((p) => ({ ...p, [r.id]: r.action?.check?.at ?? "" }));
+    const { data, error } = await supabase.functions.invoke("todo-check", { body: { op: "check", id: r.id } });
+    const d = data as any;
+    if (error || !d?.ok) {
+      toast.error(d?.error ?? error?.message ?? "Couldn't start the check");
+      setPending((p) => { const n = { ...p }; delete n[r.id]; return n; });
+      return;
+    }
+    toast.success("Scout is checking. You can leave this page.");
+  };
+  const feedback = async (r: CheckRow, kind: "up" | "down" | "undo", note?: string) => {
+    const checkId = r.action?.check?.id;
+    if (!checkId) return;
+    const { error } = await supabase.rpc("todo_check_feedback" as never, { p_check: checkId, p_kind: kind, p_note: note ?? null } as never);
+    if (error) { toast.error(error.message); return; }
+    toast.success(kind === "up" ? "Thanks, noted." : "Got it. Scout is learning from this.");
+    reloadRef.current();
+  };
+  return { pending, checkOne, feedback };
 }

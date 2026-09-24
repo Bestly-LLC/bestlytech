@@ -186,7 +186,7 @@ export function ScoutToday() {
                   <div className="min-w-0 flex-1">
                     <p className={cn("text-[0.975rem] font-semibold leading-snug text-white", done && "line-through decoration-white/40")}>{p.title}</p>
                     {p.why && <p className="mt-1.5 text-sm leading-relaxed text-white/60">{p.why}</p>}
-                    {p.action?.check && p.status === "open" && !tc.pending.has(p.id) && <CheckResult r={p} tc={tc} onDone={() => set(p, "done", "Done")} />}
+                    {p.action?.check && p.status === "open" && !tc.pending.has(p.id) && <CheckResult r={p} tc={tc} onDone={() => set(p, "done", "Done")} onNext={(q) => askScout(q, { about: p.title })} />}
                   </div>
                   {p.status === "open" ? (
                     <div className="-mx-1 flex flex-wrap items-center gap-1">
@@ -272,7 +272,7 @@ export function ScoutToday() {
                       <OwnerMenu owner={owner} mine={mine} people={people} onPick={(o) => setOwner(c, o)} />
                       {c.action?.due ? ` · due ${c.action.due}` : ""} · {String(c.action?.meeting ?? "")}
                     </p>
-                    {c.action?.check && !tc.pending.has(c.id) && <CheckResult r={c} tc={tc} onDone={() => doneCall(c)} />}
+                    {c.action?.check && !tc.pending.has(c.id) && <CheckResult r={c} tc={tc} onDone={() => doneCall(c)} onNext={(q) => askScout(q, { about: c.title })} />}
                   </div>
                   <CheckButton busy={tc.pending.has(c.id)} onClick={() => tc.checkOne(c.id)} compact />
                   {c.action?.deck_url && (

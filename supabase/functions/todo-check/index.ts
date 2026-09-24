@@ -7,6 +7,7 @@
 //   op tick                   hourly cron; queues the nightly pass at 10 PM Los Angeles, once a day.
 //   op nightly {force?}       the nightly pass (the watchdog calls this with force when tick missed).
 //
+// v4: Sent mail is evidence (todo_evidence_sent: bestly_sent_mail + partner_mail); partners can check their own to-dos.
 // v3: obeys the Paid AI switch. Off = free AI only (Mac mini); asleep = no-AI read, never paid.
 // v2: everything goes through todo_check_jobs so a check finishes even if Jared closes the page;
 // the page reads progress from todo_check_runs / todo_check_jobs, and a finished run sends a notification.
@@ -66,6 +67,14 @@ async function isService(tok: string) {
     const { error } = await probe.auth.admin.listUsers({ page: 1, perPage: 1 });
     return !error;
   } catch { return false; }
+}
+/** A signed-in partner (Eli): their roster name, for checking their own to-dos only. */
+async function partnerOf(jwt: string): Promise<{ uid: string; roster: string } | null> {
+  if (!jwt || jwt.split(".").length !== 3) return null;
+  const { data } = await db.auth.getUser(jwt);
+  if (!data?.user) return null;
+  const { data: p } = await db.from("partners").select("roster_name").eq("user_id", data.user.id).maybeSingle();
+  return (p as any)?.roster_name ? { uid: data.user.id, roster: String((p as any).roster_name).toLowerCase() } : null;
 }
 async function adminId(jwt: string): Promise<string | null> {
   if (!jwt || jwt.split(".").length !== 3) return null;
@@ -272,6 +281,13 @@ async function gather(todo: any) {
       for (const t of e.related_todos ?? []) list.push({ id: t.id, src: "todo", at: t.done_at, title: `Related ${t.kind} marked ${t.status}`, quote: t.title, url: null });
       return list;
     }, 12000),
+    run("sent", async () => {
+      // what Jared (or his partner-mail copies) SENT: the proof for "email X" / "send Y" to-dos
+      const { data, error } = await db.rpc("todo_evidence_sent", { p_terms: terms, p_since: since });
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as any[]).map((m) => ({ id: m.id, src: "sent", at: m.sent_at,
+        title: `Jared sent to ${String(m.to_addrs ?? "").slice(0, 80)}: ${m.subject ?? ""}`.slice(0, 160), quote: m.quote, url: null }));
+    }, 12000),
     run("deck", () => deckEvidence(todo), 15000),
     run("github", () => githubEvidence(terms, since), 15000),
   ]);
@@ -305,6 +321,7 @@ async function check(id: string, trigger: "button" | "sweep" | "nightly", allowC
       "Jared runs Bestly LLC, a small product studio. To-dos come from his calls and from Scout (his assistant).",
       "Rules: every claim must cite evidence ids. A match on words is not proof: the evidence must show the action itself happened",
       "(a reply was sent or received, a commit landed, a card moved to Done, a memory note says it shipped, a later call says it was done).",
+      "Evidence with source \"sent\" is an email Jared actually sent: strong proof for to-dos about emailing, sending or asking someone.",
       "A plan, a mention, or the to-do being discussed is NOT proof. If nothing shows it happened, verdict is unknown or not_done.",
       "The to-do's owner may be someone other than Jared; judge whether THAT person did it.",
       les.length ? "Lessons from Jared's past corrections (follow them):\n" + les.map((l) => `- ${l.title}: when ${l.when_text ?? "judging"}, ${l.do_text ?? ""}${l.avoid_text ? `; avoid ${l.avoid_text}` : ""}`).join("\n") : "",
@@ -509,9 +526,22 @@ Deno.serve(async (req) => {
   const apikey = req.headers.get("apikey") ?? "";
   const service = (await isService(bearer)) || (apikey.startsWith("sb_secret_") && (await isService(apikey)));
   const admin = service ? null : await adminId(bearer);
-  if (!service && !admin) return J({ ok: false, error: "sign in to the Bestly admin" }, 401);
   let body: Record<string, any> = {};
   try { body = await req.json(); } catch { /* empty */ }
+  // Partners (Eli) may only check their OWN call to-dos, one at a time, never auto-closed.
+  if (!service && !admin) {
+    const partner = body.op === "check" ? await partnerOf(bearer) : null;
+    if (!partner) return J({ ok: false, error: "sign in to the Bestly admin" }, 401);
+    const { data: t } = await db.from("scout_daily").select("kind, action").eq("id", String(body.id ?? "")).maybeSingle();
+    if (!t || (t as any).kind !== "call" || String((t as any).action?.owner ?? "").toLowerCase() !== partner.roster) {
+      return J({ ok: false, error: "you can only check your own to-dos" }, 403);
+    }
+    const { data: gate } = await db.rpc("ai_gate", { p_fn: "todo-check", p_who: `partner:${partner.uid}` });
+    if ((gate as any)?.ok === false) return J({ ok: false, error: "paused for today" }, 429);
+    const q = await enqueue([String(body.id)], "button", false, null);
+    background(drain());
+    return J({ ok: true, queued: true, ...q });
+  }
 
   try {
     switch (body.op) {
