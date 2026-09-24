@@ -15,6 +15,7 @@ import { TagBar, TripSheet } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
+import { ScrollFx } from "./ScrollFx";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -221,9 +222,9 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@600;700&display=swap" />
       </Helmet>
 
-      <div className="relative">
-        <img src="/wallet/home/hero-mcm.svg" alt="" className="block h-52 w-full object-cover object-[60%_70%] sm:h-64" />
-        <div className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
+      <div className="relative overflow-hidden">
+        <img data-fx-hero src="/wallet/home/hero-mcm.svg" alt="" className="block h-52 w-full object-cover object-[60%_70%] will-change-transform sm:h-64" />
+        <div data-fx-title className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
           <p className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: PEACH, ...shadow }}>{pub.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
           <h1 className="mt-1 text-[32px] leading-[1.05] sm:text-5xl" style={{ ...shadow, fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif", fontWeight: 700, color: "#F4EAD5" }}>Your Tesla in<br />West Hollywood</h1>
         </div>
@@ -237,29 +238,35 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
 
         {key && key.state !== "off" && <KeyCard k={key} trip={pub.trip} run={live ? run : undefined} />}
 
-        <Section kicker="Find the car" title={street}>
-          <p className="text-[14px] leading-relaxed text-white/75">{home.parking_note}</p>
+        {/* One widget for the car: where it is, weather + cabin + climate buttons, find-it buttons. */}
+        <section id="climate" aria-label="Your car" className={`mt-6 scroll-mt-4 rounded-[28px] p-3 ring-1 transition ${doClimate ? "ring-2 ring-[#E8A93A]" : "ring-white/10"}`}
+          style={{ background: "linear-gradient(160deg, rgba(232,169,58,0.10), rgba(255,255,255,0.04) 40%, rgba(42,107,102,0.18))" }}>
+          <div className="flex items-start justify-between gap-3 px-1 pt-1">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Your car · find it + get it comfy</p>
+              <h2 className="mt-0.5 text-[20px] font-bold leading-tight text-white" style={{ fontFamily: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }}>{street}</h2>
+            </div>
+            <Starburst className="mt-1 h-6 w-6 shrink-0 text-[#E8A93A]" />
+          </div>
+          <p className="mt-1 px-1 text-[14px] leading-relaxed text-white/75">{home.parking_note}</p>
+          {doClimate && <p className="mt-2 px-1 text-[15px] font-semibold text-[#E8A93A]">{doClimate === "warm" ? "Tap Warm it up below to start the heat." : "Tap Cool it down below to start the A/C."}</p>}
+          {(pub.trip || car) && <div className="mt-3 px-1"><ClimateAdvice car={car} outsideF={outsideF} /></div>}
+          <div className="mt-3 grid grid-cols-2 items-stretch gap-2.5">
+            <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} place="WeHo" />
+            <CarCard trip={pub.trip ?? null} car={car} demo={demoCar} compact onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
+          </div>
           <div className="mt-3 grid grid-cols-2 gap-2.5">
-            <a href={mapsFor(home.address)} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#1A1140] active:scale-[0.98]"><Navigation className="h-4 w-4" /> Directions</a>
+            <a href={mapsFor(home.address)} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#132726] active:scale-[0.98]"><Navigation className="h-4 w-4" /> Directions</a>
             {spot
               ? <a href={mapsFor("Your Turo Tesla", spot.lat, spot.lon)} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold ring-1 ring-white/15 active:scale-[0.98]"><MapPin className="h-4 w-4" style={{ color: PEACH }} /> Exact spot</a>
               : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/50 ring-1 ring-white/10">Exact spot shows 2 hours before pickup</span>}
           </div>
-          {spot && <p className="mt-1.5 text-[12px] text-white/45">Car location updated {ago(spot.observed_at)}</p>}
+          {spot && <p className="mt-1.5 px-1 text-[12px] text-white/45">Car location updated {ago(spot.observed_at)}</p>}
           <div className="mt-3 flex gap-2.5">
             <CarButton action="honk" label="Honk" icon={BellRing} run={live ? run : undefined} hint={live ? "Short beep" : "Works 1 hour before pickup"} />
             <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? run : undefined} hint={live ? "Good at night" : " "} />
           </div>
-        </Section>
-
-        <div id="climate" className={`scroll-mt-4 rounded-3xl transition ${doClimate ? "-mx-2 mt-4 px-2 pb-2 ring-2 ring-[#E8A93A] ring-offset-2 ring-offset-[#132726]" : ""}`}>
-        {doClimate && <p className="pt-3 text-[15px] font-semibold text-[#E8A93A]">{doClimate === "warm" ? "Tap Warm it up below to start the heat." : "Tap Cool it down below to start the A/C."}</p>}
-        {(pub.trip || car) && <div className="mt-6"><ClimateAdvice car={car} outsideF={outsideF} /></div>}
-        <div className="mt-2.5 grid grid-cols-2 items-stretch gap-2.5">
-          <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} place="WeHo" />
-          <CarCard trip={pub.trip ?? null} car={car} demo={demoCar} compact onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
-        </div>
-        </div>
+        </section>
 
         {pub.trip && new Date(pub.trip.starts_at) > new Date() && (
           <div className="mt-6"><EmailCard token={token} email={pub.email ?? null} reminderAt={pub.reminder_at ?? null} sentAt={pub.reminder_sent_at ?? null} home /></div>
@@ -300,6 +307,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
 
         <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" />
         <VideoPlayer />
+        <ScrollFx />
         <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home />
 
         <p className="mt-10 text-center text-sm text-white/50">Questions? Tap Ask a question, or message your host in the Turo app.</p>

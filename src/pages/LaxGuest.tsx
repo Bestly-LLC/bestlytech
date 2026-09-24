@@ -15,6 +15,7 @@ import { TagBar, TripSheet } from "./lax/TripSheet";
 import { AskButton, AskSheet } from "./lax/AskSheet";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type Trip } from "./lax/GuestExtras";
 import { WalletLoader } from "./lax/WalletLoader";
+import { ScrollFx } from "./lax/ScrollFx";
 import HomeGuest, { type CarAction, type HomeInfo, type KeyInfo } from "./lax/HomeGuest";
 import { renderPassImage } from "./lax/passImage";
 
@@ -260,9 +261,9 @@ export default function LaxGuest() {
         <link rel="apple-touch-icon" href="/wallet/lax/apple-touch-icon.png" />
       </Helmet>
 
-      <div className="relative">
-        <img src="/wallet/lax/hero.svg" alt="" className="block h-44 w-full object-cover object-[65%_center] sm:h-56" />
-        <div className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
+      <div className="relative overflow-hidden">
+        <img data-fx-hero src="/wallet/lax/hero.svg" alt="" className="block h-44 w-full object-cover object-[65%_center] will-change-transform sm:h-56" />
+        <div data-fx-title className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: PEACH, ...shadow }}>{pub?.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={shadow}>Picking up your Turo car at LAX</h1>
         </div>
@@ -432,6 +433,7 @@ export default function LaxGuest() {
             </TripSheet>
             <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} />
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
+            <ScrollFx />
 
             <p className="mt-10 text-center text-sm text-white/50">Questions? Tap Ask a question, or message your host in the Turo app.</p>
 
