@@ -109,13 +109,34 @@ function CarButton({ action, label, icon: Icon, run, disabled, hint }: { action:
 }
 
 function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void> }) {
+  // Guest says they already have the Tesla app: skip that step and show what's next instead.
+  const [hasApp, setHasApp] = useState(() => { try { return localStorage.getItem("hasTeslaApp") === "1"; } catch { return false; } });
+  const haveIt = () => { setHasApp(true); try { localStorage.setItem("hasTeslaApp", "1"); } catch { /* private mode */ } };
+  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   const appStore = platform() === "android" ? "https://play.google.com/store/apps/details?id=com.teslamotors.tesla" : "https://apps.apple.com/app/tesla/id582007913";
   return (
     <Section kicker="Your key" title={k.state === "added" ? "You're all set. Your phone is the key." : "Your phone is the key"} id="key">
       {k.state === "soon" && (
         <p className="text-[15px] leading-relaxed text-white/80">
-          Your key shows up here <b className="text-white">{k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"}</b>. You'll add the car to the free Tesla app with one tap. There's no key card with this car. In the meantime, download the Tesla app and sign in or make a free account.
-          <a href={appStore} className="mt-3 flex h-12 items-center justify-center gap-2 rounded-xl bg-white text-[15px] font-semibold text-[#1A1140]"><Smartphone className="h-4 w-4" /> Get the Tesla app</a>
+          Your key shows up here <b className="text-white">{k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"}</b>. You'll add the car to the free Tesla app with one tap. There's no key card with this car.
+          {!hasApp ? (
+            <>
+              <span className="mt-1 block">In the meantime, get the Tesla app and sign in or make a free account.</span>
+              <span className="mt-3 grid grid-cols-2 gap-2">
+                <a href={appStore} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-white text-[15px] font-semibold text-[#132726]"><Smartphone className="h-4 w-4" /> Get the app</a>
+                <button type="button" onClick={haveIt} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-white/10 text-[14px] font-semibold text-white ring-1 ring-white/15"><CheckCircle2 className="h-4 w-4" /> I already have it</button>
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="mt-3 flex items-start gap-2 rounded-xl bg-emerald-400/10 p-3 text-[14px] text-white/90 ring-1 ring-emerald-300/30"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />You're set with the Tesla app. Just make sure you're signed in.</span>
+              <span className="mt-3 block text-[13px] font-semibold uppercase tracking-[0.12em] text-white/55">While you wait</span>
+              <span className="mt-2 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => jump("before")} className="flex min-h-[48px] items-center justify-center rounded-xl bg-white/10 px-2 text-[14px] font-semibold text-white ring-1 ring-white/15">Before you drive</button>
+                <button type="button" onClick={() => jump("videos")} className="flex min-h-[48px] items-center justify-center rounded-xl bg-white/10 px-2 text-[14px] font-semibold text-white ring-1 ring-white/15">2-min videos</button>
+              </span>
+            </>
+          )}
         </p>
       )}
       {k.state === "making" && (
@@ -124,7 +145,9 @@ function KeyCard({ k, trip, run }: { k: KeyInfo; trip: Trip | undefined; run?: (
       {k.state === "ready" && (
         <>
           <ol className="space-y-3">
-            <Step n={1}>Get the free <a href={appStore} className="font-semibold text-white underline decoration-white/40 underline-offset-2">Tesla app</a> and sign in, or make an account. It takes a minute.</Step>
+            {hasApp
+              ? <li className="flex items-center gap-3 text-[15px] text-white/60"><CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-300" /><span className="line-through decoration-white/30">Get the Tesla app</span> <span className="no-underline">You have it</span></li>
+              : <Step n={1}>Get the free <a href={appStore} className="font-semibold text-white underline decoration-white/40 underline-offset-2">Tesla app</a> and sign in, or make an account. It takes a minute. <button type="button" onClick={haveIt} className="ml-1 font-semibold underline decoration-white/40 underline-offset-2" style={{ color: PEACH }}>I already have it</button></Step>}
             <Step n={2}>Tap the button below on this phone and accept. The car shows up in your Tesla app.</Step>
             <Step n={3}>At the car, open the Tesla app and tap <b className="text-white">Unlock</b>. The app walks you through turning on your phone key.</Step>
           </ol>
@@ -244,7 +267,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
 
         <HomeGuide pickupBattery={pub.pickup_battery} />
 
-        <Section kicker="Learn your Tesla" title="Short videos from Tesla">
+        <Section kicker="Learn your Tesla" title="Short videos from Tesla" id="videos">
           <VideoList />
         </Section>
 

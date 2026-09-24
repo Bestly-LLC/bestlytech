@@ -4,7 +4,8 @@
  * and the video links (all checked: Tesla's own YouTube channels).
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, BatteryCharging, ChevronDown, ClipboardList, Cpu, Download, ExternalLink, FileText, KeySquare, Phone, Play, PlayCircle, X } from "lucide-react";
+import { BeforeYouDrive } from "./BeforeYouDrive";
+import { AlertTriangle, BatteryCharging, ChevronDown, Cpu, Download, ExternalLink, FileText, KeySquare, Phone, Play, PlayCircle, X } from "lucide-react";
 
 const ACCENT = "var(--trip-accent)";
 const yt = (id: string) => `https://www.youtube.com/watch?v=${id}`;
@@ -131,6 +132,8 @@ export function HomeGuide({ pickupBattery }: { pickupBattery?: number | null }) 
       <p className="pt-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Your car guide</p>
       <h2 className="mt-1 text-[19px] font-semibold leading-snug text-white">Everything you need, at a glance</h2>
 
+      <BeforeYouDrive />
+
       <Fold icon={BatteryCharging} title="Charging" sub="Return with the same charge · nearest Supercharger">
         {pickupBattery != null
           ? <ChargeBadge pct={pickupBattery} />
@@ -159,15 +162,6 @@ export function HomeGuide({ pickupBattery }: { pickupBattery?: number | null }) 
         ]} />
       </Fold>
 
-      <Fold icon={ClipboardList} title="Before you drive" sub="Your driver profile, paperwork, cleaning, changes">
-        <Bullets items={[
-          <><b className="text-white">Driver profile:</b> use the Turo Guest profile for your seat and mirrors. Switch by tapping Easy Entry at the top of the screen. Please don't save changes to the host's profile.</>,
-          <><b className="text-white">Paperwork:</b> the California registration is in the center console glovebox. Please leave it in the car. Turo's <a href={INCIDENT_CARD} target="_blank" rel="noreferrer" className="underline decoration-white/40 underline-offset-2">incident information card</a> is linked below too.</>,
-          <><b className="text-white">Cleaning:</b> please keep it clean. You may be charged for extra cleaning if it comes back overly dirty.</>,
-          <><b className="text-white">Changes to your trip:</b> only in the Turo app. Message your host there with any questions.</>,
-          <><b className="text-white">No key card:</b> this car doesn't come with one. Your phone is the key.</>,
-        ]} />
-      </Fold>
 
       <Fold icon={Cpu} title="Full Self-Driving (Supervised)" sub="How to turn it on, start, and take over">
         <p><b className="text-white">Hands on. Eyes up.</b> It steers, brakes, changes lanes, handles intersections and parks, but it isn't autonomous. You're the driver and responsible at all times. Rain, glare, faded lines and heavy traffic make it worse.</p>

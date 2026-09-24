@@ -80,7 +80,7 @@ function links(text: string) {
 }
 
 /** Every action the answer suggests: phone numbers, apps, places, documents, links. */
-function CallButtons({ text }: { text: string }) {
+function CallButtons({ text, onAsk }: { text: string; onAsk?: (q: string) => void }) {
   const list = phones(text);
   const acts = links(text);
   if (!list.length && !acts.length) return null;
@@ -100,6 +100,12 @@ function CallButtons({ text }: { text: string }) {
           <Icon className="h-4 w-4" aria-hidden /> {label}
         </a>
       ))}
+      {onAsk && acts.some((a) => a.key === "tesla") && (
+        <button type="button" onClick={() => onAsk("I already have the Tesla app. What's next?")}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white/10 px-4 text-[15px] font-semibold text-white ring-1 ring-white/20 active:scale-95">
+          I already have it
+        </button>
+      )}
     </div>
   );
 }
@@ -197,7 +203,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
                 ? "rounded-br-md text-[#1A1140]" : "rounded-bl-md bg-white/[0.08] text-white ring-1 ring-white/10"} ${m.status === "error" ? "ring-[#E4527A]/60" : ""}`}
                 style={m.role === "user" ? { background: PEACH } : undefined}>
                 {m.content || (m.status === "pending" || m.status === "working" ? <Dots /> : "")}
-                {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && m.content && <CallButtons text={m.content} />}
+                {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && m.content && <CallButtons text={m.content} onAsk={busy ? undefined : send} />}
               </div>
             </li>
           ))}
