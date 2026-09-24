@@ -31,6 +31,7 @@ import { OpenTuro, TripDone, tripEnded } from "./TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type Charging } from "./Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./LiveCharge";
 import { PhoneHandoff } from "./PhoneHandoff";
+import { UnlockStart } from "./Valet";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -326,6 +327,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
             <CarButton action="honk" label="Honk" icon={BellRing} run={live ? run : undefined} hint={live ? "Short beep" : "Works 1 hour before pickup"} />
             <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? run : undefined} hint={live ? "Good at night" : " "} />
           </div>
+          {demoPage ? (key?.state === "added" && <UnlockStart demo />) : <UnlockStart token={token} />}
         </section>
 
         {pub.charging && <ChargingCard charging={pub.charging} token={token} battery={car?.battery} pickupBattery={pub.pickup_battery} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif">

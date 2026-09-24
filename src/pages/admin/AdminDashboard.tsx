@@ -16,6 +16,7 @@ import {
   fetchSweepState, fmtDay, laNowMinutes, upcomingSweepDays, weekdayOf, LA_TZ, SWEEP_DAYS, carPlacement,
   type SweepState,
 } from "@/services/streetSweepingApi";
+import { TuroMini } from "@/components/admin/turo/TuroMini";
 import { fetchLatestRun, runHeadline } from "@/services/securityAuditApi";
 
 /**
@@ -610,6 +611,9 @@ export default function AdminDashboard() {
 
       {/* 1 ─ What Scout prepared for today */}
       <ScoutToday />
+
+      {/* Turo at a glance */}
+      <TuroMini />
 
       {/* Side by side while there is room for a 26rem column, stacked the moment there
           isn't. No breakpoint guessing - the browser works it out at every width. */}

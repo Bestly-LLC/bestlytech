@@ -31,6 +31,7 @@ import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type Charging } from "./lax/Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./lax/LiveCharge";
 import { PhoneHandoff } from "./lax/PhoneHandoff";
+import { UnlockStart } from "./lax/Valet";
 import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPub, isDemo, useDemoStage } from "./lax/demo";
 
@@ -465,6 +466,7 @@ export default function LaxGuest() {
                   <CarButton action="flash" label="Flash lights" icon={Flashlight} run={live ? carCommand : undefined} hint={live ? "Good in the garage" : " "} />
                 </div>
               )}
+              {token && (demo ? (key?.state === "added" && <UnlockStart demo />) : <UnlockStart token={token} />)}
             </section>
 
 
