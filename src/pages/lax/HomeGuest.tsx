@@ -176,7 +176,7 @@ export default function HomeGuest({ pub, token, run, demo }: { pub: HomePub; tok
       </Helmet>
 
       <div className="relative">
-        <img src="/wallet/home/hero.svg" alt="" className="block h-48 w-full object-cover object-[55%_center] sm:h-60" />
+        <img src="/wallet/home/hero-night.svg" alt="" className="block h-48 w-full object-cover object-[55%_center] sm:h-60" />
         <div className="absolute inset-x-0 top-0 px-5 pt-6 sm:px-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: PEACH, ...shadow }}>{pub.trip?.first ? `Hi ${pub.trip.first} · your Turo rental` : "Your Turo rental"}</p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl" style={shadow}>Your Tesla in <span className="text-[#FFD6EC]" style={NEON}>WeHo</span></h1>
