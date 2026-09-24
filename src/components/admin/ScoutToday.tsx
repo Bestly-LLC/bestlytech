@@ -272,13 +272,13 @@ export function ScoutToday() {
                       <OwnerMenu owner={owner} mine={mine} people={people} onPick={(o) => setOwner(c, o)} />
                       {c.action?.due ? ` · due ${c.action.due}` : ""} · {String(c.action?.meeting ?? "")}
                     </p>
+                    {c.action?.check && !tc.pending.has(c.id) && <CheckResult r={c} tc={tc} onDone={() => doneCall(c)} />}
                   </div>
                   <CheckButton busy={tc.pending.has(c.id)} onClick={() => tc.checkOne(c.id)} compact />
                   {c.action?.deck_url && (
                     <a href={c.action.deck_url} target="_blank" rel="noreferrer" className={ghost} aria-label="Open on Deck">Deck <ExternalLink className="h-3.5 w-3.5" /></a>
                   )}
                   </div>
-                  {c.action?.check && !tc.pending.has(c.id) && <div className="pl-9"><CheckResult r={c} tc={tc} onDone={() => doneCall(c)} /></div>}
                 </li>
               );
             })}

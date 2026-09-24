@@ -161,27 +161,27 @@ export function CommandHero() {
         {todos === null ? <div className="mt-3 h-16 animate-pulse rounded-xl bg-white/[0.04]" /> : todos.length === 0 ? (
           <p className="mt-3 text-sm text-white/50">All clear.</p>
         ) : (
-          <ul className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(min(22rem,100%),1fr))] gap-x-6">
+          <ul className="mt-1 columns-[22rem] gap-x-8">
             {todos.slice(0, 12).map((t) => {
               const checking = tc.pending.has(t.id);
               return (
-                <li key={t.id} className="border-b border-white/[0.06] py-2.5">
+                <li key={t.id} className="break-inside-avoid border-b border-white/[0.06] py-3">
                   <div className="flex items-start gap-3">
                     <button aria-label="Mark done" onClick={() => tick(t)}
-                      className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 border-white/25 text-transparent transition hover:border-emerald-400 hover:text-emerald-400 active:scale-90">
+                      className="mt-px grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border-[1.5px] border-white/30 text-transparent transition hover:border-[#30D158] hover:text-[#30D158] active:scale-90 bento:hover:border-[#34C759] bento:hover:text-[#34C759]">
                       <Check className="h-3.5 w-3.5" />
                     </button>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[0.95rem] text-white">{t.title}</p>
-                      <p className="text-xs text-white/45">{t.action?.due ? `Due ${t.action.due} · ` : ""}{String(t.action?.meeting ?? "")}</p>
+                      <p className="text-[0.9375rem] leading-snug text-white">{t.title}</p>
+                      <p className="mt-0.5 text-[0.75rem] text-white/40">{t.action?.due ? `Due ${t.action.due} · ` : ""}{String(t.action?.meeting ?? "")}</p>
+                      {t.action?.check && !checking && <CheckResult r={t as CheckRow} tc={tc} onDone={() => tick(t)} />}
                     </div>
-                    <CheckButton busy={checking} onClick={() => tc.checkOne(t.id)} compact />
+                    <CheckButton busy={checking} onClick={() => tc.checkOne(t.id)} />
                   </div>
-                  {t.action?.check && !checking && <div className="pl-9"><CheckResult r={t as CheckRow} tc={tc} onDone={() => tick(t)} /></div>}
                 </li>
               );
             })}
-            {todos.length > 12 && <li className="pt-2 text-xs text-white/45">+{todos.length - 12} more below in From calls</li>}
+            {todos.length > 12 && <li className="break-inside-avoid pt-2 text-xs text-white/45">+{todos.length - 12} more below in From calls</li>}
           </ul>
         )}
         <ClosedByScout rows={closed as CheckRow[]} tc={tc} />

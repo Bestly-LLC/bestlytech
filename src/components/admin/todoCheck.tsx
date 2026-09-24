@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, RefreshCw, SearchCheck, ThumbsDown, ThumbsUp, Undo2, X } from "lucide-react";
+import { Check, ChevronDown, RefreshCw, SearchCheck, ThumbsDown, ThumbsUp, Undo2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -18,8 +18,6 @@ export interface CheckRow { id: string; title: string; status: string; action: R
 interface Settings { auto_close: boolean; threshold: number; note: string | null }
 interface Run { id: string; trigger: string; total: number; finished: number; looks_done: number; closed: number; errors: number; created_at: string; finished_at: string | null }
 
-const btn = "inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80 disabled:opacity-60";
-const ghost = cn(btn, "text-white/70 hover:bg-white/[0.06] hover:text-white");
 
 export const time12 = (iso?: string | null) => iso
   ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })
@@ -115,55 +113,57 @@ export function useTodoCheck(onChange: () => void) {
 }
 export type TodoCheck = ReturnType<typeof useTodoCheck>;
 
-/* ───────── the big panel (top of "Your to-dos") ───────── */
+/* ───────── look (Apple system colors; hex so the light theme's white/black swap can't flip them) ───────── */
+
+const BLUE_TEXT = "text-[#0A84FF] bento:text-[#007AFF]";
+const BLUE_FILL = "bg-[#0A84FF] bento:bg-[#007AFF] text-[#fff]";
+const tap = "transition active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF]/60 disabled:opacity-50";
+
+const VERDICT = {
+  done: { label: "Looks done", dot: "bg-[#30D158] bento:bg-[#34C759]", text: "text-[#30D158] bento:text-[#248A3D]" },
+  partly: { label: "Partly done", dot: "bg-[#FF9F0A] bento:bg-[#FF9500]", text: "text-[#FF9F0A] bento:text-[#C93400]" },
+  not_done: { label: "Not yet", dot: "bg-white/30", text: "text-white/60" },
+  unknown: { label: "Can't tell", dot: "bg-white/20", text: "text-white/50" },
+} as const;
+
+/* ───────── the control row under "Your to-dos" ───────── */
 
 export function CheckAllPanel({ tc }: { tc: TodoCheck }) {
   const { run, settings, starting } = tc;
   const active = !!run && !run.finished_at;
   const pct = run && run.total ? Math.round((run.finished / run.total) * 100) : 0;
+  const status = active
+    ? `Checking ${Math.min(run!.finished + 1, run!.total)} of ${run!.total}. Keeps going if you leave.`
+    : run
+      ? `Last check ${clock12(run.finished_at ?? run.created_at)} · ${run.looks_done} look done${run.closed ? ` · ${run.closed} closed` : ""}`
+      : "Finds proof in your email, calls, memory, Vault, Deck and git.";
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-indigo-400/25 bg-gradient-to-br from-indigo-500/[0.14] via-white/[0.02] to-emerald-500/[0.10] p-4 bento:border-transparent bento:from-[#EEF0FF] bento:via-white bento:to-[#EAF8F1]">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-indigo-500/20 text-indigo-200 bento:bg-indigo-100 bento:text-indigo-700">
-            {active ? <RefreshCw className="h-5 w-5 animate-spin" /> : <SearchCheck className="h-5 w-5" />}
-          </span>
-          <div className="min-w-0">
-            <p className="text-[1.02rem] font-semibold leading-tight text-white">
-              {active ? `Checking ${Math.min(run!.finished + 1, run!.total)} of ${run!.total}…` : "Did any of these get done?"}
-            </p>
-            <p className="mt-0.5 text-sm text-white/60">
-              {active
-                ? "Keeps going if you leave this page. Scout will notify you."
-                : run
-                  ? `Last check ${clock12(run.finished_at ?? run.created_at)}: ${run.looks_done} look done${run.closed ? `, ${run.closed} closed` : ""}${run.errors ? `, ${run.errors} couldn't be checked` : ""}`
-                  : "Scout looks through your email, memory, calls, Vault, Deck and git for proof."}
-            </p>
-          </div>
+    <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
+        <div className="min-w-0 flex-1 basis-56">
+          <p className="text-[0.9375rem] font-semibold tracking-[-0.01em] text-white">Check with Scout</p>
+          <p className="mt-0.5 text-[0.8125rem] leading-snug text-white/55">{status}</p>
         </div>
+        <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">
+        {settings && (
+          <label className="flex cursor-pointer items-center gap-2 text-[0.8125rem] text-white/60"
+            title={`Nightly at 10 PM Scout closes to-dos it's at least ${Math.round(settings.threshold * 100)}% sure about, with 2 kinds of proof. You can put any back.`}>
+            Close when sure
+            <Switch checked={settings.auto_close} onCheckedChange={tc.setAuto} aria-label="Close to-dos Scout is sure about"
+              className="data-[state=checked]:bg-[#30D158] bento:data-[state=checked]:bg-[#34C759]" />
+          </label>
+        )}
         <button onClick={tc.checkAll} disabled={active || starting}
-          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-[0.95rem] font-semibold text-black shadow-[0_8px_24px_-10px_rgba(99,102,241,0.7)] transition hover:bg-white/90 active:scale-[0.98] disabled:opacity-60 bento:bg-[#111114] bento:text-white">
-          {starting || active ? <RefreshCw className="h-4 w-4 animate-spin" /> : <SearchCheck className="h-4 w-4" />}
-          {active ? "Checking…" : "Check them all"}
+          className={cn("inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-[0.875rem] font-semibold hover:brightness-110", BLUE_FILL, tap)}>
+          {starting || active ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <SearchCheck className="h-3.5 w-3.5" />}
+          {active ? `${pct}%` : "Check all"}
         </button>
+        </div>
       </div>
       {active && (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-          <div className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-emerald-400 transition-[width] duration-500" style={{ width: `${Math.max(6, pct)}%` }} />
+        <div className="mt-3 h-[3px] overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+          <div className="h-full rounded-full bg-[#0A84FF] transition-[width] duration-500 bento:bg-[#007AFF]" style={{ width: `${Math.max(4, pct)}%` }} />
         </div>
-      )}
-      {settings && (
-        <label className="mt-3 flex cursor-pointer items-center gap-2.5 border-t border-white/[0.07] pt-3 text-sm text-white/70 bento:border-black/5">
-          <Switch checked={settings.auto_close} onCheckedChange={tc.setAuto} aria-label="Let Scout close to-dos it proves" />
-          <span>
-            <span className="font-medium text-white/85">Close them for me</span>
-            <span className="text-white/50">
-              {settings.auto_close
-                ? ` · nightly at 10 PM, only when ${Math.round(settings.threshold * 100)}% sure with 2 kinds of proof. Put back any time.`
-                : ` · off${settings.note ? ` (${settings.note})` : ""}. Scout only checks when you ask.`}
-            </span>
-          </span>
-        </label>
       )}
     </div>
   );
@@ -171,86 +171,97 @@ export function CheckAllPanel({ tc }: { tc: TodoCheck }) {
 
 /* ───────── per to-do ───────── */
 
-export function CheckButton({ busy, onClick, compact }: { busy: boolean; onClick: () => void; compact?: boolean }) {
+export function CheckButton({ busy, onClick }: { busy: boolean; onClick: () => void; compact?: boolean }) {
   return (
     <button onClick={onClick} disabled={busy}
-      className={cn(btn, "shrink-0 border border-indigo-400/30 bg-indigo-500/10 text-indigo-100 hover:bg-indigo-500/20 bento:border-indigo-200 bento:bg-indigo-50 bento:text-indigo-800", compact && "min-h-[34px] px-2.5 text-xs")}
-      aria-label="Check if it's done" title="Scout looks for proof in your email, memory, calls, Vault, Deck and git">
+      className={cn("inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-2.5 text-[0.8125rem] font-medium hover:bg-[#0A84FF]/10", BLUE_TEXT, tap)}
+      aria-label="Check if it's done" title="Scout looks for proof in your email, calls, memory, Vault, Deck and git">
       {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <SearchCheck className="h-3.5 w-3.5" />}
-      {busy ? "Checking…" : "Check"}
+      {busy ? "Checking" : "Check"}
     </button>
   );
 }
 
-const VERDICT = {
-  done: { label: "Looks done", tint: "bg-emerald-500/15 text-emerald-200 bento:bg-emerald-100 bento:text-emerald-800" },
-  partly: { label: "Partly done", tint: "bg-amber-500/15 text-amber-200 bento:bg-amber-100 bento:text-amber-800" },
-  not_done: { label: "Not yet", tint: "bg-white/10 text-white/70" },
-  unknown: { label: "Can't tell", tint: "bg-white/10 text-white/70" },
-} as const;
-
+function ProofList({ items }: { items: any[] }) {
+  if (!items?.length) return null;
+  return (
+    <ul className="mt-2 space-y-2 border-t border-white/[0.07] pt-2">
+      {items.map((e) => (
+        <li key={e.id} className="text-[0.75rem] leading-relaxed text-white/60">
+          <span className="font-medium text-white/75">
+            {e.url
+              ? (/^https?:\/\//.test(e.url) ? <a href={e.url} target="_blank" rel="noreferrer" className={cn("hover:underline", BLUE_TEXT)}>{e.title}</a> : <Link to={e.url} className={cn("hover:underline", BLUE_TEXT)}>{e.title}</Link>)
+              : e.title}
+          </span>
+          <span className="text-white/40"> · {e.src}{e.at ? `, ${time12(e.at)}` : ""}</span>
+          {e.quote && <span className="block text-white/50">{String(e.quote).replace(/[«»]/g, "").slice(0, 220)}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
 export function Evidence({ items }: { items: any[] }) {
   const [open, setOpen] = useState(false);
   if (!items?.length) return null;
   return (
-    <div className="mt-1">
-      <button className="text-xs text-white/50 underline-offset-2 hover:text-white/80 hover:underline" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        {open ? "Hide proof" : `Why (${items.length})`}
+    <div>
+      <button className={cn("text-[0.75rem] font-medium hover:underline", BLUE_TEXT)} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        {open ? "Hide proof" : "Show proof"}
       </button>
-      {open && (
-        <ul className="mt-1.5 space-y-1.5">
-          {items.map((e) => (
-            <li key={e.id} className="text-xs leading-relaxed text-white/60">
-              <span className="font-semibold uppercase tracking-wide text-white/45">{e.src}</span>
-              {e.at ? ` · ${time12(e.at)}` : ""} · {e.url
-                ? (/^https?:\/\//.test(e.url) ? <a href={e.url} target="_blank" rel="noreferrer" className="underline">{e.title}</a> : <Link to={e.url} className="underline">{e.title}</Link>)
-                : e.title}
-              {e.quote && <span className="block text-white/45">{String(e.quote).replace(/[«»]/g, "").slice(0, 220)}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
+      {open && <ProofList items={items} />}
     </div>
   );
 }
 
-/** The result under a to-do. Mark done (when it looks done), thumbs up, thumbs down with a note. */
+/** One quiet status line under a to-do; tap it for the summary, proof and thumbs. */
 export function CheckResult({ r, tc, onDone }: { r: CheckRow; tc: TodoCheck; onDone: () => void }) {
   const c = r.action?.check ?? {};
+  const [open, setOpen] = useState(false);
   const [asking, setAsking] = useState(false);
   const [note, setNote] = useState("");
   const v = VERDICT[(c.verdict as keyof typeof VERDICT) ?? "unknown"] ?? VERDICT.unknown;
   const rated = c.feedback === "up" || c.feedback === "down" || c.feedback === "undo";
+  const pct = typeof c.confidence === "number" && c.verdict !== "unknown" ? Math.round(c.confidence * 100) : null;
   return (
-    <div className="mt-2 rounded-xl border border-white/[0.07] bg-black/15 p-2.5 bento:border-black/5 bento:bg-[var(--bento-well)]">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", v.tint)}>{v.label}</span>
-        {typeof c.confidence === "number" && c.verdict !== "unknown" && <span className="text-xs tabular-nums text-white/45">{Math.round(c.confidence * 100)}% sure</span>}
-        {c.at && <span className="text-xs text-white/40">· {time12(c.at)}</span>}
+    <div className="mt-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
+          className="-mx-1 inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[0.8125rem] hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF]/60">
+          <span className={cn("h-[7px] w-[7px] rounded-full", v.dot)} aria-hidden />
+          <span className={cn("font-medium", v.text)}>{v.label}</span>
+          {pct !== null && <span className="text-white/40">{pct}%</span>}
+          <ChevronDown className={cn("h-3.5 w-3.5 text-white/35 transition-transform", open && "rotate-180")} aria-hidden />
+        </button>
+        {c.verdict === "done" && r.status === "open" && (
+          <button onClick={() => { onDone(); tc.feedback(r, "up"); }}
+            className={cn("text-[0.8125rem] font-semibold text-[#30D158] hover:underline bento:text-[#248A3D]", tap)}>Mark done</button>
+        )}
       </div>
-      {c.summary && <p className="mt-1 text-sm leading-relaxed text-white/70">{c.summary}</p>}
-      {c.remaining && c.verdict !== "done" && <p className="mt-0.5 text-xs text-white/55">Left: {c.remaining}</p>}
-      <Evidence items={c.evidence ?? []} />
-      {asking ? (
-        <form className="mt-2 flex flex-wrap items-center gap-1" onSubmit={(e) => { e.preventDefault(); tc.feedback(r, "down", note); setAsking(false); }}>
-          <input autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="What's actually true? (optional)"
-            className="min-h-[36px] min-w-0 flex-1 rounded-full border border-white/10 bg-black/20 px-3 text-sm text-white outline-none focus:border-white/25 bento:border-black/10 bento:bg-white" />
-          <button type="submit" className={ghost}>Send</button>
-          <button type="button" className={cn(ghost, "px-2.5")} aria-label="Cancel" onClick={() => setAsking(false)}><X className="h-4 w-4" /></button>
-        </form>
-      ) : (
-        <div className="-mx-1 mt-1.5 flex flex-wrap items-center gap-1">
-          {c.verdict === "done" && r.status === "open" && (
-            <button className={cn(ghost, "min-h-[34px]")} onClick={() => { onDone(); tc.feedback(r, "up"); }}><Check className="h-4 w-4" /> Mark done</button>
-          )}
-          {rated ? (
-            <span className="px-2 text-xs text-white/45">{c.feedback === "up" ? "You said this was right" : "Scout is learning from your correction"}</span>
-          ) : (
-            <>
-              <button className={cn(ghost, "min-h-[34px] px-2.5")} aria-label="Right" title="Right" onClick={() => tc.feedback(r, "up")}><ThumbsUp className="h-4 w-4" /></button>
-              <button className={cn(ghost, "min-h-[34px] px-2.5")} aria-label="Wrong: tell Scout" title="Wrong: tell Scout what's actually true" onClick={() => setAsking(true)}><ThumbsDown className="h-4 w-4" /></button>
-            </>
-          )}
+      {open && (
+        <div className="mt-1.5 rounded-[12px] bg-white/[0.04] px-3 py-2.5">
+          {c.summary && <p className="text-[0.8125rem] leading-relaxed text-white/80">{c.summary}</p>}
+          {c.remaining && c.verdict !== "done" && <p className="mt-1 text-[0.75rem] text-white/55">Still to do: {c.remaining}</p>}
+          <ProofList items={c.evidence ?? []} />
+          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/[0.07] pt-2 text-[0.75rem] text-white/45">
+            {c.at && <span>Checked {time12(c.at)}</span>}
+            <span className="flex-1" />
+            {asking ? (
+              <form className="flex w-full items-center gap-1.5" onSubmit={(e) => { e.preventDefault(); tc.feedback(r, "down", note); setAsking(false); }}>
+                <input autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="What's actually true? (optional)"
+                  className="h-8 min-w-0 flex-1 rounded-full bg-white/[0.06] px-3 text-[0.8125rem] text-white outline-none placeholder:text-white/35 focus:ring-2 focus:ring-[#0A84FF]/50" />
+                <button type="submit" className={cn("h-8 rounded-full px-3 text-[0.8125rem] font-semibold", BLUE_FILL, tap)}>Send</button>
+                <button type="button" aria-label="Cancel" onClick={() => setAsking(false)} className={cn("grid h-8 w-8 place-items-center rounded-full text-white/50 hover:bg-white/[0.06]", tap)}><X className="h-4 w-4" /></button>
+              </form>
+            ) : rated ? (
+              <span>{c.feedback === "up" ? "You said this was right" : "Scout is learning from your correction"}</span>
+            ) : (
+              <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
+                Is this right?
+                <button aria-label="Right" onClick={() => tc.feedback(r, "up")} className={cn("ml-1 grid h-7 w-7 place-items-center rounded-full text-white/55 hover:bg-white/[0.07]", tap)}><ThumbsUp className="h-3.5 w-3.5" /></button>
+                <button aria-label="Wrong: tell Scout" onClick={() => setAsking(true)} className={cn("grid h-7 w-7 place-items-center rounded-full text-white/55 hover:bg-white/[0.07]", tap)}><ThumbsDown className="h-3.5 w-3.5" /></button>
+              </span>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -262,18 +273,19 @@ export function ClosedByScout({ rows, tc }: { rows: CheckRow[]; tc: TodoCheck })
   if (!rows.length) return null;
   return (
     <div className="mt-4">
-      <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-white/50">Closed by Scout · {rows.length}</p>
-      <ul className="space-y-1">
+      <p className="mb-1 px-1 text-[0.75rem] font-medium text-white/45">Closed by Scout</p>
+      <ul className="divide-y divide-white/[0.06] rounded-[14px] bg-white/[0.04]">
         {rows.map((c) => (
-          <li key={c.id} className="flex items-start gap-3 rounded-xl bg-emerald-500/[0.06] px-3 py-2 bento:bg-emerald-50">
-            <Check className="mt-1 h-4 w-4 shrink-0 text-emerald-300 bento:text-emerald-700" aria-hidden />
+          <li key={c.id} className="flex items-start gap-3 px-4 py-2.5">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#30D158] bento:text-[#34C759]" aria-hidden />
             <div className="min-w-0 flex-1">
-              <p className="text-[0.9375rem] text-white/75 line-through decoration-white/30">{c.title}</p>
-              {c.action?.check?.summary && <p className="mt-0.5 text-sm text-white/55">{c.action.check.summary}</p>}
+              <p className="text-[0.875rem] text-white/60 line-through decoration-white/25">{c.title}</p>
+              {c.action?.check?.summary && <p className="mt-0.5 text-[0.75rem] text-white/45">{c.action.check.summary}</p>}
               <Evidence items={c.action?.check?.evidence ?? []} />
             </div>
-            <button className={cn(ghost, "min-h-[34px]")} onClick={() => tc.feedback(c, "undo")} title="Not done: reopen it and teach Scout">
-              <Undo2 className="h-4 w-4" /> Put back
+            <button className={cn("inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-2.5 text-[0.8125rem] font-medium hover:bg-[#0A84FF]/10", BLUE_TEXT, tap)}
+              onClick={() => tc.feedback(c, "undo")} title="Not done: reopen it and teach Scout">
+              <Undo2 className="h-3.5 w-3.5" /> Put back
             </button>
           </li>
         ))}
