@@ -24,6 +24,7 @@ export type CarState = {
   battery: number | null; range: number | null; inside_f: number | null; outside_f: number | null;
   locked: boolean | null; charging: string | null; online: string | null; observed_at: string; name: string | null; climate_on?: boolean | null;
   climate_mode?: string | null; climate_until?: string | null;
+  range_real?: number | null; plugged_in?: boolean | null; charge_detail?: import("./LiveCharge").ChargeDetail;
 };
 
 function Card({ label, icon, children }: { label: string; icon: ReactNode; children: ReactNode }) {

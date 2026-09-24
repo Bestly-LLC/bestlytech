@@ -29,11 +29,13 @@ import { Fold } from "./lax/HomeGuide";
 import ExtraDrivers from "./lax/ExtraDrivers";
 import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type Charging } from "./lax/Charging";
+import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./lax/LiveCharge";
+import { PhoneHandoff } from "./lax/PhoneHandoff";
 import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPub, isDemo, useDemoStage } from "./lax/demo";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -169,6 +171,21 @@ export default function LaxGuest() {
     window.addEventListener("unhandledrejection", onRej);
     return () => { window.removeEventListener("error", onErr); window.removeEventListener("unhandledrejection", onRej); };
   }, [token]);
+  // Every outside web link opens in a new tab, so the trip page stays open behind it. Links that hand off to an app
+  // (the Tesla key invite, App Store / Play Store, Turo, Wallet passes, Apple Maps) keep their normal tap so the app opens.
+  useEffect(() => {
+    const APP = /(^|\.)(tesla\.com|apple\.com|google\.com\/maps\/dir|play\.google\.com|turo\.com|pay\.google\.com)$|wallet-pass/i;
+    const f = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || a.target === "_blank" || a.dataset.sameTab !== undefined) return;
+      let u: URL; try { u = new URL(a.href, window.location.href); } catch { return; }
+      if (!/^https?:$/.test(u.protocol) || u.origin === window.location.origin) return;
+      if (APP.test(u.hostname) || APP.test(u.pathname)) return;
+      a.target = "_blank"; a.rel = "noopener noreferrer";
+    };
+    document.addEventListener("click", f, true);
+    return () => document.removeEventListener("click", f, true);
+  }, []);
   // Pickup / Return steps live in a bottom sheet opened from the luggage-tag bar. #pickup / #return deep-link it open.
   const [sheet, setSheet] = useState<"pickup" | "return" | "ask" | null>(() => {
     if (typeof window === "undefined") return null;
@@ -452,7 +469,11 @@ export default function LaxGuest() {
 
 
 
-            {pub.charging && <ChargingCard charging={pub.charging} token={token || undefined} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery} />}
+            {pub.charging && <ChargingCard charging={pub.charging} token={token || undefined} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery}>
+              <ChargeNow state={(demoCar ? demoState : pub.car)?.charging} battery={(demoCar ? demoState : pub.car)?.battery} detail={(demoCar ? demoState : pub.car)?.charge_detail} target={pub.pickup_battery} />
+              <OpenStalls token={token || undefined} live={live} demo={demo} />
+              <RangeCheck rc={pub.range_check} kind="lax" className="mt-3" />
+            </ChargingCard>}
 
             <HomeGuide pickupBattery={pub.pickup_battery} kind="lax">
               {token && pub.kind === "lax" && key && (
@@ -534,7 +555,7 @@ export default function LaxGuest() {
                 )}
                 <Step n={n0 + (keySteps ? 7 : 6)} when="Inside the car" title="Pick your driver profile.">
                   <ProfileTip />
-                  <BatteryReturn className="mt-3" target={pub.pickup_battery ?? (demoCar ? demoState : pub.car)?.battery} now={(demoCar ? demoState : pub.car)?.battery} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
+                  <BatteryReturn className="mt-3" startsAt={pub.trip?.starts_at} setAt={pub.pickup_battery_at} target={pub.pickup_battery} now={(demoCar ? demoState : pub.car)?.battery} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
                 </Step>
               </Carousel>
 
@@ -561,7 +582,8 @@ export default function LaxGuest() {
 
               <p className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[14px] leading-relaxed text-white/80 ring-1 ring-white/10">
                 <b className="text-white">Charge first:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"} to avoid Turo's recharge fee.
-                <BatteryReturn className="mt-3" target={pub.pickup_battery} now={(demoCar ? demoState : pub.car)?.battery} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
+                <RangeCheck rc={pub.range_check} kind="lax" className="mt-3" />
+                <BatteryReturn className="mt-3" startsAt={pub.trip?.starts_at} setAt={pub.pickup_battery_at} target={pub.pickup_battery} now={(demoCar ? demoState : pub.car)?.battery} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
                 <span className="mt-3 block"><ChargerLine kind="lax" /></span><SendToCar run={live ? carCommand : undefined} kind="lax" />
               </p>
 
@@ -605,6 +627,7 @@ export default function LaxGuest() {
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
             {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
             {token && !ended && <InstallToast token={token} kind="lax" />}
+            {token && !ended && <PhoneHandoff token={token} keyReady={!!key && ["ready", "making"].includes(key.state)} />}
             <VideoPlayer />
             <ScrollFx />
 

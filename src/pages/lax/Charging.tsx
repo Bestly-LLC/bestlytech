@@ -3,7 +3,7 @@
  * Live during the trip from TezLab (estimate), replaced by Tesla's billed amounts after the trip (final).
  * Data: lax_guest_public(token).charging ← trip_charges_for(reservation) ← trip_charges (synced by trip_charges_tick).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BatteryCharging, CheckCircle2, ChevronRight, Clock, FileDown, Receipt, Zap } from "lucide-react";
 import { track } from "./track";
 
@@ -20,8 +20,8 @@ const ago = (iso: string) => {
 };
 const shortPlace = (p?: string | null) => (p ?? "Supercharger").replace(/, CA\b/, "").replace(/^Los Angeles - /, "");
 
-export function ChargingCard({ charging, battery, pickupBattery, ended, embedded, titleFont, token }: {
-  charging: Charging; battery?: number | null; pickupBattery?: number | null; ended?: boolean; embedded?: boolean; titleFont?: string; token?: string;
+export function ChargingCard({ charging, battery, pickupBattery, ended, embedded, titleFont, token, children }: {
+  charging: Charging; battery?: number | null; pickupBattery?: number | null; ended?: boolean; embedded?: boolean; titleFont?: string; token?: string; children?: ReactNode;
 }) {
   const c = charging;
   const short = battery != null && pickupBattery != null ? pickupBattery - battery : null;
@@ -51,6 +51,8 @@ export function ChargingCard({ charging, battery, pickupBattery, ended, embedded
           <p className="mt-1.5 text-[12px] text-white/60">{short != null && short > 0 ? `About ${short}% to add before you return.` : "You're above your pickup charge."}</p>
         </div>
       )}
+
+      {!ended && children}
 
       {c.sessions.length > 0 ? (
         <ol className="mt-3 divide-y divide-white/10">
@@ -141,24 +143,50 @@ export function ChargingFab({ charging }: { charging: Charging }) {
 }
 
 /** "Return it at 80%+ · Now 62%": the pickup charge as the target, with the car's live battery against it. */
-export function BatteryReturn({ target, now, observedAt, className = "" }: { target?: number | null; now?: number | null; observedAt?: string | null; className?: string }) {
+const at12 = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
+
+/** The return charge line = the battery level when the trip started (snapshotted at the reservation start time).
+ *  Before the trip starts there's no line yet: it says when it gets set and shows today's level. */
+export function BatteryReturn({ target, now, observedAt, startsAt, setAt, className = "" }: {
+  target?: number | null; now?: number | null; observedAt?: string | null; startsAt?: string | null; setAt?: string | null; className?: string;
+}) {
+  const before = target == null && !!startsAt && Date.now() < +new Date(startsAt);
   if (target == null && now == null) return null;
-  const goal = target ?? now!;
-  const ok = now != null && now >= goal;
+  if (target == null) {
+    return (
+      <div className={`rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10 ${className}`}>
+        <div className="flex items-center justify-between gap-2 text-[14px]">
+          <span className="flex items-center gap-1.5 text-white/85"><BatteryCharging className="h-4 w-4 text-emerald-300" aria-hidden /> Return charge</span>
+          {now != null && <span className="text-white/70">Now <b className="tabular-nums text-white">{now}%</b></span>}
+        </div>
+        {now != null && (
+          <div className="relative mt-2 h-2.5 rounded-full bg-white/10" aria-hidden>
+            <div className="h-2.5 rounded-full bg-white/40 transition-[width] duration-700" style={{ width: `${Math.min(100, Math.max(3, now))}%` }} />
+          </div>
+        )}
+        <p className="mt-1.5 text-[12px] leading-snug text-white/65">
+          {before ? <>It's set when your trip starts{startsAt ? <> (<b className="text-white/85">{at12(startsAt)}</b>)</> : null}: bring it back with at least the charge it has then.</>
+            : "Bring it back with at least the charge it had when your trip started."}
+          {observedAt ? ` Updated ${ago(observedAt)}.` : ""}
+        </p>
+      </div>
+    );
+  }
+  const ok = now != null && now >= target;
   return (
     <div className={`rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10 ${className}`}>
       <div className="flex items-center justify-between gap-2 text-[14px]">
-        <span className="flex items-center gap-1.5 text-white/85"><BatteryCharging className="h-4 w-4 text-emerald-300" aria-hidden /> Return it at <b className="tabular-nums text-white">{goal}%+</b></span>
+        <span className="flex items-center gap-1.5 text-white/85"><BatteryCharging className="h-4 w-4 text-emerald-300" aria-hidden /> Return it at <b className="tabular-nums text-white">{target}%+</b></span>
         {now != null && <span className="text-white/70">Now <b className={`tabular-nums ${ok ? "text-emerald-300" : "text-amber-200"}`}>{now}%</b></span>}
       </div>
       {now != null && (
         <div className="relative mt-2 h-2.5 rounded-full bg-white/10" aria-hidden>
           <div className={`h-2.5 rounded-full transition-[width] duration-700 ${ok ? "bg-emerald-400" : "bg-amber-300"}`} style={{ width: `${Math.min(100, Math.max(3, now))}%` }} />
-          <span className="absolute -top-1 h-[18px] w-[3px] rounded bg-white shadow" style={{ left: `calc(${Math.min(100, goal)}% - 1px)` }} />
+          <span className="absolute -top-1 h-[18px] w-[3px] rounded bg-white shadow" style={{ left: `calc(${Math.min(100, target)}% - 1px)` }} />
         </div>
       )}
-      <p className="mt-1.5 text-[12px] text-white/60">
-        {now == null ? "That's the charge it had at pickup." : ok ? "You're good on charge." : `Add about ${goal - now}% before you return.`}
+      <p className="mt-1.5 text-[12px] leading-snug text-white/60">
+        The line is the charge it had when your trip started{setAt ? ` (${at12(setAt)})` : ""}. {now == null ? "" : ok ? "You're good on charge." : `Add about ${target - now}% before you return.`}
         {observedAt ? ` Updated ${ago(observedAt)}.` : ""}
       </p>
     </div>

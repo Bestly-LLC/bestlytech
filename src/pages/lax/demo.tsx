@@ -66,7 +66,8 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
   const key = { state: keyState, opens_at: iso(keyOpens), link: keyState === "ready" ? "#demo-key" : null, expires_at: keyState === "ready" ? iso(now + 23 * H) : null, unlock: false };
   const base = {
     ok: true, kind, trip, car: { ...DEMO_CAR, observed_at: iso(now - 3 * 60e3) }, controls: controls_state === "on", controls_state,
-    controls_opens_at: iso(s - H), email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: 80, demo: true,
+    controls_opens_at: iso(s - H), email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: now >= s ? 80 : null, pickup_battery_at: now >= s ? iso(s) : null, demo: true,
+    range_check: now >= s && now < e + 0.5 * H ? { range_mi: 188, miles: 6.4, spare: 182, status: "ok" } : null,
     charging: now < s ? null : demoCharging(s, now >= e),
   };
   if (kind === "home") {

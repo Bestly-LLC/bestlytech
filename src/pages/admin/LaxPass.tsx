@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { LaxGuests } from "./LaxGuests";
+import { CarHealth, SuperchargeAudit } from "./CarOps";
 import { TripHealth } from "./TripHealth";
 import { GuestHelperCard } from "./AskCard";
 import { TripSettingsBody } from "./TripSettings";
@@ -323,6 +324,8 @@ export default function LaxPass() {
           </div>
         </div>
         <TripHealth />
+        <SuperchargeAudit />
+        <CarHealth />
         <div id="keys"><LaxGuests /></div>
       </Section>
       </div>

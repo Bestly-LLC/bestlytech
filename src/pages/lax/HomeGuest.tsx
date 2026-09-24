@@ -29,6 +29,8 @@ import { Fold } from "./HomeGuide";
 import { homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type Charging } from "./Charging";
+import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./LiveCharge";
+import { PhoneHandoff } from "./PhoneHandoff";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -63,6 +65,7 @@ export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" |
 export type HomePub = {
   trip?: Trip; car?: CarState | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null;
   pickup_battery?: number | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; charging?: Charging | null;
+  pickup_battery_at?: string | null; range_check?: RangeCheckData;
 };
 
 function platform(): "apple" | "android" | "other" {
@@ -325,7 +328,11 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           </div>
         </section>
 
-        {pub.charging && <ChargingCard charging={pub.charging} token={token} battery={car?.battery} pickupBattery={pub.pickup_battery} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" />}
+        {pub.charging && <ChargingCard charging={pub.charging} token={token} battery={car?.battery} pickupBattery={pub.pickup_battery} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif">
+          <ChargeNow state={car?.charging} battery={car?.battery} detail={car?.charge_detail} target={pub.pickup_battery} />
+          <OpenStalls token={token} live={live} demo={!!demoPage} />
+          <RangeCheck rc={pub.range_check} kind="home" className="mt-3" />
+        </ChargingCard>}
 
         <HomeGuide pickupBattery={pub.pickup_battery}>
           <Fold icon={Users} title="Someone else driving?" sub="Add them in Turo first, then get their key here">
@@ -360,13 +367,13 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
             <Step n={n0 + 2}>Next to the car (Bluetooth on), open the Tesla app. Tap <b className="text-white">&ldquo;Set Up&rdquo;</b> and follow the steps. Then tap <b className="text-white">Unlock</b>.</Step>
             <Step n={n0 + 3}><b className="text-white">Get in and pick your profile.</b><ProfileTip /></Step>
             <Step n={n0 + 4}><b className="text-white">Take check-in photos</b> all around the car in the Turo app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
-            <Step n={n0 + 5}><b className="text-white">Drive:</b> press the brake, push the <b className="text-white">right stalk</b> down. Up is Reverse.<BatteryReturn className="mt-3" target={pub.pickup_battery ?? car?.battery} now={car?.battery} observedAt={car?.observed_at} /></Step>
+            <Step n={n0 + 5}><b className="text-white">Drive:</b> press the brake, push the <b className="text-white">right stalk</b> down. Up is Reverse.<BatteryReturn className="mt-3" startsAt={pub.trip?.starts_at} setAt={pub.pickup_battery_at} target={pub.pickup_battery} now={car?.battery} observedAt={car?.observed_at} /></Step>
           </Carousel>
         </TripSheet>
 
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
           <Carousel id="home-return" className="mt-1" labels={["Charge", "Park", "Photos + lock"]}>
-            <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"}.<BatteryReturn className="mt-3" target={pub.pickup_battery} now={car?.battery} observedAt={car?.observed_at} /><span className="mt-3 block"><ChargerLine kind="home" /></span><SendToCar run={live ? run : undefined} kind="home" /></Step>
+            <Step n={1}><b className="text-white">Charge:</b> bring it back with {pub.pickup_battery != null ? <b className="text-white">at least {pub.pickup_battery}%</b> : "the charge you picked it up with"}.<RangeCheck rc={pub.range_check} kind="home" className="mt-3" /><BatteryReturn className="mt-3" setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} target={pub.pickup_battery} now={car?.battery} observedAt={car?.observed_at} /><span className="mt-3 block"><ChargerLine kind="home" /></span><SendToCar run={live ? run : undefined} kind="home" /></Step>
             <Step n={2}><b className="text-white">Park on N Kings Rd</b> near the building. <b className="text-white">Avoid the Joybird street parking.</b> Watch for <b className="text-white">street sweeping on Mondays and Tuesdays</b>: west side Monday 8–10 AM, east side Tuesday 8–10 AM ($75 tickets).<span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span><ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} /></Step>
             <Step n={3}><b className="text-white">Return photos</b> in the Turo app, grab your stuff, lock it in the Tesla app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
           </Carousel>
@@ -377,6 +384,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
         {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
         {!ended && <InstallToast token={token} kind="home" />}
+        {!ended && <PhoneHandoff token={token} keyReady={!!key && ["ready", "making"].includes(key.state)} />}
         <VideoPlayer />
         <ScrollFx />
         <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home />
