@@ -13,6 +13,10 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { askScout } from "@/components/admin/scoutBus";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Lesson {
   id: string; scope: string; title: string; when_text: string; do_text: string; avoid_text: string | null;
@@ -50,6 +54,10 @@ export default function AdminPlaybook() {
     const r = rows ?? [];
     return { active: r.filter((x) => x.active).length, wins: r.reduce((n, x) => n + x.wins, 0), shown: r.reduce((n, x) => n + x.shown, 0) };
   }, [rows]);
+
+  // Deleting a lesson cannot be undone, and the trash icon sits next to the on/off switch.
+  const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const act = async (l: Lesson, what: "toggle" | "delete") => {
     const { error } = await supabase.rpc("scout_lesson_admin" as never, { p_id: l.id, p_active: what === "toggle" ? !l.active : null, p_delete: what === "delete" } as never);
@@ -118,7 +126,7 @@ export default function AdminPlaybook() {
                 </div>
                 <div className="flex shrink-0 gap-1">
                   <button onClick={() => act(l, "toggle")} title={l.active ? "Switch off" : "Switch on"} className="grid h-9 w-9 place-items-center rounded-full text-white/55 hover:bg-white/[0.06]"><Power className="h-4 w-4" /></button>
-                  <button onClick={() => act(l, "delete")} title="Delete" className="grid h-9 w-9 place-items-center rounded-full text-white/55 hover:bg-white/[0.06]"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => setDeleteTarget(l)} title="Delete" className="grid h-9 w-9 place-items-center rounded-full text-white/55 hover:bg-white/[0.06]"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
               <dl className="mt-2 space-y-1.5 text-sm">
@@ -134,6 +142,34 @@ export default function AdminPlaybook() {
           ))}
         </ul>
       )}
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o && !deleting) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Forget this lesson?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget ? `“${deleteTarget.title}” goes for good — Scout stops using it and there is no undo. To stop it being used without losing it, switch it off instead.` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              className="bg-red-600 text-white hover:bg-red-500"
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!deleteTarget) return;
+                setDeleting(true);
+                await act(deleteTarget, "delete");
+                setDeleting(false);
+                setDeleteTarget(null);
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

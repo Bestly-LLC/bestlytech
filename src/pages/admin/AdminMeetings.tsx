@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { copyText } from "@/lib/copyForClaude";
 import { useToast } from "@/hooks/use-toast";
 
 import { AdminMark } from "@/components/AdminMark";
@@ -213,9 +214,14 @@ export default function AdminMeetings({ embedded }: { embedded?: boolean } = {})
           : r,
       ),
     );
-    await supabase.rpc("admin_meeting_rename" as never, { p_old: renameTarget.id, p_new: newId } as never);
+    // The archive is renamed; the portal's own copy is a second write that can fail by itself.
+    // Saying "Renamed" either way is how the two end up disagreeing with nobody noticing.
+    const { error: dbErr } = await supabase.rpc("admin_meeting_rename" as never, { p_old: renameTarget.id, p_new: newId } as never);
+    const from = renameTarget.id;
     setRenameTarget(null);
-    toast({ title: "Renamed", description: `${renameTarget.id} → ${newId}` });
+    toast(dbErr
+      ? { title: "Renamed in the archive only", description: `The portal still calls it ${from}: ${dbErr.message}`, variant: "destructive" }
+      : { title: "Renamed", description: `${from} → ${newId}` });
   };
 
   const commitDelete = async () => {
@@ -268,8 +274,9 @@ export default function AdminMeetings({ embedded }: { embedded?: boolean } = {})
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.focus();
     } else {
-      navigator.clipboard.writeText(msg).catch(() => {});
-      toast({ title: "Copied to clipboard", description: "Paste into Scout to debrief." });
+      void copyText(msg).then((ok) => toast(ok
+        ? { title: "Copied to clipboard", description: "Paste into Scout to debrief." }
+        : { title: "Couldn't copy", description: msg, variant: "destructive" }));
     }
   };
 

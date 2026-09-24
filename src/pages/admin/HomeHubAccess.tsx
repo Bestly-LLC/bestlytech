@@ -46,7 +46,8 @@ function fromLines(text: string): Record<string, string> {
 }
 /** A long unbroken random-looking string is almost certainly a secret, not a location. */
 function looksLikeSecret(v: string): boolean {
-  return (v.match(/[A-Za-z0-9_\-.+/=]{24,}/g) ?? []).some(
+  const runs: string[] = v.match(/[A-Za-z0-9_\-.+/=]{24,}/g) ?? [];
+  return runs.some(
     (m) => !m.startsWith("/") && !m.startsWith("~") && /[A-Z]/.test(m) && /[a-z]/.test(m) && /[0-9]/.test(m),
   );
 }

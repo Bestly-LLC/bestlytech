@@ -81,11 +81,13 @@ export default function AdminTuro() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  /** Returns whether it saved, so a caller never clears the box on a write that failed. */
   const save = async (args: { p_paused?: boolean; p_reason?: string | null; p_note?: string }, msg: string) => {
     setSaving(true);
     const { error } = await supabase.rpc("turo_settings_set" as never, args as never);
     setSaving(false);
-    if (error) toast.error(error.message); else { toast.success(msg); load(); }
+    if (error) { toast.error(error.message); return false; }
+    toast.success(msg); load(); return true;
   };
 
   const last = runs?.[0];
@@ -156,7 +158,7 @@ export default function AdminTuro() {
                 <div className="mt-2 flex gap-2">
                   <input id="turo-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. hold Saturday at $120, or skip writing this weekend"
                     className="h-11 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[16px] text-white outline-none placeholder:text-white/35 bento:bg-[var(--bento-well)] bento:border-black/5" />
-                  <button disabled={saving || !note.trim()} onClick={() => { save({ p_note: note }, "Claude will read it next run"); setNote(""); }}
+                  <button disabled={saving || !note.trim()} onClick={async () => { if (await save({ p_note: note }, "Claude will read it next run")) setNote(""); }}
                     className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-white px-4 text-sm font-medium text-black disabled:opacity-40 bento:bg-[#111114] bento:text-[#fff]"><Send className="h-4 w-4" /> Save</button>
                 </div>
               )}
