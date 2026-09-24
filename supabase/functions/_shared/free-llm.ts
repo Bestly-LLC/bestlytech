@@ -232,7 +232,7 @@ async function callGroq(model: string, req: LlmRequest, t: number, k: Record<str
 async function callCloudflare(model: string, req: LlmRequest, t: number, k: Record<string, string>): Promise<Call> {
   if (!k.cloudflare_ai_token || !k.cloudflare_account_id) throw new Fail("skipped_nokey", "no cloudflare token/account");
   const c = await openaiCompat(`https://api.cloudflare.com/client/v4/accounts/${k.cloudflare_account_id}/ai/v1/chat/completions`,
-    k.cloudflare_ai_token, model, req, Math.min(t, 60_000));
+    k.cloudflare_ai_token, model, req, Math.min(t, 110_000)); // big prompts (reflect: ~30K tokens) need more than a minute
   const [ni, no] = CF_NEURONS[model] ?? [40_000, 80_000];
   c.units = (c.inT * ni + c.outT * no) / 1e6;
   return c;

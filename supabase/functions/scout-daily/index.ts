@@ -14,8 +14,10 @@
 //
 // Called by pg_cron / a trigger with the service key, or by an admin from the browser.
 // Nothing here sends anything to anyone: drafts wait for Jared's tap in his own mail app.
+// v7: AI runs free-only via ../_shared/free-llm.ts (see claude() below). $0.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { llm, LlmUnavailable, type LlmTask } from "../_shared/free-llm.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -52,31 +54,31 @@ function cleanKey(raw: string | undefined) {
   return (m ? m[0] : raw ?? "").trim();
 }
 
+// v7 (2026-09-23): $0. Every job runs on free AI through _shared/free-llm.ts — Groq -> Cloudflare Workers AI ->
+// Mac mini Ollama (morning only) — all no-training providers. Paid Claude is never called from here.
+// The name claude() is kept so the call sites stay untouched. If every free rung fails the job errors as before:
+// morning falls back to the top of the queue, call un-claims the recording, drafts/reflect record the error.
+// Rollback without a deploy: set env SCOUT_DAILY_PAID=fallback (Haiku comes back, under ai_budget), or redeploy v6.
+const TASK: Record<string, LlmTask> = { morning: "pick", drafts: "triage", call: "extract", reflect: "reflect" };
+const SHAPE: Record<string, (j: any) => string | null> = {
+  morning: (j) => Array.isArray(j?.picks) ? null : "no picks array",
+  drafts: (j) => Array.isArray(j?.drafts) ? null : "no drafts array",
+  call: (j) => Array.isArray(j?.commitments) && typeof j?.summary === "string" ? null : "no commitments/summary",
+  reflect: (j) => Array.isArray(j?.lessons) ? null : "no lessons array",
+};
+
 async function claude(system: string, user: string, maxTokens = 3000, job = "background", ref: string | null = null): Promise<any> {
-  const key = cleanKey(Deno.env.get("ANTHROPIC_API_KEY"));
-  if (!key) throw new Error("no ANTHROPIC_API_KEY");
-  const { data: budget } = await db.rpc("ai_budget", { p_scope: "background" });
-  if ((budget as any)?.ok === false) throw new Error(`daily background AI cap reached ($${(budget as any).spent} of $${(budget as any).cap})`);
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] }),
-      signal: AbortSignal.timeout(100_000),
+  const paid = Deno.env.get("SCOUT_DAILY_PAID") === "fallback" ? "fallback" : "never";
+  try {
+    const r = await llm({
+      task: TASK[job] ?? "summarize", system, user, json: true, job, ref, fn: "scout-daily", scope: "background", paid,
+      maxTokens: Math.min(maxTokens * 2, 8000), // free reasoning models spend part of the budget thinking
+      deadlineMs: 110_000, validate: SHAPE[job],
     });
-    if (r.ok) {
-      const j = await r.json();
-      const [pin, pout] = priceOf(String(j.model ?? MODEL));
-      const inT = Number(j.usage?.input_tokens ?? 0) + Number(j.usage?.cache_creation_input_tokens ?? 0) + Number(j.usage?.cache_read_input_tokens ?? 0);
-      const outT = Number(j.usage?.output_tokens ?? 0);
-      await db.from("ai_spend").insert({ fn: "scout-daily", scope: "background", job, model: String(j.model ?? MODEL), input_tokens: inT, output_tokens: outT, cost_usd: (inT * pin + outT * pout) / 1e6, ref });
-      const text = (j.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
-      const s = text.indexOf("{"), e = text.lastIndexOf("}");
-      if (s < 0 || e < s) throw new Error("model did not return JSON");
-      return JSON.parse(text.slice(s, e + 1));
-    }
-    if ((r.status === 429 || r.status >= 500) && attempt === 0) { await new Promise((ok) => setTimeout(ok, 3000)); continue; }
-    throw new Error(`anthropic ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    return r.json;
+  } catch (e) {
+    if (e instanceof LlmUnavailable) throw new Error(`free AI unavailable (${e.reason}): ${e.tried.map((t) => `${t.provider} ${t.outcome}`).join(", ")}`);
+    throw e;
   }
 }
 
