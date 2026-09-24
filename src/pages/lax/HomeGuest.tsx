@@ -28,7 +28,7 @@ import { InstallToast } from "./InstallToast";
 import { Fold } from "./HomeGuide";
 import { homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
-import { BatteryReturn, ChargingCard, ChargingFab, type Charging } from "./Charging";
+import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./LiveCharge";
 import { PhoneHandoff } from "./PhoneHandoff";
 import { UnlockStart } from "./Valet";
@@ -66,7 +66,7 @@ export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" |
 export type HomePub = {
   trip?: Trip; car?: CarState | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null;
   pickup_battery?: number | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; charging?: Charging | null;
-  pickup_battery_at?: string | null; range_check?: RangeCheckData; car_connected_at?: string | null;
+  pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null;
 };
 
 function platform(): "apple" | "android" | "other" {
@@ -334,10 +334,10 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
         </section>
         )}
 
-        {pub.charging && <ChargingCard charging={pub.charging} token={token} battery={car?.battery} pickupBattery={pub.pickup_battery} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif">
+        {pub.charging && <ChargingCard charging={pub.charging} token={token} battery={car?.battery} pickupBattery={pub.pickup_battery} health={pub.battery_health} charging_now={car?.charging === "Charging" || car?.charging === "Starting"} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif">
           <ChargeNow state={car?.charging} battery={car?.battery} detail={car?.charge_detail} target={pub.pickup_battery} />
           <OpenStalls token={token} live={live} demo={!!demoPage} />
-          <RangeCheck rc={pub.range_check} kind="home" className="mt-3" />
+          <RangeCheck rc={pub.range_check} kind="home" className="mt-3" warnOnly />
         </ChargingCard>}
 
         <HomeGuide pickupBattery={pub.pickup_battery} valet={demoPage ? (key?.state === "added" ? <UnlockStart demo /> : null) : <UnlockStart token={token} />}>

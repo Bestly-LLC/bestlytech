@@ -7,7 +7,7 @@
  *  - RangeCheck: real-world range vs road miles back to the return spot (lax_guest_public.range_check).
  */
 import { useState } from "react";
-import { ArrowDown, BatteryCharging, Car, CheckCircle2, Loader2, MapPin, Route, TriangleAlert, Zap } from "lucide-react";
+import { ArrowDown, BatteryCharging, Car, CheckCircle2, ChevronRight, Loader2, MapPin, Route, TriangleAlert, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
 
@@ -83,18 +83,24 @@ export function OpenStalls({ token, live, demo }: { token?: string; live: boolea
     const r = data as { ok: boolean; error?: string } | null;
     if (r?.ok) { setSent(s.name); track(token, "nav_point"); } else setMsg(r?.error ?? "Couldn't send it.");
   };
+  // Before the first tap it's one quiet row; the stall list appears after.
+  if (!sites) return (
+    <>
+      <button type="button" onClick={() => void find()} disabled={busy || (!demo && !token)}
+        className="mt-3 flex min-h-[52px] w-full items-center gap-3 rounded-2xl bg-white/[0.05] px-3 text-left ring-1 ring-white/10 disabled:opacity-60 active:scale-[0.99]">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10">{busy ? <Loader2 className="h-4 w-4 animate-spin" style={{ color: ACCENT }} /> : <Zap className="h-4 w-4" style={{ color: ACCENT }} />}</span>
+        <span className="min-w-0 flex-1 text-[15px] font-semibold text-white">{busy ? "Asking Tesla…" : "Find open stalls nearby"}</span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-white/40" aria-hidden />
+      </button>
+      {msg && <p className="mt-1 text-[12px] text-white/70" aria-live="polite">{msg}</p>}
+    </>
+  );
   return (
     <div className="mt-3 rounded-2xl bg-white/[0.05] p-3 ring-1 ring-white/10">
       <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-[14px] font-semibold text-white"><Zap className="h-4 w-4" style={{ color: ACCENT }} /> Superchargers with open stalls</p>
-        {sites && <button type="button" onClick={() => void find()} disabled={busy} className="text-[12px] font-semibold underline decoration-white/30 underline-offset-2" style={{ color: ACCENT }}>Refresh</button>}
+        <p className="flex items-center gap-1.5 text-[14px] font-semibold text-white"><Zap className="h-4 w-4" style={{ color: ACCENT }} /> Open stalls right now</p>
+        <button type="button" onClick={() => void find()} disabled={busy} className="min-h-[44px] text-[13px] font-semibold" style={{ color: ACCENT }}>{busy ? "Checking…" : "Refresh"}</button>
       </div>
-      {!sites && (
-        <button type="button" onClick={() => void find()} disabled={busy || (!demo && !token)}
-          className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-white/10 text-[14px] font-semibold text-white ring-1 ring-white/15 disabled:opacity-60 active:scale-[0.99]">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />} {busy ? "Asking Tesla…" : "Find open stalls near the car"}
-        </button>
-      )}
       {sites && (
         <ul className="mt-2 divide-y divide-white/10">
           {sites.slice(0, 4).map((s) => {
@@ -121,13 +127,12 @@ export function OpenStalls({ token, live, demo }: { token?: string; live: boolea
       )}
       {sent && <p className="mt-1 text-[12px] text-emerald-200" aria-live="polite">Sent. It shows on the car's map in about a minute.{demo ? " (Demo: nothing is sent.)" : ""}</p>}
       {msg && <p className="mt-1 text-[12px] text-white/70" aria-live="polite">{msg}</p>}
-      {!sites && !msg && <p className="mt-1.5 text-[12px] text-white/55">Live from Tesla: how many stalls are free right now.</p>}
     </div>
   );
 }
 
-export function RangeCheck({ rc, kind, className = "" }: { rc: RangeCheckData | undefined; kind: "home" | "lax"; className?: string }) {
-  if (!rc) return null;
+export function RangeCheck({ rc, kind, className = "", warnOnly }: { rc: RangeCheckData | undefined; kind: "home" | "lax"; className?: string; warnOnly?: boolean }) {
+  if (!rc || (warnOnly && rc.status === "ok")) return null;
   const tone = rc.status === "ok" ? "bg-emerald-400/10 ring-emerald-300/30" : rc.status === "tight" ? "bg-amber-300/15 ring-amber-200/40" : "bg-rose-400/15 ring-rose-300/40";
   const head = rc.status === "ok" ? "Plenty of range to get back" : rc.status === "tight" ? "Range is tight: charge on the way" : "Charge before heading back";
   return (

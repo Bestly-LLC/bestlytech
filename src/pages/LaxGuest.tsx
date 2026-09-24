@@ -28,7 +28,7 @@ import { InstallToast } from "./lax/InstallToast";
 import { Fold } from "./lax/HomeGuide";
 import ExtraDrivers from "./lax/ExtraDrivers";
 import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
-import { BatteryReturn, ChargingCard, ChargingFab, type Charging } from "./lax/Charging";
+import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./lax/Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./lax/LiveCharge";
 import { PhoneHandoff } from "./lax/PhoneHandoff";
 import { UnlockStart } from "./lax/Valet";
@@ -36,7 +36,7 @@ import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPub, isDemo, useDemoStage, useRealDemoKey } from "./lax/demo";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; car_connected_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -318,6 +318,12 @@ export default function LaxGuest() {
   const live = !!pub?.controls || demo;
   // "Set Up" done at the car (the car unlocked/moved by itself after the key was accepted), or 45 min into the trip.
   const carConnected = !!pub?.car_connected_at || (!!pub?.trip && Date.now() > +new Date(pub.trip.starts_at) + 45 * 60e3);
+  // Lobby QR: folded while booked, open from 24 hours before pickup, gone once the phone key is set up at the car
+  // (they're past the lobby). Only a real Set Up hides it early; otherwise it stays until 6 hours into the trip.
+  const startsMs = pub?.trip ? +new Date(pub.trip.starts_at) : null;
+  const qrPhase: "booked" | "pickup" | "done" = startsMs == null ? "pickup"
+    : pub?.car_connected_at || Date.now() > startsMs + 6 * 3600e3 ? "done"
+    : Date.now() < startsMs - 24 * 3600e3 ? "booked" : "pickup";
   const g = pub?.guide ?? {};
   const garage = g.garage || "5730 W 98th St, LA 90045";
   const level = g.level || "P3";
@@ -408,7 +414,8 @@ export default function LaxGuest() {
             <NextStep next={guide.next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? carCommand : undefined} kind="lax" />
 
             {/* QR */}
-            <Collapse id={onTrip ? "qr-trip" : "qr"} defaultOpen={!onTrip} kicker={onTrip ? "Park My Share QR code" : "Your QR code · opens the lobby door"} title={pub.ready && !onTrip ? "Scan it at the lobby door" : undefined} accent={PEACH} className={guide.next?.action === "qr" ? "trip-glow trip-glow-card" : ""} summary={onTrip ? "Opens the garage lobby door. Tap if you need it again." : pub.ready ? "Tap to show your QR code." : "Shows up here before your trip."}>
+            {qrPhase !== "done" && (
+            <Collapse id={qrPhase === "booked" ? "qr-booked" : "qr"} defaultOpen={qrPhase === "pickup"} kicker="Your QR code · opens the lobby door" title={pub.ready && qrPhase === "pickup" ? "Scan it at the lobby door" : undefined} accent={PEACH} className={guide.next?.action === "qr" ? "trip-glow trip-glow-card" : ""} summary={qrPhase === "booked" ? "You'll need it at pickup. It opens by itself the day before." : pub.ready ? "Tap to show your QR code." : "Shows up here before your trip."}>
               {pub.ready ? (
                 <>
                   <div className="mt-3 rounded-3xl bg-white p-6 text-center text-[#1A1140] shadow-2xl shadow-black/40">
@@ -438,6 +445,7 @@ export default function LaxGuest() {
                 <div className="mt-3 rounded-2xl bg-white/[0.06] p-4 text-white/80 ring-1 ring-white/10">Your QR code shows up right here before your trip. Nothing to do: this page updates by itself.</div>
               )}
             </Collapse>
+            )}
 
             {/* On the trip these three swipe (Your car · Supercharging · Help & guides); before it they stack. */}
             <TripSlides on={onTrip} id="lax-trip" labels={[...(carConnected ? [] : ["Your car"]), ...(pub.charging ? ["Supercharging"] : []), "Help & guides"]}>
@@ -477,10 +485,10 @@ export default function LaxGuest() {
 
 
 
-            {pub.charging && <ChargingCard charging={pub.charging} token={token || undefined} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery}>
+            {pub.charging && <ChargingCard charging={pub.charging} token={token || undefined} battery={(demoCar ? demoState : pub.car)?.battery} pickupBattery={pub.pickup_battery} health={pub.battery_health} charging_now={["Charging", "Starting"].includes((demoCar ? demoState : pub.car)?.charging ?? "")}>
               <ChargeNow state={(demoCar ? demoState : pub.car)?.charging} battery={(demoCar ? demoState : pub.car)?.battery} detail={(demoCar ? demoState : pub.car)?.charge_detail} target={pub.pickup_battery} />
               <OpenStalls token={token || undefined} live={live} demo={demo} />
-              <RangeCheck rc={pub.range_check} kind="lax" className="mt-3" />
+              <RangeCheck rc={pub.range_check} kind="lax" className="mt-3" warnOnly />
             </ChargingCard>}
 
             <HomeGuide pickupBattery={pub.pickup_battery} kind="lax" valet={token ? (demo ? (key?.state === "added" ? <UnlockStart demo /> : null) : <UnlockStart token={token} />) : null}>
