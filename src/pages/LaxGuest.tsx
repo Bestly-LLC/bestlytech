@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TagBar, TripSheet } from "./lax/TripSheet";
 import { AskButton, AskSheet } from "./lax/AskSheet";
 import { Collapse } from "./lax/Collapse";
-import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, type CarState, type Trip } from "./lax/GuestExtras";
+import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, climateNeed, type CarState, type Trip } from "./lax/GuestExtras";
 import { WalletLoader } from "./lax/WalletLoader";
 import { ScrollFx } from "./lax/ScrollFx";
 import { track } from "./lax/track";
@@ -324,6 +324,9 @@ export default function LaxGuest() {
   const keySteps = !!token && !!key && key.state !== "off" && key.state !== "ended";
   const n0 = keySteps ? 2 : 0;
   const live = !!pub?.controls || demo;
+  // Nice out and no climate to offer: hide the weather pane, car tile goes full width.
+  const wxCar = demoCar ? demoState : pub?.car ?? null;
+  const showWx = !wxCar || !!(wxCar.climate_until && +new Date(wxCar.climate_until) > Date.now()) || climateNeed(wxCar.inside_f, demo ? wxCar.outside_f : outsideF ?? wxCar.outside_f) !== "comfy";
   // "Set Up" done at the car (the car unlocked/moved by itself after the key was accepted), or 45 min into the trip.
   const carConnected = !!pub?.car_connected_at || (!!pub?.trip && Date.now() > +new Date(pub.trip.starts_at) + 45 * 60e3);
   // Lobby QR: folded while booked, open from 24 hours before pickup, gone once the phone key is set up at the car
@@ -471,8 +474,8 @@ export default function LaxGuest() {
                 <div className="mt-3 px-1"><ClimateAdvice car={demoCar ? demoState : pub.car ?? null} outsideF={demo ? null : outsideF} /></div>
               )}
               {pub.trip || pub.car ? (
-                <div className="mt-3 grid grid-cols-2 items-stretch gap-2.5">
-                  <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} />
+                <div className={`mt-3 grid items-stretch gap-2.5 ${showWx ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {showWx && <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} />}
                   <CarCard trip={pub.trip ?? null} car={demoCar ? demoState : pub.car ?? null} demo={demoCar || demo} compact outsideF={demo ? null : outsideF}
                     actions={<>
                       {pub.trip && <div className="grid grid-cols-2 gap-1.5">

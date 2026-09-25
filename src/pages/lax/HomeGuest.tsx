@@ -13,7 +13,7 @@ import { Helmet } from "react-helmet-async";
 import { ArrowRight, BellRing, CheckCircle2, Flashlight, KeyRound, Loader2, MapPin, Navigation, ShieldAlert, Smartphone } from "lucide-react";
 import { TagBar, TripSheet } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
-import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
+import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, climateNeed, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
 import { Mail, PlayCircle, Users } from "lucide-react";
 import { ScrollFx } from "./ScrollFx";
@@ -277,6 +277,8 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
     if (a === "pickup" || a === "return") openSheet(a);
     else if (a === "climate") document.getElementById("climate")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  // Nice out and no climate to offer: the weather pane adds nothing, so the car tile goes full width.
+  const showWx = !car || !!(car.climate_until && +new Date(car.climate_until) > Date.now()) || climateNeed(car.inside_f, demoPage ? car.outside_f : outsideF ?? car.outside_f) !== "comfy";
   const lockedUntil = demoCar || demoPage ? null : pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending";
 
   return (
@@ -325,8 +327,8 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           </div>
           {doClimate && <p className="mt-2 px-1 text-[15px] font-semibold text-[#E8A93A]">{doClimate === "warm" ? "Tap Warm it up below to start the heat." : "Tap Cool it down below to start the A/C."}</p>}
           {(pub.trip || car) && <div className="mt-2 px-1"><ClimateAdvice car={car} outsideF={demoPage ? null : outsideF} /></div>}
-          <div className="mt-3 grid grid-cols-2 items-stretch gap-2.5">
-            <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} place="WeHo" />
+          <div className={`mt-3 grid items-stretch gap-2.5 ${showWx ? "grid-cols-2" : "grid-cols-1"}`}>
+            {showWx && <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} place="WeHo" />}
             <CarCard trip={pub.trip ?? null} car={car} demo={demoCar || !!demoPage} compact outsideF={demoPage ? null : outsideF}
               actions={<>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -379,10 +381,9 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
               <p className="mt-7 text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Then: at the car</p>
             </>
           )}
-          <Carousel id="home-pickup" className="mt-4" labels={["Go to the car", "\u201cSet Up\u201d + Unlock", "Turo Guest profile"]}>
-            <Step n={n0 + 1}><b className="text-white">Go to</b> <a href={mapsFor(home.address)} className="underline decoration-white/40 underline-offset-2">{home.address}</a>. It's on N Kings Rd near the building. Not sure which car? Tap <b className="text-white">Honk</b> on the main page.</Step>
-            <Step n={n0 + 2}>Next to the car (Bluetooth on), open the Tesla app. Tap <b className="text-white">&ldquo;Set Up&rdquo;</b> and follow the steps. Then tap <b className="text-white">Unlock</b>.</Step>
-            <Step n={n0 + 3}><b className="text-white">Get in and pick your profile.</b><ProfileTip /></Step>
+          <Carousel id="home-pickup" className="mt-4" labels={["\u201cSet Up\u201d + Unlock", "Turo Guest profile"]}>
+            <Step n={n0 + 1}>Next to the car (Bluetooth on), open the Tesla app. Tap <b className="text-white">&ldquo;Set Up&rdquo;</b> and follow the steps. Then tap <b className="text-white">Unlock</b>.</Step>
+            <Step n={n0 + 2}><b className="text-white">Get in and pick your profile.</b><ProfileTip /></Step>
           </Carousel>
         </TripSheet>
 
