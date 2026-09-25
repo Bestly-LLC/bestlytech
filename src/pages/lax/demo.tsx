@@ -97,6 +97,22 @@ function demoCharging(start: number, ended: boolean) {
 const anchor = { stage: "", t: 0 };
 /** A fake lax_guest_public() answer for the chosen stage. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+/** Demo weather: what the climate buttons look like when it's hot, cold or nice. Host-only switch in the DemoBar. */
+export type DemoWeather = "hot" | "cold" | "nice";
+export const DEMO_WEATHER: { id: DemoWeather; label: string; inside_f: number; outside_f: number }[] = [
+  { id: "hot", label: "Hot · A/C", inside_f: 97, outside_f: 84 },
+  { id: "cold", label: "Cold · heat", inside_f: 46, outside_f: 49 },
+  { id: "nice", label: "Nice · none", inside_f: 71, outside_f: 70 },
+];
+export function demoWeather(): DemoWeather {
+  try { const w = sessionStorage.getItem("demo-weather"); if (w === "hot" || w === "cold" || w === "nice") return w; } catch { /* ignore */ }
+  return "hot";
+}
+export function useDemoWeather(): [DemoWeather, (w: DemoWeather) => void] {
+  const [w, setW] = useState<DemoWeather>(demoWeather);
+  return [w, (x) => { try { sessionStorage.setItem("demo-weather", x); } catch { /* ignore */ } setW(x); }];
+}
+
 export function demoPub(kind: "home" | "lax", stage: string): any {
   const now = Date.now();
   // Trip times are pinned when a stage is picked, so the minute refresh never shifts them; the page then runs in real time.
@@ -115,7 +131,7 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
   if (real && !real.link) keyState = "making";
   const key = { state: keyState, opens_at: iso(keyOpens), link: keyState === "ready" ? (real?.link ?? "#demo-key") : null, expires_at: keyState === "ready" ? iso(now + 23 * H) : null, unlock: false, real: !!real };
   const base = {
-    ok: true, kind, trip, car: { ...DEMO_CAR, observed_at: iso(now - 3 * 60e3) }, controls: controls_state === "on", controls_state,
+    ok: true, kind, trip, car: (() => { const w = DEMO_WEATHER.find((x) => x.id === demoWeather())!; return { ...DEMO_CAR, inside_f: w.inside_f, outside_f: w.outside_f, observed_at: iso(now - 3 * 60e3) }; })(), controls: controls_state === "on", controls_state,
     controls_opens_at: iso(s - H), email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: now >= s ? (stage === "returning" ? 90 : 76) : null, pickup_battery_at: now >= s ? iso(s) : null, car_connected_at: now >= s ? iso(s + 10 * 60e3) : null, demo: true,
     range_check: now >= s && now < e + 0.5 * H ? { range_mi: 188, miles: 6.4, spare: 182, status: "ok" } : null,
     charging: now < s ? null : demoCharging(s, now >= e),
@@ -149,7 +165,7 @@ export function useDemoStage(kind: "home" | "lax", enabled: boolean) {
 }
 
 /** Floating switcher so the host can walk the trip from booking to return. */
-export function DemoBar({ kind, stage, onStage }: { kind: "home" | "lax"; stage: string; onStage: (s: string) => void }) {
+export function DemoBar({ kind, stage, onStage, weather, onWeather }: { kind: "home" | "lax"; stage: string; onStage: (s: string) => void; weather?: DemoWeather; onWeather?: (w: DemoWeather) => void }) {
   return (
     <div className="fixed inset-x-0 bottom-[8.5rem] z-40 flex justify-center px-3" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
       <label className="flex w-full max-w-md items-center gap-2 rounded-2xl bg-black/85 px-3 py-2 text-white shadow-2xl ring-1 ring-white/20 backdrop-blur">
@@ -158,6 +174,12 @@ export function DemoBar({ kind, stage, onStage }: { kind: "home" | "lax"; stage:
         <select value={stage} onChange={(e) => onStage(e.target.value)} className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1.5 text-[14px] text-white">
           {STAGES[kind].map((s) => <option key={s.id} value={s.id} className="text-black">{s.label}</option>)}
         </select>
+        {onWeather && (
+          <select value={weather} onChange={(e) => onWeather(e.target.value as DemoWeather)} aria-label="Demo weather"
+            className="w-[7.5rem] shrink-0 rounded-lg bg-white/10 px-2 py-1.5 text-[14px] text-white">
+            {DEMO_WEATHER.map((w) => <option key={w.id} value={w.id} className="text-black">{w.label}</option>)}
+          </select>
+        )}
         {realKey && (
           <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-1 text-[12px] font-semibold text-emerald-300 ring-1 ring-emerald-300/30"
             title={`Real Tesla key. Anyone who adds it is removed after ${Math.round((realKey.keep_minutes ?? 120) / 60 * 10) / 10} hr.`}>

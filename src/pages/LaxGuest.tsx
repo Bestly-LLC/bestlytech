@@ -35,7 +35,7 @@ import { BestlyAd } from "./lax/BestlyAd";
 import { PhoneHandoff } from "./lax/PhoneHandoff";
 import { UnlockStart } from "./lax/Valet";
 import { renderPassImage } from "./lax/passImage";
-import { DemoBar, demoKind, demoPub, isDemo, useDemoStage, useRealDemoKey } from "./lax/demo";
+import { DemoBar, demoKind, demoPub, isDemo, useDemoStage, useDemoWeather, useRealDemoKey } from "./lax/demo";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
 type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
@@ -161,6 +161,7 @@ export default function LaxGuest() {
   const demo = isDemo(token);
   const dKind = demoKind(token || "");
   const [stage, setStage] = useDemoStage(dKind, demo);
+  const [weather, setWeather] = useDemoWeather();
   // The minute timer below keeps its first closure: read the demo stage from a ref so it never snaps back to an old stage.
   const stageRef = useRef(stage); stageRef.current = stage;
   // Host only: a real Tesla key on the demo (null for everyone else).
@@ -232,7 +233,7 @@ export default function LaxGuest() {
   const demoSoon = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "soon" ? new Date(Date.now() + 3 * 3600 * 1000).toISOString() : null, []);
 
   useEffect(() => {
-    if (demo) { setPub(demoPub(dKind, stage) as Pub); return; }
+    if (demo) { setPub(demoPub(dKind, stage) as Pub); return; } // weather is read inside demoPub
     const load = () => (token
       ? rpc("lax_guest_public", { p_token: token })
       : rpc("lax_pass_public", { p_slug: slug })).then(({ data }) => {
@@ -380,7 +381,7 @@ export default function LaxGuest() {
   // Home pickup (733 N Kings Rd): same page system, home look. No QR code, shuttle or garage.
   if (token && pub?.ok && pub.kind === "home") return <>
     <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} demoPage={demo} reload={reload} />
-    {demo && <DemoBar kind="home" stage={stage} onStage={setStage} />}
+    {demo && <DemoBar kind="home" stage={stage} onStage={setStage} weather={weather} onWeather={(w) => { setWeather(w); setPub(demoPub(dKind, stageRef.current) as Pub); }} />}
   </>;
 
   return (
@@ -467,12 +468,12 @@ export default function LaxGuest() {
               </div>
               {doClimate && <p className="mt-2 px-1 text-[15px] font-semibold" style={{ color: PEACH }}>{doClimate === "warm" ? "Tap Warm it up below to start the heat." : "Tap Cool it down below to start the A/C."}</p>}
               {(pub.trip || pub.car) && (
-                <div className="mt-3 px-1"><ClimateAdvice car={demoCar ? demoState : pub.car ?? null} outsideF={outsideF} /></div>
+                <div className="mt-3 px-1"><ClimateAdvice car={demoCar ? demoState : pub.car ?? null} outsideF={demo ? null : outsideF} /></div>
               )}
               {pub.trip || pub.car ? (
                 <div className="mt-3 grid grid-cols-2 items-stretch gap-2.5">
                   <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} />
-                  <CarCard trip={pub.trip ?? null} car={demoCar ? demoState : pub.car ?? null} demo={demoCar || demo} compact outsideF={outsideF}
+                  <CarCard trip={pub.trip ?? null} car={demoCar ? demoState : pub.car ?? null} demo={demoCar || demo} compact outsideF={demo ? null : outsideF}
                     actions={<>
                       {pub.trip && <div className="grid grid-cols-2 gap-1.5">
                         <CarButton small action="honk" label="Honk" icon={BellRing} run={live ? carCommand : undefined} />
@@ -643,7 +644,7 @@ export default function LaxGuest() {
             </TripSheet>
             <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} hideTags={ended}
               glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
-            {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} />}
+            {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} weather={weather} onWeather={(w) => { setWeather(w); setPub(demoPub(dKind, stageRef.current) as Pub); }} />}
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
             {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
             {token && !ended && <InstallToast token={token} kind="lax" />}

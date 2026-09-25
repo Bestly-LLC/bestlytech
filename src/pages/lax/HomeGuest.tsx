@@ -278,7 +278,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
     if (a === "pickup" || a === "return") openSheet(a);
     else if (a === "climate") document.getElementById("climate")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-  const lockedUntil = demoCar ? null : pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending";
+  const lockedUntil = demoCar || demoPage ? null : pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending";
 
   return (
     <div className="trip min-h-dvh text-white" style={{ ...MCM, background: "radial-gradient(120% 60% at 50% 0%, #1f4442 0%, #132726 62%)", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
@@ -325,10 +325,10 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
             <Starburst className="mt-1 h-6 w-6 shrink-0 text-[#E8A93A]" />
           </div>
           {doClimate && <p className="mt-2 px-1 text-[15px] font-semibold text-[#E8A93A]">{doClimate === "warm" ? "Tap Warm it up below to start the heat." : "Tap Cool it down below to start the A/C."}</p>}
-          {(pub.trip || car) && <div className="mt-2 px-1"><ClimateAdvice car={car} outsideF={outsideF} /></div>}
+          {(pub.trip || car) && <div className="mt-2 px-1"><ClimateAdvice car={car} outsideF={demoPage ? null : outsideF} /></div>}
           <div className="mt-3 grid grid-cols-2 items-stretch gap-2.5">
             <WeatherCard trip={pub.trip ?? null} compact onNow={setOutsideF} lat={home.lat} lon={home.lon} place="WeHo" />
-            <CarCard trip={pub.trip ?? null} car={car} demo={demoCar || !!demoPage} compact outsideF={outsideF}
+            <CarCard trip={pub.trip ?? null} car={car} demo={demoCar || !!demoPage} compact outsideF={demoPage ? null : outsideF}
               actions={<>
                 <div className="grid grid-cols-2 gap-1.5">
                   <CarButton small action="honk" label="Honk" icon={BellRing} run={live ? run : undefined} />
