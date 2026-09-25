@@ -23,7 +23,7 @@ const STEPS = [
   <>Find <b className="text-white">Drivers</b> (or "Additional drivers") → <b className="text-white">Add driver</b>.</>,
   <>Enter their email or phone. Turo texts them to make an account and verify their license.</>,
   <>Wait until Turo says they're <b className="text-white">approved to drive</b>. Usually minutes, sometimes longer.</>,
-  <>Come back here and add them below. Their own key appears once Turo confirms.</>,
+  <>Come back here and add them below. Once Turo confirms, their key shows up here for you to text them.</>,
 ];
 
 export default function ExtraDrivers({ token, ended, embedded }: { token: string; ended?: boolean; embedded?: boolean }) {

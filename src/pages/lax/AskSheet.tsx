@@ -4,7 +4,7 @@
  * Opens in the same luggage bottom sheet as Pickup / Return.
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Loader2, MapPin, MessageCircleQuestion, Navigation, Phone, UserPlus } from "lucide-react";
+import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Loader2, MapPin, MessageCircleQuestion, MessageSquare, Navigation, Phone, UserPlus } from "lucide-react";
 import { ackText } from "./ExtraDrivers";
 import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
@@ -234,8 +234,32 @@ function CarWashButtons({ token }: { token?: string }) {
 /** Add a driver right in the chat: 1) added + approved in Turo? 2) agree to the terms 3) their name. Same rules as the page form. */
 const DRIVER_RE = /\b(someone else|another|second|extra|additional|add(ing)?( a| my| an)?) (person )?(driv(e|er|ing))|\bcan (my|a) (\w+ )?(wife|husband|partner|friend|boyfriend|girlfriend|brother|sister|dad|mom|son|daughter) drive/i;
 function AddDriverChat({ token }: { token?: string }) {
+  const demo = !token || token.startsWith("demo-");
   const [step, setStep] = useState<"turo" | "how" | "terms" | "name" | "done">("turo");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(demo ? "Test" : ""); // demo: acts as if "Test" is on the Turo trip
+  const [key, setKey] = useState<{ state: string; link?: string | null } | null>(null);
+  // After adding: watch for Turo's confirmation, then hand over their key right here in the chat.
+  useEffect(() => {
+    if (step !== "done") return;
+    const n = name.trim().toLowerCase();
+    if (demo) {
+      const a = window.setTimeout(() => setKey({ state: "making" }), 1500);
+      const b = window.setTimeout(() => setKey({ state: "ready", link: "https://www.tesla.com/_rs/1/DEMO-KEY" }), 3200);
+      return () => { window.clearTimeout(a); window.clearTimeout(b); };
+    }
+    let stop = false;
+    const check = async () => {
+      if (stop || document.visibilityState !== "visible") return;
+      const { data } = await rpc("lax_guest_drivers", { p_token: token });
+      const ds = ((data as { drivers?: { id: number; name: string; state: string; link?: string | null }[] } | null)?.drivers ?? []).filter((d) => d.name.trim().toLowerCase() === n);
+      const d = ds.sort((x, y) => y.id - x.id)[0];
+      if (d && !stop) setKey({ state: d.state, link: d.link });
+    };
+    void check();
+    const id = window.setInterval(check, 20000);
+    return () => { stop = true; window.clearInterval(id); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const bubble = "mt-2 rounded-2xl rounded-bl-md bg-white/[0.08] px-3.5 py-2.5 text-[15px] leading-relaxed text-white ring-1 ring-white/10";
@@ -269,7 +293,7 @@ function AddDriverChat({ token }: { token?: string }) {
         <button type="button" className={`${pill} mt-2 text-[#1A1140]`} style={{ background: PEACH }} onClick={() => setStep("name")}>I agree</button>
       </>)}
       {step === "name" && (<>
-        <p className={bubble}>What's their name, as it shows in Turo?</p>
+        <p className={bubble}>What's their name, as it shows in Turo?{demo ? " (Demo: \u201cTest\u201d is on the trip.)" : ""}</p>
         <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); void add(); }}>
           <label htmlFor="helper-driver" className="sr-only">Driver's name</label>
           <input id="helper-driver" value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" maxLength={60} placeholder="e.g. Michael"
@@ -280,9 +304,19 @@ function AddDriverChat({ token }: { token?: string }) {
         </form>
         {err && <p role="alert" className="mt-1 text-[13px] text-red-300">{err}</p>}
       </>)}
-      {step === "done" && (
-        <p className={bubble}><CheckCircle2 className="mr-1 inline h-4 w-4 text-emerald-300" aria-hidden /><b>{name.trim()} is added.</b> Their own phone key shows up on your trip page as soon as Turo confirms. Nothing else to do.</p>
-      )}
+      {step === "done" && (<>
+        <p className={bubble}><CheckCircle2 className="mr-1 inline h-4 w-4 text-emerald-300" aria-hidden /><b>{name.trim()} is added.</b> Come back here once Turo confirms them. We'll have their own key ready for you to text them, right here.</p>
+        {key?.state === "making" && <p className={bubble}><Loader2 className="mr-1 inline h-4 w-4 animate-spin" aria-hidden />Turo confirmed {name.trim()}. Making their key now…</p>}
+        {key?.state === "ready" && key.link && (<>
+          <p className={bubble}><b>{name.trim()}&apos;s key is ready.</b> Text it to them. They tap it and the car is added to <i>their</i> Tesla app.</p>
+          <a href={`sms:?&body=${encodeURIComponent(`Hi ${name.trim()}! Here's your own Tesla key for our trip. Open it on your phone and tap Accept, signed in to your Tesla app: ${key.link}`)}`}
+            onClick={() => track(token, "driver_share", { via: "helper_sms" })}
+            className={`${pill} mt-2 text-[#1A1140]`} style={{ background: PEACH }}><MessageSquare className="h-4 w-4" aria-hidden />Text {name.trim()} their key</a>
+        </>)}
+        {key?.state === "added" && <p className={bubble}><CheckCircle2 className="mr-1 inline h-4 w-4 text-emerald-300" aria-hidden />{name.trim()}&apos;s phone is set up as a key.</p>}
+        {key?.state === "problem" && <p className={bubble}>Something went wrong making {name.trim()}&apos;s key. Jared&apos;s been notified and will fix it.</p>}
+        {demo && <p className="mt-1.5 text-[12px] text-amber-200/80">Demo: acting as if Turo confirmed {name.trim()}.</p>}
+      </>)}
     </div>
   );
 }
