@@ -308,7 +308,8 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
         {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /></div>}
 
         {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" /> : <>
-        <NextStep next={next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? run : undefined} kind="home" />
+        <NextStep next={next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? run : undefined} kind="home"
+          extra={next?.chargeCard ? <ReturnChargeBlock compact kind="home" endsAt={pub.trip?.ends_at} pickup={pub.pickup_battery} battery={car?.battery} rc={pub.range_check} run={live ? run : undefined} observedAt={car?.observed_at} /> : undefined} />
 
         {/* On the trip these three swipe (Your car · Supercharging · Help & guides); before it they stack. */}
         <TripSlides on={onTrip} id="home-trip" labels={[...(carConnected ? [] : ["Your car"]), ...(pub.charging ? ["Supercharging"] : []), "Help & guides"]}>

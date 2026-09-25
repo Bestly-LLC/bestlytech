@@ -31,7 +31,7 @@ export function useHasApp() {
 }
 
 export type GlowTarget = "next" | "pickup" | "return" | "key" | "climate";
-export type Next = { icon: typeof Zap; title: string; sub?: string; action?: "getapp" | "pickup" | "return" | "climate" | "send" | "qr"; label?: string; charging?: boolean } | null;
+export type Next = { icon: typeof Zap; title: string; sub?: string; action?: "getapp" | "pickup" | "return" | "climate" | "send" | "qr"; label?: string; charging?: boolean; chargeCard?: boolean } | null;
 
 /** One place decides what the guest should do now, and what glows. */
 export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady, pickupBattery, rc, now = Date.now() }: {
@@ -52,7 +52,8 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
     const chargeLine = !r.known ? "" : r.needs ? ` Charge to ${pickupBattery}% (same as pickup) first: add about ${r.add}%.` : " You're good on charge.";
     if (now >= e - 3 * H) {
       glow.add("return"); glow.add("next");
-      return { next: { icon: Undo2, title: now >= e ? "Return time: park and lock it" : "Time to head back", sub: `${now >= e ? "It was due" : "Return by"} ${fmtWhen(trip.ends_at)}.${chargeLine}`, action: "return", label: "Return steps" }, glow };
+      // Short on charge: the card shows the charge arc (headline + gauge) instead of a charge sentence.
+      return { next: { icon: Undo2, title: now >= e ? "Return time: park and lock it" : "Time to head back", sub: `${now >= e ? "It was due" : "Return by"} ${fmtWhen(trip.ends_at)}.${r.needs ? "" : chargeLine}`, action: "return", label: "Return steps", chargeCard: r.needs }, glow };
     }
     if (r.needs) return { next: { icon: Zap, title: `Return by ${fmtWhen(trip.ends_at)}`, sub: `Bring it back at ${pickupBattery}%, same as pickup. Add about ${r.add}% before you return.`, action: "send", label: "Send charger to car", charging: true }, glow };
     return { next: { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, sub: `Bring it back at the same charge as pickup${pickupBattery != null ? ` (${pickupBattery}%)` : ""}.${r.known ? " You're good on charge right now." : ""}`, charging: true }, glow };
@@ -84,8 +85,8 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
   return { next: { icon: ArrowRight, title: `Pickup ${fmtWhen(trip.starts_at)}`, sub: "Tap Pickup at the bottom for the steps.", action: "pickup", label: "Pickup steps" }, glow };
 }
 
-export function NextStep({ next, glow, onAction, onHasApp, run, kind }: {
-  next: Next; glow: boolean; onAction: (a: NonNullable<NonNullable<Next>["action"]>) => void; onHasApp: () => void;
+export function NextStep({ next, glow, onAction, onHasApp, run, kind, extra }: {
+  next: Next; glow: boolean; onAction: (a: NonNullable<NonNullable<Next>["action"]>) => void; onHasApp: () => void; extra?: ReactNode;
   run?: (a: "nav_charger" | "nav_charger_lax", onStage?: (s: string) => void) => Promise<void>; kind: TripKind;
 }) {
   if (!next) return null;
@@ -100,6 +101,7 @@ export function NextStep({ next, glow, onAction, onHasApp, run, kind }: {
           {next.sub && <p className="mt-0.5 text-[14px] leading-snug text-white/75">{next.sub}</p>}
         </div>
       </div>
+      {extra && <div className="mt-3 text-[14px] leading-relaxed text-white/80">{extra}</div>}
       {next.action === "send" ? (
         <div className="mt-1 pl-[52px]"><SendToCar run={run} kind={kind} /></div>
       ) : next.action === "getapp" ? (
@@ -109,7 +111,8 @@ export function NextStep({ next, glow, onAction, onHasApp, run, kind }: {
         </div>
       ) : next.action ? (
         <button type="button" onClick={() => onAction(next.action!)}
-          className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#1A1140] shadow-lg shadow-black/25 active:scale-[0.99]" style={{ background: ACCENT }}>
+          // With the charge card up, charging is the main action: Return steps steps back to a secondary button.
+          className={`mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold active:scale-[0.99] ${next.chargeCard ? "bg-white/10 text-white ring-1 ring-white/15" : "text-[#1A1140] shadow-lg shadow-black/25"}`} style={next.chargeCard ? undefined : { background: ACCENT }}>
           {next.label}<ArrowRight className="h-4 w-4" />
         </button>
       ) : null}

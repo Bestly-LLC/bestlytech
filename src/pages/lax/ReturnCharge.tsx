@@ -52,8 +52,8 @@ export function returnChargeLive(battery?: number | null, pickup?: number | null
 }
 
 /** Step 1 of both Return sheets. Renders nothing until returnChargeLive() says it matters. */
-export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, observedAt }: {
-  kind: TripKind; pickup?: number | null; battery?: number | null; rc?: RangeCheckData; run?: NavRun;
+export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, observedAt, compact }: {
+  kind: TripKind; pickup?: number | null; battery?: number | null; rc?: RangeCheckData; run?: NavRun; compact?: boolean;
   setAt?: string | null; startsAt?: string | null; endsAt?: string | null; observedAt?: string | null; lead?: ReactNode;
 }) {
   const [why, setWhy] = useState(false);
@@ -94,8 +94,8 @@ export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, obse
         </div>
         {observedAt && <p className="mt-2 text-center text-[11px] text-white/45">Updated {new Date(observedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</p>}
       </div>
-      <RangeCheck rc={rc} kind={kind} className="mt-3" warnOnly />
-      {r.needs && <><span className="mt-3 block"><ChargerLine kind={kind} /></span><SendToCar run={run} kind={kind} /></>}
+      {!compact && <RangeCheck rc={rc} kind={kind} className="mt-3" warnOnly />}
+      {r.needs && (compact ? <SendToCar run={run} kind={kind} label="Send a Supercharger to the car" /> : <><span className="mt-3 block"><ChargerLine kind={kind} /></span><SendToCar run={run} kind={kind} /></>)}
     </div>
   );
 }
