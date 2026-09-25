@@ -492,7 +492,9 @@ export function Scout() {
       refreshJobs();
       inputRef.current?.focus();
     },
-    [busy, threadId, loadThread, location.pathname, location.search, refreshJobs, toNewest],
+    // 2026-09-24: attach.* must be here. Without them send() kept the first render's attach (no files), so
+    // attachments uploaded and read fine but the message went out without them ("can you read that?" -> nothing).
+    [busy, threadId, loadThread, location.pathname, location.search, refreshJobs, toNewest, attach.compose, attach.count, attach.busy, attach.drop],
   );
 
   // Other parts of the admin open Scout or hand it a question (scoutBus.ts).

@@ -56,9 +56,11 @@ export function useScoutFiles() {
   /** What actually goes to Scout: the files first, then the question. */
   const compose = useCallback((question: string) => {
     const ready = files.filter((f) => f.text);
-    if (!ready.length) return question;
-    const blocks = ready.map((f) =>
-      `[File: ${f.name}${f.kind === "image" ? " — what the image shows" : f.kind === "pdf" ? " — the document's text" : ""}]\n${f.text}`);
+    // A file that couldn't be read still goes along as a note, so Scout says so instead of acting as if nothing came.
+    const failed = files.filter((f) => !f.text && f.error).map((f) => `[File: ${f.name} — couldn't be read: ${f.error}]`);
+    if (!ready.length && !failed.length) return question;
+    const blocks = [...ready.map((f) =>
+      `[File: ${f.name}${f.kind === "image" ? " — what the image shows" : f.kind === "pdf" ? " — the document's text" : ""}]\n${f.text}`), ...failed];
     return `${blocks.join("\n\n")}\n\n---\n${question || "Read this and tell me what you make of it."}`;
   }, [files]);
 
