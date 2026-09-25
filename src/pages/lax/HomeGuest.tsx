@@ -225,6 +225,17 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
 }
 
 
+/** Short emoji-bulleted list for the Return steps. */
+function Bullets({ items }: { items: [string, ReactNode][] }) {
+  return (
+    <ul className="space-y-2">
+      {items.map(([e, t], i) => (
+        <li key={i} className="flex gap-2.5 leading-snug"><span className="w-6 shrink-0 text-center text-[17px]" aria-hidden>{e}</span><span>{t}</span></li>
+      ))}
+    </ul>
+  );
+}
+
 export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: { pub: HomePub; token: string; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; demo: string | null; demoPage?: boolean; reload?: () => void }) {
   const [sheet, setSheet] = useState<"pickup" | "return" | "ask" | null>(() => {
     if (typeof window === "undefined") return null;
@@ -390,8 +401,16 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
           <Carousel id="home-return" className="mt-1" labels={[...(chargeLive ? ["Charge"] : []), "Park", "Photos + lock"]}>
             {chargeLive && <Step n={1}><ReturnChargeBlock kind="home" endsAt={pub.trip?.ends_at} lead={<b className="text-white">Charge: </b>} pickup={pub.pickup_battery} battery={car?.battery} rc={pub.range_check} run={live ? run : undefined} setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={car?.observed_at} /></Step>}
-            <Step n={chargeLive ? 2 : 1}><b className="text-white">Park on N Kings Rd</b> near the building. <b className="text-white">Avoid the Joybird street parking.</b> Watch for <b className="text-white">street sweeping on Mondays and Tuesdays</b>: west side Monday 8–10 AM, east side Tuesday 8–10 AM ($75 tickets).<span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span><ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} /></Step>
-            <Step n={chargeLive ? 3 : 2}><b className="text-white">Return photos</b> in the Turo app, grab your stuff, lock it in the Tesla app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
+            <Step n={chargeLive ? 2 : 1}><Bullets items={[
+              ["📍", <><b className="text-white">Park on N Kings Rd</b> near the building.</>],
+              ["🚫", <><b className="text-white">Not</b> in the Joybird street parking.</>],
+              ["🧹", <><b className="text-white">Street sweeping</b> ($75 tickets): west side Monday 8–10 AM, east side Tuesday 8–10 AM.</>],
+            ]} /><span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span><ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} /></Step>
+            <Step n={chargeLive ? 3 : 2}><Bullets items={[
+              ["📸", <><b className="text-white">Return photos</b> in the Turo app.</>],
+              ["🎒", <><b className="text-white">Grab your stuff.</b></>],
+              ["🔒", <><b className="text-white">Lock it</b> in the Tesla app.</>],
+            ]} /><OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
           </Carousel>
           <p className="mt-5 text-[14px] text-white/60">Your key turns off by itself after the trip. Nothing to hand back.</p>
         </TripSheet>

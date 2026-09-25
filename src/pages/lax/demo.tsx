@@ -15,11 +15,20 @@ export function demoPass(): string | null {
   try {
     const u = new URL(window.location.href);
     const q = u.searchParams.get("dk");
-    if (q) { localStorage.setItem(PASS_KEY, q); u.searchParams.delete("dk"); history.replaceState(null, "", u.pathname + u.search + u.hash); }
-    return localStorage.getItem(PASS_KEY);
+    if (q) {
+      localStorage.setItem(PASS_KEY, q);
+      document.cookie = `${PASS_KEY}=${encodeURIComponent(q)}; max-age=${365 * 864e2}; path=/t; SameSite=Lax; Secure`;
+      u.searchParams.delete("dk"); history.replaceState(null, "", u.pathname + u.search + u.hash);
+    }
+    const ls = localStorage.getItem(PASS_KEY);
+    if (ls) return ls;
+    // Backup copy in a cookie: restores the host pass if Safari cleared local storage.
+    const c = document.cookie.split("; ").find((x) => x.startsWith(`${PASS_KEY}=`));
+    if (c) { const v = decodeURIComponent(c.split("=")[1]); localStorage.setItem(PASS_KEY, v); return v; }
+    return null;
   } catch { return null; }
 }
-type RealKey = { state: string; link: string | null; keep_minutes?: number } | null;
+type RealKey = { state: string; link: string | null; keep_minutes?: number; expires_at?: string | null } | null;
 /** null = not the host, so the pretend key is used. */
 export let realKey: RealKey = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,7 +44,7 @@ export function useRealDemoKey(enabled: boolean, onChange: () => void) {
     const load = async () => {
       const { data } = await rpc("demo_key_get", { p_pass: demoPass() }).catch(() => ({ data: null }));
       if (stop) return;
-      const next: RealKey = data && data.state !== "off" ? { state: data.state, link: data.link ?? null, keep_minutes: data.keep_minutes } : null;
+      const next: RealKey = data && data.state !== "off" ? { state: data.state, link: data.link ?? null, keep_minutes: data.keep_minutes, expires_at: data.expires_at ?? null } : null;
       if (JSON.stringify(next) !== JSON.stringify(realKey)) { realKey = next; bump((n) => n + 1); onChange(); }
       t = window.setTimeout(load, next && !next.link ? 10e3 : 5 * 60e3);
     };
@@ -142,7 +151,7 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
   // Host: the button is a real Tesla key ("making" for the few seconds a fresh invite takes).
   const real = keyState === "ready" && realKey ? realKey : null;
   if (real && !real.link) keyState = "making";
-  const key = { state: keyState, opens_at: iso(keyOpens), link: keyState === "ready" ? (real?.link ?? "#demo-key") : null, expires_at: keyState === "ready" ? iso(now + 23 * H) : null, unlock: false, real: !!real };
+  const key = { state: keyState, opens_at: iso(keyOpens), link: keyState === "ready" ? (real?.link ?? "#demo-key") : null, expires_at: keyState === "ready" ? (real?.expires_at ?? iso(now + 23 * H)) : null, unlock: false, real: !!real };
   const base = {
     ok: true, kind, trip, car: (() => { const w = DEMO_WEATHER.find((x) => x.id === demoWeather())!; return { ...DEMO_CAR, inside_f: w.inside_f, outside_f: w.outside_f, observed_at: iso(now - 3 * 60e3) }; })(), controls: controls_state === "on", controls_state,
     controls_opens_at: iso(s - H), email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: now >= s ? (stage === "returning" ? 90 : 76) : null, pickup_battery_at: now >= s ? iso(s) : null, car_connected_at: now >= s ? iso(s + 10 * 60e3) : null, demo: true,
