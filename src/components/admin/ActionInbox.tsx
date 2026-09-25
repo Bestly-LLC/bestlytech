@@ -277,7 +277,7 @@ export function ActionInbox() {
         detail: r.detail || undefined,
         ageMs: r.since ? now - new Date(r.since).getTime() : 0,
         href: r.url || undefined,
-        external: !!r.url && /^https?:/i.test(r.url),
+        external: !!r.url && /^https?:/i.test(r.url) && !r.url.startsWith(window.location.origin) && !r.url.startsWith("/"),
         count: count > 1 ? count : undefined,
         // Every row can be ticked now. admin_today_done() used to raise for anything that was
         // not a Cookie Yeti release or a bell alert, so the check mark was hidden on the rest.
