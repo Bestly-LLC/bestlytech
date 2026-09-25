@@ -340,7 +340,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           <div className="flex items-start justify-between gap-3 px-1 pt-1">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Your car</p>
-              <h2 className="mt-0.5 text-[20px] font-bold leading-tight text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>{street}</h2>
+              <h2 className="mt-0.5 text-[20px] font-bold leading-tight text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}><a href={mapsFor(home.address)} onClick={() => track(undefined, "directions", { to: "733 N Kings Rd", from: "car_heading" })} className="underline decoration-white/35 underline-offset-4 hover:decoration-white">{street}</a></h2>
             </div>
             <Starburst className="mt-1 h-6 w-6 shrink-0 text-[#E8A93A]" />
           </div>

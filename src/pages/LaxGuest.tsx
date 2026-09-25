@@ -467,7 +467,7 @@ export default function LaxGuest() {
               style={{ background: "linear-gradient(160deg, rgba(255,184,120,0.10), rgba(255,255,255,0.04) 40%, rgba(122,46,158,0.22))" }}>
               <div className="px-1 pt-1">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Your car</p>
-                <h2 className="mt-0.5 text-[20px] font-bold leading-tight text-white">{garage.split(",")[0]} · {level}</h2>
+                <h2 className="mt-0.5 text-[20px] font-bold leading-tight text-white"><a href={maps} onClick={() => track(token || undefined, "directions", { to: "the LAX garage", from: "car_heading" })} className="underline decoration-white/35 underline-offset-4 hover:decoration-white">{garage.split(",")[0]}</a> · {level}</h2>
               </div>
               {doClimate && <p className="mt-2 px-1 text-[15px] font-semibold" style={{ color: PEACH }}>{doClimate === "warm" ? "Tap Warm it up below to start the heat." : "Tap Cool it down below to start the A/C."}</p>}
               {(pub.trip || pub.car) && (
