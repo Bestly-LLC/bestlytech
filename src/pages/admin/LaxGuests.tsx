@@ -59,6 +59,8 @@ function explain(e: Ev, home: boolean): { title: string; sub?: string } {
       return { title: `Helper: ${String(d.note ?? d.action ?? "took an action")}`, sub: r?.note ? String(r.note) : undefined };
     }
     case "view": return { title: "Opened their trip page" };
+    case "out_of_state": return { title: "Said they're leaving California", sub: `“${String(d.text ?? "")}” · you got a Scout alert` };
+    case "geofence_block": return { title: `Tried to ${d.action === "flash" ? "flash the lights" : "honk"} from too far away`, sub: d.meters ? `About ${Math.round(Number(d.meters) * 3.281)} ft from the car · blocked` : "Blocked" };
     default: return { title: ACT[e.kind] ?? e.kind.replace(/_/g, " ") };
   }
 }
