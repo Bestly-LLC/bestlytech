@@ -4,7 +4,8 @@
  * Opens in the same luggage bottom sheet as Pickup / Return.
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Loader2, MapPin, MessageCircleQuestion, Navigation, Phone } from "lucide-react";
+import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Loader2, MapPin, MessageCircleQuestion, Navigation, Phone, UserPlus } from "lucide-react";
+import { ackText } from "./ExtraDrivers";
 import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
 import { track } from "./track";
@@ -227,6 +228,62 @@ function CarWashButtons({ token }: { token?: string }) {
   );
 }
 
+/** Add a driver right in the chat: 1) added + approved in Turo? 2) agree to the terms 3) their name. Same rules as the page form. */
+const DRIVER_RE = /\b(someone else|another|second|extra|additional|add(ing)?( a| my| an)?) (person )?(driv(e|er|ing))|\bcan (my|a) (\w+ )?(wife|husband|partner|friend|boyfriend|girlfriend|brother|sister|dad|mom|son|daughter) drive/i;
+function AddDriverChat({ token }: { token?: string }) {
+  const [step, setStep] = useState<"turo" | "how" | "terms" | "name" | "done">("turo");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const bubble = "mt-2 rounded-2xl rounded-bl-md bg-white/[0.08] px-3.5 py-2.5 text-[15px] leading-relaxed text-white ring-1 ring-white/10";
+  const pill = "inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold active:scale-95 disabled:opacity-50";
+  const add = async () => {
+    const n = name.trim();
+    if (n.length < 2) { setErr("Type their name as it shows in Turo."); return; }
+    setBusy(true); setErr(null);
+    if (!token || token.startsWith("demo-")) { await new Promise((r) => setTimeout(r, 500)); setBusy(false); setStep("done"); return; }
+    const { error } = await rpc("lax_guest_driver_add", { p_token: token, p_name: n, p_ack: true, p_ack_text: ackText(n), p_device: `helper · ${navigator.userAgent.slice(0, 100)}` });
+    setBusy(false);
+    if (error) { setErr(error.message.replace(/^.*?: /, "")); return; }
+    track(token, "driver_add", { name: n, via: "helper" });
+    setStep("done");
+  };
+  return (
+    <div className="mt-2" aria-live="polite">
+      {step === "turo" && (<>
+        <p className={bubble}><b>Want to add them now?</b> First: are they added in the Turo app, and did Turo approve them?</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" className={`${pill} text-[#1A1140]`} style={{ background: PEACH }} onClick={() => { setStep("terms"); track(token, "driver_open", { via: "helper" }); }}><CheckCircle2 className="h-4 w-4" aria-hidden />Yes, they're approved</button>
+          <button type="button" className={`${pill} bg-white/10 text-white ring-1 ring-white/20`} onClick={() => setStep("how")}>How do I add them?</button>
+        </div>
+      </>)}
+      {step === "how" && (<>
+        <p className={bubble}>In the <b>Turo app</b>: Trips → this trip → <b>Add driver</b>. Enter their email or phone. Turo texts them to verify their license. Once Turo says they're approved, come back and tap below.</p>
+        <button type="button" className={`${pill} mt-2 text-[#1A1140]`} style={{ background: PEACH }} onClick={() => setStep("terms")}><CheckCircle2 className="h-4 w-4" aria-hidden />They're approved now</button>
+      </>)}
+      {step === "terms" && (<>
+        <p className={bubble}>Quick agreement: only Turo-approved drivers are covered by Turo's protection. Nobody else drives this car, and you're responsible if someone unapproved does.</p>
+        <button type="button" className={`${pill} mt-2 text-[#1A1140]`} style={{ background: PEACH }} onClick={() => setStep("name")}>I agree</button>
+      </>)}
+      {step === "name" && (<>
+        <p className={bubble}>What's their name, as it shows in Turo?</p>
+        <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); void add(); }}>
+          <label htmlFor="helper-driver" className="sr-only">Driver's name</label>
+          <input id="helper-driver" value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" maxLength={60} placeholder="e.g. Michael"
+            className="h-11 min-w-0 flex-1 rounded-full bg-black/25 px-4 text-[16px] text-white ring-1 ring-white/15 placeholder:text-white/35 focus:outline-none focus:ring-2" />
+          <button type="submit" disabled={busy || name.trim().length < 2} className={`${pill} text-[#1A1140]`} style={{ background: PEACH }}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <UserPlus className="h-4 w-4" aria-hidden />}Add
+          </button>
+        </form>
+        {err && <p role="alert" className="mt-1 text-[13px] text-red-300">{err}</p>}
+      </>)}
+      {step === "done" && (
+        <p className={bubble}><CheckCircle2 className="mr-1 inline h-4 w-4 text-emerald-300" aria-hidden /><b>{name.trim()} is added.</b> Their own phone key shows up on your trip page as soon as Turo confirms. Nothing else to do.</p>
+      )}
+    </div>
+  );
+}
+
 function Dots() {
   return (
     <span className="inline-flex gap-1 py-1" aria-label="Thinking">
@@ -321,6 +378,13 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
     </form>
   );
 
+  // The add-a-driver flow shows once, under the answer to the first "someone else drive?" question.
+  const driverMsgId = (() => {
+    if (!token) return null;
+    for (let i = 1; i < msgs.length; i++) if (msgs[i].role === "assistant" && msgs[i - 1].role === "user" && (msgs[i - 1].content === DRIVER_Q || DRIVER_RE.test(msgs[i - 1].content))) return msgs[i].id;
+    return null;
+  })();
+
   return (
     <TripSheet open={open} onClose={onClose} kicker="Trip helper" title="Ask a question" footer={footer} bodyRef={body}>
       {urgent && (
@@ -344,6 +408,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
                 {m.content || (m.status === "pending" || m.status === "working" ? <Dots /> : "")}
                 {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && m.content && <CallButtons text={m.content} onAsk={busy ? undefined : send} />}
                 {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && WASH_RE.test(m.content) && <CarWashButtons token={token} />}
+                {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && m.id === driverMsgId && <AddDriverChat token={token} />}
               </div>
             </li>
           ))}
