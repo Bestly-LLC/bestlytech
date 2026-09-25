@@ -704,7 +704,8 @@ async function freeTry(threadId: string, text: string, page: unknown): Promise<{
   if (/^take this off my plate/i.test(String((first as any)?.[0]?.body ?? ""))) return { why: FREE_WHY.ACTION };
   const { data: hist } = await db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId)
     .order("created_at", { ascending: false }).limit(7);
-  const convo = ((hist ?? []) as any[]).reverse().map((m) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body).slice(0, 600)}`).join("\n");
+  // v28.5: his newest message keeps up to 20,000 characters, so an attached file actually reaches the free model.
+  const convo = ((hist ?? []) as any[]).reverse().map((m, i, arr) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body).slice(0, i === arr.length - 1 ? 20_000 : 600)}`).join("\n");
   const [{ data: today }, { data: inc }] = await Promise.all([
     db.rpc("admin_today"),
     db.from("monitor_issues").select("key, severity, title, needs_jared, fix_stage, opened_at").eq("status", "open").limit(30),
@@ -801,7 +802,7 @@ async function freeAgent(threadId: string, text: string, page: unknown): Promise
     db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(10),
     db.rpc("admin_today"),
   ]);
-  const convo = ((hist ?? []) as any[]).reverse().map((m) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body).slice(0, 700)}`).join("\n");
+  const convo = ((hist ?? []) as any[]).reverse().map((m, i, arr) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body).slice(0, i === arr.length - 1 ? 20_000 : 700)}`).join("\n");
   const toolDocs = TOOLS.filter((t) => FREE_TOOLS.has(t.name))
     .map((t) => `- ${t.name}: ${t.description.slice(0, 300)} Args: ${JSON.stringify((t.input_schema as any).properties ?? {}).slice(0, 260)}`).join("\n");
   const queue = ((today ?? []) as any[]).slice(0, 12).map((q) => `- [${q.key}] rank ${q.rank} ${q.title}${q.detail ? `: ${String(q.detail).slice(0, 140)}` : ""}`).join("\n");
@@ -1221,6 +1222,47 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
 // Tools autopilot never runs even without a confirmed flag: they reach Jared or a machine.
 const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "db_write", "clear_alerts"]);
 
+
+/**
+ * v28.5 (2026-09-24): attachments reach Scout even when the page sends the message without them.
+ * Looks for files uploaded to scout-files in the last 5 minutes that no chat message has carried yet,
+ * reads them (text directly; images/PDFs through the scout-file function) and puts them in front of the question.
+ */
+async function withRecentFiles(question: string): Promise<string> {
+  const day = (d: Date) => d.toISOString().slice(0, 10);
+  const now = new Date();
+  const folders = [...new Set([day(now), day(new Date(now.getTime() - 5 * 60_000))])];
+  const since = Date.now() - 5 * 60_000;
+  const recent: { path: string; name: string }[] = [];
+  for (const f of folders) {
+    const { data } = await db.storage.from("scout-files").list(f, { limit: 20, sortBy: { column: "created_at", order: "desc" } });
+    for (const o of (data ?? []) as any[]) {
+      if (o?.created_at && Date.parse(o.created_at) >= since) recent.push({ path: `${f}/${o.name}`, name: String(o.name).replace(/^[0-9a-f-]{36}-/, "") });
+    }
+  }
+  if (!recent.length) return question;
+  const { data: sent } = await db.from("admin_chat_messages").select("body").eq("role", "user")
+    .gte("created_at", new Date(since).toISOString()).like("body", "[File:%").limit(20);
+  const carried = ((sent ?? []) as any[]).map((m) => String(m.body));
+  const blocks: string[] = [];
+  for (const r of recent.slice(0, 5)) {
+    if (carried.some((b) => b.includes(r.name))) continue;
+    try {
+      const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/scout-file`, {
+        method: "POST", headers: { "Content-Type": "application/json", apikey: SECRET_KEY, Authorization: `Bearer ${SECRET_KEY}` },
+        body: JSON.stringify({ op: "read", path: r.path }), signal: AbortSignal.timeout(60_000),
+      });
+      const j = await res.json();
+      blocks.push(j?.ok ? `[File: ${r.name}${j.kind === "image" ? " — what the image shows" : j.kind === "pdf" ? " — the document's text" : ""}]\n${j.text}`
+        : `[File: ${r.name} — couldn't be read: ${j?.error ?? res.status}]`);
+    } catch (e) {
+      blocks.push(`[File: ${r.name} — couldn't be read: ${(e as Error).message}]`);
+    }
+  }
+  if (!blocks.length) return question;
+  return `${blocks.join("\n\n")}\n\n---\n${question || "Read this and tell me what you make of it."}`.slice(0, 130_000);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return J({ ok: false, error: "POST only" }, 405);
@@ -1259,9 +1301,14 @@ Deno.serve(async (req) => {
   autoRunOn = (prefs as any)?.auto_run === true || keepGoing;
   const paidAlwaysOk = (prefs as any)?.paid_ai_ok === true;
 
-  const text = String(body.body ?? "").trim();
+  let text = String(body.body ?? "").trim();
   if (!text) return J({ ok: false, error: "body required" }, 400);
-  if (text.length > 6000) return J({ ok: false, error: "that is too long for one message" }, 400);
+  // v28.5: safety net for attachments. If he attached a file in the last few minutes and this message arrived
+  // without it (an old page still open, a read that failed in the browser), fetch and read it here.
+  if (!autopilot && !/^\[File: /m.test(text)) text = await withRecentFiles(text).catch(() => text);
+  // v28.5: an attached file rides in the message as text (ScoutAttach), so file messages get a much bigger limit.
+  const hasFile = /^\[File: /m.test(text);
+  if (text.length > (hasFile ? 130_000 : 6000)) return J({ ok: false, error: hasFile ? "that file is too long for one message" : "that is too long for one message" }, 400);
 
   let threadId = body.thread_id ? String(body.thread_id) : "";
   if (!threadId) {
