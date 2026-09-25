@@ -104,7 +104,7 @@ export function ChargingCard({ charging, battery, pickupBattery, health, chargin
         </a>
       )}
       <p className="mt-2 text-[12px] leading-snug text-white/50">
-        {empty ? "Charging is billed to the car's Tesla account; your host requests it in Turo." : <>Billed to the car's Tesla account; your host requests it in Turo.{c.final ? "" : " Final after your trip."}{c.updated_at ? ` Updated ${ago(c.updated_at)}.` : ""}</>}
+        {empty ? "Charging is billed to the car's Tesla account; your host requests it in Turo." : <>Billed to the car's Tesla account; your host requests it in Turo.{c.final ? "" : " Final once the car is returned, so charging after your trip end time still counts."}{c.updated_at ? ` Updated ${ago(c.updated_at)}.` : ""}</>}
       </p>
 
       {/* 3. Battery (under the stops + billing note): now vs the return line, health as sub text. (Bar hidden while charging: the live charging box shows it.) */}
