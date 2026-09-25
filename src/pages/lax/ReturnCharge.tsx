@@ -90,7 +90,7 @@ export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, obse
         <div className="mt-1 grid grid-cols-3 divide-x divide-white/10 text-center">
           <p className="px-1 text-[12px] text-white/60">Now<b className="mt-0.5 block text-[16px] font-semibold tabular-nums text-white">{battery}%</b></p>
           <p className="px-1 text-[12px] text-white/60">Drive back<b className="mt-0.5 block text-[16px] font-semibold tabular-nums text-white">{r.miles != null ? `${Math.round(r.miles)} mi` : "—"}</b></p>
-          <p className="px-1 text-[12px] text-white/60"><span className="mr-1 inline-block h-2.5 w-[3px] rounded bg-white align-[-1px]" aria-hidden />Charge at pick-up<b className="mt-0.5 block text-[16px] font-semibold tabular-nums text-white">{pickup}%</b></p>
+          <p className="px-1 text-[12px] text-white/60">Charge at pick-up<b className="mt-0.5 block text-[16px] font-semibold tabular-nums text-white">{pickup}%</b></p>
         </div>
         {observedAt && <p className="mt-2 text-center text-[11px] text-white/45">Updated {new Date(observedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</p>}
       </div>

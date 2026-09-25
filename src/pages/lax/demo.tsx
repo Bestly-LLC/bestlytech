@@ -63,7 +63,7 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
     { id: "on-trip", label: "On the trip (2½ days left)" },
     { id: "return-2d", label: "2 days before return (car check turns on)" },
     { id: "returning", label: "Return in 90 min" },
-    { id: "returning-low", label: "Return in 90 min (needs charge)" },
+    { id: "returning-ok", label: "Return in 90 min (charged)" },
     { id: "grace", label: "Just past return time (30-min buffer)" },
     { id: "ended", label: "Trip ended (30+ min after)" },
   ],
@@ -74,7 +74,7 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
     { id: "on-trip", label: "On the trip (2½ days left)" },
     { id: "return-2d", label: "2 days before return (car check turns on)" },
     { id: "returning", label: "Return in 90 min" },
-    { id: "returning-low", label: "Return in 90 min (needs charge)" },
+    { id: "returning-ok", label: "Return in 90 min (charged)" },
     { id: "grace", label: "Just past return time (30-min buffer)" },
     { id: "ended", label: "Trip ended (30+ min after)" },
   ],
@@ -101,7 +101,7 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
   const now = Date.now();
   // Trip times are pinned when a stage is picked, so the minute refresh never shifts them; the page then runs in real time.
   if (anchor.stage !== stage) { anchor.stage = stage; anchor.t = now; }
-  const startIn: Record<string, number> = { booked: 72 * H, "key-soon": 3 * H, "key-ready": 1.5 * H, "key-added": 0.5 * H, "day-of": 1.5 * H, "on-way": 0.5 * H, "on-trip": -12 * H, "return-2d": -26 * H, returning: -70.5 * H, "returning-low": -70.5 * H, grace: -72.25 * H, ended: -74 * H };
+  const startIn: Record<string, number> = { booked: 72 * H, "key-soon": 3 * H, "key-ready": 1.5 * H, "key-added": 0.5 * H, "day-of": 1.5 * H, "on-way": 0.5 * H, "on-trip": -12 * H, "return-2d": -26 * H, returning: -70.5 * H, "returning-ok": -70.5 * H, grace: -72.25 * H, ended: -74 * H };
   const s = anchor.t + (startIn[stage] ?? 72 * H);
   const e = s + 72 * H;
   const trip = { first: "Demo", starts_at: iso(s), ends_at: iso(e), car_opens_at: iso(s - H) };
@@ -116,7 +116,7 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
   const key = { state: keyState, opens_at: iso(keyOpens), link: keyState === "ready" ? (real?.link ?? "#demo-key") : null, expires_at: keyState === "ready" ? iso(now + 23 * H) : null, unlock: false, real: !!real };
   const base = {
     ok: true, kind, trip, car: { ...DEMO_CAR, observed_at: iso(now - 3 * 60e3) }, controls: controls_state === "on", controls_state,
-    controls_opens_at: iso(s - H), email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: now >= s ? (stage === "returning-low" ? 90 : 76) : null, pickup_battery_at: now >= s ? iso(s) : null, car_connected_at: now >= s ? iso(s + 10 * 60e3) : null, demo: true,
+    controls_opens_at: iso(s - H), email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: now >= s ? (stage === "returning" ? 90 : 76) : null, pickup_battery_at: now >= s ? iso(s) : null, car_connected_at: now >= s ? iso(s + 10 * 60e3) : null, demo: true,
     range_check: now >= s && now < e + 0.5 * H ? { range_mi: 188, miles: 6.4, spare: 182, status: "ok" } : null,
     charging: now < s ? null : demoCharging(s, now >= e),
     battery_health: { score: "good", pct: 80, range_full: 192 },
