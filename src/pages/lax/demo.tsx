@@ -17,7 +17,7 @@ export function demoPass(): string | null {
     const q = u.searchParams.get("dk");
     if (q) {
       localStorage.setItem(PASS_KEY, q);
-      document.cookie = `${PASS_KEY}=${encodeURIComponent(q)}; max-age=${365 * 864e2}; path=/t; SameSite=Lax; Secure`;
+      document.cookie = `${PASS_KEY}=${encodeURIComponent(q)}; max-age=${365 * 864e2}; path=/; SameSite=Lax; Secure`;
       u.searchParams.delete("dk"); history.replaceState(null, "", u.pathname + u.search + u.hash);
     }
     const ls = localStorage.getItem(PASS_KEY);

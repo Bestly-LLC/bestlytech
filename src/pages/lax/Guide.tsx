@@ -179,7 +179,7 @@ export function KeySteps({ k, token, hasApp, onHasApp, onAdded, glow }: { k: Key
                   </a>
                 </span>
                 {k.link === "#demo-key"
-                  ? <span className="mt-1.5 block rounded-xl bg-amber-400/10 px-3 py-2 text-[13px] leading-snug text-amber-100 ring-1 ring-amber-300/30">Demo on a device that isn't yours, so this key is pretend. For the real key, sign in to bestly.tech/admin once on this phone, or open the host link from Turo settings → Demo key.</span>
+                  ? <span className="mt-1.5 block rounded-xl bg-amber-400/10 px-3 py-2 text-[13px] leading-snug text-amber-100 ring-1 ring-amber-300/30">This device isn't set up as yours yet, so this key is pretend. <a href="/admin" className="font-semibold text-white underline underline-offset-2">Sign in to admin once on this device</a>, then come back: from then on it's the real key here.</span>
                   : <span className="mt-1.5 block text-[13px] text-white/65">Then tap <b className="text-white">Accept</b> in the Tesla app. One-time link, just for you.</span>}
               </>
           : <span className="block rounded-xl bg-white/10 p-3 text-[14px]">Preview: the real button appears here 2 hours before pickup.</span>)}

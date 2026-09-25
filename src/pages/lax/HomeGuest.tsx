@@ -225,12 +225,20 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
 }
 
 
-/** Short emoji-bulleted list for the Return steps. */
-function Bullets({ items }: { items: [string, ReactNode][] }) {
+/** iOS inset-grouped list (Settings style): emoji in a tinted rounded tile, title, one quiet line under it. */
+type Row = { e: string; tint: string; title: ReactNode; sub?: ReactNode };
+function Bullets({ items }: { items: Row[] }) {
   return (
-    <ul className="space-y-2">
-      {items.map(([e, t], i) => (
-        <li key={i} className="flex gap-2.5 leading-snug"><span className="w-6 shrink-0 text-center text-[17px]" aria-hidden>{e}</span><span>{t}</span></li>
+    <ul className="overflow-hidden rounded-2xl bg-white/[0.07] ring-1 ring-white/10">
+      {items.map((r, i) => (
+        <li key={i} className="relative flex min-h-[56px] items-center gap-3 px-3.5 py-2.5">
+          {i > 0 && <span className="absolute left-[60px] right-0 top-0 h-px bg-white/10" aria-hidden />}
+          <span className="grid h-[32px] w-[32px] shrink-0 place-items-center rounded-[9px] text-[17px] leading-none" style={{ background: r.tint }} aria-hidden>{r.e}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[16px] font-semibold leading-tight text-white">{r.title}</span>
+            {r.sub && <span className="mt-0.5 block text-[14px] leading-snug text-white/65">{r.sub}</span>}
+          </span>
+        </li>
       ))}
     </ul>
   );
@@ -402,15 +410,15 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           <Carousel id="home-return" className="mt-1" labels={[...(chargeLive ? ["Charge"] : []), "Park", "Photos + lock"]}>
             {chargeLive && <Step n={1}><ReturnChargeBlock kind="home" endsAt={pub.trip?.ends_at} lead={<b className="text-white">Charge: </b>} pickup={pub.pickup_battery} battery={car?.battery} rc={pub.range_check} run={live ? run : undefined} setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={car?.observed_at} /></Step>}
             <Step n={chargeLive ? 2 : 1}><Bullets items={[
-              ["📍", <><b className="text-white">Park on N Kings Rd</b> near the building.</>],
-              ["🚫", <><b className="text-white">Not</b> in the Joybird street parking.</>],
-              ["🧹", <><b className="text-white">Street sweeping</b> ($75 tickets): west side Monday 8–10 AM, east side Tuesday 8–10 AM.</>],
+              { e: "📍", tint: "rgba(255,69,58,.22)", title: "Park on N Kings Rd", sub: "Right by the building." },
+              { e: "🚫", tint: "rgba(255,159,10,.22)", title: "Skip the Joybird spots", sub: "That street parking isn't ours." },
+              { e: "🧹", tint: "rgba(10,132,255,.22)", title: "Street sweeping", sub: <>West side Mon 8–10 AM · East side Tue 8–10 AM<br />$75 tickets</> },
             ]} /><span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span><ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} /></Step>
             <Step n={chargeLive ? 3 : 2}><Bullets items={[
-              ["📸", <><b className="text-white">Return photos</b> in the Turo app.</>],
-              ["🎒", <><b className="text-white">Grab your stuff.</b></>],
-              ["🔒", <><b className="text-white">Lock it</b> in the Tesla app.</>],
-            ]} /><OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
+              { e: "📸", tint: "rgba(191,90,242,.22)", title: "Return photos", sub: "In the Turo app, all around the car." },
+              { e: "🎒", tint: "rgba(48,209,88,.22)", title: "Grab your stuff", sub: "Seats, trunk and front trunk." },
+              { e: "🔒", tint: "rgba(100,210,255,.22)", title: "Lock it", sub: "In the Tesla app." },
+            ]} /><OpenTuro className="mt-3 w-full" label="Open Turo for photos" /></Step>
           </Carousel>
           <p className="mt-5 text-[14px] text-white/60">Your key turns off by itself after the trip. Nothing to hand back.</p>
         </TripSheet>

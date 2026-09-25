@@ -1,3 +1,4 @@
+import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -63,6 +64,20 @@ export function AdminLayout() {
   const [muted, setMuted] = useState(notifySoundMuted());
   const { bento, toggle: toggleTheme } = useAdminTheme();
   useDeployRefresh();
+  // Any device you use the admin on becomes a "host" device for the demo trip pages: save the demo key
+  // pass here (local storage + a year-long cookie) so the demo shows the REAL Tesla key there, even
+  // after the admin sign-in expires.
+  useEffect(() => {
+    void (supabase.rpc("demo_key_admin" as never, { p_action: "get" } as never) as unknown as Promise<{ data: { pass?: string } | null }>).then(({ data }) => {
+      const pass = data?.pass;
+      if (!pass) return;
+      try {
+        localStorage.setItem("bestly-demo-dk", pass);
+        localStorage.setItem("bestly-host", "1");
+        document.cookie = `bestly-demo-dk=${encodeURIComponent(pass)}; max-age=${365 * 86400}; path=/; SameSite=Lax; Secure`;
+      } catch { /* private mode */ }
+    }, () => {});
+  }, []);
 
   // Menus, dialogs and toasts render in portals on <body>, outside the admin wrapper. Put the
   // admin theme tokens on <body> too so they come up dark instead of in the public site's light theme.
