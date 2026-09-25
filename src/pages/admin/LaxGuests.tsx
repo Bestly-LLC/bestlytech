@@ -17,7 +17,7 @@ export type Row = {
   reservation_id: number; pickup_battery?: number | null; pickup_battery_at?: string | null; first: string | null; last: string | null; starts_at: string; ends_at: string; lax: boolean;
   token: string | null; email: string | null; email_by: "guest" | "host" | null; reminder_at: string | null;
   reminder_sent_at: string | null; reminder_error: string | null; suggested_reminder_at: string; kind?: "lax" | "home";
-  activity?: { views: number; first_seen: string | null; last_seen: string | null; devices: string[]; asks: number; recent: { kind: string; at: string; detail: Record<string, string> | null }[] } | null;
+  activity?: { views: number; first_seen: string | null; last_seen: string | null; devices: string[]; asks: number; unsure?: number; host?: number; recent: { kind: string; at: string; detail: Record<string, string> | null; actor?: string }[] } | null;
   key?: { status: string; error: string | null; ready_at: string | null; accepted_at: string | null; removed_at: string | null; driver: string | null; opens_at: string } | null;
 };
 const KEY_TEXT: Record<string, string> = {
@@ -35,7 +35,8 @@ const ACT: Record<string, string> = {
 };
 const ago = (iso: string) => { const m = Math.round((Date.now() - +new Date(iso)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : `${Math.round(m / 1440)} d ago`; };
 
-type Ev = { kind: string; at: string; device?: string | null; detail: Record<string, unknown> | null };
+type Ev = { kind: string; at: string; device?: string | null; detail: Record<string, unknown> | null; actor?: string };
+type Drive = { id: string; at: string; ended_at: string | null; miles: number | null; max_mph: number | null; from: string | null; to: string | null; basis: "key" | "booking" | "none"; driver: string | null };
 type Qa = { at: string; q: string; a: string | null; source: string | null; unanswered: boolean; urgent: boolean };
 const CLIMATE_NAME: Record<string, string> = { cool: "Cool it down (A/C)", warm: "Warm it up (heat)", seat: "Heated seat", off: "Turned climate off" };
 /** One plain sentence per event: what exactly they did. */
@@ -62,15 +63,60 @@ function explain(e: Ev, home: boolean): { title: string; sub?: string } {
   }
 }
 
+/**
+ * Who was driving, and how well we can say so.
+ *
+ * key    — a named Tesla account held a live digital key across the whole drive. This is the one
+ *          worth showing Turo.
+ * booking — all we know is that a trip was active. The car has no record of which key started a
+ *          drive, so this cannot rule out the host.
+ */
+const BASIS: Record<Drive["basis"], { label: string; cls: string }> = {
+  key: { label: "their phone key", cls: "bg-[#30D15826] text-[#30D158] bento:bg-[#34C7591f] bento:text-[#248A3D]" },
+  booking: { label: "booking only", cls: "bg-[#FF9F0A26] text-[#FF9F0A] bento:bg-[#FF95001f] bento:text-[#C93400]" },
+  none: { label: "unattributed", cls: "bg-white/[0.08] text-white/70 bento:bg-neutral-100 bento:text-neutral-500" },
+};
+function DriveList({ drives }: { drives: Drive[] }) {
+  if (!drives.length) return null;
+  const weak = drives.filter((d) => d.basis !== "key").length;
+  return (
+    <div className="border-b border-white/[0.06] bento:border-neutral-200">
+      <p className="px-3.5 pt-2.5 text-[13px] font-semibold text-white bento:text-neutral-900">Drives</p>
+      <ul className="px-3.5 pb-2.5">
+        {drives.slice(0, 8).map((d) => {
+          const b = BASIS[d.basis] ?? BASIS.none;
+          return (
+            <li key={d.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 py-1 text-[13px] text-white/70 bento:text-neutral-600">
+              <span className="text-white bento:text-neutral-900">{d.from ?? "?"} → {d.to ?? "?"}</span>
+              <span className="tabular-nums">{d.miles ? `${Math.round(d.miles)} mi` : ""}{d.max_mph ? ` · top ${Math.round(d.max_mph)} mph` : ""}</span>
+              <span className={cn("rounded-full px-1.5 py-0.5 text-[11px] font-semibold", b.cls)}>
+                {b.label}{d.basis === "key" && d.driver ? ` · ${d.driver}` : ""}
+              </span>
+              <time className="ml-auto shrink-0 text-[12px] tabular-nums text-white/45 bento:text-neutral-400" dateTime={d.at}>{ago(d.at)}</time>
+            </li>
+          );
+        })}
+      </ul>
+      {weak > 0 && (
+        <p className="px-3.5 pb-2.5 text-[12px] leading-snug text-white/50 bento:text-neutral-500">
+          {weak} of these {weak === 1 ? "is" : "are"} attributed by the booking window alone — the car does not record which key started a drive, so on {weak === 1 ? "it" : "them"} we cannot rule out that you drove.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Everything they did + every question they asked the helper (with the answer). Loads on open. */
 function Timeline({ res, home }: { res: number; home: boolean }) {
-  const [t, setT] = useState<{ events: Ev[]; questions: Qa[] } | null>(null);
+  const [t, setT] = useState<{ events: Ev[]; questions: Qa[]; drives?: Drive[]; host_events?: number } | null>(null);
   useEffect(() => { void rpc("lax_guest_timeline", { p_reservation: res }).then(({ data }) => setT((data as never) ?? { events: [], questions: [] })); }, [res]);
   if (!t) return <div className="mt-2 h-16 animate-pulse rounded-xl bg-white/[0.04] bento:bg-neutral-100" />;
   const views = t.events.filter((e) => e.kind === "view");
   const items = [
     ...t.events.filter((e) => e.kind !== "view").map((e) => ({ at: e.at, node: (() => { const x = explain(e, home); return (
-      <><p className="text-[15px] text-white bento:text-neutral-900">{x.title}</p>{x.sub && <p className="text-[13px] text-white/55 bento:text-neutral-500">{x.sub}</p>}</>); })() })),
+      <><p className="text-[15px] text-white bento:text-neutral-900">{x.title}
+        {e.actor === "unsure" && <span className="ml-1.5 rounded-full bg-[#FF9F0A26] px-1.5 py-0.5 text-[11px] font-semibold text-[#FF9F0A] bento:bg-[#FF95001f] bento:text-[#C93400]">not confirmed as theirs</span>}</p>
+        {x.sub && <p className="text-[13px] text-white/55 bento:text-neutral-500">{x.sub}</p>}</>); })() })),
     ...t.questions.map((q) => ({ at: q.at, node: (
       <>
         <p className="flex items-start gap-1.5 text-[15px] text-white bento:text-neutral-900"><MessageCircleQuestion className="mt-0.5 h-4 w-4 shrink-0 text-[#409CFF] bento:text-[#007AFF]" aria-hidden />“{q.q}”</p>
@@ -81,7 +127,9 @@ function Timeline({ res, home }: { res: number; home: boolean }) {
   return (
     <div className="mt-2 overflow-hidden rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.06] bento:bg-white bento:ring-neutral-200">
       {views.length > 0 && <p className="border-b border-white/[0.06] px-3.5 py-2 text-[13px] text-white/55 bento:border-neutral-200 bento:text-neutral-500">
-        Opened {views.length}× · first {when(views[views.length - 1].at)}{views[0].device ? ` · on ${views[0].device}` : ""}</p>}
+        Opened {views.length}× · first {when(views[views.length - 1].at)}{views[0].device ? ` · on ${views[0].device}` : ""}
+        {!!t.host_events && <> · {t.host_events} of your own visit{t.host_events === 1 ? "" : "s"} left out</>}</p>}
+      <DriveList drives={t.drives ?? []} />
       {items.length === 0 ? <p className="px-3.5 py-3 text-[13px] text-white/55 bento:text-neutral-500">Nothing tapped yet.</p> : (
         <ul className="divide-y divide-white/[0.06] bento:divide-neutral-200">
           {items.slice(0, 60).map((it, i) => (
@@ -96,16 +144,32 @@ function Timeline({ res, home }: { res: number; home: boolean }) {
   );
 }
 
-/** Did the guest (not you) actually use their page? Your own views never count (see lax/track.ts). */
+/**
+ * Did the guest — not you — actually use their page?
+ *
+ * The count here is only the visits the server attributed to the guest. Your own browsers are
+ * excluded two ways: the client-side checks in lax/track.ts, and the server rule that a browser
+ * seen on two different trip pages belongs to the host. Anything it cannot place is counted
+ * separately and said out loud rather than folded into the guest's number.
+ */
 function ActivityRow({ a, res, home }: { a: Row["activity"]; res: number; home: boolean }) {
   const [open, setOpen] = useState(false);
-  if (!a || !a.last_seen) return <p className="mt-2 flex items-center gap-1.5 text-xs text-white/55 bento:text-neutral-500"><Activity className="h-3.5 w-3.5" /> Guest hasn't opened their page yet.</p>;
+  const unsure = a?.unsure ?? 0;
+  const mine = a?.host ?? 0;
+  if (!a || !a.last_seen) return (
+    <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-white/55 bento:text-neutral-500">
+      <Activity className="h-3.5 w-3.5" /> Guest hasn't opened their page yet.
+      {(mine > 0 || unsure > 0) && <span>· {mine + unsure} visit{mine + unsure === 1 ? "" : "s"} here {mine > 0 && unsure === 0 ? "were yours" : "couldn't be placed as theirs"}</span>}
+    </p>
+  );
   return (
     <div className="mt-2 text-xs text-white/75 bento:text-neutral-600">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
         className="flex min-h-[44px] w-full flex-wrap items-center gap-1.5 text-left sm:min-h-0">
         <Activity className="h-3.5 w-3.5 text-emerald-400" />
         <b className="text-white bento:text-neutral-900">Opened {a.views}×</b> · last seen {when(a.last_seen)} ({ago(a.last_seen)}){a.devices?.length ? ` · ${a.devices.join(", ")}` : ""}{a.asks ? ` · ${a.asks} question${a.asks === 1 ? "" : "s"}` : ""}
+        {unsure > 0 && <span className="text-[#FF9F0A] bento:text-[#C93400]">· {unsure} not confirmed as theirs</span>}
+        {mine > 0 && <span className="text-white/50 bento:text-neutral-500">· {mine} yours, not counted</span>}
         <span className="ml-auto inline-flex items-center gap-0.5 font-medium text-[#409CFF] bento:text-[#007AFF]">{open ? "Hide" : "What they did"}<ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} aria-hidden /></span>
       </button>
       {open && <Timeline res={res} home={home} />}
