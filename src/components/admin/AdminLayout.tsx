@@ -48,6 +48,10 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/waitlist": "Waitlist",
   "/admin/meetings": "Meetings",
   "/admin/cloud": "Cloud Deals",
+  "/admin/partners": "Partners",
+  "/admin/turo": "Turo Watch",
+  "/admin/playbook": "Scout's playbook",
+  "/admin/skills": "Claude Skills",
 };
 
 /** ui/sidebar.tsx saves the desktop open/collapsed state in this cookie; read it back on load. */
@@ -94,7 +98,7 @@ export function AdminLayout() {
   const currentLabel = BREADCRUMB_MAP[location.pathname] ??
     (location.pathname.startsWith("/admin/submissions/") ? "Submission Detail"
       : location.pathname.startsWith("/admin/cloud/") ? "Cloud Deal"
-      : "Admin");
+      : "Not found");
 
   return (
     <TooltipProvider>
