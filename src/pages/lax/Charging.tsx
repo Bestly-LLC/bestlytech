@@ -4,7 +4,7 @@
  * Data: lax_guest_public(token).charging ← trip_charges_for(reservation) ← trip_charges (synced by trip_charges_tick).
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { BatteryCharging, CheckCircle2, ChevronRight, Clock, FileDown, Receipt, Zap } from "lucide-react";
+import { BatteryCharging, CheckCircle2, ChevronRight, Clock, Receipt, Zap } from "lucide-react";
 import { track } from "./track";
 
 export type ChargeSession = { at: string; end?: string | null; place?: string | null; address?: string | null; kwh?: number | null; from?: number | null; to?: number | null; cost?: number | null; idle?: number | null; final?: boolean; invoices?: { id: string; name?: string }[] | null };
@@ -97,12 +97,6 @@ export function ChargingCard({ charging, battery, pickupBattery, health, chargin
         </>
       ) : null}
 
-      {receipts && c.count > 0 && (
-        <a href={`${RECEIPT}?t=${encodeURIComponent(token!)}`} target="_blank" rel="noreferrer" onClick={() => track(token, "charge_receipt")}
-          className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-white/10 text-[15px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98]">
-          <FileDown className="h-4 w-4" style={{ color: ACCENT }} /> Download receipt (PDF)
-        </a>
-      )}
       <p className="mt-2 text-[12px] leading-snug text-white/50">
         {empty ? "Charging is billed to the car's Tesla account; your host requests it in Turo." : <>Billed to the car's Tesla account; your host requests it in Turo.{c.final ? "" : " Final once the car is returned."}{c.updated_at ? ` Updated ${ago(c.updated_at)}.` : ""}</>}
       </p>
