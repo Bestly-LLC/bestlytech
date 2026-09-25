@@ -11,6 +11,16 @@ const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets We
 
 type Which = "pickup" | "return";
 
+/** Which trip tab fits right now. Pickup until they're in the car (or 1 hour after the start),
+ *  then Return until the trip ends. Nothing after the trip. */
+export function tripTab(trip: { starts_at: string; ends_at: string } | null | undefined, ended: boolean, inCarAt?: string | null): Which | null {
+  if (ended) return null;
+  if (!trip) return "pickup";
+  const s = +new Date(trip.starts_at), now = Date.now();
+  const inCar = !!inCarAt && +new Date(inCarAt) >= s - 3 * 3600e3;
+  return now < s + 3600e3 && !inCar ? "pickup" : "return";
+}
+
 /** LAX: a boarding pass. Main part (Arriving / Pickup), a perforated tear line with punched notches, and a stub
  *  with the route like a flight (LAX → CAR, CAR → LAX). */
 function Tag({ which, active, onClick, keyOn }: { which: Which; active: boolean; onClick: () => void; keyOn?: boolean }) {
@@ -61,7 +71,7 @@ function Ticket({ which, active, onClick }: { which: Which; active: boolean; onC
   );
 }
 
-export function TagBar({ open, onOpen, top, variant, hideTags, glow, badge }: { open: Which | null; onOpen: (w: Which) => void; top?: ReactNode; variant?: "lax" | "home"; hideTags?: boolean; glow?: Which | null; badge?: string }) {
+export function TagBar({ open, onOpen, top, variant, hideTags, glow, badge, only }: { open: Which | null; onOpen: (w: Which) => void; top?: ReactNode; variant?: "lax" | "home"; hideTags?: boolean; glow?: Which | null; badge?: string; only?: Which | null }) {
   // The ticket for the next step glows (same running light as the next-step card); "Key ready" badge on Pickup.
   const wrap = (w: Which, el: ReactNode) => (
     <span className={`relative flex flex-1 ${variant === "home" ? "rounded-[18px]" : "rounded-[12px]"} ${glow === w ? "trip-glow" : ""}`}>
@@ -82,9 +92,9 @@ export function TagBar({ open, onOpen, top, variant, hideTags, glow, badge }: { 
       {/* luggage strap across the bar */}
       <div aria-hidden className="h-[3px] w-full" style={{ background: "var(--trip-strap, repeating-linear-gradient(90deg, #FFB87855 0 10px, transparent 10px 16px))" }} />
       {top && <div className="mx-auto max-w-md px-4 pt-2.5">{top}</div>}
-      {!hideTags && <div className="mx-auto flex max-w-md gap-3 px-4 pt-2.5">
-        {wrap("pickup", variant === "home" ? <Ticket which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} /> : <Tag which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} keyOn={!!badge} />)}
-        {wrap("return", variant === "home" ? <Ticket which="return" active={open === "return"} onClick={() => onOpen("return")} /> : <Tag which="return" active={open === "return"} onClick={() => onOpen("return")} />)}
+      {!hideTags && only !== null && <div className="mx-auto flex max-w-md gap-3 px-4 pt-2.5">
+        {only !== "return" && wrap("pickup", variant === "home" ? <Ticket which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} /> : <Tag which="pickup" active={open === "pickup"} onClick={() => onOpen("pickup")} keyOn={!!badge} />)}
+        {only !== "pickup" && wrap("return", variant === "home" ? <Ticket which="return" active={open === "return"} onClick={() => onOpen("return")} /> : <Tag which="return" active={open === "return"} onClick={() => onOpen("return")} />)}
       </div>}
     </nav>
   );

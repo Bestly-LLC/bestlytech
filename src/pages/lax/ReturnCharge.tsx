@@ -52,8 +52,8 @@ export function returnChargeLive(battery?: number | null, pickup?: number | null
 }
 
 /** Step 1 of both Return sheets. Renders nothing until returnChargeLive() says it matters. */
-export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, observedAt, compact }: {
-  kind: TripKind; pickup?: number | null; battery?: number | null; rc?: RangeCheckData; run?: NavRun; compact?: boolean;
+export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, observedAt, compact, check }: {
+  kind: TripKind; pickup?: number | null; battery?: number | null; rc?: RangeCheckData; run?: NavRun; compact?: boolean; check?: ReactNode;
   setAt?: string | null; startsAt?: string | null; endsAt?: string | null; observedAt?: string | null; lead?: ReactNode;
 }) {
   const [why, setWhy] = useState(false);
@@ -79,6 +79,7 @@ export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, obse
             </button>
           </span>
         )}
+      {check}
       {why && !r.needs && (
         <p className="mt-2 rounded-xl bg-white/[0.06] px-3 py-2 text-[13px] leading-snug text-white/75 ring-1 ring-white/10">
           It's at {battery}% now. The drive back to {spot}{r.miles != null ? ` (about ${r.miles} mi)` : ""} uses about {r.used}%, so it should get back at about {r.arrive}%.
@@ -95,7 +96,7 @@ export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, obse
         {observedAt && <p className="mt-2 text-center text-[11px] text-white/45">Updated {new Date(observedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</p>}
       </div>
       {!compact && <RangeCheck rc={rc} kind={kind} className="mt-3" warnOnly />}
-      {r.needs && (compact ? <SendToCar run={run} kind={kind} label="Send a Supercharger to the car" /> : <><span className="mt-3 block text-[13px] text-white/65">Send to car picks the Supercharger closest to where the car is now.</span><SendToCar run={run} kind={kind} /></>)}
+      {r.needs && (compact ? <SendToCar center run={run} kind={kind} label="Send a Supercharger to the car" /> : <><span className="mt-3 block text-center text-[13px] text-white/65">Picks the Supercharger closest to where the car is now.</span><SendToCar center run={run} kind={kind} label="Send a Supercharger to the car" /></>)}
     </div>
   );
 }

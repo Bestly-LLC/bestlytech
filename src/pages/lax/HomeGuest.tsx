@@ -11,7 +11,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
 import { ArrowRight, BellRing, CheckCircle2, Flashlight, KeyRound, Loader2, MapPin, Navigation, ShieldAlert, Smartphone } from "lucide-react";
-import { TagBar, TripSheet } from "./TripSheet";
+import { TagBar, TripSheet, tripTab } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, climateNeed, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
@@ -24,6 +24,7 @@ import { ChargerLine, KeyPending, SendToCar, keyTapped, markKeyTapped, useKeyWat
 import { KeySteps, NextStep, ProfileTip, guideFor, useHasApp } from "./Guide";
 import { Carousel, TripSlides } from "./Carousel";
 import { ReturnChecklist } from "./ReturnChecklist";
+import { FindCarButton } from "./FindCar";
 import { InstallToast } from "./InstallToast";
 import { Fold } from "./HomeGuide";
 import { homePlace } from "./places";
@@ -360,7 +361,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           </div>
           <div className="mt-2.5">
             {spot
-              ? <a href={mapsFor("Your Turo Tesla", spot.lat, spot.lon)} onClick={() => track(undefined, "spot")} className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold ring-1 ring-white/15 active:scale-[0.98]"><MapPin className="h-4 w-4" style={{ color: PEACH }} /> Exact spot of the car</a>
+              ? <FindCarButton kind="home" spot={spot} run={live ? run : undefined} demo={!!demoPage} token={token} where="on N Kings Rd" />
               : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">{pub.trip && Date.now() >= +new Date(pub.trip.starts_at) - 2 * 3600e3 ? "Car location updating… use Honk to find it" : "Exact spot of the car shows 2 hours before pickup"}</span>}
           </div>
         </section>
@@ -400,6 +401,8 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
               <p className="mt-7 text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Then: at the car</p>
             </>
           )}
+          <FindCarButton className="mt-3" kind="home" spot={spot} run={live ? run : undefined} demo={!!demoPage} token={token} where="on N Kings Rd"
+            opensAt={pub.trip && Date.now() < +new Date(pub.trip.starts_at) - 2 * 3600e3 ? pub.trip.starts_at : null} />
           <Carousel id="home-pickup" className="mt-4" labels={["\u201cSet Up\u201d + Unlock", "Turo Guest profile"]}>
             <Step n={n0 + 1}>Next to the car (Bluetooth on), open the Tesla app. Tap <b className="text-white">&ldquo;Set Up&rdquo;</b> and follow the steps. Then tap <b className="text-white">Unlock</b>.</Step>
             <Step n={n0 + 2}><b className="text-white">Get in and pick your profile.</b><ProfileTip /></Step>
@@ -408,12 +411,12 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
 
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
           <Carousel id="home-return" className="mt-1" labels={[...(chargeLive ? ["Charge"] : []), "Park", "Photos + lock"]}>
-            {chargeLive && <Step n={1}><ReturnChargeBlock kind="home" endsAt={pub.trip?.ends_at} lead={<b className="text-white">Charge: </b>} pickup={pub.pickup_battery} battery={car?.battery} rc={pub.range_check} run={live ? run : undefined} setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={car?.observed_at} /></Step>}
+            {chargeLive && <Step n={1}><ReturnChargeBlock kind="home" endsAt={pub.trip?.ends_at} lead={<b className="text-white">Charge: </b>} pickup={pub.pickup_battery} battery={car?.battery} rc={pub.range_check} run={live ? run : undefined} setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={car?.observed_at} check={<ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} />} /></Step>}
             <Step n={chargeLive ? 2 : 1}><Bullets items={[
               { e: "📍", tint: "rgba(255,69,58,.22)", title: "Park on N Kings Rd", sub: "Right by the building." },
               { e: "🚫", tint: "rgba(255,159,10,.22)", title: "Skip the Joybird spots", sub: "That street parking isn't ours." },
               { e: "🧹", tint: "rgba(10,132,255,.22)", title: "Street sweeping", sub: <>West side Mon 8–10 AM · East side Tue 8–10 AM<br />$75 tickets</> },
-            ]} /><span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span><ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} /></Step>
+            ]} /><span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span>{!chargeLive && <ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} />}</Step>
             <Step n={chargeLive ? 3 : 2}><Bullets items={[
               { e: "📸", tint: "rgba(191,90,242,.22)", title: "Return photos", sub: "In the Turo app, all around the car." },
               { e: "🎒", tint: "rgba(48,209,88,.22)", title: "Grab your stuff", sub: "Seats, trunk and front trunk." },
@@ -423,7 +426,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           <p className="mt-5 text-[14px] text-white/60">Your key turns off by itself after the trip. Nothing to hand back.</p>
         </TripSheet>
 
-        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended}
+        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended} only={tripTab(pub.trip, ended, pub.car_connected_at)}
           glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
         {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
         {!ended && <InstallToast token={token} kind="home" />}

@@ -66,29 +66,7 @@ export function ChargingCard({ charging, battery, pickupBattery, health, chargin
         </span>}
       </div>
 
-      {/* 2. Battery: now vs the return line, health as sub text. (Bar hidden while charging: the live charging box shows it.) */}
-      {!ended && (battery != null || health) && (
-        <div className="mt-4 rounded-2xl bg-white/[0.05] p-3 ring-1 ring-white/10">
-          {battery != null && !charging_now && (
-            <>
-              <div className="flex items-baseline justify-between text-[14px]">
-                <span className="text-white/80">Battery <b className="text-[17px] tabular-nums text-white">{battery}%</b></span>
-                {pickupBattery != null && <span className="text-white/65">Pickup level <b className="tabular-nums text-white">{pickupBattery}%</b></span>}
-              </div>
-              <div className="relative mt-2 h-2 rounded-full bg-white/10" aria-hidden>
-                <div className="h-2 rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, Math.max(2, battery))}%`, background: ok || pickupBattery == null ? ACCENT : "#FCD34D" }} />
-                {pickupBattery != null && <span className="absolute -top-1 h-4 w-[2px] rounded bg-white" style={{ left: `${Math.min(100, pickupBattery)}%` }} />}
-              </div>
-              {short != null && short > 0 && <p className="mt-1.5 text-[13px] text-white/65">Add about {short}% before you return.</p>}
-            </>
-          )}
-          <BatteryHealthRow h={health} className={battery != null && !charging_now ? "mt-1.5" : ""} />
-        </div>
-      )}
-
-      {!ended && children}
-
-      {/* 3. Stops: the latest two, the rest on tap. */}
+      {/* 2. Stops: the latest two, the rest on tap. */}
       {c.sessions.length > 0 ? (
         <>
           <ol className="mt-3 divide-y divide-white/10">
@@ -128,6 +106,28 @@ export function ChargingCard({ charging, battery, pickupBattery, health, chargin
       <p className="mt-2 text-[12px] leading-snug text-white/50">
         {empty ? "Charging is billed to the car's Tesla account; your host requests it in Turo." : <>Billed to the car's Tesla account; your host requests it in Turo.{c.final ? "" : " Final after your trip."}{c.updated_at ? ` Updated ${ago(c.updated_at)}.` : ""}</>}
       </p>
+
+      {/* 3. Battery (under the stops + billing note): now vs the return line, health as sub text. (Bar hidden while charging: the live charging box shows it.) */}
+      {!ended && (battery != null || health) && (
+        <div className="mt-3 rounded-2xl bg-white/[0.05] p-3 ring-1 ring-white/10">
+          {battery != null && !charging_now && (
+            <>
+              <div className="flex items-baseline justify-between text-[14px]">
+                <span className="text-white/80">Battery <b className="text-[17px] tabular-nums text-white">{battery}%</b></span>
+                {pickupBattery != null && <span className="text-white/65">Pickup level <b className="tabular-nums text-white">{pickupBattery}%</b></span>}
+              </div>
+              <div className="relative mt-2 h-2 rounded-full bg-white/10" aria-hidden>
+                <div className="h-2 rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, Math.max(2, battery))}%`, background: ok || pickupBattery == null ? ACCENT : "#FCD34D" }} />
+                {pickupBattery != null && <span className="absolute -top-1 h-4 w-[2px] rounded bg-white" style={{ left: `${Math.min(100, pickupBattery)}%` }} />}
+              </div>
+              {short != null && short > 0 && <p className="mt-1.5 text-[13px] text-white/65">Add about {short}% before you return.</p>}
+            </>
+          )}
+          <BatteryHealthRow h={health} className={battery != null && !charging_now ? "mt-1.5" : ""} />
+        </div>
+      )}
+
+      {!ended && children}
     </section>
   );
 }

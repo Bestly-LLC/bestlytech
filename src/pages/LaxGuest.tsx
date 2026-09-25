@@ -11,7 +11,7 @@ import { Helmet } from "react-helmet-async";
 import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
 import { ArrowRight, BellRing, Check, Download, Flashlight, Loader2, Mail, MapPin, Phone, PlayCircle, Sun, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { TagBar, TripSheet } from "./lax/TripSheet";
+import { TagBar, TripSheet, tripTab } from "./lax/TripSheet";
 import { AskButton, AskSheet } from "./lax/AskSheet";
 import { Collapse } from "./lax/Collapse";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, climateNeed, type CarState, type Trip } from "./lax/GuestExtras";
@@ -24,6 +24,7 @@ import { ChargerLine, SendToCar, useKeyWatch } from "./lax/KeyNext";
 import { KeySteps, NextStep, ProfileTip, guideFor, useHasApp } from "./lax/Guide";
 import { Carousel, TripSlides } from "./lax/Carousel";
 import { ReturnChecklist } from "./lax/ReturnChecklist";
+import { FindCarButton } from "./lax/FindCar";
 import { InstallToast } from "./lax/InstallToast";
 import { Fold } from "./lax/HomeGuide";
 import ExtraDrivers from "./lax/ExtraDrivers";
@@ -580,11 +581,13 @@ export default function LaxGuest() {
                   Scan at the lobby door, take the elevator to {level}.
                   {g.spot ? <> Your space is <b className="text-white">{level} · {g.spot}</b>.</> : <> I'll text your exact {level} space the day before your trip.</>}
                   <Warn><b className="text-white">{level} only.</b> Please don't park on other levels. If the QR doesn't scan, there's an intercom right next to the door; someone will buzz you in.</Warn>
+                  <FindCarButton className="mt-3" kind="lax" spot={pub.spot ?? null} run={live ? carCommand : undefined} demo={demo} token={token || undefined} where={`on Level ${level}`}
+                    opensAt={pub.trip && Date.now() < +new Date(pub.trip.starts_at) - 2 * 3600e3 ? pub.trip.starts_at : null} />
                 </Step>
                 {keySteps && (
                   <Step n={n0 + 6} when="At the car" title={"Tap \u201cSet Up\u201d, then Unlock."}>
                     Next to the car, with Bluetooth on, open the Tesla app and tap <b className="text-white">&ldquo;Set Up&rdquo;</b>. Follow the steps, then tap <b className="text-white">Unlock</b>. Take your check-in photos in the Turo app.
-                    <span className="mt-1 block text-white/60">Not sure which one is yours? Tap Honk on the main page.</span>
+                    <span className="mt-1 block text-white/60">Not sure which one is yours? Use Find the Car, or tap Honk.</span>
                     <OpenTuro className="mt-3 w-full" label="Open Turo for photos" />
                   </Step>
                 )}
@@ -616,7 +619,8 @@ export default function LaxGuest() {
 
               {returnChargeLive((demoCar ? demoState : pub.car)?.battery, pub.pickup_battery, pub.range_check, pub.trip?.ends_at) && <div className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[14px] leading-relaxed text-white/80 ring-1 ring-white/10">
                 <ReturnChargeBlock kind="lax" endsAt={pub.trip?.ends_at} pickup={pub.pickup_battery} battery={(demoCar ? demoState : pub.car)?.battery} rc={pub.range_check} run={live ? carCommand : undefined}
-                  setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
+                  setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={(demoCar ? demoState : pub.car)?.observed_at}
+                  check={token ? <ReturnChecklist compact token={token} kind="lax" run={live ? carCommand : undefined} demo={demo} endsAt={pub.trip?.ends_at} /> : undefined} />
               </div>}
 
               <Carousel id="lax-return" className="mt-4" labels={["Drive in", "Park", "Walk out", "Shuttle"]}>
@@ -628,7 +632,7 @@ export default function LaxGuest() {
                 <Step n={2} when="Inside" title={`Park on ${level}. Designated carshare area only.`}>
                   Same level you picked up from. The carshare zone is marked.
                   <Warn><b className="text-white">Do not return to The Parking Spot Century at {stop.replace(/ Blvd$/, "")}.</b> Your car won't have access there and you may be charged an improper-return fee.</Warn>
-                  {token && <ReturnChecklist compact token={token} kind="lax" run={live ? carCommand : undefined} demo={demo} endsAt={pub.trip?.ends_at} />}
+                  {!returnChargeLive((demoCar ? demoState : pub.car)?.battery, pub.pickup_battery, pub.range_check, pub.trip?.ends_at) && token && <ReturnChecklist compact token={token} kind="lax" run={live ? carCommand : undefined} demo={demo} endsAt={pub.trip?.ends_at} />}
                 </Step>
                 <Step n={3} when="Walk out" title="Elevator down, exit on 98th St.">
                   From {level}, take the elevator down, exit onto 98th St, and follow the Park My Share signs.
@@ -653,7 +657,7 @@ export default function LaxGuest() {
               )}
             
             </TripSheet>
-            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} hideTags={ended}
+            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} hideTags={ended} only={tripTab(pub?.trip, ended, pub?.car_connected_at)}
               glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
             {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} weather={weather} onWeather={(w) => { setWeather(w); setPub(demoPub(dKind, stageRef.current) as Pub); }} />}
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />

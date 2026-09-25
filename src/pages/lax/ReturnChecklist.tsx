@@ -21,7 +21,7 @@ type Run = (a: "refresh" | "lock" | "windows_close" | "nav_charger" | "nav_charg
 const ACCENT = "var(--trip-accent)";
 const DEMO: Check = { ok: true, live: true, fresh: true, controls: true, observed_at: new Date(Date.now() - 60e3).toISOString(), items: [
   { id: "parked", ok: false, label: "Park at the return spot", detail: "About 0.4 miles away." },
-  { id: "charge", ok: true, label: "Charged to 76% (same as pickup)", detail: "It's at 82% now." },
+  { id: "charge", ok: false, label: "Charge back to 90% (same as pickup)", detail: "It's at 82% now." },
   { id: "trunks", ok: true, label: "Trunk and frunk closed", detail: "Both closed." },
   { id: "locked", ok: false, label: "Locked", detail: "The car is unlocked." },
 ] };
@@ -90,28 +90,21 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
 
   // Compact: one small live row inside the Park step. The other fixes (send spot / charger) live in their own steps.
   if (compact) {
-    const short: Record<Item["id"], string> = { parked: "Parked", charge: "Charged", trunks: "Trunks shut", locked: "Locked" };
-    const needLock = items.some((i) => i.id === "locked" && !i.ok);
+    const short: Record<Item["id"], string> = { parked: "Parked", charge: "Charged", trunks: "Trunks", locked: "Locked" };
     return (
-      <div ref={box} aria-label="Live car check" className={`mt-3 rounded-2xl p-3 ring-1 ${all ? "bg-emerald-400/10 ring-emerald-300/40" : "bg-white/[0.06] ring-white/10"}`}>
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[13px] font-bold text-white">{all ? "All set. You're good to go." : `Car check · ${done} of ${total}`}</p>
+      <div ref={box} aria-label="Live car check" className={`mt-3 rounded-2xl px-2.5 py-2 ring-1 ${all ? "bg-emerald-400/10 ring-emerald-300/40" : "bg-white/[0.06] ring-white/10"}`}>
+        <div className="flex items-center justify-between gap-2 px-0.5">
+          <p className="text-[12px] font-bold text-white">{all ? "Car check · all set" : `Car check · ${done} of ${total}`}</p>
           <span className="text-[11px] text-white/50">{c.observed_at ? ago(c.observed_at) : ""}</span>
         </div>
-        <ul className="mt-2 flex flex-wrap gap-1.5">
+        <ul className="mt-1.5 flex gap-1">
           {items.map((i) => (
-            <li key={i.id} title={i.detail} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${i.ok ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-300/15 text-amber-100"}`}>
-              {i.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}{short[i.id]}
+            <li key={i.id} title={i.detail} className={`flex flex-auto items-center justify-center gap-0.5 whitespace-nowrap rounded-full px-1 py-1 text-[11px] font-semibold tracking-tight ${i.ok ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-300/15 text-amber-100"}`}>
+              {i.ok ? <CheckCircle2 className="h-3 w-3 shrink-0" aria-hidden /> : <Circle className="h-3 w-3 shrink-0" aria-hidden />}<span>{short[i.id]}</span>
+              <span className="sr-only">{i.ok ? " done" : " not yet"}</span>
             </li>
           ))}
         </ul>
-        {needLock && run && (
-          <button type="button" onClick={() => void act("lock", "lock", "locked")} disabled={!!busy}
-            className="mt-2.5 inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[14px] font-bold text-[#1A1140] disabled:opacity-50" style={{ background: ACCENT }}>
-            {busy === "lock" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Lock it
-          </button>
-        )}
-        {msg && <p className="mt-1.5 text-[12px] text-white/70" aria-live="polite">{msg}</p>}
       </div>
     );
   }
@@ -133,7 +126,7 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
               <p className={`text-[16px] font-semibold ${i.ok ? "text-white/70" : "text-white"}`}>{i.label}</p>
               <p className="text-[13px] text-white/60">{i.detail}</p>
               {!i.ok && i.id === "parked" && <SendToCar run={run} kind={kind} action={kind === "home" ? "nav_home" : "nav_garage_lax"} label="Send the return spot to the car" />}
-              {!i.ok && i.id === "charge" && <SendToCar run={run} kind={kind} label="Send a Supercharger to the car" />}
+              {!i.ok && i.id === "charge" && <SendToCar center run={run} kind={kind} label="Send a Supercharger to the car" />}
               {!i.ok && i.id === "locked" && (
                 <button type="button" onClick={() => void act("lock", "lock", "locked")} disabled={!run || !!busy}
                   className="mt-2 inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[14px] font-bold text-[#1A1140] disabled:opacity-50" style={{ background: ACCENT }}>

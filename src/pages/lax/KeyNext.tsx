@@ -107,12 +107,12 @@ export const ChargerLine = ({ kind }: { kind: TripKind }) => {
 type NavAction = "nav_charger" | "nav_charger_lax" | "nav_garage_lax" | "nav_home";
 export type NavRun = (a: NavAction, onStage?: (s: string) => void) => Promise<void>;
 /** "Send to car": puts the closest Supercharger in the car's navigation (TezLab first, Tesla backup). */
-export function SendToCar({ run, kind, action, label = "Send to car's navigation", full }: { run?: NavRun; kind: TripKind; action?: NavAction; label?: string; full?: boolean }) {
+export function SendToCar({ run, kind, action, label = "Send to car's navigation", full, center }: { run?: NavRun; kind: TripKind; action?: NavAction; label?: string; full?: boolean; center?: boolean }) {
   const [st, setSt] = useState<"idle" | "busy" | "done" | "err">("idle");
   const [msg, setMsg] = useState<string | null>(null);
   // Always shown so guests know it exists; greyed out until the car buttons open (1 hour before pickup).
   if (!run) return (
-    <div className={full ? "" : "mt-2.5"}>
+    <div className={full ? "" : center ? "mt-3 flex flex-col items-center text-center" : "mt-2.5"}>
       <button type="button" disabled aria-disabled
         className={full ? "flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.08] text-[15px] font-semibold text-white/50 ring-1 ring-white/10" : "inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white/[0.08] px-4 text-[14px] font-semibold text-white/50 ring-1 ring-white/10"}>
         <Navigation className="h-4 w-4" /> {label}
@@ -126,13 +126,13 @@ export function SendToCar({ run, kind, action, label = "Send to car's navigation
     catch (e) { setSt("err"); setMsg((e as Error).message || "Couldn't reach the car. Tap the address instead."); }
   };
   return (
-    <div className={full ? "" : "mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1"}>
+    <div className={full ? "" : center ? "mt-3 flex flex-col items-center gap-1 text-center" : "mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1"}>
       <button type="button" onClick={() => void go()} disabled={st === "busy"}
         className={full ? "flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-[#1A1140] shadow-md shadow-black/20 active:scale-[0.98] disabled:opacity-60" : "inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-[#1A1140] shadow-md shadow-black/20 active:scale-95 disabled:opacity-60"} style={{ background: ACCENT }}>
         {st === "busy" ? <Loader2 className="h-4 w-4 animate-spin" /> : st === "done" ? <CheckCircle2 className="h-4 w-4" /> : <Navigation className="h-4 w-4" />}
         {st === "done" ? (full ? "Sent" : "Sent to your car") : label}
       </button>
-      {msg && <p className={`min-w-0 flex-1 text-[12px] leading-snug ${full ? "mt-1 text-center" : ""} ${st === "err" ? "text-red-300" : "text-white/65"}`} aria-live="polite">{msg}</p>}
+      {msg && <p className={`min-w-0 ${center ? "" : "flex-1"} text-[12px] leading-snug ${full ? "mt-1 text-center" : ""} ${st === "err" ? "text-red-300" : "text-white/65"}`} aria-live="polite">{msg}</p>}
     </div>
   );
 }
