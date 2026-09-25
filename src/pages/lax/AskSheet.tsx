@@ -18,9 +18,15 @@ const rpc = (fn: string, args?: Record<string, unknown>) =>
 const EARLY_Q = "Can I pick up or return the car early?";
 const EARLY_A = "Yes! Just change your trip times in the Turo app (Manage trip → Change trip). Your host can't change them for you, and this chat can't either.";
 
-// The opening three. Jared picked these: do not reorder or swap them without asking him.
-const SUGGEST = ["Where do I catch the shuttle after I land?", "How do I get into the garage?", "How do I unlock and start the Tesla?", EARLY_Q];
-const SUGGEST_HOME = ["How do I get the key?", "Where is the car?", "Can someone else drive?", EARLY_Q];
+// Pinned first on every chip list, airport and home, and it stays there until the guest has
+// actually asked about it. Jared's call: a second driver who is not on the trip is the one thing a
+// guest can get wrong in a way that voids the insurance, and it used to sit behind the return
+// question, which the page already answers on its own.
+const DRIVER_Q = "Can someone else drive?";
+
+// The opening set. Jared picked these: do not reorder or swap them without asking him.
+const SUGGEST = [DRIVER_Q, "Where do I catch the shuttle after I land?", "How do I get into the garage?", "How do I unlock and start the Tesla?", EARLY_Q];
+const SUGGEST_HOME = [DRIVER_Q, "How do I get the key?", "Where is the car?", EARLY_Q];
 
 /**
  * What to offer once the conversation has started.
@@ -50,7 +56,6 @@ const TOPIC: [string, RegExp][] = [
 ];
 
 const BANK_HOME: string[] = [
-  "Can someone else drive?",
   "How charged does it need to be when I return it?",
   "Where do I return the car?",
   "What if the phone key stops working?",
@@ -61,9 +66,8 @@ const BANK_HOME: string[] = [
   "Who do I call if something happens?",
 ];
 const BANK_LAX: string[] = [
-  "Where do I return the car?",
-  "Can someone else drive?",
   "How charged does it need to be when I return it?",
+  "Where do I return the car?",
   "What if my flight is delayed?",
   "What if the phone key stops working?",
   "How do I get back into the garage?",
@@ -73,19 +77,24 @@ const BANK_LAX: string[] = [
 
 const topicOf = (q: string) => TOPIC.find(([, re]) => re.test(q))?.[0];
 
-/** Server suggestions first, minus what is already covered, topped up from the bank, EARLY_Q last. */
+/**
+ * DRIVER_Q first, then the server's suggestions minus what is already covered, topped up from the
+ * bank, EARLY_Q last. DRIVER_Q drops off only once the guest has asked about a second driver.
+ */
 function nextChips(from: string[], asked: string, home: boolean): string[] {
   const done = new Set(TOPIC.filter(([, re]) => re.test(asked)).map(([t]) => t));
+  const driver = !done.has("driver");
+  if (driver) done.add("driver");
   const out: string[] = [];
   const take = (q: string) => {
-    if (out.length >= 3 || q === EARLY_Q || out.includes(q)) return;
+    if (out.length >= 3 || q === EARLY_Q || q === DRIVER_Q || out.includes(q)) return;
     const t = topicOf(q);
     if (t && (done.has(t) || out.some((o) => topicOf(o) === t))) return;
     out.push(q);
   };
   from.forEach(take);
   (home ? BANK_HOME : BANK_LAX).forEach(take);
-  return [...out, EARLY_Q];
+  return [...(driver ? [DRIVER_Q] : []), ...out, EARLY_Q];
 }
 
 function Chips({ list, onPick, disabled }: { list: string[]; onPick: (s: string) => void; disabled?: boolean }) {
