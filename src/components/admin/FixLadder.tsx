@@ -94,7 +94,7 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
           </div>
           {iss.claude_prompt && (
             <details className="mt-3 text-sm">
-              <summary className="cursor-pointer text-white/55 bento:text-white/60">See the prompt</summary>
+              <summary className="cursor-pointer text-white/60 bento:text-white/60">See the prompt</summary>
               <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-[12px] leading-relaxed text-white/75 bento:bg-white/5 bento:text-white/75">{iss.claude_prompt}</pre>
             </details>
           )}
@@ -116,10 +116,10 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
               <span className={cn("grid h-7 w-7 place-items-center rounded-full text-[11px] font-semibold",
                 done ? "bg-white/15 text-white/80 bento:bg-white/10 bento:text-white/70"
                   : now ? "bg-white text-black ring-2 ring-white/30 bento:bg-[#111114] bento:text-[#fff]"
-                  : "bg-white/[0.04] text-white/35 bento:bg-white/5 bento:text-white/60")}>
+                  : "bg-white/[0.04] text-white/60 bento:bg-white/5 bento:text-white/60")}>
                 {done ? <Check className="h-3.5 w-3.5" aria-hidden /> : n + 1}
               </span>
-              <span className={cn("text-[11px]", now ? "font-semibold text-white bento:text-white" : "text-white/50 bento:text-white/60")}>{r.label}</span>
+              <span className={cn("text-[11px]", now ? "font-semibold text-white bento:text-white" : "text-white/60 bento:text-white/60")}>{r.label}</span>
             </li>
           );
         })}
@@ -131,12 +131,12 @@ export function FixLadder({ issueKey, about, onClose }: { issueKey: string; abou
           {log.map((l, n) => (
             <li key={n} className="flex gap-2 text-sm">
               <span className={cn("mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full",
-                l.ok === true ? "bg-emerald-400/20 text-emerald-300" : l.ok === false ? "bg-rose-400/15 text-rose-300" : "bg-white/10 text-white/50")}>
+                l.ok === true ? "bg-emerald-400/20 text-emerald-300" : l.ok === false ? "bg-rose-400/15 text-rose-300" : "bg-white/10 text-white/60")}>
                 {l.ok === true ? <Check className="h-3 w-3" aria-hidden /> : l.ok === false ? <X className="h-3 w-3" aria-hidden /> : <span className="h-1 w-1 rounded-full bg-current" />}
               </span>
               <span className="min-w-0 text-white/75 bento:text-white/70">
                 <span className="font-medium text-white bento:text-white">{WHO[l.by] ?? l.by}</span> · {l.text}
-                <span className="ml-1 text-white/35 bento:text-white/60">{time(l.at)}</span>
+                <span className="ml-1 text-white/60 bento:text-white/60">{time(l.at)}</span>
               </span>
             </li>
           ))}

@@ -202,7 +202,7 @@ export function NotificationBell() {
         </div>
         {push !== "unsupported" && (
           <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg bg-white/[0.04] px-3 py-2 text-xs">
-            <Bell className="h-3.5 w-3.5 flex-none text-white/55" aria-hidden="true" />
+            <Bell className="h-3.5 w-3.5 flex-none text-white/60" aria-hidden="true" />
             <span className="flex-1 text-white/70">
               {push === "on" ? "Desktop alerts on" : push === "denied" ? "Desktop alerts blocked in browser settings" : "Desktop alerts off"}
             </span>
@@ -211,7 +211,7 @@ export function NotificationBell() {
             )}
             {push !== "denied" && (
               <button type="button" onClick={togglePush} disabled={push === "busy"}
-                className={cn("h-7 rounded-md px-2.5 font-medium disabled:opacity-50", push === "on" ? "text-white/55 hover:text-white" : "bg-white text-black")}>
+                className={cn("h-7 rounded-md px-2.5 font-medium disabled:opacity-50", push === "on" ? "text-white/60 hover:text-white" : "bg-white text-black")}>
                 {push === "on" ? "Turn off" : push === "busy" ? "…" : "Turn on"}
               </button>
             )}
@@ -220,7 +220,7 @@ export function NotificationBell() {
         <div className="flex gap-1 overflow-x-auto px-3 pb-2 [scrollbar-width:none]" role="group" aria-label="Show">
           {["all", "unread", ...groups].map((f) => (
             <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}
-              className={cn("h-8 shrink-0 rounded-md px-2.5 text-xs", filter === f ? "bg-white/10 text-white" : "text-white/55 hover:text-white")}>
+              className={cn("h-8 shrink-0 rounded-md px-2.5 text-xs", filter === f ? "bg-white/10 text-white" : "text-white/60 hover:text-white")}>
               {f === "all" ? "All" : f === "unread" ? `Unread${unread ? ` ${unread}` : ""}` : f}
             </button>
           ))}
@@ -231,9 +231,9 @@ export function NotificationBell() {
             <p className="px-4 py-6 text-sm text-red-200">Couldn't load notifications: {loadError}</p>
           ) : shown.length === 0 ? (
             <div className="px-4 py-10 text-center">
-              <BellOff className="h-6 w-6 text-white/30 mx-auto" aria-hidden="true" />
+              <BellOff className="h-6 w-6 text-white/60 mx-auto" aria-hidden="true" />
               <p className="mt-2 text-sm text-white/80">{filter === "unread" ? "All caught up" : "Nothing yet"}</p>
-              <p className="mt-1 text-xs text-white/50">New leads, deposits, intakes and messages show up here.</p>
+              <p className="mt-1 text-xs text-white/60">New leads, deposits, intakes and messages show up here.</p>
             </div>
           ) : (
             <ul>
@@ -266,8 +266,8 @@ export function NotificationBell() {
                           <span className={cn("flex-1 text-sm leading-snug", n.read_at ? "text-white/75" : "font-semibold text-white")}>{n.title}</span>
                           {!n.read_at && <span className="mt-1.5 h-2 w-2 flex-none rounded-full bg-cyan-400" aria-label="Unread" />}
                         </span>
-                        {n.body && <span className="mt-0.5 block text-xs text-white/55 line-clamp-2">{n.body}</span>}
-                        <span className="mt-1 block text-[0.6875rem] text-white/40">{k.label} · {ago(n.created_at)}</span>
+                        {n.body && <span className="mt-0.5 block text-xs text-white/60 line-clamp-2">{n.body}</span>}
+                        <span className="mt-1 block text-[0.6875rem] text-white/60">{k.label} · {ago(n.created_at)}</span>
                       </span>
                     </button>
                   </li>
