@@ -24,8 +24,8 @@ const GROUPS: { id: string; label: string; kinds: string[]; icon: typeof Gauge; 
   { id: "tires", label: "Tire pressure", kinds: ["tires"], icon: Thermometer, about: "Red under 38 psi, yellow when a tire is getting close (under 40) or two tires differ." },
   { id: "fixes", label: "Windows & locks", kinds: ["autofix_windows", "autofix_lock"], icon: Lock, about: "Windows closed automatically anywhere; locked automatically only at N Kings Rd or the LAX garage." },
   { id: "sentry", label: "Sentry", kinds: ["sentry_on", "sentry_off"], icon: ShieldCheck, about: "Sentry turns on between trips and off during trips." },
-  { id: "arrival", label: "Returns & arrival", kinds: ["eta", "late"], icon: Navigation, about: "How far away the guest is when heading back, and late returns." },
-  { id: "wipe", label: "Guest access removed", kinds: ["wipe"], icon: Shield, about: "The guest's Tesla access removed after the trip." },
+  { id: "arrival", label: "Returns & arrival", kinds: ["eta", "late"], icon: Navigation, about: "Once a guest is driving back and within 15 minutes, a row appears — \u201cMaya is about 12 min away\u201d — with where they are heading and the booked return time. A second, orange row says so if they are not going to make it. Nothing appears while the car is parked." },
+  { id: "wipe", label: "Guest access removed", kinds: ["wipe"], icon: Shield, about: "Half an hour after a trip ends, with the car parked at home or the LAX garage, it is asked to clear the last guest\u2019s driver profile, their saved places and any phone they paired. It does not touch your own profile or the key cards. This stays off until you and Scout have run it once together \u2014 and the car has to accept the command, which Scout now checks every hour." },
 ];
 const serious = (e: Ev) => e.severity === "warning" || e.severity === "critical";
 
