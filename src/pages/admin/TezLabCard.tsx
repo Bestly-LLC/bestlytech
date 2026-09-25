@@ -9,8 +9,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { btnPlain, btnTinted, card, label, secondary } from "./laxUi";
 
-type St = { connected: boolean; enabled: boolean; connected_at: string | null; last_ok_at: string | null; last_error: string | null; last_error_at: string | null; via_tezlab_30d: number };
+type St = { connected: boolean; enabled: boolean; connected_at: string | null; last_ok_at: string | null; last_error: string | null; last_error_at: string | null; down_until?: string | null; down_streak?: number; via_tezlab_30d: number };
 const when = (iso: string | null) => iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" }) : "never";
+const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
+const plain = (err: string) => err.replace(/^(Error|TezLabDown): /, "");
 
 export function TezLabCard() {
   const [st, setSt] = useState<St | null>(null);
@@ -24,14 +26,17 @@ export function TezLabCard() {
     setBusy(op);
     const { data, error } = await supabase.functions.invoke("tezlab", { body: { op } });
     setBusy(null);
-    const d = data as { ok?: boolean; url?: string; error?: string } | null;
-    if (error || d?.error) { toast.error(d?.error ?? error?.message ?? "TezLab didn't answer"); void load(); return; }
+    const d = data as { ok?: boolean; url?: string; error?: string; down?: boolean } | null;
+    if (error || d?.error) { toast.error(d?.down ? "TezLab's servers are down right now. Tesla backup is covering; nothing to reconnect." : (d?.error ?? error?.message ?? "TezLab didn't answer")); void load(); return; }
     if (op === "start" && d?.url) { window.location.href = d.url; return; }
     toast.success("TezLab is working: it just read the car.");
     void load();
   };
   if (!st) return <div className={cn(card, "h-24 animate-pulse")} aria-label="Loading" />;
   const failing = !!st.last_error_at && (!st.last_ok_at || st.last_error_at > st.last_ok_at);
+  // Their outage (5xx / 401 on a fresh token): routing is paused, the Tesla backup covers, nothing to reconnect.
+  const outage = failing && /^TezLabDown:/.test(st.last_error ?? "");
+  const pausedUntil = st.down_until && new Date(st.down_until) > new Date() ? st.down_until : null;
   return (
     <div id="tezlab" className={cn(card, "space-y-3 scroll-mt-24")}>
       <div className="flex items-start gap-3">
@@ -40,11 +45,12 @@ export function TezLabCard() {
           : <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#30D158]" aria-hidden />}
         <div className="min-w-0">
           <p className={cn("text-[17px] font-semibold", label)}>
-            {!st.connected ? "TezLab isn't connected" : failing ? "TezLab hiccup, Tesla backup is covering" : "TezLab is working"}
+            {!st.connected ? "TezLab isn't connected" : outage ? "TezLab's servers are down, Tesla backup is covering" : failing ? "TezLab hiccup, Tesla backup is covering" : "TezLab is working"}
           </p>
           <p className={cn("mt-0.5 text-[14px] leading-snug", secondary)}>
             Last worked {when(st.last_ok_at)} · {st.via_tezlab_30d} guest command{st.via_tezlab_30d === 1 ? "" : "s"} in 30 days.
-            {failing && st.last_error ? <> Last error {when(st.last_error_at)}: {st.last_error.replace(/^Error: /, "").slice(0, 120)}</> : null}
+            {outage ? <> Their side, not ours: nothing to reconnect. {pausedUntil ? `Car buttons skip TezLab until ${clock(pausedUntil)}, then it tries again on its own.` : "It tries again on its own."}</>
+              : failing && st.last_error ? <> Last error {when(st.last_error_at)}: {plain(st.last_error).slice(0, 120)}</> : null}
           </p>
         </div>
       </div>
