@@ -280,8 +280,16 @@ export default function LaxGuest() {
       if (name) { onStage?.(`${name} is in the car's navigation`); return; }
     }
     if (action !== "refresh") track(token || undefined, ["cool", "warm", "seat", "off"].includes(action) ? "climate" : action, { action });
+    // Honk / Flash are geofenced server-side: send where this phone is (only for those two).
+    let here: { p_lat?: number; p_lon?: number; p_acc?: number } = {};
+    if (token && (action === "honk" || action === "flash") && typeof navigator !== "undefined" && navigator.geolocation) {
+      onStage?.("Checking you're near the car");
+      here = await new Promise((res) => navigator.geolocation.getCurrentPosition(
+        (p) => res({ p_lat: p.coords.latitude, p_lon: p.coords.longitude, p_acc: p.coords.accuracy }),
+        () => res({}), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }));
+    }
     const { data, error } = token
-      ? await rpc("lax_guest_car_command", { p_token: token, p_action: action })
+      ? await rpc("lax_guest_car_command", { p_token: token, p_action: action, ...here })
       : await rpc("lax_shared_car_command", { p_slug: slug, p_action: action });
     const r = data as { ok: boolean; id?: number; error?: string; cached?: boolean } | null;
     if (error || !r?.ok) throw new Error(r?.error ?? error?.message ?? "Couldn't reach the car");
