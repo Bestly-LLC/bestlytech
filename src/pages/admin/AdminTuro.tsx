@@ -13,6 +13,8 @@ import { AlertTriangle, CheckCircle2, ExternalLink, Pause, Play, Send, Settings 
 import { Link } from "react-router-dom";
 import { GuestRow, useGuestRows } from "./LaxGuests";
 import { CarHealth, SuperchargeAudit } from "./CarOps";
+import { ReadyWidget } from "@/components/admin/turo/ReadyWidget";
+import { CarProtectLog, TollCheck } from "@/components/admin/turo/CarProtect";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -107,6 +109,13 @@ export default function AdminTuro() {
           guest={(t) => { const g = guests.rows?.find((x) => x.reservation_id === t.reservation_id); return g ? <ul><GuestRow r={g} reload={guests.reload} compact /></ul> : <p className="text-sm text-white/60">No guest page for this trip yet.</p>; }}
           returnAt={(t) => { const g = guests.rows?.find((x) => x.reservation_id === t.reservation_id); return g ? { pct: g.pickup_battery ?? null, at: g.pickup_battery_at ?? null } : null; }} />
       </div>
+
+      {/* Ready for the next guest + what the car-protect engine did */}
+      <div id="ready" className="grid scroll-mt-24 items-start gap-4 lg:grid-cols-2">
+        <ReadyWidget />
+        <CarProtectLog />
+      </div>
+      <TollCheck />
 
       {/* Money + car health */}
       <div className="grid items-start gap-4 lg:grid-cols-2">

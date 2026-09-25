@@ -18,6 +18,7 @@ import {
   type SweepState,
 } from "@/services/streetSweepingApi";
 import { TuroMini } from "@/components/admin/turo/TuroMini";
+import { ReadyWidget } from "@/components/admin/turo/ReadyWidget";
 import { StatusBoard } from "@/components/admin/StatusBoard";
 import { fetchLatestRun, runHeadline } from "@/services/securityAuditApi";
 import {
@@ -589,6 +590,7 @@ export default function AdminDashboard() {
 
       {/* Turo at a glance */}
       <TuroMini />
+      <ReadyWidget compact />
 
       {/* Side by side while there is room for a 26rem column, stacked the moment there
           isn't. No breakpoint guessing - the browser works it out at every width. */}
