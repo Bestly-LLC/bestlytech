@@ -22,6 +22,8 @@ import {
   btnTinted, cardCls, divider, hairline, inset, rowCls, text, tint,
 } from "@/components/admin/ui";
 import { AskScoutButton } from "./AskScoutButton";
+import { Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /**
  * Everything waiting on the operator, from one server-side rule set.
@@ -47,6 +49,10 @@ interface TodayRow {
   since: string | null;
   item_count: number | null;
   rank: number;
+  origin_table: string | null;
+  origin_id: string | null;
+  why: string | null;
+  fingerprint: string | null;
 }
 
 interface ActionItem {
@@ -62,6 +68,11 @@ interface ActionItem {
   /** Cards that resolve with a tap rather than a visit. */
   done?: boolean;
   doneLabel?: string;
+  /** Where this came from, for the ⓘ: the table, the record, and the condition that raised it. */
+  originTable?: string;
+  originId?: string;
+  why?: string;
+  since?: string;
 }
 
 const severityRank: Record<Severity, number> = { critical: 0, urgent: 1, stale: 2, info: 3 };
@@ -111,6 +122,37 @@ function timeAgo(ms: number): string {
   return `${d}d`;
 }
 
+/**
+ * Where a to-do came from. Hover, or focus it with the keyboard — it is a button, so a tap on a
+ * phone opens it too. The row itself only ever said "Studio"; this names the table, the record
+ * and the exact condition that put it in front of you.
+ */
+function WhereFrom({ item }: { item: ActionItem }) {
+  if (!item.originTable && !item.why) return null;
+  const when = item.since
+    ? new Date(item.since).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" aria-label={`Where this came from: ${item.why ?? item.originTable}`}
+          className="grid h-11 w-9 shrink-0 place-items-center self-center text-white/45 transition hover:text-white sm:h-9">
+          <Info className="h-4 w-4" aria-hidden />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-xs text-left">
+        {item.why && <p className="text-[0.8125rem] leading-snug">{item.why}</p>}
+        {item.originTable && (
+          <p className="mt-1 font-mono text-[0.6875rem] opacity-70">
+            {item.originTable}{item.originId ? ` · ${item.originId.length > 20 ? item.originId.slice(0, 8) + "…" : item.originId}` : ""}
+          </p>
+        )}
+        {when && <p className="mt-1 text-[0.6875rem] opacity-70">Since {when}</p>}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function ActionInbox() {
   const [items, setItems] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,8 +187,14 @@ export function ActionInbox() {
         href: r.url || undefined,
         external: !!r.url && /^https?:/i.test(r.url),
         count: count > 1 ? count : undefined,
-        done: r.key.startsWith("cy:") || r.key.startsWith("bell:"),
+        // Every row can be ticked now. admin_today_done() used to raise for anything that was
+        // not a Cookie Yeti release or a bell alert, so the check mark was hidden on the rest.
+        done: true,
         doneLabel: r.action_label || "Done",
+        originTable: r.origin_table || undefined,
+        originId: r.origin_id || undefined,
+        why: r.why || undefined,
+        since: r.since || undefined,
       };
     });
 
@@ -304,6 +352,7 @@ export function ActionInbox() {
                 <div className="min-w-0 flex-1">
                   <RowLink href={item.href}>{body}</RowLink>
                 </div>
+                <WhereFrom item={item} />
                 <AskScoutButton
                   question={`Help me with this: ${item.title}. What's going on, and can you fix it?`}
                   about={[item.title, item.detail, item.href].filter(Boolean).join(" | ")}
