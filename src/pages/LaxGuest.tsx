@@ -339,12 +339,10 @@ export default function LaxGuest() {
   const showWx = !wxCar || !!(wxCar.climate_until && +new Date(wxCar.climate_until) > Date.now()) || climateNeed(wxCar.inside_f, demo ? wxCar.outside_f : outsideF ?? wxCar.outside_f) !== "comfy";
   // "Set Up" done at the car (the car unlocked/moved by itself after the key was accepted), or 45 min into the trip.
   const carConnected = !!pub?.car_connected_at || (!!pub?.trip && Date.now() > +new Date(pub.trip.starts_at) + 45 * 60e3);
-  // Lobby QR: folded while booked, open from 24 hours before pickup, gone once the phone key is set up at the car
-  // (they're past the lobby). Only a real Set Up hides it early; otherwise it stays until 6 hours into the trip.
-  const startsMs = pub?.trip ? +new Date(pub.trip.starts_at) : null;
-  const qrPhase: "booked" | "pickup" | "done" = startsMs == null ? "pickup"
-    : pub?.car_connected_at || Date.now() > startsMs + 6 * 3600e3 ? "done"
-    : Date.now() < startsMs - 24 * 3600e3 ? "booked" : "pickup";
+  // Lobby QR (Jared's rule): OPEN from booking until the phone key is set up at the car (they tapped "Set Up" and
+  // the Bluetooth key connected, i.e. they're past the lobby). Then it folds, still one tap away. Gone after the trip.
+  // The page decides open/closed (not a remembered tap), so it always matches where the guest is.
+  const qrPhase: "pickup" | "set" | "done" = ended ? "done" : pub?.car_connected_at ? "set" : "pickup";
   const g = pub?.guide ?? {};
   const garage = g.garage || "5730 W 98th St, LA 90045";
   const level = g.level || "P3";
@@ -437,7 +435,7 @@ export default function LaxGuest() {
 
             {/* QR */}
             {qrPhase !== "done" && (
-            <Collapse id={qrPhase === "booked" ? "qr-booked" : "qr"} defaultOpen={qrPhase === "pickup"} kicker="Your QR code · opens the lobby door" title={pub.ready && qrPhase === "pickup" ? "Scan it at the lobby door" : undefined} accent={PEACH} className={guide.next?.action === "qr" ? "trip-glow trip-glow-card" : ""} summary={qrPhase === "booked" ? "You'll need it at pickup. It opens by itself the day before." : pub.ready ? "Tap to show your QR code." : "Shows up here before your trip."}>
+            <Collapse id="qr" remember={false} defaultOpen={qrPhase === "pickup"} kicker="Your QR code · opens the lobby door" title={pub.ready && qrPhase === "pickup" ? "Scan it at the lobby door" : undefined} accent={PEACH} className={guide.next?.action === "qr" ? "trip-glow trip-glow-card" : ""} summary={qrPhase === "set" ? "Your key is set up. Tap if you need the lobby door again." : pub.ready ? "Tap to show your QR code." : "Shows up here before your trip."}>
               {pub.ready ? (
                 <>
                   <div className="mt-3 rounded-3xl bg-white p-6 text-center text-[#1A1140] shadow-2xl shadow-black/40">
@@ -620,17 +618,7 @@ export default function LaxGuest() {
             </TripSheet>
             <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Drop the car → catch your flight" title="Return: car → shuttle → LAX">
 
-              <p className="text-[15px] leading-relaxed text-white/75">
-                Reverse of the morning. The two things to watch: <b className="text-white">which entrance you use</b>, and <b className="text-white">which address you drive to</b>. Get those right and you're done.
-              </p>
-
-              {returnChargeLive((demoCar ? demoState : pub.car)?.battery, pub.pickup_battery, pub.range_check, pub.trip?.ends_at) && <div className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[14px] leading-relaxed text-white/80 ring-1 ring-white/10">
-                <ReturnChargeBlock kind="lax" endsAt={pub.trip?.ends_at} pickup={pub.pickup_battery} battery={(demoCar ? demoState : pub.car)?.battery} rc={pub.range_check} run={live ? carCommand : undefined}
-                  setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={(demoCar ? demoState : pub.car)?.observed_at}
-                  check={token ? <ReturnChecklist compact token={token} kind="lax" run={live ? carCommand : undefined} demo={demo} endsAt={pub.trip?.ends_at} /> : undefined} />
-              </div>}
-
-              <Carousel id="lax-return" className="mt-4" labels={["Drive in", "Park", "Walk out", "Shuttle"]}>
+              <Carousel id="lax-return" className="mt-1" labels={["Drive in", "Park", "Walk out", "Shuttle"]}>
                 <Step n={1} when="Drive in" title="Use the carshare return lane on 98th St.">
                   Drive to <a href={maps} className="underline decoration-white/40 underline-offset-2">{garage.split(",")[0]}</a> and take the car share return lane on 98th St.
                   <span className="mt-1 block text-white/60"><b className="text-white/80">After 10 PM:</b> use the alley return lane between Century Blvd and 98th St instead.</span>
@@ -639,7 +627,7 @@ export default function LaxGuest() {
                 <Step n={2} when="Inside" title={`Park on ${level}. Designated carshare area only.`}>
                   Same level you picked up from. The carshare zone is marked.
                   <Warn><b className="text-white">Do not return to The Parking Spot Century at {stop.replace(/ Blvd$/, "")}.</b> Your car won't have access there and you may be charged an improper-return fee.</Warn>
-                  {!returnChargeLive((demoCar ? demoState : pub.car)?.battery, pub.pickup_battery, pub.range_check, pub.trip?.ends_at) && token && <ReturnChecklist compact token={token} kind="lax" run={live ? carCommand : undefined} demo={demo} endsAt={pub.trip?.ends_at} />}
+                  {token && <ReturnChecklist compact token={token} kind="lax" run={live ? carCommand : undefined} demo={demo} endsAt={pub.trip?.ends_at} />}
                 </Step>
                 <Step n={3} when="Walk out" title="Elevator down, exit on 98th St.">
                   From {level}, take the elevator down, exit onto 98th St, and follow the Park My Share signs.

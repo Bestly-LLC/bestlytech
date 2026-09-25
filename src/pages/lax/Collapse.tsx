@@ -9,15 +9,18 @@ import { Lines } from "./Lines";
 
 const load = (k: string, d: boolean) => { try { const v = localStorage.getItem(k); return v == null ? d : v === "1"; } catch { return d; } };
 
-export function Collapse({ id, kicker, title, summary, defaultOpen = true, children, className = "", style, titleStyle, accent = "var(--trip-accent)" }: {
+export function Collapse({ id, kicker, title, summary, defaultOpen = true, remember = true, children, className = "", style, titleStyle, accent = "var(--trip-accent)" }: {
   id: string; kicker: string; title?: ReactNode; summary?: ReactNode; defaultOpen?: boolean; children: ReactNode;
+  /** false: the page decides open/closed (e.g. by trip phase); a tap only lasts until the phase changes or reload. */
+  remember?: boolean;
   className?: string; style?: CSSProperties; titleStyle?: CSSProperties; accent?: string;
 }) {
   const key = `fold:${id}`;
-  const [open, setOpen] = useState(() => load(key, defaultOpen));
+  const [open, setOpen] = useState(() => remember ? load(key, defaultOpen) : defaultOpen);
+  useEffect(() => { if (!remember) setOpen(defaultOpen); }, [remember, defaultOpen]);
   const body = useRef<HTMLDivElement>(null);
   useEffect(() => { const el = body.current; if (!el) return; if (open) el.removeAttribute("inert"); else el.setAttribute("inert", ""); }, [open]);
-  const set = useCallback((v: boolean) => { setOpen(v); try { localStorage.setItem(key, v ? "1" : "0"); } catch { /* private mode */ } }, [key]);
+  const set = useCallback((v: boolean) => { setOpen(v); if (!remember) return; try { localStorage.setItem(key, v ? "1" : "0"); } catch { /* private mode */ } }, [key, remember]);
   useEffect(() => {
     const onHash = () => { if (location.hash === `#${id}`) set(true); };
     const onOpen = (e: Event) => { if ((e as CustomEvent).detail === id) set(true); };

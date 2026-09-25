@@ -4,7 +4,7 @@
  * Data comes from lax_guest_public (page) and weatherkit-proxy (Apple WeatherKit, public, cached).
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Armchair, ArrowRight, BatteryMedium, Car, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSun, Fan, Flame, Loader2, Lock, LockOpen, Mail, Moon, Power, Snowflake, Sun, Thermometer, Wind, Zap } from "lucide-react";
+import { Armchair, ArrowRight, BatteryMedium, Car, CheckCircle2, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSun, Fan, Flame, Loader2, Lock, LockOpen, Mail, Moon, Power, Snowflake, Sun, Thermometer, Wind, Zap } from "lucide-react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
