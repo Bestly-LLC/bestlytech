@@ -762,3 +762,15 @@ export function EmailCard({ token, email, reminderAt, sentAt, home = false }: { 
     </Card>
   );
 }
+
+/** Shown for 2 days after the guest changes the trip in the Turo app: the page already has the new times. */
+export function TripChanged({ at }: { at?: string | null }) {
+  if (!at) return null;
+  const m = Math.max(1, Math.round((Date.now() - +new Date(at)) / 60000));
+  const ago = m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : "yesterday";
+  return (
+    <p className="mt-2 flex items-center justify-center gap-1.5 text-[13px] font-medium text-emerald-200" role="status">
+      <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />Updated with your Turo trip change · {ago}
+    </p>
+  );
+}

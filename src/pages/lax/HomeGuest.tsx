@@ -13,7 +13,7 @@ import { Helmet } from "react-helmet-async";
 import { ArrowRight, BellRing, CheckCircle2, Flashlight, KeyRound, Loader2, MapPin, Navigation, ShieldAlert, Smartphone } from "lucide-react";
 import { TagBar, TripSheet, tripTab } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
-import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, climateNeed, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
+import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, TripChanged, WeatherCard, climateNeed, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
 import { Mail, PlayCircle, Users } from "lucide-react";
 import { ScrollFx } from "./ScrollFx";
@@ -70,7 +70,7 @@ export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" |
 export type HomePub = {
   trip?: Trip; car?: CarState | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null;
   pickup_battery?: number | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; charging?: Charging | null;
-  pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null;
+  pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null;
 };
 
 function platform(): "apple" | "android" | "other" {
@@ -327,7 +327,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
       <main className="mx-auto max-w-md px-5 pb-48 pt-5">
         {!ended && <p className="text-[17px] leading-relaxed text-white/85">Your Turo Tesla is parked on <b className="text-white">{street.replace(/^\d+\s*/, "")}</b>. <b className="text-white">Your phone is the key.</b> No meetup, no keys.</p>}
 
-        {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /></div>}
+        {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /><TripChanged at={pub.trip_changed_at} /></div>}
 
         {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" /> : <>
         <NextStep next={next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? run : undefined} kind="home"

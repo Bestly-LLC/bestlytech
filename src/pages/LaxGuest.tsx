@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TagBar, TripSheet, tripTab } from "./lax/TripSheet";
 import { AskButton, AskSheet } from "./lax/AskSheet";
 import { Collapse } from "./lax/Collapse";
-import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, WeatherCard, climateNeed, type CarState, type Trip } from "./lax/GuestExtras";
+import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, TripChanged, WeatherCard, climateNeed, type CarState, type Trip } from "./lax/GuestExtras";
 import { WalletLoader } from "./lax/WalletLoader";
 import { ScrollFx } from "./lax/ScrollFx";
 import { track } from "./lax/track";
@@ -39,7 +39,7 @@ import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPub, isDemo, useDemoStage, useDemoWeather, useRealDemoKey } from "./lax/demo";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -428,7 +428,7 @@ export default function LaxGuest() {
           <>
             {!ended && <p className="text-[17px] leading-relaxed text-white/85">Your Turo Tesla is in a garage 5 minutes from LAX. <b className="text-white">Your phone is the key</b>, and a QR code opens the lobby door.</p>}
 
-            {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /></div>}
+            {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /><TripChanged at={pub.trip_changed_at} /></div>}
 
             {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token || undefined} /> : <>
             <NextStep next={guide.next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? carCommand : undefined} kind="lax"
