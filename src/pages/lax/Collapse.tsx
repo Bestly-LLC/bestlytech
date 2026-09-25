@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
+import { Lines } from "./Lines";
 
 const load = (k: string, d: boolean) => { try { const v = localStorage.getItem(k); return v == null ? d : v === "1"; } catch { return d; } };
 
@@ -32,7 +33,7 @@ export function Collapse({ id, kicker, title, summary, defaultOpen = true, child
         <span className="min-w-0">
           <span className="block text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: accent }}>{kicker}</span>
           {title && <span className="mt-1 block text-[20px] font-bold leading-snug text-white" style={titleStyle}>{title}</span>}
-          {!open && summary && <span className="mt-1 block text-[13px] text-white/60">{summary}</span>}
+          {!open && summary && <span className="mt-1 block text-[13px] text-white/60"><Lines>{summary}</Lines></span>}
         </span>
         <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[0.08]">
           <ChevronDown className={`h-4 w-4 text-white/70 transition-transform duration-300 ${open ? "rotate-180" : ""}`} aria-hidden />

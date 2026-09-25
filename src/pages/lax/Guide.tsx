@@ -16,6 +16,7 @@ import type { RangeCheckData } from "./LiveCharge";
 import { returnCharge } from "./ReturnCharge";
 import type { TripKind } from "./places";
 import { track } from "./track";
+import { Lines } from "./Lines";
 
 const ACCENT = "var(--trip-accent)";
 const H = 3600e3;
@@ -98,7 +99,7 @@ export function NextStep({ next, glow, onAction, onHasApp, run, kind, extra }: {
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full" style={{ background: ACCENT }}><Icon className="h-5 w-5 text-[#1A1140]" aria-hidden /></span>
         <div className="min-w-0 flex-1">
           <p className="text-[18px] font-bold leading-snug text-white">{next.title}</p>
-          {next.sub && <p className="mt-0.5 text-[14px] leading-snug text-white/75">{next.sub}</p>}
+          {next.sub && <p className="mt-0.5 text-[14px] leading-snug text-white/75"><Lines>{next.sub}</Lines></p>}
         </div>
       </div>
       {extra && <div className="mt-3 text-[14px] leading-relaxed text-white/80">{extra}</div>}

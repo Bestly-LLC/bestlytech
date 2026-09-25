@@ -35,6 +35,7 @@ import { ReturnChargeBlock, returnCharge, returnChargeLive } from "./ReturnCharg
 import { BestlyAd } from "./BestlyAd";
 import { PhoneHandoff } from "./PhoneHandoff";
 import { UnlockStart } from "./Valet";
+import { Lines } from "./Lines";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -237,7 +238,7 @@ function Bullets({ items }: { items: Row[] }) {
           <span className="grid h-[32px] w-[32px] shrink-0 place-items-center rounded-[9px] text-[17px] leading-none" style={{ background: r.tint }} aria-hidden>{r.e}</span>
           <span className="min-w-0 flex-1">
             <span className="block text-[16px] font-semibold leading-tight text-white">{r.title}</span>
-            {r.sub && <span className="mt-0.5 block text-[14px] leading-snug text-white/65">{r.sub}</span>}
+            {r.sub && <span className="mt-0.5 block text-[14px] leading-snug text-white/65"><Lines>{r.sub}</Lines></span>}
           </span>
         </li>
       ))}

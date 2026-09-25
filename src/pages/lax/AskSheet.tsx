@@ -10,6 +10,7 @@ import { useHasApp } from "./Guide";
 import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
 import { track } from "./track";
+import { Lines } from "./Lines";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 type Msg = { id: number | string; role: "user" | "assistant"; content: string; status?: string };
@@ -487,7 +488,7 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
               <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[15px] leading-relaxed ${m.role === "user"
                 ? "rounded-br-md text-[#1A1140]" : "rounded-bl-md bg-white/[0.08] text-white ring-1 ring-white/10"} ${m.status === "error" ? "ring-[#E4527A]/60" : ""}`}
                 style={m.role === "user" ? { background: PEACH } : undefined}>
-                {m.content || (m.status === "pending" || m.status === "working" ? <Dots /> : "")}
+                {m.content ? <Lines>{m.content}</Lines> : (m.status === "pending" || m.status === "working" ? <Dots /> : "")}
                 {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && m.content && <CallButtons text={m.content} onAsk={busy ? undefined : send} />}
                 {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && WASH_RE.test(m.content) && <CarWashButtons token={token} />}
                 {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && m.id === driverMsgId && <AddDriverChat token={token} />}

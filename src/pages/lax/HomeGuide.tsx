@@ -8,6 +8,7 @@ import { BeforeYouDrive } from "./BeforeYouDrive";
 import { track } from "./track";
 import { AlertTriangle, BatteryCharging, ChevronDown, Cpu, Download, ExternalLink, FileText, KeySquare, Phone, Play, PlayCircle, X } from "lucide-react";
 import { CHARGERS, chargerMaps, type TripKind } from "./places";
+import { Lines } from "./Lines";
 
 const ACCENT = "var(--trip-accent)";
 const yt = (id: string) => `https://www.youtube.com/watch?v=${id}`;
@@ -64,7 +65,7 @@ export function VideoList() {
               <img src={v.thumb} alt="" loading="lazy" className="h-full w-full object-cover" />
               <span className="absolute inset-0 grid place-items-center bg-black/25"><span className="grid h-8 w-8 place-items-center rounded-full" style={{ background: "var(--trip-accent)" }}><Play className="ml-0.5 h-4 w-4 fill-current text-[#132726]" /></span></span>
             </span>
-            <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold leading-snug text-white">{v.title}</span><span className="block text-[13px] leading-snug text-white/60">{v.sub}</span></span>
+            <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold leading-snug text-white">{v.title}</span><span className="block text-[13px] leading-snug text-white/60"><Lines>{v.sub}</Lines></span></span>
           </button>
         </li>
       ))}
@@ -94,7 +95,7 @@ export function Fold({ icon: Icon, title, sub, children, tone, open: start = fal
       <button type="button" onClick={() => setOpen((x) => !x)} aria-expanded={open}
         className="flex min-h-[60px] w-full items-center gap-3 py-3 text-left">
         <Icon className="h-6 w-6 shrink-0" style={{ color: tone === "alert" ? "#FF8FA8" : ACCENT }} strokeWidth={1.75} />
-        <span className="min-w-0 flex-1"><span className="block text-[16px] font-semibold text-white">{title}</span><span className="block text-[13px] leading-snug text-white/60">{sub}</span></span>
+        <span className="min-w-0 flex-1"><span className="block text-[16px] font-semibold text-white">{title}</span><span className="block text-[13px] leading-snug text-white/60"><Lines>{sub}</Lines></span></span>
         <ChevronDown className={`h-5 w-5 shrink-0 text-white/65 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && <div className="pb-4 text-[15px] leading-relaxed text-white/85">{children}</div>}
