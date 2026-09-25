@@ -45,6 +45,19 @@ export function useRealDemoKey(enabled: boolean, onChange: () => void) {
   }, [enabled]);
   return realKey;
 }
+/**
+ * Record the tap on the real demo key.
+ *
+ * Without this the server could not tell a link nobody touched from one that was tapped and did
+ * nothing — the page just kept asking "is a new driver there yet?" and a silent no looked exactly
+ * like a broken key. demo_key_watchdog judges the outcome against the tap: no new driver ten
+ * minutes later and it rotates the invite once and says what else stops a Tesla invite being
+ * accepted (an account that already holds a key to this car, or the owner's own account).
+ */
+export async function realDemoKeyTapped(): Promise<void> {
+  await rpc("demo_key_tap", { p_pass: demoPass() }).catch(() => ({ data: null }));
+}
+
 /** After the tap on a real demo key: true once Tesla shows a new driver. */
 export async function realDemoKeyAdded(): Promise<boolean> {
   const { data } = await rpc("demo_key_check", { p_pass: demoPass() }).catch(() => ({ data: null }));
