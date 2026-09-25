@@ -19,7 +19,12 @@ export interface ScoutAsk {
 }
 
 export function askScout(text: string, opts: Omit<ScoutAsk, "text"> = {}) {
-  window.dispatchEvent(new CustomEvent<ScoutAsk>(SCOUT_ASK_EVENT, { detail: { text, fresh: true, ...opts } }));
+  // Open Scout first so its event listener is mounted, then send the ask.
+  window.dispatchEvent(new Event(SCOUT_OPEN_EVENT));
+  // A 80ms gap is enough for the open animation to start and the listener to attach.
+  window.setTimeout(() => {
+    window.dispatchEvent(new CustomEvent<ScoutAsk>(SCOUT_ASK_EVENT, { detail: { text, fresh: true, ...opts } }));
+  }, 80);
 }
 
 export function openScout() {

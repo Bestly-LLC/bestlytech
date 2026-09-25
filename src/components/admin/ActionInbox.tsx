@@ -17,6 +17,8 @@ import {
   CheckCircle2,
   X,
   ExternalLink,
+  MoreHorizontal,
+  VolumeX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -131,6 +133,8 @@ function ItemPopup({ item, onClose, onDone, working }: {
   working: string | null;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [flagged, setFlagged] = useState(false);
   const Icon = item.icon;
   const pill = severityPill[item.severity];
 
@@ -179,14 +183,53 @@ function ItemPopup({ item, onClose, onDone, working }: {
             </div>
             {when && <p className={cn(text.meta, "mt-0.5")}>{when}</p>}
           </div>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className="-mr-1 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-white/50 transition hover:bg-white/[0.06] hover:text-white"
-          >
-            <X className="h-4 w-4" aria-hidden />
-          </button>
+          <div className="relative -mr-1 -mt-1 flex shrink-0 items-center gap-0.5">
+            {/* ... menu */}
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="More options"
+                onClick={() => setMenuOpen((v) => !v)}
+                className="grid h-8 w-8 place-items-center rounded-full text-white/50 transition hover:bg-white/[0.06] hover:text-white"
+              >
+                <MoreHorizontal className="h-4 w-4" aria-hidden />
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-[60]" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-full z-[61] mt-1 w-48 rounded-xl border border-white/[0.10] bg-[#2c2c2e] py-1 shadow-2xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFlagged(true);
+                        setMenuOpen(false);
+                        // Tell Scout to learn this is low-urgency
+                        const { askScout } = require('./scoutBus');
+                        import('./scoutBus').then(({ askScout: ask }) => {
+                          ask(
+                            `Flag "${item.title}" as not urgent so you don't surface it as a priority. Note it as low-urgency and self-heal if you can.`,
+                            { about: [item.title, item.detail, item.why].filter(Boolean).join(' | ') }
+                          );
+                        });
+                      }}
+                      className="flex w-full items-center gap-2.5 px-3.5 py-2 text-[13px] text-white/70 transition hover:bg-white/[0.06] hover:text-white"
+                    >
+                      <VolumeX className="h-4 w-4 shrink-0" aria-hidden />
+                      {flagged ? 'Flagged as not urgent' : 'Not urgent'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="grid h-8 w-8 place-items-center rounded-full text-white/50 transition hover:bg-white/[0.06] hover:text-white"
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
