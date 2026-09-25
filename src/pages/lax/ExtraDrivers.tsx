@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
 
 const ACCENT = "var(--trip-accent)";
-type Drv = { id: number; name: string; state: "waiting" | "making" | "ready" | "added" | "ended" | "problem"; link?: string | null; expires_at?: string | null; approved_by?: string };
+type Drv = { id: number; name: string; state: "waiting" | "making" | "ready" | "added" | "ended" | "problem"; link?: string | null; expires_at?: string | null; approved_by?: string; suggest?: string | null; page?: string | null };
 type Data = { drivers: Drv[]; turo_approved: string[] };
 
 const rpc = <T,>(fn: string, args: Record<string, unknown>) =>
@@ -74,7 +74,18 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
     const { data } = await rpc<Data>("lax_guest_driver_cancel", { p_token: token, p_id: id }); if (data) setData(data);
   };
   const demoStep = (id: number, state: Drv["state"], link?: string) => setData((d) => d && { ...d, drivers: d.drivers.map((x) => x.id === id ? { ...x, state, link: link ?? x.link } : x) });
-  const shareText = (d: Drv) => `Hi ${d.name}! Here's your own Tesla key for our trip. Open it on your phone and tap Accept, signed in to your Tesla app: ${d.link}`;
+  // Short link to their own key page (key + how-to + key help), falling back to Tesla's link.
+  const shareText = (d: Drv) => d.page
+    ? `Hi ${d.name}! Here's your own Tesla key for our trip: ${d.page.replace(/^https:\/\//, "")} Open it and tap Add the car to my Tesla app.`
+    : `Hi ${d.name}! Here's your own Tesla key for our trip. Open it on your phone and tap Accept, signed in to your Tesla app: ${d.link}`;
+  const confirmMatch = async (d: Drv) => {
+    if (demo) { demoStep(d.id, "making"); window.setTimeout(() => demoStep(d.id, "ready", "https://www.tesla.com/_rs/1/DEMO-KEY"), 1500); return; }
+    const { data } = await rpc<{ ok?: boolean; error?: string }>("lax_agent_driver", { p_token: token, p_action: "confirm_match", p_name: d.name, p_value: null });
+    if (!data?.ok) { setErr(data?.error ?? "Couldn't confirm. Try again."); return; }
+    track(token, "driver_confirm_match", { id: d.id, via: "card" });
+    void load();
+  };
+  const dismissMatch = (id: number) => setData((x) => x && { ...x, drivers: x.drivers.map((y) => (y.id === id ? { ...y, suggest: null } : y)) });
   const share = async (d: Drv) => {
     if (!d.link) return;
     const text = shareText(d);
@@ -105,7 +116,8 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
                 {d.state === "waiting" && <button type="button" onClick={() => void cancel(d.id)} aria-label={`Remove ${d.name}`} className="grid h-9 w-9 place-items-center rounded-full text-white/50 hover:text-white"><X className="h-4 w-4" /></button>}
               </div>
               <p className="mt-1 text-[13px] leading-relaxed text-white/70" aria-live="polite">
-                {d.state === "waiting" && <>Waiting for Turo to confirm {d.name} is approved. Their key shows up here automatically, so no need to message.</>}
+                {d.state === "waiting" && !d.suggest && <>Waiting for Turo to confirm {d.name} is approved. Their key shows up here automatically, so no need to message.</>}
+                {d.state === "waiting" && d.suggest && <>Turo approved a driver named <b className="text-white">{d.suggest}</b>. Is that {d.name}?</>}
                 {d.state === "making" && <>Turo approved {d.name}. Making their key now…</>}
                 {d.state === "ready" && <>Send this to {d.name}. It's their own one-time key: they tap it and the car is added to <i>their</i> Tesla app.</>}
                 {d.state === "added" && <>{d.name}'s phone is set up as a key.</>}
@@ -121,6 +133,14 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
                   <button type="button" onClick={() => void share(d)} aria-label={`More ways to send ${d.name} the key`} className="flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-white/[0.09] px-4 text-[14px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.99]">
                     {copied === d.id ? <><Copy className="h-4 w-4" />Copied</> : <><Share2 className="h-4 w-4" />Share</>}
                   </button>
+                </div>
+              )}
+              {d.state === "waiting" && d.suggest && (
+                <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                  <button type="button" onClick={() => void confirmMatch(d)} className="flex h-11 items-center justify-center gap-2 rounded-2xl text-[15px] font-bold text-[#132726] active:scale-[0.99]" style={{ background: ACCENT }}>
+                    <CheckCircle2 className="h-4 w-4" />Yes, that's them
+                  </button>
+                  <button type="button" onClick={() => dismissMatch(d.id)} className="h-11 rounded-2xl bg-white/[0.09] px-4 text-[14px] font-semibold text-white ring-1 ring-white/15">No</button>
                 </div>
               )}
               {demo && d.state === "waiting" && (

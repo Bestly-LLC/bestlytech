@@ -8,6 +8,9 @@
 // resend the key, make it now, refresh the car, or wake the host. Every action is scoped to the token's trip,
 // rate-limited and logged in SQL (lax_agent_act), and fixes are reported to Scout.
 //
+// v9: extra-driver tools (status, check, resend, rename, confirm Turo name match, remove) for the guest, and a
+// key-only helper on each extra driver's own page (bestly.tech/d/<token>; same tools, scoped to that driver).
+//
 // Ladder (all free):
 //   1. Gemini free tier (tools on personal links).
 //   2. Groq free (gpt-oss, OpenAI-style tools) when Gemini is out of quota or down.
@@ -42,6 +45,13 @@ YOU ARE ALSO THE TRIP'S NIGHT-SHIFT FIXER. You have tools that look at the real 
 - After a tool that starts a job, call job_status once to confirm before telling the guest it worked.
 - If you can't fix it after one attempt, or anything involves safety, damage, money, the reservation, or someone driving who isn't approved in Turo: call notify_host with a one-line summary, and tell the guest the host has been alerted and what to do meanwhile.
 - Never invent status. Only say what diagnose/job_status returned. Don't mention tools, jobs, IDs or systems by name: speak plainly ("I just sent you a fresh key, it's on your page now").
+- EXTRA DRIVERS (someone else driving): use the EXTRA DRIVERS status in your instructions first, then the driver_* tools:
+  * waiting on Turo and the Turo approval shows a similar name -> ask "Turo shows <name>, is that them?"; on yes call driver_confirm_match.
+  * the guest typed their name wrong -> driver_rename with the name exactly as it shows in Turo.
+  * link expired, already used, or they accepted on the wrong Tesla account -> driver_resend (tell them to text the new link; it also shows on the driver's own page).
+  * they say they accepted but it isn't working -> driver_check, then job_status.
+  * add the wrong person / no longer driving -> driver_remove (confirm with the guest first).
+  * still stuck after one fix -> driver_notify_host.
 - ANTICIPATE: use the trip phase and time to add ONE useful next step at the end (e.g. 40 minutes before pickup: "Cool it down now so it's comfy when you get there"; key ready but not added: "Tap Add the car to my Tesla app"; 2 hours before return: charging + photos reminder). Keep it to one line.`;
 
 const DECL = [
@@ -51,6 +61,13 @@ const DECL = [
   { name: "make_key_now", description: "Create the key now if it hasn't been made or failed (only within 3 hours of pickup).", parameters: { type: "OBJECT", properties: { reason: { type: "STRING" } }, required: ["reason"] } },
   { name: "refresh_car", description: "Ask the car for a fresh reading (battery, temperature, online).", parameters: { type: "OBJECT", properties: {} } },
   { name: "job_status", description: "Result of a job started by check_key, resend_key, make_key_now or refresh_car. Waits up to ~12 seconds.", parameters: { type: "OBJECT", properties: { job: { type: "NUMBER" } }, required: ["job"] } },
+  { name: "driver_status", description: "Live status of the trip's extra drivers (or, on a driver's own page, just that driver): key state, whether Turo approved them, a suggested Turo name match, link expiry.", parameters: { type: "OBJECT", properties: {} } },
+  { name: "driver_check", description: "Ask Tesla whether an extra driver's key was accepted (is their phone on the car).", parameters: { type: "OBJECT", properties: { name: { type: "STRING", description: "driver's name (omit on a driver page)" } } } },
+  { name: "driver_resend", description: "Cancel an extra driver's key link and make a fresh one (expired, already used, or accepted on the wrong Tesla account). Max twice per 6 hours per driver.", parameters: { type: "OBJECT", properties: { name: { type: "STRING" } } } },
+  { name: "driver_rename", description: "Guest only: fix an extra driver's name so it matches the name in the Turo app (before their key is made).", parameters: { type: "OBJECT", properties: { name: { type: "STRING", description: "name as typed before" }, new_name: { type: "STRING", description: "name exactly as it shows in Turo" } }, required: ["new_name"] } },
+  { name: "driver_confirm_match", description: "Guest only: the guest confirmed the Turo-approved name (the suggestion) is the same person. Approves them and makes their key.", parameters: { type: "OBJECT", properties: { name: { type: "STRING" } } } },
+  { name: "driver_remove", description: "Guest only: take an extra driver off the trip; their key stops working. Confirm with the guest first.", parameters: { type: "OBJECT", properties: { name: { type: "STRING" } }, required: ["name"] } },
+  { name: "driver_notify_host", description: "Alert the host about an extra driver key problem you couldn't fix.", parameters: { type: "OBJECT", properties: { name: { type: "STRING" }, summary: { type: "STRING" } }, required: ["summary"] } },
   { name: "notify_host", description: "Alert the host (Jared) on his phone right now. Use when you can't fix it or it needs a person.", parameters: { type: "OBJECT", properties: { summary: { type: "STRING", description: "one or two lines: what's wrong, what you tried" } }, required: ["summary"] } },
 ];
 const GEMINI_TOOLS = [{ functionDeclarations: DECL }];
@@ -68,6 +85,11 @@ async function runTool(token: string, name: string, args: Record<string, unknown
     case "make_key_now": return await act("make_key_now", args.reason);
     case "refresh_car": return await act("refresh_car");
     case "notify_host": return await act("notify_host", args.summary);
+    case "driver_status": case "driver_check": case "driver_resend": case "driver_rename": case "driver_confirm_match": case "driver_remove": case "driver_notify_host": {
+      const a = name.replace(/^driver_/, "");
+      return (await sb.rpc("lax_agent_driver", { p_token: token, p_action: a, p_name: args.name ? String(args.name).slice(0, 60) : null,
+        p_value: args.new_name ? String(args.new_name).slice(0, 60) : args.summary ? String(args.summary).slice(0, 300) : null })).data;
+    }
     case "job_status": {
       const id = Number(args.job);
       let last: unknown = null;
@@ -248,7 +270,7 @@ Deno.serve(async (req) => {
         const src = res.via + (res.actions.length ? "-agent" : "");
         await sb.rpc("lax_ask_finish", { p_reply_id: rid, p_content: res.text, p_source: src, p_done: true });
         if (res.via === "groq") await sb.rpc("lax_ask_agent_result", { p_via: "groq", p_ok: true }).then(() => {}, () => {});
-        return json({ ok: true, reply_id: rid, status: "done", content: res.text, left: start.left, fixed: res.actions.some((a) => a === "resend_key" || a === "make_key_now") });
+        return json({ ok: true, reply_id: rid, status: "done", content: res.text, left: start.left, fixed: res.actions.some((a) => ["resend_key", "make_key_now", "driver_resend", "driver_confirm_match", "driver_rename", "driver_remove"].includes(a)) });
       }
       await sb.from("lax_ask_msgs").update({ status: "pending", created_at: new Date().toISOString() }).eq("id", rid).eq("status", "working");
     }

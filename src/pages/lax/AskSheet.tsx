@@ -4,8 +4,9 @@
  * Opens in the same luggage bottom sheet as Pickup / Return.
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Loader2, MapPin, MessageCircleQuestion, MessageSquare, Navigation, Phone, UserPlus } from "lucide-react";
+import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Loader2, MapPin, MessageCircleQuestion, MessageSquare, Navigation, Phone, UserPlus, Wrench } from "lucide-react";
 import { ackText } from "./ExtraDrivers";
+import { useHasApp } from "./Guide";
 import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
 import { track } from "./track";
@@ -17,7 +18,7 @@ const rpc = (fn: string, args?: Record<string, unknown>) =>
 
 // Pinned on every chip list (the server adds it too): early pickup/return is always a Turo-app change.
 const EARLY_Q = "Can I pick up or return the car early?";
-const EARLY_A = "Yes! Just change your trip times in the Turo app (Manage trip → Change trip). Your host can't change them for you, and this chat can't either.";
+const EARLY_A = "Yes! Just change your trip times in the Turo app (Trips → your trip → Manage trip → Change trip → Dates and location). Your host can't change them for you, and this chat can't either.";
 
 // Pinned first on every chip list, airport and home, and it stays there until the guest has
 // actually asked about it. Jared's call: a second driver who is not on the trip is the one thing a
@@ -161,6 +162,7 @@ function links(text: string) {
 
 /** Every action the answer suggests: phone numbers, apps, places, documents, links. */
 function CallButtons({ text, onAsk }: { text: string; onAsk?: (q: string) => void }) {
+  const [hasApp, markHasApp] = useHasApp();
   const list = phones(text);
   const acts = links(text);
   if (!list.length && !acts.length) return null;
@@ -180,12 +182,28 @@ function CallButtons({ text, onAsk }: { text: string; onAsk?: (q: string) => voi
           <Icon className="h-4 w-4" aria-hidden /> {label}
         </a>
       ))}
-      {onAsk && acts.some((a) => a.key === "tesla") && (
-        <button type="button" onClick={() => onAsk("I already have the Tesla app. What's next?")}
+      {onAsk && !hasApp && acts.some((a) => a.key === "tesla") && (
+        <button type="button" onClick={() => { markHasApp(); onAsk("I already have the Tesla app. What's next?"); }}
           className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white/10 px-4 text-[15px] font-semibold text-white ring-1 ring-white/20 active:scale-95">
           I already have it
         </button>
       )}
+    </div>
+  );
+}
+
+/** After any answer about a key problem: one tap asks the helper to actually check and fix it. */
+const KEY_RE = /phone key|key (stops?|isn.?t|not|won.?t|doesn.?t)|digital key|tesla key|not in (my|the) (tesla )?app|(link|invite) (expired|doesn.?t|isn.?t|won.?t)|can.?t unlock|won.?t unlock|set ?up phone key/i;
+const XDRIVER_RE = /(extra|additional|second|other) driver|driver.?s key|their key|my (friend|wife|husband|partner).{0,20}key/i;
+function KeyHelpButtons({ q, a, driver, onAsk }: { q: string; a: string; driver?: boolean; onAsk: (q: string) => void }) {
+  const key = KEY_RE.test(q) || KEY_RE.test(a);
+  const x = !driver && (XDRIVER_RE.test(q) || XDRIVER_RE.test(a));
+  if (!key && !x) return null;
+  const pill = "inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white/10 px-4 text-[15px] font-semibold text-white ring-1 ring-white/20 active:scale-95";
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {key && !x && <button type="button" className={pill} onClick={() => onAsk(driver ? "My key isn't working. Can you check it and fix it?" : "My phone key isn't working. Can you check it and fix it?")}><Wrench className="h-4 w-4" style={{ color: PEACH }} aria-hidden />Check my key for me</button>}
+      {x && <button type="button" className={pill} onClick={() => onAsk("My extra driver's key isn't working. Can you check it and fix it?")}><Wrench className="h-4 w-4" style={{ color: PEACH }} aria-hidden />Check my driver's key</button>}
     </div>
   );
 }
@@ -237,7 +255,8 @@ function AddDriverChat({ token }: { token?: string }) {
   const demo = !token || token.startsWith("demo-");
   const [step, setStep] = useState<"turo" | "how" | "terms" | "name" | "done">("turo");
   const [name, setName] = useState(demo ? "Test" : ""); // demo: acts as if "Test" is on the Turo trip
-  const [key, setKey] = useState<{ state: string; link?: string | null } | null>(null);
+  const [key, setKey] = useState<{ state: string; link?: string | null; page?: string | null; suggest?: string | null } | null>(null);
+  const [tick, setTick] = useState(0);
   // After adding: watch for Turo's confirmation, then hand over their key right here in the chat.
   useEffect(() => {
     if (step !== "done") return;
@@ -251,15 +270,26 @@ function AddDriverChat({ token }: { token?: string }) {
     const check = async () => {
       if (stop || document.visibilityState !== "visible") return;
       const { data } = await rpc("lax_guest_drivers", { p_token: token });
-      const ds = ((data as { drivers?: { id: number; name: string; state: string; link?: string | null }[] } | null)?.drivers ?? []).filter((d) => d.name.trim().toLowerCase() === n);
+      const all = (data as { drivers?: { id: number; name: string; state: string; link?: string | null; page?: string | null; suggest?: string | null }[] } | null)?.drivers ?? [];
+      const ds = all.filter((d) => d.name.trim().toLowerCase() === n || d.name.trim().toLowerCase().startsWith(n.split(" ")[0]));
       const d = ds.sort((x, y) => y.id - x.id)[0];
-      if (d && !stop) setKey({ state: d.state, link: d.link });
+      if (d && !stop) { setKey({ state: d.state, link: d.link, page: d.page, suggest: d.suggest }); if (d.name.trim().toLowerCase() !== n) setName(d.name); }
     };
     void check();
     const id = window.setInterval(check, 20000);
     return () => { stop = true; window.clearInterval(id); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
+  }, [step, tick]);
+  const confirm = async (yes: boolean) => {
+    if (!yes) { setKey((k) => k && { ...k, suggest: null }); return; }
+    setBusy(true);
+    const { data } = await rpc("lax_agent_driver", { p_token: token, p_action: "confirm_match", p_name: name.trim(), p_value: null });
+    setBusy(false);
+    const r = data as { ok?: boolean; error?: string } | null;
+    if (!r?.ok) { setErr(r?.error ?? "Couldn't confirm. Try again."); return; }
+    track(token, "driver_confirm_match", { via: "helper" });
+    setTick((t) => t + 1);
+  };
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const bubble = "mt-2 rounded-2xl rounded-bl-md bg-white/[0.08] px-3.5 py-2.5 text-[15px] leading-relaxed text-white ring-1 ring-white/10";
@@ -306,10 +336,18 @@ function AddDriverChat({ token }: { token?: string }) {
       </>)}
       {step === "done" && (<>
         <p className={bubble}><CheckCircle2 className="mr-1 inline h-4 w-4 text-emerald-300" aria-hidden /><b>{name.trim()} is added.</b> Come back here once Turo confirms them. We'll have their own key ready for you to text them, right here.</p>
+        {key?.state === "waiting" && key.suggest && (<>
+          <p className={bubble}>Turo approved a driver named <b>{key.suggest}</b>. Is that {name.trim()}?</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" disabled={busy} className={`${pill} text-[#1A1140]`} style={{ background: PEACH }} onClick={() => void confirm(true)}>{busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}Yes, that's them</button>
+            <button type="button" className={`${pill} bg-white/10 text-white ring-1 ring-white/20`} onClick={() => void confirm(false)}>No</button>
+          </div>
+          {err && <p role="alert" className="mt-1 text-[13px] text-red-300">{err}</p>}
+        </>)}
         {key?.state === "making" && <p className={bubble}><Loader2 className="mr-1 inline h-4 w-4 animate-spin" aria-hidden />Turo confirmed {name.trim()}. Making their key now…</p>}
         {key?.state === "ready" && key.link && (<>
           <p className={bubble}><b>{name.trim()}&apos;s key is ready.</b> Text it to them. They tap it and the car is added to <i>their</i> Tesla app.</p>
-          <a href={`sms:?&body=${encodeURIComponent(`Hi ${name.trim()}! Here's your own Tesla key for our trip. Open it on your phone and tap Accept, signed in to your Tesla app: ${key.link}`)}`}
+          <a href={`sms:?&body=${encodeURIComponent(key.page ? `Hi ${name.trim()}! Here's your own Tesla key for our trip: ${key.page.replace(/^https:\/\//, "")} Open it and tap Add the car to my Tesla app.` : `Hi ${name.trim()}! Here's your own Tesla key for our trip. Open it on your phone and tap Accept, signed in to your Tesla app: ${key.link}`)}`}
             onClick={() => track(token, "driver_share", { via: "helper_sms" })}
             className={`${pill} mt-2 text-[#1A1140]`} style={{ background: PEACH }}><MessageSquare className="h-4 w-4" aria-hidden />Text {name.trim()} their key</a>
         </>)}
@@ -329,13 +367,14 @@ function Dots() {
   );
 }
 
-export function AskSheet({ open, onClose, token, slug, home = false }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean }) {
+const DRIVER_CHIPS = ["My key link doesn't work", "I accepted, but the car isn't in my Tesla app", "How do I unlock the car?", "Where is the car?"];
+export function AskSheet({ open, onClose, token, slug, home = false, driver = false }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean; driver?: boolean }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState<number | null>(null);
   const [urgent, setUrgent] = useState(false);
-  const [chips, setChips] = useState<string[]>(home ? SUGGEST_HOME : SUGGEST);
+  const [chips, setChips] = useState<string[]>(driver ? DRIVER_CHIPS : home ? SUGGEST_HOME : SUGGEST);
   const loaded = useRef(false);
   const body = useRef<HTMLDivElement>(null);
   // Host demo pages talk to the real helper with an example trip (server link d:demo-home / d:demo-lax, no tools).
@@ -343,7 +382,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
   const who = demoLink ? { p_token: null, p_slug: demoLink } : { p_token: token || null, p_slug: token ? null : slug || null };
   // Everything the guest has typed so far, so a chip is never offered for something they covered.
   const askedRef = useRef("");
-  const refreshChips = () =>
+  const refreshChips = () => driver ? setChips(DRIVER_CHIPS.filter((c) => !askedRef.current.includes(c)).slice(0, 3)) :
     rpc("lax_ask_suggest", who)
       .then(({ data }) => setChips(nextChips(Array.isArray(data) ? (data as string[]) : [], askedRef.current, home)))
       .catch(() => setChips(nextChips([], askedRef.current, home)));
@@ -412,7 +451,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
 
   // The add-a-driver flow shows once, under the answer to the first "someone else drive?" question.
   const driverMsgId = (() => {
-    if (!token) return null;
+    if (!token || driver) return null;
     for (let i = 1; i < msgs.length; i++) if (msgs[i].role === "assistant" && msgs[i - 1].role === "user" && (msgs[i - 1].content === DRIVER_Q || DRIVER_RE.test(msgs[i - 1].content))) return msgs[i].id;
     return null;
   })();
@@ -426,13 +465,13 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
       )}
       {msgs.length === 0 ? (
         <div>
-          <p className="text-[15px] leading-relaxed text-white/75">{home ? "Ask anything about your phone key, finding the car, driving it, or returning it." : "Ask anything about getting to the garage, the lobby door, the car, or returning it."} Answers come from your trip guide.</p>
+          <p className="text-[15px] leading-relaxed text-white/75">{driver ? "Ask anything about your phone key or getting into the car. I can check your key and send a fresh one if it's not working." : home ? "Ask anything about your phone key, finding the car, driving it, or returning it." : "Ask anything about getting to the garage, the lobby door, the car, or returning it."} Answers come from your trip guide.</p>
           <Chips list={chips} onPick={send} />
         </div>
       ) : (
         <>
         <ul className="space-y-3" aria-live="polite">
-          {msgs.map((m) => (
+          {msgs.map((m, i) => (
             <li key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
               <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[15px] leading-relaxed ${m.role === "user"
                 ? "rounded-br-md text-[#1A1140]" : "rounded-bl-md bg-white/[0.08] text-white ring-1 ring-white/10"} ${m.status === "error" ? "ring-[#E4527A]/60" : ""}`}
@@ -441,6 +480,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
                 {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && m.content && <CallButtons text={m.content} onAsk={busy ? undefined : send} />}
                 {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && WASH_RE.test(m.content) && <CarWashButtons token={token} />}
                 {m.role === "assistant" && m.status !== "pending" && m.status !== "working" && m.id === driverMsgId && <AddDriverChat token={token} />}
+                {m.role === "assistant" && m.status === "done" && m.content && !busy && i === msgs.length - 1 && i > 0 && m.id !== driverMsgId && <KeyHelpButtons q={msgs[i - 1].content} a={m.content} driver={driver} onAsk={send} />}
               </div>
             </li>
           ))}

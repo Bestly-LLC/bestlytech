@@ -55,6 +55,8 @@ const ConfeshPrivacy = lazyPage(() => import("./pages/ConfeshPrivacy"));
 const ConfeshSupport = lazyPage(() => import("./pages/ConfeshSupport"));
 const Links = lazyPage(() => import("./pages/Links"));
 const LaxGuest = lazyPage(() => import("./pages/LaxGuest"));
+const DriverKey = lazyPage(() => import("./pages/DriverKey"));
+const ApproveDriver = lazyPage(() => import("./pages/ApproveDriver"));
 const EmailUnsubscribe = lazyPage(() => import("./pages/EmailUnsubscribe"));
 const Status = lazyPage(() => import("./pages/Status"));
 const VoiceToClaude = lazyPage(() => import("./pages/VoiceToClaude"));
@@ -180,6 +182,8 @@ const App = () => {
                 <Route path="/lax" element={<LaxGuest />} />
                 <Route path="/lax/t/:token" element={<LaxGuest />} />
                 <Route path="/t/:token" element={<LaxGuest />} />
+                <Route path="/d/:token" element={<DriverKey />} />
+                <Route path="/xa/:token" element={<ApproveDriver />} />
                 <Route path="/lax/:slug" element={<LaxGuest />} />
                 <Route path="/unsubscribe" element={<EmailUnsubscribe />} />
                 <Route path="/status" element={<Status />} />

@@ -26,6 +26,14 @@
       "destination": "/trip.html"
     },
     {
+      "source": "/d/(.*)",
+      "destination": "/trip.html"
+    },
+    {
+      "source": "/xa/(.*)",
+      "destination": "/trip.html"
+    },
+    {
       "source": "/lax",
       "destination": "/lax.html"
     },
