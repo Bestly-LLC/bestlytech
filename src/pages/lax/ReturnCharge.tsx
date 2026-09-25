@@ -96,7 +96,7 @@ export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, obse
         {observedAt && <p className="mt-2 text-center text-[11px] text-white/45">Updated {new Date(observedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</p>}
       </div>
       {!compact && <RangeCheck rc={rc} kind={kind} className="mt-3" warnOnly />}
-      {r.needs && (compact ? <SendToCar center run={run} kind={kind} label="Send a Supercharger to the car" /> : <><span className="mt-3 block text-center text-[13px] text-white/65">Picks the Supercharger closest to where the car is now.</span><SendToCar center run={run} kind={kind} label="Send a Supercharger to the car" /></>)}
+      {r.needs && (compact ? <SendToCar center run={run} kind={kind} label="Send nearest Supercharger to car" /> : <><span className="mt-3 block text-center text-[13px] text-white/65">Picks the Supercharger closest to where the car is now.</span><SendToCar center run={run} kind={kind} label="Send nearest Supercharger to car" /></>)}
     </div>
   );
 }

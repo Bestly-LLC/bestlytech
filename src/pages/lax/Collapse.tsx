@@ -32,7 +32,7 @@ export function Collapse({ id, kicker, title, summary, defaultOpen = true, child
         className="flex w-full items-start justify-between gap-3 rounded-3xl p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
         <span className="min-w-0">
           <span className="block text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: accent }}>{kicker}</span>
-          {title && <span className="mt-1 block text-[20px] font-bold leading-snug text-white" style={titleStyle}>{title}</span>}
+          {title && <span className="mt-1 block text-[20px] font-bold leading-snug text-white" style={titleStyle}><Lines>{title}</Lines></span>}
           {!open && summary && <span className="mt-1 block text-[13px] text-white/60"><Lines>{summary}</Lines></span>}
         </span>
         <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[0.08]">

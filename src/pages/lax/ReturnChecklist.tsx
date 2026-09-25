@@ -126,7 +126,7 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
               <p className={`text-[16px] font-semibold ${i.ok ? "text-white/70" : "text-white"}`}>{i.label}</p>
               <p className="text-[13px] text-white/60">{i.detail}</p>
               {!i.ok && i.id === "parked" && <SendToCar run={run} kind={kind} action={kind === "home" ? "nav_home" : "nav_garage_lax"} label="Send the return spot to the car" />}
-              {!i.ok && i.id === "charge" && <SendToCar center run={run} kind={kind} label="Send a Supercharger to the car" />}
+              {!i.ok && i.id === "charge" && <SendToCar center run={run} kind={kind} label="Send nearest Supercharger to car" />}
               {!i.ok && i.id === "locked" && (
                 <button type="button" onClick={() => void act("lock", "lock", "locked")} disabled={!run || !!busy}
                   className="mt-2 inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[14px] font-bold text-[#1A1140] disabled:opacity-50" style={{ background: ACCENT }}>

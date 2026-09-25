@@ -25,6 +25,7 @@ import { KeySteps, NextStep, ProfileTip, guideFor, useHasApp } from "./lax/Guide
 import { Carousel, TripSlides } from "./lax/Carousel";
 import { ReturnChecklist } from "./lax/ReturnChecklist";
 import { FindCarButton } from "./lax/FindCar";
+import { Lines } from "./lax/Lines";
 import { InstallToast } from "./lax/InstallToast";
 import { Fold } from "./lax/HomeGuide";
 import ExtraDrivers from "./lax/ExtraDrivers";
@@ -116,7 +117,7 @@ function Warn({ children }: { children: ReactNode }) {
   return (
     <div className="mt-3 flex gap-3 rounded-xl bg-[#E4527A]/15 p-3 text-[14px] leading-snug text-white/90 ring-1 ring-[#E4527A]/40">
       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#E4527A] text-xs font-bold text-white">!</span>
-      <div>{children}</div>
+      <div><Lines>{children}</Lines></div>
     </div>
   );
 }
@@ -125,7 +126,7 @@ function Ok({ children }: { children: ReactNode }) {
   return (
     <div className="mt-4 flex gap-3 rounded-xl bg-emerald-400/10 p-3 text-[14px] leading-snug text-white/90 ring-1 ring-emerald-300/40">
       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400 text-[#1A1140]"><Check className="h-3.5 w-3.5" strokeWidth={3} /></span>
-      <div>{children}</div>
+      <div><Lines>{children}</Lines></div>
     </div>
   );
 }
@@ -140,7 +141,7 @@ function Chips({ items }: { items: string[] }) {
   );
 }
 
-function Step({ n, when, title, children }: { n: number; when: string; title: string; children: ReactNode }) {
+function Step({ n, when, title, children }: { n: number; when: string; title: ReactNode; children: ReactNode }) {
   // One swipeable card per step (Pickup / Return carousels).
   return (
     <div className="flex h-full flex-col rounded-3xl bg-white/[0.07] p-5 ring-1 ring-white/10">
@@ -148,8 +149,8 @@ function Step({ n, when, title, children }: { n: number; when: string; title: st
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[18px] font-bold text-[#1A1140]" style={{ background: PEACH }}>{n}</span>
         <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/60">{when}</p>
       </div>
-      <h3 className="mt-3 text-[21px] font-bold leading-snug text-white">{title}</h3>
-      <div className="mt-2 text-[16px] leading-relaxed text-white/80">{children}</div>
+      <h3 className="mt-3 text-[21px] font-bold leading-snug text-white"><Lines>{title}</Lines></h3>
+      <div className="mt-2 text-[16px] leading-relaxed text-white/80"><Lines>{children}</Lines></div>
     </div>
   );
 }
@@ -644,8 +645,9 @@ export default function LaxGuest() {
                   From {level}, take the elevator down, exit onto 98th St, and follow the Park My Share signs.
                   <Chips items={[level, "Elevator", "98th St exit", "Shuttle stop"]} />
                 </Step>
-                <Step n={4} when="Shuttle pickup" title={`Catch the shuttle at ${stop}.`}>
-                  Signs point you right to it. Board <b className="text-white">The Parking Spot · {shuttleShort}</b> back to LAX.
+                <Step n={4} when="Shuttle pickup" title={<>Catch the shuttle at<span className="block">{stop}</span></>}>
+                  Signs point you right to it. Board this shuttle back to LAX:
+                  <b className="block text-white">The Parking Spot · {shuttleShort}</b>
                   <Ok>Allow <b className="text-white">at least 1 hour</b> before your terminal arrival for return + shuttle + TSA buffer.</Ok>
                 </Step>
               </Carousel>

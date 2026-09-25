@@ -12,6 +12,8 @@ function sentences(text: string): string[] {
 }
 
 export function Lines({ children }: { children: ReactNode }) {
+  // Mixed text + elements (e.g. "Park on <b>P3</b>. Designated area only."): split each text piece.
+  if (Array.isArray(children)) return <>{children.map((c, i) => <Fragment key={i}>{typeof c === "string" ? <Lines>{c}</Lines> : c}</Fragment>)}</>;
   if (typeof children !== "string") return <>{children}</>;
   const paras = children.split("\n");
   return (

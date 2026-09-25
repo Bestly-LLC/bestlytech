@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PlaneLanding, PlaneTakeoff, X, KeyRound } from "lucide-react";
+import { Lines } from "./Lines";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 
@@ -151,7 +152,7 @@ export function TripSheet({ open, onClose, children, title, label, kicker, foote
           <div className="mt-1 flex items-start gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: PEACH }}>{kicker}</p>
-              <h2 className="mt-0.5 text-[22px] font-bold leading-tight tracking-tight text-white">{title}</h2>
+              <h2 className="mt-0.5 text-[22px] font-bold leading-tight tracking-tight text-white"><Lines>{title}</Lines></h2>
             </div>
             <button type="button" onClick={onClose} onPointerDown={(e) => e.stopPropagation()} aria-label="Close"
               className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-white ring-1 ring-white/15 active:scale-95">

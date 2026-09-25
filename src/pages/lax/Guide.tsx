@@ -56,7 +56,7 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
       // Short on charge: the card shows the charge arc (headline + gauge) instead of a charge sentence.
       return { next: { icon: Undo2, title: now >= e ? "Return time: park and lock it" : "Time to head back", sub: `${now >= e ? "It was due" : "Return by"} ${fmtWhen(trip.ends_at)}.${r.needs ? "" : chargeLine}`, action: "return", label: "Return steps", chargeCard: r.needs }, glow };
     }
-    if (r.needs) return { next: { icon: Zap, title: `Return by ${fmtWhen(trip.ends_at)}`, sub: `Bring it back at ${pickupBattery}%, same as pickup. Add about ${r.add}% before you return.`, action: "send", label: "Send charger to car", charging: true }, glow };
+    if (r.needs) return { next: { icon: Zap, title: `Return by ${fmtWhen(trip.ends_at)}`, sub: `Bring it back at ${pickupBattery}%, same as pickup. Add about ${r.add}% before you return.`, action: "send", label: "Send nearest Supercharger to car", charging: true }, glow };
     return { next: { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, sub: `Bring it back at the same charge as pickup${pickupBattery != null ? ` (${pickupBattery}%)` : ""}.${r.known ? " You're good on charge right now." : ""}`, charging: true }, glow };
   }
   // Key: not ready yet
@@ -98,7 +98,7 @@ export function NextStep({ next, glow, onAction, onHasApp, run, kind, extra }: {
       <div className="mt-1.5 flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full" style={{ background: ACCENT }}><Icon className="h-5 w-5 text-[#1A1140]" aria-hidden /></span>
         <div className="min-w-0 flex-1">
-          <p className="text-[18px] font-bold leading-snug text-white">{next.title}</p>
+          <p className="text-[18px] font-bold leading-snug text-white"><Lines>{next.title}</Lines></p>
           {next.sub && <p className="mt-0.5 text-[14px] leading-snug text-white/75"><Lines>{next.sub}</Lines></p>}
         </div>
       </div>
@@ -136,7 +136,7 @@ function Row({ n, done, title, children }: { n: number; done?: boolean; title: R
       {done ? <CheckCircle2 className="mt-0.5 h-7 w-7 shrink-0 text-emerald-300" />
         : <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-[14px] font-bold text-[#1A1140]" style={{ background: ACCENT }}>{n}</span>}
       <div className="min-w-0 flex-1">
-        <p className={`text-[17px] font-semibold leading-snug ${done ? "text-white/70" : "text-white"}`}>{title}</p>
+        <p className={`text-[17px] font-semibold leading-snug ${done ? "text-white/70" : "text-white"}`}><Lines>{title}</Lines></p>
         {children && <div className="mt-1 text-[15px] leading-relaxed text-white/80">{children}</div>}
       </div>
     </li>

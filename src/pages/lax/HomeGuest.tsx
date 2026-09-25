@@ -99,7 +99,7 @@ function Step({ n, children }: { n: number; children: ReactNode }) {
   return (
     <div className="flex h-full flex-col rounded-3xl bg-white/[0.07] p-5 ring-1 ring-white/10">
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[18px] font-bold text-[#1A1140]" style={{ background: PEACH }}>{n}</span>
-      <div className="mt-3 text-[17px] leading-relaxed text-white/85">{children}</div>
+      <div className="mt-3 text-[17px] leading-relaxed text-white/85"><Lines>{children}</Lines></div>
     </div>
   );
 }
