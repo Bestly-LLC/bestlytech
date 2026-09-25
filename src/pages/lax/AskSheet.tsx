@@ -14,13 +14,79 @@ type Msg = { id: number | string; role: "user" | "assistant"; content: string; s
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 
-// Fallback chips; the live ones come from lax_ask_suggest (trip phase, LA time of day, car state, last question).
 // Pinned on every chip list (the server adds it too): early pickup/return is always a Turo-app change.
 const EARLY_Q = "Can I pick up or return the car early?";
 const EARLY_A = "Yes! Just change your trip times in the Turo app (Manage trip → Change trip). Your host can't change them for you, and this chat can't either.";
+
+// The opening three. Jared picked these: do not reorder or swap them without asking him.
 const SUGGEST = ["Where do I catch the shuttle after I land?", "How do I get into the garage?", "How do I unlock and start the Tesla?", EARLY_Q];
-const SUGGEST_HOME = ["How do I get the key?", "Where is the car?", "Where do I return the car?", EARLY_Q];
-const withEarly = (xs: string[]) => (xs.includes(EARLY_Q) ? xs : [...xs.slice(0, 3), EARLY_Q]);
+const SUGGEST_HOME = ["How do I get the key?", "Where is the car?", "Can someone else drive?", EARLY_Q];
+
+/**
+ * What to offer once the conversation has started.
+ *
+ * The chips used to repeat: lax_ask_suggest reads the trip phase and the car, not what the guest
+ * has already asked, so someone who had just been told where to return the car was offered
+ * "Where do I return the car?" again. Anything already covered is dropped - by topic, not by exact
+ * wording, so "where do i drop it" counts as the return question - and the list is topped back up
+ * from the bank below, in order. The bank is the set of things guests need and mostly do not think
+ * to ask: the extra driver, the charge level, running late, what to do when the key sulks.
+ */
+const TOPIC: [string, RegExp][] = [
+  ["driver", /someone else|second driver|extra driver|another driver|add .*driver|can (my|his|her|their) \w+ drive/i],
+  ["key", /\bkeys?\b|unlock|phone key|card key/i],
+  ["find", /where.{0,12}(car|parked|tesla)|find the car|which spot/i],
+  ["charge", /charg|battery|\bpercent\b|\d\s*%|supercharg|plug/i],
+  ["return", /return|drop.{0,6}(it|the car|off)|bring it back|give it back/i],
+  ["late", /\blate\b|delay|extend|running over|more time/i],
+  ["range", /out of (la|los angeles|state|california)|how far|mileage|road trip/i],
+  ["rules", /\bpets?\b|\bdogs?\b|smok|vap/i],
+  ["help", /accident|emergency|roadside|who do i (call|contact)|something happens|stuck/i],
+  ["shuttle", /shuttle/i],
+  ["garage", /garage|elevator|lobby|gate/i],
+  ["start", /how do i (start|drive)|put it in (gear|drive)|turn it on/i],
+  ["clean", /car wash|wash it|clean/i],
+  ["toll", /toll|fastrak|ticket/i],
+];
+
+const BANK_HOME: string[] = [
+  "Can someone else drive?",
+  "How charged does it need to be when I return it?",
+  "Where do I return the car?",
+  "What if the phone key stops working?",
+  "What happens if I'm running late?",
+  "Can I take it out of LA?",
+  "How do tolls work?",
+  "Are pets or smoking allowed?",
+  "Who do I call if something happens?",
+];
+const BANK_LAX: string[] = [
+  "Where do I return the car?",
+  "Can someone else drive?",
+  "How charged does it need to be when I return it?",
+  "What if my flight is delayed?",
+  "What if the phone key stops working?",
+  "How do I get back into the garage?",
+  "How do tolls work?",
+  "Who do I call if something happens?",
+];
+
+const topicOf = (q: string) => TOPIC.find(([, re]) => re.test(q))?.[0];
+
+/** Server suggestions first, minus what is already covered, topped up from the bank, EARLY_Q last. */
+function nextChips(from: string[], asked: string, home: boolean): string[] {
+  const done = new Set(TOPIC.filter(([, re]) => re.test(asked)).map(([t]) => t));
+  const out: string[] = [];
+  const take = (q: string) => {
+    if (out.length >= 3 || q === EARLY_Q || out.includes(q)) return;
+    const t = topicOf(q);
+    if (t && (done.has(t) || out.some((o) => topicOf(o) === t))) return;
+    out.push(q);
+  };
+  from.forEach(take);
+  (home ? BANK_HOME : BANK_LAX).forEach(take);
+  return [...out, EARLY_Q];
+}
 
 function Chips({ list, onPick, disabled }: { list: string[]; onPick: (s: string) => void; disabled?: boolean }) {
   if (!list.length) return null;
@@ -170,13 +236,24 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
   const loaded = useRef(false);
   const body = useRef<HTMLDivElement>(null);
   const who = { p_token: token || null, p_slug: token ? null : slug || null };
+  // Everything the guest has typed so far, so a chip is never offered for something they covered.
+  const askedRef = useRef("");
   const refreshChips = () =>
-    rpc("lax_ask_suggest", who).then(({ data }) => { if (Array.isArray(data) && data.length) setChips(withEarly(data as string[])); }).catch(() => {});
+    rpc("lax_ask_suggest", who)
+      .then(({ data }) => setChips(nextChips(Array.isArray(data) ? (data as string[]) : [], askedRef.current, home)))
+      .catch(() => setChips(nextChips([], askedRef.current, home)));
 
   useEffect(() => {
     if (!open || loaded.current) return;
     loaded.current = true;
-    rpc("lax_ask_history", who).then(({ data }) => { if (Array.isArray(data) && data.length) setMsgs(data as Msg[]); });
+    rpc("lax_ask_history", who).then(({ data }) => {
+      if (!Array.isArray(data) || !data.length) return;
+      const xs = data as Msg[];
+      setMsgs(xs);
+      // Coming back to the sheet should not re-offer what they asked yesterday.
+      askedRef.current = xs.filter((m) => m.role === "user").map((m) => m.content).join(" \n ");
+      refreshChips();
+    });
     refreshChips();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -188,6 +265,7 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
     q = q.trim();
     if (!q || busy) return;
     setBusy(true); setText("");
+    askedRef.current += " \n " + q;
     track(token, "ask");
     const tmp = `a${Date.now()}`;
     setMsgs((xs) => [...xs, { id: `u${Date.now()}`, role: "user", content: q }, { id: tmp, role: "assistant", content: "", status: "pending" }]);
