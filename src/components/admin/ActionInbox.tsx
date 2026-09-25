@@ -23,6 +23,7 @@ import {
 } from "@/components/admin/ui";
 import { AskScoutButton } from "./AskScoutButton";
 import { Info } from "lucide-react";
+import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /**
@@ -136,7 +137,7 @@ function WhereFrom({ item }: { item: ActionItem }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <button type="button" aria-label={`Where this came from: ${item.why ?? item.originTable}`}
-          className="grid h-11 w-9 shrink-0 place-items-center self-center text-white/45 transition hover:text-white sm:h-9">
+          className="grid h-11 w-9 shrink-0 place-items-center self-center text-white/60 transition hover:text-white sm:h-9">
           <Info className="h-4 w-4" aria-hidden />
         </button>
       </TooltipTrigger>
@@ -221,19 +222,33 @@ export function ActionInbox() {
     };
   }, [load]);
 
+  const undoDone = useCallback(async (key: string, title: string) => {
+    const { error: rpcError } = await (supabase.rpc as any)("admin_today_undo", { p_key: key });
+    if (rpcError) { toast.error("Couldn't put it back", { description: rpcError.message }); return; }
+    toast("Back on the list", { description: title });
+    load();
+  }, [load]);
+
   const markDone = useCallback(
-    async (key: string) => {
+    async (key: string, title: string) => {
       setWorking(key);
       const { error: rpcError } = await (supabase.rpc as any)("admin_today_done", { p_key: key });
       if (rpcError) {
         setError("That didn't go through. Try again.");
       } else {
         setItems((prev) => prev.filter((i) => i.id !== key));
+        // A tick is one tap and the row leaves the list, so the same tap has to be reversible.
+        // Cookie Yeti and bell rows really change at the source; the rest record a dismissal,
+        // and admin_today_undo removes it either way.
+        toast("Done", {
+          description: title,
+          action: { label: "Undo", onClick: () => void undoDone(key, title) },
+        });
       }
       setWorking(null);
       load();
     },
-    [load],
+    [load, undoDone],
   );
 
   const summary = useMemo(() => {
@@ -333,7 +348,7 @@ export function ActionInbox() {
                     type="button"
                     className={cn(btnTinted, "px-3 text-[13px]")}
                     disabled={working === item.id}
-                    onClick={() => markDone(item.id)}
+                    onClick={() => markDone(item.id, item.title)}
                   >
                     <Check className="h-3.5 w-3.5" aria-hidden />
                     {working === item.id ? "Saving…" : item.doneLabel}
