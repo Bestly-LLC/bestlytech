@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playNotifySound } from "@/lib/notifySound";
@@ -10,6 +10,14 @@ import {
   Rocket, Snowflake, Store, Wrench, Binoculars, Check, Copy, Car, QrCode, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/** "22:00" -> "10 PM". Times are 12-hour everywhere in here. */
+function hhmm(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return m ? `${h12}:${String(m).padStart(2, "0")} ${ampm}` : `${h12} ${ampm}`;
+}
 import { copyForClaude } from "@/lib/copyForClaude";
 import { enablePush, disablePush, sendTestPush, syncPushOnLoad, type PushState } from "@/lib/webPush";
 
@@ -28,6 +36,7 @@ type Notification = {
   body: string | null;
   url: string | null;
   severity: "info" | "success" | "warning";
+  silent?: boolean;
   read_at: string | null;
   entity_key?: string | null;
 };
@@ -108,7 +117,7 @@ export function NotificationBell() {
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from("admin_notifications" as any)
-      .select("id, created_at, kind, title, body, url, severity, read_at, entity_key")
+      .select("id, created_at, kind, title, body, url, severity, read_at, entity_key, silent")
       .order("created_at", { ascending: false })
       .limit(50);
     if (error) { setLoadError(error.message); return; }
@@ -137,7 +146,12 @@ export function NotificationBell() {
       .on("postgres_changes" as any, { event: "INSERT", schema: "public", table: "admin_notifications" }, (payload: any) => {
         const n = payload.new as Notification;
         setItems((xs) => [n, ...xs.filter((x) => x.id !== n.id)].slice(0, 50));
-        playNotifySound();
+        // A receipt lands in the list without a word. Quiet hours and DND hold everything but
+        // a warning, which matches what the server already does to the push.
+        const urgent = n.severity === "warning";
+        if (n.silent) return;
+        if (quietRef.current && !urgent) return;
+        if (soundRef.current) playNotifySound();
         toast(n.title, {
           description: n.body ?? undefined,
           action: n.url ? { label: "Open", onClick: () => go(n) } : undefined,
@@ -152,14 +166,49 @@ export function NotificationBell() {
     return () => { supabase.removeChannel(channel); window.clearInterval(poll); };
   }, [load, go]);
 
-  const unread = useMemo(() => items.filter((n) => !n.read_at).length, [items]);
+  const unread = useMemo(() => items.filter((n) => !n.read_at && !n.silent).length, [items]);
   const groups = useMemo(() => {
     const order = ["Turo", "Work", "Scout", "Monitor", "Cookie Yeti"];
     const present = new Set(items.map((n) => metaFor(n).group));
     return order.filter((g) => present.has(g));
   }, [items]);
-  const shown = filter === "unread" ? items.filter((n) => !n.read_at)
+  const shown = filter === "unread" ? items.filter((n) => !n.read_at && !n.silent)
     : filter === "all" ? items : items.filter((n) => metaFor(n).group === filter);
+
+  /* ───────── quiet ─────────
+     A browser cannot read macOS Focus — there is no web API for it — but a push that arrives
+     while the Mac is in Focus is already suppressed by macOS. This is Bestly's own quiet: it
+     stops the toast and the sound here, and push_web_send() skips the send server-side, so a
+     phone stays quiet too. Warnings still come through unless you turn that off. */
+  const [prefs, setPrefs] = useState<{ quiet: boolean; why?: string; until?: string; sound_on: boolean; quiet_on: boolean; quiet_start: string; quiet_end: string; urgent_through: boolean } | null>(null);
+  const quietRef = useRef(false);
+  const soundRef = useRef(true);
+  const loadPrefs = useCallback(async () => {
+    const { data, error } = await supabase.rpc("admin_notify_prefs_get" as never);
+    if (error || !data) return;
+    const d = data as any;
+    const next = {
+      quiet: !!d.now?.quiet, why: d.now?.why, until: d.now?.until,
+      sound_on: d.sound_on !== false, quiet_on: !!d.quiet_on,
+      quiet_start: String(d.quiet_start ?? "22:00").slice(0, 5), quiet_end: String(d.quiet_end ?? "08:00").slice(0, 5),
+      urgent_through: d.urgent_through !== false,
+    };
+    setPrefs(next); quietRef.current = next.quiet; soundRef.current = next.sound_on;
+  }, []);
+  useEffect(() => { loadPrefs(); const t = window.setInterval(loadPrefs, 60_000); return () => window.clearInterval(t); }, [loadPrefs]);
+
+  const setDnd = async (minutes: number) => {
+    const { error } = await supabase.rpc("admin_dnd" as never, { p_minutes: minutes } as never);
+    if (error) { toast.error("Couldn't change that", { description: error.message }); return; }
+    await loadPrefs();
+    toast(minutes > 0 ? `Quiet for ${minutes >= 1440 ? "the day" : minutes >= 60 ? `${minutes / 60} hour${minutes === 60 ? "" : "s"}` : `${minutes} minutes`}` : "Notifications back on",
+      { description: minutes > 0 ? "Warnings still come through." : undefined });
+  };
+  const toggleQuietHours = async () => {
+    const { error } = await supabase.rpc("admin_notify_prefs_set" as never, { p_quiet_on: !prefs?.quiet_on } as never);
+    if (error) { toast.error("Couldn't change that", { description: error.message }); return; }
+    loadPrefs();
+  };
 
   const markAll = async () => {
     const ids = items.filter((n) => !n.read_at).map((n) => n.id);
@@ -200,6 +249,38 @@ export function NotificationBell() {
             <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" /> Mark all read
           </button>
         </div>
+        {/* Quiet: one row, the state first, then the ways to change it. */}
+        <div className="mx-3 mb-2 rounded-lg bg-white/[0.04] px-3 py-2 text-xs">
+          <div className="flex items-center gap-2">
+            {prefs?.quiet ? <BellOff className="h-3.5 w-3.5 flex-none text-amber-300 bento:text-amber-700" aria-hidden />
+                          : <Bell className="h-3.5 w-3.5 flex-none text-white/60" aria-hidden />}
+            <span className="flex-1 text-white/70">
+              {prefs?.quiet
+                ? (prefs.why === "quiet_hours"
+                    ? `Quiet hours until ${hhmm(prefs.quiet_end)}`
+                    : `Do Not Disturb until ${prefs.until ? new Date(prefs.until).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" }) : "you turn it off"}`)
+                : "Notifications on"}
+            </span>
+            {prefs?.quiet
+              ? <button type="button" onClick={() => prefs.why === "quiet_hours" ? toggleQuietHours() : setDnd(0)}
+                  className="h-7 rounded-md bg-white px-2.5 font-medium text-black bento:bg-[#111114] bento:text-[#fff]">Turn on</button>
+              : (
+                <span className="flex gap-1">
+                  {[[30, "30m"], [60, "1h"], [480, "8h"]].map(([m, l]) => (
+                    <button key={l as string} type="button" onClick={() => setDnd(m as number)}
+                      className="h-7 rounded-md px-2 text-white/70 hover:bg-white/10 hover:text-white">{l as string}</button>
+                  ))}
+                </span>
+              )}
+          </div>
+          {!prefs?.quiet && (
+            <button type="button" onClick={toggleQuietHours}
+              className="mt-1 text-[11px] text-white/60 underline-offset-2 hover:text-white hover:underline">
+              {prefs?.quiet_on ? `Quiet hours on, ${hhmm(prefs.quiet_start)}–${hhmm(prefs.quiet_end)}` : "Set quiet hours 10 PM – 8 AM"}
+            </button>
+          )}
+        </div>
+
         {push !== "unsupported" && (
           <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg bg-white/[0.04] px-3 py-2 text-xs">
             <Bell className="h-3.5 w-3.5 flex-none text-white/60" aria-hidden="true" />
