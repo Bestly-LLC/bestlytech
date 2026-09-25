@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AlertTriangle,
@@ -15,16 +15,16 @@ import {
   RefreshCw,
   Check,
   CheckCircle2,
+  X,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  Disclosure, IconButton, LoadError, Pill, RowLink, SectionHeader, SkeletonRows,
+  Disclosure, IconButton, LoadError, Pill, SectionHeader, SkeletonRows,
   cardCls, divider, hairline, inset, rowCls, text, tint,
 } from "@/components/admin/ui";
 import { AskScoutButton } from "./AskScoutButton";
-import { Info } from "lucide-react";
 import { toast } from "sonner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /**
  * Everything waiting on the operator, from one server-side rule set.
@@ -123,34 +123,124 @@ function timeAgo(ms: number): string {
   return `${d}d`;
 }
 
-/**
- * Where a to-do came from. Hover, or focus it with the keyboard — it is a button, so a tap on a
- * phone opens it too. The row itself only ever said "Studio"; this names the table, the record
- * and the exact condition that put it in front of you.
- */
-function WhereFrom({ item }: { item: ActionItem }) {
-  if (!item.originTable && !item.why) return null;
+/** Small centered popup that shows when a Needs You row is clicked. */
+function ItemPopup({ item, onClose, onDone, working }: {
+  item: ActionItem;
+  onClose: () => void;
+  onDone: (id: string, title: string) => void;
+  working: string | null;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const Icon = item.icon;
+  const pill = severityPill[item.severity];
+
   const when = item.since
     ? new Date(item.since).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
     : null;
+
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // Trap focus inside the popup
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    const focusable = el.querySelectorAll<HTMLElement>('button,a,[tabindex]:not([tabindex="-1"])');
+    focusable[0]?.focus();
+  }, []);
+
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button type="button" aria-label={`Where this came from: ${item.why ?? item.originTable}`}
-          className="grid h-11 w-9 shrink-0 place-items-center self-center text-white/60 transition hover:text-white sm:h-9">
-          <Info className="h-4 w-4" aria-hidden />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="left" className="max-w-xs text-left">
-        {item.why && <p className="text-[0.8125rem] leading-snug">{item.why}</p>}
-        {item.originTable && (
-          <p className="mt-1 font-mono text-[0.6875rem] opacity-70">
-            {item.originTable}{item.originId ? ` · ${item.originId.length > 20 ? item.originId.slice(0, 8) + "…" : item.originId}` : ""}
-          </p>
-        )}
-        {when && <p className="mt-1 text-[0.6875rem] opacity-70">Since {when}</p>}
-      </TooltipContent>
-    </Tooltip>
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+        aria-hidden
+        onClick={onClose}
+      />
+      {/* Popup */}
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={item.title}
+        className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,480px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/[0.10] bg-[#1c1c1e] shadow-2xl"
+      >
+        {/* Header */}
+        <div className="flex items-start gap-3 border-b border-white/[0.06] px-5 py-4">
+          <Icon className="mt-0.5 h-5 w-5 shrink-0 text-white/55" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              {pill && <Pill tone={pill}>{severityWord[item.severity]}</Pill>}
+              <p className={cn(text.title, "leading-snug")}>{item.title}</p>
+            </div>
+            {when && <p className={cn(text.meta, "mt-0.5")}>{when}</p>}
+          </div>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="-mr-1 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-white/50 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-3">
+          {item.detail && (
+            <p className={cn(text.detail, "leading-relaxed whitespace-pre-line")}>{item.detail}</p>
+          )}
+          {item.why && (
+            <p className="text-[12px] leading-snug text-white/40">{item.why}</p>
+          )}
+          {item.originTable && (
+            <p className="font-mono text-[11px] text-white/30">
+              {item.originTable}
+              {item.originId ? ` · ${item.originId.length > 20 ? item.originId.slice(0, 8) + "…" : item.originId}` : ""}
+            </p>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] px-5 py-3">
+          <AskScoutButton
+            question={`Help me with this: ${item.title}. What's going on, and can you fix it?`}
+            about={[item.title, item.detail, item.href].filter(Boolean).join(" | ")}
+            className="h-9 rounded-full px-3 text-[13px] font-medium"
+            label="Ask Scout"
+          />
+          {item.href && (
+            <a
+              href={item.href}
+              target={item.external ? "_blank" : undefined}
+              rel={item.external ? "noopener noreferrer" : undefined}
+              onClick={onClose}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/[0.10] px-3 text-[13px] font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+            >
+              {item.doneLabel ?? "Open"}
+              {item.external && <ExternalLink className="h-3.5 w-3.5" aria-hidden />}
+            </a>
+          )}
+          {item.done && (
+            <button
+              type="button"
+              disabled={working === item.id}
+              onClick={() => { onDone(item.id, item.title); onClose(); }}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/[0.10] px-3 text-[13px] font-medium text-white/60 transition hover:bg-white/[0.06] hover:text-white disabled:opacity-50 ml-auto"
+            >
+              {working === item.id
+                ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
+                : <Check className="h-4 w-4" aria-hidden />}
+              Mark done
+            </button>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -160,6 +250,7 @@ export function ActionInbox() {
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
+  const [openItem, setOpenItem] = useState<ActionItem | null>(null);
 
   const load = useCallback(async () => {
     // admin_today / admin_today_done are newer than the generated Supabase types;
@@ -323,53 +414,30 @@ export function ActionInbox() {
           {visible.map((item) => {
             const Icon = item.icon;
             const pill = severityPill[item.severity];
-            const body = (
-              <>
-                <Icon className="h-4 w-4 shrink-0 text-white/55" aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p className={cn(text.title, "flex min-w-0 items-center gap-2")}>
-                    {pill ? <Pill tone={pill}>{severityWord[item.severity]}</Pill> : <span className="sr-only">{severityWord[item.severity]}: </span>}
-                    <span className="truncate">{item.title}</span>
-                  </p>
-                  {item.detail && <p className={cn(text.detail, "mt-0.5 truncate")}>{item.detail}</p>}
-                </div>
-                {item.count && <Pill>{item.count}</Pill>}
-                <span className={cn(text.meta, "shrink-0")}>
-                  <span className="sr-only">Waiting </span>{timeAgo(item.ageMs)}
-                </span>
-              </>
-            );
-
-            // One layout for every row. The row itself is the link — that is what "Open this
-            // preview" means — and the tick is its own small button beside it. They used to be
-            // the same control: the tick wore the row's action_label, so a button reading
-            // "Open this preview" quietly dismissed the item instead of opening it, and the ⓘ
-            // lived in a branch nothing reached any more.
             return (
-              <li key={item.id} className="flex items-stretch">
-                <div className="min-w-0 flex-1">
-                  <RowLink href={item.href} label={item.href ? `${item.doneLabel}: ${item.title}` : undefined}>
-                    {body}
-                  </RowLink>
-                </div>
-                <WhereFrom item={item} />
-                {item.done && (
-                  <IconButton
-                    label={`Mark done: ${item.title}`}
-                    disabled={working === item.id}
-                    onClick={() => markDone(item.id, item.title)}
-                    className="self-center"
-                  >
-                    {working === item.id
-                      ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
-                      : <Check className="h-4 w-4" aria-hidden />}
-                  </IconButton>
-                )}
-                <AskScoutButton
-                  question={`Help me with this: ${item.title}. What's going on, and can you fix it?`}
-                  about={[item.title, item.detail, item.href].filter(Boolean).join(" | ")}
-                  className="mr-2 h-11 w-11 self-center rounded-full sm:mr-3 sm:h-9 sm:w-9"
-                />
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpenItem(item)}
+                  className={cn(
+                    "flex w-full min-h-[44px] items-center gap-3 py-3 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] focus-visible:ring-inset",
+                    inset,
+                  )}
+                  aria-label={`${severityWord[item.severity]}: ${item.title}`}
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-white/55" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className={cn(text.title, "flex min-w-0 items-center gap-2")}>
+                      {pill ? <Pill tone={pill}>{severityWord[item.severity]}</Pill> : <span className="sr-only">{severityWord[item.severity]}: </span>}
+                      <span className="truncate">{item.title}</span>
+                    </p>
+                    {item.detail && <p className={cn(text.detail, "mt-0.5 truncate")}>{item.detail}</p>}
+                  </div>
+                  {item.count && <Pill>{item.count}</Pill>}
+                  <span className={cn(text.meta, "shrink-0")}>
+                    <span className="sr-only">Waiting </span>{timeAgo(item.ageMs)}
+                  </span>
+                </button>
               </li>
             );
           })}
@@ -380,6 +448,14 @@ export function ActionInbox() {
           </Disclosure>
         )}
       </div>
+      {openItem && (
+        <ItemPopup
+          item={openItem}
+          onClose={() => setOpenItem(null)}
+          onDone={markDone}
+          working={working}
+        />
+      )}
     </section>
   );
 }
