@@ -19,7 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   Disclosure, IconButton, LoadError, Pill, RowLink, SectionHeader, SkeletonRows,
-  btnTinted, cardCls, divider, hairline, inset, rowCls, text, tint,
+  cardCls, divider, hairline, inset, rowCls, text, tint,
 } from "@/components/admin/ui";
 import { AskScoutButton } from "./AskScoutButton";
 import { Info } from "lucide-react";
@@ -340,34 +340,31 @@ export function ActionInbox() {
               </>
             );
 
-            if (item.done) {
-              return (
-                <li key={item.id} className={cn(rowCls, "pr-2 sm:pr-3")}>
-                  {body}
-                  <button
-                    type="button"
-                    className={cn(btnTinted, "px-3 text-[13px]")}
-                    disabled={working === item.id}
-                    onClick={() => markDone(item.id, item.title)}
-                  >
-                    <Check className="h-3.5 w-3.5" aria-hidden />
-                    {working === item.id ? "Saving…" : item.doneLabel}
-                  </button>
-                  <AskScoutButton
-                    question={`Help me with this: ${item.title}. What's going on, and can you handle it?`}
-                    about={[item.title, item.detail].filter(Boolean).join(" | ")}
-                    className="h-11 w-11 rounded-full sm:h-9 sm:w-9"
-                  />
-                </li>
-              );
-            }
-
+            // One layout for every row. The row itself is the link — that is what "Open this
+            // preview" means — and the tick is its own small button beside it. They used to be
+            // the same control: the tick wore the row's action_label, so a button reading
+            // "Open this preview" quietly dismissed the item instead of opening it, and the ⓘ
+            // lived in a branch nothing reached any more.
             return (
               <li key={item.id} className="flex items-stretch">
                 <div className="min-w-0 flex-1">
-                  <RowLink href={item.href}>{body}</RowLink>
+                  <RowLink href={item.href} label={item.href ? `${item.doneLabel}: ${item.title}` : undefined}>
+                    {body}
+                  </RowLink>
                 </div>
                 <WhereFrom item={item} />
+                {item.done && (
+                  <IconButton
+                    label={`Mark done: ${item.title}`}
+                    disabled={working === item.id}
+                    onClick={() => markDone(item.id, item.title)}
+                    className="self-center"
+                  >
+                    {working === item.id
+                      ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
+                      : <Check className="h-4 w-4" aria-hidden />}
+                  </IconButton>
+                )}
                 <AskScoutButton
                   question={`Help me with this: ${item.title}. What's going on, and can you fix it?`}
                   about={[item.title, item.detail, item.href].filter(Boolean).join(" | ")}
