@@ -12,14 +12,15 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
-import { card, secondary, label, tint } from "./laxUi";
+import { btnTinted, card, secondary, label, tint } from "./laxUi";
 
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 const money = (n?: number | null) => `$${(n ?? 0).toFixed(2)}`;
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" });
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
-const small = "inline-flex h-8 items-center gap-1.5 rounded-full border border-white/15 px-3 text-[12px] font-medium text-white disabled:opacity-50 bento:border-neutral-200 bento:text-neutral-800";
+// Apple tinted capsule (iOS .bordered): never wraps, 44pt touch target, dims + scales on press.
+const small = cn(btnTinted, "shrink-0 whitespace-nowrap px-4 [&_svg]:h-4 [&_svg]:w-4");
 
 type Sess = { at: string; place: string | null; cost: number; idle: number; kwh: number | null };
 type Trip = { rid: number; guest: string | null; starts_at: string; ends_at: string; billed: number; idle: number; count: number; asked: number; paid: boolean; status: string; owed: number; sessions: Sess[] };
@@ -127,11 +128,11 @@ export function CarHealth() {
   return (
     <div className={card} id="car-health">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className={cn("text-[17px] font-semibold", label)}>Car health · {h.name ?? "Tesla"}</p>
           <p className={cn("mt-0.5 text-xs", secondary)}>Watched every 5 minutes. Problems go to Scout; guests get a push for charging, low battery, unlocked, trunk open.</p>
         </div>
-        <button type="button" onClick={() => void check()} disabled={!!busy} className={small}>{busy === "check" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}Check now</button>
+        <button type="button" onClick={() => void check()} disabled={!!busy} className={small}>{busy === "check" ? <><Loader2 className="animate-spin" aria-hidden />Checking…</> : <><RefreshCw aria-hidden />Check now</>}</button>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
         <Tile icon={<BatteryCharging className="h-4 w-4" />} k="Battery" v={h.battery != null ? `${h.battery}%${h.range ? ` · ${Math.round(h.range)} mi` : ""}` : "?"} sub={h.charging && h.charging !== "Disconnected" ? h.charging : h.plugged_in ? "Plugged in" : "Not plugged in"} />

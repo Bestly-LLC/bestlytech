@@ -287,36 +287,38 @@ export function TripCard({ trip, theme = "lax", recap }: { trip: Trip; theme?: "
   );
 }
 
-// ---------- Comfort: what to suggest, based on the car's inside temp (target ~72°F) ----------
+// ---------- Comfort: 72°F is the goal. Offer A/C at 80°+ and heat (plus heated seat) at 52° or below. ----------
+// Cabin temp wins when we have it (a parked car in the sun can be 97° inside on a 73° day). In between: nothing to offer.
 export type Need = "cool" | "warm" | "comfy" | null;
+export const HOT_F = 80, COLD_F = 52;
 export function climateNeed(inside?: number | null, outside?: number | null): Need {
-  if (inside != null) {
-    if (inside >= 77 || (outside != null && outside >= 85 && inside >= 74)) return "cool";
-    if (inside <= 65 || (outside != null && outside <= 55 && inside <= 68)) return "warm";
-    return "comfy";
-  }
-  if (outside == null) return null;
-  if (outside >= 80) return "cool";
-  if (outside <= 60) return "warm";
+  if (inside == null && outside == null) return null;
+  if ((inside ?? -99) >= HOT_F || (outside ?? -99) >= HOT_F) return "cool";
+  if ((inside ?? 99) <= COLD_F || (outside ?? 99) <= COLD_F) return "warm";
   return "comfy";
 }
-const seatNeeded = (inside?: number | null, outside?: number | null) => (inside ?? outside ?? 99) <= 60;
+/** The temperature behind the suggestion: the cabin if it's the one that's off, else outside. */
+function needTemp(need: Need, inside?: number | null, outside?: number | null): { t: number; where: "inside" | "outside" } | null {
+  const hot = (x?: number | null) => x != null && x >= HOT_F, cold = (x?: number | null) => x != null && x <= COLD_F;
+  if (need === "cool") return hot(inside) ? { t: inside!, where: "inside" } : outside != null ? { t: outside, where: "outside" } : null;
+  if (need === "warm") return cold(inside) ? { t: inside!, where: "inside" } : outside != null ? { t: outside, where: "outside" } : null;
+  return null;
+}
 
-/** One line above the weather + car tiles: what to do before heading over. */
+/** One line above the weather + car tiles. Nothing at all when the car is already comfortable. */
 export function ClimateAdvice({ car, outsideF }: { car: CarState | null; outsideF: number | null }) {
-  // Suggestion is based on the temperature OUTSIDE only (what the guest feels walking up).
   const outside = outsideF ?? car?.outside_f ?? null;
+  const inside = car?.inside_f ?? null;
   if (car?.climate_until && +new Date(car.climate_until) > Date.now()) {
     return <p className="flex items-center gap-2 text-[15px] font-medium text-white/90"><Fan className="h-4 w-4 shrink-0 animate-spin text-sky-300 motion-reduce:animate-none" aria-hidden />Climate is on. The car will be comfy when you get there.</p>;
   }
-  const need = climateNeed(null, outside);
-  if (!need) return null;
-  const t = Math.round(outside!);
-  const where = "outside";
-  const [Icon, color, text] =
-    need === "cool" ? [Snowflake, "text-sky-300", `It's ${t}° ${where}. Turn on the A/C before you head over.`] :
-    need === "warm" ? [Flame, "text-orange-300", `It's chilly: ${t}° ${where}. Warm it up before you head over.`] :
-    [Thermometer, "text-emerald-300", `It's a nice ${t}° outside. No need for the A/C.`];
+  const need = climateNeed(inside, outside);
+  const nt = needTemp(need, inside, outside);
+  if ((need !== "cool" && need !== "warm") || !nt) return null;
+  const t = Math.round(nt.t);
+  const [Icon, color, text] = need === "cool"
+    ? [Snowflake, "text-sky-300", `It's ${t}° ${nt.where === "inside" ? "inside the car" : "outside"}. Turn on the A/C before you head over.`]
+    : [Flame, "text-orange-300", `It's ${t}° ${nt.where === "inside" ? "inside the car" : "outside"}. Warm it up before you head over.`];
   return <p className="flex items-start gap-2 text-[15px] font-medium leading-snug text-white/90"><Icon className={`mt-0.5 h-4 w-4 shrink-0 ${color}`} aria-hidden />{text}</p>;
 }
 
@@ -607,14 +609,16 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car, ou
     } finally { setBusy(null); setStage(null); }
   };
 
-  // Only the button the weather calls for (outside temp): hot = Cool it down, cold = Warm it up (+ seats when cold).
+  // Only the button the temperature calls for: 80°+ (inside or out) = Cool it down, 52° or below = Warm it up + Heated seat.
   const outside = outsideF ?? car?.outside_f ?? null;
-  const need = climateNeed(null, outside);
+  const need = climateNeed(car?.inside_f, outside);
   const shown: ClimateAction[] =
     need === "cool" ? ["cool"] :
-    need === "warm" ? (seatNeeded(null, outside) ? ["warm", "seat"] : ["warm"]) :
+    need === "warm" ? ["warm", "seat"] :
     need === "comfy" ? [] : ["cool", "warm"];
   const locked = !!lockedUntil;
+  // Nice out and nothing running: no climate UI at all.
+  if (shown.length === 0 && !stopped && !running && !busy && !done) return null;
 
   return (
     <div className={compact ? "mt-3" : "mt-4 border-t border-white/10 pt-4"}>
@@ -625,14 +629,11 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car, ou
         <ClimateOn mode={running.mode} until={running.until} busy={busy === "off"} onOff={() => press("off")} />
       ) : (
         <>
-          {need === "comfy" && (
-            <p className="rounded-xl bg-emerald-400/10 px-3 py-2 text-[13px] leading-snug text-emerald-200 ring-1 ring-emerald-300/25">Nice out. No A/C needed.</p>
-          )}
           <div className={compact ? "grid gap-1.5" : "mt-2.5 grid grid-cols-2 gap-2"}>
             {shown.map((id, i) => {
               const a = CLIMATE.find((x) => x.id === id)!;
               const Icon = a.icon;
-              const primary = i === 0 && need !== "comfy";
+              const primary = i === 0;
               return (
                 <button key={id} type="button" onClick={() => press(id)} disabled={busy !== null || locked} aria-disabled={locked}
                   className={`flex items-center gap-2.5 rounded-xl text-left ring-1 transition active:scale-[0.98] disabled:opacity-40 disabled:saturate-0 ${primary ? (id === "cool" ? "bg-sky-400/20 ring-sky-300/40" : "bg-orange-400/20 ring-orange-300/40") : "bg-white/[0.08] ring-white/10"} ${compact ? "min-h-[48px] px-2.5 py-1.5" : "min-h-[56px] px-3 py-2.5"}`}>

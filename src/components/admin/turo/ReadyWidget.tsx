@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Car, Check, ChevronRight, Loader2, Navigation } from "lucide-react";
+import { AlertTriangle, Car, Check, ChevronRight, Info, Loader2, Navigation } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,18 @@ type Ready = {
   eta: { minutes: number; miles: number; eta_at: string; moving: boolean } | null;
   checks: CheckRow[]; state: "ready" | "warn" | "partial"; checked_at: string | null; warn_count: number;
 };
-const ACTION_LABEL: Record<string, string> = { lock: "Lock", windows_close: "Close windows", charge_start: "Start charging", erase: "Wipe now" };
+const ACTION_LABEL: Record<string, string> = { lock: "Lock", windows_close: "Close windows", charge_start: "Start charging" };
+/** What each check means, in plain words. Shown on hover (desktop) or tap of the (i). */
+const INFO: Record<string, string> = {
+  charge: "Battery now vs. what the next guest should get (80%). \"Start charging\" only shows when it's plugged in.",
+  tires: "Tire pressure: front left, front right, rear left, rear right. Orange if any tire is under 38 psi, or two differ by more than 4.",
+  locked: "Doors and windows. Open windows get closed automatically anywhere. The car only auto-locks at N Kings Rd or the LAX garage, never elsewhere (a guest may have left it open on purpose).",
+  software: "A Tesla update waiting to install. Install it between trips so it never starts during a pickup.",
+  wipe: "After each trip we remove the guest's Tesla access, and any extra drivers'. Their phone key stops working and they drop off the car's driver list. " +
+    "Not removed: Bluetooth phones they paired for music or calls, and their recent or saved places. Tesla can't remove just one phone remotely, and its full \"erase\" would also delete your phone key and the keys TezLab and this app use, so we never run it. " +
+    "To clear their Bluetooth phone: in the car, tap the Bluetooth icon, pick their phone, then Forget. Yours stays.",
+  spot: "Where the car is parked, from its GPS. Home = within about 720 ft of N Kings Rd. LAX = the Park My Share garage.",
+};
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 function until(iso: string) {
@@ -40,6 +51,7 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
   const [r, setR] = useState<Ready | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const load = useCallback(async () => {
     const { data, error } = await (supabase.rpc("admin_car_ready" as never) as unknown as Promise<{ data: Ready | null; error: unknown }>);
     if (error || !data) { setFailed(true); return; }
@@ -48,7 +60,6 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
   useEffect(() => { load(); const id = window.setInterval(() => { if (!document.hidden) load(); }, 60000); return () => window.clearInterval(id); }, [load]);
 
   const fix = async (action: string) => {
-    if (action === "erase" && !window.confirm("Wipe guest data from the car? This clears saved places, the driver profile and paired phones. First time: check afterwards that your own settings are still there.")) return;
     setBusy(action);
     const { data, error } = await (supabase.rpc("admin_car_fix" as never, { p_action: action } as never) as unknown as Promise<{ data: { ok: boolean; error?: string } | null; error: { message: string } | null }>);
     setBusy(null);
@@ -102,15 +113,26 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
         {rows.length > 0 && (
           <ul className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
             {rows.map((c) => (
-              <li key={c.id} className="flex min-h-[52px] items-center gap-3 px-4 py-2 sm:px-5">
-                <Dot s={c.state} />
-                <span className="text-[15px] text-white">{c.label}</span>
-                <span className={cn("min-w-0 flex-1 truncate text-right text-[15px]", c.state === "warn" ? tint.orange : "text-white/60")} title={c.value}>{c.value}{c.hint ? ` · ${c.hint}` : ""}</span>
-                {c.action && ACTION_LABEL[c.action] && (
-                  <button type="button" onClick={() => fix(c.action!)} disabled={!!busy}
-                    className={cn("inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full bg-[#0A84FF] px-3.5 text-[13px] font-semibold text-white disabled:opacity-50", focusRing)}>
-                    {busy === c.action && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}{ACTION_LABEL[c.action]}
-                  </button>
+              <li key={c.id} onMouseEnter={() => INFO[c.id] && setInfo(c.id)} onMouseLeave={() => setInfo((x) => (x === c.id ? null : x))}>
+                <div className="flex min-h-[52px] items-center gap-3 px-4 py-2 sm:px-5">
+                  <Dot s={c.state} />
+                  <span className="shrink-0 text-[15px] text-white">{c.label}</span>
+                  {INFO[c.id] && (
+                    <button type="button" onClick={() => setInfo((x) => (x === c.id ? null : c.id))} aria-expanded={info === c.id} aria-label={`What ${c.label} means`} title={INFO[c.id]}
+                      className={cn("-m-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-white/40 transition-colors hover:text-white/80 active:opacity-60", info === c.id && tint.blue, focusRing)}>
+                      <Info className="h-[18px] w-[18px]" aria-hidden />
+                    </button>
+                  )}
+                  <span className={cn("min-w-0 flex-1 truncate text-right text-[15px]", c.state === "warn" ? tint.orange : "text-white/60")} title={c.value}>{c.value}{c.hint ? ` · ${c.hint}` : ""}</span>
+                  {c.action && ACTION_LABEL[c.action] && (
+                    <button type="button" onClick={() => fix(c.action!)} disabled={!!busy}
+                      className={cn("inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full bg-[#0A84FF] px-3.5 text-[13px] font-semibold text-white disabled:opacity-50", focusRing)}>
+                      {busy === c.action && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}{ACTION_LABEL[c.action]}
+                    </button>
+                  )}
+                </div>
+                {info === c.id && INFO[c.id] && (
+                  <p role="note" className="mx-4 mb-3 -mt-1 rounded-xl bg-white/[0.06] px-3.5 py-2.5 text-[13px] leading-relaxed text-white/75 ring-1 ring-white/10 sm:mx-5">{INFO[c.id]}</p>
                 )}
               </li>
             ))}

@@ -6,12 +6,12 @@
  * Reminders go out from support@bestly.tech (wallet-pass op remind_due, cron lax-guest-tick every 10 min).
  */
 import { useCallback, useEffect, useState } from "react";
-import { Activity, ExternalLink, House, KeyRound, Loader2, Mail, Plane, RotateCcw, Send, Zap } from "lucide-react";
+import { Activity, ChevronDown, ExternalLink, House, KeyRound, Loader2, Mail, MessageCircleQuestion, Plane, RefreshCw, RotateCcw, Send, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
-import { card } from "./laxUi";
+import { btnTinted, card } from "./laxUi";
 
 export type Row = {
   reservation_id: number; pickup_battery?: number | null; pickup_battery_at?: string | null; first: string | null; last: string | null; starts_at: string; ends_at: string; lax: boolean;
@@ -30,23 +30,116 @@ const ACT: Record<string, string> = {
   key_tap: "Tapped Add the car", have_app: "Has the Tesla app", video: "Watched a video", directions: "Opened directions", spot: "Checked the exact spot",
   call: "Tapped a call button", email: "Signed up for the reminder", ask: "Asked the helper", climate: "Used A/C / heat", honk: "Honked", flash: "Flashed lights",
   unlock: "Used backup unlock", turo_app: "Opened the Turo app", app_link: "Opened an app link", reminder_click: "Opened the reminder email",
+  link_sent: "Trip link sent in Turo", driver_open: "Opened the extra-driver form", key_resend: "Key re-sent", key_self_removed: "Removed the car from their Tesla app",
+  agent: "Helper fixed something", view: "Opened the page",
 };
 const ago = (iso: string) => { const m = Math.round((Date.now() - +new Date(iso)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : `${Math.round(m / 1440)} d ago`; };
 
+type Ev = { kind: string; at: string; device?: string | null; detail: Record<string, unknown> | null };
+type Qa = { at: string; q: string; a: string | null; source: string | null; unanswered: boolean; urgent: boolean };
+const CLIMATE_NAME: Record<string, string> = { cool: "Cool it down (A/C)", warm: "Warm it up (heat)", seat: "Heated seat", off: "Turned climate off" };
+/** One plain sentence per event: what exactly they did. */
+function explain(e: Ev, home: boolean): { title: string; sub?: string } {
+  const d = (e.detail ?? {}) as Record<string, string | boolean | Record<string, unknown> | null>;
+  const where = home ? "733 N Kings Rd" : "the LAX garage";
+  switch (e.kind) {
+    case "video": return { title: `Watched “${d.title ?? "a Tesla how-to"}”`, sub: "A Tesla how-to video on the page" };
+    case "directions": return { title: `Opened directions to ${d.to ?? where}`, sub: d.app ? `In ${d.app}` : "Map app opened from the page" };
+    case "link_sent": return { title: "We sent their trip link in Turo's chat", sub: d.verified ? "Confirmed it's in the Turo thread (sent by the Mac mini)" : "Sent by the Mac mini" };
+    case "key_tap": return { title: d.retry ? "Tapped Add the car again (retry)" : "Tapped Add the car", sub: "Opens the Tesla invite to add the car to their Tesla app" };
+    case "have_app": return { title: "Said they have the Tesla app" };
+    case "spot": return { title: "Looked at the exact parking spot", sub: home ? "Photo + pin at N Kings Rd" : "Level and spot in the LAX garage" };
+    case "climate": return { title: CLIMATE_NAME[String(d.action)] ?? "Used A/C or heat" };
+    case "driver_open": return { title: "Opened the extra driver form" };
+    case "key_resend": return { title: d.by === "host" ? "You re-sent their key" : "Key re-sent", sub: "Old invite cancelled, new link on their page" };
+    case "key_self_removed": return { title: "They removed the car from their Tesla app" };
+    case "agent": {
+      const r = d.result as { note?: string } | null;
+      return { title: `Helper: ${String(d.note ?? d.action ?? "took an action")}`, sub: r?.note ? String(r.note) : undefined };
+    }
+    case "view": return { title: "Opened their trip page" };
+    default: return { title: ACT[e.kind] ?? e.kind.replace(/_/g, " ") };
+  }
+}
+
+/** Everything they did + every question they asked the helper (with the answer). Loads on open. */
+function Timeline({ res, home }: { res: number; home: boolean }) {
+  const [t, setT] = useState<{ events: Ev[]; questions: Qa[] } | null>(null);
+  useEffect(() => { void rpc("lax_guest_timeline", { p_reservation: res }).then(({ data }) => setT((data as never) ?? { events: [], questions: [] })); }, [res]);
+  if (!t) return <div className="mt-2 h-16 animate-pulse rounded-xl bg-white/[0.04] bento:bg-neutral-100" />;
+  const views = t.events.filter((e) => e.kind === "view");
+  const items = [
+    ...t.events.filter((e) => e.kind !== "view").map((e) => ({ at: e.at, node: (() => { const x = explain(e, home); return (
+      <><p className="text-[15px] text-white bento:text-neutral-900">{x.title}</p>{x.sub && <p className="text-[13px] text-white/55 bento:text-neutral-500">{x.sub}</p>}</>); })() })),
+    ...t.questions.map((q) => ({ at: q.at, node: (
+      <>
+        <p className="flex items-start gap-1.5 text-[15px] text-white bento:text-neutral-900"><MessageCircleQuestion className="mt-0.5 h-4 w-4 shrink-0 text-[#409CFF] bento:text-[#007AFF]" aria-hidden />“{q.q}”</p>
+        {q.a ? <p className="mt-1 rounded-xl bg-white/[0.05] px-3 py-2 text-[13px] leading-relaxed text-white/70 bento:bg-neutral-100 bento:text-neutral-600">{q.a}</p>
+          : <p className="text-[13px] text-amber-300 bento:text-amber-700">No answer{q.unanswered ? " (flagged for you)" : ""}</p>}
+      </>) })),
+  ].sort((a, b) => +new Date(b.at) - +new Date(a.at));
+  return (
+    <div className="mt-2 overflow-hidden rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.06] bento:bg-white bento:ring-neutral-200">
+      {views.length > 0 && <p className="border-b border-white/[0.06] px-3.5 py-2 text-[13px] text-white/55 bento:border-neutral-200 bento:text-neutral-500">
+        Opened {views.length}× · first {when(views[views.length - 1].at)}{views[0].device ? ` · on ${views[0].device}` : ""}</p>}
+      {items.length === 0 ? <p className="px-3.5 py-3 text-[13px] text-white/55 bento:text-neutral-500">Nothing tapped yet.</p> : (
+        <ul className="divide-y divide-white/[0.06] bento:divide-neutral-200">
+          {items.slice(0, 60).map((it, i) => (
+            <li key={i} className="flex gap-3 px-3.5 py-2.5">
+              <div className="min-w-0 flex-1">{it.node}</div>
+              <time className="shrink-0 pt-0.5 text-[12px] tabular-nums text-white/45 bento:text-neutral-400" dateTime={it.at} title={when(it.at)}>{ago(it.at)}</time>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** Did the guest (not you) actually use their page? Your own views never count (see lax/track.ts). */
-function ActivityRow({ a }: { a: Row["activity"] }) {
+function ActivityRow({ a, res, home }: { a: Row["activity"]; res: number; home: boolean }) {
+  const [open, setOpen] = useState(false);
   if (!a || !a.last_seen) return <p className="mt-2 flex items-center gap-1.5 text-xs text-white/55 bento:text-neutral-500"><Activity className="h-3.5 w-3.5" /> Guest hasn't opened their page yet.</p>;
   return (
     <div className="mt-2 text-xs text-white/75 bento:text-neutral-600">
-      <p className="flex flex-wrap items-center gap-1.5"><Activity className="h-3.5 w-3.5 text-emerald-400" />
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        className="flex min-h-[44px] w-full flex-wrap items-center gap-1.5 text-left sm:min-h-0">
+        <Activity className="h-3.5 w-3.5 text-emerald-400" />
         <b className="text-white bento:text-neutral-900">Opened {a.views}×</b> · last seen {when(a.last_seen)} ({ago(a.last_seen)}){a.devices?.length ? ` · ${a.devices.join(", ")}` : ""}{a.asks ? ` · ${a.asks} question${a.asks === 1 ? "" : "s"}` : ""}
-      </p>
-      {a.recent?.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {a.recent.map((e, i) => <span key={i} className="rounded-full bg-white/[0.06] px-2 py-0.5 bento:bg-neutral-100">{ACT[e.kind] ?? e.kind} · {ago(e.at)}</span>)}
-        </div>
-      )}
+        <span className="ml-auto inline-flex items-center gap-0.5 font-medium text-[#409CFF] bento:text-[#007AFF]">{open ? "Hide" : "What they did"}<ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} aria-hidden /></span>
+      </button>
+      {open && <Timeline res={res} home={home} />}
     </div>
+  );
+}
+
+type Phase = { who: string; role: "driver" | "extra"; phase: "none" | "sent" | "added" | "phone_key" | "off"; added_at: string | null; proof_at: string | null; proof: string | null };
+const PHASE: Record<Phase["phase"], { dot: string; text: string; ring?: boolean }> = {
+  none: { dot: "bg-transparent", ring: true, text: "No key yet" },
+  sent: { dot: "bg-transparent", ring: true, text: "Key link sent, not added yet" },
+  added: { dot: "bg-[#FFD60A]", text: "Added to their Tesla app · not set up at the car yet" },
+  phone_key: { dot: "bg-[#30D158]", text: "Phone key working" },
+  off: { dot: "bg-white/25 bento:bg-neutral-300", text: "Access removed" },
+};
+/** Yellow = key added in their Tesla app. Green = they pressed Set Up at the car and the phone is now the key. */
+function KeyDots({ res }: { res: number }) {
+  const [p, setP] = useState<Phase[] | null>(null);
+  useEffect(() => { void rpc("guest_key_phases", { p_reservation: res }).then(({ data }) => setP((data as Phase[]) ?? [])); }, [res]);
+  if (!p || p.length === 0 || p.every((x) => x.phase === "none")) return null;
+  return (
+    <ul className="mt-3 space-y-1.5 rounded-xl bg-white/[0.03] px-3 py-2.5 bento:bg-neutral-50" aria-label="Phone keys">
+      {p.map((x, i) => {
+        const ph = PHASE[x.phase];
+        return (
+          <li key={i} className="flex items-center gap-2.5 text-sm" title={x.proof ? `Green because ${x.proof}` : undefined}>
+            <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", ph.dot, ph.ring && "ring-[1.5px] ring-inset ring-white/35 bento:ring-neutral-400")} aria-hidden />
+            <span className="font-medium text-white bento:text-neutral-900">{x.who}</span>
+            <span className="text-[12px] text-white/45 bento:text-neutral-400">{x.role === "extra" ? "Extra driver" : "Driver"}</span>
+            <span className="ml-auto text-right text-[13px] text-white/65 bento:text-neutral-600">{ph.text}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -172,7 +265,7 @@ function ChargingAdmin({ res, first }: { res: number; first: string | null }) {
   const copy = [`Supercharging during ${first ?? "the"} trip: ${money(c.total)} (${c.count} session${c.count === 1 ? "" : "s"}, ${c.kwh} kWh${c.idle > 0 ? `, incl. ${money(c.idle)} idle fees` : ""}).`,
     ...c.sessions.map((s) => `- ${when(s.at)} ${s.place ?? "Supercharger"}: ${money((s.cost ?? 0) + (s.idle ?? 0))}${s.kwh ? ` (${s.kwh} kWh)` : ""}`),
     c.final ? "Amounts are from Tesla's Supercharger billing." : "Amounts are estimates from the car's charging log."].join("\n");
-  const btn = "inline-flex h-7 items-center gap-1 rounded-full border border-white/15 px-2.5 text-[11px] text-white disabled:opacity-50 bento:border-neutral-200 bento:text-neutral-800";
+  const btn = cn(btnTinted, "shrink-0 whitespace-nowrap px-4 [&_svg]:h-4 [&_svg]:w-4");
   const refresh = async () => { setBusy(true); const { error } = await rpc("trip_charges_refresh", { p_reservation: res }); if (error) toast.error(error.message); else { toast.success("Checking. Updates in about a minute."); window.setTimeout(() => { void load(); setBusy(false); }, 45000); return; } setBusy(false); };
   return (
     <div className="mt-3 rounded-xl bg-white/[0.03] px-3 py-2 text-sm text-white/80 bento:bg-neutral-50 bento:text-neutral-700">
@@ -181,7 +274,7 @@ function ChargingAdmin({ res, first }: { res: number; first: string | null }) {
           <span className="text-xs text-white/50 bento:text-neutral-500">{c.count} stop{c.count === 1 ? "" : "s"} · {c.final ? "final from Tesla" : "estimate"}</span></span>
         <span className="flex gap-1.5">
           {c.count > 0 && <CopyButton text={copy} label="Copy for Turo" />}
-          <button type="button" className={btn} disabled={busy} onClick={() => void refresh()}>{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}Check now</button>
+          <button type="button" className={btn} disabled={busy} onClick={() => void refresh()}>{busy ? <><Loader2 className="animate-spin" aria-hidden />Checking…</> : <><RefreshCw aria-hidden />Check now</>}</button>
         </span>
       </div>
       {c.last_error && <p className="mt-1 text-xs text-amber-300 bento:text-amber-700">Last check: {c.last_error.includes("Scope") ? "Tesla needs the charging permission. Reconnect Tesla in Settings to get final amounts." : c.last_error}</p>}
@@ -236,7 +329,8 @@ export function GuestRow({ r, reload, compact }: { r: Row; reload: () => void; c
           </div>
           <LinkSentRow res={r.reservation_id} />
           {new Date(r.starts_at) <= new Date() && <ChargingAdmin res={r.reservation_id} first={r.first} />}
-          <ActivityRow a={r.activity} />
+          <ActivityRow a={r.activity} res={r.reservation_id} home={home} />
+          <KeyDots res={r.reservation_id} />
           {home && <KeyRow r={r} reload={reload} />}
           {<><div className="mt-3 flex flex-wrap items-center gap-2">
             <Mail className="h-4 w-4 text-white/40 bento:text-neutral-400" />

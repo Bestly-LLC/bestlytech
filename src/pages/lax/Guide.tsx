@@ -71,7 +71,7 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
   // On the way: 1 hour before pickup until just after it
   if (now >= s - H && controlsOn) {
     glow.add("pickup");
-    const need = climateNeed(null, car?.outside_f); // outside temp only
+    const need = climateNeed(car?.inside_f, car?.outside_f); // 72° goal: A/C at 80°+, heat at 52° or below
     if (now < s - 10 * 60e3 && !added && (need === "cool" || need === "warm")) {
       glow.add("climate");
       return { next: { icon: Snowflake, title: need === "cool" ? "On your way? Cool the car first." : "On your way? Warm the car first.", sub: car?.inside_f != null ? `It's ${Math.round(car.inside_f)}° inside right now.` : undefined, action: "climate", label: need === "cool" ? "Cool it down" : "Warm it up" }, glow };

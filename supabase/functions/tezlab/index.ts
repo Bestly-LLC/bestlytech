@@ -10,6 +10,9 @@
 //   POST {op:"job", id}          (from the DB trigger) → runs one queued guest command
 // If TezLab fails, the job goes back to the queue for the Mac mini worker (Tesla Fleet API) and Scout is told.
 //
+// v14: merges the car-protection jobs (lost when v13 was deployed over them): 'caps' (TezLab command list),
+//      'drives' (drives with top speed → car_drives, for speed alerts), 'cmd' (server-made TezLab commands: Sentry,
+//      charge start, erase guest data), and refresh stores TezLab's full status (car_raw_store) for windows/Sentry.
 // v12: TezLab outages are recognised as TezLab's problem, not ours. 2026-09-24 their OAuth origin behind
 //      Cloudflare answered 502 to every /oauth/token call (even a bogus one; a healthy server says 400) while
 //      their MCP endpoint rejected a still-valid access token with 401. v11 treated that as "token refresh
@@ -167,6 +170,20 @@ function chargeDetail(c: any) {
   };
 }
 
+// Loose readers for TezLab drive records (field names vary between list and detail).
+// deno-lint-ignore no-explicit-any
+function deep(o: any, re: RegExp): any { if (!o || typeof o !== "object") return null; for (const [k, v] of Object.entries(o)) { if (re.test(k) && v && typeof v === "object") return v; } return null; }
+// deno-lint-ignore no-explicit-any
+function findNum(o: any, re: RegExp, depth = 0): number | null {
+  if (!o || typeof o !== "object" || depth > 3) return null;
+  for (const [k, v] of Object.entries(o)) if (re.test(k) && v != null && v !== "" && !isNaN(Number(v))) return Number(v);
+  for (const v of Object.values(o)) { const r = findNum(v, re, depth + 1); if (r != null) return r; }
+  return null;
+}
+// deno-lint-ignore no-explicit-any
+function pick(a: any, b: any, re: RegExp): string | null { for (const o of [a, b]) if (o) for (const [k, v] of Object.entries(o)) if (re.test(k) && typeof v === "string") return v; return null; }
+const num = (v: unknown) => (v == null || v === "" || isNaN(Number(v)) ? null : Number(v));
+
 // TezLab status → the state shape tesla_job_done expects (now with location + trunks for the return checklist).
 // deno-lint-ignore no-explicit-any
 function toState(v: any) {
@@ -249,8 +266,66 @@ async function runJob(id: number) {
       await sb.rpc("tezlab_ok");
       return { ok: true };
     }
+    if (job.action === "caps") {
+      const c = await tool("get_command_capabilities", { vin });
+      await sb.from("car_protect_settings").update({ caps: c, caps_at: new Date().toISOString() }).eq("id", 1);
+      await sb.rpc("tesla_job_done", { p_id: id, p_ok: true, p_result: { ok: true, via: "tezlab", caps: c }, p_state: null });
+      await sb.rpc("tezlab_ok");
+      return { ok: true };
+    }
+    if (job.action === "drives") {
+      const since = String(job.args?.since ?? new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10));
+      // deno-lint-ignore no-explicit-any
+      const br: any = await tool("get_drives_brief", { vin, start_date: since, limit: 100, order: "desc" });
+      // deno-lint-ignore no-explicit-any
+      const list: any[] = Array.isArray(br) ? br : (br?.drives ?? br?.data ?? []);
+      const ids = list.map((d) => String(d.id));
+      const { data: known } = await sb.rpc("car_drives_known", { p_ids: ids });
+      const knownSet = new Set((known ?? []) as string[]);
+      const out: Record<string, unknown>[] = [];
+      for (const d of list.slice(0, 25)) {
+        const idS = String(d.id);
+        // deno-lint-ignore no-explicit-any
+        let det: any = null;
+        if (!knownSet.has(idS) || job.args?.all) det = await tool("get_drive_detail", { vin, id: idS }).catch(() => null);
+        if (knownSet.has(idS) && !det) continue;
+        const src = det ?? d;
+        out.push({
+          id: idS, vin, started_at: pick(src, d, /^(start_time|started_at|start)$/), ended_at: pick(src, d, /^(end_time|ended_at|end)$/),
+          from_name: deep(d, /^from$/)?.name ?? deep(src, /start_location|from/)?.name ?? null,
+          from_lat: num(deep(d, /^from$/)?.latitude ?? deep(src, /start_location|from/)?.latitude),
+          from_lon: num(deep(d, /^from$/)?.longitude ?? deep(src, /start_location|from/)?.longitude),
+          to_name: deep(d, /^to$/)?.name ?? deep(src, /end_location|to/)?.name ?? null,
+          to_lat: num(deep(d, /^to$/)?.latitude ?? deep(src, /end_location|to/)?.latitude),
+          to_lon: num(deep(d, /^to$/)?.longitude ?? deep(src, /end_location|to/)?.longitude),
+          state: d.state ?? src.state ?? null, country: d.country_code ?? src.country_code ?? null,
+          miles: num(findNum(src, /^(distance|distance_mi|distance_miles|miles)$/) ?? findNum(d, /distance/)),
+          max_mph: num(findNum(src, /max.*speed|speed.*max/)), avg_mph: num(findNum(src, /(avg|average).*speed|speed.*(avg|average)/)),
+          odo_start: num(findNum(src, /(start|begin).*odometer|odometer.*(start|begin)/)), odo_end: num(findNum(src, /end.*odometer|odometer.*end/)),
+          raw: det ?? d,
+        });
+      }
+      const { data: n } = await sb.rpc("car_drives_store", { p_drives: out });
+      await sb.rpc("tesla_job_done", { p_id: id, p_ok: true, p_result: { ok: true, via: "tezlab", drives: list.length, stored: n }, p_state: null });
+      await sb.rpc("tezlab_ok");
+      return { ok: true, stored: n };
+    }
+    if (job.action === "cmd") {
+      const command = String(job.args?.command ?? "");
+      if (!command) throw new Error("cmd without a command");
+      await sb.rpc("tezlab_job_stage", { p_id: id, p_stage: "Waking up the car" });
+      await tool("send_vehicle_command", { vin, command: "wake_up" }).catch((e) => { if (isDown(e)) throw e; });
+      await sb.rpc("tezlab_job_stage", { p_id: id, p_stage: "Sending to the car" });
+      const r = await tool("send_vehicle_command", { vin, command, ...((job.args?.params ?? {}) as Record<string, unknown>) });
+      const v = await tool("get_vehicle_status", { vin }).catch(() => null);
+      if (v) await sb.rpc("car_raw_store", { p_raw: v });
+      await sb.rpc("tesla_job_done", { p_id: id, p_ok: true, p_result: { ok: true, via: "tezlab", command, reply: r }, p_state: toState(v) });
+      await sb.rpc("tezlab_ok");
+      return { ok: true };
+    }
     if (job.action === "refresh") {
       const v = await tool("get_vehicle_status", { vin });
+      if (v && typeof v === "object") await sb.rpc("car_raw_store", { p_raw: v });
       await sb.rpc("tesla_job_done", { p_id: id, p_ok: true, p_result: { ok: true, msg: "updated", via: "tezlab" }, p_state: toState(v) });
       await sb.rpc("tezlab_ok");
       return { ok: true };
