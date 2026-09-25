@@ -6,7 +6,7 @@
  */
 import { useState, type ReactNode } from "react";
 import { Info, Zap } from "lucide-react";
-import { ChargerLine, SendToCar, type NavRun } from "./KeyNext";
+import { SendToCar, type NavRun } from "./KeyNext";
 import { RangeCheck, type RangeCheckData } from "./LiveCharge";
 import type { TripKind } from "./places";
 
@@ -95,7 +95,7 @@ export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, obse
         {observedAt && <p className="mt-2 text-center text-[11px] text-white/45">Updated {new Date(observedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</p>}
       </div>
       {!compact && <RangeCheck rc={rc} kind={kind} className="mt-3" warnOnly />}
-      {r.needs && (compact ? <SendToCar run={run} kind={kind} label="Send a Supercharger to the car" /> : <><span className="mt-3 block"><ChargerLine kind={kind} /></span><SendToCar run={run} kind={kind} /></>)}
+      {r.needs && (compact ? <SendToCar run={run} kind={kind} label="Send a Supercharger to the car" /> : <><span className="mt-3 block text-[13px] text-white/65">Send to car picks the Supercharger closest to where the car is now.</span><SendToCar run={run} kind={kind} /></>)}
     </div>
   );
 }

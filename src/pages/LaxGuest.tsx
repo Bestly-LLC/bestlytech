@@ -29,7 +29,7 @@ import { Fold } from "./lax/HomeGuide";
 import ExtraDrivers from "./lax/ExtraDrivers";
 import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./lax/Charging";
-import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./lax/LiveCharge";
+import { ChargeNow, OpenStalls, RangeCheck, sendNearestSupercharger, type RangeCheckData } from "./lax/LiveCharge";
 import { ReturnChargeBlock, returnCharge, returnChargeLive } from "./lax/ReturnCharge";
 import { BestlyAd } from "./lax/BestlyAd";
 import { PhoneHandoff } from "./lax/PhoneHandoff";
@@ -273,6 +273,11 @@ export default function LaxGuest() {
   }, [token, slug]);
   const carCommand = async (action: CarAction, onStage?: (s: string) => void) => {
     if (demo) { onStage?.("Demo: nothing is sent to the car"); await new Promise((r) => setTimeout(r, 1200)); return; }
+    // Supercharger: the one closest to where the car is now (falls back to the fixed nearby one if Tesla can't list sites).
+    if (token && (action === "nav_charger" || action === "nav_charger_lax")) {
+      const name = await sendNearestSupercharger(token, onStage);
+      if (name) { onStage?.(`${name} is in the car's navigation`); return; }
+    }
     if (action !== "refresh") track(token || undefined, ["cool", "warm", "seat", "off"].includes(action) ? "climate" : action, { action });
     const { data, error } = token
       ? await rpc("lax_guest_car_command", { p_token: token, p_action: action })

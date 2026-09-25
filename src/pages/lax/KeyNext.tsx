@@ -121,7 +121,7 @@ export function SendToCar({ run, kind, action, label = "Send to car's navigation
   );
   const go = async () => {
     setSt("busy"); setMsg(null);
-    try { await run(action ?? CHARGERS[kind].action, (s) => setMsg(s)); setSt("done"); setMsg("It's in the car's navigation."); }
+    try { await run(action ?? CHARGERS[kind].action, (s) => setMsg(s)); setSt("done"); setMsg((m) => (m?.includes("navigation") ? m : "It's in the car's navigation.")); }
     catch (e) { setSt("err"); setMsg((e as Error).message || "Couldn't reach the car. Tap the address instead."); }
   };
   return (

@@ -154,3 +154,40 @@ export function SendToCarIcon({ className = "" }: { className?: string }) {
     </span>
   );
 }
+
+/**
+ * "Send a Supercharger to the car": the Supercharger closest to where the car is RIGHT NOW (Tesla's live list,
+ * nearest with an open stall first), sent to the car's navigation. Returns null when Tesla can't list sites
+ * (car asleep, no answer), so the caller can fall back to the fixed nearby Supercharger.
+ */
+export async function sendNearestSupercharger(token: string, onStage?: (s: string) => void): Promise<string | null> {
+  onStage?.("Finding the Supercharger closest to the car");
+  let sites: Site[] | null = null;
+  for (let i = 0; i < 12 && !sites; i++) {
+    const { data } = await rpc("trip_superchargers", { p_token: token });
+    const r = data as { ok: boolean; sites?: Site[]; pending?: boolean; asleep?: boolean } | null;
+    if (!r?.ok || r.asleep) return null;
+    if (r.sites) sites = r.sites.filter((s) => !s.closed);
+    else await new Promise((res) => setTimeout(res, 2500));
+  }
+  if (!sites?.length) return null;
+  const byDist = [...sites].sort((a, b) => a.miles - b.miles);
+  const pick = byDist.find((s) => (s.open ?? 1) > 0) ?? byDist[0];
+  onStage?.(`Sending ${nice(pick.name)} (${pick.miles < 10 ? pick.miles.toFixed(1) : Math.round(pick.miles)} mi)`);
+  const { data } = await rpc("trip_supercharger_nav", { p_token: token, p_lat: pick.lat, p_lon: pick.lon });
+  const r = data as { ok: boolean; id?: number; error?: string } | null;
+  if (!r?.ok) throw new Error(r?.error ?? "Couldn't send it.");
+  track(token, "nav_point", { nearest: nice(pick.name) });
+  if (r.id) {
+    for (let i = 0; i < 45; i++) {
+      await new Promise((res) => setTimeout(res, 2000));
+      const { data: j } = await rpc("lax_guest_car_job", { p_token: token, p_id: r.id });
+      const job = j as { status: string; result?: { error?: string } } | null;
+      if (job?.status === "done") return nice(pick.name);
+      if (job?.status === "failed") throw new Error(job.result?.error ?? "The car didn't respond");
+    }
+    throw new Error("The car is taking a while. Try again in a minute.");
+  }
+  return nice(pick.name);
+}
+
