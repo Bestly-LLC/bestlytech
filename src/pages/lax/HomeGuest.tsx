@@ -414,7 +414,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
             {chargeLive && <Step n={1}><ReturnChargeBlock kind="home" endsAt={pub.trip?.ends_at} lead={<b className="text-white">Charge: </b>} pickup={pub.pickup_battery} battery={car?.battery} rc={pub.range_check} run={live ? run : undefined} setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={car?.observed_at} check={<ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} />} /></Step>}
             <Step n={chargeLive ? 2 : 1}><Bullets items={[
               { e: "📍", tint: "rgba(255,69,58,.22)", title: "Park on N Kings Rd", sub: "Right by the building." },
-              { e: "🚫", tint: "rgba(255,159,10,.22)", title: "Skip the Joybird spots", sub: "That street parking isn't ours." },
+              { e: "🚫", tint: "rgba(255,159,10,.22)", title: <>Please do not use the <u className="underline decoration-2 underline-offset-2">metered</u> parking near Joybird.</> },
               { e: "🧹", tint: "rgba(10,132,255,.22)", title: "Street sweeping", sub: <>West side Mon 8–10 AM · East side Tue 8–10 AM<br />$75 tickets</> },
             ]} /><span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span>{!chargeLive && <ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} />}</Step>
             <Step n={chargeLive ? 3 : 2}><Bullets items={[
