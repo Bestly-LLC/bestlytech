@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { AlertTriangle, CheckCircle2, ExternalLink, HeartHandshake, Loader2, RefreshCw } from "lucide-react";
+import { VestaInvites } from "./VestaInvites";
 
 type Status = {
   release: string; deployment: string; last_run: string | null; paused: boolean;
@@ -111,6 +112,8 @@ export default function Vesta() {
           )}
         </div>
       )}
+
+      <VestaInvites />
 
       {SECTIONS.map((sec) => (
         <div key={sec.title} className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10">
