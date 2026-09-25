@@ -178,7 +178,7 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
             <li className="flex gap-3 rounded-2xl p-3 ring-1 ring-white/10">
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/15 text-[14px] font-bold text-white">3</span>
               <div className="min-w-0 flex-1">
-                <p className="text-[16px] font-semibold text-white">At the car: tap &ldquo;Set Up&rdquo;, then Unlock</p>
+                <p className="text-[16px] font-semibold text-white">At the car: tap &ldquo;Set Up&rdquo; -<br />then Unlock</p>
                 <p className="mt-0.5 text-[14px] leading-snug text-white/70">Stand next to the car with Bluetooth on. Open the Tesla app and tap <b className="text-white">&ldquo;Set Up&rdquo;</b>. Follow the steps. Then tap <b className="text-white">Unlock</b> and drive.</p>
               </div>
             </li>

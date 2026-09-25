@@ -155,7 +155,7 @@ export function KeyNextSteps({ trip, pickupBattery, place, kind, maps, go, run }
   } else if (now < s + H) {
     title = "At the car";
     steps = [
-      { icon: Smartphone, title: "Open the Tesla app: tap \u201cSet Up\u201d, then Unlock", body: "First time only: stand next to the car with Bluetooth on, tap \u201cSet Up\u201d and follow the steps. After that, just tap Unlock." },
+      { icon: Smartphone, title: "Open the Tesla app: tap \u201cSet Up\u201d -\nthen Unlock", body: "First time only: stand next to the car with Bluetooth on, tap \u201cSet Up\u201d and follow the steps. After that, just tap Unlock." },
       { icon: MapPin, title: "Not sure which car?", body: "Tap Honk or Flash lights and it'll beep or blink.", action: { label: "Find the car", onClick: () => go("climate") } },
       { icon: CheckCircle2, title: "Take your check-in photos", body: "All around the car, in the Turo app, before you drive off.", action: TURO },
     ];
@@ -181,7 +181,7 @@ export function KeyNextSteps({ trip, pickupBattery, place, kind, maps, go, run }
           <li key={st.title} className="flex items-start gap-3 px-1 py-3">
             <st.icon className="mt-0.5 h-5 w-5 shrink-0" style={{ color: ACCENT }} strokeWidth={1.75} />
             <div className="min-w-0 flex-1">
-              <p className="text-[15px] font-semibold leading-snug text-white">{st.title}</p>
+              <p className="whitespace-pre-line text-[15px] font-semibold leading-snug text-white">{st.title}</p>
               <p className="mt-0.5 text-[14px] leading-snug text-white/75">{st.body}</p>
               {st.send && <SendToCar run={run} kind={kind} />}
             </div>

@@ -21,7 +21,9 @@ export function Lines({ children }: { children: ReactNode }) {
       {paras.map((p, i) => (
         <Fragment key={i}>
           {i > 0 && "\n"}
-          {sentences(p).map((s, j) => <Fragment key={j}>{j > 0 && " "}<span className="inline-block max-w-full">{s}</span></Fragment>)}
+          {/^\s/.test(p) && " "}
+          {sentences(p).map((s, j) => <Fragment key={j}>{j > 0 && " "}<span className="inline-block max-w-full">{s.trim()}</span></Fragment>)}
+          {/\s$/.test(p) && p.trim() && " "}
         </Fragment>
       ))}
     </>

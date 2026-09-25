@@ -77,7 +77,7 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
       glow.add("climate");
       return { next: { icon: Snowflake, title: need === "cool" ? "On your way? Cool the car first." : "On your way? Warm the car first.", sub: car?.inside_f != null ? `It's ${Math.round(car.inside_f)}° inside right now.` : undefined, action: "climate", label: need === "cool" ? "Cool it down" : "Warm it up" }, glow };
     }
-    return { next: { icon: KeyRound, title: k ? "At the car: tap “Set Up”, then Unlock" : "Pickup time", sub: k ? "In the Tesla app, next to the car, Bluetooth on." : "Follow the pickup steps.", action: "pickup", label: "Pickup steps" }, glow };
+    return { next: { icon: KeyRound, title: k ? "At the car: tap “Set Up” -\nthen Unlock" : "Pickup time", sub: k ? "In the Tesla app, next to the car, Bluetooth on." : "Follow the pickup steps.", action: "pickup", label: "Pickup steps" }, glow };
   }
   // Key added, pickup later
   if (added) return { next: { icon: CheckCircle2, title: "Key added. You're all set.", sub: `Pickup ${fmtWhen(trip.starts_at)}. You can cool or warm the car 1 hour before.`, action: "pickup", label: "Pickup steps" }, glow };
@@ -98,7 +98,7 @@ export function NextStep({ next, glow, onAction, onHasApp, run, kind, extra }: {
       <div className="mt-1.5 flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full" style={{ background: ACCENT }}><Icon className="h-5 w-5 text-[#1A1140]" aria-hidden /></span>
         <div className="min-w-0 flex-1">
-          <p className="text-[18px] font-bold leading-snug text-white"><Lines>{next.title}</Lines></p>
+          <p className="whitespace-pre-line text-[18px] font-bold leading-snug text-white"><Lines>{next.title}</Lines></p>
           {next.sub && <p className="mt-0.5 text-[14px] leading-snug text-white/75"><Lines>{next.sub}</Lines></p>}
         </div>
       </div>

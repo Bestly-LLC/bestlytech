@@ -4,7 +4,7 @@
  * One exception: for the host (signed-in admin, or the host link with ?dk=…) the "Add the car" button is a REAL
  * Tesla key for Blue Steel. Anyone who adds it is removed automatically (2 hours by default; Turo settings > Demo key).
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FlaskConical, KeyRound } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { DEMO_CAR } from "./GuestExtras";
@@ -188,27 +188,54 @@ export function useDemoStage(kind: "home" | "lax", enabled: boolean) {
 
 /** Floating switcher so the host can walk the trip from booking to return. */
 export function DemoBar({ kind, stage, onStage, weather, onWeather }: { kind: "home" | "lax"; stage: string; onStage: (s: string) => void; weather?: DemoWeather; onWeather?: (w: DemoWeather) => void }) {
+  // Tucks itself away so the page (and sheets) can be seen: a faint "Demo" pill. Tap it to open, pick things,
+  // and it tucks away again a few seconds after you stop (never while a menu is open).
+  const [open, setOpen] = useState(true);
+  const busy = useRef(false);
+  const timer = useRef(0);
+  const later = useCallback((ms = 4000) => {
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => { if (!busy.current) setOpen(false); }, ms);
+  }, []);
+  useEffect(() => { later(2500); return () => window.clearTimeout(timer.current); }, [later]);
+  const poke = () => { setOpen(true); later(); };
+  const stageLabel = STAGES[kind].find((s) => s.id === stage)?.label ?? "";
+  const focusProps = {
+    onFocus: () => { busy.current = true; window.clearTimeout(timer.current); },
+    onBlur: () => { busy.current = false; later(2500); },
+  };
   return (
-    <div className="fixed inset-x-0 bottom-[8.5rem] z-40 flex justify-center px-3" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-      <label className="flex w-full max-w-md items-center gap-2 rounded-2xl bg-black/85 px-3 py-2 text-white shadow-2xl ring-1 ring-white/20 backdrop-blur">
-        <FlaskConical className="h-4 w-4 shrink-0 text-amber-300" aria-hidden />
-        <span className="shrink-0 text-[12px] font-semibold uppercase tracking-[0.12em] text-amber-300">Demo</span>
-        <select value={stage} onChange={(e) => onStage(e.target.value)} className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1.5 text-[14px] text-white">
-          {STAGES[kind].map((s) => <option key={s.id} value={s.id} className="text-black">{s.label}</option>)}
-        </select>
-        {onWeather && (
-          <select value={weather} onChange={(e) => onWeather(e.target.value as DemoWeather)} aria-label="Demo weather"
-            className="w-[7.5rem] shrink-0 rounded-lg bg-white/10 px-2 py-1.5 text-[14px] text-white">
-            {DEMO_WEATHER.map((w) => <option key={w.id} value={w.id} className="text-black">{w.label}</option>)}
+    <div className="pointer-events-none fixed inset-x-0 bottom-[8.5rem] z-40 flex justify-center px-3" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      {open ? (
+        <div onPointerDown={poke} onKeyDown={poke}
+          className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-2xl bg-black/85 px-3 py-2 text-white shadow-2xl ring-1 ring-white/20 backdrop-blur transition-opacity duration-200 motion-reduce:transition-none">
+          <button type="button" onClick={() => setOpen(false)} aria-label="Hide demo controls" className="flex shrink-0 items-center gap-1.5">
+            <FlaskConical className="h-4 w-4 shrink-0 text-amber-300" aria-hidden />
+            <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-amber-300">Demo</span>
+          </button>
+          <select value={stage} onChange={(e) => { onStage(e.target.value); later(); }} {...focusProps} aria-label="Demo trip stage" className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1.5 text-[14px] text-white">
+            {STAGES[kind].map((s) => <option key={s.id} value={s.id} className="text-black">{s.label}</option>)}
           </select>
-        )}
-        {realKey && (
-          <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-1 text-[12px] font-semibold text-emerald-300 ring-1 ring-emerald-300/30"
-            title={`Real Tesla key. Anyone who adds it is removed after ${Math.round((realKey.keep_minutes ?? 120) / 60 * 10) / 10} hr.`}>
-            <KeyRound className="h-3.5 w-3.5" aria-hidden /> Real key
-          </span>
-        )}
-      </label>
+          {onWeather && (
+            <select value={weather} onChange={(e) => { onWeather(e.target.value as DemoWeather); later(); }} {...focusProps} aria-label="Demo weather"
+              className="w-[7.5rem] shrink-0 rounded-lg bg-white/10 px-2 py-1.5 text-[14px] text-white">
+              {DEMO_WEATHER.map((w) => <option key={w.id} value={w.id} className="text-black">{w.label}</option>)}
+            </select>
+          )}
+          {realKey && (
+            <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-1 text-[12px] font-semibold text-emerald-300 ring-1 ring-emerald-300/30"
+              title={`Real Tesla key. Anyone who adds it is removed after ${Math.round((realKey.keep_minutes ?? 120) / 60 * 10) / 10} hr.`}>
+              <KeyRound className="h-3.5 w-3.5" aria-hidden /> Real key
+            </span>
+          )}
+        </div>
+      ) : (
+        <button type="button" onClick={poke} aria-label={`Show demo controls (${stageLabel})`}
+          className="pointer-events-auto ml-auto flex min-h-[36px] items-center gap-1.5 rounded-full bg-black/80 px-3 text-white opacity-25 ring-1 ring-white/20 transition-opacity duration-200 hover:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none">
+          <FlaskConical className="h-3.5 w-3.5 text-amber-300" aria-hidden />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-300">Demo</span>
+        </button>
+      )}
     </div>
   );
 }

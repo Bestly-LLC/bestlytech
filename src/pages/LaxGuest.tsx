@@ -592,7 +592,7 @@ export default function LaxGuest() {
                     opensAt={pub.trip && Date.now() < +new Date(pub.trip.starts_at) - 2 * 3600e3 ? pub.trip.starts_at : null} />
                 </Step>
                 {keySteps && (
-                  <Step n={n0 + 6} when="At the car" title={"Tap \u201cSet Up\u201d, then Unlock."}>
+                  <Step n={n0 + 6} when="At the car" title={<>Tap &ldquo;Set Up&rdquo; -<br />then Unlock</>}>
                     Next to the car, with Bluetooth on, open the Tesla app and tap <b className="text-white">&ldquo;Set Up&rdquo;</b>. Follow the steps, then tap <b className="text-white">Unlock</b>. Take your check-in photos in the Turo app.
                     <span className="mt-1 block text-white/60">Not sure which one is yours? Use Find the Car, or tap Honk.</span>
                     <OpenTuro className="mt-3 w-full" label="Open Turo for photos" />
