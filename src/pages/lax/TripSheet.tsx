@@ -90,7 +90,7 @@ export function TagBar({ open, onOpen, top, variant, hideTags, glow, badge }: { 
   );
 }
 
-export function TripSheet({ open, onClose, children, title, kicker, footer, bodyRef }: { open: boolean; onClose: () => void; children: ReactNode; title: string; kicker: string; footer?: ReactNode; bodyRef?: React.Ref<HTMLDivElement> }) {
+export function TripSheet({ open, onClose, children, title, label, kicker, footer, bodyRef }: { open: boolean; onClose: () => void; children: ReactNode; title: ReactNode; label?: string; kicker: string; footer?: ReactNode; bodyRef?: React.Ref<HTMLDivElement> }) {
   const [drag, setDrag] = useState(0);
   const start = useRef<{ y: number; t: number } | null>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -123,7 +123,7 @@ export function TripSheet({ open, onClose, children, title, kicker, footer, body
         ref={panel}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-label={label ?? (typeof title === "string" ? title : kicker)}
         tabIndex={-1}
         className="absolute inset-x-0 bottom-0 mx-auto flex max-h-[88dvh] max-w-md flex-col rounded-t-[28px] bg-[color:var(--trip-bg,#1A1140)] shadow-2xl shadow-black/60 outline-none ring-1 ring-white/10 motion-reduce:transition-none"
         style={{
