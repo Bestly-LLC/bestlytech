@@ -301,7 +301,9 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
   const [chips, setChips] = useState<string[]>(home ? SUGGEST_HOME : SUGGEST);
   const loaded = useRef(false);
   const body = useRef<HTMLDivElement>(null);
-  const who = { p_token: token || null, p_slug: token ? null : slug || null };
+  // Host demo pages talk to the real helper with an example trip (server link d:demo-home / d:demo-lax, no tools).
+  const demoLink = token?.startsWith("demo-") ? token : null;
+  const who = demoLink ? { p_token: null, p_slug: demoLink } : { p_token: token || null, p_slug: token ? null : slug || null };
   // Everything the guest has typed so far, so a chip is never offered for something they covered.
   const askedRef = useRef("");
   const refreshChips = () =>
@@ -335,15 +337,8 @@ export function AskSheet({ open, onClose, token, slug, home = false }: { open: b
     track(token, "ask");
     const tmp = `a${Date.now()}`;
     setMsgs((xs) => [...xs, { id: `u${Date.now()}`, role: "user", content: q }, { id: tmp, role: "assistant", content: "", status: "pending" }]);
-    if (token?.startsWith("demo-")) {  // host demo page: no real trip behind it
-      await new Promise((r) => setTimeout(r, 900));
-      if (/\bearl(y|ier)\b/i.test(q) && !/flight|terminal|airport/i.test(q)) { patch(tmp, { content: EARLY_A, status: "done" }); setBusy(false); return; }
-      patch(tmp, { content: "This is a demo page, so I can't look up a real trip. On a guest's page I answer from their live trip: key status, the car's temperature, pickup and return steps, and I can resend their key if it's stuck.", status: "done" });
-      setBusy(false);
-      return;
-    }
     try {
-      const { data, error } = await supabase.functions.invoke("lax-ask", { body: { token: token || undefined, slug: token ? undefined : slug, question: q } });
+      const { data, error } = await supabase.functions.invoke("lax-ask", { body: demoLink ? { slug: demoLink, question: q } : { token: token || undefined, slug: token ? undefined : slug, question: q } });
       const r = data as { ok: boolean; error?: string; reply_id?: number; status?: string; content?: string; left?: number; urgent?: boolean; fixed?: boolean } | null;
       if (error || !r?.ok || !r.reply_id) { patch(tmp, { content: r?.error ?? "The helper hit a snag. Try again, or message your host in the Turo app.", status: "error" }); return; }
       if (r.left != null) setLeft(r.left);
