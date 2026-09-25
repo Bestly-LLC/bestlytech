@@ -175,10 +175,12 @@ export function KeySteps({ k, token, hasApp, onHasApp, onAdded, glow }: { k: Key
                 <span className={`block rounded-2xl ${glow ? "trip-glow" : ""}`}>
                   <a href={k.link} onClick={() => { track(undefined, "key_tap"); markKeyTapped(token); window.setTimeout(() => setTapped(true), 600); }}
                     className="flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#1A1140] shadow-lg shadow-black/30 active:scale-[0.99]" style={{ background: ACCENT }}>
-                    <KeyRound className="h-5 w-5" /> Add the car to my Tesla app
+                    <KeyRound className="h-5 w-5" /> {k.link === "#demo-key" ? "Pretend: add the car" : "Add the car to my Tesla app"}
                   </a>
                 </span>
-                <span className="mt-1.5 block text-[13px] text-white/65">Then tap <b className="text-white">Accept</b> in the Tesla app. One-time link, just for you.</span>
+                {k.link === "#demo-key"
+                  ? <span className="mt-1.5 block rounded-xl bg-amber-400/10 px-3 py-2 text-[13px] leading-snug text-amber-100 ring-1 ring-amber-300/30">Demo on a device that isn't yours, so this key is pretend. For the real key, sign in to bestly.tech/admin once on this phone, or open the host link from Turo settings → Demo key.</span>
+                  : <span className="mt-1.5 block text-[13px] text-white/65">Then tap <b className="text-white">Accept</b> in the Tesla app. One-time link, just for you.</span>}
               </>
           : <span className="block rounded-xl bg-white/10 p-3 text-[14px]">Preview: the real button appears here 2 hours before pickup.</span>)}
         {k.state === "problem" && <span className="flex items-start gap-2"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />Your key is taking longer than usual. Your host knows and it retries by itself.</span>}

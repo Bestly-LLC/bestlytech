@@ -74,19 +74,18 @@ export function KeyPending({ token, link, onAdded }: { token: string; link: stri
     return () => { stop = true; window.clearInterval(id); document.removeEventListener("visibilitychange", back); window.removeEventListener("focus", back); };
   }, [token, onAdded]);
   const slow = Date.now() - (keyTapped(token) ?? Date.now()) > 3 * 60e3;
+  // No checkmark here: nothing is done until Tesla shows the new driver. The key button stays live the whole time.
   return (
-    <div className="mt-4">
-      <div aria-disabled className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-white/[0.08] text-[16px] font-bold text-white/70 ring-1 ring-white/10">
-        <CheckCircle2 className="h-5 w-5 text-emerald-300" /> Opened in the Tesla app
-      </div>
-      <p className="mt-2 flex items-center gap-2 text-[14px] text-white/80" aria-live="polite">
-        <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" style={{ color: ACCENT }} />
-        {slow ? "Still waiting for Tesla. Make sure you tapped Accept in the Tesla app." : "Checking with Tesla. This page updates by itself."}
+    <div className="mt-1">
+      <p className="flex items-center gap-2 text-[15px] font-semibold text-white" aria-live="polite">
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none" style={{ color: ACCENT }} />
+        {slow ? "Still waiting for Tesla" : "Waiting for you to tap Accept in the Tesla app"}
       </p>
+      <p className="mt-1 text-[13px] leading-snug text-white/70">{slow ? "Didn't see an Accept button? Open the key again below." : "This page updates by itself once you've accepted."}</p>
       {link && (
         <a href={link} onClick={() => { markKeyTapped(token); track(token, "key_tap", { retry: true }); }}
-          className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold underline decoration-white/40 underline-offset-2" style={{ color: ACCENT }}>
-          <RotateCcw className="h-4 w-4" /> Didn't work? Try the link again
+          className="mt-3 flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#1A1140] shadow-lg shadow-black/30 active:scale-[0.99]" style={{ background: ACCENT }}>
+          <KeyRound className="h-5 w-5" /> Open the key in the Tesla app
         </a>
       )}
       <span className="sr-only">{checks} checks</span>
