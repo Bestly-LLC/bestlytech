@@ -67,7 +67,19 @@ async function currentCode(): Promise<Code | null> {
 type Trip = { reservation_id: number; first: string | null; starts_at: string; ends_at: string; token?: string };
 const isTripSerial = (s: string) => /^trip-\d+$/.test(s);
 const knownSerial = (s: string) => s === SERIAL || s === HOST_SERIAL || isTripSerial(s);
+// Host demo pages (/t/demo-lax, /t/demo-home): a real, signed pass for an example trip with a demo QR
+// that does NOT open the lobby door. reservation_id 0 marks it.
+const isDemoToken = (t: string | null) => !!t && /^demo-(home|lax)$/.test(t);
+function demoTrip(t: string): Trip {
+  const s = Date.now() + 30 * 60e3;
+  return { reservation_id: 0, first: "Demo", starts_at: new Date(s).toISOString(), ends_at: new Date(s + 72 * 3600e3).toISOString(), token: t };
+}
+async function demoCode(): Promise<Code> {
+  const cur = await currentCode().catch(() => null);
+  return { id: "demo", payload: "BESTLY-DEMO-QR", valid_month: cur?.valid_month ?? laMonthNow(), note: "Demo pass. This QR code won't open the lobby door.", created_at: new Date().toISOString() };
+}
 async function tripByToken(t: string): Promise<Trip | null> {
+  if (isDemoToken(t)) return demoTrip(t);
   const { data } = await sb.rpc("lax_guest_trip", { p_token: t });
   return (data as Trip) ?? null;
 }
@@ -77,6 +89,7 @@ async function tripByRes(id: number): Promise<Trip | null> {
 }
 async function codeFor(trip: Trip | null): Promise<Code | null> {
   if (!trip) return await currentCode();
+  if (trip.reservation_id === 0) return await demoCode();
   const { data } = await sb.rpc("lax_code_for", { p_at: trip.starts_at });
   const row = data as Code | null;
   return row && row.id ? row : await currentCode();

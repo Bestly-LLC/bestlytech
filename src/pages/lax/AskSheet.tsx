@@ -198,6 +198,7 @@ function CarWashButtons({ token }: { token?: string }) {
   const [state, setState] = useState<"idle" | "busy" | "sent" | string>("idle");
   useEffect(() => {
     if (!token) return;
+    if (token.startsWith("demo-")) { setSite({ name: "LUV Car Wash (demo)", address: "8601 S Sepulveda Blvd, Los Angeles, CA", miles: 1.8 }); return; }
     rpc("trip_car_wash", { p_token: token }).then(({ data }) => {
       const s = (data as { sites?: Wash[] } | null)?.sites?.[0]; if (s) setSite(s);
     }).catch(() => {});
@@ -205,7 +206,9 @@ function CarWashButtons({ token }: { token?: string }) {
   if (!site) return null;
   const send = async () => {
     if (!token || state === "busy") return;
-    setState("busy"); track(token, "car_wash_send");
+    setState("busy");
+    if (token.startsWith("demo-")) { await new Promise((r) => setTimeout(r, 1000)); setState("sent"); return; }
+    track(token, "car_wash_send");
     const { data, error } = await rpc("trip_car_wash_nav", { p_token: token });
     const r = data as { ok?: boolean; error?: string } | null;
     setState(error ? "Couldn't reach the car" : r?.ok ? "sent" : r?.error ?? "Couldn't send");

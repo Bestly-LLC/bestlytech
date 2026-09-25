@@ -724,6 +724,10 @@ export function EmailCard({ token, email, reminderAt, sentAt, home = false }: { 
   const [err, setErr] = useState<string | null>(null);
   const save = async () => {
     setBusy(true); setErr(null);
+    if (token.startsWith("demo-")) { // demo page: show the saved state, send nothing
+      await new Promise((r) => setTimeout(r, 600)); setBusy(false);
+      setShown({ email: value.trim(), at: new Date(Date.now() + 26 * 3600e3).toISOString() }); setEditing(false); setValue(""); return;
+    }
     const { data, error } = await rpc("lax_guest_set_email", { p_token: token, p_email: value });
     setBusy(false);
     if (error) { setErr(error.message.replace(/^.*?: /, "")); return; }

@@ -168,7 +168,7 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
     };
   }
   return {
-    ...base, key, ready: true, payload: "BESTLY-DEMO-QR", note: null, google: false, code_for_trip_month: true,
+    ...base, key, ready: true, payload: "BESTLY-DEMO-QR", note: "Demo pass. This QR code won't open the lobby door.", google: true, code_for_trip_month: true,
     valid_through: (() => { const d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth() + 1, 0)).toISOString().slice(0, 10); })(), // QR codes expire at the end of the month
     guide: { car: "Tesla Model 3", garage: "5730 W 98th St, LA 90045", level: "P3", spot: "", shuttle: "The Parking Spot — Century", after_hours: "310-642-0947", shuttle_stop: "5701 W Century Blvd" },
   };
