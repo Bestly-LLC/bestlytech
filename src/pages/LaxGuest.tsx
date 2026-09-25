@@ -598,7 +598,7 @@ export default function LaxGuest() {
               </p>
 
               <div className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[14px] leading-relaxed text-white/80 ring-1 ring-white/10">
-                <ReturnChargeBlock kind="lax" pickup={pub.pickup_battery} battery={(demoCar ? demoState : pub.car)?.battery} rc={pub.range_check} run={live ? carCommand : undefined}
+                <ReturnChargeBlock kind="lax" endsAt={pub.trip?.ends_at} pickup={pub.pickup_battery} battery={(demoCar ? demoState : pub.car)?.battery} rc={pub.range_check} run={live ? carCommand : undefined}
                   setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
               </div>
 

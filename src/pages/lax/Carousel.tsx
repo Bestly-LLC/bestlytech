@@ -10,6 +10,7 @@
  */
 import { Children, useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { track } from "./track";
 
 const PAD = 20; // matches px-5 / scroll-padding
 
@@ -19,14 +20,66 @@ export function Carousel({ id, labels, children, className = "" }: { id: string;
   const scroller = useRef<HTMLDivElement>(null);
   const items = useRef<(HTMLDivElement | null)[]>([]);
   const [active, setActive] = useState(0);
+  const [settled, setSettled] = useState(0); // the card it came to rest on (height follows this, never mid-swipe)
   const [h, setH] = useState<number | null>(null);
+  const wanted = useRef<number | null>(null);
   const reduce = typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
   const go = useCallback((i: number, smooth = true) => {
-    const el = scroller.current, kid = items.current[Math.max(0, Math.min(n - 1, i))];
+    const idx = Math.max(0, Math.min(n - 1, i));
+    const el = scroller.current, kid = items.current[idx];
     if (!el || !kid) return;
+    wanted.current = idx;
     el.scrollTo({ left: Math.max(0, kid.offsetLeft - PAD), behavior: smooth && !reduce ? "smooth" : "auto" });
   }, [n, reduce]);
+
+  // Rigid paging, like iOS: one swipe = one card, and it always comes to rest on a whole card.
+  // CSS snap alone let cards stop halfway on iPhone (momentum + the height change mid-swipe).
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || n < 2) return;
+    const nearest = () => {
+      let best = 0, d = Infinity;
+      items.current.forEach((k, i) => { if (!k) return; const x = Math.abs(k.offsetLeft - PAD - el.scrollLeft); if (x < d) { d = x; best = i; } });
+      return best;
+    };
+    let touching = false, start = { x: 0, t: 0, i: 0 }, timer = 0, tries = 0;
+    const settle = () => {
+      if (touching) return;
+      const want = wanted.current ?? nearest();
+      const kid = items.current[want];
+      if (!kid) return;
+      const target = Math.max(0, Math.min(kid.offsetLeft - PAD, el.scrollWidth - el.clientWidth));
+      if (Math.abs(el.scrollLeft - target) > 2) {
+        // Self-heal: smooth first; if it still won't land, jump there and report it (watchdog → Scout).
+        if (++tries > 3) { el.scrollLeft = target; track(undefined, "carousel_misaligned", { id, off: Math.round(el.scrollLeft - target) }); tries = 0; }
+        else el.scrollTo({ left: target, behavior: reduce ? "auto" : "smooth" });
+        return;
+      }
+      tries = 0;
+      wanted.current = null;
+      setSettled(want);
+    };
+    const onScroll = () => { window.clearTimeout(timer); timer = window.setTimeout(settle, 110); };
+    const onStart = (e: TouchEvent) => { touching = true; wanted.current = null; start = { x: e.touches[0].clientX, t: Date.now(), i: nearest() }; };
+    const onEnd = (e: TouchEvent) => {
+      touching = false;
+      const dx = start.x - (e.changedTouches[0]?.clientX ?? start.x);
+      const v = Math.abs(dx) / Math.max(1, Date.now() - start.t);
+      const step = Math.abs(dx) > 40 || v > 0.35 ? Math.sign(dx) : 0;
+      go(start.i + step);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    el.addEventListener("scrollend", settle as EventListener);
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    el.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      el.removeEventListener("scroll", onScroll); el.removeEventListener("scrollend", settle as EventListener);
+      el.removeEventListener("touchstart", onStart); el.removeEventListener("touchend", onEnd); el.removeEventListener("touchcancel", onEnd);
+    };
+  }, [n, go, reduce, id]);
 
   // Which card is on screen: the one most visible inside the scroller.
   useEffect(() => {
@@ -45,13 +98,13 @@ export function Carousel({ id, labels, children, className = "" }: { id: string;
 
   // Height follows the card on screen.
   useLayoutEffect(() => {
-    const kid = items.current[active];
+    const kid = items.current[settled];
     if (!kid || !("ResizeObserver" in window)) return;
     const ro = new ResizeObserver(() => setH(kid.offsetHeight));
     ro.observe(kid);
     setH(kid.offsetHeight);
     return () => ro.disconnect();
-  }, [active, n]);
+  }, [settled, n]);
 
   // Peek the next card the first time it's on screen (real scroll, so it can't fight a finger).
   useEffect(() => {
