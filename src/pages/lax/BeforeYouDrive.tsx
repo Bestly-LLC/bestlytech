@@ -1,10 +1,11 @@
 /**
  * "Before you drive" as a swipeable carousel with midcentury-style illustrations (original, inline SVG).
  * Order matters: trip changes first (it's the one that costs guests money when they get it wrong).
- * Scroll-snap on phones, arrows + dots for everyone else. Colors follow the page theme vars.
+ * Rigid one-card-per-swipe pager (shared Carousel), arrows + dots under it. Colors follow the page theme vars.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, ExternalLink } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ChevronDown, ClipboardList, ExternalLink } from "lucide-react";
+import { Carousel } from "./Carousel";
 import { track as trackEvent } from "./track";
 
 const MUSTARD = "#E8A93A", ORANGE = "#E36F3C", CREAM = "#F4EAD5", TEAL = "#2a6b66", DEEP = "#132726", OLIVE = "#6f7d3a";
@@ -101,58 +102,36 @@ const SLIDES: Slide[] = [
 ];
 
 export function BeforeYouDrive() {
-  const track = useRef<HTMLDivElement>(null);
-  const [i, setI] = useState(0);
   const [open, setOpen] = useState(false);
   useEffect(() => { const o = () => setOpen(true); window.addEventListener("open-before", o); return () => window.removeEventListener("open-before", o); }, []);
-  useEffect(() => {
-    const el = track.current;
-    if (!el) return;
-    const on = () => setI(Math.round(el.scrollLeft / Math.max(1, el.clientWidth * 0.86)));
-    el.addEventListener("scroll", on, { passive: true });
-    return () => el.removeEventListener("scroll", on);
-  }, [open]);
-  const go = (n: number) => {
-    const el = track.current;
-    const card = el?.children[Math.max(0, Math.min(SLIDES.length - 1, n))] as HTMLElement | undefined;
-    if (el && card) el.scrollTo({ left: card.offsetLeft - el.offsetLeft, behavior: "smooth" });
-  };
   return (
     <div className="-mx-4 border-b border-white/10" id="before">
       <div className="flex items-center gap-3 px-4">
         <button type="button" onClick={() => setOpen((x) => !x)} aria-expanded={open} className="flex min-h-[60px] min-w-0 flex-1 items-center gap-3 py-3 text-left">
           <ClipboardList className="h-6 w-6 shrink-0" style={{ color: "var(--trip-accent)" }} strokeWidth={1.75} />
           <span className="min-w-0 flex-1"><span className="block text-[16px] font-semibold text-white">Before you drive</span><span className="block text-[13px] leading-snug text-white/60">5 quick cards · trip changes, profile, paperwork</span></span>
-          {!open && <ChevronDown className="h-5 w-5 shrink-0 text-white/65" />}
+          <ChevronDown className={`h-5 w-5 shrink-0 text-white/65 transition-transform duration-200 motion-reduce:transition-none ${open ? "rotate-180" : ""}`} aria-hidden />
         </button>
-        {open && <div className="flex shrink-0 gap-1.5">
-          <button type="button" aria-label="Previous" onClick={() => go(i - 1)} disabled={i === 0} className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition active:scale-95 disabled:opacity-30"><ChevronLeft className="h-5 w-5" /></button>
-          <button type="button" aria-label="Next" onClick={() => go(i + 1)} disabled={i >= SLIDES.length - 1} className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition active:scale-95 disabled:opacity-30"><ChevronRight className="h-5 w-5" /></button>
-          <button type="button" aria-label="Collapse" onClick={() => setOpen(false)} className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition active:scale-95"><ChevronDown className="h-5 w-5 rotate-180" /></button>
-        </div>}
       </div>
-      {open && <div className="pb-4">
-      <div ref={track} className="mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="region" aria-roledescription="carousel" aria-label="Before you drive">
-        {SLIDES.map((s, n) => (
-          <article key={s.kicker} aria-roledescription="slide" aria-label={`${n + 1} of ${SLIDES.length}`}
-            className="w-[86%] shrink-0 snap-start overflow-hidden rounded-3xl bg-[#1f4442] ring-1 ring-white/10">
-            <div className="h-[132px] bg-[#183433] px-4 pt-3"><s.art /></div>
-            <div className="p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--trip-accent)" }}>{s.kicker}</p>
-              <h3 className="mt-1 text-[18px] font-bold leading-snug text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>{s.title}</h3>
-              <p className="mt-1.5 text-[15px] leading-relaxed text-white/80">{s.body}</p>
-              {s.cta && (
-                <a href={s.cta.href || turoApp()} onClick={() => trackEvent(undefined, "turo_app")} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold text-[#132726]" style={{ background: "var(--trip-accent)" }}>
-                  <ExternalLink className="h-4 w-4" /> {s.cta.label}
-                </a>
-              )}
-            </div>
-          </article>
-        ))}
-      </div>
-      <div className="mt-3 flex justify-center gap-1.5" aria-hidden>
-        {SLIDES.map((s, n) => <span key={s.kicker} className={`h-1.5 rounded-full transition-all ${n === i ? "w-5" : "w-1.5 bg-white/25"}`} style={n === i ? { background: "var(--trip-accent)" } : undefined} />)}
-      </div>
+      {/* Same rigid pager as the other trip carousels: one swipe = one card, always lands on a whole card. */}
+      {open && <div className="px-5 pb-4 pt-1">
+        <Carousel id="before-you-drive" labels={SLIDES.map((s) => s.kicker.replace(/^\d+\s*·\s*/, ""))}>
+          {SLIDES.map((s) => (
+            <article key={s.kicker} className="overflow-hidden rounded-3xl bg-[#1f4442] ring-1 ring-white/10">
+              <div className="h-[132px] bg-[#183433] px-4 pt-3"><s.art /></div>
+              <div className="p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--trip-accent)" }}>{s.kicker}</p>
+                <h3 className="mt-1 text-[18px] font-bold leading-snug text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>{s.title}</h3>
+                <p className="mt-1.5 text-[15px] leading-relaxed text-white/80">{s.body}</p>
+                {s.cta && (
+                  <a href={s.cta.href || turoApp()} onClick={() => trackEvent(undefined, "turo_app")} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold text-[#132726]" style={{ background: "var(--trip-accent)" }}>
+                    <ExternalLink className="h-4 w-4" /> {s.cta.label}
+                  </a>
+                )}
+              </div>
+            </article>
+          ))}
+        </Carousel>
       </div>}
     </div>
   );
