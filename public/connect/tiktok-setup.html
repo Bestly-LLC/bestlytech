@@ -1,0 +1,44 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>TikTok app setup · Bestly Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1A1712;--bone:#EFEAE1;--brass:#A8824B;--mute:#6E6557;--hair:#CEC6B9;--bad:#9A2F22}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bone);color:var(--ink)}
+body{font:17px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:12vh 20px 56px}
+.eb{font:600 12px/1 Inter,-apple-system,sans-serif;letter-spacing:.28em;text-transform:uppercase;color:var(--brass)}
+h1{font:400 40px/1.12 "Cormorant Garamond",Georgia,serif;margin:14px 0 18px}
+hr{border:0;border-top:1px solid var(--hair);margin:24px 0}
+p{margin:0 0 14px}.mute{color:var(--mute);font-size:15px}.bad{color:var(--bad)}
+.btn{display:inline-block;background:var(--ink);color:var(--bone);border:0;border-radius:999px;padding:14px 26px;font:600 15px Inter,-apple-system,sans-serif;text-decoration:none;cursor:pointer}
+.btn[disabled]{opacity:.5;cursor:default}
+input{width:100%;padding:12px 14px;border:1px solid var(--hair);border-radius:10px;background:#fff;font:16px ui-monospace,Menlo,monospace;margin:6px 0 16px;color:var(--ink)}
+label{font:600 12px Inter,-apple-system,sans-serif;letter-spacing:.2em;text-transform:uppercase;color:var(--mute)}
+code{font:14px ui-monospace,Menlo,monospace;background:#fff;padding:2px 6px;border-radius:6px;word-break:break-all}
+</style>
+
+</head><body><main><div class="eb">Bestly Studio · setup</div><div id="out">
+<h1>Connect the TikTok app</h1>
+<p class="mute">developers.tiktok.com → your app → <b>Basic information</b>. Copy the <b>Client key</b> and <b>Client secret</b> into the boxes below. They go straight into the vault; nobody sees them again.</p>
+<p class="mute">On the same app: add the products <b>Login Kit</b> and <b>Content Posting API</b>, tick the scopes <code>user.info.basic</code> and <code>video.upload</code>, and under Login Kit → <b>Redirect URI</b> add:<br><code>https://www.bestly.tech/connect/tiktok.html</code></p><hr>
+<form id="f"><label>Client key</label><input name="client_key" autocomplete="off" required>
+<label>Client secret</label><input name="client_secret" type="password" autocomplete="off" required>
+<button class="btn" type="submit">Save</button> <span id="m" class="mute"></span></form></div></main>
+<script>
+const API = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/studio-social";
+const s = new URLSearchParams(location.search).get("s") || "";
+history.replaceState(null, "", location.pathname);
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target), m = document.getElementById("m"), b = e.target.querySelector("button");
+  b.disabled = true; m.textContent = "Saving…";
+  const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ op: "tiktok_setup", s, client_key: f.get("client_key"), client_secret: f.get("client_secret") }) })
+    .then(r => r.json()).catch(() => ({ ok: false, error: "unreachable" }));
+  if (r.ok) { document.getElementById("out").innerHTML = "<h1>Saved.</h1><p>TikTok connect links work now — the TikTok tile on client boards is live. You can close this tab.</p>"; return; }
+  b.disabled = false;
+  m.textContent = r.error === "setup_link_expired" ? "This setup link has expired." : "Didn't save: " + (r.detail || r.error);
+};
+</script></body></html>
