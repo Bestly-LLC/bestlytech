@@ -30,7 +30,7 @@ import ExtraDrivers from "./lax/ExtraDrivers";
 import { OpenTuro, TripDone, tripEnded } from "./lax/TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./lax/Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./lax/LiveCharge";
-import { ReturnChargeBlock, returnCharge } from "./lax/ReturnCharge";
+import { ReturnChargeBlock, returnCharge, returnChargeLive } from "./lax/ReturnCharge";
 import { BestlyAd } from "./lax/BestlyAd";
 import { PhoneHandoff } from "./lax/PhoneHandoff";
 import { UnlockStart } from "./lax/Valet";
@@ -572,7 +572,6 @@ export default function LaxGuest() {
                 )}
                 <Step n={n0 + (keySteps ? 7 : 6)} when="Inside the car" title="Pick your driver profile.">
                   <ProfileTip />
-                  <BatteryReturn className="mt-3" startsAt={pub.trip?.starts_at} setAt={pub.pickup_battery_at} target={pub.pickup_battery} now={(demoCar ? demoState : pub.car)?.battery} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
                 </Step>
               </Carousel>
 
@@ -597,10 +596,10 @@ export default function LaxGuest() {
                 Reverse of the morning. The two things to watch: <b className="text-white">which entrance you use</b>, and <b className="text-white">which address you drive to</b>. Get those right and you're done.
               </p>
 
-              <div className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[14px] leading-relaxed text-white/80 ring-1 ring-white/10">
+              {returnChargeLive((demoCar ? demoState : pub.car)?.battery, pub.pickup_battery, pub.range_check, pub.trip?.ends_at) && <div className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[14px] leading-relaxed text-white/80 ring-1 ring-white/10">
                 <ReturnChargeBlock kind="lax" endsAt={pub.trip?.ends_at} pickup={pub.pickup_battery} battery={(demoCar ? demoState : pub.car)?.battery} rc={pub.range_check} run={live ? carCommand : undefined}
                   setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={(demoCar ? demoState : pub.car)?.observed_at} />
-              </div>
+              </div>}
 
               <Carousel id="lax-return" className="mt-4" labels={["Drive in", "Park", "Walk out", "Shuttle"]}>
                 <Step n={1} when="Drive in" title="Use the carshare return lane on 98th St.">

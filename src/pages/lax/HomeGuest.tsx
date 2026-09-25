@@ -30,7 +30,7 @@ import { homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./LiveCharge";
-import { ReturnChargeBlock, returnCharge } from "./ReturnCharge";
+import { ReturnChargeBlock, returnCharge, returnChargeLive } from "./ReturnCharge";
 import { BestlyAd } from "./BestlyAd";
 import { PhoneHandoff } from "./PhoneHandoff";
 import { UnlockStart } from "./Valet";
@@ -106,6 +106,8 @@ function Step({ n, children }: { n: number; children: ReactNode }) {
 export function CarButton({ action, label, icon: Icon, run, disabled, hint, small }: { action: CarAction; label: string; icon: typeof BellRing; run?: (a: CarAction, onStage?: (s: string) => void) => Promise<void>; disabled?: boolean; hint?: string; small?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // "Done" (or an error) shows for 5 seconds, then the button goes back to its label.
+  useEffect(() => { if (busy || !msg) return; const t = window.setTimeout(() => setMsg(null), 5000); return () => window.clearTimeout(t); }, [msg, busy]);
   const press = async () => {
     if (!run || busy) return;
     setBusy(true); setMsg(null);
@@ -269,6 +271,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
   const [hasApp, markHasApp] = useHasApp();
   useKeyWatch(token, key?.state ?? "off", key?.opens_at, () => reload?.());
   const { next, glow } = guideFor({ trip: pub.trip, keyInfo: key, hasApp, car, controlsOn: !!pub.controls, kind: "home", pickupBattery: pub.pickup_battery, rc: pub.range_check });
+  const chargeLive = returnChargeLive(car?.battery, pub.pickup_battery, pub.range_check, pub.trip?.ends_at);
   const keySteps = !!key && key.state !== "off" && key.state !== "ended";
   const n0 = keySteps ? 2 : 0;
   const doNext = (a: string) => {
@@ -381,15 +384,15 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
             <Step n={n0 + 2}>Next to the car (Bluetooth on), open the Tesla app. Tap <b className="text-white">&ldquo;Set Up&rdquo;</b> and follow the steps. Then tap <b className="text-white">Unlock</b>.</Step>
             <Step n={n0 + 3}><b className="text-white">Get in and pick your profile.</b><ProfileTip /></Step>
             <Step n={n0 + 4}><b className="text-white">Take check-in photos</b> all around the car in the Turo app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
-            <Step n={n0 + 5}><b className="text-white">Drive:</b> press the brake, push the <b className="text-white">right stalk</b> down. Up is Reverse.<BatteryReturn className="mt-3" startsAt={pub.trip?.starts_at} setAt={pub.pickup_battery_at} target={pub.pickup_battery} now={car?.battery} observedAt={car?.observed_at} /></Step>
+            <Step n={n0 + 5}><b className="text-white">Drive:</b> press the brake, push the <b className="text-white">right stalk</b> down. Up is Reverse.</Step>
           </Carousel>
         </TripSheet>
 
         <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
-          <Carousel id="home-return" className="mt-1" labels={["Charge", "Park", "Photos + lock"]}>
-            <Step n={1}><ReturnChargeBlock kind="home" endsAt={pub.trip?.ends_at} lead={<b className="text-white">Charge: </b>} pickup={pub.pickup_battery} battery={car?.battery} rc={pub.range_check} run={live ? run : undefined} setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={car?.observed_at} /></Step>
-            <Step n={2}><b className="text-white">Park on N Kings Rd</b> near the building. <b className="text-white">Avoid the Joybird street parking.</b> Watch for <b className="text-white">street sweeping on Mondays and Tuesdays</b>: west side Monday 8–10 AM, east side Tuesday 8–10 AM ($75 tickets).<span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span><ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} /></Step>
-            <Step n={3}><b className="text-white">Return photos</b> in the Turo app, grab your stuff, lock it in the Tesla app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
+          <Carousel id="home-return" className="mt-1" labels={[...(chargeLive ? ["Charge"] : []), "Park", "Photos + lock"]}>
+            {chargeLive && <Step n={1}><ReturnChargeBlock kind="home" endsAt={pub.trip?.ends_at} lead={<b className="text-white">Charge: </b>} pickup={pub.pickup_battery} battery={car?.battery} rc={pub.range_check} run={live ? run : undefined} setAt={pub.pickup_battery_at} startsAt={pub.trip?.starts_at} observedAt={car?.observed_at} /></Step>}
+            <Step n={chargeLive ? 2 : 1}><b className="text-white">Park on N Kings Rd</b> near the building. <b className="text-white">Avoid the Joybird street parking.</b> Watch for <b className="text-white">street sweeping on Mondays and Tuesdays</b>: west side Monday 8–10 AM, east side Tuesday 8–10 AM ($75 tickets).<span className="mt-3 block"><SendToCar run={live ? run : undefined} kind="home" action="nav_home" label="Send 733 N Kings Rd to the car" /></span><ReturnChecklist compact token={token} kind="home" run={live ? run : undefined} demo={!!demoPage} endsAt={pub.trip?.ends_at} /></Step>
+            <Step n={chargeLive ? 3 : 2}><b className="text-white">Return photos</b> in the Turo app, grab your stuff, lock it in the Tesla app.<OpenTuro className="mt-2 w-full" label="Open Turo for photos" /></Step>
           </Carousel>
           <p className="mt-5 text-[14px] text-white/60">Your key turns off by itself after the trip. Nothing to hand back.</p>
         </TripSheet>

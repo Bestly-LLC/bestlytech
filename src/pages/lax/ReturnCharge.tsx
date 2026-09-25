@@ -5,7 +5,7 @@
  * The live charge gauge (an Apple-style arc) only shows in the last 24 hours before return, when it matters.
  */
 import { useState, type ReactNode } from "react";
-import { Info } from "lucide-react";
+import { Info, Zap } from "lucide-react";
 import { ChargerLine, SendToCar, type NavRun } from "./KeyNext";
 import { RangeCheck, type RangeCheckData } from "./LiveCharge";
 import type { TripKind } from "./places";
@@ -30,9 +30,11 @@ function ChargeArc({ now, arrive, pickup, ok }: { now: number; arrive: number; p
   const [t1x, t1y] = pt(pickup, R - SW / 2 - 4), [t2x, t2y] = pt(pickup, R + SW / 2 + 4);
   return (
     <svg viewBox="0 0 200 108" className="mx-auto block w-full max-w-[260px]" role="img"
-      aria-label={`About ${arrive}% when you get back. It had ${pickup}% at pickup. Now ${now}%.`}>
+      aria-label={`About ${arrive}% when you get back. Charge at pick-up was ${pickup}%. Now ${now}%.`}>
       <path d={arc(0, 100)} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth={SW} strokeLinecap="round" />
       {now > arrive && <path d={arc(arrive, now)} fill="none" stroke={color} strokeOpacity=".35" strokeWidth={SW} strokeLinecap="round" />}
+      {/* Short of the pick-up charge: the missing part is drawn as a dotted orange gap up to the tick. */}
+      {!ok && pickup > arrive && <path d={arc(arrive, pickup)} fill="none" stroke={color} strokeOpacity=".95" strokeWidth={3} strokeDasharray="4 4" strokeLinecap="butt" />}
       {arrive > 0 && <path d={arc(0, arrive)} fill="none" stroke={color} strokeWidth={SW} strokeLinecap="round" className="transition-all duration-700" />}
       <line x1={t1x} y1={t1y} x2={t2x} y2={t2y} stroke="white" strokeWidth="3" strokeLinecap="round" />
       <text x={CX} y={CY - 16} textAnchor="middle" fontSize="34" fontWeight="700" fill="white" style={{ fontVariantNumeric: "tabular-nums" }}>{arrive}%</text>
@@ -41,28 +43,33 @@ function ChargeArc({ now, arrive, pickup, ok }: { now: number; arrive: number; p
   );
 }
 
-/** Step 1 of both Return sheets. */
-export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, observedAt, lead }: {
+/** Show the return charge only when it matters: last 24 hours before return, or when they'd come back short. */
+export function returnChargeLive(battery?: number | null, pickup?: number | null, rc?: RangeCheckData, endsAt?: string | null): boolean {
+  const r = returnCharge(battery, pickup, rc);
+  const hoursLeft = endsAt ? (+new Date(endsAt) - Date.now()) / 3600e3 : null;
+  const near = hoursLeft != null && hoursLeft <= 24 && hoursLeft > -2;
+  return r.known && r.arrive != null && (near || r.needs);
+}
+
+/** Step 1 of both Return sheets. Renders nothing until returnChargeLive() says it matters. */
+export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, observedAt }: {
   kind: TripKind; pickup?: number | null; battery?: number | null; rc?: RangeCheckData; run?: NavRun;
   setAt?: string | null; startsAt?: string | null; endsAt?: string | null; observedAt?: string | null; lead?: ReactNode;
 }) {
   const [why, setWhy] = useState(false);
   const r = returnCharge(battery, pickup, rc);
   const level = pickup != null ? <b className="text-white">{pickup}%</b> : null;
-  // Live charge info only near return (last 24 hours), or when they would come back short.
-  const hoursLeft = endsAt ? (+new Date(endsAt) - Date.now()) / 3600e3 : null;
-  const near = hoursLeft != null && hoursLeft <= 24 && hoursLeft > -2;
-  const live = r.known && (near || r.needs) && battery != null && pickup != null && r.arrive != null;
   const spot = kind === "home" ? "N Kings Rd" : "the garage";
-
-  if (!live) {
-    return <div>{lead}Bring it back with the same charge it had at pickup{level ? <> ({level})</> : ""}.</div>;
-  }
+  if (!returnChargeLive(battery, pickup, rc, endsAt) || battery == null || pickup == null) return null;
   return (
     <div>
-      {r.needs && lead}
       {r.needs
-        ? <>Charge before you return: bring it back at {level}, the same as pickup, to avoid Turo's recharge fee. <b className="text-white">Add about {r.add}%.</b></>
+        ? (
+          <>
+            <p className="flex items-start gap-2 text-[16px] font-semibold leading-snug text-white"><Zap className="mt-0.5 h-[18px] w-[18px] shrink-0 fill-[#FF9F0A] text-[#FF9F0A]" aria-hidden />Add about {r.add}% before you return</p>
+            <p className="mt-1 text-[14px] leading-snug text-white/70">It would get back at about {r.arrive}%. Bring it back at {level}, the charge at pick-up, to avoid Turo's recharge fee.</p>
+          </>
+        )
         : (
           <span className="inline-flex items-center gap-1.5">
             <span className="font-semibold text-white">You're good on charge</span>
@@ -75,7 +82,7 @@ export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, obse
       {why && !r.needs && (
         <p className="mt-2 rounded-xl bg-white/[0.06] px-3 py-2 text-[13px] leading-snug text-white/75 ring-1 ring-white/10">
           It's at {battery}% now. The drive back to {spot}{r.miles != null ? ` (about ${r.miles} mi)` : ""} uses about {r.used}%, so it should get back at about {r.arrive}%.
-          Turo only charges a recharge fee if it comes back under {pickup}%, the level at pickup.
+          Turo only charges a recharge fee if it comes back under {pickup}%, the charge at pick-up.
         </p>
       )}
       <div className="mt-3 rounded-2xl bg-white/[0.05] px-3 pb-3 pt-2 ring-1 ring-white/10">
@@ -83,7 +90,7 @@ export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, obse
         <div className="mt-1 grid grid-cols-3 divide-x divide-white/10 text-center">
           <p className="px-1 text-[12px] text-white/60">Now<b className="mt-0.5 block text-[16px] font-semibold tabular-nums text-white">{battery}%</b></p>
           <p className="px-1 text-[12px] text-white/60">Drive back<b className="mt-0.5 block text-[16px] font-semibold tabular-nums text-white">{r.miles != null ? `${Math.round(r.miles)} mi` : "—"}</b></p>
-          <p className="px-1 text-[12px] text-white/60"><span className="inline-flex items-center gap-1"><span className="h-2.5 w-[3px] rounded bg-white" aria-hidden />Pickup</span><b className="mt-0.5 block text-[16px] font-semibold tabular-nums text-white">{pickup}%</b></p>
+          <p className="px-1 text-[12px] text-white/60"><span className="mr-1 inline-block h-2.5 w-[3px] rounded bg-white align-[-1px]" aria-hidden />Charge at pick-up<b className="mt-0.5 block text-[16px] font-semibold tabular-nums text-white">{pickup}%</b></p>
         </div>
         {observedAt && <p className="mt-2 text-center text-[11px] text-white/45">Updated {new Date(observedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</p>}
       </div>
