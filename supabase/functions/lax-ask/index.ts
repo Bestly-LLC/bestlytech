@@ -11,6 +11,8 @@
 // v9: extra-driver tools (status, check, resend, rename, confirm Turo name match, remove) for the guest, and a
 // key-only helper on each extra driver's own page (bestly.tech/d/<token>; same tools, scoped to that driver).
 //
+// v10: demo pages (/t/demo-*) get the same tools, simulated in SQL (lax_demo_tool), so the host can test and teach the helper.
+//
 // Ladder (all free):
 //   1. Gemini free tier (tools on personal links).
 //   2. Groq free (gpt-oss, OpenAI-style tools) when Gemini is out of quota or down.
@@ -77,6 +79,8 @@ const lower = (o: unknown): unknown => Array.isArray(o) ? o.map(lower) : o && ty
 const OPENAI_TOOLS = DECL.map((d) => ({ type: "function", function: lower(d) }));
 
 async function runTool(token: string, name: string, args: Record<string, unknown>): Promise<unknown> {
+  // Demo: simulated tools on a per-demo-link state (never touches the real car or keys).
+  if (token.startsWith("demo:")) return (await sb.rpc("lax_demo_tool", { p_link: "d:" + token.slice(5), p_name: name, p_args: args ?? {} })).data;
   const act = async (a: string, note?: unknown) => (await sb.rpc("lax_agent_act", { p_token: token, p_action: a, p_note: note ? String(note).slice(0, 300) : null })).data;
   switch (name) {
     case "diagnose": return (await sb.rpc("lax_agent_diag", { p_token: token })).data;
@@ -246,7 +250,9 @@ Deno.serve(async (req) => {
     if (error) throw error;
     if (!start?.ok) return json(start ?? { ok: false, error: "Try again" });
     const rid = start.reply_id as number;
-    const token = typeof b.token === "string" && b.token ? b.token : null;
+    const demoSlug = typeof b.slug === "string" && /^demo-(home|lax)$/.test(b.slug) ? b.slug : null;
+    // Tools run for trip links, driver pages, and (simulated) on the demo pages.
+    const token = typeof b.token === "string" && b.token ? b.token : demoSlug ? "demo:" + demoSlug : null;
 
     const { data: gkey } = await sb.rpc("lax_ask_gemini_key");
     const { data: keys } = await sb.rpc("llm_keys");
@@ -254,7 +260,7 @@ Deno.serve(async (req) => {
     if (gkey || groqKey) {
       const { data: p } = await sb.rpc("lax_ask_prompt", { p_reply_id: rid });
       if (token && p) {
-        const { data: diag } = await sb.rpc("lax_agent_diag", { p_token: token });
+        const { data: diag } = token.startsWith("demo:") ? await sb.rpc("lax_demo_tool", { p_link: "d:" + token.slice(5), p_name: "diagnose", p_args: {} }) : await sb.rpc("lax_agent_diag", { p_token: token });
         if (diag) (p as Prompt).system += "\nLIVE STATUS RIGHT NOW (already checked for you; call diagnose again only after a fix):\n" + JSON.stringify(diag).slice(0, 2500);
       }
       await sb.from("lax_ask_msgs").update({ status: "working", updated_at: new Date().toISOString() }).eq("id", rid);

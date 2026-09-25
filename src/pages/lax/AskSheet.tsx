@@ -4,7 +4,7 @@
  * Opens in the same luggage bottom sheet as Pickup / Return.
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Loader2, MapPin, MessageCircleQuestion, MessageSquare, Navigation, Phone, UserPlus, Wrench } from "lucide-react";
+import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Loader2, MapPin, MessageCircleQuestion, MessageSquare, Navigation, Phone, RotateCcw, UserPlus, Wrench } from "lucide-react";
 import { ackText } from "./ExtraDrivers";
 import { useHasApp } from "./Guide";
 import { supabase } from "@/integrations/supabase/client";
@@ -262,8 +262,11 @@ function AddDriverChat({ token }: { token?: string }) {
     if (step !== "done") return;
     const n = name.trim().toLowerCase();
     if (demo) {
-      const a = window.setTimeout(() => setKey({ state: "making" }), 1500);
-      const b = window.setTimeout(() => setKey({ state: "ready", link: "https://www.tesla.com/_rs/1/DEMO-KEY" }), 3200);
+      // Demo acts as if Turo approved "Test": typing Test goes straight through; any other name gets "Is that them?".
+      void rpc("lax_demo_tool", { p_link: "d:" + (token ?? "demo-home"), p_name: "driver_add", p_args: { name: name.trim() } });
+      if (n !== "test" && tick === 0) { const w = window.setTimeout(() => setKey({ state: "waiting", suggest: "Test" }), 1200); return () => window.clearTimeout(w); }
+      const a = window.setTimeout(() => setKey({ state: "making" }), 1200);
+      const b = window.setTimeout(() => setKey({ state: "ready", link: "https://www.tesla.com/_rs/1/DEMO-KEY", page: "https://bestly.tech/d/demo" }), 2800);
       return () => { window.clearTimeout(a); window.clearTimeout(b); };
     }
     let stop = false;
@@ -282,6 +285,7 @@ function AddDriverChat({ token }: { token?: string }) {
   }, [step, tick]);
   const confirm = async (yes: boolean) => {
     if (!yes) { setKey((k) => k && { ...k, suggest: null }); return; }
+    if (demo) { setName(key?.suggest ?? name); setKey({ state: "making" }); setTick((t) => t + 1); return; }
     setBusy(true);
     const { data } = await rpc("lax_agent_driver", { p_token: token, p_action: "confirm_match", p_name: name.trim(), p_value: null });
     setBusy(false);
@@ -461,6 +465,13 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
       {urgent && (
         <div className="mb-3 rounded-xl bg-[#E4527A]/20 p-3 text-[14px] font-semibold leading-snug text-white ring-1 ring-[#E4527A]/50">
           If anyone is hurt, call 911 first. Then use Roadside Assistance in the Turo app and message your host there.
+        </div>
+      )}
+      {demoLink && (
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-amber-300/10 px-3 py-2 text-[12px] text-amber-100 ring-1 ring-amber-300/30">
+          <span>Demo: the helper's fixes run on a pretend copy of the trip. Alerts to you still fire, marked DEMO.</span>
+          <button type="button" onClick={async () => { await rpc("lax_demo_tool", { p_link: "d:" + demoLink, p_name: "reset", p_args: {} }); setMsgs([]); askedRef.current = ""; refreshChips(); }}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-2.5 py-1.5 font-semibold text-white"><RotateCcw className="h-3.5 w-3.5" aria-hidden />Reset</button>
         </div>
       )}
       {msgs.length === 0 ? (
