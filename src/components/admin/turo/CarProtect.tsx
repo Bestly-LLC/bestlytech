@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { LoadError, SectionHeader, cardCls, focusRing, text, tint } from "@/components/admin/ui";
+import { TirePsiGrid } from "./TirePsiGrid";
 
 type Ev = { id: number; at: string; kind: string; severity: string; title: string; detail: string; lat: number | null; lon: number | null; guest: string | null; read_at: string | null };
 const at12 = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
@@ -36,19 +37,27 @@ export function CarProtectLog() {
   const [evs, setEvs] = useState<Ev[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
-  const [lowPsi, setLowPsi] = useState<number | null>(null);
+  // The four pressures, straight from car_health_admin — the same read the Car health card
+  // shows. The old code scraped them out of the "41 · 41 · 40 · 40 psi" summary string,
+  // which gave a lowest number and no way to say which corner it was.
+  const [tires, setTires] = useState<Record<string, number | null> | null>(null);
+  const [tiresAt, setTiresAt] = useState<string | null>(null);
   const load = useCallback(async () => {
     const [{ data, error }, ready] = await Promise.all([
       supabase.rpc("admin_car_events" as never, { p_days: 60 } as never) as unknown as Promise<{ data: Ev[] | null; error: unknown }>,
-      supabase.rpc("admin_car_ready" as never) as unknown as Promise<{ data: { checks?: { id: string; value: string }[] } | null }>,
+      supabase.rpc("car_health_admin" as never) as unknown as Promise<{ data: { health?: { tires?: Record<string, number | null> } | null; health_at?: string | null } | null }>,
     ]);
     if (error) { setFailed(true); return; }
     setFailed(false); setEvs(data ?? []);
-    const t = ready.data?.checks?.find((c) => c.id === "tires")?.value ?? "";
-    const nums = (t.match(/\d+(\.\d+)?/g) ?? []).map(Number).filter((n) => n > 10);
-    setLowPsi(nums.length ? Math.min(...nums) : null);
+    setTires(ready.data?.health?.tires ?? null);
+    setTiresAt(ready.data?.health_at ?? null);
   }, []);
+
+
   useEffect(() => { load(); }, [load]);
+
+  const psi = tires ? Object.values(tires).filter((n): n is number => typeof n === "number") : [];
+  const lowPsi = psi.length ? Math.min(...psi) : null;
 
   const toggle = (g: (typeof GROUPS)[number]) => {
     const next = open === g.id ? null : g.id;
@@ -89,6 +98,20 @@ export function CarProtectLog() {
                     </button>
                     {isOpen && (
                       <div id={`protect-${g.id}`} className="bg-white/[0.02] px-4 pb-3 pt-1 sm:px-5">
+                        {g.id === "tires" && (
+                          <div className="mb-3 flex flex-wrap items-end gap-x-4 gap-y-1 rounded-2xl bg-white/[0.04] px-3 py-2.5 bento:bg-black/[0.03]">
+                            <div>
+                              <p className={cn(text.meta, "mb-1 uppercase tracking-wide")}>Right now</p>
+                              {tires
+                                ? <TirePsiGrid tires={tires} low={38} size="lg" />
+                                : <p className={text.detail}>Not read yet.</p>}
+                            </div>
+                            <p className={cn(text.meta, "pb-1")}>
+                              {tiresAt ? `Read ${at12(tiresAt)}` : "Reads when the car is awake"}
+                              {lowPsi != null && <> · lowest {Math.round(lowPsi)} psi</>}
+                            </p>
+                          </div>
+                        )}
                         <p className={cn(text.detail, "pb-2")}>{g.about}</p>
                         {list.length === 0 ? <p className={cn(text.meta, "pb-1")}>Nothing yet.</p> : (
                           <ol className="space-y-2">

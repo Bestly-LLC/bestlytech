@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { btnTinted, card, secondary, label, tint } from "./laxUi";
+import { TirePsiGrid } from "@/components/admin/turo/TirePsiGrid";
 
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
@@ -141,7 +142,7 @@ export function CarHealth() {
           icon={<Gauge className="h-4 w-4" />}
           k="Tires (psi)"
           v={tires
-            ? <><TireGrid tires={tires} low={LOW_PSI} />{low != null && low < LOW_PSI && (
+            ? <><TirePsiGrid tires={tires} low={LOW_PSI} />{low != null && low < LOW_PSI && (
                 <span className={cn("mt-1 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", tint.orange)}>Low</span>
               )}</>
             : "Not read yet"}
@@ -177,31 +178,6 @@ export function CarHealth() {
 
 /** Below this, Tesla's own warning is close; flag the tyre rather than the whole card. */
 const LOW_PSI = 37;
-
-function TireGrid({ tires, low }: { tires: Record<string, number | null>; low: number }) {
-  const cell = (pos: "fl" | "fr" | "rl" | "rr", name: string) => {
-    const v = tires[pos];
-    const under = typeof v === "number" && v < low;
-    return (
-      <span className={cn("tabular-nums", under ? tint.orange : label)}>
-        <span className="sr-only">{name}: </span>
-        {v ?? "?"}
-        {under && <span className="sr-only"> (low)</span>}
-      </span>
-    );
-  };
-  return (
-    // A hairline cross reads as the car from above, so left stays left without a legend.
-    <div className="mt-1 grid w-fit grid-cols-2 text-[15px] font-semibold leading-tight
-                    [&>span]:px-2 [&>span]:py-0.5
-                    [&>span:nth-child(even)]:border-l [&>span:nth-child(odd)]:pl-0
-                    [&>span:nth-child(n+3)]:border-t
-                    [&>span]:border-white/[0.14]">
-      {cell("fl", "Front left")}{cell("fr", "Front right")}
-      {cell("rl", "Rear left")}{cell("rr", "Rear right")}
-    </div>
-  );
-}
 
 function Tile({ icon, k, v, sub, bad }: { icon: React.ReactNode; k: string; v: React.ReactNode; sub?: string; bad?: boolean }) {
   return (

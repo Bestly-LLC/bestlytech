@@ -66,7 +66,7 @@ export function ScoutToday() {
   const [healed, setHealed] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
-  const [allCalls, setAllCalls] = useState(false);
+  const [openCols, setOpenCols] = useState<Record<string, boolean>>({});
   const [allDrafts, setAllDrafts] = useState(false);
   const today = laDay();
 
@@ -144,10 +144,18 @@ export function ScoutToday() {
     toast.success(owner.toLowerCase() === "jared" ? "Moved to your list" : `Moved to ${owner}`);
   };
 
-  // Yours first, then everyone else's, so the top of a folded list is always what's on you.
-  const callsSorted = useMemo(() => [...calls].sort((a, b) =>
-    Number(String(b.action?.owner ?? "Jared").toLowerCase() === "jared") - Number(String(a.action?.owner ?? "Jared").toLowerCase() === "jared")), [calls]);
-  const shownCalls = allCalls ? callsSorted : callsSorted.slice(0, FOLD);
+  // One column per person. A call to-do always belongs to someone, and reading a single
+  // mixed list meant re-reading the owner on every row to find your own. Yours is first.
+  const callColumns = useMemo(() => {
+    const by = new Map<string, Row[]>();
+    for (const c of calls) {
+      const owner = String(c.action?.owner ?? "Jared").trim() || "Jared";
+      (by.get(owner) ?? by.set(owner, []).get(owner)!).push(c);
+    }
+    return [...by.entries()]
+      .map(([owner, items]) => ({ owner, mine: owner.toLowerCase() === "jared", items }))
+      .sort((a, b) => Number(b.mine) - Number(a.mine) || b.items.length - a.items.length || a.owner.localeCompare(b.owner));
+  }, [calls]);
   const shownDrafts = allDrafts ? drafts : drafts.slice(0, 3);
 
   return (
@@ -264,35 +272,47 @@ export function ScoutToday() {
               <p className={text.title}>All done from your calls.</p>
             </div>
           ) : (
-            <div className={cn(cardCls, "overflow-hidden")}>
-              <ul id="calls-list" className={divider}>
-                {shownCalls.map((c) => {
-                  const owner = String(c.action?.owner ?? "Jared");
-                  const mine = owner.toLowerCase() === "jared";
-                  return (
-                    <li key={c.id} className={cn(rowCls, "py-2 pl-2 sm:pl-4")}>
-                      <CheckCircle label={`Mark done: ${c.title}`} onClick={() => set(c, "done", "Marked done")} />
-                      <div className="min-w-0 flex-1">
-                        <p className={text.title}>{c.title}</p>
-                        <p className={cn(text.detail, "mt-0.5")}>
-                          <OwnerMenu owner={owner} mine={mine} people={people} onPick={(o) => setOwner(c, o)} />
-                          {c.action?.due ? ` · due ${c.action.due}` : ""}{c.action?.meeting ? ` · ${String(c.action.meeting)}` : ""}
-                        </p>
-                      </div>
-                      {c.action?.deck_url && (
-                        <a href={c.action.deck_url} target="_blank" rel="noreferrer" className={cn(btnPlain, "shrink-0 text-[13px] sm:min-h-9")} aria-label={`Open on Deck: ${c.title}`}>
-                          Deck <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                        </a>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-              {calls.length > FOLD && (
-                <Disclosure open={allCalls} onToggle={() => setAllCalls((v) => !v)} controls="calls-list">
-                  {allCalls ? "Show fewer" : `Show all ${calls.length}`}
-                </Disclosure>
-              )}
+            <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {callColumns.map((col) => {
+                const listId = `calls-${col.owner.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+                const open = !!openCols[col.owner];
+                const shown = open ? col.items : col.items.slice(0, FOLD);
+                return (
+                  <div key={col.owner} className={cn(cardCls, "overflow-hidden")}>
+                    <div className={cn("flex items-center justify-between gap-2 px-4 py-2.5", hairline)}>
+                      <p className={cn(text.title, "truncate")}>
+                        {col.mine ? "You" : col.owner}
+                        {!col.mine && <span className="sr-only"> — their to-dos from your calls</span>}
+                      </p>
+                      <Pill>{col.items.length}</Pill>
+                    </div>
+                    <ul id={listId} className={divider}>
+                      {shown.map((c) => (
+                        <li key={c.id} className={cn(rowCls, "py-2 pl-2 sm:pl-3")}>
+                          <CheckCircle label={`Mark done: ${c.title}`} onClick={() => set(c, "done", "Marked done")} />
+                          <div className="min-w-0 flex-1">
+                            <p className={text.title}>{c.title}</p>
+                            <p className={cn(text.detail, "mt-0.5")}>
+                              <OwnerMenu owner={col.owner} mine={col.mine} people={people} onPick={(o) => setOwner(c, o)} />
+                              {c.action?.due ? ` · due ${c.action.due}` : ""}{c.action?.meeting ? ` · ${String(c.action.meeting)}` : ""}
+                            </p>
+                          </div>
+                          {c.action?.deck_url && (
+                            <a href={c.action.deck_url} target="_blank" rel="noreferrer" className={cn(btnPlain, "shrink-0 text-[13px] sm:min-h-9")} aria-label={`Open on Deck: ${c.title}`}>
+                              Deck <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                            </a>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    {col.items.length > FOLD && (
+                      <Disclosure open={open} onToggle={() => setOpenCols((v) => ({ ...v, [col.owner]: !v[col.owner] }))} controls={listId}>
+                        {open ? "Show fewer" : `Show all ${col.items.length}`}
+                      </Disclosure>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
           {callsDone.length > 0 && <CallsDone rows={callsDone} onReopen={(r) => set(r, "open", "Back on your list")} />}
