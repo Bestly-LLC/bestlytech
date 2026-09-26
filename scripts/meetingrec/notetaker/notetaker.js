@@ -201,6 +201,9 @@ async function main() {
     ["button.join-call", () => page.locator("button.join-call").first()],
     ["role join/start call", () => page.getByRole("button", { name: /^(join call|start call)$/i }).first()],
     ["text join/start call", () => page.locator("button", { hasText: /join call|start call/i }).first()],
+    ["aria-label join/start", () => page.locator("button[aria-label*='join' i], button[aria-label*='start call' i]").first()],
+    ["data-testid join", () => page.locator("[data-testid*='join'], [data-testid*='enter-call']").first()],
+    ["text join now", () => page.locator("button", { hasText: /join now|enter call/i }).first()],
   ];
   await page.waitForTimeout(3000);
   for (let attempt = 0; attempt < 3 && !(await inCall()); attempt++) {
