@@ -127,6 +127,8 @@ export default function Wall() {
   const [sigs, setSigs] = useState<Sig[]>([]);
   const [signMsg, setSignMsg] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<number | null>(null);
+  const [showAllSigs, setShowAllSigs] = useState(false);
   const [sel, setSel] = useState(0);
   const [fine, setFine] = useState(true);
   const [one, setOne] = useState("");
@@ -270,7 +272,7 @@ export default function Wall() {
     if (Array.isArray(data)) setSigs(data as Sig[]);
   }, []);
   useEffect(() => { void loadSigs(); const t = setInterval(() => void loadSigs(), 10000); return () => clearInterval(t); }, [loadSigs]);
-  const signAction = async (action: "test" | "clear" | "hide" | "show", id?: number) => {
+  const signAction = async (action: "test" | "clear" | "hide" | "show" | "delete", id?: number) => {
     setSignMsg(null);
     const { data, error } = await rpc("wall_admin_sign_action", { p_action: action, p_id: id ?? null });
     if (error) { setSignMsg(`Didn't go through: ${error.message}`); return; }
@@ -280,6 +282,7 @@ export default function Wall() {
     }
     if (action === "test") setSignMsg(`Sent a test signature from “${d?.name ?? "a guest"}”. Watch the wall.`);
     if (action === "clear") setSignMsg("Wall cleared. Names are hidden, not deleted.");
+    if (action === "delete") { setSignMsg("Signature deleted for good."); setSigs((l) => l.filter((x) => x.id !== id)); }
     void loadSigs();
   };
 
@@ -474,14 +477,32 @@ export default function Wall() {
           </div>
           {signMsg && <p className="text-[13px] text-white/60" role="status">{signMsg}</p>}
         </div>
-        {sigs.slice(0, 8).map((g) => (
-          <Row key={g.id} label={<span style={{ color: g.color }}>{g.name || "No name"}{g.test ? " · test" : ""}</span>}
+        {(showAllSigs ? sigs : sigs.slice(0, 8)).map((g) => (
+          <Row key={g.id} label={<span style={{ color: g.color }}>{g.name || "No name"}{g.test ? " · test" : ""}{g.hidden ? <span className="text-white/40"> · hidden</span> : null}</span>}
             detail={new Date(g.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}>
-            <button type="button" className={cn(btn, "min-h-[36px] px-3 text-[13px]")} onClick={() => void signAction(g.hidden ? "show" : "hide", g.id)}>
-              {g.hidden ? <><Eye className="h-4 w-4" aria-hidden /> Show</> : <><EyeOff className="h-4 w-4" aria-hidden /> Hide</>}
-            </button>
+            <div className="flex gap-2">
+              <button type="button" className={cn(btn, "min-h-[36px] px-3 text-[13px]")} aria-label={g.hidden ? "Show on the wall" : "Hide from the wall"}
+                onClick={() => void signAction(g.hidden ? "show" : "hide", g.id)}>
+                {g.hidden ? <><Eye className="h-4 w-4" aria-hidden /> Show</> : <><EyeOff className="h-4 w-4" aria-hidden /> Hide</>}
+              </button>
+              <button type="button" aria-label={confirmDel === g.id ? "Tap again to delete for good" : "Delete signature"}
+                className={cn(btn, "min-h-[36px] px-3 text-[13px] text-red-400", confirmDel === g.id && "bg-red-500/15 ring-red-400/60")}
+                onClick={() => {
+                  if (confirmDel === g.id) { setConfirmDel(null); void signAction("delete", g.id); }
+                  else { setConfirmDel(g.id); window.setTimeout(() => setConfirmDel((c) => (c === g.id ? null : c)), 4000); }
+                }}>
+                <Trash2 className="h-4 w-4" aria-hidden /> {confirmDel === g.id ? "Confirm" : "Delete"}
+              </button>
+            </div>
           </Row>
         ))}
+        {sigs.length > 8 && (
+          <div className="px-4 py-2">
+            <button type="button" className="text-[14px] font-medium text-sky-400" onClick={() => setShowAllSigs((v) => !v)}>
+              {showAllSigs ? "Show fewer" : `Show all ${sigs.length}`}
+            </button>
+          </div>
+        )}
         <Row label={<span className="inline-flex items-center gap-2"><Volume2 className="h-4 w-4" aria-hidden /> Sounds</span>} detail="Chimes and whooshes on the wall. Always quiet 11 PM–7 AM." htmlFor="wall-sound">
           <Switch id="wall-sound" checked={s.sound !== false} onCheckedChange={(v) => change({ sound: v })} />
         </Row>
