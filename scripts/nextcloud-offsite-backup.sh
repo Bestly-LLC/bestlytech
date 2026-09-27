@@ -40,7 +40,6 @@ DB_USER="nextcloud"
 DATA_VOLUME="/var/lib/docker/volumes/nextcloud_data/_data"
 CONFIG_VOLUME="/var/lib/docker/volumes/nextcloud_config/_data"
 COMPOSE_FILE="/opt/nextcloud/docker-compose.yml"
-NTFY_TOPIC="bestly-sysalert-7q2k9mx4"
 RETENTION_KEEP_DAILY=7
 RETENTION_KEEP_WEEKLY=4
 RETENTION_KEEP_MONTHLY=6
@@ -48,11 +47,14 @@ RETENTION_KEEP_MONTHLY=6
 # --- helpers --------------------------------------------------------------
 log()    { logger -t "$LOG_TAG" -- "$*"; echo "[$LOG_TAG] $*" >&2; }
 ntfy()   {
-  # ASCII headers only (em-dashes break ntfy header validation)
+  # Name kept for callers. Home Assistant push via hapush (ntfy retired 2026-09-27)
   local title="$1"; shift
-  local body="$*"
-  curl -fsS -H "Title: $(echo -n "$title" | LC_ALL=C sed 's/[^\x20-\x7E]//g')" \
-       -d "$body" "https://ntfy.sh/$NTFY_TOPIC" >/dev/null 2>&1 || true
+  local body="$*" prio="low" src="Backups"
+  case "$title" in *FAIL*) prio="high" ;; esac
+  local hp="${HOME:-/nonexistent}/bin/hapush"
+  if [ -x "$hp" ]; then "$hp" "$title" "$body" "$prio" "$src" >/dev/null 2>&1 || true
+  elif [ -f /home/pi/scripts/hapush.py ]; then python3 /home/pi/scripts/hapush.py "$title" "$body" "$prio" "$src" >/dev/null 2>&1 || true
+  fi
 }
 die() {
   log "FATAL: $*"

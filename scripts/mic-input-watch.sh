@@ -24,16 +24,14 @@ mkdir -p "$(dirname "$CONFIG_FILE")"
 # Defaults — overridable in ~/.bestly/mic-input-watch.conf
 PINNED_INPUT_DEFAULT="OBSBOT"
 POLL_INTERVAL_DEFAULT=3
-NTFY_TOPIC_DEFAULT="bestly-sysalert-7q2k9mx4"
 ENABLED_DEFAULT="true"
 FLAP_THRESHOLD_DEFAULT=5         # if > N flips per minute, pause for a beat
 FLAP_COOLDOWN_DEFAULT=60         # seconds to pause after flap detected
-NOTIFY_AFTER_DEFAULT="3"         # ntfy only after Nth consecutive restore (suppress noise)
+NOTIFY_AFTER_DEFAULT="3"         # push only after Nth consecutive restore (suppress noise)
 
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 PINNED_INPUT="${PINNED_INPUT:-$PINNED_INPUT_DEFAULT}"
 POLL_INTERVAL="${POLL_INTERVAL:-$POLL_INTERVAL_DEFAULT}"
-NTFY_TOPIC="${NTFY_TOPIC:-$NTFY_TOPIC_DEFAULT}"
 ENABLED="${ENABLED:-$ENABLED_DEFAULT}"
 FLAP_THRESHOLD="${FLAP_THRESHOLD:-$FLAP_THRESHOLD_DEFAULT}"
 FLAP_COOLDOWN="${FLAP_COOLDOWN:-$FLAP_COOLDOWN_DEFAULT}"
@@ -50,9 +48,12 @@ log() {
 }
 
 notify() {
-  local title="$1" body="$2"
-  curl -sfm 5 -d "$body" -H "X-Title: $title" \
-       "https://ntfy.sh/$NTFY_TOPIC" >/dev/null 2>&1 || true
+  # Home Assistant push via hapush (ntfy retired 2026-09-27)
+  local title="$1" body="$2" prio="default" src="Mac mic"
+  local hp="${HOME:-/nonexistent}/bin/hapush"
+  if [ -x "$hp" ]; then "$hp" "$title" "$body" "$prio" "$src" >/dev/null 2>&1 || true
+  elif [ -f /home/pi/scripts/hapush.py ]; then python3 /home/pi/scripts/hapush.py "$title" "$body" "$prio" "$src" >/dev/null 2>&1 || true
+  fi
   osascript -e "display notification \"$body\" with title \"$title\"" 2>/dev/null || true
 }
 
@@ -128,7 +129,7 @@ while true; do
     continue
   fi
 
-  # Suppress notification noise — only ntfy after N consecutive restores (means OS is actively fighting)
+  # Suppress notification noise — only push after N consecutive restores (means OS is actively fighting)
   if [ "$consecutive_restores" -eq "$NOTIFY_AFTER" ]; then
     notify "mic-input-watch" "Repeatedly restoring Input to $target (was: $current). OS Bluetooth auto-coupling is fighting. Cooling off if it continues."
   fi

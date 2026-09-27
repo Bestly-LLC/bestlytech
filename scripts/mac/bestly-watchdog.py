@@ -10,7 +10,7 @@ Micro instance pinned, every query timed out for 75 min, no alert fired.
   slow/down -> report to ops_watchdog_report: it logs the incident and runs the
                best-scoring in-database heal (hygiene / cancel / terminate)
   2 misses  -> pause the Mac pollers (they only add load during a freeze); restored on recovery
-  3 misses  -> push to Jared's phone via ntfy (topic in Keychain)
+  3 misses  -> push to Jared's phone via Home Assistant (~/bin/hapush; ntfy retired 2026-09-27)
   8 misses  -> restart the database via the Management API, if a token is in
                Keychain (service bestly-supabase-pat), at most every 30 min
 Everything it does is appended to ~/Library/Application Support/bestly-watchdog/log.
@@ -65,12 +65,14 @@ def rpc(fn, args, timeout=10):
 
 
 def ntfy(title, body, prio=5, tags="rotating_light"):
-    topic = keychain("bestly-ntfy-topic")
-    if not topic:
-        return log("ntfy: no topic in Keychain")
-    code, _, _ = http("https://ntfy.sh", {"topic": topic, "title": title, "message": body, "priority": prio,
-                                          "tags": [tags], "click": "https://studio.bestly.tech/"}, timeout=10)
-    log(f"ntfy {code}: {title}")
+    """Name kept for callers; ntfy retired 2026-09-27. Pushes via Home Assistant (~/bin/hapush:
+    Pi -> Supabase ha_push / HA direct; Pi down -> Supabase ha_push_t + web-push fallback)."""
+    try:
+        r = subprocess.run([os.path.expanduser("~/bin/hapush"), title, body, str(prio), "Mac watchdog"],
+                           capture_output=True, text=True, timeout=90)
+        log(f"hapush {r.returncode}: {title}" + (f" ({r.stderr.strip()[:160]})" if r.returncode else ""))
+    except Exception as e:
+        log(f"hapush failed: {e}: {title}")
 
 
 def load():

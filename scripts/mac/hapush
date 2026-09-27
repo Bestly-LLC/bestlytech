@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""hapush - the Mac's one way to reach Jared's iPhone: Home Assistant (ntfy retired 2026-09-27).
+
+  hapush "<title>" "<message>" [priority] [source]
+  priority: urgent|max|5|high|4 -> time-sensitive, default|3 -> active, low|min|2|1 -> passive
+
+Route:
+  a) ssh bestly-pi-lan -> /home/pi/scripts/hapush.py (Supabase ha_push, else HA directly on the Pi,
+     so a Supabase outage is covered).
+  b) Pi unreachable -> Supabase rpc ha_push_t (queues ha_push; web-push fallback after 6 min if the
+     Pi still can't deliver). Keys reused from where the Mac already has them: the publishable key
+     in ~/bin/bestly-watchdog.py (ANON) and the watchdog token in Keychain (bestly-db-watchdog).
+     Nothing new is stored.
+Exit 0 when the push was handed off. Importable: from hapush import send (via importlib).
+"""
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+PI = "bestly-pi-lan"
+PI_SCRIPT = "/home/pi/scripts/hapush.py"
+SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
+WATCHDOG = os.path.expanduser("~/bin/bestly-watchdog.py")
+
+_LEVELS = {
+    "urgent": "time-sensitive", "max": "time-sensitive", "5": "time-sensitive",
+    "high": "time-sensitive", "4": "time-sensitive",
+    "default": "active", "3": "active", "": "active",
+    "low": "passive", "min": "passive", "2": "passive", "1": "passive",
+    "passive": "passive", "active": "active", "time-sensitive": "time-sensitive", "critical": "critical",
+}
+_EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿️‍]+")
+
+
+def level_for(priority):
+    return _LEVELS.get(str(priority if priority is not None else "").strip().lower(), "active")
+
+
+def _tidy(title):
+    t = _EMOJI.sub("", str(title or "")).strip()
+    m = re.match(r"^\[(NEW|STILL|OK)\]\s*", t, re.I)
+    if m:
+        t = t[m.end():]
+        if m.group(1).upper() == "STILL":
+            t = "Still down: " + t
+    return (t or "Bestly")[:120]
+
+
+def _via_pi(title, message, priority, source):
+    remote = " ".join(shlex.quote(x) for x in ("python3", PI_SCRIPT, title, message, str(priority), source))
+    try:
+        r = subprocess.run(["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes", PI, remote],
+                           capture_output=True, text=True, timeout=45)
+    except Exception as exc:  # noqa: BLE001
+        print(f"hapush: pi route failed: {exc}", file=sys.stderr)
+        return False
+    if r.returncode == 0:
+        print((r.stdout.strip() or "push (pi)"))
+        return True
+    print(f"hapush: pi route exit {r.returncode}: {(r.stderr or r.stdout).strip()[:200]}", file=sys.stderr)
+    return False
+
+
+def _keychain(service, account=None):
+    args = ["security", "find-generic-password", "-s", service, "-w"] + (["-a", account] if account else [])
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=10).stdout.strip() or None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _supabase_key():
+    """Same key the watchdog uses: its ANON line. Read at runtime, never copied."""
+    try:
+        m = re.search(r'^ANON\s*=\s*["\']([^"\']+)["\']', open(WATCHDOG).read(), re.M)
+        if m:
+            return m.group(1)
+    except OSError:
+        pass
+    return _keychain("bestly-studio", "publishable")
+
+
+def _via_supabase(title, message, level, source):
+    key, token = _supabase_key(), _keychain("bestly-db-watchdog", "token")
+    if not key or not token:
+        print("hapush: supabase route has no key/token", file=sys.stderr)
+        return False
+    h = {"apikey": key} if key.startswith("sb_") else {"apikey": key, "Authorization": f"Bearer {key}"}
+    body = {"p_token": token, "p_title": title, "p_body": message, "p_level": level, "p_source": source,
+            "p_url": "https://bestly.tech/admin", "p_group": re.sub(r"\W+", "-", source.lower()).strip("-") or "mac"}
+    req = urllib.request.Request(f"{SB}/rest/v1/rpc/ha_push_t", data=json.dumps(body).encode(), method="POST",
+                                 headers={"Content-Type": "application/json", **h})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            ok = r.status < 300
+    except urllib.error.HTTPError as exc:
+        print(f"hapush: supabase {exc.code}: {exc.read().decode('utf-8', 'replace')[:200]}", file=sys.stderr)
+        return False
+    except Exception as exc:  # noqa: BLE001
+        print(f"hapush: supabase route failed: {exc}", file=sys.stderr)
+        return False
+    if ok:
+        print(f"push (mac fallback ha_push_t, {level}): [{title}] {message[:100]}")
+    return ok
+
+
+def send(title, message="", priority="default", source="Mac"):
+    """True when the push was handed off. Never raises."""
+    try:
+        title = _tidy(title)
+        message = (_EMOJI.sub("", str(message or "")).strip() or title)[:1200]
+        source = str(source or "Mac")
+        return _via_pi(title, message, priority, source) or \
+            _via_supabase(title, message, level_for(priority), source)
+    except Exception as exc:  # noqa: BLE001 - an alert must never crash its caller
+        print(f"hapush: {exc}", file=sys.stderr)
+        return False
+
+
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    sys.exit(0 if send(a[0] if a else "Test", a[1] if len(a) > 1 else "",
+                       a[2] if len(a) > 2 else "default", a[3] if len(a) > 3 else "Mac") else 1)

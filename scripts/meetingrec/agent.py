@@ -700,21 +700,27 @@ def orphan_job():
 # Everything that watches Bestly - the monitors, the fix ladder, the alert bell -
 # lives inside Supabase, so when Supabase itself goes down nothing is left to
 # notice. This Mac is the only thing outside it that talks to it every three
-# seconds, so it is the watchdog. ntfy is a different service on a different
-# network path, which is the whole point: it still works when the database does not.
-NTFY = "https://ntfy.sh/bestly-sysalert-7q2k9mx4"
+# seconds, so it is the watchdog. Alerts go through ~/bin/hapush (ntfy retired 2026-09-27):
+# ssh to the Pi, which pushes via Home Assistant directly when Supabase is down - a route
+# that does not need the database, which is the whole point.
+HAPUSH = os.path.expanduser("~/bin/hapush")
 down = {"since": None, "told": 0}
 DOWN_AFTER_S = 180          # a blip is not an outage
 REMIND_EVERY_S = 900
 
 
 def ntfy(title, body, priority="urgent", tags="rotating_light"):
-    try:
-        req = urllib.request.Request(NTFY, data=body.encode(), method="POST",
-                                     headers={"Title": title, "Priority": priority, "Tags": tags})
-        urllib.request.urlopen(req, timeout=10).read()
-    except Exception as e:  # noqa: BLE001
-        log("ntfy failed", e)
+    """Name kept for callers. Pushes via Home Assistant (~/bin/hapush) on a background
+    thread so a slow ssh never stalls the 3-second poll loop."""
+    def _send():
+        try:
+            r = subprocess.run([HAPUSH, title, body, str(priority), "Mac MeetingRec"],
+                               capture_output=True, text=True, timeout=90)
+            if r.returncode:
+                log("hapush failed", r.returncode, (r.stderr or "").strip()[:200])
+        except Exception as e:  # noqa: BLE001
+            log("hapush failed", e)
+    threading.Thread(target=_send, daemon=True).start()
 
 
 def watch_backend(ok):

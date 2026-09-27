@@ -10,7 +10,6 @@ PROBE_URL="${PROBE_URL:-http://localhost:8082/status.php}"
 PROBE_INTERVAL="${PROBE_INTERVAL:-30}"
 FAILURE_THRESHOLD="${FAILURE_THRESHOLD:-3}"
 RESTART_COOLDOWN="${RESTART_COOLDOWN:-300}"
-NTFY_TOPIC="${NTFY_TOPIC:-bestly-sysalert-7q2k9mx4}"
 
 consecutive_failures=0
 last_restart=0
@@ -22,9 +21,12 @@ probe() {
 }
 
 notify() {
-  local msg="$1"
-  curl -sfm 5 -d "$msg" -H "X-Title: cloudflared-origin-watch" \
-       "https://ntfy.sh/$NTFY_TOPIC" >/dev/null 2>&1 || true
+  # Home Assistant push via hapush (ntfy retired 2026-09-27): ~/bin/hapush on the Mac, else the Pi's hapush.py
+  local title="cloudflared-origin-watch" body="$1" prio="high" src="cloudflared"
+  local hp="${HOME:-/nonexistent}/bin/hapush"
+  if [ -x "$hp" ]; then "$hp" "$title" "$body" "$prio" "$src" >/dev/null 2>&1 || true
+  elif [ -f /home/pi/scripts/hapush.py ]; then python3 /home/pi/scripts/hapush.py "$title" "$body" "$prio" "$src" >/dev/null 2>&1 || true
+  fi
 }
 
 log "starting cloudflared-origin-watch; probe=$PROBE_URL interval=${PROBE_INTERVAL}s threshold=$FAILURE_THRESHOLD"
