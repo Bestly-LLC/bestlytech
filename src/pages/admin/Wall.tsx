@@ -14,6 +14,9 @@
  * Order is answer-first: a Now card (status, mode, what's playing, 4 quick actions), then daily
  * controls, then Live Activities, and an Advanced disclosure for alignment, sky fit, power tools and tests.
  * Every action confirms with a toast (sonner, one at a time).
+ *
+ * Deep links (iPhone Live Activities open these): #sleep, #show, #live, #theme scroll to that section
+ * once the page has loaded, opening any collapsed disclosure that holds it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -29,6 +32,9 @@ import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2,
 type Pt = [number, number];
 type LiveKind = "plane" | "sweep" | "turo" | "show" | "sleep" | "incident";
 type Mode = "auto" | "board" | "ambient" | "demo" | "off";
+/** Values of the wall state key `theme` (null = Normal). A new theme adds its value here, to THEMES,
+ *  to server.py's theme check, to wall_clean_patch, and to wall.html. */
+type ThemeId = "halloween";
 type WallState = {
   corners: Pt[]; mode: Mode; one: string; mapping: boolean;
   testSweep: boolean; testScout: boolean; away: boolean; mask: Pt[] | null;
@@ -36,7 +42,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: "halloween" | null; volume?: number | null; airplay?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
   heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
@@ -86,9 +92,10 @@ const toF = (c: number) => Math.round((c * 9) / 5 + 32);
 
 /* ───────── building blocks (grouped inset list, Apple style) ───────── */
 
-function Group({ title, footer, children }: { title?: string; footer?: React.ReactNode; children: React.ReactNode }) {
+/** `id` makes the group a deep-link target (#id); scroll-mt clears the sticky admin header. */
+function Group({ id, title, footer, children }: { id?: string; title?: string; footer?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="space-y-2">
+    <section id={id} className="scroll-mt-20 space-y-2">
       {title && <h2 className="px-4 text-[13px] font-medium uppercase tracking-[0.06em] text-white/50">{title}</h2>}
       <div className="overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/10">{children}</div>
       {footer && <p className="px-4 text-[13px] leading-snug text-white/50">{footer}</p>}
@@ -160,6 +167,40 @@ const LIVE_ACTS: { id: LiveKind; label: string; detail: string; icon: React.Elem
   { id: "incident", label: "Something's broken", detail: "A red card while a serious problem is open.", icon: AlertTriangle },
 ];
 
+/** Options for the Theme control. "normal" writes theme: null. Add a new theme's value here once the Pi supports it. */
+const THEMES: { id: "normal" | ThemeId; label: string; detail: string }[] = [
+  { id: "normal", label: "Normal", detail: "The everyday wall." },
+  { id: "halloween", label: "Halloween", detail: "Orange clock, cobweb, spider, jack-o'-lantern, bats and a countdown to Oct 31." },
+];
+
+/** Copied by "Add a new theme". The idea Jared types goes after the last line. */
+const NEW_THEME_PROMPT = `Build a new theme for the Bestly Wall, end to end, and ship it.
+
+Context
+- The Bestly Wall is projected onto the wall and ceiling above my desk by an Anker Nebula Capsule 3 projector (Google TV).
+- The Raspberry Pi at \`ssh bestly-pi-lan\` runs it from /opt/bestly/wall: server.py (state and API), watchdog.py (health checks and auto-recovery), and www/wall.html (the page the projector shows).
+- Wall state lives in Supabase project rcqfqhguwpmaarseifqg, table wall_state.
+- The remote is the admin page at bestly.tech/admin/wall (src/pages/admin/Wall.tsx in ~/Developer/bestlytech-wall; push to origin main).
+
+How themes work today
+- The Halloween theme is the wall state key \`theme\` set to "halloween". null means Normal.
+- server.py validates it with: if k == "theme" and v not in (None, "halloween")
+- The database function wall_clean_patch must accept the value too.
+- A new theme needs its new value added in all three places (wall.html, server.py, wall_clean_patch), plus a new option in the admin page's Theme control (the THEMES list in Wall.tsx).
+
+Rules
+- Read bestly_memory first. Write what you learned back before you finish.
+- Other sessions edit wall.html too. Patch it on the Pi with exact-anchor scripts that make a backup first. Never overwrite it from a local copy.
+- Test on the real projector with adb screencap. Headless tests are useless for performance.
+- Keep it at 30+ fps: no blur or backdrop-filter, and animate only transform and opacity.
+- Decorations stay inside the strip, sign wall and sky surfaces. Hide any that would look wrong in ambient mode.
+- Add a self-healing watchdog hook that reports to Scout.
+- US units, 12-hour times, and a number never wraps away from its unit.
+- Use the Apple design skill.
+- Reply to me ADHD-style: answer first, short bullets, bold the key point, end with the one next step.
+
+Theme to build: `;
+
 /** Big iOS-style tile for the Now card. */
 function QuickAction({ icon: Icon, label, onClick, active }: { icon: React.ElementType; label: string; onClick: () => void; active?: boolean }) {
   return (
@@ -175,11 +216,33 @@ function QuickAction({ icon: Icon, label, onClick, active }: { icon: React.Eleme
   );
 }
 
-/** Open/closed memory is a per-viewer convenience only, so storage failures are ignored. */
-function useRemembered(key: string, fallback: boolean) {
+/** Section id from the URL hash ("#sleep" -> "sleep"). */
+const hashId = () => { try { return decodeURIComponent(window.location.hash.slice(1)); } catch { return ""; } };
+
+/** Copy text, falling back to a hidden textarea where the Clipboard API is blocked. */
+async function copyText(text: string) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const t = document.createElement("textarea");
+    t.value = text; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0";
+    document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove();
+  }
+}
+
+/** Open/closed memory is a per-viewer convenience only, so storage failures are ignored.
+ *  `opensFor` lists deep-link ids inside it: landing on one of those hashes opens it. */
+function useRemembered(key: string, fallback: boolean, opensFor: string[] = []) {
   const [open, setOpen] = useState<boolean>(() => {
+    if (opensFor.includes(hashId())) return true;
     try { const v = localStorage.getItem(key); return v == null ? fallback : v === "1"; } catch { return fallback; }
   });
+  const opensKey = opensFor.join(",");
+  useEffect(() => {
+    if (!opensKey) return;
+    const onHash = () => { if (opensKey.split(",").includes(hashId())) setOpen(true); };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, [opensKey]);
   const toggle = () => setOpen((o) => {
     try { localStorage.setItem(key, o ? "0" : "1"); } catch { /* ignore */ }
     return !o;
@@ -188,10 +251,10 @@ function useRemembered(key: string, fallback: boolean) {
 }
 
 /** Collapsible section for rarely used tools (progressive disclosure). */
-function Disclosure({ id, title, summary, children }: { id: string; title: string; summary?: string; children: React.ReactNode }) {
-  const [open, toggle] = useRemembered(`wall-open-${id}`, false);
+function Disclosure({ id, title, summary, opensFor = [], children }: { id: string; title: string; summary?: string; opensFor?: string[]; children: React.ReactNode }) {
+  const [open, toggle] = useRemembered(`wall-open-${id}`, false, [id, ...opensFor]);
   return (
-    <section className="space-y-4">
+    <section id={id} className="scroll-mt-20 space-y-4">
       <button type="button" aria-expanded={open} aria-controls={`wall-${id}-panel`} onClick={toggle}
         className="flex min-h-[56px] w-full items-center gap-3 rounded-2xl bg-white/[0.04] px-4 py-2 text-left ring-1 ring-white/10 transition-colors duration-150 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
         <span className="min-w-0 flex-1">
@@ -206,12 +269,12 @@ function Disclosure({ id, title, summary, children }: { id: string; title: strin
 }
 
 /** A "More" row inside a group that reveals extra rows below it. */
-function DisclosureRow({ id, label, summary, children }: { id: string; label: string; summary?: string; children: React.ReactNode }) {
-  const [open, toggle] = useRemembered(`wall-open-${id}`, false);
+function DisclosureRow({ id, label, summary, opensFor = [], children }: { id: string; label: string; summary?: string; opensFor?: string[]; children: React.ReactNode }) {
+  const [open, toggle] = useRemembered(`wall-open-${id}`, false, [id, ...opensFor]);
   return (
     <>
-      <button type="button" aria-expanded={open} aria-controls={`wall-${id}-rows`} onClick={toggle}
-        className="flex min-h-[52px] w-full items-center gap-3 border-b border-white/[0.07] px-4 py-2.5 text-left last:border-b-0 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400">
+      <button type="button" id={id} aria-expanded={open} aria-controls={`wall-${id}-rows`} onClick={toggle}
+        className="flex min-h-[52px] w-full scroll-mt-20 items-center gap-3 border-b border-white/[0.07] px-4 py-2.5 text-left last:border-b-0 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400">
         <span className="min-w-0 flex-1">
           <span className="block text-[16px] text-sky-400">{label}</span>
           {summary && !open && <span className="block text-[13px] text-white/50">{summary}</span>}
@@ -237,6 +300,8 @@ export default function Wall() {
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
   const [showAllSigs, setShowAllSigs] = useState(false);
   const [copiedAlign, setCopiedAlign] = useState(false);
+  const [themeIdea, setThemeIdea] = useState("");
+  const [copiedTheme, setCopiedTheme] = useState(false);
   const [sheepMins, setSheepMins] = useState<"15" | "30" | "60">("30");
   const [sheepMusic, setSheepMusic] = useState(true);
   const [, setSheepTick] = useState(0);
@@ -496,6 +561,31 @@ export default function Wall() {
       ? { dot: "bg-amber-400 animate-pulse", text: "Saving…" }
       : { dot: "bg-emerald-400", text: "Synced" };
 
+  /* ───── deep links: /admin/wall#sleep, #show, #live (Live Activities), #theme ───── */
+  // Sign-in and the first load render a placeholder, so wait until the real sections exist, then scroll.
+  // Two frames let any disclosure that holds the target open first (useRemembered opensFor).
+  const ready = !!r && !!s;
+  useEffect(() => {
+    if (!ready) return;
+    let raf = 0;
+    const go = () => {
+      const id = hashId();
+      if (!id) return;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        raf = requestAnimationFrame(() => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+          el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+        });
+      });
+    };
+    go();
+    window.addEventListener("hashchange", go);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("hashchange", go); };
+  }, [ready]);
+
   if (!r || !s) {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
@@ -541,6 +631,19 @@ export default function Wall() {
   const stopShow = () => act({ tour: { cmd: "stop", at: Date.now() } }, "Stopping. The wall goes back to normal.");
   const startSheep = () => act({ sleepShow: { at: Date.now(), mins: Number(sheepMins), music: sheepMusic } }, `Counting sheep for ${sheepLen}. Good night.`);
   const stopSheep = () => act({ sleepShow: null }, "Sleep mode stopped.");
+  /** The one place the theme is written: Normal -> null, anything else -> its value. */
+  const themeNow = THEMES.find((t) => t.id === (s.theme ?? "normal")) ?? THEMES[0];
+  const setTheme = (id: (typeof THEMES)[number]["id"]) => {
+    const t = THEMES.find((x) => x.id === id) ?? THEMES[0];
+    act({ theme: id === "normal" ? null : id }, `Theme: ${t.label}.`);
+  };
+  const copyThemePrompt = async () => {
+    const idea = themeIdea.trim();
+    if (!idea) return;
+    await copyText(NEW_THEME_PROMPT + idea);
+    setCopiedTheme(true); window.setTimeout(() => setCopiedTheme(false), 2500);
+    toast.success("Copied. Paste it into a Claude chat.", { id: "wall-act" });
+  };
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 pb-10">
@@ -573,6 +676,7 @@ export default function Wall() {
           </div>
           <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[15px]">
             <dt className="text-white/50">Mode</dt><dd className="text-white">{modeLabel}</dd>
+            {s.theme && <><dt className="text-white/50">Theme</dt><dd className="text-white">{themeNow.label}</dd></>}
             <dt className="text-white/50">Playing</dt><dd className="text-white">{playing ?? <span className="text-white/60">Nothing extra</span>}</dd>
             {s.one && <><dt className="text-white/50">Message</dt><dd className="min-w-0 truncate text-white">“{s.one}”</dd></>}
           </dl>
@@ -632,6 +736,31 @@ export default function Wall() {
         </div>
       </Group>
 
+      {/* Theme: the only control for state key `theme` (null = Normal). New themes start from the copied prompt. */}
+      <Group id="theme" title="Theme">
+        <div className="border-b border-white/[0.07] p-2">
+          <Segmented label="Theme" value={themeNow.id} onChange={setTheme}
+            options={THEMES.map((t) => ({ id: t.id, label: t.id === "halloween" ? <><Ghost className="h-4 w-4 shrink-0" aria-hidden />{t.label}</> : t.label }))} />
+          <p className="px-2 pb-1 pt-2 text-[13px] leading-snug text-white/55">{themeNow.detail}</p>
+        </div>
+        <DisclosureRow id="new-theme" label="Add a new theme" summary="Copy a prompt that has Claude build it">
+          <div className="space-y-3 px-4 py-3">
+            <label htmlFor="wall-theme-idea" className="block text-[16px] text-white">Theme name or idea</label>
+            <textarea
+              id="wall-theme-idea" rows={3} maxLength={600} value={themeIdea} autoComplete="off"
+              placeholder="e.g. Christmas: snow falling, twinkly lights, a sleigh crossing the ceiling"
+              onChange={(e) => setThemeIdea(e.target.value)}
+              className="min-h-[88px] w-full resize-none rounded-xl bg-white/[0.07] px-3 py-2.5 text-[16px] leading-snug text-white ring-1 ring-white/10 placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-sky-400"
+            />
+            <button type="button" className={cn(btnPrimary, "w-full")} disabled={!themeIdea.trim()} onClick={() => void copyThemePrompt()}>
+              {copiedTheme ? <CheckCircle2 className="h-5 w-5" aria-hidden /> : <Copy className="h-5 w-5" aria-hidden />}
+              {copiedTheme ? "Copied" : "Copy prompt"}
+            </button>
+            <p className="text-[13px] text-white/50">Paste it into a new Claude chat. Claude builds the theme on the Pi and adds it here when it's done.</p>
+          </div>
+        </DisclosureRow>
+      </Group>
+
       {/* Demo text: only while Demo mode is showing */}
       {s.mode === "demo" && (
         <Group title="Demo text" footer="Left and right can be two lines. Changes show on the wall as you type.">
@@ -656,28 +785,52 @@ export default function Wall() {
       )}
 
       {/* Show for friends: a ~2 minute tour, then a party loop until you stop it (45 min max). */}
-      <Group title="Show for friends"
+      <Group id="show" title="Show for friends"
         footer={<>The show is a 2-minute tour, then a party until you stop it (45{"\u00a0"}minutes max). The skit is a 2-minute cartoon with speech bubbles. Music and voices play 7{"\u00a0"}AM to 11{"\u00a0"}PM when wall sound is on; at night it's lights only.</>}>
-        <div className="space-y-2 px-4 py-3">
-          <button type="button" className={cn(btnPrimary, "w-full")} onClick={() => playShow("play")}>
-            <Presentation className="h-5 w-5" aria-hidden /> Play the show
-          </button>
-          <div className="grid grid-cols-3 gap-2">
-            <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("party")}>
-              <PartyPopper className="h-4 w-4 shrink-0" aria-hidden /> Party
+        {tour ? (
+          /* Playing: Stop is the one filled button, so it's the obvious tap (the Live Activity lands here). */
+          <div className="space-y-3 px-4 py-3">
+            <div className="flex items-center gap-3">
+              {skitOn ? <Clapperboard className="h-5 w-5 shrink-0 text-red-300" aria-hidden /> : <PartyPopper className="h-5 w-5 shrink-0 text-red-300" aria-hidden />}
+              <div className="min-w-0 flex-1">
+                <div className="text-[17px] font-semibold text-white">{TOUR_NAME[tour.cmd]} is playing</div>
+                <div className="text-[15px] text-white/60">Started <NW>{time12(tour.at)}</NW></div>
+              </div>
+            </div>
+            <button type="button" className={cn(btnPrimary, "w-full bg-red-500 text-white hover:bg-red-500/90 active:bg-red-500/80")} onClick={stopShow}>
+              <Square className="h-5 w-5" aria-hidden /> {skitOn ? "Stop the skit" : "Stop the show"}
             </button>
-            <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("skit")}>
-              <Clapperboard className="h-4 w-4 shrink-0" aria-hidden /> Skit
-            </button>
-            <button type="button" className={cn(btn, "px-2", tour && "text-red-300 ring-red-400/40")} onClick={stopShow}>
-              <Square className="h-4 w-4 shrink-0" aria-hidden /> Stop
-            </button>
+            <div className="grid grid-cols-3 gap-2">
+              <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("play")}>
+                <Presentation className="h-4 w-4 shrink-0" aria-hidden /> Show
+              </button>
+              <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("party")}>
+                <PartyPopper className="h-4 w-4 shrink-0" aria-hidden /> Party
+              </button>
+              <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("skit")}>
+                <Clapperboard className="h-4 w-4 shrink-0" aria-hidden /> Skit
+              </button>
+            </div>
           </div>
-        </div>
-        <Row htmlFor="wall-halloween" label="Halloween theme" detail="Orange clock, cobweb, spider, jack-o'-lantern, bats and a countdown to Oct 31.">
-          <Switch className={swHit} id="wall-halloween" checked={s.theme === "halloween"} onCheckedChange={(v) => act({ theme: v ? "halloween" : null }, v ? "Halloween theme on." : "Halloween theme off.")} />
-        </Row>
-        <div className="grid grid-cols-2 gap-2 px-4 py-3">
+        ) : (
+          <div className="space-y-2 px-4 py-3">
+            <button type="button" className={cn(btnPrimary, "w-full")} onClick={() => playShow("play")}>
+              <Presentation className="h-5 w-5" aria-hidden /> Play the show
+            </button>
+            <div className="grid grid-cols-3 gap-2">
+              <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("party")}>
+                <PartyPopper className="h-4 w-4 shrink-0" aria-hidden /> Party
+              </button>
+              <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("skit")}>
+                <Clapperboard className="h-4 w-4 shrink-0" aria-hidden /> Skit
+              </button>
+              <button type="button" className={cn(btn, "px-2")} onClick={stopShow}>
+                <Square className="h-4 w-4 shrink-0" aria-hidden /> Stop
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2 border-t border-white/[0.07] px-4 py-3">
           <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("hshow")}>
             <Ghost className="h-4 w-4 shrink-0" aria-hidden /> Halloween show
           </button>
@@ -688,15 +841,20 @@ export default function Wall() {
       </Group>
 
       {/* Sleep mode: counting sheep */}
-      <Group title="Sleep mode" footer={`Sheep hop a fence while a soft lullaby plays. It slows down as you drift off, says good night, and turns the projector off until 7\u00a0AM.`}>
+      <Group id="sleep" title="Sleep mode" footer={`Sheep hop a fence while a soft lullaby plays. It slows down as you drift off, says good night, and turns the projector off until 7\u00a0AM.`}>
         {sheepOn ? (
-          <div className="flex items-center gap-3 px-4 py-3">
-            <Moon className="h-5 w-5 shrink-0 text-indigo-300" aria-hidden />
-            <div className="min-w-0 flex-1">
-              <div className="text-[17px] font-semibold text-white">Counting sheep</div>
-              <div className="text-[15px] text-white/60">Ends at <NW>{time12(sheepEnd)}</NW></div>
+          /* Counting: Stop is the one filled button, so it's the obvious tap (the Live Activity lands here). */
+          <div className="space-y-3 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Moon className="h-5 w-5 shrink-0 text-indigo-300" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <div className="text-[17px] font-semibold text-white">Counting sheep</div>
+                <div className="text-[15px] text-white/60">Ends at <NW>{time12(sheepEnd)}</NW></div>
+              </div>
             </div>
-            <button type="button" className={cn(btn, "shrink-0")} onClick={stopSheep}>Stop</button>
+            <button type="button" className={cn(btnPrimary, "w-full")} onClick={stopSheep}>
+              <Square className="h-5 w-5" aria-hidden /> Stop counting sheep
+            </button>
           </div>
         ) : (
           <div className="space-y-3 px-4 py-3">
@@ -782,7 +940,7 @@ export default function Wall() {
         };
         const onCount = LIVE_ACTS.filter((x) => acts[x.id] !== false).length;
         return (
-          <Group title="Live Activities" footer={`Live cards on your iPhone's Lock Screen and Dynamic Island, sent by the wall. ${onCount} of ${LIVE_ACTS.length} on.`}>
+          <Group id="live" title="Live Activities" footer={`Live cards on your iPhone's Lock Screen and Dynamic Island, sent by the wall. ${onCount} of ${LIVE_ACTS.length} on.`}>
             {LIVE_ACTS.map((x) => (
               <Row key={x.id} htmlFor={`wall-la-${x.id}`} detail={x.detail}
                 label={<span className="inline-flex items-center gap-2"><x.icon className={cn("h-4 w-4 shrink-0", x.id === "incident" ? "text-red-400" : "text-white/60")} aria-hidden />{x.label}</span>}>
@@ -952,7 +1110,7 @@ export default function Wall() {
               onClick={async () => {
                 change({ calGrid: true });
                 const prompt = "Wall alignment: the alignment grid is on the wall now. I'm attaching 2 photos taken from where I usually sit (one with the lights on, one with the lights off). Re-fit the strip, the sign wall, the blocked TV area and the sky (fill the whole ceiling, text and planes must look straight from where I sit). Save it, turn the grid off, and check it on the projector. Use the wall-realign skill.";
-                try { await navigator.clipboard.writeText(prompt); } catch { const t = document.createElement("textarea"); t.value = prompt; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+                await copyText(prompt);
                 setCopiedAlign(true); setTimeout(() => setCopiedAlign(false), 2500);
                 toast.success("Grid is on and the prompt is copied. Take 2 photos from your usual spot.", { id: "wall-act" });
               }}>

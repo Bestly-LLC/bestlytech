@@ -27,7 +27,8 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    const next = location.pathname + location.search;
+    // Keep the #section too, so deep links (e.g. a Live Activity opening /admin/wall#sleep) survive sign-in.
+    const next = location.pathname + location.search + location.hash;
     return <Navigate to={next && next !== "/admin" ? `/admin/login?next=${encodeURIComponent(next)}` : "/admin/login"} replace />;
   }
 
@@ -37,7 +38,7 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
 
   // Back from Apple sign-in: finish the trip to where you were headed (e.g. the QR approve page).
   const pending = takeNext();
-  if (pending && pending !== location.pathname + location.search) return <Navigate to={pending} replace />;
+  if (pending && pending !== location.pathname + location.search + location.hash) return <Navigate to={pending} replace />;
 
   return <>{children}<PasswordSetup /></>;
 }
