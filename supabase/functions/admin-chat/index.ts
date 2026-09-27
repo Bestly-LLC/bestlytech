@@ -1,5 +1,5 @@
 import { SECRET_KEY, isServiceRequest } from "../_shared/keys.ts";
-import { llm } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0
+import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0
 // admin-chat — Scout, the assistant inside bestly.tech/admin.
 //
 // Rules, in order of how much trouble breaking them causes:
@@ -79,6 +79,9 @@ import { llm } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v29 (2026-09-27): free agent on real function calling (llmChat: Groq gpt-oss-120b -> Qwen -> gpt-oss-20b -> Cloudflare),
+//   summary + "Keep going" instead of a bare paid ask when it runs out of steps, one nudge before giving up, and
+//   autopilot (fix ladder) tries free first. See freeAgent().
 // v28 (2026-09-24): the free model has hands - see freeAgent(). freeTry answers first; on NEEDS_TOOLS the
 //   free model runs a tool loop (same tools and guards as paid Scout minus commit_files / db_write /
 //   mac_command; its Mac jobs always wait for the Run tap) and only hands off to paid for code, data
@@ -754,151 +757,221 @@ ${convo}`;
 }
 
 /**
- * v28: the free model gets hands (plan Phase 5, widened at Jared's ask: "as capable as possible").
- * When freeTry says NEEDS_TOOLS, freeAgent runs a tool loop on the free rungs (llm() task "judge":
- * Groq gpt-oss-120b -> Cloudflare gpt-oss-120b; paid never), strict JSON, same runTool() with the same
- * guards and the same admin_chat_actions log. It can read everything, tidy up, notify, move to-dos, run Pi
- * checks and propose Mac jobs. It does NOT get commit_files, db_write or mac_command, and its Mac jobs
- * always wait for his Run tap even with auto-run on: free-model shell that runs unseen is not safe.
- * When a job is beyond it (a code change, a real build, a data fix) it escalates to paid Scout.
- * A reply that says something was done when no action succeeded is thrown away (v23 rule, kept).
+ * v29 (2026-09-27): the free agent uses REAL function calling (llmChat in _shared/free-llm.ts).
+ *
+ * v28 described the tools in prose and asked gpt-oss for one JSON object per step. gpt-oss is trained to call tools
+ * natively, so it kept emitting a native call the request never declared; the provider dropped it and the reply came
+ * back empty. About 1 in 4 free calls died that way (Sep 24-27), and each one turned into "I'd need paid AI". Now the
+ * tools are declared, results go back as proper tool messages, and Groq rotates three models (per-model limits).
+ *
+ * Also in v29:
+ *  - When the step or time budget runs out, the free model summarizes what it found and offers "Keep going" (free)
+ *    next to paid, instead of a bare "the free AI got partway" ask.
+ *  - A reply that refuses or claims unfinished work gets one nudge to use its tools before anything escalates.
+ *  - Autopilot (the fix ladder) runs this free agent first; paid AI is only offered when free can't finish.
+ * Unchanged: no commit_files, db_write or mac_command; free Mac jobs always wait for his Run tap.
  */
 const FREE_TOOLS = new Set([
   "today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "notify", "mark_done",
   "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn",
 ]);
 const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript"]);
-const FREE_STEPS = 8;
-const FREE_BUDGET_MS = 85_000;   // freeTry (~2-30s) + this must stay under the 150s platform limit
+const FREE_STEPS = 10;
+const FREE_BUDGET_MS = 95_000;   // freeTry (~2-30s) + this must stay under the 150s platform limit
 const REFUSES = /\b(can'?t|cannot|can not|unable to|not able to|don'?t have (access|the ability))\b|\bmanually\b|\byou('ll| will)? (need|have) to\b/i;
 const CLAIMS_DONE = /\b(done|fixed|resolved|pushed|sent|cleared|moved|restarted|deployed|completed|updated|notified)\b/i;
+const PLACEHOLDER = /\[(?:[A-Z][A-Za-z ]{1,20})\]|(?<!Model )\bX\b(?=\s+[a-z])|<[a-z_ ]{2,20}>/;
+/** His latest message is a plain yes: only then may a free-model action carry confirmed:true (auto-run aside). */
+const PLAIN_YES = /^\s*(yes|yep|yeah|ya|ok|okay|sure|do it|go ahead|go for it|approved?|confirm(ed)?|please do|keep going)\b/i;
+const PAID_ONLY_WHY: Record<string, string> = {
+  commit_files: "It means changing how the admin works (a code change), which only the paid AI can do.",
+  db_write: "It means changing data in Bestly, which only the paid AI can do.",
+  mac_command: "It needs an admin command on the Mac mini, which only the paid AI can run.",
+};
 
-async function freeModel(threadId: string, system: string, user: string, until: number): Promise<string | null> {
-  const left = until - Date.now();
-  if (left < 6000) return null;
-  try {
-    const r = await llm({
-      // json:false on purpose: strict JSON mode makes Groq reject and Cloudflare's gpt-oss spend the whole
-      // budget reasoning (empty reply). parseStep() pulls the JSON object out of plain text instead.
-      task: "judge", system, user, json: false, job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat",
-      paid: "never", maxTokens: 2500, deadlineMs: Math.min(left - 2000, 45_000),
-    });
-    return r.text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-  } catch {
-    return null;
+const ASK_PAID_TOOL = {
+  type: "function",
+  function: {
+    name: "ask_paid",
+    description: "Hand the job to paid Scout (Claude). Use ONLY when it needs a change to the admin's code (a feature, page, alert or behaviour), " +
+      "a change to data rows (INSERT/UPDATE/DELETE), or you used your tools and truly cannot finish. Never for anything you can answer by reading.",
+    parameters: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["CODE", "DATA", "HARD"] },
+        why: { type: "string", description: "One plain line: what is left and why you can't do it." },
+      },
+      required: ["kind", "why"],
+    },
+  },
+};
+
+function freeToolDefs(autopilot: boolean) {
+  return [
+    ...TOOLS.filter((t) => FREE_TOOLS.has(t.name) && !(autopilot && AUTOPILOT_NEVER.has(t.name))).map((t) => ({
+      type: "function",
+      function: { name: t.name, description: t.description.slice(0, 700), parameters: t.input_schema },
+    })),
+    ASK_PAID_TOOL,
+  ];
+}
+
+type Msg = Record<string, any>;
+/** Keep the prompt under Groq's per-model 8K tokens/min: shrink older tool results first, newest two stay whole. */
+function trimForBudget(msgs: Msg[], maxTokens = 5200) {
+  const est = () => Math.ceil(JSON.stringify(msgs).length / 3.5);
+  const toolIdx = msgs.map((m, i) => (m.role === "tool" ? i : -1)).filter((i) => i >= 0);
+  for (const i of toolIdx.slice(0, -2)) {
+    if (est() <= maxTokens) return;
+    const c = String(msgs[i].content ?? "");
+    if (c.length > 400) msgs[i].content = c.slice(0, 400) + "...(older result shortened)";
   }
 }
 
-function parseStep(raw: string): Record<string, any> | null {
-  const m = raw.match(/\{[\s\S]*\}/);
-  if (!m) return null;
-  try { return JSON.parse(m[0]); } catch { return null; }
-}
-
-async function freeAgent(threadId: string, text: string, page: unknown): Promise<{ answer?: string; why: string; tools?: string[] }> {
+async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean } = {}):
+  Promise<{ answer?: string; why: string; tools?: string[] }> {
+  const autopilot = !!opts.autopilot;
   const until = Date.now() + FREE_BUDGET_MS;
 
   const [{ data: hist }, { data: today }] = await Promise.all([
-    db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(10),
+    db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(12),
     db.rpc("admin_today"),
   ]);
-  const convo = ((hist ?? []) as any[]).reverse().map((m, i, arr) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body).slice(0, i === arr.length - 1 ? 20_000 : 700)}`).join("\n");
-  const toolDocs = TOOLS.filter((t) => FREE_TOOLS.has(t.name))
-    .map((t) => `- ${t.name}: ${t.description.slice(0, 300)} Args: ${JSON.stringify((t.input_schema as any).properties ?? {}).slice(0, 260)}`).join("\n");
+  const saidYes = !autopilot && PLAIN_YES.test(text);
   const queue = ((today ?? []) as any[]).slice(0, 12).map((q) => `- [${q.key}] rank ${q.rank} ${q.title}${q.detail ? `: ${String(q.detail).slice(0, 140)}` : ""}`).join("\n");
 
-  const head = `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You DO things with tools; you do not describe what someone else should do.
-You have no function-calling API. Write your decision as ONE JSON object in plain text and nothing else (no prose, no code fences), one of:
-{"tool": "<name>", "args": {...}}                      run a tool; you will see its result, then choose the next step
-{"reply": "<text for Jared>", "options": ["Do it", "Not now"]}   finish: plain text under 70 words, lead with the answer; options = 2-4 short buttons he can tap
-{"escalate": "CODE" | "DATA" | "ACTION", "why": "<one line>"}    hand to paid Scout when the job needs a code change or build, a data change (INSERT/UPDATE/DELETE), or more than you can finish here
+  const yesRule = autopilot
+    ? "Jared is NOT here (the fix ladder sent you). Use read tools and do only what needs no yes. Anything that needs his yes: don't call it, say it in your last line."
+    : saidYes
+      ? "His latest message is a yes: set confirmed:true on the one action he agreed to."
+      : autoRunOn
+        ? "Auto-run is on: actions may run with confirmed:true without asking him first."
+        : "He has not said yes yet: before any action that needs confirmed:true, say what it will do and end with OPTIONS: Do it | Not now.";
 
-Rules:
-- Read before you act: use run_sql / today / incidents / read_file to get facts. Never invent numbers, names, files or results.
-- Tools marked "requires confirmed:true" need his yes. If he already said yes in the conversation (e.g. "Do it", "yes", "keep going"), set confirmed:true. Otherwise reply asking, with options.
-- mac_run: propose a short, safe, idempotent zsh script with a plain title and why. It waits for his Run tap. Say the Run card is up.
-- Only say something is done if a tool result in THIS turn shows ok:true for it.
-- If a tool fails, change approach; after two failures, escalate.
-- run_sql is one SELECT/WITH on the public schema. Times are UTC; show them to Jared in Pacific time, 12-hour (3:05 PM).
-- If a query fails because a table or column doesn't exist, look it up first: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND table_name ILIKE '%word%'. Never answer from a failed query.
-- Never answer with placeholders like X, [Name] or [Date]: every number and name must come from a tool result.
-- Only add options when there is something for him to do or approve; a plain answer needs none.
+  const system = `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You run on a free model WITH real tools: do the work yourself, don't tell Jared what someone else should do.
+How to work:
+- Read before you answer or act: run_sql, today, incidents, read_file, meeting_transcript. Never invent numbers, names, files or results. Never use placeholders like X or [Name].
+- run_sql is one SELECT/WITH on the public schema. If a table or column is wrong, look it up: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND table_name ILIKE '%word%'. Then retry. Never answer from a failed query.
+- Times in the data are UTC; show Pacific time, 12-hour (3:05 PM). US units.
+- ${yesRule}
+- mac_run: propose a short, safe, idempotent zsh script with a plain title and why; it waits for his Run tap.
+- Only say something is done if a tool result in this turn shows ok:true for it.
+- If a tool fails, change approach. Call ask_paid only for a code change, a data change (INSERT/UPDATE/DELETE), or when you truly can't finish.
+${autopilot
+    ? `Reply: plain words, under 90 words, then exactly one last line:
+FIXED: <what fixed it>  |  NEEDS_YES: <the one action you'd take with his yes, in everyday words>  |  STUCK: <what blocks it>`
+    : `Reply: plain text, under 90 words, lead with the answer, no markdown headers. When he needs to choose or approve, end with one line: OPTIONS: <2-4 short choices separated by |>. A plain answer needs no options.`}
+
+${FREE_FACTS}
 
 Main tables (public schema):
-- turo_trips: reservation_id, guest_first, guest_last, starts_at, ends_at, status, earnings, airport_code (LAX trips), pickup_city. Upcoming = starts_at > now().
+- turo_trips: reservation_id, guest_first, guest_last, starts_at, ends_at, status, earnings, airport_code, pickup_city.
 - turo_vehicle_state: battery_pct, range_real, inside_temp, locked, charging_state, observed_at (the Tesla).
-- trip_health: check_key, label, status, detail, checked_at (guest trip apps health).
+- trip_health: check_key, label, status, detail, checked_at.
 - monitor_issues: key, title, severity, status ('open'), fix_stage, opened_at (incidents Scout watches).
 - scout_daily: id, day, kind ('call' = to-do), title, status, action (his to-dos).
 - admin_notifications: title, body, created_at, read_at (the bell).
-- db_metrics: at, mem_avail_mb, swap_used_mb, load1 (database memory, every 5 min).
-- ai_spend: at, provider, job, ok, cost_usd (AI calls and cost).
-
-Tools:
-${toolDocs}
+- mac_jobs: title, status, exit_code, output, finished_at (Mac mini jobs).
+- ai_spend: at, provider, job, ok, cost_usd.
 
 Queue waiting on him right now:
 ${queue || "(empty)"}
 
-Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}
+Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
 
-Conversation (newest last):
-${convo}`;
+  // Conversation as real turns. Paid-AI asks are left out: they are not answers, and they talk the free model into giving up.
+  const msgs: Msg[] = [{ role: "system", content: system }];
+  const turns = ((hist ?? []) as any[]).reverse()
+    .filter((m) => !(m.role === "assistant" && /^(I'd need paid AI|NEEDS_YES: Let Scout work on this with paid AI)/.test(String(m.body))));
+  turns.forEach((m, i) => {
+    const role = m.role === "assistant" ? "assistant" : "user";
+    const body = String(m.body ?? "").slice(0, i === turns.length - 1 ? 20_000 : 900) || "(empty)";
+    const last = msgs[msgs.length - 1];
+    if (last.role === role) last.content += "\n\n" + body;
+    else msgs.push({ role, content: body });
+  });
+  if (msgs[msgs.length - 1].role !== "user") msgs.push({ role: "user", content: text.slice(0, 20_000) });
 
-  const steps: string[] = [];
+  const tools = freeToolDefs(autopilot);
+  const allowed = new Set(tools.map((t) => t.function.name));
   const used: string[] = [];
-  let replied = false;   // v28.4: did any free model answer at all this turn?
-  let acted = false;
-  let fails = 0;
+  let replied = false, acted = false, fails = 0, nudges = 0;
+
   for (let i = 0; i < FREE_STEPS && Date.now() < until - 8000; i++) {
     toolDeadline = Math.min(until - 5000, Date.now() + 60_000);
-    const raw = await freeModel(threadId, head, `Your steps so far this turn:\n${steps.join("\n") || "(none yet)"}\n\nNext JSON:`, until);
-    if (raw == null) { if (++fails > 1) break; continue; }   // every free rung failed this step: one more try
-    replied = true;
-    const s = parseStep(raw);
-    if (!s) { steps.push(`(your last answer was not valid JSON; answer with one JSON object)`); if (++fails > 2) break; continue; }
-
-    if (s.escalate) return { why: FREE_WHY[String(s.escalate).toUpperCase()] ?? FREE_WHY.ACTION, tools: used };
-
-    if (typeof s.reply === "string") {
-      const r = s.reply.trim();
-      if (!r) break;
-      // v28.4: "There are X upcoming trips; the next is [Name]" came back after a failed query. Make it look it up.
-      if (/\[(?:[A-Z][A-Za-z ]{1,20})\]|(?<!Model )\bX\b(?=\s+[a-z])|<[a-z_ ]{2,20}>/.test(r)) {
-        steps.push(`Step ${steps.length + 1}: your reply used placeholders instead of real values. Get the real values with a tool (fix the query if it failed), then reply.`);
-        if (++fails > 2) break;
-        continue;
-      }
-      if (REFUSES.test(r)) return { why: FREE_WHY.ACTION, tools: used };          // let paid Scout try instead
-      if (CLAIMS_DONE.test(r) && !acted && !/\?\s*$/.test(r)) return { why: FREE_WHY.ACTION, tools: used }; // claimed work nothing did
-      const opts = Array.isArray(s.options) ? s.options.map((o: unknown) => String(o).replace(/\|/g, "/").trim()).filter(Boolean).slice(0, 4) : [];
-      return { answer: `${r}${opts.length >= 2 ? `\n\nOPTIONS: ${opts.join(" | ")}` : ""}`, why: "", tools: used };
-    }
-
-    const name = String(s.tool ?? "");
-    if (!FREE_TOOLS.has(name)) {
-      if (["commit_files", "db_write", "mac_command"].includes(name)) return { why: name === "commit_files" ? FREE_WHY.CODE : FREE_WHY.ACTION, tools: used };
-      steps.push(`Step ${steps.length + 1}: you asked for "${name}", which is not a tool you have. Use one from the list.`);
-      if (++fails > 2) break;
+    trimForBudget(msgs);
+    let r: ChatResult;
+    try {
+      r = await llmChat({ messages: msgs, tools, maxTokens: 1200, deadlineMs: Math.min(until - Date.now() - 2000, 45_000), job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
+    } catch {
+      if (++fails > 1) break;
       continue;
     }
-    const args = (s.args && typeof s.args === "object") ? s.args as Record<string, any> : {};
-    if (name === "mac_run" && args.action === "propose") args.__free = true;   // never auto-run a free-model script
-    let out = await runTool(name, args, threadId);
-    if ((out as any)?.ok === false && name !== "learn") out = await heal(name, args, out, {});  // real columns + past lessons
-    used.push(name);
-    const ok = (out as any)?.ok !== false;
-    if (ok && !FREE_READS.has(name) && !(name === "mac_run" && args.action === "get") && !(name === "pi_command" && PI_READ_ONLY.has(`${args.target}.${args.action}`))) acted = true;
-    if (!ok) fails++;
-    let res = JSON.stringify(out);
-    if (res.length > 2500) res = res.slice(0, 2500) + "...(cut)";
-    // Prose, not call-shaped JSON: gpt-oss otherwise answers with a native function call and the content comes back empty.
-    steps.push(`Step ${steps.length + 1}: you used ${name} with ${JSON.stringify(args).slice(0, 500)}. Result: ${res}`);
-    if (fails > 3) break;
+    replied = true;
+
+    if (!r.toolCalls.length) {
+      const reply = r.content.trim();
+      const nudge = (why: string) => { msgs.push({ role: "assistant", content: reply }); msgs.push({ role: "user", content: why }); nudges++; };
+      if (PLACEHOLDER.test(reply) && nudges < 2) { nudge("That reply has placeholders instead of real values. Get the real values with a tool, then reply."); continue; }
+      if (REFUSES.test(reply) && nudges < 1) { nudge("You DO have tools (see the list). Use them to do this. If it truly needs a code or data change, call ask_paid."); continue; }
+      const own = reply.split(/^\s*OPTIONS:/m)[0];
+      if (CLAIMS_DONE.test(own) && !acted && !/\?\s*$/.test(own.trim())) {
+        if (nudges < 2) { nudge("Nothing was changed by a tool in this turn, so don't say it's done. Either do it with a tool, or say what you found and what's left."); continue; }
+        return { why: "The free AI tried but couldn't finish this one.", tools: used };
+      }
+      // Normalize the options line; fewer than two choices means no line.
+      const m = reply.match(/^\s*OPTIONS:\s*(.+)$/m);
+      const opts = m ? m[1].split("|").map((o) => o.trim()).filter(Boolean).slice(0, 4) : [];
+      let body = reply.replace(/^\s*OPTIONS:.*$/m, "").trim();
+      if (autopilot && !/^(FIXED|NEEDS_YES|STUCK):/m.test(body)) body += "\nSTUCK: the free AI didn't reach a verdict.";
+      return { answer: `${body}${!autopilot && opts.length >= 2 ? `\n\nOPTIONS: ${opts.join(" | ")}` : ""}`, why: "", tools: used };
+    }
+
+    // Tool turn: echo the calls back exactly, then one result per call (max 3 run per step).
+    msgs.push({ role: "assistant", content: r.content || null, tool_calls: r.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.raw } })) });
+    for (const [n, c] of r.toolCalls.entries()) {
+      const answer = (out: unknown) => { let s = JSON.stringify(out); if (s.length > 3000) s = s.slice(0, 3000) + "...(cut)"; msgs.push({ role: "tool", tool_call_id: c.id, content: s }); };
+      if (n >= 3) { answer({ ok: false, error: "skipped: run at most 3 tools at once" }); continue; }
+      if (c.name === "ask_paid") {
+        const kind = String(c.args.kind ?? "HARD").toUpperCase();
+        const why = kind === "CODE" ? FREE_WHY.CODE : kind === "DATA" ? PAID_ONLY_WHY.db_write : "The free AI tried but couldn't finish this one.";
+        return { why, tools: used };
+      }
+      if (PAID_ONLY_WHY[c.name]) return { why: PAID_ONLY_WHY[c.name], tools: used };
+      if (!allowed.has(c.name)) { answer({ ok: false, error: `"${c.name}" is not one of your tools. Use one from the list.` }); if (++fails > 3) break; continue; }
+      const args = { ...c.args } as Record<string, any>;
+      if (autopilot && (args.confirmed === true || AUTOPILOT_NEVER.has(c.name))) {
+        answer({ ok: false, error: "needs_yes", hint: "Jared is not here, so this waits for his yes. Don't retry it; make your last line NEEDS_YES: <what you'd do, in everyday words>." });
+        continue;
+      }
+      if (args.confirmed === true && !saidYes && !autoRunOn) {
+        answer({ ok: false, error: "not_confirmed", hint: "He hasn't said yes. Tell him what it will do and end with OPTIONS: Do it | Not now." });
+        continue;
+      }
+      if (c.name === "mac_run" && args.action === "propose") args.__free = true;   // never auto-run a free-model script
+      let out = await runTool(c.name, args, threadId);
+      if ((out as any)?.ok === false && c.name !== "learn") out = await heal(c.name, args, out, {});  // real columns + past lessons
+      used.push(c.name);
+      const ok = (out as any)?.ok !== false;
+      if (ok && !FREE_READS.has(c.name) && !(c.name === "mac_run" && args.action === "get") && !(c.name === "pi_command" && PI_READ_ONLY.has(`${args.target}.${args.action}`))) acted = true;
+      if (!ok) fails++;
+      answer(out);
+    }
+    if (fails > 4) break;
   }
-  // v28.4: don't blame the question when the free AI simply never answered.
+
   if (!replied) return { why: "The free AI isn't answering right now.", tools: used };
-  return { why: used.length ? "The free AI got partway but couldn't finish this." : FREE_WHY.ACTION, tools: used };
+  // Out of steps or time with work in hand: say what was found and offer to keep going for free (chat only).
+  if (!autopilot && used.length) {
+    try {
+      msgs.push({ role: "user", content: "Stop using tools now. In under 90 words, tell Jared what you found so far and what is left, using only the tool results above. No options line." });
+      trimForBudget(msgs);
+      const s = await llmChat({ messages: msgs, tools, toolChoice: "none", maxTokens: 700, deadlineMs: 25_000, job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
+      const sum = s.content.replace(/^\s*OPTIONS:.*$/m, "").trim();
+      if (sum && !s.toolCalls.length) return { answer: `${sum}\n\nOPTIONS: Keep going | Yes, use paid AI`, why: "", tools: used };
+    } catch { /* fall through to the paid ask */ }
+  }
+  return { why: "The free AI tried but couldn't finish this one.", tools: used };
 }
 
 /**
@@ -1348,7 +1421,12 @@ Deno.serve(async (req) => {
       } else if (/^no,? skip it\.?$/i.test(text)) {
         return await say("OK, skipped. Nothing was spent.");
       } else if (autopilot) {
-        return await say("NEEDS_YES: Let Scout work on this with paid AI (Claude). It costs a few cents.", { paid_needed: true });
+        // v29: the fix ladder tries the free agent first (same autopilot limits: nothing that needs a yes runs).
+        // Paid AI is offered only when free can't finish; a free STUCK keeps its diagnosis and adds the paid offer.
+        const agent = await freeAgent(threadId, text, body.page, { autopilot: true }).catch(() => ({ why: "", tools: [] as string[] }) as { answer?: string; why: string; tools?: string[] });
+        if (agent.answer && !/^STUCK:/m.test(agent.answer)) return await say(agent.answer, { free: true, tools: agent.tools ?? [] });
+        const diag = agent.answer ? agent.answer.replace(/^STUCK:.*$/m, "").trim() + "\n" : "";
+        return await say(`${diag}NEEDS_YES: Let Scout work on this with paid AI (Claude). It costs a few cents.`, { paid_needed: true, tools: agent.tools ?? [] });
       } else {
         let free = await freeTry(threadId, text, body.page);
         if (free.answer) return await say(free.answer, { free: true });

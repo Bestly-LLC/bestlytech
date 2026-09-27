@@ -64,13 +64,16 @@ interface Rung { provider: Provider; model: string; maxIn: number }
 const M = {
   groqBig: "openai/gpt-oss-120b",
   groqSmall: "openai/gpt-oss-20b",
+  groqQwen: "qwen/qwen3.8-27b",       // v2 (2026-09-27): Groq's limits are per model, so each extra model is another 8K tokens/min
+
   cfBig: "@cf/openai/gpt-oss-120b",
   local: "qwen3:8b",
   gemini: "gemini-2.5-flash-lite",
   openrouter: "nvidia/nemotron-3-super-120b-a12b:free",
 };
-// Estimated input-token ceilings per rung (Groq free = 8K tokens/min total, so prompt + output must fit).
-const GROQ_MAX = 6000, LOCAL_MAX = 3000, CF_MAX = 120_000, GEMINI_MAX = 200_000, OR_MAX = 100_000;
+// Estimated input+output ceilings per rung. Groq free = 8K tokens/min PER MODEL, so prompt + output must fit.
+// v2: LOCAL_MAX follows the Mac mini worker's num_ctx (8192, scripts/partner-ai/worker.py); it was 3000, which shut it out.
+const GROQ_MAX = 7000, LOCAL_MAX = 7000, CF_MAX = 120_000, GEMINI_MAX = 200_000, OR_MAX = 100_000;
 
 // Cloudflare Neurons per 1M tokens [in, out] (pricing page 2026-09-23: $0.011 per 1K Neurons).
 const CF_NEURONS: Record<string, [number, number]> = {
@@ -87,15 +90,16 @@ function routes(task: LlmTask, privacy: LlmPrivacy): Rung[] {
   switch (task) {
     case "judge":
     case "pick":
-      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
-        { provider: "local", model: M.local, maxIn: LOCAL_MAX }, ...pub];
+      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, { provider: "local", model: M.local, maxIn: LOCAL_MAX }, ...pub];
     case "classify":
-      return [{ provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX }, { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
-        { provider: "local", model: M.local, maxIn: LOCAL_MAX }, ...pub];
+      return [{ provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, { provider: "local", model: M.local, maxIn: LOCAL_MAX }, ...pub];
     case "write":
       return [{ provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }]; // used only when paid is over budget (paid "first")
-    default: // extract, reflect, triage, summarize
-      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...pub];
+    default: // extract, reflect, triage, summarize (v2: + Groq Qwen, and the Mac mini as the last free rung)
+      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, { provider: "local", model: M.local, maxIn: LOCAL_MAX }, ...pub];
   }
 }
 
@@ -147,6 +151,21 @@ async function cooldown(p: Provider, seconds: number, why: string) {
   const until = new Date(Date.now() + Math.max(30, Math.min(seconds, 24 * 3600)) * 1000).toISOString();
   if (_prov?.v[p]) _prov.v[p].cooldown_until = until;
   await db().from("llm_providers").update({ cooldown_until: until, cooldown_reason: why.slice(0, 200), updated_at: new Date().toISOString() }).eq("name", p);
+}
+
+/**
+ * v2 (2026-09-27): Groq limits are per MODEL (8K tokens/min, 1000 req/day each). A 429 on one model used to pause
+ * all of Groq for a minute, so Scout fell to Cloudflare (or asked for paid AI) while two other Groq models sat idle.
+ * Now a Groq 429 only benches that model: for its retry-after on a per-minute limit, an hour on a per-day one.
+ */
+const modelSkip = new Map<string, number>();
+async function rateLimited(rung: Rung, f: Fail) {
+  if (rung.provider === "groq") {
+    const daily = /per day|\b(TPD|RPD)\b/i.test(f.message);
+    modelSkip.set(rung.model, Date.now() + (daily ? 3600 : Math.max(10, Math.min(f.retryAfter || 20, 120))) * 1000);
+    return;
+  }
+  await cooldown(rung.provider, f.retryAfter, f.message);
 }
 
 const SECRET_RE = /(sk-ant-[A-Za-z0-9_\-]{10,}|sk-[A-Za-z0-9_\-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sb_secret_[A-Za-z0-9_\-]{10,}|gsk_[A-Za-z0-9]{20,}|cfut_[A-Za-z0-9_\-]{10,}|AIza[0-9A-Za-z_\-]{30,}|xox[abpr]-[A-Za-z0-9\-]{10,}|eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,})/g;
@@ -252,7 +271,8 @@ async function callGroq(model: string, req: LlmRequest, t: number, k: Record<str
 async function callCloudflare(model: string, req: LlmRequest, t: number, k: Record<string, string>): Promise<Call> {
   if (!k.cloudflare_ai_token || !k.cloudflare_account_id) throw new Fail("skipped_nokey", "no cloudflare token/account");
   const c = await openaiCompat(`https://api.cloudflare.com/client/v4/accounts/${k.cloudflare_account_id}/ai/v1/chat/completions`,
-    k.cloudflare_ai_token, model, req, Math.min(t, 110_000)); // big prompts (reflect: ~30K tokens) need more than a minute
+    k.cloudflare_ai_token, model, req, Math.min(t, 110_000), // big prompts (reflect: ~30K tokens) need more than a minute
+    model.includes("gpt-oss") ? { reasoning_effort: "low" } : {}); // v2: default effort burned Neurons and time on long reasoning
   const [ni, no] = CF_NEURONS[model] ?? [40_000, 80_000];
   c.units = (c.inT * ni + c.outT * no) / 1e6;
   return c;
@@ -377,6 +397,7 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
     if (p && !p.enabled) { skip("skipped_off"); continue; }
     if (privacy === "private" && p && !p.private_ok) { skip("skipped_privacy"); continue; }
     if (pass === 0 && p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now()) { cooled.push(rung); skip("rate_limited"); continue; }
+    if ((modelSkip.get(rung.model) ?? 0) > Date.now()) { skip("rate_limited"); continue; }
     if (need > rung.maxIn) { skip("skipped_size"); continue; }
     if (p?.daily_cap && rung.provider !== "anthropic" && (await usedToday(rung.provider)) >= p.daily_cap) { skip("skipped_budget"); continue; }
 
@@ -416,12 +437,142 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
       if (f.outcome === "skipped_budget") { budgetHit = true; continue; }
       if (f.outcome.startsWith("skipped")) continue; // nothing was sent; not logged
       await log(req, rung.provider, rung.model, f.outcome, ms, undefined, f.message);
-      if (f.outcome === "rate_limited" && rung.provider !== "anthropic") await cooldown(rung.provider, f.retryAfter, f.message);
+      if (f.outcome === "rate_limited" && rung.provider !== "anthropic") await rateLimited(rung, f);
     }
   }
   }
   if (paid === "never") throw new LlmUnavailable("paid_never", tried);
   if (budgetHit) throw new LlmUnavailable("budget", tried);
+  throw new LlmUnavailable("all_failed", tried);
+}
+
+/* ───────── chat with native tools (v2, 2026-09-27) ───────── */
+
+/**
+ * Multi-turn chat with real OpenAI-style function calling, free rungs only (never paid).
+ *
+ * Why: Scout's free agent used to describe its tools in prose and ask for one JSON object per step. gpt-oss is trained
+ * to call tools natively, so it often emitted a native call the request never declared, and the provider dropped it:
+ * content came back empty ("empty reply (finish stop)") - about 1 in 4 free calls failed that way on 2026-09-24..27,
+ * and every failure became a paid-AI ask. With `tools` declared, Groq and Cloudflare return real `tool_calls`
+ * (verified 2026-09-27 on gpt-oss-120b, gpt-oss-20b, qwen3.8-27b and Cloudflare gpt-oss-120b), and the tool schemas
+ * cost a fraction of the old prose docs.
+ *
+ * Ladder: Groq gpt-oss-120b -> Groq Qwen -> Groq gpt-oss-20b -> Cloudflare gpt-oss-120b. Each Groq model has its own
+ * 8K tokens/min, so rotating triples the headroom before Cloudflare's daily Neurons get touched.
+ */
+export interface ChatToolCall { id: string; name: string; args: Record<string, unknown>; raw: string }
+export interface ChatRequest {
+  messages: Record<string, unknown>[];
+  tools?: Record<string, unknown>[];
+  toolChoice?: "auto" | "none";
+  maxTokens?: number;
+  deadlineMs?: number;
+  job: string;
+  ref?: string | null;
+  fn?: string;
+  scope?: "background" | "chat";
+}
+export interface ChatResult { content: string; toolCalls: ChatToolCall[]; provider: Provider; model: string; tried: LlmResult["tried"] }
+
+const CHAT_LADDER: Rung[] = [
+  { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
+  { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+  { provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX },
+  { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
+];
+
+async function postChat(url: string, key: string, body: Record<string, unknown>, timeoutMs: number): Promise<any> {
+  let r: Response;
+  try {
+    r = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
+  } catch (e) {
+    throw new Fail((e as Error).name === "TimeoutError" ? "timeout" : "error", (e as Error).message);
+  }
+  if (r.status === 429) {
+    const ra = Number(r.headers.get("retry-after")) || 60;
+    throw new Fail("rate_limited", `429 ${(await r.text()).slice(0, 200)}`, ra);
+  }
+  if (!r.ok) throw new Fail("error", `${r.status} ${(await r.text()).slice(0, 240)}`);
+  return await r.json();
+}
+
+/** Cloudflare's schema wants every message content to be a string (null on a tool-call turn is a 400). */
+function forCloudflare(messages: Record<string, unknown>[]) {
+  return messages.map((m) => (m.content == null ? { ...m, content: "" } : m));
+}
+
+export async function llmChat(input: ChatRequest): Promise<ChatResult> {
+  const messages = input.messages.map((m) => (typeof m.content === "string" ? { ...m, content: scrub(m.content as string) } : m));
+  const maxTokens = input.maxTokens ?? 1200;
+  const deadline = Date.now() + (input.deadlineMs ?? 45_000);
+  const need = estTokens(JSON.stringify(messages) + JSON.stringify(input.tools ?? [])) + maxTokens;
+  const logReq: LlmRequest = { task: "judge", system: "", user: "", job: input.job, ref: input.ref ?? null, fn: input.fn, scope: input.scope ?? "chat" };
+  const tried: LlmResult["tried"] = [];
+  const [prov, k] = await Promise.all([providers(), keys()]);
+
+  for (const rung of CHAT_LADDER) {
+    const left = deadline - Date.now();
+    const skip = (outcome: Outcome) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0 });
+    if (left < 3000) { skip("timeout"); continue; }
+    const p = prov[rung.provider];
+    if (p && !p.enabled) { skip("skipped_off"); continue; }
+    if (p && !p.private_ok) { skip("skipped_privacy"); continue; }
+    // Provider pauses (free_llm_watch) are ignored here on purpose: Jared is waiting in a live chat, a paused rung
+    // costs one quick request, and false pauses were a main reason Scout asked for paid AI (scout_free_watch lifts them).
+    if ((modelSkip.get(rung.model) ?? 0) > Date.now()) { skip("rate_limited"); continue; }
+    if (need > rung.maxIn) { skip("skipped_size"); continue; }
+    if (p?.daily_cap && (await usedToday(rung.provider)) >= p.daily_cap) { skip("skipped_budget"); continue; }
+
+    const gptOss = rung.model.includes("gpt-oss");
+    const body: Record<string, unknown> = {
+      model: rung.model,
+      messages: rung.provider === "cloudflare" ? forCloudflare(messages) : messages,
+      max_tokens: maxTokens,
+      ...(gptOss ? { reasoning_effort: "low" } : {}),
+    };
+    if (input.tools?.length) { body.tools = input.tools; body.tool_choice = input.toolChoice ?? "auto"; }
+
+    const t0 = Date.now();
+    try {
+      let j: any;
+      if (rung.provider === "groq") {
+        if (!k.groq_api_key) throw new Fail("skipped_nokey", "no groq_api_key");
+        j = await postChat("https://api.groq.com/openai/v1/chat/completions", k.groq_api_key, body, Math.min(left, 25_000));
+      } else {
+        if (!k.cloudflare_ai_token || !k.cloudflare_account_id) throw new Fail("skipped_nokey", "no cloudflare token/account");
+        j = await postChat(`https://api.cloudflare.com/client/v4/accounts/${k.cloudflare_account_id}/ai/v1/chat/completions`, k.cloudflare_ai_token, body, Math.min(left, 60_000));
+      }
+      const ms = Date.now() - t0;
+      const msg = j.choices?.[0]?.message ?? {};
+      const toolCalls: ChatToolCall[] = ((msg.tool_calls ?? []) as any[]).filter((c) => c?.function?.name).map((c, i) => {
+        const raw = typeof c.function.arguments === "string" ? c.function.arguments : JSON.stringify(c.function.arguments ?? {});
+        let args: Record<string, unknown> = {};
+        try { const a = JSON.parse(raw || "{}"); if (a && typeof a === "object") args = a; } catch { /* keep {} */ }
+        return { id: String(c.id ?? `call_${Date.now()}_${i}`), name: String(c.function.name).replace(/^functions\./, ""), args, raw: raw || "{}" };
+      });
+      const content = stripThink(String(msg.content ?? "")).trim();
+      const inT = Number(j.usage?.prompt_tokens ?? 0), outT = Number(j.usage?.completion_tokens ?? 0);
+      const c: Call = { text: content, model: String(j.model ?? rung.model), inT, outT, cost: 0 };
+      if (rung.provider === "cloudflare") { const [ni, no] = CF_NEURONS[rung.model] ?? [40_000, 80_000]; c.units = Number(j.usage?.neurons) || (inT * ni + outT * no) / 1e6; }
+      if (!content && !toolCalls.length) {
+        // A blank turn is the model's miss, not the provider's: "invalid" keeps free_llm_watch from pausing a healthy provider.
+        await log(logReq, rung.provider, c.model, "invalid", ms, c, `empty reply (finish ${j.choices?.[0]?.finish_reason ?? "?"})`);
+        tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
+        continue;
+      }
+      await log(logReq, rung.provider, c.model, "ok", ms, c);
+      tried.push({ provider: rung.provider, model: c.model, outcome: "ok", ms });
+      return { content, toolCalls, provider: rung.provider, model: c.model, tried };
+    } catch (e) {
+      const ms = Date.now() - t0;
+      const f = e instanceof Fail ? e : new Fail("error", (e as Error).message);
+      tried.push({ provider: rung.provider, model: rung.model, outcome: f.outcome, ms });
+      if (f.outcome.startsWith("skipped")) continue;
+      await log(logReq, rung.provider, rung.model, f.outcome, ms, undefined, f.message);
+      if (f.outcome === "rate_limited") await rateLimited(rung, f);
+    }
+  }
   throw new LlmUnavailable("all_failed", tried);
 }
 
