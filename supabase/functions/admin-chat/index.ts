@@ -835,16 +835,30 @@ function freeToolDefs(autopilot: boolean, convo: string) {
 }
 
 type Msg = Record<string, any>;
-/** Keep the prompt under Groq's per-model 8K tokens/min: shrink older tool results first, newest two stay whole. */
+/**
+ * Keep each step under Groq's per-model 8K tokens/min (input + 1,200 output): older tool results shrink first,
+ * then the newest ones, then older chat turns. Without this, two file reads pushed the prompt past every Groq
+ * model's size gate and the turn fell to Cloudflare (or failed when its daily Neurons were spent).
+ */
 function trimForBudget(msgs: Msg[], maxTokens = 3800) {
-  const est = () => Math.ceil(JSON.stringify(msgs).length / 3.5);
+  const est = () => Math.ceil(JSON.stringify(msgs).length / 3.8);
   const toolIdx = msgs.map((m, i) => (m.role === "tool" ? i : -1)).filter((i) => i >= 0);
-  for (const i of toolIdx.slice(0, -2)) {
-    if (est() <= maxTokens) return;
+  const shrink = (i: number, keep: number, tag: string) => {
     const c = String(msgs[i].content ?? "");
-    if (c.length > 300) msgs[i].content = c.slice(0, 300) + "...(older result shortened)";
+    if (c.length > keep) msgs[i].content = c.slice(0, keep) + tag;
+  };
+  for (const i of toolIdx.slice(0, -2)) { if (est() <= maxTokens) return; shrink(i, 300, "...(older result shortened)"); }
+  for (const i of toolIdx.slice(-2)) { if (est() <= maxTokens) return; shrink(i, 1200, "...(cut to fit)"); }
+  // Last resort: drop the oldest chat turns before his request (never the system prompt, his request or a tool turn).
+  while (est() > maxTokens) {
+    const ask = msgs.findIndex((m) => KEEP.has(m));
+    const j = msgs.findIndex((m, k) => k > 0 && k < ask && (m.role === "user" || m.role === "assistant") && !m.tool_calls);
+    if (j < 0) break;
+    msgs.splice(j, 1);
   }
 }
+/** The message holding his current request: trimming never drops it. */
+const KEEP = new WeakSet<Msg>();
 
 async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean } = {}):
   Promise<{ answer?: string; why: string; tools?: string[]; note?: string }> {
@@ -909,6 +923,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     else msgs.push({ role, content: body });
   });
   if (msgs[msgs.length - 1].role !== "user") msgs.push({ role: "user", content: text.slice(0, 20_000) });
+  KEEP.add(msgs[msgs.length - 1]);
 
   const tools = freeToolDefs(autopilot, msgs.slice(1).map((m) => String(m.content ?? "")).join("\n").slice(-6000));
   const allowed = new Set(tools.map((t) => t.function.name));
@@ -948,7 +963,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     // Tool turn: echo the calls back exactly, then one result per call (max 3 run per step).
     msgs.push({ role: "assistant", content: r.content || null, tool_calls: r.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.raw } })) });
     for (const [n, c] of r.toolCalls.entries()) {
-      const answer = (out: unknown) => { let s = JSON.stringify(out); if (s.length > 3000) s = s.slice(0, 3000) + "...(cut)"; msgs.push({ role: "tool", tool_call_id: c.id, content: s }); };
+      const answer = (out: unknown) => { let s = JSON.stringify(out); if (s.length > 2500) s = s.slice(0, 2500) + "...(cut)"; msgs.push({ role: "tool", tool_call_id: c.id, content: s }); };
       if (n >= 3) { answer({ ok: false, error: "skipped: run at most 3 tools at once" }); continue; }
       if (c.name === "ask_paid") {
         const kind = String(c.args.kind ?? "HARD").toUpperCase();
