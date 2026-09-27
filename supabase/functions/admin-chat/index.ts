@@ -214,8 +214,13 @@ const TOOLS = [
   },
   {
     name: "read_file",
-    description: "Read one file from a repo. Always read a file before you change it. Never write a file whose current contents you have not seen.",
-    input_schema: { type: "object", properties: { repo: { type: "string", enum: ["site", "hoku"] }, path: { type: "string" } }, required: ["path"] },
+    description: "Read one file from a repo. Always read a file before you change it. Never write a file whose current contents you have not seen. " +
+      "Big file? Pass find (text to look for: returns the matching lines with 12 lines around each) or line_start/line_end (1-based).",
+    input_schema: {
+      type: "object",
+      properties: { repo: { type: "string", enum: ["site", "hoku"] }, path: { type: "string" }, find: { type: "string" }, line_start: { type: "number" }, line_end: { type: "number" } },
+      required: ["path"],
+    },
   },
   {
     name: "commit_files",
@@ -1121,7 +1126,23 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
     }
     case "read_file": {
       const r = await gitCall({ action: "get", repo, path: String(args.path ?? "") });
-      out = (r as any).ok === false ? r : { ok: true, path: (r as any).path, content: (r as any).content };
+      if ((r as any).ok === false) { out = r; break; }
+      // v29: slices, so a model with a small window can read big files (it used to re-read the same first page).
+      const full = String((r as any).content ?? "");
+      const lines = full.split("\n");
+      const num = (a: number, b: number) => lines.slice(a, b).map((l, k) => `${a + k + 1}: ${l}`).join("\n");
+      if (args.find) {
+        const needle = String(args.find).toLowerCase();
+        const hits = lines.map((l, i) => (l.toLowerCase().includes(needle) ? i : -1)).filter((i) => i >= 0).slice(0, 6);
+        out = { ok: true, path: (r as any).path, total_lines: lines.length, matches: hits.length,
+          content: hits.length ? hits.map((i) => num(Math.max(0, i - 12), Math.min(lines.length, i + 13))).join("\n...\n") : `"${args.find}" is not in this file.` };
+      } else if (args.line_start || args.line_end) {
+        const a = Math.max(0, Math.round(Number(args.line_start) || 1) - 1);
+        const b = Math.min(lines.length, Math.round(Number(args.line_end) || a + 120));
+        out = { ok: true, path: (r as any).path, total_lines: lines.length, content: a < lines.length ? num(a, b) : `The file has only ${lines.length} lines.` };
+      } else {
+        out = { ok: true, path: (r as any).path, total_lines: lines.length, content: full };
+      }
       break;
     }
     case "commit_files": {

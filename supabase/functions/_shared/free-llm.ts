@@ -162,7 +162,10 @@ const modelSkip = new Map<string, number>();
 async function rateLimited(rung: Rung, f: Fail) {
   if (rung.provider === "groq") {
     const daily = /per day|\b(TPD|RPD)\b/i.test(f.message);
-    modelSkip.set(rung.model, Date.now() + (daily ? 3600 : Math.max(10, Math.min(f.retryAfter || 20, 120))) * 1000);
+    const tooBig = /request too large/i.test(f.message);
+    const wait = Number(f.message.match(/try again in ([\d.]+)s/i)?.[1] ?? NaN);
+    const secs = daily ? 3600 : tooBig ? 60 : Number.isFinite(wait) ? Math.max(1, Math.min(wait + 0.5, 120)) : Math.max(5, Math.min(f.retryAfter || 20, 120));
+    modelSkip.set(rung.model, Date.now() + secs * 1000);
     return;
   }
   await cooldown(rung.provider, f.retryAfter, f.message);
@@ -503,6 +506,23 @@ function forCloudflare(messages: Record<string, unknown>[]) {
 }
 
 export async function llmChat(input: ChatRequest): Promise<ChatResult> {
+  // Groq's per-minute budgets refill in seconds: when every rung is only rate-limited, wait for the first to free up
+  // (inside the caller's deadline) instead of failing the whole turn. Up to 3 passes.
+  const deadline = Date.now() + (input.deadlineMs ?? 45_000);
+  let last: unknown;
+  for (let pass = 0; pass < 3; pass++) {
+    try { return await llmChatOnce({ ...input, deadlineMs: deadline - Date.now() }); } catch (e) { last = e; }
+    const tried = (last as LlmUnavailable)?.tried ?? [];
+    if (tried.some((t) => t.outcome === "ok" || t.outcome === "invalid" || t.outcome === "error" || t.outcome === "timeout")) break;
+    const soonest = Math.min(...[...modelSkip.values()].filter((t) => t > Date.now()));
+    const wait = soonest - Date.now();
+    if (!Number.isFinite(wait) || wait > 20_000 || Date.now() + wait + 8000 > deadline) break;
+    await new Promise((ok) => setTimeout(ok, wait + 250));
+  }
+  throw last;
+}
+
+async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
   const messages = input.messages.map((m) => (typeof m.content === "string" ? { ...m, content: scrub(m.content as string) } : m));
   const maxTokens = input.maxTokens ?? 1200;
   const deadline = Date.now() + (input.deadlineMs ?? 45_000);
