@@ -1,0 +1,9 @@
+{
+  "applinks": {
+    "details": [
+      { "appIDs": ["PV65ABS5W9.app.arrivekey.host"], "components": [ { "/": "/t/*", "comment": "Arrivekey guest trip links" } ] }
+    ]
+  },
+  "appclips": { "apps": ["PV65ABS5W9.app.arrivekey.host.Clip"] },
+  "webcredentials": { "apps": ["PV65ABS5W9.app.arrivekey.host"] }
+}

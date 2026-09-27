@@ -10,6 +10,10 @@
   },
   "rewrites": [
     {
+      "source": "/tesla/callback",
+      "destination": "/tesla/callback.html"
+    },
+    {
       "source": "/admin",
       "destination": "/admin.html"
     },
@@ -47,20 +51,37 @@
     }
   ],
   "redirects": [
-    { "source": "/tezlab/:s", "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/tezlab/connect?s=:s", "permanent": false },
     {
-      "source": "/:path*",
+      "source": "/tezlab/:s",
+      "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/tezlab/connect?s=:s",
+      "permanent": false
+    },
+    {
+      "source": "/:path((?!\\.well-known/|t/|tesla/).*)",
       "has": [
         {
           "type": "host",
           "value": "bestly.tech"
         }
       ],
-      "destination": "https://www.bestly.tech/:path*",
+      "destination": "https://www.bestly.tech/:path",
       "permanent": true
     }
   ],
   "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [

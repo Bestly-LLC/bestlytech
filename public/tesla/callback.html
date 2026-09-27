@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Connecting your Tesla…</title>
+  <style>
+    html,body{margin:0;background:#0B0F14;color:#fff;font:17px/1.5 -apple-system,system-ui,sans-serif}
+    main{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px 24px;gap:12px}
+    .dot{width:56px;height:56px;border-radius:50%;background:#12B5C7;display:grid;place-items:center;font-size:28px}
+    p{color:rgba(255,255,255,.7);max-width:26em;margin:0}
+    a.btn{margin-top:8px;background:#12B5C7;color:#0B0F14;text-decoration:none;font-weight:600;padding:14px 22px;border-radius:14px}
+  </style>
+</head>
+<body>
+<main>
+  <div class="dot" id="dot">⏳</div>
+  <h1 id="h" style="margin:0;font-size:24px">Connecting your Tesla…</h1>
+  <p id="p">One moment. Don’t close this page.</p>
+  <a class="btn" id="back" href="arrivekey://tesla?ok=1" style="display:none">Back to Arrivekey</a>
+</main>
+<script>
+(async function () {
+  // Arrivekey Tesla OAuth return. Exchanges the code server-side (the token never touches this page),
+  // then hands control back to the app via its URL scheme.
+  var FN = "https://hzvrfbxqxdjhdsdooupi.supabase.co/functions/v1/tesla"; // https://<ref>.supabase.co/functions/v1/tesla
+  var KEY = "sb_publishable_mFs_7JzXOWkVrRXwFGGTtw_DQSrULS-";
+  var q = new URLSearchParams(location.search);
+  var code = q.get("code"), state = q.get("state"), err = q.get("error");
+  var h = document.getElementById("h"), p = document.getElementById("p"), back = document.getElementById("back"), dot = document.getElementById("dot");
+  function fail(msg) { dot.textContent = "!"; dot.style.background = "#FF453A"; h.textContent = "That didn’t go through"; p.textContent = msg; back.textContent = "Back to Arrivekey"; back.href = "arrivekey://tesla?ok=0"; back.style.display = "inline-block"; }
+  if (err || !code || !state) return fail(err ? "Tesla said: " + err : "Missing code from Tesla. Tap Connect Tesla again in the app.");
+  try {
+    var r = await fetch(FN, { method: "POST", headers: { "Content-Type": "application/json", "apikey": KEY, "Authorization": "Bearer " + KEY }, body: JSON.stringify({ op: "callback", code: code, state: state }) });
+    var j = await r.json();
+    if (!r.ok || j.error) return fail(j.error || "Tesla didn’t accept the sign-in.");
+    dot.textContent = "✓"; dot.style.background = "#30D158"; h.textContent = "Tesla connected"; p.textContent = (j.vehicles && j.vehicles.length ? j.vehicles.length + " car" + (j.vehicles.length > 1 ? "s" : "") + " found. " : "") + "Heading back to Arrivekey…";
+    back.style.display = "inline-block";
+    setTimeout(function () { location.href = "arrivekey://tesla?ok=1"; }, 800);
+  } catch (e) { fail("Network hiccup. Go back to the app and try again."); }
+})();
+</script>
+</body>
+</html>
