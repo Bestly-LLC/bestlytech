@@ -28,7 +28,7 @@ const SOURCE: Record<string, string> = { reflect: "Learned overnight", scout: "L
 const ago = (iso: string | null) => {
   if (!iso) return "never";
   const d = (Date.now() - Date.parse(iso)) / 864e5;
-  return d < 1 ? "today" : d < 2 ? "yesterday" : `${Math.round(d)} days ago`;
+  return d < 1 ? "today" : d < 2 ? "yesterday" : `${Math.round(d)} days ago`;
 };
 
 export default function AdminPlaybook() {
@@ -73,7 +73,7 @@ export default function AdminPlaybook() {
     const { data, error } = await supabase.functions.invoke("scout-daily", { body: { op: "reflect", days: 3 } });
     setRunning(false);
     if (error || data?.ok === false) toast.error(error?.message ?? data?.error ?? "Failed");
-    else toast.success(`Looked back 3 days: ${data?.reflect?.learned ?? 0} learned`);
+    else toast.success(`Looked back 3 days: ${data?.reflect?.learned ?? 0} learned`);
     load();
   };
 
@@ -100,7 +100,7 @@ export default function AdminPlaybook() {
             className="h-10 w-full rounded-full border border-white/10 bg-white/[0.04] pl-9 pr-4 text-[16px] text-white outline-none placeholder:text-white/35 bento:bg-[#fff] bento:border-white/5" />
         </div>
         <button onClick={reflectNow} disabled={running} className="inline-flex h-10 items-center gap-1.5 rounded-full bg-white/[0.08] px-4 text-sm font-medium text-white disabled:opacity-50">
-          <Sparkles className={cn("h-4 w-4", running && "animate-pulse")} /> {running ? "Looking back…" : "Learn from the last 3 days"}
+          <Sparkles className={cn("h-4 w-4", running && "animate-pulse")} /> {running ? "Looking back…" : "Learn from the last 3 days"}
         </button>
         <button onClick={() => askScout("Remember this for next time: ", { fresh: true })} className="inline-flex h-10 items-center gap-1.5 rounded-full bg-white/[0.08] px-4 text-sm font-medium text-white">
           <Binoculars className="h-4 w-4" /> Teach Scout

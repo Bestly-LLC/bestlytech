@@ -193,8 +193,8 @@ export default function HomeHubAccess() {
               </div>
               <div className="text-sm text-white/80 space-y-1.5 py-2">
                 <p><span className="text-white/60">Up</span> {uptime(h.uptime_seconds) ?? "?"}{h.cpu_temp_c != null ? ` · ${h.cpu_temp_c}°C` : ""}</p>
-                {h.memory_mb?.MemTotal && <p><span className="text-white/60">Memory free</span> {Math.round((h.memory_mb.MemAvailable ?? 0) / 1024 * 10) / 10} of {Math.round(h.memory_mb.MemTotal / 1024 * 10) / 10} GB</p>}
-                {(h.disks ?? []).map((dsk) => <p key={dsk.mount}><span className="text-white/60">Disk {dsk.mount}</span> {dsk.used_gb} of {dsk.total_gb} GB used</p>)}
+                {h.memory_mb?.MemTotal && <p><span className="text-white/60">Memory free</span> {Math.round((h.memory_mb.MemAvailable ?? 0) / 1024 * 10) / 10} of {Math.round(h.memory_mb.MemTotal / 1024 * 10) / 10} GB</p>}
+                {(h.disks ?? []).map((dsk) => <p key={dsk.mount}><span className="text-white/60">Disk {dsk.mount}</span> {dsk.used_gb} of {dsk.total_gb} GB used</p>)}
                 {(h.listening ?? []).length > 0 && <p className="break-words"><span className="text-white/60">Open ports</span> {(h.listening ?? []).join(", ")}</p>}
               </div>
             </div>

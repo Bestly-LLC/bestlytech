@@ -48,7 +48,7 @@ export function TezLabCard() {
             {!st.connected ? "TezLab isn't connected" : outage ? "TezLab's servers are down, Tesla backup is covering" : failing ? "TezLab hiccup, Tesla backup is covering" : "TezLab is working"}
           </p>
           <p className={cn("mt-0.5 text-[14px] leading-snug", secondary)}>
-            Last worked {when(st.last_ok_at)} · {st.via_tezlab_30d} guest command{st.via_tezlab_30d === 1 ? "" : "s"} in 30 days.
+            Last worked {when(st.last_ok_at)} · {st.via_tezlab_30d} guest command{st.via_tezlab_30d === 1 ? "" : "s"} in 30 days.
             {outage ? <> Their side, not ours: nothing to reconnect. {pausedUntil ? `Car buttons skip TezLab until ${clock(pausedUntil)}, then it tries again on its own.` : "It tries again on its own."}</>
               : failing && st.last_error ? <> Last error {when(st.last_error_at)}: {plain(st.last_error).slice(0, 120)}</> : null}
           </p>

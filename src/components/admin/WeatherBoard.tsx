@@ -132,7 +132,7 @@ function NowCard({ data, place }: { data: WxData; place: string }) {
       </div>
       <div className="mt-2 grid grid-cols-3 gap-2 border-t border-white/15 pt-3 text-white bento:border-[#cfd5e0] bento:text-[#17151c]">
         <Stat icon={<Droplet className="h-3.5 w-3.5" />} label="Humidity" value={c.humidity != null ? `${Math.round(c.humidity * 100)}%` : "—"} />
-        <Stat icon={<Wind className="h-3.5 w-3.5" />} label="Wind" value={mph(c.windSpeed) != null ? `${mph(c.windSpeed)} mph ${compass(c.windDirection)}` : "—"} />
+        <Stat icon={<Wind className="h-3.5 w-3.5" />} label="Wind" value={mph(c.windSpeed) != null ? `${mph(c.windSpeed)} mph ${compass(c.windDirection)}` : "—"} />
         <Stat icon={<Sun className="h-3.5 w-3.5" />} label="Feels" value={feels != null ? `${feels}°` : "—"} />
       </div>
     </section>
@@ -288,7 +288,7 @@ function DayDetail({ d }: { d: WxDay }) {
     [<Sunset className="h-5 w-5 text-orange-300" />, "Sunset", clock(d.sunset)],
     [<Sun className="h-5 w-5 text-amber-300" />, "Max UV", d.maxUvIndex != null ? String(d.maxUvIndex) : "—"],
     [<Wind className="h-5 w-5 text-white/60 bento:text-[#6b6874]" />, "Wind",
-      mph(d.windSpeedAvg) != null ? `${mph(d.windSpeedAvg)} mph ${compass(d.daytimeForecast?.windDirection)}`.trim() : "—"],
+      mph(d.windSpeedAvg) != null ? `${mph(d.windSpeedAvg)} mph ${compass(d.daytimeForecast?.windDirection)}`.trim() : "—"],
     [<Droplets className="h-5 w-5 text-sky-400" />, "Rainfall", rain ? `${rain} in` : "None"],
     [<Droplet className="h-5 w-5 text-sky-300" />, "Humidity",
       d.daytimeForecast?.humidity != null ? `${Math.round(d.daytimeForecast.humidity * 100)}%` : "—"],

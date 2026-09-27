@@ -36,7 +36,7 @@ export function RunHistory() {
             </div>
             <p className="mt-1 text-xs text-white/60 bento:text-neutral-500">
               {r.runner} · market {money(r.market_base)} · n={r.comp_n ?? 0}
-              {r.mode === "applied" ? ` · ${r.days_verified}/${r.days_written} days verified` : ""}
+              {r.mode === "applied" ? ` · ${r.days_verified}/${r.days_written} days verified` : ""}
               {tripped.length ? ` · stopped by: ${tripped.join(", ")}` : ""}
             </p>
             {r.notes && <p className="mt-1 line-clamp-2 text-xs text-white/60">{r.notes.replace(/^CRASH:.*/s, "Runner crashed (fixed Sept 22).")}</p>}

@@ -667,7 +667,7 @@ export default function AdminDashboard() {
 
       {/* 5 ─ This week */}
       <section aria-labelledby="week-title" className="col-[1/-1]">
-        <SectionHeader id="week-title" title="This week" aside="Last 7 days" />
+        <SectionHeader id="week-title" title="This week" aside="Last 7 days" />
         <ul className={cn(cardCls, "grid grid-cols-2 overflow-hidden lg:grid-cols-4 [&>li]:border-white/[0.06] [&>li:nth-child(odd)]:border-r lg:[&>li]:border-r lg:[&>li:last-child]:border-r-0 [&>li:nth-child(-n+2)]:border-b lg:[&>li:nth-child(-n+2)]:border-b-0")}>
           <WeekItem
             source={deals}

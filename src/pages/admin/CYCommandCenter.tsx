@@ -220,7 +220,7 @@ export default function CYCommandCenter({ embedded = false }: { embedded?: boole
           iconColor={needsCount > 0 ? "text-red-400" : "text-emerald-400"}
           subtitle={needsCount > 0 ? "about 30 seconds each" : "all clear"} />
         <StatCard label="Domains covered" value={o.total_domains ?? 0} icon={Globe} iconBg="bg-violet-500/10" iconColor="text-violet-400" subtitle={`${(o.total_patterns ?? 0).toLocaleString()} patterns`} />
-        <StatCard label="Active this week" value={o.patterns_last_7d ?? 0} icon={Sparkles} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle={`${o.new_domains_last_7d ?? 0} new domains`} tooltip="Patterns seen working in the last 7 days." />
+        <StatCard label="Active this week" value={o.patterns_last_7d ?? 0} icon={Sparkles} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" subtitle={`${o.new_domains_last_7d ?? 0} new domains`} tooltip="Patterns seen working in the last 7 days." />
         <StatCard label="Active today" value={o.patterns_last_24h ?? 0} icon={Activity} iconBg="bg-cyan-500/10" iconColor="text-cyan-400" subtitle="patterns, last 24h" />
       </div>
 

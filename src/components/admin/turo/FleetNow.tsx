@@ -172,7 +172,7 @@ export function FleetNow({ trips, vehicle, guest, returnAt }: {
                 {current.miles_unlimited
                   ? <Flag tone="ok" icon={Gauge}>Unlimited miles</Flag>
                   : current.miles_included != null
-                    ? <Flag tone="warn" icon={Gauge}>{`${current.miles_included.toLocaleString()} mi cap`}</Flag>
+                    ? <Flag tone="warn" icon={Gauge}>{`${current.miles_included.toLocaleString()} mi cap`}</Flag>
                     : null}
               </p>
               {current.guest_url && (
@@ -261,7 +261,7 @@ export function FleetNow({ trips, vehicle, guest, returnAt }: {
               <div className="flex items-baseline gap-2">
                 <span className={cn("text-[2rem] font-bold leading-none tabular-nums", ink)}>{pct ?? "–"}%</span>
                 {vehicle.range_real != null && (
-                  <span className={cn("text-sm tabular-nums", muted)}>{Math.round(vehicle.range_real)} mi</span>
+                  <span className={cn("text-sm tabular-nums", muted)}>{Math.round(vehicle.range_real)} mi</span>
                 )}
               </div>
               {/* A meter, not a chart: one value against its own full scale. */}
@@ -285,7 +285,7 @@ export function FleetNow({ trips, vehicle, guest, returnAt }: {
               <p className={cn("mt-3 flex flex-wrap items-center gap-x-3 text-xs", muted)}>
                 {vehicle.odometer != null && (
                   <span className="inline-flex items-center gap-1 tabular-nums">
-                    <Gauge className="h-3.5 w-3.5" aria-hidden />{vehicle.odometer.toLocaleString()} mi
+                    <Gauge className="h-3.5 w-3.5" aria-hidden />{vehicle.odometer.toLocaleString()} mi
                   </span>
                 )}
                 {stale && (

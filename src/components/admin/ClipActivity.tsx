@@ -11,7 +11,7 @@ import { AlertTriangle, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { subscribeClipUploads, dismissUpload, cancelUpload, type ClipUpload } from "@/pages/admin/clipUploads";
 
-const mb = (n: number) => (n > 1e6 ? `${(n / 1e6).toFixed(0)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
+const mb = (n: number) => (n > 1e6 ? `${(n / 1e6).toFixed(0)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
 
 export function ClipActivity() {
   const [ups, setUps] = useState<ClipUpload[]>([]);

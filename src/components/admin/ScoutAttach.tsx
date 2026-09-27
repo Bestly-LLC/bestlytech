@@ -26,7 +26,7 @@ export interface ScoutFile {
 }
 
 const MAX = 25 * 1024 * 1024;
-const kb = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+const kb = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 const slug = (s: string) => s.replace(/[^\w.-]+/g, "-").slice(-80);
 
 export function useScoutFiles() {
@@ -35,7 +35,7 @@ export function useScoutFiles() {
 
   const add = useCallback(async (picked: File[]) => {
     for (const file of picked.slice(0, 5)) {
-      if (file.size > MAX) { toast.error(`${file.name} is over 25 MB`); continue; }
+      if (file.size > MAX) { toast.error(`${file.name} is over 25 MB`); continue; }
       const id = crypto.randomUUID();
       setFiles((xs) => [...xs, { id, name: file.name, size: file.size, kind: null, text: null, error: null, reading: true }]);
       const path = `${new Date().toISOString().slice(0, 10)}/${id}-${slug(file.name)}`;

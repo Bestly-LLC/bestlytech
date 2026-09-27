@@ -1772,7 +1772,7 @@ function MigrationSummary({ data }: { data: any }) {
               </div>
               {(ps.data_volume_gb_per_user || ps.decommission_after_days) && (
                 <div className="text-[0.6875rem] text-white/60 mt-0.5">
-                  {ps.data_volume_gb_per_user && `${ps.data_volume_gb_per_user} GB/user`}
+                  {ps.data_volume_gb_per_user && `${ps.data_volume_gb_per_user} GB/user`}
                   {ps.data_volume_gb_per_user && ps.decommission_after_days && " · "}
                   {ps.decommission_after_days && `decommission +${ps.decommission_after_days}d`}
                 </div>

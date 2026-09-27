@@ -24,6 +24,23 @@ ui-ux-pro-max checklist; written after the 2026-09 audit.
   `text-white/20–40` is for decorative icons and dividers only.
 - Semantic status colour always comes with a word or icon (never colour alone).
 
+## Text wrapping (Jared's rule, 2026-09-26)
+- **A number never wraps away from its unit.** "9 MB", "42 ms", "80%", "12 min" move to the next
+  line together. Join value and unit with a non-breaking space (`\u00a0`) or put them in one
+  `whitespace-nowrap` span. Applies to every Bestly UI: admin, trip pages, the wall.
+- **Stat tiles:** the value line is `whitespace-nowrap`; if it doesn't fit, the tile gets wider or
+  the font steps down, never a split.
+- Prose uses `text-wrap: pretty` and headings `text-wrap: balance` (set globally in the admin), so
+  no line ends on one orphaned word.
+
+## Typography (Apple HIG, 2026-09-26)
+- Admin font is the Apple system font (SF Pro on Apple devices), set on `body.admin-shell`.
+  No Newsreader / Plus Jakarta / Inter inside the admin.
+- Phones use the iOS scale: root 17px (follows iPhone Text Size in Safari), so `text-xs` ≈ 13,
+  `text-sm` ≈ 15, `text-base` = 17. Desktop root stays 14px. Never go under 11pt on a phone.
+- Page titles: SF bold, 34pt on phone (Large Title), tracking -0.015em.
+- Fields are at least 16px on touch screens (iOS zooms into smaller ones).
+
 ## States
 - Loading: skeletons in the final layout; the Bestly mark (`BrandLoader`) only for whole-page waits.
 - Empty: `EmptyState` with what will appear here and, if there is one, the action that fills it.

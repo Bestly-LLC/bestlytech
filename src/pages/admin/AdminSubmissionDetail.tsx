@@ -629,7 +629,7 @@ export default function AdminSubmissionDetail() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-white truncate">{doc.file_name}</p>
                   <p className="text-xs text-white/55">
-                    {doc.document_type}{doc.file_size ? ` · ${(doc.file_size / 1024).toFixed(0)} KB` : ""}
+                    {doc.document_type}{doc.file_size ? ` · ${(doc.file_size / 1024).toFixed(0)} KB` : ""}
                   </p>
                 </div>
                 <Tooltip>

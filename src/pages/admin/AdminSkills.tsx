@@ -29,7 +29,7 @@ type SkillFile = {
   captured_at: string;
 };
 
-const kb = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`);
+const kb = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`);
 
 export default function AdminSkills() {
   const [files, setFiles] = useState<SkillFile[]>([]);

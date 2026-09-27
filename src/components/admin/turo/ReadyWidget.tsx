@@ -24,21 +24,21 @@ const ACTION_LABEL: Record<string, string> = { lock: "Lock", windows_close: "Clo
 /** What each check means, in plain words. Shown on hover (desktop) or tap of the (i). */
 const INFO: Record<string, string> = {
   charge: "Battery now vs. what the next guest should get (80%). \"Start charging\" only shows when it's plugged in.",
-  tires: "Tire pressure: front left, front right, rear left, rear right. Orange if any tire is under 38 psi, or two differ by more than 4.",
+  tires: "Tire pressure: front left, front right, rear left, rear right. Orange if any tire is under 38 psi, or two differ by more than 4.",
   locked: "Doors and windows. Open windows get closed automatically anywhere. The car only auto-locks at N Kings Rd or the LAX garage, never elsewhere (a guest may have left it open on purpose).",
   software: "A Tesla update waiting to install. Install it between trips so it never starts during a pickup.",
   wipe: "After each trip we remove the guest's Tesla access, and any extra drivers'. Their phone key stops working and they drop off the car's driver list. " +
     "Not removed: Bluetooth phones they paired for music or calls, and their recent or saved places. Tesla can't remove just one phone remotely, and its full \"erase\" would also delete your phone key and the keys TezLab and this app use, so we never run it. " +
     "To clear their Bluetooth phone: in the car, tap the Bluetooth icon, pick their phone, then Forget. Yours stays.",
-  spot: "Where the car is parked, from its GPS. Home = within about 720 ft of N Kings Rd. LAX = the Park My Share garage.",
+  spot: "Where the car is parked, from its GPS. Home = within about 720 ft of N Kings Rd. LAX = the Park My Share garage.",
 };
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 function until(iso: string) {
   const m = Math.round((Date.parse(iso) - Date.now()) / 60000);
-  if (m < 60) return `${Math.max(m, 0)} min`;
+  if (m < 60) return `${Math.max(m, 0)} min`;
   const h = Math.floor(m / 60), d = Math.floor(h / 24);
-  return d >= 1 ? `${d} day${d === 1 ? "" : "s"} ${h % 24} hr` : `${h} hr ${m % 60} min`;
+  return d >= 1 ? `${d} day${d === 1 ? "" : "s"} ${h % 24} hr` : `${h} hr ${m % 60} min`;
 }
 
 function Dot({ s }: { s: CheckRow["state"] }) {
@@ -106,8 +106,8 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
         {r.eta && (
           <div className="flex items-center gap-3 border-t border-white/[0.06] px-4 py-3 sm:px-5">
             <Navigation className={cn("h-5 w-5 shrink-0", tint.blue)} aria-hidden />
-            <p className="min-w-0 flex-1 text-[15px] text-white"><b className="font-semibold">{r.on_trip?.guest ?? "Guest"} is about {r.eta.minutes} min away</b>
-              <span className="text-white/60"> · {r.eta.miles} mi{r.eta.moving ? "" : " · parked"}</span></p>
+            <p className="min-w-0 flex-1 text-[15px] text-white"><b className="font-semibold">{r.on_trip?.guest ?? "Guest"} is about {r.eta.minutes} min away</b>
+              <span className="text-white/60"> · {r.eta.miles} mi{r.eta.moving ? "" : " · parked"}</span></p>
           </div>
         )}
         {rows.length > 0 && (

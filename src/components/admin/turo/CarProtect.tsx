@@ -18,14 +18,14 @@ const maps = (lat: number, lon: number) => `https://maps.apple.com/?ll=${lat},${
 
 /** The categories, like the Car widget: one row each with a status dot; tap to see the incidents, newest first. */
 const GROUPS: { id: string; label: string; kinds: string[]; icon: typeof Gauge; about: string }[] = [
-  { id: "speed", label: "Speeding", kinds: ["speed"], icon: Gauge, about: "Any drive over 90 mph, with the guest, top speed and where." },
+  { id: "speed", label: "Speeding", kinds: ["speed"], icon: Gauge, about: "Any drive over 90 mph, with the guest, top speed and where." },
   { id: "where", label: "Left LA or California", kinds: ["left_la", "left_ca"], icon: MapPin, about: "The car went more than 60 miles from LA, or crossed the state line." },
   { id: "border", label: "Mexico / Canada border", kinds: ["border_me", "border_ca"], icon: TriangleAlert, about: "Red if the car looks to be in Mexico or Canada (not allowed or covered on Turo); yellow within about 10 miles of either border. Also pings your phone." },
   { id: "moved", label: "Moved with no trip", kinds: ["moved_no_trip"], icon: TriangleAlert, about: "The car moved when no one had it booked." },
-  { id: "tires", label: "Tire pressure", kinds: ["tires"], icon: Thermometer, about: "Red under 38 psi, yellow when a tire is getting close (under 40) or two tires differ." },
+  { id: "tires", label: "Tire pressure", kinds: ["tires"], icon: Thermometer, about: "Red under 38 psi, yellow when a tire is getting close (under 40) or two tires differ." },
   { id: "fixes", label: "Windows & locks", kinds: ["autofix_windows", "autofix_lock"], icon: Lock, about: "Windows closed automatically anywhere; locked automatically only at N Kings Rd or the LAX garage." },
   { id: "sentry", label: "Sentry", kinds: ["sentry_on", "sentry_off"], icon: ShieldCheck, about: "Sentry turns on between trips and off during trips." },
-  { id: "arrival", label: "Returns & arrival", kinds: ["eta", "late"], icon: Navigation, about: "Once a guest is driving back and within 15 minutes, a row appears — \u201cMaya is about 12 min away\u201d — with where they are heading and the booked return time. A second, orange row says so if they are not going to make it. Nothing appears while the car is parked." },
+  { id: "arrival", label: "Returns & arrival", kinds: ["eta", "late"], icon: Navigation, about: "Once a guest is driving back and within 15 minutes, a row appears — \u201cMaya is about 12 min away\u201d — with where they are heading and the booked return time. A second, orange row says so if they are not going to make it. Nothing appears while the car is parked." },
   { id: "wipe", label: "Guest access removed", kinds: ["wipe"], icon: Shield, about: "Half an hour after a trip ends, with the car parked at home or the LAX garage, it is asked to clear the last guest\u2019s driver profile, their saved places and any phone they paired. It does not touch your own profile or the key cards. This stays off until you and Scout have run it once together \u2014 and the car has to accept the command, which Scout now checks every hour." },
 ];
 const serious = (e: Ev) => e.severity === "warning" || e.severity === "critical";
@@ -72,7 +72,7 @@ export function CarProtectLog() {
 
   return (
     <section aria-labelledby="protect-title" id="protect" className="scroll-mt-24">
-      <SectionHeader id="protect-title" title="Car protection" icon={<Shield className="h-3.5 w-3.5" aria-hidden />} aside="Last 60 days" />
+      <SectionHeader id="protect-title" title="Car protection" icon={<Shield className="h-3.5 w-3.5" aria-hidden />} aside="Last 60 days" />
       <div className={cn(cardCls, "overflow-hidden")}>
         {failed ? <div className="p-4 sm:p-6"><LoadError label="car protection" onRetry={load} /></div>
           : !evs ? <div className="h-64 animate-pulse" />
@@ -93,7 +93,7 @@ export function CarProtectLog() {
                       <Dot tone={tone} />
                       <Icon className="h-[18px] w-[18px] shrink-0 text-white/50" aria-hidden />
                       <span className="min-w-0 flex-1 truncate text-[15px] text-white">{g.label}
-                        {g.id === "tires" && lowPsi != null && <span className="text-white/50"> · lowest {Math.round(lowPsi)} psi</span>}</span>
+                        {g.id === "tires" && lowPsi != null && <span className="text-white/50"> · lowest {Math.round(lowPsi)} psi</span>}</span>
                       <span className={cn("shrink-0 text-[13px] tabular-nums", unread.length ? (tone === "red" ? tint.red : tint.orange) : "text-white/50")}>{right}</span>
                       <ChevronDown className={cn("h-4 w-4 shrink-0 text-white/40 transition-transform duration-200", isOpen && "rotate-180")} aria-hidden />
                     </button>
@@ -109,7 +109,7 @@ export function CarProtectLog() {
                             </div>
                             <p className={cn(text.meta, "pb-1")}>
                               {tiresAt ? `Read ${at12(tiresAt)}` : "Reads when the car is awake"}
-                              {lowPsi != null && <> · lowest {Math.round(lowPsi)} psi</>}
+                              {lowPsi != null && <> · lowest {Math.round(lowPsi)} psi</>}
                             </p>
                           </div>
                         )}
@@ -165,7 +165,7 @@ export function TollCheck() {
   const nearest = res?.points.slice().sort((a, b) => Math.abs(a.mins) - Math.abs(b.mins))[0];
   const summary = res && (res.trip
     ? `On ${at12(res.at)} the car was on ${res.trip.guest ?? "the guest"}'s Turo trip (reservation ${res.trip.reservation_id}, ${at12(res.trip.starts_at)} to ${at12(res.trip.ends_at)}).`
-      + (nearest ? ` Car location ${Math.abs(nearest.mins)} min ${nearest.mins < 0 ? "before" : "after"}: ${nearest.lat.toFixed(5)}, ${nearest.lon.toFixed(5)}.` : "")
+      + (nearest ? ` Car location ${Math.abs(nearest.mins)} min ${nearest.mins < 0 ? "before" : "after"}: ${nearest.lat.toFixed(5)}, ${nearest.lon.toFixed(5)}.` : "")
       + (res.drives.length ? ` Drives in that window: ${res.drives.map((d) => `${d.from ?? "?"} to ${d.to ?? "?"}`).join("; ")}.` : "")
     : `No Turo trip was active on ${at12(res.at)}.`);
   return (
@@ -185,11 +185,11 @@ export function TollCheck() {
             <p className="text-[17px] font-semibold text-white">{res.trip ? `${res.trip.guest ?? "Guest"} had the car` : "No trip at that time"}</p>
             {res.trip && <p className={text.detail}>{res.trip.kind === "home" ? "Home" : "LAX"} trip · {at12(res.trip.starts_at)} to {at12(res.trip.ends_at)} · #{res.trip.reservation_id}</p>}
             {nearest ? (
-              <p className={text.detail}>Where: <a href={maps(nearest.lat, nearest.lon)} target="_blank" rel="noreferrer" className={cn(tint.blue, "hover:underline")}>{nearest.lat.toFixed(4)}, {nearest.lon.toFixed(4)}</a> ({Math.abs(nearest.mins)} min {nearest.mins < 0 ? "before" : "after"})</p>
+              <p className={text.detail}>Where: <a href={maps(nearest.lat, nearest.lon)} target="_blank" rel="noreferrer" className={cn(tint.blue, "hover:underline")}>{nearest.lat.toFixed(4)}, {nearest.lon.toFixed(4)}</a> ({Math.abs(nearest.mins)} min {nearest.mins < 0 ? "before" : "after"})</p>
             ) : (
               <p className={text.detail}>No saved location near that time{res.history_from ? ` (history starts ${at12(res.history_from)})` : " (location history started Sep 25, 2026)"}.</p>
             )}
-            {res.drives.map((d) => <p key={d.id} className={text.detail}>Drive: {d.from ?? "?"} → {d.to ?? "?"}{d.miles ? ` · ${Math.round(d.miles)} mi` : ""}{d.max_mph ? ` · top ${Math.round(d.max_mph)} mph` : ""}</p>)}
+            {res.drives.map((d) => <p key={d.id} className={text.detail}>Drive: {d.from ?? "?"} → {d.to ?? "?"}{d.miles ? ` · ${Math.round(d.miles)} mi` : ""}{d.max_mph ? ` · top ${Math.round(d.max_mph)} mph` : ""}</p>)}
             {summary && (
               <button type="button" onClick={() => { void navigator.clipboard.writeText(summary); toast.success("Copied for Turo"); }}
                 className={cn("inline-flex min-h-[44px] items-center gap-1.5 text-[15px] font-medium", tint.blue)}><Copy className="h-4 w-4" aria-hidden /> Copy summary for Turo</button>

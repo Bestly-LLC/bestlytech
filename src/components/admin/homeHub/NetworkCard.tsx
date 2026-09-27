@@ -94,7 +94,7 @@ export function NetworkCard() {
       <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
         <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3">
           <p className="text-[11px] sm:text-xs text-white/60">Internet delay</p>
-          <p className="text-lg sm:text-2xl font-semibold text-white tabular-nums">{view.delay == null ? "–" : `${Math.round(view.delay)} ms`}</p>
+          <p className="text-lg sm:text-2xl font-semibold text-white tabular-nums">{view.delay == null ? "–" : `${Math.round(view.delay)} ms`}</p>
           <p className="text-[11px] text-white/50">last hour · under 80 is normal</p>
         </div>
         <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3">
@@ -104,7 +104,7 @@ export function NetworkCard() {
         </div>
         <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3">
           <p className="text-[11px] sm:text-xs text-white/60">Router</p>
-          <p className="text-lg sm:text-2xl font-semibold text-white tabular-nums">{view.router == null ? "–" : `${view.router.toFixed(1)} ms`}</p>
+          <p className="text-lg sm:text-2xl font-semibold text-white tabular-nums">{view.router == null ? "–" : `${view.router.toFixed(1)} ms`}</p>
           <p className="text-[11px] text-white/50">Pi to router · wired</p>
         </div>
       </div>
@@ -120,7 +120,7 @@ export function NetworkCard() {
               <Tooltip
                 contentStyle={{ background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, fontSize: 12 }}
                 labelFormatter={(v) => clock(new Date(Number(v)).toISOString())}
-                formatter={(v: number, k: string) => [k === "drop" ? "Signal dropped" : `${v} ms`, k === "drop" ? "" : "Delay"]}
+                formatter={(v: number, k: string) => [k === "drop" ? "Signal dropped" : `${v} ms`, k === "drop" ? "" : "Delay"]}
               />
               <Line type="monotone" dataKey="delay" stroke="#0A84FF" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
               <Scatter dataKey="drop" fill="#F59E0B" isAnimationActive={false} />
@@ -159,7 +159,7 @@ export function NetworkCard() {
                   </p>
                 </div>
                 <span className="text-xs text-white/50 tabular-nums shrink-0">
-                  {d.pingMs != null ? `${Math.round(d.pingMs)} ms` : "quiet"}
+                  {d.pingMs != null ? `${Math.round(d.pingMs)} ms` : "quiet"}
                 </span>
               </li>
             ))}

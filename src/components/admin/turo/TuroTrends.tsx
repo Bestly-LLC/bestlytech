@@ -27,8 +27,8 @@ const SERIES = [
 ] as const;
 const RANGES = [
   { id: "today", label: "Today", days: 0 },
-  { id: "7d", label: "7 days", days: 7 },
-  { id: "30d", label: "30 days", days: 30 },
+  { id: "7d", label: "7 days", days: 7 },
+  { id: "30d", label: "30 days", days: 30 },
   { id: "1y", label: "1 year", days: 365 },
 ] as const;
 
@@ -177,7 +177,7 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
     const gap = Math.round(market - next7);
     tips.push(gap > 3 ? `The nearby market median is $${gap}/day above you.` : gap < -3 ? `You're $${-gap}/day above the nearby market median.` : "You're at the nearby market median.");
   }
-  if (lift != null) tips.push(`Over the last 30 days the manager priced ${lift >= 0 ? `$${Math.round(lift)}/day above` : `$${Math.round(-lift)}/day below`} Turo's own dynamic price.`);
+  if (lift != null) tips.push(`Over the last 30 days the manager priced ${lift >= 0 ? `$${Math.round(lift)}/day above` : `$${Math.round(-lift)}/day below`} Turo's own dynamic price.`);
 
   return (
     <section className={cn(card, "p-5")}>

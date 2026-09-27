@@ -44,7 +44,7 @@ type Item = { id: string; text: string; why?: string };
 const FIRST: Item[] = [
   { id: "phones", text: "Charge your phone, laptop and power banks", why: "The wall may not be there later." },
   { id: "tesla", text: "Set the Tesla to charge to 100%", why: "It's a car and a very big battery." },
-  { id: "water", text: "Fill water: jugs, and the bathtub", why: "A gallon per person per day, at least 3 days." },
+  { id: "water", text: "Fill water: jugs, and the bathtub", why: "A gallon per person per day, at least 3 days." },
   { id: "cash", text: "Get some cash", why: "Card readers go down with the power." },
   { id: "bag", text: "Go-bag by the door: meds, glasses, chargers, ID, keys", why: "Grab-and-go in one trip." },
   { id: "people", text: "Text Eli and family where you are and the plan", why: "Texts get through when calls don't." },
@@ -233,8 +233,8 @@ export default function Emergency() {
               <p className="mt-3 text-sm text-white/60">
                 {!bat.online ? "Looks offline: check it's plugged in and on Wi-Fi." :
                   `Charge limit ${bat.max_charge ?? "?"}%` +
-                  (bat.input_watts ? ` · ${Math.round(bat.input_watts)} W in` : " · not charging") +
-                  (bat.minutes_to_full ? ` · full in ~${Math.round(bat.minutes_to_full)} min` : "")}
+                  (bat.input_watts ? ` · ${Math.round(bat.input_watts)} W in` : " · not charging") +
+                  (bat.minutes_to_full ? ` · full in ~${Math.round(bat.minutes_to_full)} min` : "")}
               </p>
               <p className="mt-1 text-xs text-white/35">Read {new Date(bat.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
             </>

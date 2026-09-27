@@ -138,7 +138,7 @@ export function OperationsPanel({ onRefresh, candidateCount, permanentlyFailedCo
           <AlertDialogHeader>
             <AlertDialogTitle>Run pattern maintenance now?</AlertDialogTitle>
             <AlertDialogDescription>
-              This is the same job that runs every 3 hours. It changes live patterns: patterns not re-reported in 30 days
+              This is the same job that runs every 3 hours. It changes live patterns: patterns not re-reported in 30 days
               are deactivated, patterns reported more than 5 times that never worked are deleted, and weak patterns have
               their confidence lowered. It also resolves user reports that now have a working pattern. Deleted patterns
               can't be restored.
@@ -156,9 +156,9 @@ export function OperationsPanel({ onRefresh, candidateCount, permanentlyFailedCo
           <AlertDialogHeader>
             <AlertDialogTitle>Reset failed domains?</AlertDialogTitle>
             <AlertDialogDescription>
-              Domains whose last permanent AI failure was over 30 days ago get their attempt count reset so the AI generator
-              tries them again, and domains whose render attempts ran out over 30 days ago get another render.
-              Failure log entries older than 30 days are deleted. This can't be undone.
+              Domains whose last permanent AI failure was over 30 days ago get their attempt count reset so the AI generator
+              tries them again, and domains whose render attempts ran out over 30 days ago get another render.
+              Failure log entries older than 30 days are deleted. This can't be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

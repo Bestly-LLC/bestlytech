@@ -69,7 +69,7 @@ const rpc = (fn: string, args?: Record<string, unknown>) =>
 
 const secsAgo = (iso: string | null) => (iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000)) : null);
 const agoText = (s: number | null) =>
-  s == null ? "never" : s < 10 ? "just now" : s < 60 ? `${s} sec ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} hr ago`;
+  s == null ? "never" : s < 10 ? "just now" : s < 60 ? `${s} sec ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} hr ago`;
 const time12 = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 const toF = (c: number) => Math.round((c * 9) / 5 + 32);
 

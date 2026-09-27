@@ -14,12 +14,12 @@ export function PageHeader({ title, description, actions, embedded }: PageHeader
   }
   return (
     <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4">
-      <div>
-        {title && <h1 className="font-display text-2xl sm:text-3xl font-normal text-white leading-[1.05] tracking-[-0.01em] bento:font-heading bento:font-bold bento:tracking-[-0.03em] bento:text-3xl sm:bento:text-[2.75rem]">
+      <div className="min-w-0">
+        {title && <h1 className="text-[2rem] sm:text-3xl font-bold text-white leading-[1.1] tracking-[-0.015em] bento:tracking-[-0.025em] sm:bento:text-[2.75rem]">
           {title}
         </h1>}
         {description && (
-          <p className={`text-sm text-white/55 ${title ? "mt-2" : ""}`}>{description}</p>
+          <p className={`text-[0.9375rem] sm:text-sm text-white/60 ${title ? "mt-1.5" : ""}`}>{description}</p>
         )}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2 sm:justify-end">{actions}</div>}

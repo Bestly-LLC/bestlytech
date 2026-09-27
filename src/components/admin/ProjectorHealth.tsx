@@ -55,7 +55,7 @@ function BatteryRing({ h }: { h: Health }) {
           {h.charging ? (
             <div className="flex items-center gap-1 text-[#30D158]">
               <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.6, repeat: Infinity }}><Zap className="h-4 w-4" aria-hidden /></motion.span>
-              Charging{h.watts ? ` · ${h.watts} W` : ""}
+              Charging{h.watts ? ` · ${h.watts} W` : ""}
             </div>
           ) : (
             <div className="text-white/70">{h.plugged ? "Plugged in" : "On battery"}</div>
@@ -144,7 +144,7 @@ function History({ h }: { h: Health }) {
   return (
     <div className="rounded-2xl bg-white/[0.05] p-4 ring-1 ring-white/10">
       <div className="flex items-center justify-between text-[12px] font-semibold uppercase tracking-[0.06em] text-white/50">
-        <span>Last {Math.max(1, Math.round((t1 - t0) / 60))} min</span>
+        <span>Last {Math.max(1, Math.round((t1 - t0) / 60))} min</span>
         <span className="flex gap-3 normal-case tracking-normal"><span className="text-[#30D158]">● Battery</span><span className="text-[#FF9F0A]">● Heat</span></span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 h-[70px] w-full" preserveAspectRatio="none">

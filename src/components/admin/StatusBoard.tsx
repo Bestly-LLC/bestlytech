@@ -29,7 +29,7 @@ function when(iso: string | null): string {
   if (!iso) return "never";
   const d = new Date(iso), now = Date.now(), mins = Math.round((now - +d) / 60000);
   if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60) return `${mins} min ago`;
   const t = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
   const sameDay = new Date(now).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" }) === d.toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
   return sameDay ? t : `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" })}, ${t}`;

@@ -287,7 +287,7 @@ export default function CloudDeals({ embedded = false }: { embedded?: boolean } 
           <AlertTriangle className="h-5 w-5 text-amber-400 mt-0.5 shrink-0" aria-hidden />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-amber-200 mb-2">
-              {stuck.length} deal{stuck.length === 1 ? "" : "s"} stuck for more than 7 days
+              {stuck.length} deal{stuck.length === 1 ? "" : "s"} stuck for more than 7 days
             </div>
             <div className="flex flex-wrap gap-2">
               {stuck.slice(0, 6).map((r) => (

@@ -342,7 +342,7 @@ export default function StreetSweeping() {
     } else if (inWindowToday && latestToday) {
       tone = "ok";
       headline = latestToday.outcome === "safe_side" ? "Blue Steel is on the safe side" : "Blue Steel isn't parked on Kings Rd";
-      detail = `Last checked ${fmtLA(latestToday.ran_at, { hour: "numeric", minute: "2-digit" })}. Checks continue every 30 min until 9:55am.`;
+      detail = `Last checked ${fmtLA(latestToday.ran_at, { hour: "numeric", minute: "2-digit" })}. Checks continue every 30 min until 9:55am.`;
     } else if (inWindowToday) {
       headline = `${cap(todaySide!)} curb is swept today, 8–10am`;
       detail = nowMin < 415 ? "First check at 6:55am." : "Waiting on the next check.";
@@ -448,7 +448,7 @@ export default function StreetSweeping() {
                   : `checked ${ago(derived.placement.ranAt)}`
                 : "no reading yet"}
               icon={Car}
-              tooltip="The car is only read during a sweeping check (every 30 min, Mon and Tue mornings). Between checks this is history, not live."
+              tooltip="The car is only read during a sweeping check (every 30 min, Mon and Tue mornings). Between checks this is history, not live."
             />
             <StatCard
               label="Next sweep"
@@ -587,7 +587,7 @@ export default function StreetSweeping() {
           <div className="flex items-start gap-2 text-xs text-white/50">
             <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <p>
-              Checks run as two Claude scheduled tasks every 30 min, 6:55–9:55am on sweep days, reading the car from TezLab.
+              Checks run as two Claude scheduled tasks every 30 min, 6:55–9:55am on sweep days, reading the car from TezLab.
               Alerts go to ntfy at top priority. Tapping the alert, its "Moved it" button, or "I moved it" here stops that morning's alerts.
             </p>
           </div>

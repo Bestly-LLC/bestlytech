@@ -181,7 +181,7 @@ export default function AdminTuro() {
       {last && (
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            ["Last run", hoursSince != null ? (hoursSince < 48 ? `${Math.round(hoursSince)} h ago` : `${Math.round(hoursSince / 24)} days ago`) : "–", MODE[last.mode]?.label ?? last.mode],
+            ["Last run", hoursSince != null ? (hoursSince < 48 ? `${Math.round(hoursSince)} h ago` : `${Math.round(hoursSince / 24)} days ago`) : "–", MODE[last.mode]?.label ?? last.mode],
             ["Market (renter/day)", money(lastPlanRun?.market_base ?? last.market_base), `${lastPlanRun?.comp_n ?? last.comp_n ?? 0} nearby Model 3s`],
             ["Your net / day", money(lastPlanRun?.host_net ?? last.host_net), "after Turo's cut"],
             ["Ceiling", money(lastPlanRun?.ceiling ?? last.ceiling), "never priced above"],

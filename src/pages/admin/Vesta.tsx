@@ -105,8 +105,8 @@ export default function Vesta() {
               <Stat n={db.reports_open} label="reports open" warn={(db.reports_open ?? 0) > 0} />
               <Stat n={db.pending} label="women waiting" warn={(db.pending ?? 0) > 0} />
               <Stat n={db.members} label="members" />
-              <Stat n={db.posts_24h} label="posts, 24 h" />
-              <Stat n={db.messages_24h} label="messages, 24 h" />
+              <Stat n={db.posts_24h} label="posts, 24 h" />
+              <Stat n={db.messages_24h} label="messages, 24 h" />
               <Stat n={db.codes_left} label="invite codes left" />
             </div>
           )}

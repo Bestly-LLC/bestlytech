@@ -44,7 +44,7 @@ export function DemoKeyCard() {
       <div className="flex flex-wrap items-center gap-3">
         <span className={cn("text-[13px]", secondary)}>Remove drivers after</span>
         <Segmented ariaLabel="Remove after" value={String(s.keep_minutes)} onChange={(v) => run("keep", v)}
-          options={[{ value: "60", label: "1 hr" }, { value: "120", label: "2 hr" }, { value: "1440", label: "24 hr" }]} />
+          options={[{ value: "60", label: "1 hr" }, { value: "120", label: "2 hr" }, { value: "1440", label: "24 hr" }]} />
       </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="shrink-0 rounded-xl bg-white p-2"><QRCodeSVG value={link("home")} size={96} /></div>

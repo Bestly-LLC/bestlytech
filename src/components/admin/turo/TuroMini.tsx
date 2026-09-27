@@ -62,7 +62,7 @@ export function TuroMini() {
         <div className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-4">
           <Stat
             label="Battery"
-            value={<>{w.battery ?? "–"}%{w.range ? <span className="ml-1 text-[13px] font-normal text-white/60">{Math.round(w.range)} mi</span> : null}</>}
+            value={<>{w.battery ?? "–"}%{w.range ? <span className="ml-1 text-[13px] font-normal text-white/60">{Math.round(w.range)} mi</span> : null}</>}
             detail={charging
               ? <><BatteryIcon pct={w.battery} className="h-3.5 w-3.5 shrink-0" />{w.charging}</>
               : w.locked === false

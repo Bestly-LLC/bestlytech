@@ -110,7 +110,7 @@ export function VestaInvites() {
           <input type="number" min={1} max={500} value={uses} onChange={(e) => setUses(Math.max(1, Math.min(500, Number(e.target.value) || 1)))} className={cn(field, "mt-1")} /></label>
         <label className="text-xs text-white/60">Expires after
           <select value={days} onChange={(e) => setDays(e.target.value)} className={cn(field, "mt-1")}>
-            <option value="">Never</option><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option>
+            <option value="">Never</option><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option>
           </select></label>
         <div className="flex items-end sm:col-span-2">
           <button type="button" onClick={() => void generate()} disabled={busy}

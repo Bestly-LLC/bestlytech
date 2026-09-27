@@ -329,7 +329,7 @@ export default function Security() {
                     <span className={cn(pill, RUN_TONE[r.status])}>{r.status}</span>
                     <span className="text-sm text-white">{fmt(r.started_at, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
                     <span className="text-sm text-white/55 tabular-nums">
-                      {r.checks_passed}/{r.checks_total} passed · {r.new_findings} new · {r.fixed_findings} fixed{mins ? ` · ${mins} min` : ""}{r.trigger === "manual" ? " · manual" : ""}
+                      {r.checks_passed}/{r.checks_total} passed · {r.new_findings} new · {r.fixed_findings} fixed{mins ? ` · ${mins} min` : ""}{r.trigger === "manual" ? " · manual" : ""}
                     </span>
                   </li>
                 );

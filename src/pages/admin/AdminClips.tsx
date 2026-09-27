@@ -119,8 +119,8 @@ const AUDIO_EXT = new Set(["m4a", "mp4", "mp3", "wav", "aac", "caf", "amr", "ogg
 
 const fmtBytes = (n: number) => {
   if (!n) return "-";
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 };
 
 const fmtSecs = (s: number | null) => {

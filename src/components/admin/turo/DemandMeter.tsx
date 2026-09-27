@@ -30,7 +30,7 @@ const SCOPES = [
 
 function why(r: DemandRow) {
   const pricier = r.near_median_daily && r.far_median_daily ? Math.round((r.near_median_daily / r.far_median_daily - 1) * 100) : null;
-  if (r.scope === "car") return r.booked_share != null ? `${Math.round(r.booked_share * 14)} of the next 14 days are booked.` : r.note ?? "";
+  if (r.scope === "car") return r.booked_share != null ? `${Math.round(r.booked_share * 14)} of the next 14 days are booked.` : r.note ?? "";
   if (r.scope === "model3") {
     const free = r.near_count != null && r.far_count != null ? `${r.near_count} still free next week vs ${r.far_count}${r.far_capped ? "+" : ""} a month out.` : "";
     return `${free} ${pricier != null ? `Next week runs ${pricier >= 0 ? `${pricier}% pricier` : `${-pricier}% cheaper`}.` : ""}`.trim();

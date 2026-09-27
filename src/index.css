@@ -501,6 +501,75 @@
   --sidebar-ring: 0 0% 30%;
 }
 
+/* ============================================================================
+ * Admin typography: Apple system font (HIG typography.md: use the system font, San Francisco,
+ * for legibility at every size). On Apple devices this is SF Pro, with SF's optical sizes picked
+ * automatically; elsewhere it falls back to the platform UI font, then Inter.
+ * Brand serif/Jakarta are marketing-site faces and stay out of the admin.
+ * ========================================================================== */
+body.admin-shell,
+body.admin-shell .admin-shell {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "Segoe UI", "Inter", system-ui, sans-serif;
+  font-feature-settings: normal;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+/* Low specificity (:where) so a page's own font-/tracking-/leading- classes still win. */
+:where(body.admin-shell) :is(h1, h2, h3, h4, h5, h6) {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Segoe UI", "Inter", system-ui, sans-serif;
+  font-feature-settings: normal;
+  letter-spacing: -0.015em;
+}
+:where(body.admin-shell) :is(.font-display, .font-heading, .font-modern) {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Segoe UI", "Inter", system-ui, sans-serif;
+  font-feature-settings: normal;
+}
+/* Apple titles are bold, not heavy. */
+:where(body.admin-shell) h1 { font-weight: 700; }
+:where(body.admin-shell) :is(h2, h3, h4) { font-weight: 600; }
+/* Paragraph leading for UI text, not article text (iOS body is 17/22). */
+:where(body.admin-shell) p { line-height: 1.4; text-wrap: pretty; }
+/* No orphans: a heading never ends with one lonely word on its own row. */
+:where(body.admin-shell) :is(h1, h2, h3, h4, h5, h6) { text-wrap: balance; }
+/* Numbers that change in place (stats, clocks, percentages) don't jiggle. */
+:where(body.admin-shell) time { font-variant-numeric: tabular-nums; }
+
+/* iPhone type scale. The admin is rem-based, so the root size is the whole scale:
+   at 17px, text-xs = 12.75 (caption), text-sm = 14.9 (subhead), text-base = 17 (body),
+   matching iOS instead of the 10.5px that the 14px desktop root gave text-xs on a phone.
+   On iPhone Safari, -apple-system-body follows the phone's own Text Size (Dynamic Type).
+   A size picked in the header (inline style on <html>) still wins. */
+@media (max-width: 767px) {
+  html:has(body.admin-shell) { font-size: 17px; }
+  @supports (font: -apple-system-body) {
+    html:has(body.admin-shell) { font: -apple-system-body; }
+  }
+}
+
+/* Touch screens. HIG accessibility.md: controls at least 44x44pt. */
+@media (pointer: coarse) {
+  /* iOS Safari zooms the page into any field under 16px; keep fields at 16px or more. */
+  body.admin-shell :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+    font-size: max(16px, 1em);
+  }
+  /* Small icon-only buttons keep their look but get a 44pt hit area. */
+  body.admin-shell :is(button, a, [role="button"])[aria-label]:not(.absolute):not(.fixed):not(.sticky) {
+    position: relative;
+  }
+  body.admin-shell :is(button, a, [role="button"])[aria-label]::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+  /* No grey flash on tap; buttons press instead (active states below). */
+  body.admin-shell { -webkit-tap-highlight-color: transparent; }
+}
+
 /* Keyboard focus, everywhere in the admin and partner shells.
    Not one of the 59 buttons in the partner portal had a focus ring: tabbing through it moved an
    invisible cursor. This is `outline`, not a ring/box-shadow, so the handful of components that

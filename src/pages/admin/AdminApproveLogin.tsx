@@ -64,7 +64,7 @@ function describe(ua: string | null) {
 
 function ago(iso: string) {
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
-  return s < 10 ? "just now" : s < 60 ? `${s} seconds ago` : `${Math.round(s / 60)} min ago`;
+  return s < 10 ? "just now" : s < 60 ? `${s} seconds ago` : `${Math.round(s / 60)} min ago`;
 }
 
 /** Segmented one-time-code field: one real input under the cells, so paste, autofill and VoiceOver just work. */

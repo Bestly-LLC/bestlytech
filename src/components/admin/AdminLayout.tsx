@@ -133,9 +133,9 @@ export function AdminLayout() {
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <button type="button" onClick={textSize.reset} aria-label={`Text size ${textSize.percent}%. Reset to default`}
+                      <button type="button" onClick={textSize.reset} aria-label={`Text size ${textSize.label}. Reset to default`}
                         className="h-8 min-w-[2.75rem] px-1 text-xs tabular-nums text-white/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 rounded-sm">
-                        {textSize.percent}%
+                        {textSize.label}
                       </button>
                     </TooltipTrigger>
                     <TooltipContent>{textSize.isDefault ? "Text size" : "Reset text size"}</TooltipContent>
@@ -230,7 +230,7 @@ export function AdminLayout() {
                       <span className="text-xs text-muted-foreground">Text size</span>
                       <span className="flex items-center gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={textSize.smaller} disabled={!textSize.canShrink} aria-label="Smaller text"><Minus className="h-3.5 w-3.5" /></Button>
-                        <button type="button" onClick={textSize.reset} className="min-w-[2.5rem] text-xs tabular-nums">{textSize.percent}%</button>
+                        <button type="button" onClick={textSize.reset} className="min-w-[2.5rem] text-xs tabular-nums">{textSize.label}</button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={textSize.larger} disabled={!textSize.canGrow} aria-label="Larger text"><Plus className="h-3.5 w-3.5" /></Button>
                       </span>
                     </div>

@@ -33,7 +33,7 @@ const ACT: Record<string, string> = {
   link_sent: "Trip link sent in Turo", driver_open: "Opened the extra-driver form", key_resend: "Key re-sent", key_self_removed: "Removed the car from their Tesla app",
   agent: "Helper fixed something", view: "Opened the page",
 };
-const ago = (iso: string) => { const m = Math.round((Date.now() - +new Date(iso)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : `${Math.round(m / 1440)} d ago`; };
+const ago = (iso: string) => { const m = Math.round((Date.now() - +new Date(iso)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : `${Math.round(m / 1440)} d ago`; };
 
 type Ev = { kind: string; at: string; device?: string | null; detail: Record<string, unknown> | null; actor?: string };
 type Drive = { id: string; at: string; ended_at: string | null; miles: number | null; max_mph: number | null; from: string | null; to: string | null; basis: "key" | "booking" | "none"; driver: string | null };
@@ -60,7 +60,7 @@ function explain(e: Ev, home: boolean): { title: string; sub?: string } {
     }
     case "view": return { title: "Opened their trip page" };
     case "out_of_state": return { title: "Said they're leaving California", sub: `“${String(d.text ?? "")}” · you got a Scout alert` };
-    case "geofence_block": return { title: `Tried to ${d.action === "flash" ? "flash the lights" : "honk"} from too far away`, sub: d.meters ? `About ${Math.round(Number(d.meters) * 3.281)} ft from the car · blocked` : "Blocked" };
+    case "geofence_block": return { title: `Tried to ${d.action === "flash" ? "flash the lights" : "honk"} from too far away`, sub: d.meters ? `About ${Math.round(Number(d.meters) * 3.281)} ft from the car · blocked` : "Blocked" };
     default: return { title: ACT[e.kind] ?? e.kind.replace(/_/g, " ") };
   }
 }
@@ -90,7 +90,7 @@ function DriveList({ drives }: { drives: Drive[] }) {
           return (
             <li key={d.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 py-1 text-[13px] text-white/70 bento:text-neutral-600">
               <span className="text-white bento:text-neutral-900">{d.from ?? "?"} → {d.to ?? "?"}</span>
-              <span className="tabular-nums">{d.miles ? `${Math.round(d.miles)} mi` : ""}{d.max_mph ? ` · top ${Math.round(d.max_mph)} mph` : ""}</span>
+              <span className="tabular-nums">{d.miles ? `${Math.round(d.miles)} mi` : ""}{d.max_mph ? ` · top ${Math.round(d.max_mph)} mph` : ""}</span>
               <span className={cn("rounded-full px-1.5 py-0.5 text-[11px] font-semibold", b.cls)}>
                 {b.label}{d.basis === "key" && d.driver ? ` · ${d.driver}` : ""}
               </span>
@@ -305,7 +305,7 @@ function LinkSentRow({ res }: { res: number }) {
   const btn = "inline-flex h-7 items-center gap-1 rounded-full border border-white/15 px-2.5 text-[11px] text-white disabled:opacity-50 bento:border-neutral-200 bento:text-neutral-800";
   const text = !m ? "Trip link not sent in Turo yet"
     : m.status === "sent" ? `Trip link sent in Turo ${m.sent_at ? when(m.sent_at) : ""}${m.verified ? " ✓ confirmed in thread" : ""}`
-    : m.status === "queued" || m.status === "sending" ? "Trip link message queued (sends within ~3 min)"
+    : m.status === "queued" || m.status === "sending" ? "Trip link message queued (sends within ~3 min)"
     : m.status === "skipped" ? "Trip link message skipped"
     : `Trip link message failed${m.error ? `: ${m.error}` : ""} (retrying)`;
   return (
@@ -328,8 +328,8 @@ function ChargingAdmin({ res, first }: { res: number; first: string | null }) {
   useEffect(() => { void load(); }, [load]);
   if (!c) return null;
   const money = (n?: number | null) => `$${(n ?? 0).toFixed(2)}`;
-  const copy = [`Supercharging during ${first ?? "the"} trip: ${money(c.total)} (${c.count} session${c.count === 1 ? "" : "s"}, ${c.kwh} kWh${c.idle > 0 ? `, incl. ${money(c.idle)} idle fees` : ""}).`,
-    ...c.sessions.map((s) => `- ${when(s.at)} ${s.place ?? "Supercharger"}: ${money((s.cost ?? 0) + (s.idle ?? 0))}${s.kwh ? ` (${s.kwh} kWh)` : ""}`),
+  const copy = [`Supercharging during ${first ?? "the"} trip: ${money(c.total)} (${c.count} session${c.count === 1 ? "" : "s"}, ${c.kwh} kWh${c.idle > 0 ? `, incl. ${money(c.idle)} idle fees` : ""}).`,
+    ...c.sessions.map((s) => `- ${when(s.at)} ${s.place ?? "Supercharger"}: ${money((s.cost ?? 0) + (s.idle ?? 0))}${s.kwh ? ` (${s.kwh} kWh)` : ""}`),
     c.final ? "Amounts are from Tesla's Supercharger billing." : "Amounts are estimates from the car's charging log."].join("\n");
   const btn = cn(btnTinted, "shrink-0 whitespace-nowrap px-4 [&_svg]:h-4 [&_svg]:w-4");
   const refresh = async () => { setBusy(true); const { error } = await rpc("trip_charges_refresh", { p_reservation: res }); if (error) toast.error(error.message); else { toast.success("Checking. Updates in about a minute."); window.setTimeout(() => { void load(); setBusy(false); }, 45000); return; } setBusy(false); };

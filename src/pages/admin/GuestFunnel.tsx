@@ -58,7 +58,7 @@ export function GuestFunnel() {
 
   if (err) return <div className={cn(card, "text-[14px]", tint.orange)}>Couldn't load guest steps: {err}</div>;
   if (!trips) return <div className={cn(card, "h-40 animate-pulse")} />;
-  if (!trips.length) return <div className={cn(card, "text-[14px]", secondary)}>No guest pages in the last 120 days.</div>;
+  if (!trips.length) return <div className={cn(card, "text-[14px]", secondary)}>No guest pages in the last 120 days.</div>;
 
   return (
     <div className={cn(card, "space-y-4")} id="guest-steps">
@@ -103,7 +103,7 @@ export function GuestFunnel() {
                         s.at ? pill.green : overdue ? pill.orange : "bg-[#2C2C2E] text-[#EBEBF599] bento:bg-[#7676801a] bento:text-[#3C3C4399]")}>
                       {s.at ? <Check className="h-3.5 w-3.5" aria-hidden /> : overdue ? <Clock className="h-3.5 w-3.5" aria-hidden /> : <Minus className="h-3.5 w-3.5" aria-hidden />}
                       {s.label}{skip ? " · skipped" : ""}{s.guessed ? " · likely" : ""}
-                      {s.id === "returned" && s.late_min ? ` · ${s.late_min} min late` : ""}
+                      {s.id === "returned" && s.late_min ? ` · ${s.late_min} min late` : ""}
                       <span className="sr-only">{s.at ? `done ${t12(s.at)}` : overdue ? "not done, overdue" : "not yet"}</span>
                     </li>
                   );
