@@ -33,7 +33,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; airLabels?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
 };
 type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
@@ -570,8 +570,11 @@ export default function Wall() {
           <Row label="Moon" detail="Where the moon is, with tonight's real phase." htmlFor="wall-sky-moon">
             <Switch id="wall-sky-moon" checked={s.skyMoon !== false} onCheckedChange={(v) => change({ skyMoon: v })} />
           </Row>
-          <Row label="Sun and planets" detail="The sun by day, Mercury to Saturn when they're up." htmlFor="wall-sky-sun">
+          <Row label="Sun" detail="Where the sun is, while it's up." htmlFor="wall-sky-sun">
             <Switch id="wall-sky-sun" checked={s.skySun !== false} onCheckedChange={(v) => change({ skySun: v })} />
+          </Row>
+          <Row label="Planets" detail="Mercury to Saturn when they're up at dusk and night." htmlFor="wall-sky-planets">
+            <Switch id="wall-sky-planets" checked={s.skyPlanets !== false} onCheckedChange={(v) => change({ skyPlanets: v })} />
           </Row>
         </>}
         <Row label="Sky key" detail="Shows what the colors and symbols mean on the ceiling. Handy when showing people." htmlFor="wall-air-key">
