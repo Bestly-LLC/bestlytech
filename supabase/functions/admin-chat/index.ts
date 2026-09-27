@@ -782,7 +782,7 @@ const FREE_TOOLS = new Set([
 ]);
 const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript"]);
 const FREE_STEPS = 10;
-const FREE_BUDGET_MS = 95_000;   // freeTry (~2-30s) + this must stay under the 150s platform limit
+const FREE_BUDGET_MS = 85_000;   // freeTry (up to 30s) + this + the 20s summary must stay under the 150s platform limit
 const REFUSES = /\b(can'?t|cannot|can not|unable to|not able to|don'?t have (access|the ability))\b|\bmanually\b|\byou('ll| will)? (need|have) to\b/i;
 const CLAIMS_DONE = /\b(done|fixed|resolved|pushed|sent|cleared|moved|restarted|deployed|completed|updated|notified)\b/i;
 /** "It already cleared / the last runs succeeded" reports a state, not work Scout did: not a false claim. */
@@ -1013,14 +1013,19 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   }
 
   if (!replied) return { why: "The free AI isn't answering right now.", tools: used };
-  // Out of steps or time with work in hand: say what was found and offer to keep going for free (chat only).
-  if (!autopilot && used.length) {
+  // Out of steps or time with work in hand: say what was found. Chat offers to keep going for free; autopilot
+  // keeps the findings next to the paid offer (a STUCK verdict), so the paid run starts from them.
+  if (used.length) {
     try {
       msgs.push({ role: "user", content: "Stop using tools now. In under 90 words, tell Jared what you found so far and what is left, using only the tool results above. No options line." });
       trimForBudget(msgs);
-      const s = await llmChat({ messages: msgs, tools, toolChoice: "none", maxTokens: 700, deadlineMs: 25_000, job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
+      const s = await llmChat({ messages: msgs, tools, toolChoice: "none", maxTokens: 700, deadlineMs: 20_000, job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
       const sum = s.content.replace(/^\s*OPTIONS:.*$/m, "").trim();
-      if (sum && !s.toolCalls.length) return { answer: `${sum}\n\nOPTIONS: Keep going | Yes, use paid AI`, why: "", tools: used };
+      if (sum && !s.toolCalls.length) {
+        return autopilot
+          ? { answer: `${sum.replace(/^(FIXED|NEEDS_YES|STUCK):.*$/gm, "").trim()}\nSTUCK: the free AI ran out of time before finishing.`, why: "", tools: used }
+          : { answer: `${sum}\n\nOPTIONS: Keep going | Yes, use paid AI`, why: "", tools: used };
+      }
     } catch { /* fall through to the paid ask */ }
   }
   return { why: "The free AI tried but couldn't finish this one.", tools: used };
