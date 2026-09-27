@@ -20,7 +20,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { ProjectorHealth, type Health } from "@/components/admin/ProjectorHealth";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay } from "lucide-react";
 
 type Pt = [number, number];
 type Mode = "auto" | "board" | "ambient" | "demo" | "off";
@@ -31,7 +31,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop"; at: number } | null; volume?: number | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit"; at: number } | null; volume?: number | null; airplay?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
   sleepShow?: { at: number; mins: number; music?: boolean } | null;
 };
@@ -49,6 +49,8 @@ type PiStatus = {
   override?: { on: boolean; until: number } | null; restarts_1h?: number; sync_age_s?: number | null;
   health?: Health | null;
   page_mode?: string | null; dark_30m?: number; last_dark?: { at: number; why: string } | null;
+  airplay?: { want?: boolean; on?: boolean; casting?: boolean; kind?: string | null; since?: number | null; err?: string | null;
+    age_s?: number | null; page?: string | null; rtc?: string | null } | null;
 };
 type Remote = {
   state: WallState; version: number; channel: string; power: { on?: boolean; seq: number; at?: string };
@@ -472,6 +474,27 @@ export default function Wall() {
         </div>
       </Group>
 
+      {/* AirPlay: the Pi is an AirPlay receiver ("Bestly Wall"); video plays where the clock and today are. */}
+      {(() => {
+        const ap = st?.airplay ?? null;
+        const off = s.airplay === false;
+        const fresh = !!ap && ap.age_s != null && ap.age_s < 90 && statusAge != null && statusAge < 150;
+        const since = ap?.since ? new Date(ap.since * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : null;
+        const detail = off ? "Off. Your phone won't see the wall."
+          : !ap ? "Checking with the Pi…"
+          : ap.casting ? `Playing ${ap.kind === "audio" ? "audio" : "video"}${since ? `\u00a0since ${since}` : ""}${ap.page && ap.page.startsWith("playing") ? "" : " · connecting on the wall"}`
+          : ap.on && fresh ? "Ready. On your iPhone: Control Center, Screen Mirroring, Bestly\u00a0Wall."
+          : "Not running right now. The Pi keeps retrying and Scout will tell you if it stays down.";
+        return (
+          <Group title="AirPlay" footer="Mirror your iPhone or Mac, or AirPlay a video to Bestly Wall. It plays where the clock and today are, and the rest of the wall moves over. Anyone on your Wi-Fi can pick it.">
+            <Row htmlFor="wall-airplay" label={<span className="inline-flex items-center gap-2"><Airplay className="h-4 w-4 text-white/60" aria-hidden />Bestly Wall in AirPlay</span>}
+              detail={<span className={cn(!off && ap && !ap.casting && !(ap.on && fresh) && "text-amber-300")}>{detail}{ap?.rtc === "no-h264" ? " The projector's browser can't play this video format." : ""}</span>}>
+              <Switch id="wall-airplay" checked={!off} onCheckedChange={(v) => change({ airplay: v })} />
+            </Row>
+          </Group>
+        );
+      })()}
+
       {/* Sleep mode: counting sheep */}
       {(() => {
         const ss = s.sleepShow; const end = ss ? ss.at + ss.mins * 60000 : 0; const on = !!ss && Date.now() < end;
@@ -489,7 +512,7 @@ export default function Wall() {
               </div>
             ) : (
               <div className="space-y-3 px-4 py-3">
-                <Segmented label="Length" value={sheepMins} onChange={setSheepMins}
+                <Segmented label="Length" value={sheepMins} onChange={(v) => setSheepMins(v as "15" | "30" | "60")}
                   options={[{ id: "15", label: "15 min" }, { id: "30", label: "30 min" }, { id: "60", label: "1 hour" }]} />
                 <div className="flex min-h-[44px] items-center justify-between">
                   <label htmlFor="wall-sheep-music" className="text-[17px] text-white">Lullaby music</label>
