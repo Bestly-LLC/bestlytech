@@ -44,7 +44,7 @@ type WallState = {
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
   air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
-  heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
+  heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; tripDismiss?: { id: string; at: number } | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
   sleepShow?: { at: number; mins: number; music?: boolean } | null;
   liveActs?: Partial<Record<LiveKind, boolean>> | null;
@@ -62,6 +62,9 @@ type PiStatus = {
   status?: string; top?: string; cpu_c?: number | null; heartbeat_age_s?: number | null;
   override?: { on: boolean; until: number } | null; restarts_1h?: number; sync_age_s?: number | null;
   health?: Health | null;
+  /** Turo handoff card on the wall (server.py trip_loop): RETRIEVE = transit to get the car, DELIVER = drive it there. */
+  trip?: { active?: boolean; id?: string; kind?: "retrieve" | "deliver"; phase?: string; title?: string; line?: string;
+    test?: boolean; fresh_age_s?: number | null; err?: string | null } | null;
   page_mode?: string | null; dark_30m?: number; last_dark?: { at: number; why: string } | null;
   airplay?: { want?: boolean; on?: boolean; casting?: boolean; kind?: string | null; since?: number | null; err?: string | null;
     age_s?: number | null; page?: string | null; rtc?: string | null } | null;
@@ -913,6 +916,28 @@ export default function Wall() {
                 </button>
               </div>
             </div>
+          </Group>
+        );
+      })()}
+
+      {/* Turo handoff: the wall's inline trip card (server.py trip_loop). Dismiss (state.tripDismiss {id, at}) hides it on
+          the wall and ends the iPhone Live Activity. It also ends on its own (car left the spot / trip started / 2 h late). */}
+      {(() => {
+        const t = st?.trip;
+        if (!t?.active || !t.id) return null;
+        const id = t.id;
+        const gone = s.tripDismiss?.id === id;
+        const old = t.fresh_age_s != null && t.fresh_age_s > 330;
+        return (
+          <Group title="Turo handoff" footer={t.kind === "deliver"
+            ? "You drive it there at least an hour before pickup. It ends on its own when the trip starts."
+            : "Next buses and trains refresh every 2\u00a0minutes. It ends on its own when the car leaves the spot, or 2\u00a0hours after you were due there."}>
+            <Row label={t.title ?? "Turo handoff"} detail={<>{t.line}{old ? " · may be out of date" : ""}{t.test ? " · test" : ""}</>}>
+              <button type="button" className={cn(btn, "px-3 text-[14px]")} disabled={gone}
+                onClick={() => act({ tripDismiss: { id, at: Date.now() } }, "Dismissed on the wall and your phone.")}>
+                <Car className="h-4 w-4 shrink-0" aria-hidden /> {gone ? "Dismissed" : "Dismiss"}
+              </button>
+            </Row>
           </Group>
         );
       })()}
