@@ -64,7 +64,7 @@ export function TuroMini() {
             label="Battery"
             value={<>{w.battery ?? "–"}%{w.range ? <span className="ml-1 text-[13px] font-normal text-white/60">{Math.round(w.range)} mi</span> : null}</>}
             detail={charging
-              ? <><BatteryIcon pct={w.battery} className="h-3.5 w-3.5 shrink-0" />{w.charging}</>
+              ? <><BatteryIcon pct={w.battery} charging className="h-3.5 w-3.5 shrink-0" />{w.charging}</>
               : w.locked === false
                 ? <><LockOpen className={cn("h-3.5 w-3.5 shrink-0", tint.orange)} aria-hidden /><span className={tint.orange}>Unlocked</span></>
                 : <><Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />Locked</>}

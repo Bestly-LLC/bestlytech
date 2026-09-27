@@ -40,7 +40,7 @@ function BatteryRing({ h }: { h: Health }) {
   const col = pct <= 20 ? "#FF453A" : pct <= 50 ? "#FFD60A" : "#30D158";
   return (
     <Tile>
-      <Label icon={(p) => <BatteryIcon pct={h.pct} {...p} />}>Battery</Label>
+      <Label icon={(p) => <BatteryIcon pct={h.pct} charging={!!h.charging} {...p} />}>Battery</Label>
       <div className="mt-2 flex items-center gap-4">
         <div className="relative h-[88px] w-[88px] shrink-0">
           <svg viewBox="0 0 88 88" className="h-full w-full -rotate-90">

@@ -137,7 +137,7 @@ export function CarHealth() {
         <button type="button" onClick={() => void check()} disabled={!!busy} className={small}>{busy === "check" ? <><Loader2 className="animate-spin" aria-hidden />Checking…</> : <><RefreshCw aria-hidden />Check now</>}</button>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-        <Tile icon={<BatteryIcon pct={h.battery} className="h-4 w-4" />} k="Battery" v={h.battery != null ? `${h.battery}%${h.range ? ` · ${Math.round(h.range)} mi` : ""}` : "?"} sub={h.charging && h.charging !== "Disconnected" ? h.charging : h.plugged_in ? "Plugged in" : "Not plugged in"} />
+        <Tile icon={<BatteryIcon pct={h.battery} charging={h.charging === "Charging" || h.charging === "Starting"} className="h-4 w-4" />} k="Battery" v={h.battery != null ? `${h.battery}%${h.range ? ` · ${Math.round(h.range)} mi` : ""}` : "?"} sub={h.charging && h.charging !== "Disconnected" ? h.charging : h.plugged_in ? "Plugged in" : "Not plugged in"} />
         <Tile icon={h.locked ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />} k="Doors" v={h.locked == null ? "?" : h.locked ? "Locked" : "Unlocked"} bad={h.locked === false} sub={h.online ?? ""} />
         <Tile
           icon={<Gauge className="h-4 w-4" />}

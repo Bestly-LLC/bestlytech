@@ -13,7 +13,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  AlertTriangle, BatteryMedium, CalendarClock, Car, CheckCircle2, ChevronRight, ExternalLink,
+  AlertTriangle, BatteryCharging, BatteryMedium, CalendarClock, Car, CheckCircle2, ChevronRight, ExternalLink,
   Gauge, Lock, MapPin, Plane, Thermometer, Unlock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -273,7 +273,7 @@ export function FleetNow({ trips, vehicle, guest, returnAt }: {
               </div>
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
                 {vehicle.plugged_in
-                  ? <Flag tone="ok" icon={BatteryMedium}>{vehicle.charging_state ?? "Plugged in"}</Flag>
+                  ? <Flag tone="ok" icon={vehicle.charging_state === "Charging" || vehicle.charging_state === "Starting" ? BatteryCharging : BatteryMedium}>{vehicle.charging_state ?? "Plugged in"}</Flag>
                   : needsCharge
                     ? <Flag tone="warn" icon={BatteryMedium}>{`Under ${READY_PCT}% for handoff`}</Flag>
                     : <Flag tone="ok" icon={CheckCircle2}>Ready to hand off</Flag>}
