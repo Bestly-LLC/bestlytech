@@ -878,7 +878,7 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
   const queue = ((today ?? []) as any[]).slice(0, 12).map((q) => `- [${q.key}] rank ${q.rank} ${q.title}${q.detail ? `: ${String(q.detail).slice(0, 140)}` : ""}`).join("\n");
 
   const yesRule = autopilot
-    ? "Jared is NOT here (the fix ladder sent you). Use read tools and do only what needs no yes. Anything that needs his yes: don't call it, say it in your last line."
+    ? "Jared is NOT here (the fix ladder sent you). FIRST check it is still happening right now (a scheduled job: SELECT status, return_message, start_time FROM cron.job_run_details d JOIN cron.job j USING (jobid) WHERE j.jobname='<name>' ORDER BY start_time DESC LIMIT 3; anything else: the incidents tool or the table it watches). If it has stopped, say so with the evidence and end FIXED: already clear. Use read tools and do only what needs no yes. Anything that needs his yes: don't call it, say it in your last line."
     : saidYes
       ? "His latest message is a yes: set confirmed:true on the one action he agreed to."
       : autoRunOn
