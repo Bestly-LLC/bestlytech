@@ -33,7 +33,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
 };
 type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
@@ -572,6 +572,14 @@ export default function Wall() {
           <Switch id="wall-air" checked={s.airShow !== false} onCheckedChange={(v) => change({ airShow: v })} />
         </Row>
         {s.airShow !== false && <>
+          <Row label="Nearest-plane card" detail="The big frosted card that names the closest aircraft." htmlFor="wall-air-card">
+            <Switch id="wall-air-card" checked={s.airCard !== false} onCheckedChange={(v) => change({ airCard: v })} />
+          </Row>
+          {s.airCard !== false && (
+            <Row label="Helicopters in the card" detail="Off: helicopters (like LAPD circling) never take the big card. They still fly across the sky." htmlFor="wall-air-card-heli">
+              <Switch id="wall-air-card-heli" checked={s.airCardHeli !== false} onCheckedChange={(v) => change({ airCardHeli: v })} />
+            </Row>
+          )}
           <Row label="Plane labels" detail="Name tags next to each plane and helicopter. The big nearest-plane card stays." htmlFor="wall-air-labels">
             <Switch id="wall-air-labels" checked={s.airLabels !== false} onCheckedChange={(v) => change({ airLabels: v })} />
           </Row>

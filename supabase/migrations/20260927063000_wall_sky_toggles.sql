@@ -41,3 +41,14 @@ begin
   end loop;
   return out;
 end $$;
+
+-- 2026-09-27: nearest-plane card on/off and helicopters-in-card switches.
+create or replace function public.wall_clean_toggles(p jsonb)
+returns jsonb language plpgsql immutable set search_path to 'public' as $$
+declare out jsonb := '{}'::jsonb; k text;
+begin
+  foreach k in array array['skyStars','skyMoon','skySun','skyPlanets','airLabels','airCard','airCardHeli'] loop
+    if jsonb_typeof(p->k) = 'boolean' then out := out || jsonb_build_object(k, p->k); end if;
+  end loop;
+  return out;
+end $$;
