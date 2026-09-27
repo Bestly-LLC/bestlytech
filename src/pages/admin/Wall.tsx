@@ -20,7 +20,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { ProjectorHealth, type Health } from "@/components/admin/ProjectorHealth";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull } from "lucide-react";
 
 type Pt = [number, number];
 type Mode = "auto" | "board" | "ambient" | "demo" | "off";
@@ -31,7 +31,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit"; at: number } | null; volume?: number | null; airplay?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: "halloween" | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
   heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
@@ -487,6 +487,17 @@ export default function Wall() {
             <Clapperboard className="h-4 w-4" aria-hidden /> Play the skit
           </button>
         </div>
+        <div className="grid gap-2 border-t border-white/10 px-4 py-3 sm:grid-cols-2">
+          <button type="button" className={cn(btn, "w-full")} onClick={() => change({ tour: { cmd: "hshow", at: Date.now() } })}>
+            <Ghost className="h-4 w-4" aria-hidden /> Halloween show
+          </button>
+          <button type="button" className={cn(btn, "w-full")} onClick={() => change({ tour: { cmd: "hparty", at: Date.now() } })}>
+            <Skull className="h-4 w-4" aria-hidden /> Halloween party
+          </button>
+        </div>
+        <Row htmlFor="wall-halloween" label="Halloween theme" detail="Orange clock, cobweb, dangling spider, jack-o'-lantern, bats and a countdown to October 31.">
+          <Switch id="wall-halloween" checked={s.theme === "halloween"} onCheckedChange={(v) => change({ theme: v ? "halloween" : null })} />
+        </Row>
       </Group>
 
       {/* AirPlay: the Pi is an AirPlay receiver ("Bestly Wall"); video plays where the clock and today are. */}
