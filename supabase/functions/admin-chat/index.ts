@@ -1487,7 +1487,8 @@ Deno.serve(async (req) => {
         // Paid AI is offered only when free can't finish; a free STUCK keeps its diagnosis and adds the paid offer.
         const agent = await freeAgent(threadId, text, body.page, { autopilot: true }).catch(() => ({ why: "", tools: [] as string[] }) as { answer?: string; why: string; tools?: string[]; note?: string });
         if (agent.answer && !/^STUCK:/m.test(agent.answer)) return await say(agent.answer, { free: true, tools: agent.tools ?? [] });
-        const diag = agent.answer ? agent.answer.replace(/^STUCK:.*$/m, "").trim() + "\n"
+        // Keep what the free AI found (its STUCK line becomes a plain note), then the one-tap paid offer as the verdict.
+        const diag = agent.answer ? agent.answer.replace(/^STUCK:\s*/m, "Free AI is stuck: ").trim() + "\n"
           : agent.note ? `The free AI looked (${(agent.tools ?? []).length} checks) and handed off: ${agent.note}\n` : "";
         return await say(`${diag}NEEDS_YES: Let Scout work on this with paid AI (Claude). It costs a few cents.`, { paid_needed: true, tools: agent.tools ?? [] });
       } else {
