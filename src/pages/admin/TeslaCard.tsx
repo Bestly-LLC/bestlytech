@@ -47,6 +47,9 @@ export function TeslaCard() {
   };
   // Admin test: queue a command, wait for the Mac mini helper to finish it.
   const [testing, setTesting] = useState<string | null>(null);
+  // Cool / Off: TezLab first, Tesla worker as backup; both now confirm the car really changed before saying Done.
+  // Read the car: a live Tesla read (never wakes it). Errors come back in plain words (e.g. Low Power Mode is on).
+  const TITLES = { cool: "Couldn't cool it down", off: "Couldn't turn the A/C off", refresh: "Couldn't read the car" } as const;
   const test = async (action: "cool" | "off" | "refresh") => {
     setTesting(action);
     try {
@@ -56,12 +59,23 @@ export function TeslaCard() {
       for (let i = 0; i < 40; i++) {
         await new Promise((r) => setTimeout(r, 3000));
         const { data: j } = await rpc("tesla_admin_job", { p_id: id });
-        const job = j as { status: string; result?: { error?: string; msg?: string } } | null;
-        if (job?.status === "done") { toast.success(job.result?.msg === "car is asleep" ? "Car is asleep (didn't wake it for a read)" : "Done"); load(); return; }
-        if (job?.status === "failed") throw new Error(job.result?.error ?? "failed");
+        const job = j as { status: string; result?: { error?: string; msg?: string; climate_on?: boolean | null } } | null;
+        if (job?.status === "done") {
+          const { data: s } = await rpc("tesla_fleet_admin_state");
+          const next = s as TState | null;
+          if (next) setSt(next);
+          const c = next?.car;
+          const temp = c?.inside_f != null ? `Inside ${c.inside_f}°F` : undefined;
+          if (action === "refresh") {
+            if (job.result?.msg === "car is asleep") toast.success("The car is asleep", { description: "It wasn't woken up, so this is the last reading." });
+            else toast.success("Read the car", { description: c ? `${c.battery ?? "?"}% · ${temp ?? "no temperature"}` : undefined });
+          } else toast.success(action === "cool" ? "A/C is on (68°F, turns off in 20 min)" : "A/C is off", { description: temp });
+          return;
+        }
+        if (job?.status === "failed") throw new Error(job.result?.error ?? "The car didn't answer.");
       }
-      throw new Error("No answer after 2 minutes. Is the Mac mini helper running?");
-    } catch (e) { toast.error("Tesla test failed", { description: (e as Error).message }); load(); }
+      throw new Error("No answer after 2 minutes. The Mac mini helper may be offline.");
+    } catch (e) { toast.error(TITLES[action], { description: (e as Error).message, duration: 12000 }); load(); }
     finally { setTesting(null); }
   };
   const setEnabled = async (on: boolean) => {

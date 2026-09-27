@@ -10,6 +10,10 @@
 //   POST {op:"job", id}          (from the DB trigger) → runs one queued guest command
 // If TezLab fails, the job goes back to the queue for the Mac mini worker (Tesla Fleet API) and Scout is told.
 //
+// v15 (2026-09-27): a car REFUSAL (TezLab says "car could not execute command: <reason>", e.g. low_power_mode_low_soc)
+//      is the car's answer, not a TezLab failure: fail the job in plain words instead of falling back to the Tesla
+//      worker (which gets the same refusal 20 s later). Climate jobs also confirm the car really changed
+//      (climate.active) before calling it done. toState passes TezLab's own reading time (observed_at).
 // v14: merges the car-protection jobs (lost when v13 was deployed over them): 'caps' (TezLab command list),
 //      'drives' (drives with top speed → car_drives, for speed alerts), 'cmd' (server-made TezLab commands: Sentry,
 //      charge start, erase guest data), and refresh stores TezLab's full status (car_raw_store) for windows/Sentry.
@@ -55,6 +59,15 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** TezLab's side is broken (5xx, unreachable, or rejecting tokens it just issued). Nothing to reconnect. */
 class TezLabDown extends Error { constructor(m: string) { super(m); this.name = "TezLabDown"; } }
 const isDown = (e: unknown) => e instanceof TezLabDown || /^TezLabDown/.test(String(e));
+/** The car answered and said no. Not TezLab's problem and the Tesla backup would get the same answer. */
+class CarRefused extends Error { constructor(m: string) { super(m); this.name = "CarRefused"; } }
+const REFUSALS: Record<string, string> = {
+  low_power_mode_low_soc: "The car is in Low Power Mode, so it won't run the A/C remotely. Turn it off on the car's screen (Controls > Charging > Low Power Mode) or in the Tesla app, then try again.",
+  vehicle_busy: "The car was busy with something else. Try again in a minute.",
+  user_present: "Someone is in the car, so it won't take a remote command.",
+};
+const refusalOf = (e: unknown) => /car could not execute command:\s*([a-z0-9_]+)/i.exec(String(e))?.[1]?.toLowerCase() ?? null;
+const refusalText = (r: string) => REFUSALS[r] ?? `The car said no (${r.replace(/_/g, " ")}). Try again in a minute.`;
 const DOWN_MSG = (what: string) => `TezLab's servers are down (${what}). That's on TezLab's side, nothing to reconnect; the Tesla backup covers until they're back.`;
 
 async function isAdmin(req: Request) {
@@ -198,6 +211,7 @@ function toState(v: any) {
     doors: v.doors ? { locked: v.doors.locked ?? null, front_trunk_open: v.doors.front_trunk_open ?? null, rear_trunk_open: v.doors.rear_trunk_open ?? null } : null,
     charge: chargeDetail(v.charging),
     online: v.connection_state === "online" ? "online" : "offline",
+    observed_at: typeof v.last_updated === "string" ? v.last_updated : null,
   };
 }
 
@@ -339,17 +353,35 @@ async function runJob(id: number) {
       let last: unknown = null;
       for (let a = 0; a < 3; a++) {
         try { await tool("send_vehicle_command", { vin, command: s.cmd, ...(s.args ?? {}) }); last = null; break; }
-        catch (e) { last = e; if (isDown(e)) break; await sleep(4000); }
+        catch (e) { last = e; if (isDown(e)) break; const r = refusalOf(e); if (r && r !== "vehicle_busy") { last = new CarRefused(r); break; } await sleep(4000); }
       }
       if (last) throw last;
     }
     await sb.rpc("tezlab_job_stage", { p_id: id, p_stage: "Done, checking the car" });
-    await sleep(2500);
-    const v = await tool("get_vehicle_status", { vin }).catch(() => null);
-    await sb.rpc("tesla_job_done", { p_id: id, p_ok: true, p_result: { ok: true, msg: job.action, via: "tezlab" }, p_state: toState(v) });
+    // Climate: TezLab's status is cached, so give it a few looks before deciding the car ignored us.
+    const want = ["cool", "warm", "seat"].includes(job.action) ? true : job.action === "off" ? false : null;
+    // deno-lint-ignore no-explicit-any
+    let v: any = null;
+    for (let i = 0; i < (want === null ? 1 : 4); i++) {
+      await sleep(i === 0 ? 2500 : 4000);
+      v = await tool("get_vehicle_status", { vin }).catch(() => null);
+      if (want === null || v?.climate?.active === want) break;
+    }
+    if (want !== null && typeof v?.climate?.active === "boolean" && v.climate.active !== want) {
+      // TezLab's cache can lag; don't call it failed on TezLab alone. Hand it to the Tesla worker, which reads the car live.
+      throw new Error(`climate still ${want ? "off" : "on"} after the command (TezLab reading ${v?.last_updated ?? "?"})`);
+    }
+    await sb.rpc("tesla_job_done", { p_id: id, p_ok: true, p_result: { ok: true, msg: job.action, via: "tezlab", climate_on: v?.climate?.active ?? null }, p_state: toState(v) });
     await sb.rpc("tezlab_ok");
     return { ok: true };
   } catch (e) {
+    const refused = e instanceof CarRefused ? e.message : refusalOf(e);
+    if (refused && refused !== "vehicle_busy") {
+      console.warn(`tezlab job ${id} ${job.action}: car refused (${refused})`);
+      await sb.rpc("tesla_job_done", { p_id: id, p_ok: false, p_result: { ok: false, via: "tezlab", car_reason: refused, error: refusalText(refused) }, p_state: null });
+      await sb.rpc("tezlab_ok");
+      return { ok: false, refused };
+    }
     const down = isDown(e);
     if (down) await markDown(e, `job ${id} ${job.action}`);
     else console.warn(`tezlab job ${id} ${job.action} failed: ${String(e).slice(0, 300)}`);

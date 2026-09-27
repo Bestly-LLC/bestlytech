@@ -21,7 +21,7 @@ const GROUPS: { id: string; label: string; kinds: string[]; icon: typeof Gauge; 
   { id: "speed", label: "Speeding", kinds: ["speed"], icon: Gauge, about: "Any drive over 90 mph, with the guest, top speed and where." },
   { id: "where", label: "Left LA or California", kinds: ["left_la", "left_ca"], icon: MapPin, about: "The car went more than 60 miles from LA, or crossed the state line." },
   { id: "border", label: "Mexico / Canada border", kinds: ["border_me", "border_ca"], icon: TriangleAlert, about: "Red if the car looks to be in Mexico or Canada (not allowed or covered on Turo); yellow within about 10 miles of either border. Also pings your phone." },
-  { id: "moved", label: "Moved with no trip", kinds: ["moved_no_trip"], icon: TriangleAlert, about: "The car moved when no one had it booked." },
+  { id: "moved", label: "Moved with no trip", kinds: ["moved_no_trip", "owner_drive"], icon: TriangleAlert, about: "The car moved when no one had it booked. No alert when it's clearly you: only your key is on the car and your phone moved with it, or you're driving it back from the LAX garage after a trip (those show here as grey \u201clooks like you\u201d rows with the reason). Any doubt, it alerts and says why." },
   { id: "tires", label: "Tire pressure", kinds: ["tires"], icon: Thermometer, about: "Red under 38 psi, yellow when a tire is getting close (under 40) or two tires differ." },
   { id: "fixes", label: "Windows & locks", kinds: ["autofix_windows", "autofix_lock"], icon: Lock, about: "Windows closed automatically anywhere; locked automatically only at N Kings Rd or the LAX garage." },
   { id: "sentry", label: "Sentry", kinds: ["sentry_on", "sentry_off"], icon: ShieldCheck, about: "Sentry turns on between trips and off during trips." },

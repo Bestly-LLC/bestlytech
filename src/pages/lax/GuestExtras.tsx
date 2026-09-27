@@ -557,6 +557,11 @@ function ClimateOn({ mode, until, onOff, busy, stoppedAt, auto }: { mode: string
   );
 }
 
+/** This device has the host's demo pass (same key as demo.tsx), so the demo page's A/C buttons are real. */
+function hostDemo(): boolean {
+  try { return !!localStorage.getItem("bestly-demo-dk"); } catch { return false; }
+}
+
 /** Climate buttons. Only the ones that make sense for the temperature right now (72° is the goal); "More" shows the rest. */
 function ClimateControls({ demo, onAction, compact = false, lockedUntil, car, outsideF }: { demo: boolean; onAction?: (a: ClimateAction, onStage?: (s: string) => void) => Promise<void>; compact?: boolean; lockedUntil?: string | null; car?: CarState | null; outsideF?: number | null }) {
   const [busy, setBusy] = useState<ClimateAction | null>(null);
@@ -598,14 +603,16 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car, ou
     const was = running;
     setBusy(id); setDone(null); setStage("Sending your request");
     try {
-      if (demo || !onAction) {
-        await new Promise((r) => setTimeout(r, 900));
-        setDemoOn(id === "off" ? null : { mode: id, until: new Date(Date.now() + CLIMATE_MINUTES * 60000).toISOString() });
-      } else await onAction(id, setStage);
+      // The demo page passes onAction too: for the host it drives the real car, for everyone else it pretends.
+      if (onAction) await onAction(id, setStage);
+      else await new Promise((r) => setTimeout(r, 900));
+      if (demo) setDemoOn(id === "off" ? null : { mode: id, until: new Date(Date.now() + CLIMATE_MINUTES * 60000).toISOString() });
       if (id === "off" && was) { shownFor.current = was.until; setStopped({ ...was, at: Date.now(), auto: false }); lastSession.current = null; }
       setDone(id === "off" ? "Climate is off." : null);
     } catch (e) {
-      setDone(`Couldn't reach the car. ${(e as Error).message ?? ""}`.trim());
+      // The server sends plain words (e.g. the car is in Low Power Mode); only fall back to a generic line.
+      const msg = ((e as Error).message ?? "").trim();
+      setDone(`Couldn't ${id === "off" ? "turn it off" : "start it"}. ${msg || "The car didn't answer. Try again in a minute."}`);
     } finally { setBusy(null); setStage(null); }
   };
 
@@ -649,7 +656,7 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car, ou
         {busy ? <>{stage ?? "Working"}… <span className="tabular-nums text-white/65">{secs}s</span>{stage === "Waking up the car" && <span className="block text-white/65">Can take up to a minute.</span>}</> : done}
       </p>
       <p className="text-[11px] leading-snug text-white/65">
-        {demo ? "Demo: nothing is sent to the car."
+        {demo ? (hostDemo() ? "Host demo: these buttons run Blue Steel's A/C for real (never while a guest has it)." : "Demo: nothing is sent to the car.")
           : lockedUntil === "pending" ? "Turns on when your Tesla phone key is connected, or 1 hour before pickup."
           : lockedUntil ? <>Turns on <b className="text-white/80">{fmtWhen(lockedUntil)}</b>, or as soon as your phone key is connected.</>
           : null}

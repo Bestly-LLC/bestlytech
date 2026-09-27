@@ -30,3 +30,20 @@ The window keys are deliberately flat: `car_raw_find` matches on key name, so `f
 and a nested `windows: {fd: 0}` would not be. Any result carrying a window key is filed into
 `car_status_raw` row 2 (the Fleet source) by `trg_car_raw_from_command`, which is what makes
 `car_windows_open()` answer true or false instead of null.
+
+## 1.8.1 (2026-09-27): a refused command is a failure, in plain words
+
+Tesla's signed commands come back as `{"response": {"result": false, "reason": "..."}}` instead of
+raising when the car says no. Up to 1.8.0 the worker ignored that, so "Cool it down" answered Done
+while the A/C stayed off. Now:
+
+- every step's reply goes through `check_reply()`; `result: false` raises `CarSaidNo(reason)` and
+  the job fails with `plain_reason()` text (`REASONS` map). Only `vehicle_busy` / `Too many retries`
+  are retried.
+- cool / warm / seat / off re-read the car (up to 4 looks, ~14 s) and fail if `climate_on` did not
+  change ("The car said OK, but the A/C didn't come on").
+- seen live: `low_power_mode_low_soc` = the car's Low Power Mode is on (Controls > Charging > Low
+  Power Mode). It blocks remote climate on every path (TezLab too). Scout incident
+  `car.climate_blocked` opens on a refusal and resolves on the next climate command that works.
+
+`min_worker_version` = 1.8.1. Backup of 1.8.0: `worker.py.bak-1.8.0`.

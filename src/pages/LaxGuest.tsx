@@ -37,7 +37,7 @@ import { BestlyAd } from "./lax/BestlyAd";
 import { PhoneHandoff } from "./lax/PhoneHandoff";
 import { UnlockStart } from "./lax/Valet";
 import { renderPassImage } from "./lax/passImage";
-import { DemoBar, demoKind, demoPub, isDemo, useDemoStage, useDemoWeather, useRealDemoKey } from "./lax/demo";
+import { DemoBar, demoKind, demoPass, demoPub, isDemo, useDemoStage, useDemoWeather, useRealDemoKey } from "./lax/demo";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
 type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
@@ -275,7 +275,29 @@ export default function LaxGuest() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, slug]);
   const carCommand = async (action: CarAction, onStage?: (s: string) => void) => {
-    if (demo) { onStage?.("Demo: nothing is sent to the car"); await new Promise((r) => setTimeout(r, 1200)); return; }
+    if (demo) {
+      // Host on the demo page (signed in, or the host link's pass): the A/C buttons drive Blue Steel for real, unless a
+      // guest has it. Everyone else gets the pretend version (the server answers null for them).
+      if (["cool", "warm", "seat", "off"].includes(action)) {
+        const { data } = await rpc("demo_car_command", { p_pass: demoPass(), p_action: action });
+        const r = data as { ok: boolean; id?: number; error?: string } | null;
+        if (r) {
+          if (!r.ok) throw new Error(r.error ?? "Couldn't reach the car");
+          if (!r.id) return;
+          onStage?.("Sending to Blue Steel");
+          for (let i = 0; i < 45; i++) {
+            await new Promise((res) => setTimeout(res, 2000));
+            const { data: j } = await rpc("demo_car_job", { p_pass: demoPass(), p_id: r.id });
+            const job = j as { status: string; stage?: string | null; result?: { error?: string } } | null;
+            if (job?.stage) onStage?.(job.stage);
+            if (job?.status === "done") return;
+            if (job?.status === "failed") throw new Error(job.result?.error ?? "The car didn't respond");
+          }
+          throw new Error("The car is taking a while. Try again in a minute.");
+        }
+      }
+      onStage?.("Demo: nothing is sent to the car"); await new Promise((r) => setTimeout(r, 1200)); return;
+    }
     // Supercharger: the one closest to where the car is now (falls back to the fixed nearby one if Tesla can't list sites).
     if (token && (action === "nav_charger" || action === "nav_charger_lax")) {
       const name = await sendNearestSupercharger(token, onStage);
