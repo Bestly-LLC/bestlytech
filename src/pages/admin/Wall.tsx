@@ -20,7 +20,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar,
-  Focus, Plane, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff,
+  Focus, Maximize2, Minimize2, Plane, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff,
 } from "lucide-react";
 
 type Pt = [number, number];
@@ -238,6 +238,17 @@ export default function Wall() {
   const nudge = (dx: number, dy: number) => {
     const px = fine ? 1 : 10;
     move(sel, (dx * px) / 1920, (dy * px) / 1080, "now");
+  };
+
+  /** Resize the strip without changing its shape: scale all 4 corners around their center. */
+  const scale = (grow: boolean) => {
+    const c = S.current?.corners; if (!c) return;
+    const step = fine ? 0.01 : 0.04;
+    const f = grow ? 1 + step : 1 / (1 + step);
+    const cx = c.reduce((a, p) => a + p[0], 0) / c.length;
+    const cy = c.reduce((a, p) => a + p[1], 0) / c.length;
+    const clamp = (v: number) => Math.min(1.5, Math.max(-0.5, v));
+    change({ corners: c.map(([x, y]) => [clamp(cx + (x - cx) * f), clamp(cy + (y - cy) * f)] as Pt) });
   };
 
   const addMask = () => {
@@ -469,9 +480,19 @@ export default function Wall() {
               <Segmented label="Drag precision" value={fine ? "fine" : "fast"} onChange={(v) => setFine(v === "fine")}
                 options={[{ id: "fine", label: "Precise" }, { id: "fast", label: "Fast" }]} />
               {tool === "corners" ? (
-                <button type="button" className={cn(btn, "w-full")} onClick={() => change({ corners: DEFAULT_CORNERS })}>
-                  <RotateCcw className="h-4 w-4" aria-hidden /> Reset corners
-                </button>
+                <>
+                  <div className="flex gap-2" role="group" aria-label="Resize the strip, same shape">
+                    <button type="button" className={cn(btn, "flex-1")} onClick={() => scale(false)}>
+                      <Minimize2 className="h-4 w-4" aria-hidden /> Smaller
+                    </button>
+                    <button type="button" className={cn(btn, "flex-1")} onClick={() => scale(true)}>
+                      <Maximize2 className="h-4 w-4" aria-hidden /> Bigger
+                    </button>
+                  </div>
+                  <button type="button" className={cn(btn, "w-full")} onClick={() => change({ corners: DEFAULT_CORNERS })}>
+                    <RotateCcw className="h-4 w-4" aria-hidden /> Reset corners
+                  </button>
+                </>
               ) : (
                 <div className="flex gap-2">
                   {s.mask && s.mask.length < 6 && (
