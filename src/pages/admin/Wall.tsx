@@ -19,10 +19,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { ProjectorHealth, type Health } from "@/components/admin/ProjectorHealth";
 import { Switch } from "@/components/ui/switch";
-import {
-  AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar,
-  Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff,
-} from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation } from "lucide-react";
 
 type Pt = [number, number];
 type Mode = "auto" | "board" | "ambient" | "demo" | "off";
@@ -33,7 +30,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop"; at: number } | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
   sleepShow?: { at: number; mins: number; music?: boolean } | null;
 };
@@ -598,6 +595,21 @@ export default function Wall() {
       </Group>
 
       {/* Layout */}
+      {/* Show for friends: a ~2 minute tour of the wall, then a party loop until you stop it (45 min max). */}
+      <Group title="Show for friends" footer="About 2 minutes of tour, then the party keeps going until you stop it (45 minutes max). Music plays 7 AM to 11 PM when wall sound is on; at night it's lights only.">
+        <div className="grid gap-2 px-4 py-3 sm:grid-cols-3">
+          <button type="button" className={cn(btn, "w-full")} onClick={() => change({ tour: { cmd: "play", at: Date.now() } })}>
+            <Presentation className="h-4 w-4" aria-hidden /> Play the show
+          </button>
+          <button type="button" className={cn(btn, "w-full")} onClick={() => change({ tour: { cmd: "party", at: Date.now() } })}>
+            <PartyPopper className="h-4 w-4" aria-hidden /> Party only
+          </button>
+          <button type="button" className={cn(btn, "w-full")} onClick={() => change({ tour: { cmd: "stop", at: Date.now() } })}>
+            <Square className="h-4 w-4" aria-hidden /> Stop
+          </button>
+        </div>
+      </Group>
+
       <Group title="Layout"
         footer={tool === "air"
           ? "The violet box is the sky: live planes and helicopters overhead fly across it. Put it on the open wall above the strip."
