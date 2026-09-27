@@ -49,6 +49,7 @@ type PiStatus = {
   status?: string; top?: string; cpu_c?: number | null; heartbeat_age_s?: number | null;
   override?: { on: boolean; until: number } | null; restarts_1h?: number; sync_age_s?: number | null;
   health?: Health | null;
+  page_mode?: string | null; dark_30m?: number; last_dark?: { at: number; why: string } | null;
 };
 type Remote = {
   state: WallState; version: number; channel: string; power: { on?: boolean; seq: number; at?: string };
@@ -347,14 +348,24 @@ export default function Wall() {
     if (txt.startsWith("unreachable")) return { tone: "bad", icon: WifiOff, title: "Projector is offline", sub: "Check it's plugged in and on Wi-Fi." };
     if (txt === "asleep") return { tone: "idle", icon: MoonStar, title: "Projector is asleep", sub: "It wakes at 7 AM. Tap Wake to turn it on now." };
     if (txt.startsWith("in use")) return { tone: "warn", icon: Projector, title: "Projector is showing another app", sub: `${txt.replace("in use: ", "")} is open. The wall comes back when you go to the home screen.` };
+    // The Pi reports once a minute. A report older than 2.5 minutes can't vouch for what's on the wall now.
+    if (statusAge != null && statusAge > 150) {
+      return { tone: "warn", icon: AlertTriangle, title: "Can't confirm the wall right now", sub: `The Pi's last wall check was ${agoText(statusAge)}. It may be busy or offline.` };
+    }
     if (txt === "ok") {
-      const pageOk = (st?.heartbeat_age_s ?? 999) < 90;
-      return pageOk
-        ? { tone: "ok", icon: CheckCircle2, title: "On the wall", sub: `Page live${st?.cpu_c != null ? ` · projector ${toF(st.cpu_c)}°F` : ""}` }
-        : { tone: "warn", icon: AlertTriangle, title: "Wall page isn't responding", sub: "The watchdog restarts it within a minute." };
+      // How old the page's heartbeat is *now*, not when the Pi looked.
+      const beatAge = (st?.heartbeat_age_s ?? 999) + (statusAge ?? 0);
+      const pageOk = beatAge < 120;   // beats every 30 s + up to a minute between Pi reports
+      const dark = st?.last_dark && Date.now() / 1000 - st.last_dark.at < 30 * 60 ? st.last_dark : null;
+      const darkWhen = dark ? new Date(dark.at * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }) : "";
+      if (!pageOk) return { tone: "bad", icon: AlertTriangle, title: "The wall isn't showing", sub: "The page stopped checking in. The watchdog restarts it within a minute." };
+      if (st?.page_mode === "off") return { tone: "idle", icon: MoonStar, title: "The wall is dark (Off)", sub: "The projector is on but the wall is set to Off. Pick Board or Auto to bring it back." };
+      if ((st?.dark_30m ?? 0) >= 2) return { tone: "warn", icon: AlertTriangle, title: "The wall keeps going dark", sub: `${st?.dark_30m} times in 30 minutes, latest at ${darkWhen} (${dark?.why}). It's back now; Scout was alerted.` };
+      return { tone: "ok", icon: CheckCircle2, title: "On the wall",
+        sub: dark ? `Went dark at ${darkWhen} (${dark.why}), back on its own.` : `Showing now${st?.cpu_c != null ? ` · projector ${toF(st.cpu_c)}°F` : ""}` };
     }
     return { tone: "idle", icon: Loader2, title: "Checking…", sub: "" };
-  }, [r, s?.away, piOnline, pullAge, st]);
+  }, [r, s?.away, piOnline, pullAge, st, statusAge]);
 
   const toneRing = { ok: "ring-emerald-400/30 bg-emerald-400/[0.06]", warn: "ring-amber-400/30 bg-amber-400/[0.06]", bad: "ring-red-400/35 bg-red-400/[0.07]", idle: "ring-white/10 bg-white/[0.04]" } as const;
   const toneIcon = { ok: "text-emerald-400", warn: "text-amber-400", bad: "text-red-400", idle: "text-white/60" } as const;
@@ -363,7 +374,7 @@ export default function Wall() {
     ? { dot: "bg-red-400", text: "Pi offline" }
     : pending > 0
       ? { dot: "bg-amber-400 animate-pulse", text: "Saving…" }
-      : { dot: "bg-emerald-400", text: "Live" };
+      : { dot: "bg-emerald-400", text: "Synced" };
 
   if (!r || !s) {
     return (
