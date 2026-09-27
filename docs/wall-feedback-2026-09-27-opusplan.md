@@ -56,10 +56,10 @@ Status legend: [ ] todo · [x] done · [~] partial / needs Jared
 - [x] D4 Start/stop meeting buttons missing on desktop — iCloud Desktop moved both apps into "Desktop - Jared's Mac mini"; moved back to ~/Desktop, agent 1.7.0 finds them anywhere + alerts Scout if missing.
 
 ## E. Sign page (bestly.tech/sign) — one worker
-- [ ] E1 Access only from the NFC coasters (tag token in the URL; plain visits get "tap a coaster").
-- [ ] E2 Landscape only; portrait shows "turn your phone".
-- [ ] E3 Take-home badge (Kings Road × WeHo, not Bestly-branded): download + email to self.
-- [ ] E4 One emoji per guest, unique across the board (taken = pick another or make your own); Scout places it.
+- [x] E1 Access only from the NFC coasters (tag token in the URL; plain visits get "tap a coaster"). Codes in `wall_sign_tags` (6 coasters + spare, revocable), `wall_sign_open` -> 20-min session, old bare /sign works until Sun Oct 4 11:59 PM then switches off (`wall_sign_config.legacy_until`). Jared: rewrite coasters with NFC Tools.
+- [x] E2 Landscape only; portrait shows an animated "turn your phone sideways" screen (state kept underneath).
+- [x] E3 Take-home badge (Kings Road × WeHo, not Bestly-branded): canvas PNG, Save (share sheet) / Download / email via edge fn `wall-badge-email` (Resend, logged in email_send_log, 2 per session).
+- [x] E4 One emoji per guest, unique across the board (taken = pick another or type any emoji / Surprise me); Scout places it (`wall_emoji_layout`), `wall_pi_emojis(p_token)`, realtime `emoji` + `emojis_changed`. Watchdog `wall_sign_watchdog` every 10 min.
 
 ## Rules for every worker
 12-hour times, US units, number never wraps from its unit, Apple HIG for UI, self-healing watchdog tied to Scout for anything new, secrets only in Supabase Vault, short guest links, backups before Pi edits (`*.bak_<tag>`), `node --check` on wall.html script, bump `wall_state.version` after wall changes, record decisions in `bestly_memory`, commit trailer per repo convention.

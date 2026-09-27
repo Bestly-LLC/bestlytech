@@ -102,3 +102,6 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.tesla-invoice]
     verify_jwt = false
+
+[functions.wall-badge-email]
+    verify_jwt = false
