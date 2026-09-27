@@ -806,9 +806,27 @@ const ASK_PAID_TOOL = {
   },
 };
 
-function freeToolDefs(autopilot: boolean) {
+/**
+ * Only the tools this conversation could use: every tool schema rides along on every step, and the free tiers are
+ * metered in tokens (Groq 8K/min and 200K/day per model, Cloudflare 10K Neurons/day). All 15 cost ~2K tokens a step.
+ */
+const TOOL_TOPICS: [string[], RegExp][] = [
+  [["pi_command"], /\b(pi|network|wi-?fi|router|internet|dns|pi-?hole|nextcloud|homebridge|home ?assistant|devices?|lan|ping|speed|coffee|spinn)\b/i],
+  [["mac_run"], /\b(mac|mini|script|job|terminal|launchd|restart|install|brew|git|build|worker|agent|log|logs)\b/i],
+  [["notify"], /\b(notify|push|remind|ping me|let me know|tell (me|eli))\b/i],
+  [["recorder", "meeting_transcript"], /\b(record|recording|recorder|call|meeting|debrief|transcript|notetaker|talk)\b/i],
+  [["todo_owner", "mark_done"], /\b(to-?dos?|tasks?|done|finish|mark|owner|assign|mine|eli'?s?)\b/i],
+  [["clear_alerts", "resolve_incident"], /\b(alerts?|incidents?|bell|resolve|clear|fixed|warning|notification)\b/i],
+  [["learn"], /\b(learn|remember|lesson|next time)\b/i],
+];
+const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file"]);
+
+function freeToolDefs(autopilot: boolean, convo: string) {
+  const want = new Set(ALWAYS_TOOLS);
+  if (autopilot) ["resolve_incident", "learn"].forEach((n) => want.add(n));   // the fix ladder closes and records its fixes
+  for (const [names, re] of TOOL_TOPICS) if (re.test(convo)) names.forEach((n) => want.add(n));
   return [
-    ...TOOLS.filter((t) => FREE_TOOLS.has(t.name) && !(autopilot && AUTOPILOT_NEVER.has(t.name))).map((t) => ({
+    ...TOOLS.filter((t) => FREE_TOOLS.has(t.name) && want.has(t.name) && !(autopilot && AUTOPILOT_NEVER.has(t.name))).map((t) => ({
       type: "function",
       function: { name: t.name, description: t.description.slice(0, 420), parameters: t.input_schema },
     })),
@@ -818,13 +836,13 @@ function freeToolDefs(autopilot: boolean) {
 
 type Msg = Record<string, any>;
 /** Keep the prompt under Groq's per-model 8K tokens/min: shrink older tool results first, newest two stay whole. */
-function trimForBudget(msgs: Msg[], maxTokens = 5200) {
+function trimForBudget(msgs: Msg[], maxTokens = 3800) {
   const est = () => Math.ceil(JSON.stringify(msgs).length / 3.5);
   const toolIdx = msgs.map((m, i) => (m.role === "tool" ? i : -1)).filter((i) => i >= 0);
   for (const i of toolIdx.slice(0, -2)) {
     if (est() <= maxTokens) return;
     const c = String(msgs[i].content ?? "");
-    if (c.length > 400) msgs[i].content = c.slice(0, 400) + "...(older result shortened)";
+    if (c.length > 300) msgs[i].content = c.slice(0, 300) + "...(older result shortened)";
   }
 }
 
@@ -834,7 +852,7 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
   const until = Date.now() + FREE_BUDGET_MS;
 
   const [{ data: hist }, { data: today }] = await Promise.all([
-    db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(12),
+    db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(10),
     db.rpc("admin_today"),
   ]);
   const saidYes = !autopilot && PLAIN_YES.test(text);
@@ -885,14 +903,14 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     .filter((m) => !(m.role === "assistant" && /^(I'd need paid AI|NEEDS_YES: Let Scout work on this with paid AI)/.test(String(m.body))));
   turns.forEach((m, i) => {
     const role = m.role === "assistant" ? "assistant" : "user";
-    const body = String(m.body ?? "").slice(0, i === turns.length - 1 ? 20_000 : 900) || "(empty)";
+    const body = String(m.body ?? "").slice(0, i === turns.length - 1 ? 20_000 : 700) || "(empty)";
     const last = msgs[msgs.length - 1];
     if (last.role === role) last.content += "\n\n" + body;
     else msgs.push({ role, content: body });
   });
   if (msgs[msgs.length - 1].role !== "user") msgs.push({ role: "user", content: text.slice(0, 20_000) });
 
-  const tools = freeToolDefs(autopilot);
+  const tools = freeToolDefs(autopilot, msgs.slice(1).map((m) => String(m.content ?? "")).join("\n").slice(-6000));
   const allowed = new Set(tools.map((t) => t.function.name));
   const used: string[] = [];
   let replied = false, acted = false, fails = 0, nudges = 0;
