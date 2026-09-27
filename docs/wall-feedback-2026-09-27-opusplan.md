@@ -20,19 +20,19 @@ Status legend: [ ] todo · [x] done · [~] partial / needs Jared
 **Plane-tags shortcut** — RPC `wall_quick_set(p_token, p_key, p_value)` (allow-listed keys only: airLabels, airLabelsSmall, airCardPin, leftDate, sound), called by Home Assistant `rest_command`; exposed as an HA switch so Siri/Control Center/iOS Shortcuts can flip it.
 
 ## A. Wall display (Pi: wall.html, server.py, watchdog.py) — one worker
-- [ ] A1 Plane name tags: `airLabelsSmall` (commercial-only mode).
-- [ ] A2 `airCardPin`: big flight card always up, rotates planes, closest one in a distinct color.
-- [ ] A3 Sky key moves to the sign wall, left of the plane card; signatures reflow below; works when signage + aircraft card are both active.
-- [ ] A4 Hourly chime: audio breaks up → fix; during the chime the time overrides that part of the screen.
-- [ ] A5 Ambient upgrade (find what happened to it) + show sunset while the sun is up, sunrise while it is down.
-- [ ] A6 10-day forecast highlight outline → thin white.
-- [ ] A7 Remove the sign-wall QR code (NFC coasters now).
-- [ ] A8 Demo/show improvements (house/wall/show-for-friends ideas) + `leftDate` toggle.
-- [ ] A9 Black mode must not run the sleep animation / go to sleep.
-- [ ] A10 Turo trip card: bordered box (Apple HIG) listing `extras` + `flags`.
-- [ ] A11 Radio now-playing + `radio` state → HA play_media on Desk HomePod (AirPlay).
-- [ ] A12 Render emoji graffiti.
-- [ ] A13 New keys in DEFAULT_STATE + DB clean functions; watchdog/Scout coverage; measure fps after.
+- [x] A1 Plane name tags: `airLabelsSmall` (commercial-only mode). — false = tags only on airline + cargo; `airLabels` still master.
+- [x] A2 `airCardPin`: big flight card always up, rotates planes, closest one in a distinct color. — 6 closest, 9 s each, closest = blue pass + "Closest"; none = "Quiet skies". Verified on the projector.
+- [x] A3 Sky key moves to the sign wall, left of the plane card; signatures reflow below; works when signage + aircraft card are both active. — own pinned layer `#wingKey`; top band stays while guests sign, signatures/hero/emojis start below it. Verified on the projector.
+- [x] A4 Hourly chime: audio breaks up → fix; during the chime the time overrides that part of the screen. — sounds pre-rendered offline and played as buffers (heartbeat `chime=buffer` on the projector), `latencyHint:'playback'`, heavy sweep removed, big-time overlay for 7 s.
+- [x] A5 Ambient upgrade (find what happened to it) + show sunset while the sun is up, sunrise while it is down. — v5 had swapped it back to the older layout; quick glance restored over the aurora; `sunNext()` in ambient + status corner.
+- [x] A6 10-day forecast highlight outline → thin white.
+- [x] A7 Remove the sign-wall QR code (NFC coasters now). — markup + keep-clear zone removed; copy says "Tap a coaster".
+- [x] A8 Demo/show improvements (house/wall/show-for-friends ideas) + `leftDate` toggle. — tour opens with the edge-trace reveal, NFC/sign-wall-key captions; `leftDate` shows Today / date / weekday in the left field.
+- [x] A9 Black mode must not run the sleep animation / go to sleep. — instant fade to black, no dark/sleep state; verified on the projector.
+- [x] A10 Turo trip card: bordered box (Apple HIG) listing `extras` + `flags`. — "Heads-up" (flags) + "Extras"; tested headless with fake trips (projector asleep, Jared away).
+- [x] A11 Radio now-playing + `radio` state → HA play_media on Desk HomePod (AirPlay). — `media_player.desk`; tested play + stop with SomaFM (MP3 only; AAC/dead streams report "needs a working MP3 stream"). Chip in the status corner + ambient row.
+- [x] A12 Render emoji graffiti. — `/api/emojis` (poll 60 s + Realtime `emoji`), page polls 5 s, size = share of the signature-area width.
+- [x] A13 New keys in DEFAULT_STATE + DB clean functions; watchdog/Scout coverage; measure fps after. — `wall_clean_toggles` (migration 20260927235900); Scout `wall.radio`, `wall.chime`; fps board 28-35, pin+key 32-37 (A/B vs old page: only a one-time dip while sounds pre-render, now spread out).
 
 ## B. Home Assistant (Pi docker) — one worker
 - [x] B1 Hue motion sensor: no alerts while Jared is home. — pushes came from Pi `home-narrator.py` (not HA); motion skipped unless away (`presence_lib.py`: person home OR home Wi-Fi); `security-monitor.py` uses the same rule.
