@@ -27,14 +27,14 @@ import { ProjectorHealth, type Health } from "@/components/admin/ProjectorHealth
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf } from "lucide-react";
 
 type Pt = [number, number];
 type LiveKind = "plane" | "sweep" | "turo" | "show" | "sleep" | "incident";
 type Mode = "auto" | "board" | "ambient" | "demo" | "off";
 /** Values of the wall state key `theme` (null = Normal). A new theme adds its value here, to THEMES,
  *  to server.py's theme check, to wall_clean_patch, and to wall.html. */
-type ThemeId = "halloween";
+type ThemeId = "halloween" | "thanksgiving";
 type WallState = {
   corners: Pt[]; mode: Mode; one: string; mapping: boolean;
   testSweep: boolean; testScout: boolean; away: boolean; mask: Pt[] | null;
@@ -42,7 +42,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
   heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
@@ -103,10 +103,10 @@ function Group({ id, title, footer, children }: { id?: string; title?: string; f
   );
 }
 
-function Row({ label, detail, children, htmlFor }: { label: React.ReactNode; detail?: React.ReactNode; children?: React.ReactNode; htmlFor?: string }) {
+function Row({ label, detail, children, htmlFor, dim }: { label: React.ReactNode; detail?: React.ReactNode; children?: React.ReactNode; htmlFor?: string; dim?: boolean }) {
   return (
     <div className="flex min-h-[52px] items-center gap-3 border-b border-white/[0.07] px-4 py-2.5 last:border-b-0">
-      <div className="min-w-0 flex-1">
+      <div className={cn("min-w-0 flex-1", dim && "opacity-50")}>
         <label htmlFor={htmlFor} className="block text-[16px] text-white">{label}</label>
         {detail && <div className="mt-0.5 text-[13px] text-white/50">{detail}</div>}
       </div>
@@ -170,8 +170,10 @@ const LIVE_ACTS: { id: LiveKind; label: string; detail: string; icon: React.Elem
 /** Options for the Theme control. "normal" writes theme: null. Add a new theme's value here once the Pi supports it. */
 const THEMES: { id: "normal" | ThemeId; label: string; detail: string }[] = [
   { id: "normal", label: "Normal", detail: "The everyday wall." },
-  { id: "halloween", label: "Halloween", detail: "Orange clock, cobweb, spider, jack-o'-lantern, bats and a countdown to Oct 31." },
+  { id: "halloween", label: "Halloween", detail: "Spooky type, bats, a spider, a jack-o'-lantern and a Halloween countdown." },
+  { id: "thanksgiving", label: "Thanksgiving", detail: "Warm harvest colors, falling leaves, a turkey on the strip, geese crossing the ceiling, and a Thanksgiving countdown." },
 ];
+const THEME_ICON: Partial<Record<"normal" | ThemeId, React.ElementType>> = { halloween: Ghost, thanksgiving: Leaf };
 
 /** Copied by "Add a new theme". The idea Jared types goes after the last line. */
 const NEW_THEME_PROMPT = `Build a new theme for the Bestly Wall, end to end, and ship it.
@@ -183,8 +185,8 @@ Context
 - The remote is the admin page at bestly.tech/admin/wall (src/pages/admin/Wall.tsx in ~/Developer/bestlytech-wall; push to origin main).
 
 How themes work today
-- The Halloween theme is the wall state key \`theme\` set to "halloween". null means Normal.
-- server.py validates it with: if k == "theme" and v not in (None, "halloween")
+- Each theme is a value of the wall state key \`theme\`: "halloween" and "thanksgiving" today. null means Normal.
+- server.py validates it with a check like: if k == "theme" and v not in (None, "halloween", "thanksgiving")
 - The database function wall_clean_patch must accept the value too.
 - A new theme needs its new value added in all three places (wall.html, server.py, wall_clean_patch), plus a new option in the admin page's Theme control (the THEMES list in Wall.tsx).
 
@@ -739,8 +741,12 @@ export default function Wall() {
       {/* Theme: the only control for state key `theme` (null = Normal). New themes start from the copied prompt. */}
       <Group id="theme" title="Theme">
         <div className="border-b border-white/[0.07] p-2">
-          <Segmented label="Theme" value={themeNow.id} onChange={setTheme}
-            options={THEMES.map((t) => ({ id: t.id, label: t.id === "halloween" ? <><Ghost className="h-4 w-4 shrink-0" aria-hidden />{t.label}</> : t.label }))} />
+          {/* compact + icons from sm up, so all three labels fit one row on a 390 pt phone */}
+          <Segmented label="Theme" value={themeNow.id} onChange={setTheme} compact
+            options={THEMES.map((t) => {
+              const Icon = THEME_ICON[t.id];
+              return { id: t.id, label: Icon ? <><Icon className="hidden h-4 w-4 shrink-0 sm:block" aria-hidden />{t.label}</> : t.label };
+            })} />
           <p className="px-2 pb-1 pt-2 text-[13px] leading-snug text-white/55">{themeNow.detail}</p>
         </div>
         <DisclosureRow id="new-theme" label="Add a new theme" summary="Copy a prompt that has Claude build it">
@@ -1046,7 +1052,7 @@ export default function Wall() {
         <Row label={<span className="inline-flex items-center gap-2"><Plane className="h-4 w-4 text-white/60" aria-hidden /> Planes overhead</span>} detail="Live planes and helicopters over the house, above the strip." htmlFor="wall-air">
           <Switch className={swHit} id="wall-air" checked={s.airShow !== false} onCheckedChange={(v) => act({ airShow: v }, v ? "Planes overhead on." : "Planes overhead off.")} />
         </Row>
-        <DisclosureRow id="sky-details" label="Sky details" summary="Plane card, labels, stars, moon, sun, planets, key">
+        <DisclosureRow id="sky-details" label="Sky details" summary="Plane card, labels, stars, star names, grid, moon, sun, planets, key">
           {s.airShow !== false && <>
             <Row label="Nearest-plane card" detail="The big card that names the closest aircraft." htmlFor="wall-air-card">
               <Switch className={swHit} id="wall-air-card" checked={s.airCard !== false} onCheckedChange={(v) => change({ airCard: v })} />
@@ -1061,6 +1067,14 @@ export default function Wall() {
             </Row>
             <Row label="Stars and constellations" detail="Bright stars plus Orion and the Big Dipper, at night." htmlFor="wall-sky-stars">
               <Switch className={swHit} id="wall-sky-stars" checked={s.skyStars !== false} onCheckedChange={(v) => change({ skyStars: v })} />
+            </Row>
+            <Row label="Star names" htmlFor="wall-sky-star-labels" dim={s.skyStars === false}
+              detail={s.skyStars === false ? "Turn on Stars and constellations to use this." : "Show the names of bright stars and constellations."}>
+              <Switch className={swHit} id="wall-sky-star-labels" disabled={s.skyStars === false} checked={s.skyStarLabels !== false} onCheckedChange={(v) => change({ skyStarLabels: v })} />
+            </Row>
+            <Row label="Sky grid" htmlFor="wall-sky-grid" dim={s.skyStars === false}
+              detail={s.skyStars === false ? "Turn on Stars and constellations to use this." : "A faint planetarium grid over the stars (only while stars are on)."}>
+              <Switch className={swHit} id="wall-sky-grid" disabled={s.skyStars === false} checked={s.skyGrid !== false} onCheckedChange={(v) => change({ skyGrid: v })} />
             </Row>
             <Row label="Moon" detail="Where the moon is, with tonight's real phase." htmlFor="wall-sky-moon">
               <Switch className={swHit} id="wall-sky-moon" checked={s.skyMoon !== false} onCheckedChange={(v) => change({ skyMoon: v })} />
