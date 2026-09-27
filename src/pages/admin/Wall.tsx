@@ -31,6 +31,7 @@ type WallState = {
   autoKeystone?: boolean;
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
+  soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
 };
 type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
 const DEFAULT_WING: Pt[] = [[0.02, 0.33], [0.27, 0.36], [0.27, 0.66], [0.02, 0.70]];
@@ -506,6 +507,15 @@ export default function Wall() {
         <Row label={<span className="inline-flex items-center gap-2"><Volume2 className="h-4 w-4" aria-hidden /> Sounds</span>} detail="Chimes and whooshes on the wall. Always quiet 11 PM–7 AM." htmlFor="wall-sound">
           <Switch id="wall-sound" checked={s.sound !== false} onCheckedChange={(v) => change({ sound: v })} />
         </Row>
+        <div className="space-y-3 px-4 py-3">
+          <Segmented label="Sound style" value={s.soundPack ?? "glass"}
+            onChange={(v) => change({ soundPack: v, soundTest: Date.now() })}
+            options={[{ id: "glass", label: "Glass" }, { id: "marimba", label: "Marimba" }, { id: "keys", label: "Soft keys" }]} />
+          <button type="button" className={cn(btn, "w-full")} onClick={() => change({ soundTest: Date.now() })}>
+            <Volume2 className="h-4 w-4" aria-hidden /> Play every sound on the wall
+          </button>
+          <p className="text-[13px] text-white/50">Plays the hourly chime, a mode switch, an alert, a new signature and a celebration, in that order.</p>
+        </div>
       </Group>
 
       {/* Layout */}
