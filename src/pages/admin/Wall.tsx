@@ -33,7 +33,7 @@ type Pt = [number, number];
 type LiveKind = "plane" | "sweep" | "turo" | "show" | "sleep" | "incident";
 type Mode = "auto" | "board" | "ambient" | "demo" | "off";
 /** Values of the wall state key `theme` (null = Normal). A new theme adds its value here, to THEMES,
- *  to server.py's theme check, to wall_clean_patch, and to wall.html. */
+ *  to server.py's theme check, to wall_clean_tour, and to wall.html. */
 type ThemeId = "halloween" | "thanksgiving";
 type WallState = {
   corners: Pt[]; mode: Mode; one: string; mapping: boolean;
@@ -187,8 +187,10 @@ Context
 How themes work today
 - Each theme is a value of the wall state key \`theme\`: "halloween" and "thanksgiving" today. null means Normal.
 - server.py validates it with a check like: if k == "theme" and v not in (None, "halloween", "thanksgiving")
-- The database function wall_clean_patch must accept the value too.
-- A new theme needs its new value added in all three places (wall.html, server.py, wall_clean_patch), plus a new option in the admin page's Theme control (the THEMES list in Wall.tsx).
+- The database function wall_clean_tour (not wall_clean_patch) must accept the value too.
+- A new theme needs its new value added in all three places (wall.html, server.py, wall_clean_tour), plus a new option in the admin page's Theme control (the THEMES list in Wall.tsx).
+- In wall.html, themeSync() sets body[data-theme]; theme styling is CSS under body[data-theme="<name>"] (fonts + colors on the clock .hm/.ampm/.date, .wx-temp, .lb/.le, .tcap, .wing-title, #amb .amb-clock, .bp). Copy the Thanksgiving block (#tgDecor, tgDaysLeft countdown in LALT) as the pattern. Fonts are self-hosted in www/fonts (see the "theme fonts" block in fonts.css).
+- Same information on every theme: only colors, fonts and decorations change. Never use background-clip:text on the clock (it hides the rolling digits on the projector). Nothing decorative on the ceiling (it reads as real aircraft).
 
 Rules
 - Read bestly_memory first. Write what you learned back before you finish.
