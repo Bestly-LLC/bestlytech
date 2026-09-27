@@ -35,6 +35,7 @@ type WallState = {
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
   air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
+  sleepShow?: { at: number; mins: number; music?: boolean } | null;
 };
 type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
 const DEFAULT_WING: Pt[] = [[0.02, 0.33], [0.27, 0.36], [0.27, 0.66], [0.02, 0.70]];
@@ -138,6 +139,10 @@ export default function Wall() {
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
   const [showAllSigs, setShowAllSigs] = useState(false);
   const [copiedAlign, setCopiedAlign] = useState(false);
+  const [sheepMins, setSheepMins] = useState<"15" | "30" | "60">("30");
+  const [sheepMusic, setSheepMusic] = useState(true);
+  const [, setSheepTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setSheepTick((n) => n + 1), 15000); return () => clearInterval(t); }, []);
   const [sel, setSel] = useState(0);
   const [fine, setFine] = useState(true);
   const [one, setOne] = useState("");
@@ -441,6 +446,39 @@ export default function Wall() {
       )}
 
       <ProjectorHealth health={st?.health} />
+
+      {/* Sleep mode: counting sheep */}
+      {(() => {
+        const ss = s.sleepShow; const end = ss ? ss.at + ss.mins * 60000 : 0; const on = !!ss && Date.now() < end;
+        const endTxt = on ? new Date(end).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "";
+        return (
+          <Group title="Sleep mode" footer="Sheep hop a fence on the wall while a soft lullaby plays. It slows down as you drift off, says good night, and turns the projector off until 7 AM.">
+            {on ? (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <Moon className="h-5 w-5 shrink-0 text-indigo-300" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[17px] font-semibold text-white">Counting sheep</div>
+                  <div className="text-[15px] text-white/60">Ends at <span className="whitespace-nowrap">{endTxt}</span></div>
+                </div>
+                <button type="button" className={cn(btn, "shrink-0")} onClick={() => change({ sleepShow: null })}>Stop</button>
+              </div>
+            ) : (
+              <div className="space-y-3 px-4 py-3">
+                <Segmented label="Length" value={sheepMins} onChange={setSheepMins}
+                  options={[{ id: "15", label: "15 min" }, { id: "30", label: "30 min" }, { id: "60", label: "1 hour" }]} />
+                <div className="flex min-h-[44px] items-center justify-between">
+                  <label htmlFor="wall-sheep-music" className="text-[17px] text-white">Lullaby music</label>
+                  <Switch id="wall-sheep-music" checked={sheepMusic} onCheckedChange={setSheepMusic} />
+                </div>
+                <button type="button" className={cn(btn, "w-full bg-indigo-500/90 text-white hover:bg-indigo-500")}
+                  onClick={() => change({ sleepShow: { at: Date.now(), mins: Number(sheepMins), music: sheepMusic } })}>
+                  <Moon className="h-4 w-4" aria-hidden /> Start counting sheep
+                </button>
+              </div>
+            )}
+          </Group>
+        );
+      })()}
 
       {/* The one thing */}
       <Group title="Now" footer="Shows in big letters in the middle of the wall.">
