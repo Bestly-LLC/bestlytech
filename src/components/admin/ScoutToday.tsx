@@ -87,6 +87,25 @@ export function ScoutToday() {
     return () => clearInterval(t);
   }, [load]);
 
+  // A Refresh on Needs you also has Scout check the to-dos: follow along until its queue is empty
+  // (max 3 minutes) so the ones it closes drop into Done without waiting for the next minute poll.
+  useEffect(() => {
+    let t: number | undefined;
+    let until = 0;
+    const follow = () => {
+      until = Date.now() + 180_000;
+      if (t) return;
+      t = window.setInterval(async () => {
+        await load();
+        const { count } = await supabase.from("todo_check_jobs" as never)
+          .select("id", { count: "exact", head: true }).in("status", ["queued", "running"]);
+        if (!count || Date.now() > until) { window.clearInterval(t); t = undefined; }
+      }, 4000);
+    };
+    window.addEventListener("scout:checking", follow);
+    return () => { window.removeEventListener("scout:checking", follow); if (t) window.clearInterval(t); };
+  }, [load]);
+
   const set = async (r: Row, status: Status, msg?: string, quiet = false) => {
     setBusy(r.id);
     // done_at moves with the status, exactly as scout_daily_set() does it, so the

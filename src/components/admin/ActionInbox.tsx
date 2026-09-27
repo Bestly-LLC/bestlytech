@@ -76,7 +76,16 @@ interface ActionItem {
   originId?: string;
   why?: string;
   since?: string;
+  /** Scout's latest "is this already done?" read from a Refresh (admin_needs_checks). */
+  check?: NeedCheck;
 }
+
+interface NeedCheck { verdict: string; summary: string | null; at: string | null; closed: boolean }
+
+const VERDICT_WORD: Record<string, string> = { done: "Looks done", partly: "Partly done", not_done: "Not yet", unknown: "Can't tell" };
+const clock12 = (iso: string | null) => iso
+  ? new Date(iso).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit", hour12: true })
+  : "";
 
 const severityRank: Record<Severity, number> = { critical: 0, urgent: 1, stale: 2, info: 3 };
 
@@ -237,6 +246,12 @@ function ItemPopup({ item, onClose, onDone, working }: {
           {item.detail && (
             <p className={cn(text.detail, "leading-relaxed whitespace-pre-line")}>{item.detail}</p>
           )}
+          {item.check && VERDICT_WORD[item.check.verdict] && (
+            <p className="text-[13px] leading-snug text-white/70">
+              <span className="font-medium text-white/90">Scout checked{item.check.at ? <> at <span className="whitespace-nowrap">{clock12(item.check.at)}</span></> : null}: </span>
+              {VERDICT_WORD[item.check.verdict]}{item.check.summary ? ` · ${item.check.summary}` : ""}
+            </p>
+          )}
           {item.why && (
             <p className="text-[12px] leading-snug text-white/40">{item.why}</p>
           )}
@@ -294,6 +309,8 @@ export function ActionInbox() {
   const [showAll, setShowAll] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
   const [openItem, setOpenItem] = useState<ActionItem | null>(null);
+  /** A Refresh in flight: the rules already ran; `run` is the AI pass still judging `pending` items. */
+  const [checking, setChecking] = useState<{ run: string | null; pending: number } | null>(null);
 
   const load = useCallback(async () => {
     // admin_today / admin_today_done are newer than the generated Supabase types;
@@ -309,6 +326,19 @@ export function ActionInbox() {
 
     const now = Date.now();
     const rows = (data ?? []) as TodayRow[];
+
+    // Scout's latest read per row (last day), so the popup can say what the last Refresh found.
+    const checks = new Map<string, NeedCheck>();
+    const keys = rows.map((r) => r.key).filter((k) => k.startsWith("bell:") || k.startsWith("cy:"));
+    if (keys.length) {
+      const { data: cs } = await supabase.from("admin_needs_checks" as never)
+        .select("key, verdict, summary, finished_at, closed, status")
+        .in("key", keys).eq("status", "done").gte("created_at", new Date(now - 864e5).toISOString())
+        .order("created_at", { ascending: false }).limit(200);
+      for (const c of ((cs ?? []) as any[])) {
+        if (!checks.has(c.key)) checks.set(c.key, { verdict: c.verdict, summary: c.summary, at: c.finished_at, closed: c.closed });
+      }
+    }
 
     const out: ActionItem[] = rows.map((r) => {
       const count = r.item_count ?? 1;
@@ -330,6 +360,7 @@ export function ActionInbox() {
         originId: r.origin_id || undefined,
         why: r.why || undefined,
         since: r.since || undefined,
+        check: checks.get(r.key),
       };
     });
 
@@ -385,6 +416,91 @@ export function ActionInbox() {
     [load, undoDone],
   );
 
+  const undoMany = useCallback(async (keys: string[]) => {
+    const results = await Promise.all(keys.map((k) => (supabase.rpc as any)("admin_today_undo", { p_key: k })));
+    const failed = results.filter((r) => r.error).length;
+    if (failed) toast.error(`Couldn't put ${failed} back`);
+    else toast(keys.length === 1 ? "Back on the list" : `${keys.length} back on the list`, { description: "Scout won't close these again for a week." });
+    load();
+  }, [load]);
+
+  const listTitles = (rows: { title: string }[]) =>
+    rows.slice(0, 3).map((r) => r.title).join(" · ") + (rows.length > 3 ? ` · and ${rows.length - 3} more` : "");
+
+  /**
+   * Refresh = reload AND have Scout check whether anything here (and in the to-dos) is already done.
+   * The server closes what it can prove right away, then an AI pass judges the rest in the background;
+   * this polls that pass and reports what it closed. Everything it closes is one tap to put back.
+   */
+  const scoutRefresh = useCallback(async () => {
+    if (checking) { load(); return; }
+    setChecking({ run: null, pending: 0 });
+    const { data, error: fnErr } = await supabase.functions.invoke("todo-check", { body: { op: "refresh" } });
+    const d = data as { ok?: boolean; error?: string; run?: string; closed?: { key: string; title: string; why: string }[]; judging?: number; todos?: number } | null;
+    await load();
+    if (fnErr || !d?.ok) {
+      setChecking(null);
+      toast.error("Scout couldn't check right now", { description: d?.error ?? fnErr?.message ?? "Refreshed the list only." });
+      return;
+    }
+    if ((d.todos ?? 0) > 0) window.dispatchEvent(new CustomEvent("scout:checking", { detail: { todos: d.todos } }));
+    const closed = d.closed ?? [];
+    const more = [d.judging ? `${d.judging} on this list` : "", d.todos ? `${d.todos} to-do${d.todos === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ");
+    if (closed.length) {
+      toast(`Scout cleared ${closed.length} that ${closed.length === 1 ? "was" : "were"} already handled`, {
+        description: listTitles(closed) + (more ? `. Still checking ${more}.` : ""),
+        action: { label: "Undo", onClick: () => void undoMany(closed.map((c) => c.key)) },
+        duration: 10_000,
+      });
+    } else if (more) {
+      toast(`Scout is checking ${more}`, { description: "Anything already done gets cleared. You can leave this page." });
+    } else {
+      toast("Up to date", { description: "Nothing new to check. Scout looked at everything here in the last 20 minutes." });
+    }
+    setChecking(d.judging && d.run ? { run: d.run, pending: d.judging } : null);
+  }, [checking, load, undoMany]);
+
+  // Watch the AI pass a Refresh started; report what it closed. Gives up watching after 4 minutes
+  // (the server keeps going and sends a notification when it closes anything).
+  useEffect(() => {
+    const run = checking?.run;
+    if (!run) return;
+    const stopAt = Date.now() + 240_000;
+    let stopped = false;
+    const tick = async () => {
+      const { data } = await supabase.from("admin_needs_checks" as never)
+        .select("key, title, status, closed, rule").eq("run_id", run);
+      const rows = (data ?? []) as { key: string; title: string; status: string; closed: boolean; rule: string | null }[];
+      const left = rows.filter((r) => r.status === "queued" || r.status === "running").length;
+      if (stopped) return;
+      if (left > 0 && Date.now() < stopAt) { setChecking({ run, pending: left }); return; }
+      stopped = true;
+      setChecking(null);
+      load();
+      if (left > 0) return;
+      const aiClosed = rows.filter((r) => r.closed && !r.rule);
+      const judged = rows.filter((r) => !r.rule).length;
+      if (aiClosed.length) {
+        toast(`Scout cleared ${aiClosed.length} more`, {
+          description: listTitles(aiClosed),
+          action: { label: "Undo", onClick: () => void undoMany(aiClosed.map((c) => c.key)) },
+          duration: 10_000,
+        });
+      } else if (judged) {
+        toast(`Scout checked ${judged} more`, { description: "None of them are done yet. Tap one to see what Scout found." });
+      }
+    };
+    const t = setInterval(tick, 3000);
+    return () => { stopped = true; clearInterval(t); };
+  }, [checking?.run, load, undoMany]);
+
+  // The page's "Refresh now" menu item runs the same check.
+  useEffect(() => {
+    const on = () => void scoutRefresh();
+    window.addEventListener("admin:refresh-now", on);
+    return () => window.removeEventListener("admin:refresh-now", on);
+  }, [scoutRefresh]);
+
   const summary = useMemo(() => {
     const critical = items.filter((i) => i.severity === "critical").length;
     const urgent = items.filter((i) => i.severity === "urgent").length;
@@ -398,15 +514,25 @@ export function ActionInbox() {
       title="Needs you"
       aside={
         <>
-          {!loading && summary.total > 0 && (
+          {checking ? (
+            <span aria-live="polite">
+              {checking.pending > 0 ? <>Scout is checking <span className="whitespace-nowrap">{checking.pending} {checking.pending === 1 ? "item" : "items"}</span>…</> : "Scout is checking…"}
+            </span>
+          ) : !loading && summary.total > 0 && (
             <span>
               {summary.total}
               {summary.critical > 0 && ` · ${summary.critical} critical`}
               {summary.urgent > 0 && ` · ${summary.urgent} urgent`}
             </span>
           )}
-          <IconButton label="Refresh the queue" onClick={() => load()} className="-mr-2">
-            <RefreshCw className="h-4 w-4" aria-hidden />
+          <IconButton
+            label={checking ? "Scout is checking what's already done" : "Refresh, and have Scout clear what's already done"}
+            title="Refresh · Scout clears what's already done"
+            onClick={() => void scoutRefresh()}
+            aria-busy={!!checking}
+            className="-mr-2"
+          >
+            <RefreshCw className={cn("h-4 w-4", checking && "animate-spin motion-reduce:animate-none")} aria-hidden />
           </IconButton>
         </>
       }

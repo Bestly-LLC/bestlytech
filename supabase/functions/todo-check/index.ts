@@ -6,6 +6,15 @@
 //   op drain                  work the queue in the background (todo_check_drain cron, every minute).
 //   op tick                   hourly cron; queues the nightly pass at 10 PM Los Angeles, once a day.
 //   op nightly {force?}       the nightly pass (the watchdog calls this with force when tick missed).
+//   op refresh                the Refresh button on the admin home: checks "Needs you" AND the to-dos. Admin JWT.
+//
+// v6 (2026-09-27): Refresh checks what is already done. admin_needs_rules() closes alerts with hard proof
+//   (monitor resolved, later Mac job OK, newer duplicate) and queues the rest into admin_needs_checks; the
+//   drain judges them here with the same evidence + free AI as to-dos and closes only under the to-do bar.
+//   Open to-dos not checked in the last 2 hours are swept too. Migration 20260927220000_refresh_checks_needs.sql.
+// v6.1: an alert its own system still reports (monitor open / raised again) is "not yet" with no AI call; when the
+//   free AI is out the item waits and retries (not_before, up to 3 tries) instead of settling for a no-AI read;
+//   the drain does Needs you before to-dos. Migration 20260927223000_refresh_checks_retry.sql.
 //
 // v5 (2026-09-23): $0. The judge and the lesson writer use the shared helper _shared/free-llm.ts:
 //   Groq -> Cloudflare Workers AI -> Mac mini, all no-training, paid never. Haiku is no longer called.
@@ -401,6 +410,158 @@ async function check(id: string, trigger: "button" | "sweep" | "nightly", allowC
   return { todo: { id, title: todo.title }, ...checkDoc, searched };
 }
 
+/* ───────── check one "Needs you" row (Refresh) ───────── */
+
+/** What the system itself says now about an alert: is the problem still being raised? */
+async function alertState(key: string, raised: string): Promise<Item[]> {
+  if (!key.startsWith("bell:")) return [];
+  const { data: n } = await db.from("admin_notifications").select("id, title, entity_key, created_at").eq("id", key.slice(5)).maybeSingle();
+  if (!n) return [];
+  const out: Item[] = [];
+  const ek = String((n as any).entity_key ?? "");
+  if (ek.startsWith("monitor:")) {
+    const { data: m } = await db.from("monitor_issues").select("key, status, updated_at, resolved_at, occurrences").eq("key", ek.slice(8)).maybeSingle();
+    if (m) out.push({ id: `monitor:${(m as any).key}`, src: "monitor", at: (m as any).resolved_at ?? (m as any).updated_at,
+      title: `Monitor issue "${(m as any).key}"`,
+      quote: (m as any).status === "resolved" ? `Resolved ${time12((m as any).resolved_at)}.`
+        : `Still open; last seen ${time12((m as any).updated_at)} (${(m as any).occurrences ?? 1} times).`, url: null });
+  }
+  // raised again since? That means it is NOT fixed.
+  const norm = String((n as any).title).toLowerCase().replace(/[0-9]+/g, "#");
+  const { data: later } = await db.from("admin_notifications").select("id, title, created_at").gt("created_at", raised)
+    .neq("id", (n as any).id).order("created_at", { ascending: false }).limit(60);
+  const again = ((later ?? []) as any[]).filter((x) => String(x.title).toLowerCase().replace(/[0-9]+/g, "#") === norm);
+  if (again.length) out.push({ id: `again:${again[0].id}`, src: "alerts", at: again[0].created_at,
+    title: "Same alert raised again", quote: `Raised ${again.length} more time${again.length === 1 ? "" : "s"}, last at ${time12(again[0].created_at)}.`, url: null });
+  return out;
+}
+
+async function checkNeed(job: any) {
+  const { data: rows, error } = await db.rpc("admin_today");
+  if (error) throw new Error(error.message);
+  const row = ((rows ?? []) as any[]).find((r) => r.key === job.key);
+  if (!row) {
+    // it left the list on its own (fixed at the source, or ticked) between the refresh and now
+    return { verdict: "cleared", confidence: 1, summary: "Already off the list.", evidence: [], model: "none", closed: false };
+  }
+  const raised = row.since ?? job.created_at;
+  // The system that raised it says it is still happening: that IS the answer, no AI needed.
+  const state = await alertState(job.key, raised);
+  const firing = state.find((i) => i.src === "alerts" || (i.src === "monitor" && /still open/i.test(i.quote)));
+  if (firing) {
+    const q = firing.quote.replace(/^Still open; /, "").replace(/\.$/, "");
+    const why = firing.src === "monitor" ? `Not fixed yet: its monitor still sees the problem, ${q}.` : `Not fixed yet: the same alert came back. ${q}.`;
+    return { verdict: "not_done", confidence: 1, summary: why, evidence: [firing], model: "rule", closed: false, error: null };
+  }
+  const pseudo = { id: crypto.randomUUID(), title: row.title, why: row.detail, created_at: raised, action: {} };
+  const [{ items: found }, les, { data: settings }] = await Promise.all([
+    gather(pseudo), lessons(),
+    db.from("todo_check_settings").select("*").eq("id", 1).maybeSingle(),
+  ]);
+  const items = [...state, ...found];
+  const byId = new Map(items.map((i) => [i.id, i]));
+  let verdict = "unknown", confidence = 0, summary = "", cited: string[] = [], model = "none", err: string | null = null;
+  try {
+    if (!items.length) throw Object.assign(new Error("no evidence"), { quiet: true });
+    const system = [
+      "You decide whether an item on Jared's \"Needs you\" list is already taken care of, using ONLY the evidence given.",
+      "Items are alerts from his systems (something broke or looked wrong) or asks waiting on him. Jared runs Bestly LLC, a small product studio.",
+      "It is done only if the evidence shows the problem was FIXED or the ask was HANDLED after it was raised",
+      "(a monitor resolved it, a fix was committed or deployed, a memory note says it was fixed, a later job succeeded, a reply was sent).",
+      "Evidence that the same alert was raised again, or that its monitor issue is still open, means NOT done.",
+      "A mention, a plan, or the alert being discussed is not proof. When unsure, verdict is unknown. Every claim must cite evidence ids.",
+      les.length ? "Lessons from Jared's past corrections (follow them):\n" + les.map((l) => `- ${l.title}: when ${l.when_text ?? "judging"}, ${l.do_text ?? ""}${l.avoid_text ? `; avoid ${l.avoid_text}` : ""}`).join("\n") : "",
+      'Return JSON only: {"verdict":"done|partly|not_done|unknown","confidence":0-1,"evidence_ids":["..."],"summary":"one plain sentence"}',
+    ].filter(Boolean).join("\n");
+    const user = JSON.stringify({
+      item: { title: row.title, detail: row.detail, from: row.source, raised: time12(raised), why_listed: row.why },
+      evidence: items.map((i) => ({ id: i.id, source: i.src, when: time12(i.at), title: i.title, text: String(i.quote ?? "").replace(/[«»]/g, "").slice(0, 500) })),
+    });
+    const out = await llm({ task: "judge", system, user, maxTokens: 400, json: true, job: "needs-check", ref: job.key });
+    const j = out.json ?? {};
+    model = out.model;
+    verdict = ["done", "partly", "not_done", "unknown"].includes(j.verdict) ? j.verdict : "unknown";
+    confidence = Math.max(0, Math.min(1, Number(j.confidence) || 0));
+    cited = (Array.isArray(j.evidence_ids) ? j.evidence_ids : []).map(String).filter((x: string) => byId.has(x));
+    summary = String(j.summary ?? "").slice(0, 300);
+    // checked by code, not trusted
+    if (verdict === "done" && !cited.length) { verdict = "unknown"; confidence = Math.min(confidence, 0.3); summary ||= "Nothing found that proves it."; }
+    if (verdict === "done" && confidence < 0.6) verdict = "partly";
+  } catch (e) {
+    // free AI out (rate limit / daily quota): wait and try again rather than settle for a guess
+    if (e instanceof FreeOffline && !(e as any).message?.startsWith("no evidence") && Number(job.attempts ?? 1) < 3) throw new RetryLater((e as Error).message);
+    if (!(e as any).quiet) err = (e as Error).message.slice(0, 300);
+    verdict = "unknown";
+    summary = items.length ? "Found some related things but could not judge them." : "Nothing found about this yet.";
+    if (e instanceof FreeOffline) summary += " (The free AI was out all three tries, so this is a no-AI read.)";
+    cited = [];
+    model = "no-ai";
+  }
+  const kinds = new Set(cited.map((c) => byId.get(c)?.src));
+  const s = (settings ?? { auto_close: false, threshold: 0.95, min_sources: 2 }) as any;
+  // Cookie Yeti asks are never auto-closed: ticking one erases its text, so it could not be put back.
+  const close = !err && job.key.startsWith("bell:") && s.auto_close && verdict === "done"
+    && confidence >= Number(s.threshold) && kinds.size >= Number(s.min_sources ?? 2);
+  if (close) await db.rpc("admin_today_done", { p_key: job.key });
+  const evidence = cited.map((c) => byId.get(c)!).filter(Boolean).slice(0, 5);
+  return { verdict, confidence, summary, evidence, model, closed: close, error: err };
+}
+
+class RetryLater extends Error {}
+
+async function drainNeeds(stop: number) {
+  let n = 0;
+  while (Date.now() < stop - 65_000) {
+    const { data: jobs, error } = await db.rpc("admin_needs_claim", { p_n: 2 });
+    if (error) throw new Error(error.message);
+    const list = (jobs ?? []) as any[];
+    if (!list.length) break;
+    await Promise.all(list.map(async (j) => {
+      try {
+        const r = await checkNeed(j);
+        await db.from("admin_needs_checks").update({
+          status: "done", verdict: r.verdict, confidence: r.confidence, summary: r.summary, evidence: r.evidence,
+          model: r.model, closed: r.closed, error: r.error ?? null, finished_at: new Date().toISOString(),
+        }).eq("id", j.id);
+      } catch (e) {
+        const msg = (e as Error).message.slice(0, 300);
+        if (e instanceof RetryLater) {
+          // the minute drain picks it up again once the wait is over
+          await db.from("admin_needs_checks").update({ status: "queued", started_at: null, error: `waiting for free AI: ${msg}`.slice(0, 300),
+            not_before: new Date(Date.now() + 90_000).toISOString() }).eq("id", j.id);
+          n++;
+          return;
+        }
+        // under 3 tries: back in the queue for the next drain; the SQL drain gives up after 3
+        await db.from("admin_needs_checks").update(j.attempts >= 3
+          ? { status: "error", error: msg, finished_at: new Date().toISOString() }
+          : { status: "queued", started_at: null, error: msg }).eq("id", j.id);
+      }
+      n++;
+    }));
+  }
+  if (n) await notifyNeeds().catch(() => {});
+  return n;
+}
+
+/** When a refresh's AI pass finishes and it closed something, say so once (quiet if it closed nothing). */
+async function notifyNeeds() {
+  const { data } = await db.from("admin_needs_checks").select("run_id, title, summary, closed, rule, status")
+    .gte("created_at", new Date(Date.now() - 3600e3).toISOString());
+  const byRun = new Map<string, any[]>();
+  for (const r of (data ?? []) as any[]) (byRun.get(r.run_id) ?? byRun.set(r.run_id, []).get(r.run_id)!).push(r);
+  for (const [run, rows] of byRun) {
+    if (rows.some((r) => r.status === "queued" || r.status === "running")) continue;
+    const ai = rows.filter((r) => r.closed && !r.rule);
+    if (!ai.length) continue;
+    await db.rpc("scout_notify", {
+      p_title: `Scout closed ${ai.length} item${ai.length === 1 ? "" : "s"} that were already done`,
+      p_body: ai.map((r) => `${r.title}: ${r.summary}`).join("\n").slice(0, 480) + "\nWrong? Open it on the home page and tap Undo.",
+      p_severity: "info", p_push: false, p_url: "/admin", p_dedupe: `needs-check.run.${run}`,
+    });
+  }
+}
+
 /* ───────── the queue: checks keep going after Jared leaves the page ───────── */
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
@@ -409,13 +570,15 @@ const background = (p: Promise<unknown>) => {
   if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(safe);
 };
 
-async function openTodos(skipRecent: boolean) {
+async function openTodos(skipRecent: boolean | number) {
   const since = new Date(Date.now() - 21 * 864e5).toISOString();
   const { data } = await db.from("scout_daily").select("id, action").in("kind", ["pick", "call"]).eq("status", "open")
     .gte("created_at", since).order("created_at", { ascending: false }).limit(40);
+  // true = nightly (skip what was checked today); a number = skip anything checked within that many ms
+  const window = skipRecent === true ? 12 * 3600e3 : typeof skipRecent === "number" ? skipRecent : 0;
   return ((data ?? []) as any[]).filter((t) => {
     const at = t.action?.check?.at ? Date.parse(t.action.check.at) : 0;
-    return !skipRecent || Date.now() - at > 12 * 3600e3; // nightly skips what was checked today
+    return !window || Date.now() - at > window;
   }).map((t) => String(t.id));
 }
 
@@ -469,6 +632,8 @@ async function drain(budgetMs = 140_000) {
   // the Mac mini answers one at a time and can take ~30-90s, so leave room for a whole job
   const margin = paid ? 65_000 : 105_000;
   let n = 0;
+  // Needs you first: a Refresh means Jared is looking at that list right now
+  try { n += await drainNeeds(stop); } catch (e) { console.error("needs drain:", (e as Error).message); }
   while (Date.now() < stop - margin) {
     const { data: jobs, error } = await db.rpc("todo_check_claim", { p_n: paid ? 3 : 1 });
     if (error) throw new Error(error.message);
@@ -575,6 +740,18 @@ Deno.serve(async (req) => {
         const q = await enqueue(await openTodos(false), "sweep", true, admin);
         background(drain());
         return J({ ok: true, queued: true, ...q });
+      }
+      case "refresh": {
+        // The Refresh button: close what is provably done, queue the rest for the judge, sweep the to-dos.
+        if (!admin && !service) return J({ ok: false, error: "sign in to the Bestly admin" }, 401);
+        const run = crypto.randomUUID();
+        const { data: rules, error: rErr } = await db.rpc("admin_needs_rules", { p_run: run });
+        if (rErr) throw new Error(rErr.message);
+        // to-dos checked in the last 2 hours are skipped: the free AI has a small per-minute budget
+        const q = await enqueue(await openTodos(2 * 3600e3), "sweep", true, admin);
+        background(drain());
+        const r = (rules ?? {}) as { closed?: any[]; queued?: number };
+        return J({ ok: true, run, closed: r.closed ?? [], judging: r.queued ?? 0, todos: q.total, todo_run: q.run_id });
       }
       case "drain": {
         if (!service) return J({ ok: false, error: "service only" }, 403);

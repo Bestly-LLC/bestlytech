@@ -408,6 +408,8 @@ export default function AdminDashboard() {
   const all = [contacts, hires, intakes, emails, cloudLeads, deals, sweep, health, homeHub, cy, security, newLeads, paidSubs, waitlist];
   const refreshAll = async () => {
     setActivityKey((k) => k + 1);
+    // Needs you listens for this and has Scout clear what's already done (and check the to-dos).
+    window.dispatchEvent(new Event("admin:refresh-now"));
     await Promise.all(all.map((s) => s.reload()));
   };
 
