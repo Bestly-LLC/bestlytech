@@ -29,7 +29,14 @@ type WallState = {
   corners: Pt[]; mode: Mode; one: string; mapping: boolean;
   testSweep: boolean; testScout: boolean; away: boolean; mask: Pt[] | null;
   autoKeystone?: boolean;
+  demoLeft?: string; demoNames?: string; demoRight?: string;
 };
+type DemoKey = "demoLeft" | "demoNames" | "demoRight";
+const DEMO_FIELDS: { key: DemoKey; label: string; placeholder: string; lines: number; fallback: string }[] = [
+  { key: "demoLeft", label: "Left", placeholder: "Oct 18\n2026", lines: 2, fallback: "Oct 18\n2026" },
+  { key: "demoNames", label: "Middle", placeholder: "Maya & Jordan", lines: 1, fallback: "Maya & Jordan" },
+  { key: "demoRight", label: "Right", placeholder: "Welcome\nfriends", lines: 2, fallback: "Welcome\nfriends" },
+];
 type PiStatus = {
   status?: string; top?: string; cpu_c?: number | null; heartbeat_age_s?: number | null;
   override?: { on: boolean; until: number } | null; restarts_1h?: number; sync_age_s?: number | null;
@@ -117,6 +124,7 @@ export default function Wall() {
   const [sel, setSel] = useState(0);
   const [fine, setFine] = useState(true);
   const [one, setOne] = useState("");
+  const [demo, setDemo] = useState<Record<DemoKey, string>>({ demoLeft: "", demoNames: "", demoRight: "" });
   const [pending, setPending] = useState(0);
   const [powerMsg, setPowerMsg] = useState<string | null>(null);
   const [, bump] = useState(0);
@@ -137,7 +145,10 @@ export default function Wall() {
     const d = data as Remote;
     setR(d);
     if (!dragging.current && saveT.current.timer == null) { S.current = d.state; repaint(); }
-    if (!typing.current) setOne(d.state.one ?? "");
+    if (!typing.current) {
+      setOne(d.state.one ?? "");
+      setDemo(Object.fromEntries(DEMO_FIELDS.map((f) => [f.key, d.state[f.key] ?? f.fallback])) as Record<DemoKey, string>);
+    }
   }, []);
   useEffect(() => { void load(); const t = setInterval(() => void load(), 5000); return () => clearInterval(t); }, [load]);
 
@@ -373,6 +384,29 @@ export default function Wall() {
             options={MODES.map((m) => ({ id: m.id, label: m.label }))} />
         </div>
       </Group>
+
+      {/* Demo text: only while Demo mode is showing */}
+      {s.mode === "demo" && (
+        <Group title="Demo text" footer="Left and right can be two lines. Changes show on the wall as you type.">
+          {DEMO_FIELDS.map((f) => (
+            <div key={f.key} className="flex items-start gap-3 px-4 py-2">
+              <label htmlFor={`wall-${f.key}`} className="min-h-[44px] w-16 shrink-0 pt-3 text-[15px] text-white/60">{f.label}</label>
+              <textarea
+                id={`wall-${f.key}`} rows={f.lines} maxLength={60} value={demo[f.key]} placeholder={f.placeholder.replace("\n", " / ")}
+                autoComplete="off" spellCheck={false}
+                onFocus={() => (typing.current = true)}
+                onBlur={() => { typing.current = false; }}
+                onChange={(e) => {
+                  const v = f.lines === 1 ? e.target.value.replace(/\n/g, " ") : e.target.value.split("\n").slice(0, 2).join("\n");
+                  setDemo((d) => ({ ...d, [f.key]: v }));
+                  change({ [f.key]: v } as Partial<WallState>, { now: false });
+                }}
+                className="min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[17px] leading-snug text-white placeholder:text-white/35 focus:outline-none"
+              />
+            </div>
+          ))}
+        </Group>
+      )}
 
       {/* Layout */}
       <Group title="Layout"
