@@ -13,7 +13,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  AlertTriangle, BatteryCharging, CalendarClock, Car, CheckCircle2, ChevronRight, ExternalLink,
+  AlertTriangle, BatteryMedium, CalendarClock, Car, CheckCircle2, ChevronRight, ExternalLink,
   Gauge, Lock, MapPin, Plane, Thermometer, Unlock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -218,7 +218,7 @@ export function FleetNow({ trips, vehicle, guest, returnAt }: {
                 </div>
                 {rc?.pct != null && pct != null && (ok
                   ? <Flag tone="ok" icon={CheckCircle2}>{`Now ${pct}%: on track`}</Flag>
-                  : <Flag tone="warn" icon={BatteryCharging}>{`Now ${pct}%: needs ${rc.pct - pct}% more`}</Flag>)}
+                  : <Flag tone="warn" icon={BatteryMedium}>{`Now ${pct}%: needs ${rc.pct - pct}% more`}</Flag>)}
               </div>
               {guest && <details className="group"><summary className={cn("flex min-h-[40px] cursor-pointer list-none items-center gap-1.5 text-sm font-medium [&::-webkit-details-marker]:hidden", ink)}>
                 <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden /> Guest page, key &amp; charging</summary>
@@ -273,9 +273,9 @@ export function FleetNow({ trips, vehicle, guest, returnAt }: {
               </div>
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
                 {vehicle.plugged_in
-                  ? <Flag tone="ok" icon={BatteryCharging}>{vehicle.charging_state ?? "Plugged in"}</Flag>
+                  ? <Flag tone="ok" icon={BatteryMedium}>{vehicle.charging_state ?? "Plugged in"}</Flag>
                   : needsCharge
-                    ? <Flag tone="warn" icon={BatteryCharging}>{`Under ${READY_PCT}% for handoff`}</Flag>
+                    ? <Flag tone="warn" icon={BatteryMedium}>{`Under ${READY_PCT}% for handoff`}</Flag>
                     : <Flag tone="ok" icon={CheckCircle2}>Ready to hand off</Flag>}
                 {vehicle.locked === false
                   ? <Flag tone="bad" icon={Unlock}>Unlocked</Flag>

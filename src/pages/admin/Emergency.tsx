@@ -17,8 +17,9 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
-  AlertTriangle, BatteryCharging, Check, CloudRain, ExternalLink, Flame, Loader2, PlugZap, ShieldCheck, Siren, Waves, Zap,
+  AlertTriangle, Check, CloudRain, ExternalLink, Flame, Loader2, PlugZap, ShieldCheck, Siren, Waves, Zap,
 } from "lucide-react";
+import { BatteryIcon } from "@/components/admin/BatteryIcon";
 
 type Hazard = "general" | "earthquake" | "fire" | "flood" | "outage";
 type Prep = { id: string; hazard: Hazard; started_at: string; ended_at: string | null; checklist: Record<string, string>; charge_cmd: string | null };
@@ -219,7 +220,7 @@ export default function Emergency() {
       {/* battery */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10">
-          <p className="flex items-center gap-2 text-sm font-semibold text-white"><BatteryCharging className="h-4 w-4 text-white/50" /> EcoFlow DELTA 2</p>
+          <p className="flex items-center gap-2 text-sm font-semibold text-white"><BatteryIcon pct={bat?.battery ?? null} className="h-4 w-4 text-white/50" /> EcoFlow DELTA 2</p>
           {bat ? (
             <>
               <div className="mt-3 flex items-end gap-2">

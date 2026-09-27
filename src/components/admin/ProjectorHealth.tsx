@@ -4,7 +4,8 @@
  * It does NOT report fan speed, so the fan animation follows the heat level (labelled as an estimate).
  */
 import { motion, useReducedMotion } from "framer-motion";
-import { BatteryCharging, BatteryFull, Fan, ShieldCheck, ShieldAlert, Thermometer, Wifi, Zap } from "lucide-react";
+import { Fan, ShieldCheck, ShieldAlert, Thermometer, Wifi, Zap } from "lucide-react";
+import { BatteryIcon } from "@/components/admin/BatteryIcon";
 import { cn } from "@/lib/utils";
 
 export type Health = {
@@ -39,7 +40,7 @@ function BatteryRing({ h }: { h: Health }) {
   const col = pct <= 20 ? "#FF453A" : pct <= 50 ? "#FFD60A" : "#30D158";
   return (
     <Tile>
-      <Label icon={h.charging ? BatteryCharging : BatteryFull}>Battery</Label>
+      <Label icon={(p) => <BatteryIcon pct={h.pct} {...p} />}>Battery</Label>
       <div className="mt-2 flex items-center gap-4">
         <div className="relative h-[88px] w-[88px] shrink-0">
           <svg viewBox="0 0 88 88" className="h-full w-full -rotate-90">

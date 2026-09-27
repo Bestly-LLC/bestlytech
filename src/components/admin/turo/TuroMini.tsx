@@ -1,7 +1,8 @@
 /** Command Center widget: Turo Watch at a glance (car, who has it, must-return charge, next trip, unbilled Supercharging). */
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { BatteryCharging, Car, ChevronRight, Lock, LockOpen, Zap } from "lucide-react";
+import { Car, ChevronRight, Lock, LockOpen, Zap } from "lucide-react";
+import { BatteryIcon } from "@/components/admin/BatteryIcon";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { LoadError, SectionHeader, cardCls, focusRing, text, tint } from "@/components/admin/ui";
@@ -63,7 +64,7 @@ export function TuroMini() {
             label="Battery"
             value={<>{w.battery ?? "–"}%{w.range ? <span className="ml-1 text-[13px] font-normal text-white/60">{Math.round(w.range)} mi</span> : null}</>}
             detail={charging
-              ? <><BatteryCharging className="h-3.5 w-3.5 shrink-0" aria-hidden />{w.charging}</>
+              ? <><BatteryIcon pct={w.battery} className="h-3.5 w-3.5 shrink-0" />{w.charging}</>
               : w.locked === false
                 ? <><LockOpen className={cn("h-3.5 w-3.5 shrink-0", tint.orange)} aria-hidden /><span className={tint.orange}>Unlocked</span></>
                 : <><Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />Locked</>}
