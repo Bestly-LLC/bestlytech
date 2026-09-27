@@ -33,7 +33,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; airLabels?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
 };
 type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
@@ -560,6 +560,20 @@ export default function Wall() {
         <Row label={<span className="inline-flex items-center gap-2"><Plane className="h-4 w-4" aria-hidden /> Planes overhead</span>} detail="Live planes and helicopters flying over the house, on the wall above the strip." htmlFor="wall-air">
           <Switch id="wall-air" checked={s.airShow !== false} onCheckedChange={(v) => change({ airShow: v })} />
         </Row>
+        {s.airShow !== false && <>
+          <Row label="Plane labels" detail="Name tags next to each plane and helicopter. The big nearest-plane card stays." htmlFor="wall-air-labels">
+            <Switch id="wall-air-labels" checked={s.airLabels !== false} onCheckedChange={(v) => change({ airLabels: v })} />
+          </Row>
+          <Row label="Stars and constellations" detail="Bright stars plus the Orion and Big Dipper lines, at night." htmlFor="wall-sky-stars">
+            <Switch id="wall-sky-stars" checked={s.skyStars !== false} onCheckedChange={(v) => change({ skyStars: v })} />
+          </Row>
+          <Row label="Moon" detail="Where the moon is, with tonight's real phase." htmlFor="wall-sky-moon">
+            <Switch id="wall-sky-moon" checked={s.skyMoon !== false} onCheckedChange={(v) => change({ skyMoon: v })} />
+          </Row>
+          <Row label="Sun and planets" detail="The sun by day, Mercury to Saturn when they're up." htmlFor="wall-sky-sun">
+            <Switch id="wall-sky-sun" checked={s.skySun !== false} onCheckedChange={(v) => change({ skySun: v })} />
+          </Row>
+        </>}
         <Row label="Sky key" detail="Shows what the colors and symbols mean on the ceiling. Handy when showing people." htmlFor="wall-air-key">
           <Switch id="wall-air-key" checked={!!s.airKey} onCheckedChange={(v) => change({ airKey: v })} />
         </Row>
