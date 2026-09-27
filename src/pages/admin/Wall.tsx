@@ -31,7 +31,9 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit"; at: number } | null; volume?: number | null; airplay?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit"; at: number } | null; volume?: number | null; airplay?: boolean;
+  alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
+  heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
   sleepShow?: { at: number; mins: number; music?: boolean } | null;
 };
@@ -326,6 +328,14 @@ export default function Wall() {
     void load();
   };
 
+  const [apMsg, setApMsg] = useState<string | null>(null);
+  const restartAirplay = async () => {
+    setApMsg("Restarting AirPlay…");
+    const { error } = await rpc("wall_admin_command", { p_cmd: "airplay_restart" });
+    setApMsg(error ? `Didn't go through: ${error.message}` : "Restarted. Bestly Wall shows up in AirPlay again in about 10 seconds.");
+    void load();
+  };
+
   const focus = async () => {
     setPowerMsg("Focusing… the picture blurs for a few seconds.");
     const { error } = await rpc("wall_admin_command", { p_cmd: "focus" });
@@ -496,6 +506,70 @@ export default function Wall() {
               detail={<span className={cn(!off && ap && !ap.casting && !(ap.on && fresh) && "text-amber-300")}>{detail}{ap?.rtc === "no-h264" ? " The projector's browser can't play this video format." : ""}</span>}>
               <Switch id="wall-airplay" checked={!off} onCheckedChange={(v) => change({ airplay: v })} />
             </Row>
+            <div className="border-t border-white/10 px-4 py-3">
+              <button type="button" className={cn(btn, "w-full")} disabled={off} onClick={() => void restartAirplay()}>
+                <RotateCw className="h-4 w-4" aria-hidden /> Restart AirPlay
+              </button>
+              {apMsg && <p className="mt-2 text-[13px] text-white/60" role="status">{apMsg}</p>}
+            </div>
+          </Group>
+        );
+      })()}
+
+      {/* Wake-up alarm: the Pi wakes the projector, unmutes, raises the volume; the wall plays a sunrise with bells. */}
+      {(() => {
+        const a = s.alarm ?? null;
+        const on = !!a?.on;
+        const time = a?.time ?? "07:00";
+        const days = a?.days ?? "once";
+        const setA = (p: Partial<NonNullable<WallState["alarm"]>>) => change({ alarm: { on, time, days, vol: a?.vol ?? 60, ...(a ?? {}), ...p, set_at: Date.now() } as WallState["alarm"] });
+        const [hh, mm] = time.split(":").map(Number);
+        const pretty = new Date(2000, 0, 1, hh || 0, mm || 0).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        return (
+          <Group title="Alarm" footer={`The wall wakes up a minute early, turns the sound on, and a sunrise with bells fills the strip. The bells slowly get louder until you tap Stop. Your phone gets a notification if the wall can't ring.`}>
+            <Row htmlFor="wall-alarm" label="Wake-up alarm" detail={on ? `${pretty}${days === "once" ? ", once" : days === "weekdays" ? ", weekdays" : days === "weekends" ? ", weekends" : ", every day"}` : "Off"}>
+              <Switch id="wall-alarm" checked={on} onCheckedChange={(v) => setA({ on: v })} />
+            </Row>
+            <div className="space-y-3 border-t border-white/10 px-4 py-3">
+              <label className="flex items-center justify-between gap-3 text-[15px]">
+                <span>Time</span>
+                <input type="time" value={time} onChange={(e) => e.target.value && setA({ time: e.target.value, on: true })}
+                  className="min-h-[44px] rounded-lg bg-white/[0.07] px-3 text-[16px] text-white [color-scheme:dark]" />
+              </label>
+              <Segmented label="Repeat" value={days} onChange={(v) => setA({ days: v })}
+                options={[{ id: "once", label: "Once" }, { id: "weekdays", label: "Weekdays" }, { id: "weekends", label: "Weekends" }, { id: "daily", label: "Every day" }]} />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button type="button" className={cn(btn, "w-full")} onClick={() => change({ alarm: { ...(a ?? { on: false, time }), stop: Date.now() } as WallState["alarm"] })}>
+                  <Square className="h-4 w-4" aria-hidden /> Stop alarm
+                </button>
+                <button type="button" className={cn(btn, "w-full")} onClick={() => change({ alarm: { ...(a ?? { on: false, time }), test: Date.now() } as WallState["alarm"] })}>
+                  <Sun className="h-4 w-4" aria-hidden /> Preview 20 seconds
+                </button>
+              </div>
+            </div>
+          </Group>
+        );
+      })()}
+
+      {/* Heads-up: a card grows on the wall 15 minutes before ("soon", quiet), then "now" with a chime + a phone push. */}
+      {(() => {
+        const list = (s.heads ?? []).filter((h) => h && h.at > Date.now() - 20 * 60000).sort((x, y) => x.at - y.at);
+        return (
+          <Group title="Heads-up" footer="A card appears on the wall 15 minutes before, then at the time it chimes and your phone gets a notification. Dismiss stops it on both.">
+            {list.length === 0 && <p className="px-4 py-3 text-[15px] text-white/60">Nothing coming up.</p>}
+            {list.map((h) => (
+              <Row key={h.id} label={h.title} detail={`${new Date(h.at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}${h.sub ? ` · ${h.sub}` : ""}`}>
+                <button type="button" className={cn(btn, "min-h-[36px] px-3 text-[14px]")}
+                  onClick={() => change({ heads: (s.heads ?? []).filter((x) => x.id !== h.id) })}>Remove</button>
+              </Row>
+            ))}
+            {list.length > 0 && (
+              <div className="border-t border-white/10 px-4 py-3">
+                <button type="button" className={cn(btn, "w-full")} onClick={() => change({ headsStop: Date.now() })}>
+                  <Square className="h-4 w-4" aria-hidden /> Dismiss what's showing
+                </button>
+              </div>
+            )}
           </Group>
         );
       })()}
