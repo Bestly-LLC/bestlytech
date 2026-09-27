@@ -130,6 +130,7 @@ export default function Wall() {
   const [sigs, setSigs] = useState<Sig[]>([]);
   const [signMsg, setSignMsg] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [linkAll, setLinkAll] = useState(false);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
   const [showAllSigs, setShowAllSigs] = useState(false);
   const [sel, setSel] = useState(0);
@@ -227,10 +228,20 @@ export default function Wall() {
       [a, b].forEach((j) => { list[j][0] = clamp(list[j][0] + dx); list[j][1] = clamp(list[j][1] + dy); });
     } else if (i === list.length) list.forEach((p) => { p[0] = clamp(p[0] + dx); p[1] = clamp(p[1] + dy); });
     else { list[i][0] = clamp(list[i][0] + dx); list[i][1] = clamp(list[i][1] + dy); }
-    S.current = { ...cur, [key]: list };
+    const patch: Partial<WallState> = { [key]: list };
+    if (linkAll && i === list.length) {
+      // projector got bumped: slide every area (strip, blocked area, sign wall, sky) by the same amount
+      const shift = (pts?: Pt[] | null) => pts ? pts.map(([x, y]) => [clamp(x + dx), clamp(y + dy)] as Pt) : pts;
+      (["corners", "mask", "wing", "air"] as const).forEach((k) => {
+        if (k === key) return;
+        const src = k === "wing" ? cur.wing ?? DEFAULT_WING : k === "air" ? cur.air ?? DEFAULT_AIR : cur[k];
+        if (src) (patch as Record<string, unknown>)[k] = shift(src);
+      });
+    }
+    S.current = { ...cur, ...patch };
     repaint();
-    sendLive({ [key]: list });
-    sendSave({ [key]: list }, save === "now");
+    sendLive(patch);
+    sendSave(patch, save === "now");
   };
 
   const startDrag = (i: number) => (e: React.PointerEvent<HTMLElement>) => {
@@ -541,6 +552,9 @@ export default function Wall() {
         </Row>
         <Row label="Flip the sky" detail="Turn the planes area 180° if it reads upside down from your desk." htmlFor="wall-air-flip">
           <Switch id="wall-air-flip" checked={!!s.airFlip} onCheckedChange={(v) => change({ airFlip: v })} />
+        </Row>
+        <Row label="Move everything together" detail="Bumped the projector? Drag the blue dot (or use the arrows on it) and every area slides as one." htmlFor="wall-link">
+          <Switch id="wall-link" checked={linkAll} onCheckedChange={setLinkAll} />
         </Row>
         <Row label="Show guides on the wall" detail="Outlines the strip and blocked area so you can line them up." htmlFor="wall-guides">
           <Switch id="wall-guides" checked={s.mapping} onCheckedChange={(v) => change({ mapping: v })} />
