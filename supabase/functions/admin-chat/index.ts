@@ -897,8 +897,10 @@ How to work:
 - Only say something is done if a tool result in this turn shows ok:true for it.
 - If a tool fails, change approach. Call ask_paid only for a code change, a data change (INSERT/UPDATE/DELETE), or when you truly can't finish.
 ${autopilot
-    ? `Reply: plain words, under 90 words, then exactly one last line:
-FIXED: <what fixed it>  |  NEEDS_YES: <the one action you'd take with his yes, in everyday words>  |  STUCK: <what blocks it>`
+    ? `Reply: plain words, under 90 words, then ONE last line that is exactly one of these three (pick one, never list them):
+FIXED: <what fixed it, or "already clear" and the evidence>
+NEEDS_YES: <the one action you'd take with his yes, in everyday words>
+STUCK: <what blocks it>`
     : `Reply: plain text, under 90 words, lead with the answer, no markdown headers. When he needs to choose or approve, end with one line: OPTIONS: <2-4 short choices separated by |>. A plain answer needs no options.`}
 
 ${FREE_FACTS}
@@ -963,6 +965,8 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       const m = reply.match(/^\s*OPTIONS:\s*(.+)$/m);
       const opts = m ? m[1].split("|").map((o) => o.trim()).filter(Boolean).slice(0, 4) : [];
       let body = reply.replace(/^\s*OPTIONS:.*$/m, "").trim();
+      // One verdict line only: gpt-oss sometimes copies the whole template ("FIXED: x | NEEDS_YES: none | STUCK: none").
+      if (autopilot) body = body.replace(/^((?:FIXED|NEEDS_YES|STUCK):.*?)\s+\|\s+(?:FIXED|NEEDS_YES|STUCK):.*$/gm, "$1");
       if (autopilot && !/^(FIXED|NEEDS_YES|STUCK):/m.test(body)) body += "\nSTUCK: the free AI didn't reach a verdict.";
       return { answer: `${body}${!autopilot && opts.length >= 2 ? `\n\nOPTIONS: ${opts.join(" | ")}` : ""}`, why: "", tools: used };
     }
