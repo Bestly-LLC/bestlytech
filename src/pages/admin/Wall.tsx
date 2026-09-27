@@ -32,9 +32,11 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
+  air?: Pt[]; airShow?: boolean;
 };
 type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
 const DEFAULT_WING: Pt[] = [[0.02, 0.33], [0.27, 0.36], [0.27, 0.66], [0.02, 0.70]];
+const DEFAULT_AIR: Pt[] = [[0.30, 0.17], [0.99, 0.05], [0.99, 0.25], [0.30, 0.37]];
 type DemoKey = "demoLeft" | "demoNames" | "demoRight";
 const DEMO_FIELDS: { key: DemoKey; label: string; placeholder: string; lines: number; fallback: string }[] = [
   { key: "demoLeft", label: "Left", placeholder: "Oct 18\n2026", lines: 2, fallback: "Oct 18\n2026" },
@@ -124,7 +126,7 @@ const btn =
 export default function Wall() {
   const [r, setR] = useState<Remote | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tool, setTool] = useState<"corners" | "mask" | "wing">("corners");
+  const [tool, setTool] = useState<"corners" | "mask" | "wing" | "air">("corners");
   const [sigs, setSigs] = useState<Sig[]>([]);
   const [signMsg, setSignMsg] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -209,14 +211,14 @@ export default function Wall() {
   /* ───── mapping ───── */
   const EDGE = 100; // handle ids >= EDGE are side handles (side n runs from corner n to corner n+1)
   const s = S.current;
-  const shapeKey = tool === "mask" ? "mask" : tool === "wing" ? "wing" : "corners";
-  const quad: Pt[] | null = s ? (tool === "wing" ? (s.wing ?? DEFAULT_WING) : s.corners) : null;
+  const shapeKey = tool === "mask" ? "mask" : tool === "wing" ? "wing" : tool === "air" ? "air" : "corners";
+  const quad: Pt[] | null = s ? (tool === "wing" ? (s.wing ?? DEFAULT_WING) : tool === "air" ? (s.air ?? DEFAULT_AIR) : s.corners) : null;
   const pts: Pt[] | null = s ? (tool === "mask" ? s.mask : quad) : null;
 
   const move = (i: number, dx: number, dy: number, save: "throttle" | "now" = "throttle") => {
     const cur = S.current; if (!cur) return;
     const key = shapeKey;
-    const list = ((key === "wing" ? cur.wing ?? DEFAULT_WING : cur[key]) ?? []).map((p) => [...p] as Pt);
+    const list = ((key === "wing" ? cur.wing ?? DEFAULT_WING : key === "air" ? cur.air ?? DEFAULT_AIR : cur[key]) ?? []).map((p) => [...p] as Pt);
     if (!list.length) return;
     const clamp = (v: number) => Math.min(1.5, Math.max(-0.5, v));
     if (i >= EDGE) {
@@ -246,7 +248,7 @@ export default function Wall() {
     const up = () => {
       dragging.current = false;
       el.removeEventListener("pointermove", mv); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up);
-      const cur = S.current; if (cur) sendSave({ [shapeKey]: shapeKey === "wing" ? cur.wing ?? DEFAULT_WING : cur[shapeKey] }, true);
+      const cur = S.current; if (cur) sendSave({ [shapeKey]: shapeKey === "wing" ? cur.wing ?? DEFAULT_WING : shapeKey === "air" ? cur.air ?? DEFAULT_AIR : cur[shapeKey] }, true);
     };
     el.addEventListener("pointermove", mv); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
   };
@@ -258,13 +260,13 @@ export default function Wall() {
 
   /** Resize the strip without changing its shape: scale all 4 corners around their center. */
   const scale = (grow: boolean) => {
-    const c = tool === "wing" ? S.current?.wing ?? DEFAULT_WING : S.current?.corners; if (!c) return;
+    const c = tool === "wing" ? S.current?.wing ?? DEFAULT_WING : tool === "air" ? S.current?.air ?? DEFAULT_AIR : S.current?.corners; if (!c) return;
     const step = fine ? 0.01 : 0.04;
     const f = grow ? 1 + step : 1 / (1 + step);
     const cx = c.reduce((a, p) => a + p[0], 0) / c.length;
     const cy = c.reduce((a, p) => a + p[1], 0) / c.length;
     const clamp = (v: number) => Math.min(1.5, Math.max(-0.5, v));
-    change({ [tool === "wing" ? "wing" : "corners"]: c.map(([x, y]) => [clamp(cx + (x - cx) * f), clamp(cy + (y - cy) * f)] as Pt) });
+    change({ [tool === "wing" ? "wing" : tool === "air" ? "air" : "corners"]: c.map(([x, y]) => [clamp(cx + (x - cx) * f), clamp(cy + (y - cy) * f)] as Pt) });
   };
 
   /* ───── sign the wall ───── */
@@ -527,23 +529,30 @@ export default function Wall() {
 
       {/* Layout */}
       <Group title="Layout"
-        footer={tool === "wing"
+        footer={tool === "air"
+          ? "The violet box is the sky: live planes and helicopters overhead fly across it. Put it on the open wall above the strip."
+          : tool === "wing"
           ? "The teal box is the Sign the wall area. Drag it onto the open wall the projector reaches on the left. Bars stretch a side; Bigger / Smaller keep the shape."
           : tool === "corners"
           ? "The black box is the projector's whole picture. Drag the white dots onto the corners of your strip. The bars stretch one side evenly, the blue dot moves everything, and Bigger / Smaller resize without changing the shape."
           : "Drag the orange dots over the shadow where the TV blocks the light. The wall stays dark there and moves text out of the way."}>
+        <Row label={<span className="inline-flex items-center gap-2"><Plane className="h-4 w-4" aria-hidden /> Planes overhead</span>} detail="Live planes and helicopters flying over the house, on the wall above the strip." htmlFor="wall-air">
+          <Switch id="wall-air" checked={s.airShow !== false} onCheckedChange={(v) => change({ airShow: v })} />
+        </Row>
         <Row label="Show guides on the wall" detail="Outlines the strip and blocked area so you can line them up." htmlFor="wall-guides">
           <Switch id="wall-guides" checked={s.mapping} onCheckedChange={(v) => change({ mapping: v })} />
         </Row>
         <div className="space-y-3 px-4 py-3">
           <Segmented label="What to adjust" value={tool}
             onChange={(t) => { if (t === "mask" && !s.mask) addMask(); else { setTool(t); setSel(0); } }}
-            options={[{ id: "corners", label: "Strip" }, { id: "mask", label: <><Triangle className="h-4 w-4" aria-hidden /> Blocked</> }, { id: "wing", label: <><PenLine className="h-4 w-4" aria-hidden /> Sign wall</> }]} />
+            options={[{ id: "corners", label: "Strip" }, { id: "mask", label: <><Triangle className="h-4 w-4" aria-hidden /> Blocked</> }, { id: "wing", label: <><PenLine className="h-4 w-4" aria-hidden /> Sign</> }, { id: "air", label: <><Plane className="h-4 w-4" aria-hidden /> Sky</> }]} />
 
           <div ref={padRef} className="relative aspect-video w-full touch-none select-none overflow-hidden rounded-xl ring-1 ring-white/15" style={{ background: "#000" }}>
             <svg viewBox="0 0 1600 900" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
               <polygon points={s.corners.map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
                 fill="rgba(255,248,236,0.14)" stroke="#FFF8EC" strokeWidth={tool === "corners" ? 5 : 3} />
+              <polygon points={(s.air ?? DEFAULT_AIR).map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
+                fill="rgba(191,90,242,0.14)" stroke="#BF5AF2" strokeWidth={tool === "air" ? 5 : 2} strokeDasharray={tool === "air" ? undefined : "14 10"} />
               <polygon points={(s.wing ?? DEFAULT_WING).map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
                 fill="rgba(100,210,255,0.16)" stroke="#64D2FF" strokeWidth={tool === "wing" ? 5 : 2} strokeDasharray={tool === "wing" ? undefined : "14 10"} />
               {s.mask && (
@@ -578,7 +587,7 @@ export default function Wall() {
               const isAll = i === handles.length - 1;
               return (
                 <button key={`${tool}-${i}`} type="button"
-                  aria-label={isAll ? "Move the whole shape" : `${tool === "mask" ? "Blocked area" : tool === "wing" ? "Sign wall" : "Corner"} point ${i + 1}`}
+                  aria-label={isAll ? "Move the whole shape" : `${tool === "mask" ? "Blocked area" : tool === "wing" ? "Sign wall" : tool === "air" ? "Sky" : "Corner"} point ${i + 1}`}
                   aria-pressed={sel === i}
                   onPointerDown={startDrag(i)} onFocus={() => setSel(i)}
                   onKeyDown={(e) => {
@@ -589,7 +598,7 @@ export default function Wall() {
                   className="absolute -ml-[22px] -mt-[22px] flex h-11 w-11 touch-none items-center justify-center rounded-full focus-visible:outline-none">
                   <span className={cn(
                     "block h-5 w-5 rounded-full border-[2.5px] shadow-[0_0_0_2px_rgba(0,0,0,0.55)] transition-transform duration-100",
-                    isAll ? "border-white bg-sky-400" : tool === "mask" ? "border-white bg-orange-400" : tool === "wing" ? "border-black bg-[#64D2FF]" : "border-black bg-[#FFF8EC]",
+                    isAll ? "border-white bg-sky-400" : tool === "mask" ? "border-white bg-orange-400" : tool === "wing" ? "border-black bg-[#64D2FF]" : tool === "air" ? "border-black bg-[#BF5AF2]" : "border-black bg-[#FFF8EC]",
                     sel === i && "scale-125 ring-4 ring-sky-400/70",
                   )} />
                 </button>
@@ -622,8 +631,8 @@ export default function Wall() {
                       <Maximize2 className="h-4 w-4" aria-hidden /> Bigger
                     </button>
                   </div>
-                  <button type="button" className={cn(btn, "w-full")} onClick={() => change(tool === "wing" ? { wing: DEFAULT_WING } : { corners: DEFAULT_CORNERS })}>
-                    <RotateCcw className="h-4 w-4" aria-hidden /> {tool === "wing" ? "Reset sign wall" : "Reset corners"}
+                  <button type="button" className={cn(btn, "w-full")} onClick={() => change(tool === "wing" ? { wing: DEFAULT_WING } : tool === "air" ? { air: DEFAULT_AIR } : { corners: DEFAULT_CORNERS })}>
+                    <RotateCcw className="h-4 w-4" aria-hidden /> {tool === "wing" ? "Reset sign wall" : tool === "air" ? "Reset sky" : "Reset corners"}
                   </button>
                 </>
               ) : (
