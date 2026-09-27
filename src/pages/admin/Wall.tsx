@@ -20,7 +20,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar,
-  Focus, Maximize2, Minimize2, PenLine, Plane, QrCode, Sparkles, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff,
+  Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff,
 } from "lucide-react";
 
 type Pt = [number, number];
@@ -293,6 +293,13 @@ export default function Wall() {
     const mask: Pt[] = [[br[0] - 0.12, br[1] + 0.02], [tr[0] + 0.02, tr[1] + (br[1] - tr[1]) * 0.35], [br[0] + 0.02, br[1] + 0.02]];
     setTool("mask"); setSel(0);
     change({ mask, mapping: true });
+  };
+
+  const restartWall = async () => {
+    setPowerMsg("Restarting the wall… back in about 15 seconds.");
+    const { error } = await rpc("wall_admin_command", { p_cmd: "relaunch" });
+    setPowerMsg(error ? `Didn't go through: ${error.message}` : "Restart sent. The wall wakes, reopens and comes back in about 15 seconds.");
+    void load();
   };
 
   const focus = async () => {
@@ -653,6 +660,7 @@ export default function Wall() {
           <button type="button" className={btn} onClick={() => void power(true)}><Sun className="h-5 w-5" aria-hidden /> Wake</button>
           <button type="button" className={btn} onClick={() => void power(false)}><Moon className="h-5 w-5" aria-hidden /> Sleep</button>
           <button type="button" className={btn} onClick={() => void focus()}><Focus className="h-5 w-5" aria-hidden /> Focus</button>
+          <button type="button" className={btn} onClick={() => void restartWall()}><RotateCw className="h-5 w-5" aria-hidden /> Restart wall</button>
         </div>
         <Row label="Auto keystone" detail="Off keeps the picture square so your mapping doesn't shift. Turn on only if you move the projector." htmlFor="wall-keystone">
           <Switch id="wall-keystone" checked={!!s.autoKeystone} onCheckedChange={(v) => change({ autoKeystone: v })} />

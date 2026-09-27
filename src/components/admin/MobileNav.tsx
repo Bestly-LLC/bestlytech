@@ -6,14 +6,14 @@
  * they already do in Eli's portal, and everything else stays in the drawer behind More.
  *
  * The raised center button opens Quick tools: a Control Center style sheet with the six
- * things he reaches for most (Wall, Scout, Meetings, Street Sweeping, Home Hub, and a
- * one-tap projector refocus).
+ * things he reaches for most (Wall, Scout, Meetings, Street Sweeping, a one-tap projector
+ * refocus and a one-tap wall restart).
  *
  * Hidden from md up - the sidebar is the right answer on a real screen.
  */
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Binoculars, Brush, Car, Focus, LayoutDashboard, Menu, Mic, Projector, Server, Zap, X } from "lucide-react";
+import { Binoculars, Brush, Car, Focus, LayoutDashboard, Menu, Mic, Projector, RotateCw, Zap, X } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { openScout } from "@/components/admin/scoutBus";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,7 +32,14 @@ const TOOLS: Tool[] = [
   { label: "Ask Scout", sub: "Anything, anytime", icon: Binoculars, tint: "#30D158", run: () => openScout() },
   { label: "Meetings", sub: "Record & notes", icon: Mic, tint: "#FF453A", to: "/admin/meetings" },
   { label: "Street Sweeping", sub: "Where's the car", icon: Brush, tint: "#FF9F0A", to: "/admin/street-sweeping" },
-  { label: "Home Hub", sub: "Pi, HA, devices", icon: Server, tint: "#64D2FF", to: "/admin/home-hub" },
+  {
+    label: "Restart wall", sub: "Stuck? Reopen it", icon: RotateCw, tint: "#64D2FF",
+    run: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.rpc as any)("wall_admin_command", { p_cmd: "relaunch" });
+      return error ? `Didn't go through: ${error.message}` : "Restarting the wall… back in about 15 seconds.";
+    },
+  },
   {
     label: "Focus projector", sub: "Sharpen the wall", icon: Focus, tint: "#BF5AF2",
     run: async () => {
