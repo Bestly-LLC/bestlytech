@@ -20,7 +20,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { ProjectorHealth, type Health } from "@/components/admin/ProjectorHealth";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard } from "lucide-react";
 
 type Pt = [number, number];
 type Mode = "auto" | "board" | "ambient" | "demo" | "off";
@@ -460,7 +460,7 @@ export default function Wall() {
       </Group>
 
       {/* Show for friends: a ~2 minute tour of the wall, then a party loop until you stop it (45 min max). */}
-      <Group title="Show for friends" footer="About 2 minutes of tour, then the party keeps going until you stop it (45 minutes max). Music plays 7 AM to 11 PM when wall sound is on; at night it's lights only.">
+      <Group title="Show for friends" footer={<>About 2 minutes of tour, then the party keeps going until you stop it (45 minutes max). Music plays 7{"\u00a0"}AM to 11{"\u00a0"}PM when wall sound is on; at night it's lights only.<br />The skit is a 2-minute cartoon, "The Night Shift" (by day, "The Day Shift"). Voices play when wall sound is on, softer at night, and every line shows in a speech bubble.</>}>
         <div className="grid gap-2 px-4 py-3 sm:grid-cols-3">
           <button type="button" className={cn(btn, "w-full")} onClick={() => change({ tour: { cmd: "play", at: Date.now() } })}>
             <Presentation className="h-4 w-4" aria-hidden /> Play the show
@@ -470,6 +470,11 @@ export default function Wall() {
           </button>
           <button type="button" className={cn(btn, "w-full")} onClick={() => change({ tour: { cmd: "stop", at: Date.now() } })}>
             <Square className="h-4 w-4" aria-hidden /> Stop
+          </button>
+        </div>
+        <div className="border-t border-white/10 px-4 py-3">
+          <button type="button" className={cn(btn, "w-full")} onClick={() => change({ tour: { cmd: "skit", at: Date.now() } })}>
+            <Clapperboard className="h-4 w-4" aria-hidden /> Play the skit
           </button>
         </div>
       </Group>
@@ -482,7 +487,7 @@ export default function Wall() {
         const since = ap?.since ? new Date(ap.since * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : null;
         const detail = off ? "Off. Your phone won't see the wall."
           : !ap ? "Checking with the Pi…"
-          : ap.casting ? `Playing ${ap.kind === "audio" ? "audio" : "video"}${since ? `\u00a0since ${since}` : ""}${ap.page && ap.page.startsWith("playing") ? "" : " · connecting on the wall"}`
+          : ap.casting ? `Playing ${ap.kind === "audio" ? "audio" : "video"}${since ? ` since ${since}` : ""}${ap.page && ap.page.startsWith("playing") ? "" : " · connecting on the wall"}`
           : ap.on && fresh ? "Ready. On your iPhone: Control Center, Screen Mirroring, Bestly\u00a0Wall."
           : "Not running right now. The Pi keeps retrying and Scout will tell you if it stays down.";
         return (
