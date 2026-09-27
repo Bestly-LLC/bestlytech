@@ -32,7 +32,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean;
+  air?: Pt[]; airShow?: boolean; airFlip?: boolean;
 };
 type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
 const DEFAULT_WING: Pt[] = [[0.02, 0.33], [0.27, 0.36], [0.27, 0.66], [0.02, 0.70]];
@@ -538,6 +538,9 @@ export default function Wall() {
           : "Drag the orange dots over the shadow where the TV blocks the light. The wall stays dark there and moves text out of the way."}>
         <Row label={<span className="inline-flex items-center gap-2"><Plane className="h-4 w-4" aria-hidden /> Planes overhead</span>} detail="Live planes and helicopters flying over the house, on the wall above the strip." htmlFor="wall-air">
           <Switch id="wall-air" checked={s.airShow !== false} onCheckedChange={(v) => change({ airShow: v })} />
+        </Row>
+        <Row label="Flip the sky" detail="Turn the planes area 180° if it reads upside down from your desk." htmlFor="wall-air-flip">
+          <Switch id="wall-air-flip" checked={!!s.airFlip} onCheckedChange={(v) => change({ airFlip: v })} />
         </Row>
         <Row label="Show guides on the wall" detail="Outlines the strip and blocked area so you can line them up." htmlFor="wall-guides">
           <Switch id="wall-guides" checked={s.mapping} onCheckedChange={(v) => change({ mapping: v })} />
