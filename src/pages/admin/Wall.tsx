@@ -17,6 +17,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { ProjectorHealth, type Health } from "@/components/admin/ProjectorHealth";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar,
@@ -32,7 +33,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; airFlip?: boolean; airKey?: boolean;
+  air?: Pt[]; airShow?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
 };
 type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
 const DEFAULT_WING: Pt[] = [[0.02, 0.33], [0.27, 0.36], [0.27, 0.66], [0.02, 0.70]];
@@ -46,6 +47,7 @@ const DEMO_FIELDS: { key: DemoKey; label: string; placeholder: string; lines: nu
 type PiStatus = {
   status?: string; top?: string; cpu_c?: number | null; heartbeat_age_s?: number | null;
   override?: { on: boolean; until: number } | null; restarts_1h?: number; sync_age_s?: number | null;
+  health?: Health | null;
 };
 type Remote = {
   state: WallState; version: number; channel: string; power: { on?: boolean; seq: number; at?: string };
@@ -425,6 +427,8 @@ export default function Wall() {
         </section>
       )}
 
+      <ProjectorHealth health={st?.health} />
+
       {/* The one thing */}
       <Group title="Now" footer="Shows in big letters in the middle of the wall.">
         <div className="flex items-center gap-2 px-4 py-2">
@@ -552,6 +556,15 @@ export default function Wall() {
         </Row>
         <Row label="Sky key" detail="Shows what the colors and symbols mean on the ceiling. Handy when showing people." htmlFor="wall-air-key">
           <Switch id="wall-air-key" checked={!!s.airKey} onCheckedChange={(v) => change({ airKey: v })} />
+        </Row>
+        <Row label="Wall faces" detail="The sky is a map seen from below. Pick the direction your wall faces so planes move the right way." htmlFor="wall-bearing">
+          <select id="wall-bearing" value={String(s.airBearing ?? 0)} onChange={(e) => change({ airBearing: Number(e.target.value) })}
+            className="min-h-[40px] rounded-lg bg-white/[0.08] px-3 text-[15px] text-white ring-1 ring-white/15 focus:outline-none focus:ring-2 focus:ring-sky-400">
+            {["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"].map((n, i) => <option key={n} value={i * 45}>{n}</option>)}
+          </select>
+        </Row>
+        <Row label="Alignment grid" detail="Fills the projector with a labeled grid. Take a photo and send it to Claude to re-fit everything after moving the projector." htmlFor="wall-cal">
+          <Switch id="wall-cal" checked={!!s.calGrid} onCheckedChange={(v) => change({ calGrid: v })} />
         </Row>
         <Row label="Flip the sky" detail="Turn the planes area 180° if it reads upside down from your desk." htmlFor="wall-air-flip">
           <Switch id="wall-air-flip" checked={!!s.airFlip} onCheckedChange={(v) => change({ airFlip: v })} />
