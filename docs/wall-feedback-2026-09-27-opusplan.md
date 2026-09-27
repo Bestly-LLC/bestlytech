@@ -35,11 +35,11 @@ Status legend: [ ] todo · [x] done · [~] partial / needs Jared
 - [ ] A13 New keys in DEFAULT_STATE + DB clean functions; watchdog/Scout coverage; measure fps after.
 
 ## B. Home Assistant (Pi docker) — one worker
-- [ ] B1 Hue motion sensor: no alerts while Jared is home.
-- [ ] B2 Two-way sync: Jared's Bestly to-dos ⇄ an HA to-do list.
-- [ ] B3 Radio Browser integration + Desk HomePod media_player via AirPlay; record entity ids.
-- [ ] B4 AirPlay lag/connectivity: diagnose + fix.
-- [ ] B5 Plane-tags shortcut (HA switch → `wall_quick_set`), Siri/Shortcuts-ready.
+- [x] B1 Hue motion sensor: no alerts while Jared is home. — pushes came from Pi `home-narrator.py` (not HA); motion skipped unless away (`presence_lib.py`: person home OR home Wi-Fi); `security-monitor.py` uses the same rule.
+- [x] B2 Two-way sync: Jared's Bestly to-dos ⇄ an HA to-do list. — `todo.bestly` ⇄ RPC `ha_todo_sync` via `/opt/bestly/ha-todo-sync` (timer, 1 min); watchdog cron → Scout `ha.todo_sync`.
+- [x] B3 Radio Browser integration + Desk HomePod media_player via AirPlay; record entity ids. — `media_player.desk` (play_media, MP3 streams, type `music`); bestly_memory `house/ha/entities`.
+- [~] B4 AirPlay lag/connectivity: diagnose + fix. — fixed mDNS host-name fight (Homebridge's own avahi), avahi eth0-only, lower-latency relay (small VBV, no-buffer input, announce after go2rtc ready). Not yet measured with a real phone cast; wall.html jitterBufferTarget=0 left for A.
+- [x] B5 Plane-tags shortcut (HA switch → `wall_quick_set`), Siri/Shortcuts-ready. — `switch.wall_plane_tags` + `script.wall_plane_tags_toggle`; no HA HomeKit Bridge, so Siri = an iOS Shortcut running the script.
 
 ## C. Tesla + Turo — one worker
 - [ ] C1 Car-moving protection: don't alert when it's Jared driving the car back after a trip (e.g. LAX → home), confirmed via Tesla/TezLab data.
