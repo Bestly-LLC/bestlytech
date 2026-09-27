@@ -21,7 +21,7 @@ import { ProjectorHealth, type Health } from "@/components/admin/ProjectorHealth
 import { Switch } from "@/components/ui/switch";
 import {
   AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar,
-  Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff,
+  Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff,
 } from "lucide-react";
 
 type Pt = [number, number];
@@ -34,6 +34,7 @@ type WallState = {
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
   air?: Pt[]; airShow?: boolean; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
+  fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
 };
 type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
 const DEFAULT_WING: Pt[] = [[0.02, 0.33], [0.27, 0.36], [0.27, 0.66], [0.02, 0.70]];
@@ -135,6 +136,7 @@ export default function Wall() {
   const [linkAll, setLinkAll] = useState(false);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
   const [showAllSigs, setShowAllSigs] = useState(false);
+  const [copiedAlign, setCopiedAlign] = useState(false);
   const [sel, setSel] = useState(0);
   const [fine, setFine] = useState(true);
   const [one, setOne] = useState("");
@@ -539,6 +541,10 @@ export default function Wall() {
             <Volume2 className="h-4 w-4" aria-hidden /> Play every sound on the wall
           </button>
           <p className="text-[13px] text-white/50">Plays the hourly chime, a mode switch, an alert, a new signature and a celebration, in that order.</p>
+          <button type="button" className={cn(btn, "w-full")} onClick={() => change({ fxPlay: { name: "show", at: Date.now() } })}>
+            <Sparkles className="h-4 w-4" aria-hidden /> Play the wake + sleep show
+          </button>
+          <p className="text-[13px] text-white/50">The wall powers down, then wakes back up. It also plays on its own at bedtime and in the morning.</p>
         </div>
       </Group>
 
@@ -566,6 +572,19 @@ export default function Wall() {
         <Row label="Alignment grid" detail="Fills the projector with a labeled grid. Take a photo and send it to Claude to re-fit everything after moving the projector." htmlFor="wall-cal">
           <Switch id="wall-cal" checked={!!s.calGrid} onCheckedChange={(v) => change({ calGrid: v })} />
         </Row>
+        <div className="space-y-2 px-4 py-3">
+          <button type="button" className={cn(btn, "w-full")}
+            onClick={async () => {
+              change({ calGrid: true });
+              const prompt = "Wall alignment: the alignment grid is on the wall now. I'm attaching 2 photos taken from where I usually sit (one with the lights on, one with the lights off). Re-fit the strip, the sign wall, the blocked TV area and the sky (fill the whole ceiling, text and planes must look straight from where I sit). Save it, turn the grid off, and check it on the projector. Use the wall-realign skill.";
+              try { await navigator.clipboard.writeText(prompt); } catch { const t = document.createElement("textarea"); t.value = prompt; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+              setCopiedAlign(true); setTimeout(() => setCopiedAlign(false), 2500);
+            }}>
+            {copiedAlign ? <CheckCircle2 className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+            {copiedAlign ? "Copied. Grid is on" : "Re-align: turn on grid + copy prompt"}
+          </button>
+          <p className="text-[13px] text-white/50">Then take 2 photos from your usual spot (lights on and off) and paste the prompt with them to Claude. Free, and more accurate than an automatic fix.</p>
+        </div>
         <Row label="Flip the sky" detail="Turn the planes area 180° if it reads upside down from your desk." htmlFor="wall-air-flip">
           <Switch id="wall-air-flip" checked={!!s.airFlip} onCheckedChange={(v) => change({ airFlip: v })} />
         </Row>
