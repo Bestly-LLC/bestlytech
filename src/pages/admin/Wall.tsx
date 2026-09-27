@@ -20,7 +20,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar,
-  Plane, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff,
+  Focus, Plane, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff,
 } from "lucide-react";
 
 type Pt = [number, number];
@@ -28,6 +28,7 @@ type Mode = "auto" | "board" | "ambient" | "demo" | "off";
 type WallState = {
   corners: Pt[]; mode: Mode; one: string; mapping: boolean;
   testSweep: boolean; testScout: boolean; away: boolean; mask: Pt[] | null;
+  autoKeystone?: boolean;
 };
 type PiStatus = {
   status?: string; top?: string; cpu_c?: number | null; heartbeat_age_s?: number | null;
@@ -234,6 +235,13 @@ export default function Wall() {
     const mask: Pt[] = [[br[0] - 0.12, br[1] + 0.02], [tr[0] + 0.02, tr[1] + (br[1] - tr[1]) * 0.35], [br[0] + 0.02, br[1] + 0.02]];
     setTool("mask"); setSel(0);
     change({ mask, mapping: true });
+  };
+
+  const focus = async () => {
+    setPowerMsg("Focusing… the picture blurs for a few seconds.");
+    const { error } = await rpc("wall_admin_command", { p_cmd: "focus" });
+    setPowerMsg(error ? `Didn't go through: ${error.message}` : "Focus sent. Tap again if it still looks soft.");
+    void load();
   };
 
   const power = async (wantOn: boolean) => {
@@ -460,10 +468,14 @@ export default function Wall() {
 
       {/* Projector */}
       <Group title="Projector" footer={powerMsg ?? "Wake and Sleep hold until the next switch at 7 AM or midnight."}>
-        <div className="grid grid-cols-2 gap-2 p-2">
+        <div className="grid grid-cols-3 gap-2 p-2">
           <button type="button" className={btn} onClick={() => void power(true)}><Sun className="h-5 w-5" aria-hidden /> Wake</button>
           <button type="button" className={btn} onClick={() => void power(false)}><Moon className="h-5 w-5" aria-hidden /> Sleep</button>
+          <button type="button" className={btn} onClick={() => void focus()}><Focus className="h-5 w-5" aria-hidden /> Focus</button>
         </div>
+        <Row label="Auto keystone" detail="Off keeps the picture square so your mapping doesn't shift. Turn on only if you move the projector." htmlFor="wall-keystone">
+          <Switch id="wall-keystone" checked={!!s.autoKeystone} onCheckedChange={(v) => change({ autoKeystone: v })} />
+        </Row>
         <Row label="Away mode" detail="Taking it to a gig. The Pi won't wake it, open the wall or send offline alerts." htmlFor="wall-away">
           <Switch id="wall-away" checked={s.away} onCheckedChange={(v) => change({ away: v })} />
         </Row>
