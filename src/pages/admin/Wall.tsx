@@ -20,7 +20,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar,
-  Focus, Maximize2, Minimize2, Plane, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff,
+  Focus, Maximize2, Minimize2, PenLine, Plane, QrCode, Sparkles, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff,
 } from "lucide-react";
 
 type Pt = [number, number];
@@ -30,7 +30,10 @@ type WallState = {
   testSweep: boolean; testScout: boolean; away: boolean; mask: Pt[] | null;
   autoKeystone?: boolean;
   demoLeft?: string; demoNames?: string; demoRight?: string;
+  wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
 };
+type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
+const DEFAULT_WING: Pt[] = [[0.02, 0.33], [0.27, 0.36], [0.27, 0.66], [0.02, 0.70]];
 type DemoKey = "demoLeft" | "demoNames" | "demoRight";
 const DEMO_FIELDS: { key: DemoKey; label: string; placeholder: string; lines: number; fallback: string }[] = [
   { key: "demoLeft", label: "Left", placeholder: "Oct 18\n2026", lines: 2, fallback: "Oct 18\n2026" },
@@ -120,7 +123,10 @@ const btn =
 export default function Wall() {
   const [r, setR] = useState<Remote | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tool, setTool] = useState<"corners" | "mask">("corners");
+  const [tool, setTool] = useState<"corners" | "mask" | "wing">("corners");
+  const [sigs, setSigs] = useState<Sig[]>([]);
+  const [signMsg, setSignMsg] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [sel, setSel] = useState(0);
   const [fine, setFine] = useState(true);
   const [one, setOne] = useState("");
@@ -200,12 +206,14 @@ export default function Wall() {
   /* ───── mapping ───── */
   const EDGE = 100; // handle ids >= EDGE are side handles (side n runs from corner n to corner n+1)
   const s = S.current;
-  const pts: Pt[] | null = s ? (tool === "mask" ? s.mask : s.corners) : null;
+  const shapeKey = tool === "mask" ? "mask" : tool === "wing" ? "wing" : "corners";
+  const quad: Pt[] | null = s ? (tool === "wing" ? (s.wing ?? DEFAULT_WING) : s.corners) : null;
+  const pts: Pt[] | null = s ? (tool === "mask" ? s.mask : quad) : null;
 
   const move = (i: number, dx: number, dy: number, save: "throttle" | "now" = "throttle") => {
     const cur = S.current; if (!cur) return;
-    const key = tool === "mask" ? "mask" : "corners";
-    const list = (cur[key] ?? []).map((p) => [...p] as Pt);
+    const key = shapeKey;
+    const list = ((key === "wing" ? cur.wing ?? DEFAULT_WING : cur[key]) ?? []).map((p) => [...p] as Pt);
     if (!list.length) return;
     const clamp = (v: number) => Math.min(1.5, Math.max(-0.5, v));
     if (i >= EDGE) {
@@ -235,7 +243,7 @@ export default function Wall() {
     const up = () => {
       dragging.current = false;
       el.removeEventListener("pointermove", mv); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up);
-      const cur = S.current; if (cur) sendSave(tool === "mask" ? { mask: cur.mask } : { corners: cur.corners }, true);
+      const cur = S.current; if (cur) sendSave({ [shapeKey]: shapeKey === "wing" ? cur.wing ?? DEFAULT_WING : cur[shapeKey] }, true);
     };
     el.addEventListener("pointermove", mv); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
   };
@@ -247,13 +255,32 @@ export default function Wall() {
 
   /** Resize the strip without changing its shape: scale all 4 corners around their center. */
   const scale = (grow: boolean) => {
-    const c = S.current?.corners; if (!c) return;
+    const c = tool === "wing" ? S.current?.wing ?? DEFAULT_WING : S.current?.corners; if (!c) return;
     const step = fine ? 0.01 : 0.04;
     const f = grow ? 1 + step : 1 / (1 + step);
     const cx = c.reduce((a, p) => a + p[0], 0) / c.length;
     const cy = c.reduce((a, p) => a + p[1], 0) / c.length;
     const clamp = (v: number) => Math.min(1.5, Math.max(-0.5, v));
-    change({ corners: c.map(([x, y]) => [clamp(cx + (x - cx) * f), clamp(cy + (y - cy) * f)] as Pt) });
+    change({ [tool === "wing" ? "wing" : "corners"]: c.map(([x, y]) => [clamp(cx + (x - cx) * f), clamp(cy + (y - cy) * f)] as Pt) });
+  };
+
+  /* ───── sign the wall ───── */
+  const loadSigs = useCallback(async () => {
+    const { data } = await rpc("wall_admin_signs");
+    if (Array.isArray(data)) setSigs(data as Sig[]);
+  }, []);
+  useEffect(() => { void loadSigs(); const t = setInterval(() => void loadSigs(), 10000); return () => clearInterval(t); }, [loadSigs]);
+  const signAction = async (action: "test" | "clear" | "hide" | "show", id?: number) => {
+    setSignMsg(null);
+    const { data, error } = await rpc("wall_admin_sign_action", { p_action: action, p_id: id ?? null });
+    if (error) { setSignMsg(`Didn't go through: ${error.message}`); return; }
+    const d = data as { name?: string; ping?: string } | null;
+    if (d?.ping) {
+      try { const ch = supabase.channel(d.ping); await ch.send({ type: "broadcast", event: "sign", payload: {} }); void supabase.removeChannel(ch); } catch { /* backup nudge only */ }
+    }
+    if (action === "test") setSignMsg(`Sent a test signature from “${d?.name ?? "a guest"}”. Watch the wall.`);
+    if (action === "clear") setSignMsg("Wall cleared. Names are hidden, not deleted.");
+    void loadSigs();
   };
 
   const addMask = () => {
@@ -424,9 +451,47 @@ export default function Wall() {
         </Group>
       )}
 
+      {/* Sign the wall */}
+      <Group title="Sign the wall"
+        footer={<>Guests scan the QR on the wall (or open <a className="underline" href="/sign" target="_blank" rel="noreferrer">bestly.tech/sign</a>), sign with a finger, and it writes itself onto the left wall. Auto shows names when someone is near the wall or right after a new signature.</>}>
+        <div className="space-y-3 px-4 py-3">
+          <Segmented label="Show names" value={s.signShow ?? "auto"} onChange={(v) => change({ signShow: v })}
+            options={[{ id: "auto", label: "Auto" }, { id: "on", label: "Always" }, { id: "off", label: "Off" }]} />
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" className={cn(btn)} onClick={() => change({ signNear: Date.now() })}>
+              <UserRound className="h-4 w-4" aria-hidden /> Someone's near
+            </button>
+            <button type="button" className={cn(btn)} onClick={() => void signAction("test")}>
+              <Sparkles className="h-4 w-4" aria-hidden /> Test signature
+            </button>
+            <a className={cn(btn)} href="/sign" target="_blank" rel="noreferrer">
+              <QrCode className="h-4 w-4" aria-hidden /> Open guest page
+            </a>
+            <button type="button" className={cn(btn, confirmClear && "text-red-400 ring-red-400/60")}
+              onClick={() => { if (confirmClear) { setConfirmClear(false); void signAction("clear"); } else { setConfirmClear(true); window.setTimeout(() => setConfirmClear(false), 4000); } }}>
+              <EyeOff className="h-4 w-4" aria-hidden /> {confirmClear ? "Tap again to clear" : "Clear the wall"}
+            </button>
+          </div>
+          {signMsg && <p className="text-[13px] text-white/60" role="status">{signMsg}</p>}
+        </div>
+        {sigs.slice(0, 8).map((g) => (
+          <Row key={g.id} label={<span style={{ color: g.color }}>{g.name || "No name"}{g.test ? " · test" : ""}</span>}
+            detail={new Date(g.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}>
+            <button type="button" className={cn(btn, "min-h-[36px] px-3 text-[13px]")} onClick={() => void signAction(g.hidden ? "show" : "hide", g.id)}>
+              {g.hidden ? <><Eye className="h-4 w-4" aria-hidden /> Show</> : <><EyeOff className="h-4 w-4" aria-hidden /> Hide</>}
+            </button>
+          </Row>
+        ))}
+        <Row label={<span className="inline-flex items-center gap-2"><Volume2 className="h-4 w-4" aria-hidden /> Sounds</span>} detail="Chimes and whooshes on the wall. Always quiet 11 PM–7 AM." htmlFor="wall-sound">
+          <Switch id="wall-sound" checked={s.sound !== false} onCheckedChange={(v) => change({ sound: v })} />
+        </Row>
+      </Group>
+
       {/* Layout */}
       <Group title="Layout"
-        footer={tool === "corners"
+        footer={tool === "wing"
+          ? "The teal box is the Sign the wall area. Drag it onto the open wall the projector reaches on the left. Bars stretch a side; Bigger / Smaller keep the shape."
+          : tool === "corners"
           ? "The black box is the projector's whole picture. Drag the white dots onto the corners of your strip. The bars stretch one side evenly, the blue dot moves everything, and Bigger / Smaller resize without changing the shape."
           : "Drag the orange dots over the shadow where the TV blocks the light. The wall stays dark there and moves text out of the way."}>
         <Row label="Show guides on the wall" detail="Outlines the strip and blocked area so you can line them up." htmlFor="wall-guides">
@@ -435,19 +500,21 @@ export default function Wall() {
         <div className="space-y-3 px-4 py-3">
           <Segmented label="What to adjust" value={tool}
             onChange={(t) => { if (t === "mask" && !s.mask) addMask(); else { setTool(t); setSel(0); } }}
-            options={[{ id: "corners", label: "Strip corners" }, { id: "mask", label: <><Triangle className="h-4 w-4" aria-hidden /> Blocked area</> }]} />
+            options={[{ id: "corners", label: "Strip" }, { id: "mask", label: <><Triangle className="h-4 w-4" aria-hidden /> Blocked</> }, { id: "wing", label: <><PenLine className="h-4 w-4" aria-hidden /> Sign wall</> }]} />
 
           <div ref={padRef} className="relative aspect-video w-full touch-none select-none overflow-hidden rounded-xl ring-1 ring-white/15" style={{ background: "#000" }}>
             <svg viewBox="0 0 1600 900" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
               <polygon points={s.corners.map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
                 fill="rgba(255,248,236,0.14)" stroke="#FFF8EC" strokeWidth={tool === "corners" ? 5 : 3} />
+              <polygon points={(s.wing ?? DEFAULT_WING).map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
+                fill="rgba(100,210,255,0.16)" stroke="#64D2FF" strokeWidth={tool === "wing" ? 5 : 2} strokeDasharray={tool === "wing" ? undefined : "14 10"} />
               {s.mask && (
                 <polygon points={s.mask.map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
                   fill="rgba(255,149,0,0.28)" stroke="#FF9500" strokeWidth={tool === "mask" ? 5 : 3} />
               )}
             </svg>
-            {tool === "corners" && s.corners.map((a, n) => {
-              const b = s.corners[(n + 1) % s.corners.length];
+            {tool !== "mask" && quad && quad.map((a, n) => {
+              const b = quad[(n + 1) % quad.length];
               const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
               const deg = (Math.atan2((b[1] - a[1]) * 9, (b[0] - a[0]) * 16) * 180) / Math.PI;
               const id = EDGE + n;
@@ -473,7 +540,7 @@ export default function Wall() {
               const isAll = i === handles.length - 1;
               return (
                 <button key={`${tool}-${i}`} type="button"
-                  aria-label={isAll ? "Move the whole shape" : `${tool === "mask" ? "Blocked area" : "Corner"} point ${i + 1}`}
+                  aria-label={isAll ? "Move the whole shape" : `${tool === "mask" ? "Blocked area" : tool === "wing" ? "Sign wall" : "Corner"} point ${i + 1}`}
                   aria-pressed={sel === i}
                   onPointerDown={startDrag(i)} onFocus={() => setSel(i)}
                   onKeyDown={(e) => {
@@ -484,7 +551,7 @@ export default function Wall() {
                   className="absolute -ml-[22px] -mt-[22px] flex h-11 w-11 touch-none items-center justify-center rounded-full focus-visible:outline-none">
                   <span className={cn(
                     "block h-5 w-5 rounded-full border-[2.5px] shadow-[0_0_0_2px_rgba(0,0,0,0.55)] transition-transform duration-100",
-                    isAll ? "border-white bg-sky-400" : tool === "mask" ? "border-white bg-orange-400" : "border-black bg-[#FFF8EC]",
+                    isAll ? "border-white bg-sky-400" : tool === "mask" ? "border-white bg-orange-400" : tool === "wing" ? "border-black bg-[#64D2FF]" : "border-black bg-[#FFF8EC]",
                     sel === i && "scale-125 ring-4 ring-sky-400/70",
                   )} />
                 </button>
@@ -507,7 +574,7 @@ export default function Wall() {
             <div className="min-w-[180px] flex-1 space-y-2">
               <Segmented label="Drag precision" value={fine ? "fine" : "fast"} onChange={(v) => setFine(v === "fine")}
                 options={[{ id: "fine", label: "Precise" }, { id: "fast", label: "Fast" }]} />
-              {tool === "corners" ? (
+              {tool !== "mask" ? (
                 <>
                   <div className="flex gap-2" role="group" aria-label="Resize the strip, same shape">
                     <button type="button" className={cn(btn, "flex-1")} onClick={() => scale(false)}>
@@ -517,8 +584,8 @@ export default function Wall() {
                       <Maximize2 className="h-4 w-4" aria-hidden /> Bigger
                     </button>
                   </div>
-                  <button type="button" className={cn(btn, "w-full")} onClick={() => change({ corners: DEFAULT_CORNERS })}>
-                    <RotateCcw className="h-4 w-4" aria-hidden /> Reset corners
+                  <button type="button" className={cn(btn, "w-full")} onClick={() => change(tool === "wing" ? { wing: DEFAULT_WING } : { corners: DEFAULT_CORNERS })}>
+                    <RotateCcw className="h-4 w-4" aria-hidden /> {tool === "wing" ? "Reset sign wall" : "Reset corners"}
                   </button>
                 </>
               ) : (

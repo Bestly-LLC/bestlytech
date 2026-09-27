@@ -54,6 +54,7 @@ const CookieYetiSupport = lazyPage(() => import("./pages/CookieYetiSupport"));
 const ConfeshPrivacy = lazyPage(() => import("./pages/ConfeshPrivacy"));
 const ConfeshSupport = lazyPage(() => import("./pages/ConfeshSupport"));
 const Links = lazyPage(() => import("./pages/Links"));
+const SignWall = lazyPage(() => import("./pages/SignWall"));
 const LaxGuest = lazyPage(() => import("./pages/LaxGuest"));
 const DriverKey = lazyPage(() => import("./pages/DriverKey"));
 const ApproveDriver = lazyPage(() => import("./pages/ApproveDriver"));
@@ -180,6 +181,7 @@ const App = () => {
 
                 {/* Standalone pages (no Header/Footer) */}
                 <Route path="/links" element={<Links />} />
+                <Route path="/sign" element={<SignWall />} />
                 <Route path="/lax" element={<LaxGuest />} />
                 <Route path="/lax/t/:token" element={<LaxGuest />} />
                 <Route path="/t/:token" element={<LaxGuest />} />
