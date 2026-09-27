@@ -103,6 +103,7 @@ const HomeHubAccess = lazyPage(() => import("./pages/admin/HomeHubAccess"));
 const StreetSweeping = lazyPage(() => import("./pages/admin/StreetSweeping"));
 const Emergency = lazyPage(() => import("./pages/admin/Emergency"));
 const Vesta = lazyPage(() => import("./pages/admin/Vesta"));
+const Wall = lazyPage(() => import("./pages/admin/Wall"));
 const Security = lazyPage(() => import("./pages/admin/Security"));
 const AdminSkills = lazyPage(() => import("./pages/admin/AdminSkills"));
 const AdminNotFound = lazyPage(() => import("./pages/admin/AdminNotFound"));
@@ -232,6 +233,7 @@ const App = () => {
                   <Route path="street-sweeping" element={<StreetSweeping />} />
                   <Route path="emergency" element={<Emergency />} />
                   <Route path="vesta" element={<Vesta />} />
+                  <Route path="wall" element={<Wall />} />
                   <Route path="security" element={<Security />} />
                   <Route path="turo" element={<AdminTuro />} />
                   <Route path="turo/lax-pass" element={<LaxPassRedirect />} />

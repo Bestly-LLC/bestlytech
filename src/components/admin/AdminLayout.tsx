@@ -42,6 +42,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/street-sweeping": "Street Sweeping",
   "/admin/emergency": "Emergency",
   "/admin/vesta": "Vesta",
+  "/admin/wall": "Wall",
   "/admin/security": "Security",
   "/admin/contacts": "Contacts",
   "/admin/hires": "Hire Requests",
