@@ -810,7 +810,7 @@ function freeToolDefs(autopilot: boolean) {
   return [
     ...TOOLS.filter((t) => FREE_TOOLS.has(t.name) && !(autopilot && AUTOPILOT_NEVER.has(t.name))).map((t) => ({
       type: "function",
-      function: { name: t.name, description: t.description.slice(0, 700), parameters: t.input_schema },
+      function: { name: t.name, description: t.description.slice(0, 420), parameters: t.input_schema },
     })),
     ASK_PAID_TOOL,
   ];
@@ -829,7 +829,7 @@ function trimForBudget(msgs: Msg[], maxTokens = 5200) {
 }
 
 async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean } = {}):
-  Promise<{ answer?: string; why: string; tools?: string[] }> {
+  Promise<{ answer?: string; why: string; tools?: string[]; note?: string }> {
   const autopilot = !!opts.autopilot;
   const until = Date.now() + FREE_BUDGET_MS;
 
@@ -934,8 +934,16 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       if (n >= 3) { answer({ ok: false, error: "skipped: run at most 3 tools at once" }); continue; }
       if (c.name === "ask_paid") {
         const kind = String(c.args.kind ?? "HARD").toUpperCase();
+        const note = String(c.args.why ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+        // Giving up before looking is the old failure mode: make it read first (a code change is the exception).
+        if (kind === "HARD" && used.length < 2 && nudges < 2) {
+          nudges++;
+          answer({ ok: false, error: "not_yet", hint: "Look first: use run_sql, incidents, today or read_file to find the cause. Call ask_paid only if you still can't finish after that." });
+          continue;
+        }
+        await db.from("admin_chat_actions").insert({ thread_id: threadId, tool: "ask_paid", args: { kind, why: note }, result: { ok: false, free: true }, ok: false });
         const why = kind === "CODE" ? FREE_WHY.CODE : kind === "DATA" ? PAID_ONLY_WHY.db_write : "The free AI tried but couldn't finish this one.";
-        return { why, tools: used };
+        return { why, tools: used, note };
       }
       if (PAID_ONLY_WHY[c.name]) return { why: PAID_ONLY_WHY[c.name], tools: used };
       if (!allowed.has(c.name)) { answer({ ok: false, error: `"${c.name}" is not one of your tools. Use one from the list.` }); if (++fails > 3) break; continue; }
@@ -1423,9 +1431,10 @@ Deno.serve(async (req) => {
       } else if (autopilot) {
         // v29: the fix ladder tries the free agent first (same autopilot limits: nothing that needs a yes runs).
         // Paid AI is offered only when free can't finish; a free STUCK keeps its diagnosis and adds the paid offer.
-        const agent = await freeAgent(threadId, text, body.page, { autopilot: true }).catch(() => ({ why: "", tools: [] as string[] }) as { answer?: string; why: string; tools?: string[] });
+        const agent = await freeAgent(threadId, text, body.page, { autopilot: true }).catch(() => ({ why: "", tools: [] as string[] }) as { answer?: string; why: string; tools?: string[]; note?: string });
         if (agent.answer && !/^STUCK:/m.test(agent.answer)) return await say(agent.answer, { free: true, tools: agent.tools ?? [] });
-        const diag = agent.answer ? agent.answer.replace(/^STUCK:.*$/m, "").trim() + "\n" : "";
+        const diag = agent.answer ? agent.answer.replace(/^STUCK:.*$/m, "").trim() + "\n"
+          : agent.note ? `The free AI looked (${(agent.tools ?? []).length} checks) and handed off: ${agent.note}\n` : "";
         return await say(`${diag}NEEDS_YES: Let Scout work on this with paid AI (Claude). It costs a few cents.`, { paid_needed: true, tools: agent.tools ?? [] });
       } else {
         let free = await freeTry(threadId, text, body.page);
