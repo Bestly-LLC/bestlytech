@@ -46,6 +46,10 @@
       "destination": "/lax.html"
     },
     {
+      "source": "/arrivekey/privacy",
+      "destination": "/arrivekey/privacy.html"
+    },
+    {
       "source": "/((?!api/|assets/|models/).*)",
       "destination": "/index.html"
     }
