@@ -46,6 +46,8 @@ function clean(list: unknown): Station[] {
     const url = (r.url_resolved || r.url || "").trim();
     const name = (r.name || "").replace(/\s+/g, " ").trim();
     if (!url || !name) continue;
+    // The Desk HomePod (HA media_player via AirPlay) only plays MP3, OGG and FLAC streams; AAC/HLS stations fail silently.
+    if (!/^(MP3|OGG|FLAC)$/i.test((r.codec || "").trim())) continue;
     const key = `${name.toLowerCase()}|${url}`;
     if (seen.has(key) || seen.has(url)) continue;
     seen.add(key); seen.add(url);

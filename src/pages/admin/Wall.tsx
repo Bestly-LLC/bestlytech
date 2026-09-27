@@ -28,7 +28,7 @@ import { WallRadioSection, type WallRadio } from "@/components/admin/WallRadio";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, QrCode, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, Nfc, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf } from "lucide-react";
 
 type Pt = [number, number];
 type LiveKind = "plane" | "sweep" | "turo" | "show" | "sleep" | "incident";
@@ -1064,13 +1064,13 @@ export default function Wall() {
 
       {/* Sign the wall */}
       <Group title="Sign the wall"
-        footer={<>Guests scan the QR on the wall (or open <a className="underline" href="/sign" target="_blank" rel="noreferrer">bestly.tech/sign</a>), sign with a finger, and it writes itself onto the left wall. Auto shows names when someone is near or right after a new signature.</>}>
+        footer={<>Guests tap a coaster (NFC), sign with a finger, and it writes itself onto the left wall. Auto shows names when someone is near or right after a new signature.</>}>
         <div className="space-y-3 px-4 py-3">
           <Segmented label="Show names" value={s.signShow ?? "auto"} onChange={(v) => act({ signShow: v }, `Names: ${v === "auto" ? "Auto" : v === "on" ? "Always" : "Off"}.`)}
             options={[{ id: "auto", label: "Auto" }, { id: "on", label: "Always" }, { id: "off", label: "Off" }]} />
           <div className="grid grid-cols-2 gap-2">
-            <a className={cn(btn, "px-2")} href="/sign" target="_blank" rel="noreferrer">
-              <QrCode className="h-4 w-4 shrink-0" aria-hidden /> Guest page
+            <a className={cn(btn, "px-2")} href="/sign/jg8h" target="_blank" rel="noreferrer">
+              <Nfc className="h-4 w-4 shrink-0" aria-hidden /> Guest page
             </a>
             <button type="button" className={cn(btn, "px-2", confirmClear && "text-red-400 ring-red-400/60")}
               onClick={() => { if (confirmClear) { setConfirmClear(false); void signAction("clear"); } else { setConfirmClear(true); window.setTimeout(() => setConfirmClear(false), 4000); } }}>
