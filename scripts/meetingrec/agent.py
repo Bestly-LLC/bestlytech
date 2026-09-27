@@ -11,10 +11,10 @@ matter which way the call was recorded.
 
 Standard library only: it runs on the system python3.
 """
-import base64, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
+import base64, glob, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -46,6 +46,21 @@ BAD = f"{HOME}/.bad-versions"
 heal = {"next_sync": 0, "next_version_check": 0, "selftest": None, "last": None, "verify_after_update": False}
 START_APPS = [os.path.expanduser(p) for p in (
     "~/Desktop/Start Recording.app", "~/Applications/Start Recording.app", "/Applications/Start Recording.app")]
+# Turning on iCloud "Desktop & Documents" moves everything on the Desktop into a "Desktop - <Mac name>" folder
+# (it happened 2026-09-22: Jared lost his Start/Stop buttons and Scout's Record a call broke). Look there too.
+START_GLOBS = ["~/Desktop/*/Start Recording.app", "~/Documents/*/Start Recording.app"]
+SCOUT_AVATAR_URL = "https://bestly.tech/scout-mark.png"
+
+
+def find_start_app():
+    for a in START_APPS:
+        if os.path.isdir(a):
+            return a
+    for g in START_GLOBS:
+        hits = sorted(glob.glob(os.path.expanduser(g)))
+        if hits:
+            return hits[0]
+    return None
 
 busy = {"stage": None}          # set while this agent is running stop.sh
 # Shell jobs from Scout. Scout proposes, Jared taps Run in the admin, the server
@@ -424,6 +439,67 @@ def _run_selftest(reason, quiet=False):
     return False
 
 
+def check_start_app():
+    """The Desktop Start/Stop apps are how Jared (and Scout) start a recording. Tell Scout if they go missing."""
+    app = find_start_app()
+    heal["start_app"] = app
+    home_desk = os.path.expanduser("~/Desktop/Start Recording.app")
+    if not app:
+        health("start_app", "problem", "Start Recording.app is missing",
+               "Neither Jared nor Scout can start a call recording: Start Recording.app is not on the Desktop or in "
+               "Applications. Find it (Spotlight: Start Recording) and put it back on the Desktop next to "
+               "Stop & Transcribe.app.", "warning")
+    elif app != home_desk:
+        health("start_app", "problem", "The Start/Stop recording apps moved off the Desktop",
+               f"Found at {app}. Scout still records (it looks there), but Jared won't see the buttons on his Desktop. "
+               "iCloud Desktop & Documents does this. Move both apps back to the Desktop.", "info", healed=True)
+    else:
+        health("start_app", "resolved", "Start/Stop recording apps are on the Desktop", app, "info")
+
+
+def check_scout_avatar():
+    """Scout (notetaker) shows its avatar in the Talk call (camera stays off). Put the Scout mark back if it's gone."""
+    try:
+        req = urllib.request.Request(f"https://cloud.bestly.tech/avatar/{BOT_USER}/64", method="GET")
+        with urllib.request.urlopen(req, timeout=15) as r:
+            custom = r.headers.get("X-NC-IsCustomAvatar")
+        if custom == "1":
+            health("scout_avatar", "resolved", "Scout's picture shows in Talk calls", "", "info")
+            return True
+        pw = subprocess.run(["security", "find-generic-password", "-s", "nextcloud-notetaker", "-a", BOT_USER, "-w"],
+                            capture_output=True, text=True).stdout.strip()
+        with urllib.request.urlopen(SCOUT_AVATAR_URL, timeout=20) as r:
+            png = r.read()
+        boundary = "scoutavatar" + hashlib.sha256(png).hexdigest()[:12]
+        body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"files[]\"; filename=\"scout.png\"\r\n"
+                "Content-Type: image/png\r\n\r\n").encode() + png + f"\r\n--{boundary}--\r\n".encode()
+        req = urllib.request.Request("https://cloud.bestly.tech/index.php/avatar/", data=body, method="POST", headers={
+            "OCS-APIRequest": "true", "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Authorization": "Basic " + base64.b64encode(f"{BOT_USER}:{pw}".encode()).decode()})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            out = r.read().decode()[:300]
+        with urllib.request.urlopen(f"https://cloud.bestly.tech/avatar/{BOT_USER}/64?t={int(time.time())}", timeout=15) as r:
+            fixed = r.headers.get("X-NC-IsCustomAvatar") == "1"
+        if fixed:
+            health("scout_avatar", "resolved", "Scout's picture is back in Talk calls", "Re-uploaded the Scout mark.", "info")
+            log("scout avatar re-uploaded")
+            return True
+        health("scout_avatar", "problem", "Scout's picture is missing in Talk calls",
+               f"The scout-notetaker Nextcloud user has no picture, so Talk shows a letter. Re-upload failed: {out}. "
+               "Fix: log in to cloud.bestly.tech as scout-notetaker and set the avatar to bestly.tech/scout-mark.png.")
+    except Exception as e:  # noqa: BLE001
+        log("avatar check failed", e)
+    return False
+
+
+def upkeep_checks():
+    for f in (check_start_app, check_scout_avatar):
+        try:
+            f()
+        except Exception as e:  # noqa: BLE001
+            log("upkeep failed", f.__name__, e)
+
+
 def heal_tick():
     """Idle-time upkeep: code sync, Talk version watch, daily self-test."""
     if recording_pid() or busy["stage"] or (heal["selftest"] or {}).get("status") == "running":
@@ -445,6 +521,9 @@ def heal_tick():
                     reason = f"Talk updated {old} -> {v}"
         except Exception as e:  # noqa: BLE001
             log("version check failed", e)
+    if now >= heal.get("next_upkeep", 0):
+        heal["next_upkeep"] = now + 3600
+        threading.Thread(target=upkeep_checks, daemon=True).start()
     last = (heal["selftest"] or {}).get("at")
     if not reason and datetime.now().hour == 4 and (not last or now - datetime.fromisoformat(last).timestamp() > 20 * 3600):
         reason = "daily check"
@@ -455,7 +534,8 @@ def heal_tick():
 def snapshot():
     name = read(f"{HOME}/.current") or None
     roster = roster_list(read(f"{HOME}/.roster"))
-    s = {"version": VERSION, "known_voices": known_voices(), "info": {"host": os.uname().nodename, "job": job["id"]}}
+    s = {"version": VERSION, "known_voices": known_voices(),
+         "info": {"host": os.uname().nodename, "job": job["id"], "start_app": heal.get("start_app", "?")}}
     if heal["selftest"]:
         s["info"]["selftest"] = heal["selftest"]
     if name and (nt["proc"] or nt["status"] in ("no talk call", "talk unreachable", "looking", "gave up")) and recording_pid():
@@ -481,7 +561,7 @@ def do_start(payload):
         f.write(name)
     with open(f"{HOME}/.pending-roster", "w") as f:
         f.write(",".join(roster) or "-")
-    app = next((a for a in START_APPS if os.path.isdir(a)), None)
+    app = find_start_app()
     if not app:
         return False, {"name": name}, "Can't find Start Recording.app (looked on the Desktop and in Applications)."
     # ScreenCaptureKit needs an awake display ("no display" otherwise).

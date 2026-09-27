@@ -24,6 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { ProjectorHealth, type Health } from "@/components/admin/ProjectorHealth";
+import { WallRadioSection, type WallRadio } from "@/components/admin/WallRadio";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
@@ -42,13 +43,14 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airLabelsSmall?: boolean; airCard?: boolean; airCardHeli?: boolean; airCardPin?: boolean; leftDate?: boolean; radio?: WallRadio; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
   heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; tripDismiss?: { id: string; at: number } | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
   sleepShow?: { at: number; mins: number; music?: boolean } | null;
   liveActs?: Partial<Record<LiveKind, boolean>> | null;
 };
+type OneInfo = { text: string; kind: string | null; source: string | null; why: string | null; checked_at: string | null; changed_at: string | null; error: string | null };
 type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
 const DEFAULT_WING: Pt[] = [[0.02, 0.33], [0.27, 0.36], [0.27, 0.66], [0.02, 0.70]];
 const DEFAULT_AIR: Pt[] = [[0.30, 0.17], [0.99, 0.05], [0.99, 0.25], [0.30, 0.37]];
@@ -315,7 +317,9 @@ export default function Wall() {
   useEffect(() => { const t = setInterval(() => setSheepTick((n) => n + 1), 15000); return () => clearInterval(t); }, []);
   const [sel, setSel] = useState(0);
   const [fine, setFine] = useState(true);
-  const [one, setOne] = useState("");
+  /** The one thing: Scout picks it every 10 min (wall_one_thing_tick); the admin only shows it. */
+  const [oneInfo, setOneInfo] = useState<OneInfo | null>(null);
+  const [oneBusy, setOneBusy] = useState(false);
   const [demo, setDemo] = useState<Record<DemoKey, string>>({ demoLeft: "", demoNames: "", demoRight: "" });
   const [pending, setPending] = useState(0);
   const [powerMsg, setPowerMsg] = useState<string | null>(null);
@@ -340,11 +344,23 @@ export default function Wall() {
     setR(d);
     if (!dragging.current && saveT.current.timer == null) { S.current = d.state; repaint(); }
     if (!typing.current) {
-      setOne(d.state.one ?? "");
       setDemo(Object.fromEntries(DEMO_FIELDS.map((f) => [f.key, d.state[f.key] ?? f.fallback])) as Record<DemoKey, string>);
     }
   }, []);
   useEffect(() => { void load(); const t = setInterval(() => void load(), 5000); return () => clearInterval(t); }, [load]);
+
+  const loadOne = useCallback(async (refresh = false) => {
+    const { data, error } = await rpc("wall_one_thing_get", { p_refresh: refresh });
+    if (!error && data) setOneInfo(data as OneInfo);
+    return !error;
+  }, []);
+  useEffect(() => { void loadOne(); const t = setInterval(() => void loadOne(), 60000); return () => clearInterval(t); }, [loadOne]);
+  const refreshOne = async () => {
+    setOneBusy(true);
+    const ok = await loadOne(true);
+    setOneBusy(false);
+    if (ok) toast.success("Scout checked again.", { id: "wall-act" }); else toast.error("Couldn't reach Scout. Try again in a moment.", { id: "wall-act" });
+  };
 
   // Live channel to the Pi
   useEffect(() => {
@@ -685,7 +701,7 @@ export default function Wall() {
             <dt className="text-white/50">Mode</dt><dd className="text-white">{modeLabel}</dd>
             {s.theme && <><dt className="text-white/50">Theme</dt><dd className="text-white">{themeNow.label}</dd></>}
             <dt className="text-white/50">Playing</dt><dd className="text-white">{playing ?? <span className="text-white/60">Nothing extra</span>}</dd>
-            {s.one && <><dt className="text-white/50">Message</dt><dd className="min-w-0 truncate text-white">“{s.one}”</dd></>}
+            {s.one && <><dt className="text-white/50">One thing</dt><dd className="min-w-0 truncate text-white">{s.one}</dd></>}
           </dl>
           <div className="mt-2 text-[13px] text-white/45" aria-live="polite">
             {sync && <span className="mr-1.5 inline-flex items-center gap-1.5 text-white/70 sm:hidden"><span className={cn("h-2 w-2 rounded-full", sync.dot)} aria-hidden />{sync.text} ·</span>}
@@ -720,8 +736,8 @@ export default function Wall() {
       )}
 
       {/* On the wall: mode + the big message */}
-      <Group title="On the wall" footer="The message shows in big letters in the middle of the wall.">
-        <Row label="Off when I leave home" detail="Uses your iPhone's location in Home Assistant. Turns off 10 min after you leave, back on when you get home (7\u00a0AM to bedtime)." htmlFor="wall-presence">
+      <Group title="On the wall" footer="Scout picks the one thing from today's list and updates it every 10 minutes.">
+        <Row label="Off when I leave home" detail={"Uses your iPhone's location in Home Assistant. Turns off 10\u00a0min after you leave, back on when you get home (7\u00a0AM to bedtime)."} htmlFor="wall-presence">
           <Switch className={swHit} id="wall-presence" checked={s.presence !== false} onCheckedChange={(v) => act({ presence: v }, v ? "The wall turns off when you leave home." : "The wall stays on its schedule when you leave.")} />
         </Row>
         <div className="p-2">
@@ -729,21 +745,30 @@ export default function Wall() {
             options={MODES.map((m) => ({ id: m.id, label: m.label }))} />
           {modeAbout && <p className="px-2 pb-1 pt-2 text-[13px] leading-snug text-white/55">{modeAbout}</p>}
         </div>
-        <div className="flex items-center gap-2 border-t border-white/[0.07] px-4 py-1.5">
-          <label htmlFor="wall-one" className="shrink-0 text-[16px] text-white">Message</label>
-          <input
-            id="wall-one" type="text" maxLength={80} value={one} autoComplete="off" enterKeyHint="done"
-            placeholder="Big words in the middle"
-            onFocus={() => (typing.current = true)}
-            onBlur={() => { typing.current = false; }}
-            onChange={(e) => { setOne(e.target.value); change({ one: e.target.value }, { now: false }); }}
-            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-            className="min-h-[44px] min-w-0 flex-1 bg-transparent text-right text-[16px] text-white placeholder:text-white/35 focus:outline-none"
-          />
-          {one && (
-            <button type="button" className="min-h-[44px] px-2 text-[15px] text-sky-400" onClick={() => { setOne(""); act({ one: "" }, "Message cleared."); }}>Clear</button>
-          )}
+        {/* The one thing: read-only. Scout fills it (wall_one_thing_tick every 10 min); no typing here. */}
+        <div className="flex items-start gap-3 border-y border-white/[0.07] px-4 py-3">
+          <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" aria-hidden />
+          <div className="min-w-0 flex-1" aria-live="polite">
+            <div className="text-[13px] font-medium uppercase tracking-[0.06em] text-white/50">The one thing · picked by Scout</div>
+            <div className="mt-0.5 text-[16px] leading-snug text-white [text-wrap:pretty]">
+              {(oneInfo?.text ?? s.one) || <span className="text-white/60">Nothing urgent. The wall says “Make something great.”</span>}
+            </div>
+            {(oneInfo?.why || oneInfo?.checked_at) && (
+              <div className="mt-0.5 text-[13px] leading-snug text-white/50">
+                {oneInfo?.why ? `${oneInfo.why} ` : ""}
+                {oneInfo?.checked_at && <>Checked <NW>{time12(new Date(oneInfo.checked_at).getTime())}</NW>{oneInfo.source ? ` · from ${oneInfo.source}` : ""}.</>}
+              </div>
+            )}
+            {oneInfo?.error && <div className="mt-0.5 text-[13px] text-amber-300">Scout couldn't update it last time. It retries every 10{"\u00a0"}minutes.</div>}
+          </div>
+          <button type="button" onClick={() => void refreshOne()} disabled={oneBusy} aria-label="Ask Scout to pick again now"
+            className="-mr-2 inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl text-sky-400 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-40">
+            <RotateCw className={cn("h-5 w-5", oneBusy && "animate-spin motion-reduce:animate-none")} aria-hidden />
+          </button>
         </div>
+        <Row label="Show today's date on the left" detail="The left side of the strip shows today's date instead of rotating through messages." htmlFor="wall-left-date">
+          <Switch className={swHit} id="wall-left-date" checked={!!s.leftDate} onCheckedChange={(v) => act({ leftDate: v }, v ? "Today's date on the left." : "The left side rotates again.")} />
+        </Row>
       </Group>
 
       {/* Theme: the only control for state key `theme` (null = Normal). New themes start from the copied prompt. */}
@@ -1006,6 +1031,11 @@ export default function Wall() {
         </div>
       </Group>
 
+      {/* Radio: Radio Browser stations -> state.radio {on, name, url, favicon, ts}; the Pi plays it on the Desk HomePod. */}
+      <WallRadioSection radio={s.radio}
+        onPlay={(r) => act({ radio: r }, `Playing ${r.name.split(/\s+[-|–]\s+/)[0]} on the Desk HomePod.`)}
+        onStop={() => act({ radio: s.radio ? { ...s.radio, on: false, ts: Date.now() } : null }, "Radio stopped.")} />
+
       {/* AirPlay: the Pi is an AirPlay receiver ("Bestly Wall"); video plays where the clock and today are. */}
       {(() => {
         const off = s.airplay === false;
@@ -1087,6 +1117,11 @@ export default function Wall() {
             <Row label="Nearest-plane card" detail="The big card that names the closest aircraft." htmlFor="wall-air-card">
               <Switch className={swHit} id="wall-air-card" checked={s.airCard !== false} onCheckedChange={(v) => change({ airCard: v })} />
             </Row>
+            <Row label="Keep flight card up" htmlFor="wall-air-card-pin" dim={s.airCard === false}
+              detail={s.airCard === false ? "Turn on Nearest-plane card to use this." : "The card stays up and rotates through the planes in view. The closest plane gets its own color."}>
+              <Switch className={swHit} id="wall-air-card-pin" disabled={s.airCard === false} checked={!!s.airCardPin}
+                onCheckedChange={(v) => act({ airCardPin: v }, v ? "Flight card stays up and rotates through planes." : "Flight card shows only for the closest plane.")} />
+            </Row>
             {s.airCard !== false && (
               <Row label="Helicopters in the card" detail="Off: helicopters (like LAPD circling) never take the big card. They still fly across." htmlFor="wall-air-card-heli">
                 <Switch className={swHit} id="wall-air-card-heli" checked={s.airCardHeli !== false} onCheckedChange={(v) => change({ airCardHeli: v })} />
@@ -1094,6 +1129,11 @@ export default function Wall() {
             )}
             <Row label="Plane labels" detail="Name tags next to each plane and helicopter." htmlFor="wall-air-labels">
               <Switch className={swHit} id="wall-air-labels" checked={s.airLabels !== false} onCheckedChange={(v) => change({ airLabels: v })} />
+            </Row>
+            <Row label="Tags on small planes & helicopters" htmlFor="wall-air-labels-small" dim={s.airLabels === false}
+              detail={s.airLabels === false ? "Turn on Plane labels to use this." : "Off: only airline flights get a name tag."}>
+              <Switch className={swHit} id="wall-air-labels-small" disabled={s.airLabels === false} checked={s.airLabelsSmall !== false}
+                onCheckedChange={(v) => act({ airLabelsSmall: v }, v ? "Tags on every plane and helicopter." : "Tags on airline flights only.")} />
             </Row>
             <Row label="Stars and constellations" detail="Bright stars plus Orion and the Big Dipper, at night." htmlFor="wall-sky-stars">
               <Switch className={swHit} id="wall-sky-stars" checked={s.skyStars !== false} onCheckedChange={(v) => change({ skyStars: v })} />

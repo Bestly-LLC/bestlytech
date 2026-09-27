@@ -47,10 +47,10 @@ Status legend: [ ] todo · [x] done · [~] partial / needs Jared
 - [ ] C3 `extras` + `flags` in `wall_pi_trips`.
 
 ## D. Admin + meetings (bestly repo) — one worker
-- [ ] D1 Wall.tsx: switches for `airLabelsSmall`, `airCardPin`, `leftDate`; radio picker (Radio Browser search → `radio` state) — Apple HIG.
-- [ ] D2 Remove the manual "one thing" text box; Scout fills it automatically.
-- [ ] D3 Scout's image in Talk meetings (notetaker) — verify/fix.
-- [ ] D4 Start/stop meeting buttons missing on desktop — fix.
+- [x] D1 Wall.tsx: switches for `airLabelsSmall`, `airCardPin`, `leftDate`; radio picker (Radio Browser search → `radio` state) — Apple HIG. (WallRadio.tsx; writes need worker A's wall_clean_* keys)
+- [x] D2 Remove the manual "one thing" text box; Scout fills it automatically. (wall_one_thing_tick cron every 10 min -> state.one; watchdog wall.one_thing)
+- [x] D3 Scout's image in Talk meetings (notetaker) — verified: tile shows the Scout mark avatar (custom avatar set); agent now re-checks hourly and re-uploads if it's lost.
+- [x] D4 Start/stop meeting buttons missing on desktop — iCloud Desktop moved both apps into "Desktop - Jared's Mac mini"; moved back to ~/Desktop, agent 1.7.0 finds them anywhere + alerts Scout if missing.
 
 ## E. Sign page (bestly.tech/sign) — one worker
 - [ ] E1 Access only from the NFC coasters (tag token in the URL; plain visits get "tap a coaster").
