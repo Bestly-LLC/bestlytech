@@ -785,6 +785,8 @@ const FREE_STEPS = 10;
 const FREE_BUDGET_MS = 95_000;   // freeTry (~2-30s) + this must stay under the 150s platform limit
 const REFUSES = /\b(can'?t|cannot|can not|unable to|not able to|don'?t have (access|the ability))\b|\bmanually\b|\byou('ll| will)? (need|have) to\b/i;
 const CLAIMS_DONE = /\b(done|fixed|resolved|pushed|sent|cleared|moved|restarted|deployed|completed|updated|notified)\b/i;
+/** "It already cleared / the last runs succeeded" reports a state, not work Scout did: not a false claim. */
+const ALREADY = /\b(already|no longer|on its own|since then|has stopped|stopped failing|succeed(ed|s|ing)|not happening|recovered)\b/i;
 const PLACEHOLDER = /\[(?:[A-Z][A-Za-z ]{1,20})\]|(?<!Model )\bX\b(?=\s+[a-z])|<[a-z_ ]{2,20}>/;
 /** His latest message is a plain yes: only then may a free-model action carry confirmed:true (auto-run aside). */
 const PLAIN_YES = /^\s*(yes|yep|yeah|ya|ok|okay|sure|do it|go ahead|go for it|approved?|confirm(ed)?|please do|keep going)\b/i;
@@ -953,7 +955,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       if (PLACEHOLDER.test(reply) && nudges < 2) { nudge("That reply has placeholders instead of real values. Get the real values with a tool, then reply."); continue; }
       if (REFUSES.test(reply) && nudges < 1) { nudge("You DO have tools (see the list). Use them to do this. If it truly needs a code or data change, call ask_paid."); continue; }
       const own = reply.split(/^\s*OPTIONS:/m)[0];
-      if (CLAIMS_DONE.test(own) && !acted && !/\?\s*$/.test(own.trim())) {
+      if (CLAIMS_DONE.test(own) && !acted && !ALREADY.test(own) && !/\?\s*$/.test(own.trim())) {
         if (nudges < 2) { nudge("Nothing was changed by a tool in this turn, so don't say it's done. Either do it with a tool, or say what you found and what's left."); continue; }
         return { why: "The free AI tried but couldn't finish this one.", tools: used };
       }
