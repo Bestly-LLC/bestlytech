@@ -42,7 +42,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airCard?: boolean; airCardHeli?: boolean; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
   heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; tripDismiss?: { id: string; at: number } | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
@@ -721,6 +721,9 @@ export default function Wall() {
 
       {/* On the wall: mode + the big message */}
       <Group title="On the wall" footer="The message shows in big letters in the middle of the wall.">
+        <Row label="Off when I leave home" detail="Uses your iPhone's location in Home Assistant. Turns off 10 min after you leave, back on when you get home (7\u00a0AM to bedtime)." htmlFor="wall-presence">
+          <Switch className={swHit} id="wall-presence" checked={s.presence !== false} onCheckedChange={(v) => act({ presence: v }, v ? "The wall turns off when you leave home." : "The wall stays on its schedule when you leave.")} />
+        </Row>
         <div className="p-2">
           <Segmented compact label="Mode" value={s.mode} onChange={(m) => act({ mode: m }, `Mode: ${MODES.find((x) => x.id === m)?.label ?? m}.`)}
             options={MODES.map((m) => ({ id: m.id, label: m.label }))} />
