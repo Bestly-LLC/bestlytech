@@ -198,6 +198,7 @@ export default function Wall() {
   }, [sendLive, sendSave]);
 
   /* ───── mapping ───── */
+  const EDGE = 100; // handle ids >= EDGE are side handles (side n runs from corner n to corner n+1)
   const s = S.current;
   const pts: Pt[] | null = s ? (tool === "mask" ? s.mask : s.corners) : null;
 
@@ -207,7 +208,11 @@ export default function Wall() {
     const list = (cur[key] ?? []).map((p) => [...p] as Pt);
     if (!list.length) return;
     const clamp = (v: number) => Math.min(1.5, Math.max(-0.5, v));
-    if (i === list.length) list.forEach((p) => { p[0] = clamp(p[0] + dx); p[1] = clamp(p[1] + dy); });
+    if (i >= EDGE) {
+      // side handle: move both corners of that side by the same amount, so the side stretches evenly
+      const a = (i - EDGE) % list.length, b = (a + 1) % list.length;
+      [a, b].forEach((j) => { list[j][0] = clamp(list[j][0] + dx); list[j][1] = clamp(list[j][1] + dy); });
+    } else if (i === list.length) list.forEach((p) => { p[0] = clamp(p[0] + dx); p[1] = clamp(p[1] + dy); });
     else { list[i][0] = clamp(list[i][0] + dx); list[i][1] = clamp(list[i][1] + dy); }
     S.current = { ...cur, [key]: list };
     repaint();
@@ -215,7 +220,7 @@ export default function Wall() {
     sendSave({ [key]: list }, save === "now");
   };
 
-  const startDrag = (i: number) => (e: React.PointerEvent<HTMLButtonElement>) => {
+  const startDrag = (i: number) => (e: React.PointerEvent<HTMLElement>) => {
     e.preventDefault();
     const el = e.currentTarget;
     el.setPointerCapture(e.pointerId);
@@ -422,7 +427,7 @@ export default function Wall() {
       {/* Layout */}
       <Group title="Layout"
         footer={tool === "corners"
-          ? "The black box is the projector's whole picture. Drag the white dots onto the corners of your strip. The blue dot moves everything."
+          ? "The black box is the projector's whole picture. Drag the white dots onto the corners of your strip. The bars stretch one side evenly, the blue dot moves everything, and Bigger / Smaller resize without changing the shape."
           : "Drag the orange dots over the shadow where the TV blocks the light. The wall stays dark there and moves text out of the way."}>
         <Row label="Show guides on the wall" detail="Outlines the strip and blocked area so you can line them up." htmlFor="wall-guides">
           <Switch id="wall-guides" checked={s.mapping} onCheckedChange={(v) => change({ mapping: v })} />
@@ -441,6 +446,29 @@ export default function Wall() {
                   fill="rgba(255,149,0,0.28)" stroke="#FF9500" strokeWidth={tool === "mask" ? 5 : 3} />
               )}
             </svg>
+            {tool === "corners" && s.corners.map((a, n) => {
+              const b = s.corners[(n + 1) % s.corners.length];
+              const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+              const deg = (Math.atan2((b[1] - a[1]) * 9, (b[0] - a[0]) * 16) * 180) / Math.PI;
+              const id = EDGE + n;
+              return (
+                <button key={`edge-${n}`} type="button"
+                  aria-label={`Stretch the ${["top", "right", "bottom", "left"][n]} side`}
+                  aria-pressed={sel === id}
+                  onPointerDown={startDrag(id)} onFocus={() => setSel(id)}
+                  onKeyDown={(e) => {
+                    const k: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+                    if (k[e.key]) { e.preventDefault(); nudge(...k[e.key]); }
+                  }}
+                  style={{ left: `${mx * 100}%`, top: `${my * 100}%`, transform: `rotate(${deg}deg)` }}
+                  className="absolute -ml-[22px] -mt-[22px] flex h-11 w-11 touch-none items-center justify-center focus-visible:outline-none">
+                  <span className={cn(
+                    "block h-[9px] w-7 rounded-full border-2 border-black bg-[#FFF8EC] shadow-[0_0_0_2px_rgba(0,0,0,0.55)] transition-transform duration-100",
+                    sel === id && "scale-125 ring-4 ring-sky-400/70",
+                  )} />
+                </button>
+              );
+            })}
             {handles.map((p, i) => {
               const isAll = i === handles.length - 1;
               return (
@@ -470,7 +498,7 @@ export default function Wall() {
               <button type="button" aria-label="Nudge up" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, -1)}><ArrowUp className="h-5 w-5" /></button>
               <span />
               <button type="button" aria-label="Nudge left" className={cn(btn, "w-11 px-0")} onClick={() => nudge(-1, 0)}><ArrowLeft className="h-5 w-5" /></button>
-              <span className="flex h-11 w-11 items-center justify-center text-[12px] text-white/45">{sel === handles.length - 1 ? "All" : sel + 1}</span>
+              <span className="flex h-11 w-11 items-center justify-center text-[12px] text-white/45">{sel >= EDGE ? ["Top", "Right", "Bottom", "Left"][sel - EDGE] : sel === handles.length - 1 ? "All" : sel + 1}</span>
               <button type="button" aria-label="Nudge right" className={cn(btn, "w-11 px-0")} onClick={() => nudge(1, 0)}><ArrowRight className="h-5 w-5" /></button>
               <span />
               <button type="button" aria-label="Nudge down" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, 1)}><ArrowDown className="h-5 w-5" /></button>
