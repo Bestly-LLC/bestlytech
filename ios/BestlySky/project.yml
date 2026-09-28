@@ -1,0 +1,68 @@
+# Bestly Sky — Jared's personal iPhone app that hosts the wall's aircraft Live Activity (wall round 4, W6).
+# Isolated from the web app: nothing under ios/ is part of the Vite build. Build + install: scripts/build-install.sh (Mac mini).
+name: BestlySky
+options:
+  bundleIdPrefix: tech.bestly
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: PV65ABS5W9
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: 1
+    TARGETED_DEVICE_FAMILY: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+targets:
+  BestlySky:
+    type: application
+    platform: iOS
+    sources:
+      - path: BestlySky
+        excludes: ["Info.plist", "*.entitlements"]
+      - path: Shared
+    info:
+      path: BestlySky/Info.plist
+      properties:
+        CFBundleDisplayName: Sky
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSLocationWhenInUseUsageDescription: "Sky points the arrow at the plane on the wall from wherever you are standing."
+        CFBundleURLTypes:
+          - CFBundleURLName: tech.bestly.sky
+            CFBundleURLSchemes: [bestlysky]
+        ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: BestlySky/BestlySky.entitlements
+      properties:
+        aps-environment: development
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tech.bestly.sky
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - target: BestlySkyWidgets
+  BestlySkyWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: BestlySkyWidgets
+        excludes: ["Info.plist"]
+      - path: Shared
+    info:
+      path: BestlySkyWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Sky
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tech.bestly.sky.widgets
