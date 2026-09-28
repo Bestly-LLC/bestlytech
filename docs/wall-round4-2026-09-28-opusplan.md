@@ -68,14 +68,14 @@ Admin RPCs (admin auth like `wall_admin_set`): `wall_admin_packages() → [{id, 
 - [x] Radio still broken — fix end to end, audible test. (Same relay root cause; retry once then Scout after 2 min in plain words. 4:08 PM: KCRW AAC via wall_state.radio played, Pi mic heard it. `POST 127.0.0.1:8099/api/homepod` play/stop helper for W7.)
 
 ## W4 Admin (repo: Wall.tsx + admin shell + Scout chat)
-- [ ] Do Not Disturb back: edit times, override now, turn off (`dnd`).
-- [ ] Admin desktop: use the width (side-by-side columns), simplify + organize (Apple HIG).
-- [ ] Sky tab: full-screen digital sky for computer/phone (same planes as the wall).
-- [ ] NEEDS YOU: collapse duplicates (4–5 identical wall notices → one row with a count).
-- [ ] Scout chat: the "fix LAX guest…" info boxes sit inline in time order, not stuck to the bottom.
-- [ ] Packages: check off "got it" → hides from the wall. (Apple's order tracking has no API — answer in the reply.)
-- [ ] Layout editor: the selected block (`layoutSel`) is outlined on the projector while the grid is on.
-- [ ] "Motivate me" button (`motivate`).
+- [x] Do Not Disturb back: edit times, override now, turn off (`dnd`). Admin card + wall.html dndNow/server dnd_now/watchdog dnd_watch; verified on the Pi (override -> page on:override in 40 s).
+- [x] Admin desktop: use the width (side-by-side columns), simplify + organize (Apple HIG). 2 cols at 1280 px, 3 at 1536 px; phone unchanged; Playwright shots at 390/1280/1600.
+- [x] Sky tab: full-screen digital sky for computer/phone (same planes as the wall). /admin/sky from the Pi snapshot (wall_air_live, 3 s while open); fallback edge fn wall-sky.
+- [x] NEEDS YOU: collapse duplicates (4–5 identical wall notices → one row with a count). Same source+title -> one row with ×N + latest time; expand to see each; Mark all done (one Undo).
+- [x] Scout chat: the "fix LAX guest…" info boxes sit inline in time order, not stuck to the bottom. Job cards placed after the last message said before the job was proposed.
+- [x] Packages: check off "got it" → hides from the wall. (Apple's order tracking has no API — answer in the reply.) Admin card on W2's wall_admin_packages / wall_package_done, with Show again.
+- [x] Layout editor: the selected block (`layoutSel`) is outlined on the projector while the grid is on. Verified on the projector (pixel check of the sign-wall outline).
+- [x] "Motivate me" button (`motivate`). In the Now card; writes {seq+1, ts} through wall_admin_set -> wall_clean_r4admin -> server.py ALLOWED. The show itself is W5.
 
 ## W5 Shows + home automation (wall.html shows, server.py, HA/Homebridge, sign page)
 - [ ] "Motivate me" projection show (Apple-grade).
