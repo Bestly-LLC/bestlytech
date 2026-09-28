@@ -28,7 +28,7 @@ import { WallRadioSection, type WallRadio } from "@/components/admin/WallRadio";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, Nfc, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, Nfc, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf, Undo2, Redo2, Lock, Check } from "lucide-react";
 
 type Pt = [number, number];
 type LiveKind = "plane" | "sweep" | "turo" | "show" | "sleep" | "incident";
@@ -50,6 +50,37 @@ type WallState = {
   sleepShow?: { at: number; mins: number; music?: boolean } | null;
   liveActs?: Partial<Record<LiveKind, boolean>> | null;
 };
+/** One undo step from wall_geometry_history_list (newest first). can_undo / can_redo mark the next step each way. */
+type GeoStep = { id: number; at: string; reason: string; can_undo: boolean; can_redo: boolean; undone: boolean; who?: string | null };
+/** The keys undo/redo put back together (same list as the DB's wall_geo_keys()). */
+const GEO_KEYS = ["corners", "mask", "air", "wing", "airAspect", "airRot", "airFlip", "airBearing"] as const;
+const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+/** "4:59 PM" today, "Sep 26, 4:59 PM" before that. Empty when the label already says the time. */
+const stepTime = (st: GeoStep) => {
+  if (/\d:\d\d\s?[AP]M/i.test(st.reason)) return "";
+  const d = new Date(st.at);
+  const t = time12(d.getTime());
+  return d.toDateString() === new Date().toDateString() ? t : `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${t}`;
+};
+
+/** ⌘Z / ⇧⌘Z (Ctrl on Windows) while the alignment tool is on screen. Leaves typing fields alone. */
+function UndoKeys({ onUndo, onRedo }: { onUndo: () => void; onRedo: () => void }) {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k !== "z" && !(k === "y" && !isMac)) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      e.preventDefault();
+      if (k === "y" || e.shiftKey) onRedo(); else onUndo();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onUndo, onRedo]);
+  return null;
+}
+
 type OneInfo = { text: string; kind: string | null; source: string | null; why: string | null; checked_at: string | null; changed_at: string | null; error: string | null };
 type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
 const DEFAULT_WING: Pt[] = [[0.02, 0.33], [0.27, 0.36], [0.27, 0.66], [0.02, 0.70]];
@@ -317,6 +348,11 @@ export default function Wall() {
   useEffect(() => { const t = setInterval(() => setSheepTick((n) => n + 1), 15000); return () => clearInterval(t); }, []);
   const [sel, setSel] = useState(0);
   const [fine, setFine] = useState(true);
+  /** Layout undo history (DB keeps it for every writer) and the edit lock that stops stray swipes. */
+  const [geoHist, setGeoHist] = useState<GeoStep[]>([]);
+  const [geoWorking, setGeoWorking] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const lastEdit = useRef(0);
   /** The one thing: Scout picks it every 10 min (wall_one_thing_tick); the admin only shows it. */
   const [oneInfo, setOneInfo] = useState<OneInfo | null>(null);
   const [oneBusy, setOneBusy] = useState(false);
@@ -334,7 +370,14 @@ export default function Wall() {
   const padRef = useRef<HTMLDivElement>(null);
   const chan = useRef<RealtimeChannel | null>(null);
   const liveT = useRef<{ last: number; timer: number | null; next: Partial<WallState> | null }>({ last: 0, timer: null, next: null });
-  const saveT = useRef<{ last: number; timer: number | null; next: Partial<WallState> }>({ last: 0, timer: null, next: {} });
+  const saveT = useRef<{ last: number; timer: number | null; next: Partial<WallState>; inflight: number }>({ last: 0, timer: null, next: {}, inflight: 0 });
+  const geoBusy = useRef(false);
+
+  const loadGeo = useCallback(async () => {
+    const { data, error } = await rpc("wall_geometry_history_list");
+    if (!error && Array.isArray(data)) setGeoHist(data as GeoStep[]);
+  }, []);
+  useEffect(() => { void loadGeo(); const t = setInterval(() => void loadGeo(), 5000); return () => clearInterval(t); }, [loadGeo]);
 
   const load = useCallback(async () => {
     const { data, error } = await rpc("wall_admin_get");
@@ -392,20 +435,70 @@ export default function Wall() {
     const fire = async () => {
       T.timer = null; T.last = performance.now();
       const payload = T.next; T.next = {};
+      T.inflight++;
       const { error } = await rpc("wall_admin_set", { p_patch: payload });
+      T.inflight--;
       if (T.timer == null) setPending(0);
+      if (!error && GEO_KEYS.some((k) => k in payload)) void loadGeo();
       if (error) { setErr(`Couldn't save: ${error.message}`); toast.error(`Couldn't save: ${error.message}`, { id: "wall-act" }); }
     };
     if (T.timer != null) window.clearTimeout(T.timer);
     const wait = now ? 0 : Math.max(0, 400 - (performance.now() - T.last));
     T.timer = window.setTimeout(() => void fire(), wait);
-  }, []);
+  }, [loadGeo]);
 
   const change = useCallback((p: Partial<WallState>, opts: { now?: boolean } = {}) => {
     if (S.current) { S.current = { ...S.current, ...p }; repaint(); }
     sendLive(p);
     sendSave(p, opts.now ?? true);
   }, [sendLive, sendSave]);
+
+  /** Undo or redo one layout step. The DB puts the geometry back and bumps the version (the Pi reloads);
+   *  we also push it over the live channel so the wall moves right away. */
+  const geoStep = useCallback(async (dir: "undo" | "redo") => {
+    if (geoBusy.current || dragging.current) return;
+    geoBusy.current = true; setGeoWorking(true);
+    try {
+      // Let the last drag or nudge finish saving first, so it is part of the history.
+      for (let i = 0; i < 20 && (saveT.current.timer != null || saveT.current.inflight > 0); i++) await new Promise((r) => setTimeout(r, 100));
+      const { data, error } = await rpc(dir === "undo" ? "wall_geometry_undo" : "wall_geometry_redo");
+      const d = data as { ok: boolean; error?: string; reason?: string; geometry?: Partial<WallState> } | null;
+      if (error || !d) { toast.error(`Couldn't ${dir}: ${error?.message ?? "no answer"}`, { id: "wall-geo" }); return; }
+      if (!d.ok || !d.geometry) { toast(d.error ?? `Nothing to ${dir}.`, { id: "wall-geo" }); return; }
+      const geo = d.geometry;
+      if (S.current) {
+        const base = { ...S.current } as Record<string, unknown>;
+        GEO_KEYS.forEach((k) => { delete base[k]; });
+        S.current = { ...(base as WallState), ...geo };
+        repaint();
+      }
+      sendLive({ mask: null, ...geo });
+      if (!geo.mask) setTool((t) => (t === "mask" ? "corners" : t));
+      setSel(0);
+      const other = dir === "undo" ? "redo" : "undo";
+      toast.success(`${dir === "undo" ? "Undone" : "Redone"}: ${d.reason ?? "layout change"}`, {
+        id: "wall-geo",
+        action: { label: other === "redo" ? "Redo" : "Undo", onClick: () => void geoStepRef.current?.(other) },
+      });
+    } finally {
+      geoBusy.current = false; setGeoWorking(false);
+      void loadGeo();
+    }
+  }, [loadGeo, sendLive]);
+  const geoStepRef = useRef<typeof geoStep | null>(null);
+  geoStepRef.current = geoStep;
+  const doUndo = useCallback(() => void geoStepRef.current?.("undo"), []);
+  const doRedo = useCallback(() => void geoStepRef.current?.("redo"), []);
+  const nextUndo = geoHist.find((h) => h.can_undo) ?? null;
+  const nextRedo = geoHist.find((h) => h.can_redo) ?? null;
+
+  // The layout locks itself again after 2 quiet minutes, so a stray swipe later can't move it.
+  useEffect(() => {
+    if (!editing) return;
+    lastEdit.current = Date.now();
+    const t = setInterval(() => { if (!dragging.current && Date.now() - lastEdit.current > 120000) setEditing(false); }, 10000);
+    return () => clearInterval(t);
+  }, [editing]);
 
   /* ───── mapping ───── */
   const EDGE = 100; // handle ids >= EDGE are side handles (side n runs from corner n to corner n+1)
@@ -415,7 +508,8 @@ export default function Wall() {
   const pts: Pt[] | null = s ? (tool === "mask" ? s.mask : quad) : null;
 
   const move = (i: number, dx: number, dy: number, save: "throttle" | "now" = "throttle") => {
-    const cur = S.current; if (!cur) return;
+    const cur = S.current; if (!cur || !editing) return;
+    lastEdit.current = Date.now();
     const key = shapeKey;
     const list = ((key === "wing" ? cur.wing ?? DEFAULT_WING : key === "air" ? cur.air ?? DEFAULT_AIR : cur[key]) ?? []).map((p) => [...p] as Pt);
     if (!list.length) return;
@@ -443,6 +537,7 @@ export default function Wall() {
   };
 
   const startDrag = (i: number) => (e: React.PointerEvent<HTMLElement>) => {
+    if (!editing) return;
     e.preventDefault();
     const el = e.currentTarget;
     el.setPointerCapture(e.pointerId);
@@ -469,7 +564,8 @@ export default function Wall() {
 
   /** Resize the strip without changing its shape: scale all 4 corners around their center. */
   const scale = (grow: boolean) => {
-    const c = tool === "wing" ? S.current?.wing ?? DEFAULT_WING : tool === "air" ? S.current?.air ?? DEFAULT_AIR : S.current?.corners; if (!c) return;
+    const c = tool === "wing" ? S.current?.wing ?? DEFAULT_WING : tool === "air" ? S.current?.air ?? DEFAULT_AIR : S.current?.corners; if (!c || !editing) return;
+    lastEdit.current = Date.now();
     const step = fine ? 0.01 : 0.04;
     const f = grow ? 1 + step : 1 / (1 + step);
     const cx = c.reduce((a, p) => a + p[0], 0) / c.length;
@@ -1213,10 +1309,46 @@ export default function Wall() {
             <Switch className={swHit} id="wall-guides" checked={s.mapping} onCheckedChange={(v) => change({ mapping: v })} />
           </Row>
           <div className="space-y-3 px-4 py-3">
+            <UndoKeys onUndo={doUndo} onRedo={doRedo} />
+            <div className="flex items-center gap-3">
+              <p className="min-w-0 flex-1 text-[13px] text-white/55" aria-live="polite">
+                {editing ? "Editing. Drag the dots, then tap Done." : "Locked, so a stray swipe can't move the wall."}
+              </p>
+              <button type="button" aria-pressed={editing} onClick={() => setEditing((v) => !v)}
+                className={cn(btn, "shrink-0", editing && "font-semibold text-sky-400")}>
+                {editing ? <Check className="h-4 w-4" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}
+                {editing ? "Done" : "Edit layout"}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2" role="group" aria-label="Undo and redo layout changes">
+              {([["undo", nextUndo, Undo2], ["redo", nextRedo, Redo2]] as const).map(([dir, st, Icon]) => {
+                const name = dir === "undo" ? "Undo" : "Redo";
+                const when = st ? stepTime(st) : "";
+                const keys = dir === "undo" ? (isMac ? "\u2318Z" : "Ctrl+Z") : (isMac ? "\u21E7\u2318Z" : "Ctrl+Shift+Z");
+                return (
+                  <button key={dir} type="button" disabled={!st || geoWorking} onClick={dir === "undo" ? doUndo : doRedo}
+                    aria-label={st ? `${name}: ${st.reason}${when ? `, ${when}` : ""}` : `Nothing to ${dir}`}
+                    title={`${name} (${keys})`} aria-keyshortcuts={dir === "undo" ? "Meta+Z Control+Z" : "Meta+Shift+Z Control+Shift+Z"}
+                    className={cn(btn, "min-h-[52px] min-w-0 flex-col items-start justify-center gap-0 px-3 py-1.5 text-left")}>
+                    <span className="flex items-center gap-1.5 text-[15px] font-semibold">
+                      {geoWorking ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <Icon className="h-4 w-4" aria-hidden />}
+                      {name}
+                    </span>
+                    <span className="block w-full truncate text-[12px] font-normal text-white/55">
+                      {st ? <>{st.reason}{when && <> · <NW>{when}</NW></>}</> : `Nothing to ${dir}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
             <Segmented compact label="What to adjust" value={tool}
-              onChange={(t) => { if (t === "mask" && !s.mask) addMask(); else { setTool(t); setSel(0); } }}
+              onChange={(t) => {
+                if (t === "mask" && !s.mask) {
+                  if (editing) addMask(); else toast("Tap Edit layout first, then add the blocked area.", { id: "wall-act" });
+                } else { setTool(t); setSel(0); }
+              }}
               options={[{ id: "corners", label: "Strip" }, { id: "mask", label: <><Triangle className="h-4 w-4" aria-hidden /> Blocked</> }, { id: "wing", label: <><PenLine className="h-4 w-4" aria-hidden /> Sign</> }, { id: "air", label: <><Plane className="h-4 w-4" aria-hidden /> Sky</> }]} />
-          <div ref={padRef} className="relative aspect-video w-full touch-none select-none overflow-hidden rounded-xl ring-1 ring-white/15" style={{ background: "#000" }}>
+          <div ref={padRef} className={cn("relative aspect-video w-full select-none overflow-hidden rounded-xl ring-1 ring-white/15", editing ? "touch-none" : "touch-pan-y")} style={{ background: "#000" }}>
             <svg viewBox="0 0 1600 900" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
               <polygon points={s.corners.map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
                 fill="rgba(255,248,236,0.14)" stroke="#FFF8EC" strokeWidth={tool === "corners" ? 5 : 3} />
@@ -1235,7 +1367,7 @@ export default function Wall() {
               const deg = (Math.atan2((b[1] - a[1]) * 9, (b[0] - a[0]) * 16) * 180) / Math.PI;
               const id = EDGE + n;
               return (
-                <button key={`edge-${n}`} type="button"
+                <button key={`edge-${n}`} type="button" disabled={!editing}
                   aria-label={`Stretch the ${["top", "right", "bottom", "left"][n]} side`}
                   aria-pressed={sel === id}
                   onPointerDown={startDrag(id)} onFocus={() => setSel(id)}
@@ -1244,7 +1376,7 @@ export default function Wall() {
                     if (k[e.key]) { e.preventDefault(); nudge(...k[e.key]); }
                   }}
                   style={{ left: `${mx * 100}%`, top: `${my * 100}%`, transform: `rotate(${deg}deg)` }}
-                  className="absolute -ml-[22px] -mt-[22px] flex h-11 w-11 touch-none items-center justify-center focus-visible:outline-none">
+                  className="absolute -ml-[22px] -mt-[22px] flex h-11 w-11 touch-none items-center justify-center focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50">
                   <span className={cn(
                     "block h-[9px] w-7 rounded-full border-2 border-black bg-[#FFF8EC] shadow-[0_0_0_2px_rgba(0,0,0,0.55)] transition-transform duration-100",
                     sel === id && "scale-125 ring-4 ring-sky-400/70",
@@ -1255,7 +1387,7 @@ export default function Wall() {
             {handles.map((p, i) => {
               const isAll = i === handles.length - 1;
               return (
-                <button key={`${tool}-${i}`} type="button"
+                <button key={`${tool}-${i}`} type="button" disabled={!editing}
                   aria-label={isAll ? "Move the whole shape" : `${tool === "mask" ? "Blocked area" : tool === "wing" ? "Sign wall" : tool === "air" ? "Sky" : "Corner"} point ${i + 1}`}
                   aria-pressed={sel === i}
                   onPointerDown={startDrag(i)} onFocus={() => setSel(i)}
@@ -1264,7 +1396,7 @@ export default function Wall() {
                     if (k[e.key]) { e.preventDefault(); nudge(...k[e.key]); }
                   }}
                   style={{ left: `${p[0] * 100}%`, top: `${p[1] * 100}%` }}
-                  className="absolute -ml-[22px] -mt-[22px] flex h-11 w-11 touch-none items-center justify-center rounded-full focus-visible:outline-none">
+                  className="absolute -ml-[22px] -mt-[22px] flex h-11 w-11 touch-none items-center justify-center rounded-full focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50">
                   <span className={cn(
                     "block h-5 w-5 rounded-full border-[2.5px] shadow-[0_0_0_2px_rgba(0,0,0,0.55)] transition-transform duration-100",
                     isAll ? "border-white bg-sky-400" : tool === "mask" ? "border-white bg-orange-400" : tool === "wing" ? "border-black bg-[#64D2FF]" : tool === "air" ? "border-black bg-[#BF5AF2]" : "border-black bg-[#FFF8EC]",
@@ -1273,18 +1405,23 @@ export default function Wall() {
                 </button>
               );
             })}
+            {!editing && (
+              <span className="pointer-events-none absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-black/70 px-3 py-1 text-[12px] text-white/80 ring-1 ring-white/15">
+                <Lock className="h-3 w-3" aria-hidden /> Locked
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Nudge the selected point">
               <span />
-              <button type="button" aria-label="Nudge up" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, -1)}><ArrowUp className="h-5 w-5" /></button>
+              <button type="button" disabled={!editing} aria-label="Nudge up" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, -1)}><ArrowUp className="h-5 w-5" /></button>
               <span />
-              <button type="button" aria-label="Nudge left" className={cn(btn, "w-11 px-0")} onClick={() => nudge(-1, 0)}><ArrowLeft className="h-5 w-5" /></button>
+              <button type="button" disabled={!editing} aria-label="Nudge left" className={cn(btn, "w-11 px-0")} onClick={() => nudge(-1, 0)}><ArrowLeft className="h-5 w-5" /></button>
               <span className="flex h-11 w-11 items-center justify-center text-[12px] text-white/45">{sel >= EDGE ? ["Top", "Right", "Bottom", "Left"][sel - EDGE] : sel === handles.length - 1 ? "All" : sel + 1}</span>
-              <button type="button" aria-label="Nudge right" className={cn(btn, "w-11 px-0")} onClick={() => nudge(1, 0)}><ArrowRight className="h-5 w-5" /></button>
+              <button type="button" disabled={!editing} aria-label="Nudge right" className={cn(btn, "w-11 px-0")} onClick={() => nudge(1, 0)}><ArrowRight className="h-5 w-5" /></button>
               <span />
-              <button type="button" aria-label="Nudge down" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, 1)}><ArrowDown className="h-5 w-5" /></button>
+              <button type="button" disabled={!editing} aria-label="Nudge down" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, 1)}><ArrowDown className="h-5 w-5" /></button>
               <span />
             </div>
             <div className="min-w-[180px] flex-1 space-y-2">
@@ -1293,26 +1430,26 @@ export default function Wall() {
               {tool !== "mask" ? (
                 <>
                   <div className="flex gap-2" role="group" aria-label="Resize the strip, same shape">
-                    <button type="button" className={cn(btn, "flex-1")} onClick={() => scale(false)}>
+                    <button type="button" disabled={!editing} className={cn(btn, "flex-1")} onClick={() => scale(false)}>
                       <Minimize2 className="h-4 w-4" aria-hidden /> Smaller
                     </button>
-                    <button type="button" className={cn(btn, "flex-1")} onClick={() => scale(true)}>
+                    <button type="button" disabled={!editing} className={cn(btn, "flex-1")} onClick={() => scale(true)}>
                       <Maximize2 className="h-4 w-4" aria-hidden /> Bigger
                     </button>
                   </div>
-                  <button type="button" className={cn(btn, "w-full")} onClick={() => change(tool === "wing" ? { wing: DEFAULT_WING } : tool === "air" ? { air: DEFAULT_AIR } : { corners: DEFAULT_CORNERS })}>
+                  <button type="button" disabled={!editing} className={cn(btn, "w-full")} onClick={() => change(tool === "wing" ? { wing: DEFAULT_WING } : tool === "air" ? { air: DEFAULT_AIR } : { corners: DEFAULT_CORNERS })}>
                     <RotateCcw className="h-4 w-4" aria-hidden /> {tool === "wing" ? "Reset sign wall" : tool === "air" ? "Reset sky" : "Reset corners"}
                   </button>
                 </>
               ) : (
                 <div className="flex gap-2">
                   {s.mask && s.mask.length < 6 && (
-                    <button type="button" className={cn(btn, "flex-1")} onClick={() => {
+                    <button type="button" disabled={!editing} className={cn(btn, "flex-1")} onClick={() => {
                       const m = s.mask!; const a = m[m.length - 1], b = m[0];
                       change({ mask: [...m, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]] });
                     }}>Add point</button>
                   )}
-                  <button type="button" className={cn(btn, "flex-1 text-red-400")} onClick={() => { change({ mask: null }); setTool("corners"); setSel(0); }}>
+                  <button type="button" disabled={!editing} className={cn(btn, "flex-1 text-red-400")} onClick={() => { change({ mask: null }); setTool("corners"); setSel(0); }}>
                     <Trash2 className="h-4 w-4" aria-hidden /> Remove
                   </button>
                 </div>
