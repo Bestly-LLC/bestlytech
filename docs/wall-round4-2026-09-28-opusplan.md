@@ -17,6 +17,11 @@ Photos (3:49 PM) are in `docs/wall-round4-assets/`: `sky-key-bulbs.jpg` (bulb bl
 | `motivate` | object\|null | null | `{seq, ts}` — admin/remote "Motivate me" button; wall plays the show once per new seq |
 | `airFocus` | object\|null | null | `{hex, until}` — the aircraft on the wall name tag right now (Live Activity follows it) |
 
+**Do Not Disturb helpers (W4, live on the Pi 4:00 PM):** anything that makes noise or pops up checks DND first.
+Page: `window.dndNow()` → `{on, why:'schedule'|'override'|'off', until?}` (`play()` and the hourly chime already respect it).
+server.py: `dnd_now()` → `(on, why)`. SQL: `wall_dnd_now()` → `{on, why, until?}` (authenticated/service_role). Alarms + heads-ups Jared set still ring.
+**Admin Sky (W4):** Pi `sky_share_loop` → `wall_pi_air_put` → table `wall_air_live` (3 s while /admin/sky is open, else 10 s); admin reads `wall_admin_air()`.
+
 **Aircraft extras** (server.py air → page): each plane may carry `from`/`to` (IATA + city), `news:{station,call}`, `police:"LAPD"|"LASD"|null`.
 Table `wall_news_helis(hex, reg, station, channel, notes)` + `wall_pi_news_helis(p_token)`.
 
