@@ -1,0 +1,85 @@
+# Wall round 4 — opusplan (2026-09-28, 3:40 PM PT)
+
+Jared's list (attachment, 40 asks), grouped by system so parallel workers never fight over the same code.
+Status legend: [ ] todo · [x] done · [~] partial / needs Jared · [?] waiting on Jared's input
+
+Photos he mentions (sky key with the light bulbs, Flighty Live Activity, LED sign on/off/grid) were **not attached** —
+work from the descriptions; the LED sign mapping waits for the photos.
+
+## Shared contracts
+**New `wall_state.state` keys** (server.py DEFAULT_STATE + `wall_clean_toggles`/`wall_clean_patch` + admin Wall.tsx):
+| key | type | default | meaning |
+|---|---|---|---|
+| `dnd` | object | `{on:true, from:"22:30", to:"07:00", override:null}` | Do Not Disturb for wall sounds/pop-ups. `override` = `{mode:"on"\|"off", until:ts}`; admin edits times + override + off |
+| `homePos` | object\|null | null | where "home" sits on the sky `{x,y}` 0..1; the whole sky re-projects around it (not just the label) |
+| `layoutSel` | string\|null | null | id of the layout block being adjusted; wall outlines it while the grid is on |
+| `motivate` | object\|null | null | `{seq, ts}` — admin/remote "Motivate me" button; wall plays the show once per new seq |
+| `airFocus` | object\|null | null | `{hex, until}` — the aircraft on the wall name tag right now (Live Activity follows it) |
+
+**Aircraft extras** (server.py air → page): each plane may carry `from`/`to` (IATA + city), `news:{station,call}`, `police:"LAPD"|"LASD"|null`.
+Table `wall_news_helis(hex, reg, station, channel, notes)` + `wall_pi_news_helis(p_token)`.
+
+**Feeds** (`wall_pi_feeds`): `mail.items[]` (one-line summaries), `energy.today_cents`, `turo.calendar[{date, status:'booked'|'blocked'|'open', guest?}]` (30 days), `claude{pct, label, resets_at, source}` (usage arch), `packages[{id, carrier, what, eta, status, done}]`.
+
+**Pi editing rule (several workers share wall.html/server.py):** every edit = small anchored replace, under
+`flock /opt/bestly/wall/.edit.lock`, re-read the live file first, backup `*.bak_r4<w>_*`, `node --check` (page script) /
+`py_compile`, restart, bump `wall_state.version`. Never write a whole file from an old copy. Quiet hours: no audible tests after 10:45 PM.
+
+## W1 Sky + aircraft (wall.html sky, server.py air)
+- [ ] Name tag stays up longer (+~40%) and never flickers in/out (hysteresis on "in view", one owner of the tag, no re-mount).
+- [ ] Flight card always shows from → to when a route exists (callsign route lookup + cache; United etc.).
+- [ ] Rings + red dot only on the plane in the name tag; dots animate in/out.
+- [ ] News helicopters: stored database (hex → station/channel), tag shows "KTLA 5" etc., colored blue.
+- [ ] LAPD helicopters: black-and-white checkered tail boom, white rotor end.
+- [ ] Flip-sky toggle: test; fix or remove.
+- [ ] Movable home (`homePos`): the whole sky (planes, rings, compass) re-projects around it.
+- [ ] Sky animation speed + timing pass (smooth motion, easing, no jumps).
+- [ ] Sun ⇄ moon animate + fade.
+- [ ] Sky key: move the "tail …" line under "Bigger = flying lower"; move the blue-dot "closest to you" line under the red-dot line (light bulbs block the old spots).
+- [ ] LAX tower status tag under the weather: no clipping/cut-off text (Apple HIG).
+
+## W2 Strip + widgets (wall.html strip/widgets, server.py feeds, Supabase feeds)
+- [ ] Purple Scout to-dos: slower (hold each page longer, readable).
+- [ ] Quotes + mantras: big new set (Gandhi, Martha Stewart, Buddha, Steve Irwin, Dolly Parton, Catherine O'Hara, Robin Williams, Heath Ledger, Albert Einstein, Christopher Nolan, Jony Ive + more); shuffle-deck so nothing repeats until every one has shown.
+- [ ] 30-day Turo calendar widget on the right: booked / blocked / open with clear contrast (Apple HIG).
+- [ ] Home energy shows cents.
+- [ ] Mail widget: "2 pieces of mail" then a short summary of what they are.
+- [ ] Batteries: iPhone must not hide under EcoFlow when it isn't detected.
+- [ ] Claude usage widget under batteries: arch gauge + Claude mark in the middle.
+- [ ] Packages on the wall hide once checked off in admin (W4 builds the admin tool).
+
+## W3 Audio (server.py audio, relay, HA, AirPlay)
+- [ ] AirPlay target not showing on his iPhone — root-cause + fix + watchdog.
+- [ ] LAX tower (ATC) does not play on the HomePod — fix end to end, audible test before 10:45 PM.
+- [ ] Radio still broken — fix end to end, audible test.
+
+## W4 Admin (repo: Wall.tsx + admin shell + Scout chat)
+- [ ] Do Not Disturb back: edit times, override now, turn off (`dnd`).
+- [ ] Admin desktop: use the width (side-by-side columns), simplify + organize (Apple HIG).
+- [ ] Sky tab: full-screen digital sky for computer/phone (same planes as the wall).
+- [ ] NEEDS YOU: collapse duplicates (4–5 identical wall notices → one row with a count).
+- [ ] Scout chat: the "fix LAX guest…" info boxes sit inline in time order, not stuck to the bottom.
+- [ ] Packages: check off "got it" → hides from the wall. (Apple's order tracking has no API — answer in the reply.)
+- [ ] Layout editor: the selected block (`layoutSel`) is outlined on the projector while the grid is on.
+- [ ] "Motivate me" button (`motivate`).
+
+## W5 Shows + home automation (wall.html shows, server.py, HA/Homebridge, sign page)
+- [ ] "Motivate me" projection show (Apple-grade).
+- [ ] Indoor air bad → turn on the Dyson purifier (Homebridge) automatically + a cute "open the door" takeover; watchdog.
+- [ ] Skit: UFO beams Jared up from his desk (desk = the home label); story reworked for anyone, Kings Road / Melrose / WeHo, 733 N Kings Rd.
+- [ ] Turo notification: the wall strip fires at the same moment as the iPhone + HomePod announcement.
+- [ ] Live signatures: capture stroke timing on the sign page; new signature replays full screen, glides to its spot; the board re-writes signatures one by one (newest → oldest, staggered, overlaps OK), random tilt/placement, graffiti-wall-by-Apple.
+
+## W6 iPhone Live Activity (aircraft)
+- [ ] Flighty-style aircraft Live Activity (compact + expanded) with a Find-My-style arrow pointing to the aircraft.
+- [ ] Sign-wall plane name tag redesigned to match it.
+- [ ] Phone and wall show the same aircraft (`airFocus`), rotating together.
+
+## Waiting on Jared
+- [?] Dyson vacuum on the wall: mockup of a "Devices" row under batteries first; which Dyson model decides what data we can read.
+- [?] LED sign mapping (outlines, light-up, notification animations): needs the on/off/grid photos.
+
+## Rules for every worker
+12-hour times, US units, a number never wraps from its unit, Apple HIG for UI, self-healing watchdog tied to Scout for anything new,
+secrets only in Supabase Vault, short guest links, backups before Pi edits, bump `wall_state.version` after wall changes,
+record decisions in `bestly_memory` (kind `decision`, short SHAs only), commit + push to main with the repo trailer.
