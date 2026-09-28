@@ -22,6 +22,9 @@ Page: `window.dndNow()` → `{on, why:'schedule'|'override'|'off', until?}` (`pl
 server.py: `dnd_now()` → `(on, why)`. SQL: `wall_dnd_now()` → `{on, why, until?}` (authenticated/service_role). Alarms + heads-ups Jared set still ring.
 **Admin Sky (W4):** Pi `sky_share_loop` → `wall_pi_air_put` → table `wall_air_live` (3 s while /admin/sky is open, else 10 s); admin reads `wall_admin_air()`.
 
+**LED sign (W8)** — `ledSign` object `{on, look:"lit"|"breathe"|"wash"|"trace"|"none", color:"#hex", x, y (offset, 0..1 of screen), s (scale), r (deg), sx (width), outline, notify, shield, test:{fx, at}}`, cleaned by `wall_clean_ledsign()`. **`wall_admin_set` now chains `wall_clean_ledsign` after `wall_clean_r4admin` — keep it if you redefine `wall_admin_set`.**
+**LED sign keep-out box (W5 signatures):** sign center (0.1721, 0.8031) of the screen, traced size 69x70 ref px (960x540). Keep-out (sign + acrylic + margin) = screen **x 0.1307–0.2135, y 0.7290–0.8772**; in sign-wall px (1000x980) **[433, 492, 777, 802]** (tube box [445, 504, 765, 790] + 12 px). Live values in the page: `window.LEDSIGN_BOX = {norm:[x0,y0,x1,y1], wing:[x0,y0,x1,y1]}` (follows admin nudges), `'ledsign:box'` window event on change, and `WING_AVOID`'s neon entry is kept equal to it.
+
 **Aircraft extras** (server.py air → page): each plane may carry `from`/`to` (IATA + city), `news:{station,call}`, `police:"LAPD"|"LASD"|null`.
 Table `wall_news_helis(hex, reg, station, channel, notes)` + `wall_pi_news_helis(p_token)`.
 
