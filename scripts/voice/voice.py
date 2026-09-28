@@ -296,12 +296,16 @@ def tts(text):
     with wave.open(io.BytesIO(buf.getvalue())) as w:
         sr, ch, sw, frames = w.getframerate(), w.getnchannels(), w.getsampwidth(), w.readframes(w.getnframes())
     pad = b"\x00" * int(sr * 0.3) * ch * sw
+    # server.py's relay holds ~4 s of MP3 back before the first byte and (as of 4:25 PM Sep 28) drops a clip that ends
+    # sooner, so a short reply is padded with silence to 5 s. A file converts faster than real time: no added delay.
+    speech = len(frames) / (sr * ch * sw)
+    tail = pad + b"\x00" * max(0, int(sr * (5.0 - speech - 0.6))) * ch * sw
     name = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
     path = f"{MEDIA}/{name}.wav"
     with wave.open(path, "wb") as w:
         w.setnchannels(ch); w.setsampwidth(sw); w.setframerate(sr)
-        w.writeframes(pad + frames + pad)
-    return name, len(frames) / (sr * ch * sw) + 0.6
+        w.writeframes(pad + frames + tail)
+    return name, speech + 0.6
 
 
 def ha(domain, service, data, timeout=8):
