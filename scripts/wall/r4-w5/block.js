@@ -182,7 +182,7 @@
     deck=deck.filter(i=>i>=0&&i<W5_LINES.length); if(!deck.length){ deck=W5_LINES.map((_,i)=>i).sort(()=>Math.random()-.5); if(deck[0]===W5M.last&&deck.length>1) deck.push(deck.shift()); }
     const i=deck.shift(); W5M.last=i; try{ localStorage.setItem('w5motDeck',JSON.stringify(deck)); }catch(e){} return W5_LINES[i]; }
   function w5Chips(){ const out=[]; try{ const t=w2F('turo'); if(t&&t.week!=null&&+t.week>0) out.push(['$'+Math.round(+t.week).toLocaleString('en-US'),'Turo this week']); }catch(e){}
-    try{ const n=(SIGS||[]).filter(s=>!s.test).length; if(n>0) out.push([String(n),n===1?'name on the sign wall':'names on the sign wall']); }catch(e){}
+    try{ const n=(SIGS||[]).filter(s=>!s.test).length; if(n>=3) out.push([String(n),n===1?'name on the sign wall':'names on the sign wall']); }catch(e){}
     try{ const h=w2F('habits'); if(h&&h.streak) out.push([String(h.streak)+' days','streak']); else if(h&&h.steps) out.push([(+h.steps).toLocaleString('en-US'),'steps today']); }catch(e){}
     try{ const one=String(S.one||'').trim(); if(one) out.push(['One thing',one.length>42?one.slice(0,40)+'…':one]); }catch(e){}
     return out.slice(0,3); }

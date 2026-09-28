@@ -17,7 +17,7 @@
 #sigHero.w5 .nm{animation:none;opacity:0;transform:translateY(12px);filter:blur(6px);transition:opacity .8s var(--ease),transform .8s var(--ease),filter .8s var(--ease);}
 #sigHero.w5 .nm.on{opacity:1;transform:none;filter:none;}
 /* Motivate me: a ~24 s takeover of the strip */
-#w5mot,#w5air{position:absolute;inset:0;z-index:58;overflow:hidden;background:#000;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .9s var(--ease),visibility 0s linear .9s;}
+#w5mot,#w5air{position:absolute;inset:0;z-index:75;overflow:hidden;background:#000;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .9s var(--ease),visibility 0s linear .9s;}
 #w5mot.on,#w5air.on{opacity:1;visibility:visible;transition:opacity .9s var(--ease),visibility 0s;}
 body.w5-mot #board,body.w5-mot #corner,body.w5-air #board,body.w5-air #corner{opacity:0!important;transition:opacity .8s var(--ease)!important;}
 #w5mot>i{position:absolute;border-radius:50%;width:900px;height:900px;left:0;top:0;opacity:.55;will-change:transform;}
