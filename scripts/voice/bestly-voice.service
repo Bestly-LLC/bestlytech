@@ -1,0 +1,19 @@
+[Unit]
+Description=Bestly Voice - "Hey Scout" wake word + Scout on the wall (NZXT mic)
+After=network-online.target sound.target bestly-wall.service
+Wants=network-online.target
+
+[Service]
+User=pi
+Group=audio
+WorkingDirectory=/opt/bestly/voice
+ExecStart=/opt/bestly/voice/venv/bin/python -u /opt/bestly/voice/voice.py
+Restart=always
+RestartSec=3
+Nice=-2
+Environment=OMP_NUM_THREADS=1
+StandardOutput=append:/opt/bestly/voice/voice.log
+StandardError=append:/opt/bestly/voice/voice.log
+
+[Install]
+WantedBy=multi-user.target
