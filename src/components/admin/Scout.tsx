@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -23,7 +23,7 @@ import {
 import { CopyBlock } from "@/components/CopyText";
 import { copyText } from "@/lib/copyForClaude";
 import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecording } from "./ScoutRecorder";
-import { ScoutJobs, useMacJobs, type MacJob } from "./ScoutJobs";
+import { JobCard, useJobFollow, useMacJobs, type MacJob } from "./ScoutJobs";
 import { AttachBar, AttachButton, useScoutFiles } from "./ScoutAttach";
 import { ScoutAutoRunBar } from "./ScoutAutoRun";
 import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
@@ -46,6 +46,8 @@ interface Msg {
   id?: string;
   role: "user" | "assistant";
   body: string;
+  /** When it was said; places Mac job cards in the conversation where they were proposed. */
+  created_at?: string;
 }
 
 interface ThreadRow {
@@ -428,7 +430,7 @@ export function Scout() {
   const loadThread = useCallback(async (id: string) => {
     const { data } = await supabase
       .from("admin_chat_messages" as any)
-      .select("id, role, body")
+      .select("id, role, body, created_at")
       .eq("thread_id", id)
       .order("created_at");
     setMsgs((data ?? []) as unknown as Msg[]);
@@ -463,7 +465,7 @@ export function Scout() {
       // The files' text rides along in the message body, so the thread keeps the whole ask and
       // Scout can refer back to a file later in the conversation without re-reading it.
       const withFiles = attach.compose(asked);
-      setMsgs((m) => [...(fresh ? [] : m), { role: "user", body: withFiles }]);
+      setMsgs((m) => [...(fresh ? [] : m), { role: "user", body: withFiles, created_at: new Date().toISOString() }]);
       setText("");
       attach.drop();
       requestAnimationFrame(toNewest); // you just asked: follow the answer
@@ -481,7 +483,7 @@ export function Scout() {
           : status === 401 || status === 403
             ? "Your sign-in expired. Refresh the page and sign in again."
             : "I couldn't reach the server just now. Try again in a moment.";
-        setMsgs((m) => [...m, { role: "assistant", body }]);
+        setMsgs((m) => [...m, { role: "assistant", body, created_at: new Date().toISOString() }]);
       } else if (id) {
         setThreadId(id);
         await loadThread(id);
@@ -608,6 +610,25 @@ export function Scout() {
     },
     [send, threadId],
   );
+  const jobDecided = useJobFollow(jobs, refreshJobs, jobFinished);
+  /** Mac job cards sit in the conversation where they were proposed (after the last message said
+   *  before the job was created), not stuck under the newest message. -1 = before the first message. */
+  const jobsAfter = useMemo(() => {
+    const out = new Map<number, MacJob[]>();
+    let last = 0;
+    const ts = msgs.map((m) => { const t = m.created_at ? Date.parse(m.created_at) : NaN; last = Number.isFinite(t) ? t : last; return last; });
+    for (const j of [...jobs].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))) {
+      const t = Date.parse(j.created_at);
+      let at = -1;
+      for (let i = 0; i < ts.length; i++) if (ts[i] <= t) at = i;
+      out.set(at, [...(out.get(at) ?? []), j]);
+    }
+    return out;
+  }, [msgs, jobs]);
+  const jobCards = (at: number) => {
+    const list = jobsAfter.get(at);
+    return list?.length ? <div className="space-y-3">{list.map((j) => <JobCard key={j.id} job={j} onDecided={jobDecided} />)}</div> : null;
+  };
 
   const startEdit = (m: Msg) => {
     if (!m.id) return;
@@ -931,8 +952,10 @@ export function Scout() {
               </p>
             )}
 
+            {jobCards(-1)}
             {msgs.map((m, i) => (
-              <div key={i} className={cn("scout-row group", m.role === "user" ? "scout-msg-user" : "scout-msg-bot")}>
+              <Fragment key={m.id ?? i}>
+              <div className={cn("scout-row group", m.role === "user" ? "scout-msg-user" : "scout-msg-bot")}>
                 {m.role === "user" ? (
                   <div className="flex items-start justify-end gap-1">
                     <span className="scout-tools flex shrink-0 gap-0.5 pt-1">
@@ -996,9 +1019,9 @@ export function Scout() {
                   </div>
                 )}
               </div>
+              {jobCards(i)}
+              </Fragment>
             ))}
-
-            <ScoutJobs jobs={jobs} refresh={refreshJobs} onFinished={jobFinished} />
 
             {busy && (
               <p className="scout-msg-bot flex items-center gap-2 text-sm text-white/50" aria-live="polite">

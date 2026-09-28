@@ -68,7 +68,7 @@ function ago(iso: string | null) {
   return s < 60 ? `${s}s` : `${Math.round(s / 60)}m`;
 }
 
-function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run: boolean) => void }) {
+export function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run: boolean) => void }) {
   const [showScript, setShowScript] = useState(false);
   const { autoRun, setAutoRun } = useScoutAutoRun();
   const [working, setWorking] = useState(false);
@@ -174,15 +174,14 @@ function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: string, run:
   );
 }
 
-export function ScoutJobs({ jobs, refresh, onFinished }: {
-  jobs: MacJob[];
-  refresh: () => void;
-  onFinished: (job: MacJob) => void;
-}) {
-  // Jobs approved or seen running in this window; when one finishes, Scout gets told once.
+/**
+ * Follows the jobs this window started or saw running, and tells Scout once when each one finishes.
+ * Returns the onDecided handler for JobCard. Scout.tsx renders the cards itself, inline in the
+ * conversation where each job was proposed (by created_at), so a card never sticks to the bottom.
+ */
+export function useJobFollow(jobs: MacJob[], refresh: () => void, onFinished: (job: MacJob) => void) {
   const mine = useRef<Set<string>>(new Set());
   const told = useRef<Set<string>>(new Set());
-
   useEffect(() => {
     for (const j of jobs) {
       // Seen starting or running in this window (auto-run starts them with no tap): follow it too.
@@ -193,13 +192,20 @@ export function ScoutJobs({ jobs, refresh, onFinished }: {
       }
     }
   }, [jobs, onFinished]);
+  return useCallback((id: string, run: boolean) => { if (run) mine.current.add(id); refresh(); }, [refresh]);
+}
 
+/** All cards in one stack (kept for any caller that has no conversation to place them in). */
+export function ScoutJobs({ jobs, refresh, onFinished }: {
+  jobs: MacJob[];
+  refresh: () => void;
+  onFinished: (job: MacJob) => void;
+}) {
+  const decided = useJobFollow(jobs, refresh, onFinished);
   if (!jobs.length) return null;
   return (
     <div className="space-y-3">
-      {jobs.map((j) => (
-        <JobCard key={j.id} job={j} onDecided={(id, run) => { if (run) mine.current.add(id); refresh(); }} />
-      ))}
+      {jobs.map((j) => <JobCard key={j.id} job={j} onDecided={decided} />)}
     </div>
   );
 }

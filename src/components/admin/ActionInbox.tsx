@@ -19,6 +19,7 @@ import {
   ExternalLink,
   MoreHorizontal,
   VolumeX,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -78,6 +79,34 @@ interface ActionItem {
   since?: string;
   /** Scout's latest "is this already done?" read from a Refresh (admin_needs_checks). */
   check?: NeedCheck;
+  /** admin_today() source ("Home Hub", "Alerts", ...): part of the duplicate key. */
+  source?: string;
+}
+
+/** Identical notices (same source and title, e.g. the same wall alert raised 5 times) shown as one row. */
+interface ItemGroup { gid: string; items: ActionItem[]; lead: ActionItem; newestMs: number }
+
+const dupKey = (i: ActionItem) => `${i.source ?? ""}|${i.title.trim().toLowerCase().replace(/\s+/g, " ")}`;
+
+/** Keeps the list's order (worst, then oldest first); a group sits where its first notice was and wears its worst severity. */
+function groupDuplicates(items: ActionItem[]): ItemGroup[] {
+  const byKey = new Map<string, ItemGroup>();
+  const out: ItemGroup[] = [];
+  for (const it of items) {
+    const k = dupKey(it);
+    const g = byKey.get(k);
+    if (g) {
+      g.items.push(it);
+      g.newestMs = Math.min(g.newestMs, it.ageMs);
+      if (severityRank[it.severity] < severityRank[g.lead.severity]) g.lead = it;
+    } else {
+      const ng = { gid: k, items: [it], lead: it, newestMs: it.ageMs };
+      byKey.set(k, ng);
+      out.push(ng);
+    }
+  }
+  for (const g of out) g.items.sort((a, b) => a.ageMs - b.ageMs);   // newest first inside a group
+  return out;
 }
 
 interface NeedCheck { verdict: string; summary: string | null; at: string | null; closed: boolean }
@@ -309,6 +338,9 @@ export function ActionInbox() {
   const [showAll, setShowAll] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
   const [openItem, setOpenItem] = useState<ActionItem | null>(null);
+  /** Duplicate groups the operator expanded to see each notice. */
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
+  const toggleGroup = (gid: string) => setOpenGroups((s) => { const n = new Set(s); if (n.has(gid)) n.delete(gid); else n.add(gid); return n; });
   /** A Refresh in flight: the rules already ran; `run` is the AI pass still judging `pending` items. */
   const [checking, setChecking] = useState<{ run: string | null; pending: number } | null>(null);
 
@@ -361,6 +393,7 @@ export function ActionInbox() {
         why: r.why || undefined,
         since: r.since || undefined,
         check: checks.get(r.key),
+        source: r.source || undefined,
       };
     });
 
@@ -423,6 +456,22 @@ export function ActionInbox() {
     else toast(keys.length === 1 ? "Back on the list" : `${keys.length} back on the list`, { description: "Scout won't close these again for a week." });
     load();
   }, [load]);
+
+  /** One tap clears every copy of a duplicated notice (one Undo puts them all back). */
+  const markGroupDone = useCallback(async (g: ItemGroup) => {
+    const keys = g.items.map((i) => i.id);
+    setWorking(g.gid);
+    const results = await Promise.all(keys.map((k) => (supabase.rpc as any)("admin_today_done", { p_key: k })));
+    setWorking(null);
+    const ok = keys.filter((_, n) => !results[n].error);
+    if (ok.length < keys.length) setError("Some of those didn't go through. Try again.");
+    setItems((prev) => prev.filter((i) => !ok.includes(i.id)));
+    if (ok.length) toast(`Done · ${ok.length} ${ok.length === 1 ? "notice" : "notices"}`, {
+      description: g.lead.title,
+      action: { label: "Undo", onClick: () => void undoMany(ok) },
+    });
+    load();
+  }, [load, undoMany]);
 
   const listTitles = (rows: { title: string }[]) =>
     rows.slice(0, 3).map((r) => r.title).join(" · ") + (rows.length > 3 ? ` · and ${rows.length - 3} more` : "");
@@ -571,8 +620,13 @@ export function ActionInbox() {
     );
   }
 
-  const visible = showAll ? items : items.slice(0, COLLAPSED_COUNT);
-  const hidden = items.length - COLLAPSED_COUNT;
+  const groups = groupDuplicates(items);
+  const visible = showAll ? groups : groups.slice(0, COLLAPSED_COUNT);
+  const hidden = groups.length - COLLAPSED_COUNT;
+  const rowBtn = cn(
+    "flex w-full min-h-[44px] items-center gap-3 py-3 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] focus-visible:ring-inset",
+    inset,
+  );
 
   return (
     <section aria-labelledby="action-inbox-title">
@@ -580,40 +634,89 @@ export function ActionInbox() {
       <div className={cn(cardCls, "overflow-hidden")}>
         {errorBar}
         <ul id="action-inbox-list" className={divider}>
-          {visible.map((item) => {
+          {visible.map((g) => {
+            const item = g.lead;
             const Icon = item.icon;
             const pill = severityPill[item.severity];
+            const n = g.items.length;
+            const open = openGroups.has(g.gid);
+            if (n === 1) {
+              return (
+                <li key={g.gid}>
+                  <button type="button" onClick={() => setOpenItem(item)} className={rowBtn}
+                    aria-label={`${severityWord[item.severity]}: ${item.title}`}>
+                    <Icon className="h-4 w-4 shrink-0 text-white/55" aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <p className={cn(text.title, "flex min-w-0 items-center gap-2")}>
+                        {pill ? <Pill tone={pill}>{severityWord[item.severity]}</Pill> : <span className="sr-only">{severityWord[item.severity]}: </span>}
+                        <span className="truncate">{item.title}</span>
+                      </p>
+                      {item.detail && <p className={cn(text.detail, "mt-0.5 truncate")}>{item.detail}</p>}
+                    </div>
+                    {item.count && <Pill>{item.count}</Pill>}
+                    <span className={cn(text.meta, "shrink-0")}>
+                      <span className="sr-only">Waiting </span>{timeAgo(item.ageMs)}
+                    </span>
+                  </button>
+                </li>
+              );
+            }
+            const latest = g.items[0];
+            const listId = `needs-dup-${g.gid.replace(/[^a-z0-9]+/gi, "-").slice(0, 40)}`;
             return (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => setOpenItem(item)}
-                  className={cn(
-                    "flex w-full min-h-[44px] items-center gap-3 py-3 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] focus-visible:ring-inset",
-                    inset,
-                  )}
-                  aria-label={`${severityWord[item.severity]}: ${item.title}`}
-                >
+              <li key={g.gid}>
+                <button type="button" onClick={() => toggleGroup(g.gid)} className={rowBtn} aria-expanded={open} aria-controls={listId}
+                  aria-label={`${severityWord[item.severity]}: ${item.title}, ${n} times, latest ${timeAgo(g.newestMs)} ago`}>
                   <Icon className="h-4 w-4 shrink-0 text-white/55" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <p className={cn(text.title, "flex min-w-0 items-center gap-2")}>
                       {pill ? <Pill tone={pill}>{severityWord[item.severity]}</Pill> : <span className="sr-only">{severityWord[item.severity]}: </span>}
                       <span className="truncate">{item.title}</span>
+                      <span className="shrink-0 whitespace-nowrap rounded-full bg-white/[0.10] px-2 py-0.5 text-[12px] font-semibold tabular-nums text-white/85">×{n}</span>
                     </p>
-                    {item.detail && <p className={cn(text.detail, "mt-0.5 truncate")}>{item.detail}</p>}
+                    <p className={cn(text.detail, "mt-0.5 truncate")}>
+                      Latest <span className="whitespace-nowrap">{latest.since ? clock12(latest.since) : timeAgo(g.newestMs)}</span>{latest.detail ? ` · ${latest.detail}` : ""}
+                    </p>
                   </div>
-                  {item.count && <Pill>{item.count}</Pill>}
-                  <span className={cn(text.meta, "shrink-0")}>
-                    <span className="sr-only">Waiting </span>{timeAgo(item.ageMs)}
-                  </span>
+                  <span className={cn(text.meta, "shrink-0")}><span className="sr-only">Latest </span>{timeAgo(g.newestMs)}</span>
+                  <ChevronDown className={cn("h-4 w-4 shrink-0 text-white/40 transition-transform duration-200 motion-reduce:transition-none", open && "rotate-180")} aria-hidden />
                 </button>
+                {open && (
+                  <div id={listId} className="bg-white/[0.02]">
+                    <ul className={divider}>
+                      {g.items.map((it) => (
+                        <li key={it.id}>
+                          <button type="button" onClick={() => setOpenItem(it)} className={cn(rowBtn, "min-h-[44px] py-2.5 pl-10")}
+                            aria-label={`${it.title}, ${it.since ? clock12(it.since) : timeAgo(it.ageMs) + " ago"}`}>
+                            <div className="min-w-0 flex-1">
+                              <p className={cn(text.detail, "truncate text-white/80")}>
+                                <span className="whitespace-nowrap font-medium text-white/90">
+                                  {it.since ? new Date(it.since).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : timeAgo(it.ageMs)}
+                                </span>
+                                {it.detail ? ` · ${it.detail}` : ""}
+                              </p>
+                            </div>
+                            <span className={cn(text.meta, "shrink-0")}>{timeAgo(it.ageMs)}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className={cn("flex justify-end py-2", inset)}>
+                      <button type="button" disabled={working === g.gid} onClick={() => void markGroupDone(g)}
+                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 text-[13px] font-medium text-white/70 transition hover:bg-white/[0.06] hover:text-white disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF]">
+                        {working === g.gid ? <RefreshCw className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <Check className="h-4 w-4" aria-hidden />}
+                        Mark all {n} done
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             );
           })}
         </ul>
         {hidden > 0 && (
           <Disclosure open={showAll} onToggle={() => setShowAll((v) => !v)} controls="action-inbox-list">
-            {showAll ? "Show fewer" : `Show all ${items.length}`}
+            {showAll ? "Show fewer" : `Show all ${groups.length}`}
           </Disclosure>
         )}
       </div>
