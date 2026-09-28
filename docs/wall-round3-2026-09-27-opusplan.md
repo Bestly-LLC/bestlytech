@@ -47,10 +47,10 @@ Jared's list (attachment), answers: purple Scout = a detail list of its items; n
 - [ ] Left widget: news (NPR / Ground News); render the new widgets from `wall_pi_feeds`.
 
 ## W3 Data + sign (Supabase, feed fetchers, admin sign section)
-- [ ] `wall_pi_feeds`: news (NPR + Ground News), USPS Informed Delivery mail summary (rolling 7 days, from the iCloud inbox) + deliveries, App Store app statuses, Turo earnings, air quality + pollen, home energy (LADWP), streaks/habits, daily Leo line. Watchdog per feed.
-- [ ] New-booking event (`turo_booking`).
-- [ ] Sign wall: reset to just Jared's signature (count 01).
-- [ ] Clearing a name in admin also deletes that guest's emoji.
+- [x] `wall_pi_feeds`: news (NPR + Ground News), USPS Informed Delivery mail summary (rolling 7 days, from the iCloud inbox) + deliveries, App Store app statuses, Turo earnings, air quality + pollen, home energy (LADWP), streaks/habits, daily Leo line. Watchdog per feed. — LIVE 2026-09-27 11:10 PM (commits aca1da1..439deaf). Ground News has no public feed -> NPR + PBS NewsHour. Pollen null (no free keyless US source). Habits null until the iPhone step sensor is on. Energy is an estimate counted from tonight.
+- [x] New-booking event (`turo_booking`). Trigger on turo_trips insert; wall_pi_trips trips carry `new` + `booking{car,days,earnings}` for 10 min (and are listed even if they start after the 36 h window).
+- [x] Sign wall: reset to just Jared's signature (count 01). Jared = No. 1, next guest No. 2; removed rows in wall_signatures_archive.
+- [x] Clearing a name in admin also deletes that guest's emoji (hide/clear/delete; Show puts it back).
 
 ## W4 Audio, projector, alarm, power (server.py audio/alarm parts, HA, adb, admin power)
 - [ ] Radio: fix; explain HA stations vs Radio Browser.
