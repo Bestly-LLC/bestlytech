@@ -85,9 +85,9 @@ Admin RPCs (admin auth like `wall_admin_set`): `wall_admin_packages() → [{id, 
 - [ ] Live signatures: capture stroke timing on the sign page; new signature replays full screen, glides to its spot; the board re-writes signatures one by one (newest → oldest, staggered, overlaps OK), random tilt/placement, graffiti-wall-by-Apple.
 
 ## W6 iPhone Live Activity (aircraft)
-- [ ] Flighty-style aircraft Live Activity (compact + expanded) with a Find-My-style arrow pointing to the aircraft.
-- [ ] Sign-wall plane name tag redesigned to match it.
-- [ ] Phone and wall show the same aircraft (`airFocus`), rotating together.
+- [~] Flighty-style aircraft Live Activity (compact + expanded) with a Find-My-style arrow pointing to the aircraft. — Native app `ios/BestlySky` (Lock Screen + Dynamic Island + in-app true compass) + edge fn `wall-live-activity` (APNs key in Vault; probe got 400 BadDeviceToken on sandbox + production = auth OK) + Pi `sky_la_loop`. Compiles on the Mac mini; NOT on the phone yet: code signing blocked (see bestly_memory house/wall/round4-live-activity). Meanwhile the HA card got the arrow (↗ in its Dynamic Island text) + a route progress bar.
+- [ ] Sign-wall plane name tag redesigned to match it. — left to W1 (owns the name-tag code this round).
+- [x] Phone and wall show the same aircraft (`airFocus`), rotating together. — Pi target = airFocus, else page `tag_hex` (verified equal on the live wall); HA card follows it within 2 mi (45 s after a plane change); the Sky app path updates in place within 5 s.
 
 ## W7 Voice — "Hey Scout" (Pi + NZXT USB mic)
 - [ ] Wake word "Hey Scout" on the Pi using the NZXT mic Jared plugged into it (local, always-on, low CPU; custom openWakeWord-style model, with a tuned threshold + false-wake log).
