@@ -389,11 +389,16 @@ def handle(pcm, wake):
             w.setframerate(SR)
             w.writeframes(pcm.tobytes())
         t0 = time.time()
+        # a slow answer (Scout looking something up) gets a short "one sec" on the speaker after 7 s
+        filler = threading.Timer(7.0, lambda: _filler())
+        filler.daemon = True
+        filler.start()
         try:
             r = edge({"op": "ask", "audio_b64": base64.b64encode(buf.getvalue()).decode(), "ctx": ctx(), "wake": wake}, timeout=60)
         except Exception as e:
             err_add("llm", e)
             r = None
+        filler.cancel()
         lat["cloud"] = round(time.time() - t0, 2)
         if not r or not r.get("ok"):
             kind = (r or {}).get("stage") or "llm"
@@ -438,6 +443,14 @@ def handle(pcm, wake):
         log(f"turn: {outcome} heard={heard!r} reply={reply[:80]!r} lat={lat}")
         rec = {"at": time.time(), "kind": "turn", "outcome": outcome, "score": wake.get("score"), "model": wake.get("model"), "lat": lat}
         wake_log(rec)
+
+
+def _filler():
+    try:
+        name, dur = tts(random.choice(["One sec, checking.", "Let me look.", "Checking now."]))
+        speak(name, dur)
+    except Exception as e:
+        log("filler failed", str(e)[:80])
 
 
 # ---------------------------------------------------------------- audio + wake loop
