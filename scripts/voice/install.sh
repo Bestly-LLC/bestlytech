@@ -9,7 +9,7 @@ sudo mkdir -p /opt/bestly/voice/{models,tts,clips,media} && sudo chown -R pi:pi 
 /opt/bestly/voice/venv/bin/python -c "from openwakeword.utils import download_models; download_models(model_names=['hey_jarvis_v0.1'])"
 cd /opt/bestly/voice/tts && for f in en_US-lessac-medium.onnx en_US-lessac-medium.onnx.json; do
   [ -s $f ] || curl -sSL -o $f "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/$f"; done
-grep -q "pcm.scoutmic" /etc/asound.conf 2>/dev/null || sudo sh -c "cat $SRC/asound-scoutmic.conf >> /etc/asound.conf"
+sudo install -m 644 $SRC/asound-scoutmic.conf /etc/alsa/conf.d/60-scoutmic.conf; sudo sed -i "/Bestly Voice (W7)/,/^}$/d" /etc/asound.conf 2>/dev/null || true
 install -m 644 $SRC/voice.py /opt/bestly/voice/voice.py
 [ -f $SRC/hey_scout.onnx ] && install -m 644 $SRC/hey_scout.onnx /opt/bestly/voice/models/hey_scout.onnx || true
 sudo install -m 644 $SRC/bestly-voice.service /etc/systemd/system/bestly-voice.service
