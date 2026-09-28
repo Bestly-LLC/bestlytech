@@ -24,7 +24,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { ProjectorHealth, type Health } from "@/components/admin/ProjectorHealth";
-import { WallRadioSection, type WallRadio } from "@/components/admin/WallRadio";
+import { WallRadioSection, type WallRadio, type WallRadioLive } from "@/components/admin/WallRadio";
+import { WallPowerCost, type WallPowerMeter } from "@/components/admin/WallPowerCost";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
@@ -103,6 +104,11 @@ type PiStatus = {
   page_mode?: string | null; dark_30m?: number; last_dark?: { at: number; why: string } | null;
   airplay?: { want?: boolean; on?: boolean; casting?: boolean; kind?: string | null; since?: number | null; err?: string | null;
     age_s?: number | null; page?: string | null; rtc?: string | null } | null;
+  radio?: WallRadioLive;
+  /** Dashboard electricity meter (server.py power_loop): projector + Pi watts and measured kWh. */
+  power_meter?: WallPowerMeter | null;
+  /** Sign-wall focus preset (server.py focus_command): manual steps added after autofocus. */
+  focus?: { offset?: number; tuned?: boolean; busy?: boolean; err?: string | null; last?: { cmd: string; at: number; ok: boolean } | null } | null;
 };
 type Remote = {
   state: WallState; version: number; channel: string; power: { on?: boolean; seq: number; at?: string };
@@ -623,8 +629,16 @@ export default function Wall() {
     void load();
   };
 
+  const nudgeFocus = async (dir: "focus_left" | "focus_right") => {
+    setPowerMsg("Moving the lens one step. The focus screen shows for a few seconds, then the wall comes back.");
+    const { error } = await rpc("wall_admin_command", { p_cmd: dir });
+    setPowerMsg(error ? `Didn't go through: ${error.message}` : "Moved one step. Look at the sign wall: tap again the same way if it got sharper, the other way if it got softer.");
+    if (error) toast.error(`Didn't go through: ${error.message}`, { id: "wall-act" });
+    void load();
+  };
+
   const focus = async () => {
-    setPowerMsg("Focusing… the picture blurs for a few seconds.");
+    setPowerMsg("Focusing… the picture blurs for about 15 seconds.");
     const { error } = await rpc("wall_admin_command", { p_cmd: "focus" });
     setPowerMsg(error ? `Didn't go through: ${error.message}` : "Focus sent. Tap again if it still looks soft.");
     if (error) toast.error(`Didn't go through: ${error.message}`, { id: "wall-act" }); else toast.success("Focusing. Tap again if it still looks soft.", { id: "wall-act" });
@@ -1131,7 +1145,7 @@ export default function Wall() {
       </Group>
 
       {/* Radio: Radio Browser stations -> state.radio {on, name, url, favicon, ts}; the Pi plays it on the Desk HomePod. */}
-      <WallRadioSection radio={s.radio}
+      <WallRadioSection radio={s.radio} live={st?.radio ?? null}
         onPlay={(r) => act({ radio: r }, `Playing ${r.name.split(/\s+[-|–]\s+/)[0]} on the Desk HomePod.`)}
         onStop={() => act({ radio: s.radio ? { ...s.radio, on: false, ts: Date.now() } : null }, "Radio stopped.")} />
 
@@ -1301,6 +1315,21 @@ export default function Wall() {
             <button type="button" className={btn} onClick={() => void focus()}><Focus className="h-5 w-5" aria-hidden /> Focus</button>
             <button type="button" className={btn} onClick={() => void restartWall()}><RotateCw className="h-5 w-5" aria-hidden /> Restart</button>
           </div>
+          <Row label="Sign wall focus"
+            detail={<>
+              One lens can only be sharpest at one distance, and the sign wall sits a few inches behind the strip. Nudge until both look good; the wall remembers it and puts it back after Focus and every morning.
+              {st?.focus?.tuned ? <> Saved: <NW>{st.focus.offset ?? 0} {Math.abs(st.focus.offset ?? 0) === 1 ? "step" : "steps"}</NW> from autofocus.</> : null}
+              {st?.focus?.err ? <span className="text-amber-300"> {st.focus.err}</span> : null}
+            </>}>
+            <div className="flex shrink-0 gap-2" role="group" aria-label="Nudge focus">
+              <button type="button" className={cn(btn, "px-3")} disabled={!!st?.focus?.busy} onClick={() => void nudgeFocus("focus_left")} aria-label="Nudge focus left">
+                <ArrowLeft className="h-5 w-5" aria-hidden />
+              </button>
+              <button type="button" className={cn(btn, "px-3")} disabled={!!st?.focus?.busy} onClick={() => void nudgeFocus("focus_right")} aria-label="Nudge focus right">
+                <ArrowRight className="h-5 w-5" aria-hidden />
+              </button>
+            </div>
+          </Row>
           <Row label="Auto keystone" detail="Off keeps the picture square so your alignment doesn't shift. Turn on only if you move the projector." htmlFor="wall-keystone">
             <Switch className={swHit} id="wall-keystone" checked={!!s.autoKeystone} onCheckedChange={(v) => act({ autoKeystone: v }, v ? "Auto keystone on." : "Auto keystone off.")} />
           </Row>
@@ -1308,6 +1337,9 @@ export default function Wall() {
             <Switch className={swHit} id="wall-away" checked={s.away} onCheckedChange={(v) => act({ away: v }, v ? "Away mode on. The Pi leaves the projector alone." : "Away mode off.")} />
           </Row>
         </Group>
+
+        {/* Electricity: live watts + LADWP cost estimate (server.py power_loop via the watchdog status) */}
+        <WallPowerCost meter={st?.power_meter} />
 
         <Group title="Alignment"
           footer={tool === "air"

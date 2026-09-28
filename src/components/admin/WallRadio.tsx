@@ -46,8 +46,8 @@ function clean(list: unknown): Station[] {
     const url = (r.url_resolved || r.url || "").trim();
     const name = (r.name || "").replace(/\s+/g, " ").trim();
     if (!url || !name) continue;
-    // The Desk HomePod (HA media_player via AirPlay) only plays MP3, OGG and FLAC streams; AAC/HLS stations fail silently.
-    if (!/^(MP3|OGG|FLAC)$/i.test((r.codec || "").trim())) continue;
+    // The Pi relays every station through ffmpeg as MP3 (server.py relay), so AAC and HLS stations play too.
+    if (!/^(MP3|OGG|FLAC|AAC\+?|OPUS)$/i.test((r.codec || "").trim())) continue;
     const key = `${name.toLowerCase()}|${url}`;
     if (seen.has(key) || seen.has(url)) continue;
     seen.add(key); seen.add(url);
@@ -101,8 +101,12 @@ function StationRow({ st, playing, onPick }: { st: Station; playing: boolean; on
 
 const ROWS = 6;
 
-export function WallRadioSection({ radio, onPlay, onStop }: {
+/** What the Pi reports back (server.py radio_health, pushed about once a minute). */
+export type WallRadioLive = { want?: boolean; state?: string | null; err?: string | null; title?: string | null; fail_min?: number | null } | null;
+
+export function WallRadioSection({ radio, live, onPlay, onStop }: {
   radio: WallRadio | undefined;
+  live?: WallRadioLive;
   onPlay: (r: NonNullable<WallRadio>) => void;
   onStop: () => void;
 }) {
@@ -164,9 +168,17 @@ export function WallRadioSection({ radio, onPlay, onStop }: {
           <Logo src={radio?.favicon} className="h-12 w-12 rounded-xl" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[17px] font-semibold text-white">{on && nowTitle ? nowTitle : nowTitle ?? "Nothing playing"}</div>
-            <div className="truncate text-[13px] text-white/55">
-              {on ? "On the Desk HomePod" : nowTitle ? "Stopped. Tap Play to pick it back up." : "Pick a station below. It plays on the Desk HomePod."}
-            </div>
+            {on && live?.want && live.err ? (
+              <div className="line-clamp-2 text-[13px] text-amber-300">{live.err}</div>
+            ) : (
+              <div className="truncate text-[13px] text-white/55">
+                {on
+                  ? live?.want && live.state === "playing"
+                    ? live.title ? `Now playing: ${live.title}` : "Playing on the Desk HomePod"
+                    : "Starting on the Desk HomePod…"
+                  : nowTitle ? "Stopped. Tap Play to pick it back up." : "Pick a station below. It plays on the Desk HomePod."}
+              </div>
+            )}
           </div>
           {on ? (
             <button type="button" onClick={onStop}
