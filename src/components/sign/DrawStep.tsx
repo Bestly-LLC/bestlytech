@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export const COLORS = ["#FFD166", "#FF6B9A", "#7BDFF2", "#C3A6FF", "#9BF6A1", "#FF9F6B", "#FFFFFF", "#FF5E5E"];
 
-export type DrawResult = { name: string; color: string; strokes: number[][]; aspect: number };
+/** times: one array per stroke, one integer per point = ms since the first touch of the signature (the wall replays
+ *  the signature at the speed it was written). Parallel to strokes. */
+export type DrawResult = { name: string; color: string; strokes: number[][]; times: number[][]; aspect: number };
 
 type Stroke = number[];
 
@@ -18,6 +20,9 @@ export default function DrawStep({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const strokes = useRef<Stroke[]>([]);
   const drawing = useRef<Stroke | null>(null);
+  const times = useRef<number[][]>([]);          // parallel to strokes: ms per point
+  const drawingT = useRef<number[] | null>(null);
+  const t0 = useRef<number | null>(null);        // first touch of this signature
   const [color, setColor] = useState(COLORS[0]);
   const [name, setName] = useState("");
   const [hasInk, setHasInk] = useState(false);
@@ -78,6 +83,9 @@ export default function DrawStep({
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     drawing.current = point(e);
+    const now = performance.now();
+    if (t0.current === null) t0.current = now;
+    drawingT.current = [Math.round(now - t0.current)];
     redraw();
   };
   const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -87,20 +95,26 @@ export default function DrawStep({
     const dx = x - st[st.length - 2], dy = y - st[st.length - 1];
     if (dx * dx + dy * dy < 9) return;
     st.push(x, y);
+    drawingT.current?.push(Math.round(performance.now() - (t0.current ?? performance.now())));
     redraw();
   };
   const up = () => {
-    const st = drawing.current;
+    const st = drawing.current, tt = drawingT.current;
     drawing.current = null;
+    drawingT.current = null;
     if (st && strokes.current.length < 80) {
       strokes.current.push(st);
+      times.current.push(tt && tt.length * 2 === st.length ? tt : st.map((_, i) => i).filter((i) => i % 2 === 0).map(() => 0));
       setHasInk(true);
     }
     redraw();
   };
   const clear = () => {
     strokes.current = [];
+    times.current = [];
+    t0.current = null;
     drawing.current = null;
+    drawingT.current = null;
     setHasInk(false);
     redraw();
   };
@@ -111,18 +125,26 @@ export default function DrawStep({
     const r = c.getBoundingClientRect();
     const k = 1000 / r.width; // x and y share the width scale, so the drawing keeps its shape
     let pts = 0;
-    const norm = strokes.current
-      .map((st) => st.map((v) => Math.max(0, Math.min(1000, Math.round(v * k)))))
-      .map((st) => (st.length === 2 ? [st[0], st[1], st[0] + 1, st[1]] : st))
-      .filter((st) => st.length >= 4)
-      .map((st) => {
-        // keep under the server's 8,000-number cap by thinning very long strokes
-        const out = st.length > 400 ? st.filter((_, i) => Math.floor(i / 2) % 2 === 0 || i >= st.length - 2) : st;
-        pts += out.length;
-        return out;
-      });
-    if (pts > 8000) return;
-    onSend({ name: name.trim(), color, strokes: norm, aspect: Math.max(0.5, Math.min(4, r.width / r.height)) });
+    const norm: number[][] = [], tms: number[][] = [];
+    strokes.current.forEach((raw, si) => {
+      let st = raw.map((v) => Math.max(0, Math.min(1000, Math.round(v * k))));
+      let tt = (times.current[si] || []).map((v) => Math.max(0, Math.min(600000, Math.round(v))));
+      if (tt.length * 2 !== st.length) tt = st.filter((_, i) => i % 2 === 0).map(() => 0);
+      if (st.length === 2) { st = [st[0], st[1], st[0] + 1, st[1]]; tt = [tt[0] ?? 0, (tt[0] ?? 0) + 16]; }
+      if (st.length < 4) return;
+      if (st.length > 400) {
+        // keep under the server's 8,000-number cap by thinning very long strokes (every other point, always the last)
+        const keep = (p: number, n: number) => p % 2 === 0 || p === n - 1;
+        const n = st.length / 2;
+        st = st.filter((_, i) => keep(Math.floor(i / 2), n));
+        tt = tt.filter((_, p) => keep(p, n));
+      }
+      pts += st.length;
+      norm.push(st);
+      tms.push(tt);
+    });
+    if (pts > 8000 || !norm.length) return;
+    onSend({ name: name.trim(), color, strokes: norm, times: tms, aspect: Math.max(0.5, Math.min(4, r.width / r.height)) });
   };
 
   return (

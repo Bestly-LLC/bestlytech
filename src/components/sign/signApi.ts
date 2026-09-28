@@ -73,9 +73,10 @@ export async function resolveSession(code: string | null): Promise<Session | nul
   return { token: data.token, expiresAt: exp, legacy: !!data.legacy, legacyUntil: data.legacy_until ?? null, signed: 0, emoji: null };
 }
 
-export async function signWall(token: string, args: { name: string; strokes: number[][]; color: string; aspect: number }) {
+export async function signWall(token: string, args: { name: string; strokes: number[][]; times?: number[][]; color: string; aspect: number }) {
   const { data, error } = await rpc("wall_sign_tap", {
     p_token: token, p_name: args.name, p_strokes: args.strokes, p_color: args.color, p_aspect: args.aspect, p_device: deviceId(),
+    p_times: args.times && args.times.length === args.strokes.length ? args.times : null,
   });
   if (error) throw new Error(error.message);
   nudge(data?.ping, "sign", { id: data?.id });
