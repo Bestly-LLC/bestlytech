@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { AdminMark } from "@/components/AdminMark";
-import { BookOpen, GripVertical, Projector } from "lucide-react";
+import { BookOpen, GripVertical, Plane, Projector } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
@@ -67,6 +67,7 @@ const homeHubItems = [
   { title: "Homebridge", url: "/admin/home-hub/homebridge", icon: Boxes },
   { title: "Access backup", url: "/admin/home-hub/access", icon: KeyRound },
   { title: "Wall", url: "/admin/wall", icon: Projector },
+  { title: "Sky", url: "/admin/sky", icon: Plane },
 ];
 
 const turoItems = [

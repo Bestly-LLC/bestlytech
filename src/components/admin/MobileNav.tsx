@@ -13,7 +13,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Binoculars, Brush, Car, Focus, LayoutDashboard, Menu, Mic, Projector, RotateCw, Zap, X } from "lucide-react";
+import { Binoculars, Brush, Car, Focus, LayoutDashboard, Menu, Mic, Plane, Projector, RotateCw, Zap, X } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { openScout } from "@/components/admin/scoutBus";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +29,7 @@ type Tool = { label: string; sub: string; icon: typeof Zap; tint: string; to?: s
 
 const TOOLS: Tool[] = [
   { label: "Wall", sub: "Remote & layout", icon: Projector, tint: "#5E5CE6", to: "/admin/wall" },
+  { label: "Sky", sub: "Planes overhead", icon: Plane, tint: "#0A84FF", to: "/admin/sky" },
   { label: "Ask Scout", sub: "Anything, anytime", icon: Binoculars, tint: "#30D158", run: () => openScout() },
   { label: "Meetings", sub: "Record & notes", icon: Mic, tint: "#FF453A", to: "/admin/meetings" },
   { label: "Street Sweeping", sub: "Where's the car", icon: Brush, tint: "#FF9F0A", to: "/admin/street-sweeping" },
