@@ -52,7 +52,7 @@ async function keys(): Promise<Record<string, string>> {
   return v;
 }
 
-const VOCAB = "Hey Scout. Turo, Tesla, HomePod, Bestly, Eli, Jared, West Hollywood, Kings Road, LAX, EcoFlow, Nextcloud.";
+const VOCAB = "Hey Scout. Turo, Tesla, HomePod, Bestly, Eli, Jared, West Hollywood, Kings Road, LAX, EcoFlow, Nextcloud, planes overhead.";
 
 async function stt(wav: Uint8Array): Promise<{ text: string; via: string }> {
   const k = await keys();
@@ -166,7 +166,36 @@ async function scoutSnapshot(): Promise<Record<string, unknown>> {
   };
 }
 
+/** Voice needs a fast answer: Groq's small/fast models first (each has its own free per-minute and per-day limits, so a
+ * busy Scout on gpt-oss-120b doesn't starve voice), then the shared free ladder (free-llm function). Logged in ai_spend. */
+const GROQ_FAST = ["openai/gpt-oss-20b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+async function groqFast(system: string, user: string): Promise<{ text: string; via: string } | null> {
+  const k = await keys();
+  if (!k.groq) return null;
+  for (const model of GROQ_FAST) {
+    const t0 = Date.now();
+    let outcome = "ok", tin = 0, tout = 0, text = "";
+    try {
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST", headers: { Authorization: `Bearer ${k.groq}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: user }], max_tokens: 400, temperature: 0.3,
+          ...(model.startsWith("openai/") ? { reasoning_effort: "low" } : {}) }),
+        signal: AbortSignal.timeout(12_000),
+      });
+      const j = await r.json().catch(() => null);
+      if (r.ok) { text = String(j?.choices?.[0]?.message?.content ?? "").trim(); tin = j?.usage?.prompt_tokens ?? 0; tout = j?.usage?.completion_tokens ?? 0; if (!text) outcome = "invalid"; }
+      else outcome = `${r.status === 429 ? "rate_limited" : "error"}: ${r.status} ${JSON.stringify(j?.error?.message ?? "").slice(0, 160)}`;
+    } catch (e) { outcome = `timeout: ${(e as Error).name}`; }
+    await db.from("ai_spend").insert({ fn: "voice-ask", scope: "chat", job: "voice", model, provider: "groq", input_tokens: tin, output_tokens: tout,
+      cost_usd: 0, ok: outcome === "ok", ms: Date.now() - t0, outcome: outcome.slice(0, 300) }).then(() => {}, () => {});
+    if (outcome === "ok") return { text, via: `groq/${model}` };
+  }
+  return null;
+}
+
 async function freeLlm(system: string, user: string): Promise<{ text: string; via: string }> {
+  const fast = await groqFast(system, user).catch(() => null);
+  if (fast) return fast;
   const r = await fetch(`${URL_}/functions/v1/free-llm`, {
     method: "POST", headers: { "Content-Type": "application/json", ...keyHeaders(SECRET_KEY) },
     body: JSON.stringify({ op: "run", task: "summarize", system, user, paid: "never", maxTokens: 700 }),
