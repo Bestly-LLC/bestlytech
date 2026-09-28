@@ -10,9 +10,10 @@
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
-import { ArrowRight, BellRing, CheckCircle2, Flashlight, KeyRound, Loader2, MapPin, Navigation, ShieldAlert, Smartphone } from "lucide-react";
+import { ArrowRight, BellRing, CheckCircle2, Flashlight, KeyRound, Loader2, MapPin, Navigation, Smartphone } from "lucide-react";
 import { TagBar, TripSheet, tripTab } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
+import { KeyHelp, useStuck } from "./KeyHelp";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, TripChanged, WeatherCard, climateNeed, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
 import { Mail, PlayCircle, Users } from "lucide-react";
@@ -142,6 +143,7 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
   const [tapped, setTapped] = useState(() => (keyTapped(token) ?? 0) > inviteFrom);
   useEffect(() => { setTapped((keyTapped(token) ?? 0) > inviteFrom); }, [k.link, inviteFrom, token]);
   useKeyWatch(token, k.state, k.opens_at, onAdded);
+  const keySlow = useStuck(k.state === "making", 150_000);
   // Guest says they already have the Tesla app: skip that step and show what's next instead.
   const [hasApp, setHasApp] = useState(() => { try { return localStorage.getItem("hasTeslaApp") === "1"; } catch { return false; } });
   const haveIt = () => { track(undefined, "have_app"); setHasApp(true); try { localStorage.setItem("hasTeslaApp", "1"); } catch { /* private mode */ } };
@@ -194,9 +196,9 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
           )}
         </div>
       )}
-      {k.state === "making" && (
-        <p className="flex items-center gap-2 text-[15px] text-white/80"><Loader2 className="h-4 w-4 animate-spin" style={{ color: PEACH }} /> Making your key. This page updates by itself.</p>
-      )}
+      {k.state === "making" && (keySlow
+        ? <KeyHelp slow accent={PEACH} />
+        : <p className="flex items-center gap-2 text-[15px] text-white/80"><Loader2 className="h-4 w-4 animate-spin" style={{ color: PEACH }} /> Making your key. This page updates by itself.</p>)}
       {k.state === "ready" && (
         <>
           <ol className="space-y-3">
@@ -217,9 +219,7 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
         <><p className="flex items-start gap-2 text-[15px] leading-relaxed text-white/85"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />The car is in your Tesla app. Walk up with your phone and it unlocks. Access ends by itself after your trip.</p>{next}</>
       )}
       {k.state === "ended" && <p className="text-[15px] text-white/75">Your trip is over, so your key has been turned off. Thanks for driving with us.</p>}
-      {k.state === "problem" && (
-        <p className="flex items-start gap-2 text-[15px] leading-relaxed text-white/85"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />Your key is taking longer than usual. Your host has been told and it retries by itself. If pickup is soon, message your host in the Turo app.</p>
-      )}
+      {k.state === "problem" && <KeyHelp slow={false} accent={PEACH} />}
       {k.state !== "ended" && k.state !== "off" && <ExtraDrivers token={token} embedded />}
       {trip && k.state !== "ended" && <p className="mt-1 text-[12px] text-white/65">Access turns off by itself after your {fmtWhen(trip.ends_at)} return.</p>}
     </Section>

@@ -440,6 +440,18 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
     } finally { setBusy(false); refreshChips(); }
   };
 
+  // A page button (e.g. "Fix it for me" on the key card) hands the helper a question; send it once the sheet is open.
+  const [autoQ, setAutoQ] = useState<string | null>(null);
+  useEffect(() => {
+    const h = (e: Event) => setAutoQ(String((e as CustomEvent<string>).detail ?? "").slice(0, 300) || null);
+    window.addEventListener("trip-ask", h);
+    return () => window.removeEventListener("trip-ask", h);
+  }, []);
+  useEffect(() => {
+    if (open && autoQ && !busy) { const q = autoQ; setAutoQ(null); void send(q); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoQ]);
+
   const footer = (
     <form onSubmit={(e) => { e.preventDefault(); send(text); }} className="flex items-end gap-2">
       <label className="sr-only" htmlFor="ask-input">Your question</label>

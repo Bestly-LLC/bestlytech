@@ -7,7 +7,7 @@
  *  - useHasApp: "I already have the Tesla app", shared by every place that asks.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, CheckCircle2, KeyRound, Loader2, Lock, ShieldAlert, Smartphone, Snowflake, Undo2, UserRound, Zap } from "lucide-react";
+import { ArrowRight, CheckCircle2, KeyRound, Loader2, Lock, Smartphone, Snowflake, Undo2, UserRound, Zap } from "lucide-react";
 import { fmtWhen, climateNeed, type CarState, type Trip } from "./GuestExtras";
 import type { KeyInfo } from "./HomeGuest";
 import { KeyPending, SendToCar, keyTapped, markKeyTapped } from "./KeyNext";
@@ -17,6 +17,7 @@ import { returnCharge } from "./ReturnCharge";
 import type { TripKind } from "./places";
 import { track } from "./track";
 import { Lines } from "./Lines";
+import { KeyHelp, useStuck } from "./KeyHelp";
 
 const ACCENT = "var(--trip-accent)";
 const H = 3600e3;
@@ -149,6 +150,7 @@ export function KeySteps({ k, token, hasApp, onHasApp, onAdded, glow }: { k: Key
   const [tapped, setTapped] = useState(() => (keyTapped(token) ?? 0) > inviteFrom);
   useEffect(() => { setTapped((keyTapped(token) ?? 0) > inviteFrom); }, [k.link, inviteFrom, token]);
   const added = k.state === "added";
+  const keySlow = useStuck(k.state === "making", 150_000);
   return (
     <ol className="space-y-5">
       <Row n={1} done={hasApp || added} title={hasApp || added ? "Tesla app: done" : "Get the free Tesla app"}>
@@ -169,7 +171,9 @@ export function KeySteps({ k, token, hasApp, onHasApp, onAdded, glow }: { k: Key
             <span className="mt-1.5 block text-[13px] text-white/60">Come back then. This button turns on by itself.</span>
           </>
         )}
-        {k.state === "making" && <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" style={{ color: ACCENT }} /> Making your key. This updates by itself.</span>}
+        {k.state === "making" && (keySlow
+          ? <KeyHelp slow accent={ACCENT} />
+          : <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" style={{ color: ACCENT }} /> Making your key. This updates by itself.</span>)}
         {k.state === "ready" && (k.link
           ? tapped ? <KeyPending token={token} link={k.link} onAdded={onAdded} />
             : <>
@@ -184,7 +188,7 @@ export function KeySteps({ k, token, hasApp, onHasApp, onAdded, glow }: { k: Key
                   : <span className="mt-1.5 block text-[13px] text-white/65">Then tap <b className="text-white">Accept</b> in the Tesla app. One-time link, just for you.</span>}
               </>
           : <span className="block rounded-xl bg-white/10 p-3 text-[14px]">Preview: the real button appears here 2 hours before pickup.</span>)}
-        {k.state === "problem" && <span className="flex items-start gap-2"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />Your key is taking longer than usual. Your host knows and it retries by itself.</span>}
+        {k.state === "problem" && <KeyHelp slow={false} accent={ACCENT} />}
         {added && "Walk up with your phone and it unlocks. Access ends by itself after your trip."}
       </Row>
     </ol>
