@@ -12,9 +12,9 @@ The top two strip corners were dragged. Restored from `state.geometryBeforeMove`
 - Verified: rollback test (drag burst = 1 step, undo/redo exact, redo cleared by new change, anon refused) and a real undo + redo: corners came back bit-for-bit and the Pi's state.json matched within 1 s both ways.
 
 ## 2. Wall display (Pi) — worker F
-- [ ] F1 Apple-design pass over the wall itself (type scale, spacing, color, motion, hierarchy on projection).
-- [ ] F2 Debugging + performance + speed + reliability (board mode was 27–31 fps; target ≥ 40), watchdog coverage.
-- [ ] F3 10-day forecast cycles through all 10 days; the right panel shows more for the highlighted day.
-- [ ] F4 A plane name tag / highlight only ever points at a plane that is actually in view in the sky.
-- [ ] F5 A blue dot on the closest aircraft at all times.
-- [ ] F6 Ambient: no moving icons unless something needs Jared.
+- [x] F1 Apple-design pass over the wall itself (type scale, spacing, color, motion, hierarchy on projection).
+- [x] F2 Debugging + performance + speed + reliability (board mode was 27–31 fps; target ≥ 40), watchdog coverage. — board mode 27–33 → 41–52 fps (medians); page error + memory watchdog (wall.page).
+- [x] F3 10-day forecast cycles through all 10 days; the right panel shows more for the highlighted day.
+- [x] F4 A plane name tag / highlight only ever points at a plane that is actually in view in the sky.
+- [x] F5 A blue dot on the closest aircraft at all times.
+- [x] F6 Ambient: no moving icons unless something needs Jared.
