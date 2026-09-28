@@ -26,6 +26,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { ProjectorHealth, type Health } from "@/components/admin/ProjectorHealth";
 import { WallRadioSection, type WallRadio, type WallRadioLive } from "@/components/admin/WallRadio";
 import { WallPowerCost, type WallPowerMeter } from "@/components/admin/WallPowerCost";
+import { WallLedSign, type LedSign, type LedSignHealth } from "@/components/admin/WallLedSign";
 import { Group, Row, Segmented, btn, btnPrimary, swHit, NW } from "@/components/admin/wallUi";
 import { DndCard, MotivateButton, PackagesCard, type Dnd } from "@/components/admin/WallR4";
 import { VoiceCard, type Voice } from "@/components/admin/WallVoice";
@@ -72,6 +73,8 @@ type WallState = {
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
   sleepShow?: { at: number; mins: number; music?: boolean } | null;
   liveActs?: Partial<Record<LiveKind, boolean>> | null;
+  /** W8 round 4: projection-mapped neon sign (glow look, color, fine-align, alert animations, test play). */
+  ledSign?: LedSign | null;
   /** W4 round 4: Do Not Disturb, the layout block the projector outlines while the grid is on, and Motivate me (W5 plays it). */
   voice?: Voice | null;   // W7 round 4: Hey Scout
   dnd?: Dnd | null; layoutSel?: "corners" | "mask" | "wing" | "air" | null; motivate?: { seq: number; ts: number } | null;
@@ -1592,6 +1595,9 @@ export default function Wall() {
           </div>
         </div>
       </Group>
+
+      {/* W8 round 4: the projection-mapped neon sign on the sign wall (glow, looks, alert animations, fine-align) */}
+      <WallLedSign value={s.ledSign} health={(st as { lsign?: LedSignHealth } | null)?.lsign} onChange={(v) => change({ ledSign: v })} />
 
         </div>
         </div>

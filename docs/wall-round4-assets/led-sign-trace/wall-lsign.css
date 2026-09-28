@@ -1,0 +1,9 @@
+/* W8 round 4: LED sign layer (one small canvas pinned over the neon sign; above the sign wall, below shows/grid) */
+#lsign{position:fixed;left:0;top:0;z-index:7;pointer-events:none;opacity:0;transition:opacity .9s var(--ease,ease);will-change:opacity;transform-origin:0 0;}
+#lsign.on{opacity:1;}
+#lsign.ls-grid{z-index:1000;}
+#lsign.on.ls-breathe{animation:lsBreathe 6.5s ease-in-out infinite;}
+#lsign.on.ls-flick{animation:lsFlick 1.7s linear 1;}
+@keyframes lsBreathe{0%,100%{opacity:1}50%{opacity:.6}}
+@keyframes lsFlick{0%{opacity:0}6%{opacity:.8}9%{opacity:.08}17%{opacity:.9}21%{opacity:.25}27%{opacity:1}31%{opacity:.55}37%,100%{opacity:1}}
+body.black #lsign{opacity:0!important;animation:none!important;}
