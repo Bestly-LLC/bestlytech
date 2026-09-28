@@ -268,6 +268,15 @@ _voice = None
 _voice_lock = threading.Lock()
 
 
+def say_clean(t):
+    """Symbols Piper reads badly -> words."""
+    t = re.sub(r"\s*°\s*F\b", " degrees", t)
+    t = t.replace("°", " degrees").replace("%", " percent").replace("&", " and ")
+    t = re.sub(r"\bmph\b", "miles per hour", t)
+    t = re.sub(r"\b(\d{1,2}):00\s*(AM|PM)\b", r"\1 \2", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
 def piper_voice():
     global _voice
     from piper import PiperVoice
