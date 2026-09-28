@@ -43,9 +43,12 @@
   function w5Ov(a,b,pad){ const x=Math.min(a[2]+pad,b[2])-Math.max(a[0]-pad,b[0]), y=Math.min(a[3]+pad,b[3])-Math.max(a[1]-pad,b[1]); return x>0&&y>0?x*y:0; }
   // keep-out boxes (wing px): the plant + the neon LED sign (C6-C7). W8 publishes the traced sign box as window.W8_KEEPOUT
   // ([[x0,y0,x1,y1],...] in wing px, or a function returning that); until then the old hand-measured neon box is used.
-  function w5Keep(){ let k=null; try{ k=typeof window.W8_KEEPOUT==='function'?window.W8_KEEPOUT():window.W8_KEEPOUT; }catch(e){}
-    const w8=Array.isArray(k)?k.filter(b=>Array.isArray(b)&&b.length===4&&b.every(isFinite)):[];
-    return WING_AVOID.concat(w8).map(b=>[b[0]-12,b[1]-12,b[2]+12,b[3]+12]); }
+  // (W8 also moves WING_AVOID's neon entry onto the traced sign; window.LEDSIGN_BOX.wing is added too in case it doesn't overlap)
+  function w5Keep(){ const ok=b=>Array.isArray(b)&&b.length===4&&b.every(v=>typeof v==='number'&&isFinite(v)); let out=WING_AVOID.filter(ok);
+    try{ const lb=window.LEDSIGN_BOX; if(lb&&ok(lb.wing)) out=out.concat([lb.wing]); }catch(e){}
+    try{ const k=typeof window.W8_KEEPOUT==='function'?window.W8_KEEPOUT():window.W8_KEEPOUT; if(Array.isArray(k)) out=out.concat(k.filter(ok)); }catch(e){}
+    return out.map(b=>[b[0]-12,b[1]-12,b[2]+12,b[3]+12]); }
+  addEventListener('ledsign:box',()=>{ try{ W5S.key=''; if(!heroBusy) renderSigs(); }catch(e){} });
   function w5Layout(list,emos){
     const top=sigTop()+8, L=24, R=WW-20, B=WH-16, W=R-L, H=B-top, keep=w5Keep();
     const key=list.map(s=>s.id).join(',')+'|'+emos.map(e=>e.id).join(',')+'|'+top+'|'+keep.map(b=>b.map(Math.round).join(':')).join(';');
@@ -53,10 +56,10 @@
     const n=list.length, items=list.map(s=>{ const bx=w5Box(s); return {s,bx,a:Math.max(1.15,Math.min(4.2,bx.w/bx.h))}; });
     const free=W*H-keep.reduce((a,k)=>a+Math.max(0,Math.min(R,k[2])-Math.max(L,k[0]))*Math.max(0,Math.min(B,k[3])-Math.max(top,k[1])),0);
     const meanA=n?items.reduce((a,i)=>a+i.a,0)/n:2.4;
-    let h=n?Math.max(40,Math.min(210,Math.sqrt(free*.42/n/(meanA*1.12)))):120, best=null;
+    let h=n?Math.max(40,Math.min(210,Math.sqrt(free*.56/n/(meanA*1.12)))):120, best=null;
     for(let pass=0;pass<8;pass++){ const rnd=w5Rng(hash(key)+pass*977), placed=[], sigs=[], emo={}; let ov=0;
       items.forEach((it,i)=>{ const sz=h*(i===0?1.14:(.86+rnd()*.26)), w=Math.min(W,sz*it.a), hh=sz*(it.s.name?1.24:1); let bc=null;
-        for(let t=0;t<80;t++){ const x=L+rnd()*Math.max(1,W-w), y=top+rnd()*Math.max(1,H-hh), bb=[x,y,x+w,y+hh]; let sc=0;
+        for(let t=0;t<140;t++){ const x=L+rnd()*Math.max(1,W-w), y=top+rnd()*Math.max(1,H-hh), bb=[x,y,x+w,y+hh]; let sc=0;
           for(const p of placed) sc+=w5Ov(bb,p,10); for(const k of keep) sc+=w5Ov(bb,k,0)*8;
           if(!bc||sc<bc.sc) bc={sc,bb}; if(sc===0) break; }
         placed.push(bc.bb); ov+=bc.sc; sigs.push({id:it.s.id,x:bc.bb[0],y:bc.bb[1],w,h:hh,sz,r:(rnd()*2-1)*6.5,bx:it.bx}); });
@@ -65,7 +68,7 @@
           for(const p of placed) sc+=w5Ov(bb,p,4); for(const k of keep) sc+=w5Ov(bb,k,0)*8; if(!bc||sc<bc.sc) bc={sc,bb}; if(sc===0) break; }
         placed.push(bc.bb); ov+=bc.sc*.3; emo[e.id]={x:bc.bb[0]+z/2,y:bc.bb[1]+z/2,z,r:(rnd()*2-1)*16}; });
       const c={sigs,emo,ov,h}; if(!best||c.ov<best.ov) best=c;
-      if(ov<=h*h*.03*Math.max(1,n)) break; h*=.9; }
+      if(ov<=h*h*.1*Math.max(1,n)) break; h*=.92; }
     W5S.lay=best; W5S.key=key; return best; }
   function w5List(){ const q=new Set(heroQ.map(x=>x.id)); return (SIGS||[]).filter(s=>s&&!W5S.pend.has(s.id)&&!q.has(s.id)).slice(0,60); }
   function w5Render(opt){ opt=opt||{}; const box=$('#wingSigs'); if(!box) return;
