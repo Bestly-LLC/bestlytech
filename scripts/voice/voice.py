@@ -177,7 +177,7 @@ def prune_clips():
                 os.remove(f)
             except Exception:
                 pass
-    for f in glob.glob(MEDIA + "/*.mp3"):
+    for f in glob.glob(MEDIA + "/*.wav"):
         if time.time() - os.path.getmtime(f) > 600:
             try:
                 os.remove(f)
@@ -268,35 +268,31 @@ _voice = None
 _voice_lock = threading.Lock()
 
 
-def say_clean(t):
-    """Symbols Piper reads badly -> words."""
-    t = re.sub(r"\s*°\s*F\b", " degrees", t)
-    t = t.replace("°", " degrees").replace("%", " percent").replace("&", " and ")
-    t = re.sub(r"\bmph\b", "miles per hour", t)
-    t = re.sub(r"\b(\d{1,2}):00\s*(AM|PM)\b", r"\1 \2", t)
-    return re.sub(r"\s+", " ", t).strip()
-
-
-def tts(text):
-    """Piper (en_US-lessac-medium, loaded once) -> 44.1 kHz stereo MP3 with a short lead-in so AirPlay doesn't clip it."""
+def piper_voice():
     global _voice
     from piper import PiperVoice
     with _voice_lock:
         if _voice is None:
             _voice = PiperVoice.load(ROOT + "/tts/en_US-lessac-medium.onnx")
-        buf = io.BytesIO()
+    return _voice
+
+
+def tts(text):
+    """Piper (en_US-lessac-medium, loaded once at start) -> WAV with 0.3 s of silence around it (AirPlay clips the start)."""
+    v = piper_voice()
+    buf = io.BytesIO()
+    with _voice_lock:
         with wave.open(buf, "wb") as w:
-            _voice.synthesize_wav(say_clean(text), w)
-    raw = buf.getvalue()
+            v.synthesize_wav(say_clean(text), w)
+    with wave.open(io.BytesIO(buf.getvalue())) as w:
+        sr, ch, sw, frames = w.getframerate(), w.getnchannels(), w.getsampwidth(), w.readframes(w.getnframes())
+    pad = b"\x00" * int(sr * 0.3) * ch * sw
     name = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
-    path = f"{MEDIA}/{name}.mp3"
-    p = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "wav", "-i", "pipe:0", "-af", "adelay=350|350,apad=pad_dur=0.4",
-                        "-ar", "44100", "-ac", "2", "-b:a", "160k", path], input=raw, capture_output=True, timeout=20)
-    if p.returncode != 0 or not os.path.exists(path):
-        raise RuntimeError("ffmpeg: " + p.stderr.decode()[:120])
-    with wave.open(io.BytesIO(raw)) as w:
-        dur = w.getnframes() / w.getframerate()
-    return name, dur + 0.75
+    path = f"{MEDIA}/{name}.wav"
+    with wave.open(path, "wb") as w:
+        w.setnchannels(ch); w.setsampwidth(sw); w.setframerate(sr)
+        w.writeframes(pad + frames + pad)
+    return name, len(frames) / (sr * ch * sw) + 0.6
 
 
 def ha(domain, service, data, timeout=8):
@@ -312,19 +308,25 @@ def ha_state(eid):
         return json.loads(r.read())
 
 
-def speak(name):
-    """Play on the Desk HomePod. Returns ('homepod', seconds to first audio) or raises."""
-    url = f"http://127.0.0.1:{PORT}/v/{name}.mp3"
+def speak(name, dur):
+    """Desk HomePod through W3's helper (server.py homepod_play: relay -> plain MP3, pauses + resumes the radio/ATC,
+    restores the volume). Returns seconds until the HomePod reports 'playing'; raises if it never does."""
     t0 = time.time()
+    vol = None
     try:
-        ha("media_player", "play_media", {"entity_id": SPEAKER, "media_content_id": url, "media_content_type": "music"}, timeout=6)
-    except Exception as e:
-        if "timed out" not in str(e):          # HA keeps the call open while pyatv streams: a timeout means it's playing
-            raise
-    for _ in range(20):                        # confirm it started (state 'playing')
+        lvl = (ha_state(SPEAKER).get("attributes") or {}).get("volume_level")
+        if isinstance(lvl, (int, float)) and lvl < 0.15:
+            vol = 0.3                                      # nearly muted: make the reply audible, restored after
+    except Exception:
+        pass
+    r = http_json("http://127.0.0.1:8099/api/homepod", {"src": f"{MEDIA}/{name}.wav", "name": "scout", "seconds": dur + 0.5,
+                                                           **({"volume": vol} if vol else {})}, timeout=12)
+    if not (r or {}).get("ok"):
+        raise RuntimeError(f"homepod helper: {(r or {}).get('msg')}")
+    for _ in range(40):                                    # confirm it started
         try:
             if ha_state(SPEAKER).get("state") == "playing":
-                return "homepod", time.time() - t0
+                return time.time() - t0
         except Exception:
             pass
         time.sleep(0.25)
@@ -336,20 +338,20 @@ class Media(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
-        m = re.match(r"^/v/([a-z0-9]{12})\.mp3$", self.path)
+        m = re.match(r"^/v/([a-z0-9]{12})\.(wav)$", self.path)
         ip = self.client_address[0]
         if not m or not (ip.startswith("127.") or ip.startswith("192.168.")):
             self.send_response(404)
             self.end_headers()
             return
-        p = f"{MEDIA}/{m.group(1)}.mp3"
+        p = f"{MEDIA}/{m.group(1)}.{m.group(2)}"
         if not os.path.isfile(p):
             self.send_response(404)
             self.end_headers()
             return
         data = open(p, "rb").read()
         self.send_response(200)
-        self.send_header("Content-Type", "audio/mpeg")
+        self.send_header("Content-Type", "audio/wav")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -405,12 +407,12 @@ def handle(pcm, wake):
         lat["tts"] = round(time.time() - t1, 2)
         wall("reply", heard=heard, reply=reply, hold=max(10, min(30, dur + 4)))
         try:
-            where, start = speak(name)
-            lat["play_start"] = round(start, 2)
+            lat["play_start"] = round(speak(name, dur), 2)
+            where = "homepod"
         except Exception as e:
             err_add("play", e)
-            where = "wall"                       # projector speaker fallback: the page plays the MP3
-            wall("reply", heard=heard, reply=reply, hold=max(10, min(30, dur + 4)), audio=f"http://{PI_LAN}:{PORT}/v/{name}.mp3")
+            where = "wall"                       # projector speaker fallback: the page plays the WAV
+            wall("reply", heard=heard, reply=reply, hold=max(10, min(30, dur + 4)), audio=f"http://{PI_LAN}:{PORT}/v/{name}.wav")
         lat["total_to_audio"] = round(time.time() - t_end, 2)
         lat["speaker"] = where
         time.sleep(min(dur + 1.0, 30))           # don't hear ourselves: stay busy while the reply plays
@@ -472,6 +474,7 @@ def main():
     from openwakeword import VAD
     threading.Thread(target=lambda: ThreadingHTTPServer(("0.0.0.0", PORT), Media).serve_forever(), daemon=True).start()
     threading.Thread(target=status_loop, daemon=True).start()
+    threading.Thread(target=piper_voice, daemon=True).start()     # load the TTS voice now, not on the first reply
     model, key, fam, mtime = load_model()
     vad = VAD()
     S["model"] = fam
@@ -518,8 +521,9 @@ def main():
                 # --- recording a request
                 if rec is not None:
                     rec.append(x)
-                    sp = float(vad.predict(x, frame_size=640)) > 0.5
-                    if sp:
+                    vs = float(vad.predict(x, frame_size=640))
+                    vad_max = max(vad_max, vs)
+                    if vs > 0.4:
                         speech_at, heard_speech = now, True
                     el = now - rec_t0
                     done = (el > MAX_S) or (not heard_speech and el > START_S) or (heard_speech and now - speech_at > SIL_S and el > 1.2)
@@ -531,7 +535,8 @@ def main():
                         if not heard_speech:
                             wall("idle")
                             ev_add("empty")
-                            wake_log({"at": now, "kind": "turn", "outcome": "empty", "score": wk.get("score"), "model": fam})
+                            wake_log({"at": now, "kind": "turn", "outcome": "empty", "score": wk.get("score"), "model": fam, "vad_max": round(vad_max, 2)})
+                            log(f"no speech after the wake word (vad max {vad_max:.2f})")
                             threading.Thread(target=edge, args=({"op": "log", "event": {"kind": "empty", "score": wk.get("score"), "model": fam}},), daemon=True).start()
                             S["busy"] = False
                             model.reset()
@@ -585,7 +590,7 @@ def main():
                     log(f"wake {sc:.2f} (thr {thr})")
                     wake_log({"at": now, "kind": "wake", "outcome": "listen", "score": round(sc, 3), "model": fam, "threshold": thr})
                     wall("listening", chime=se["sound"])
-                    rec, rec_t0, speech_at, heard_speech, rec_wake = [], now, 0.0, False, wake
+                    rec, rec_t0, speech_at, heard_speech, rec_wake, vad_max = [], now, 0.0, False, wake, 0.0
                     vad.reset_states()
                 elif peak[1] >= 0.3 and now - peak[0] > 1.5:
                     S["near"] = [n for n in S["near"] if now - n[0] < 3600] + [peak]    # near misses, for tuning
