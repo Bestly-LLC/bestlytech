@@ -14,7 +14,7 @@ wake word is kept (clips/, last 10, deleted after 24 h) so the wake word can be 
 Gates: admin switch state.voice.on, Do Not Disturb (same rules as the page and watchdog), away from home.
 Health: status.json every 10 s; /opt/bestly/wall/watchdog.py (voice_watch) restarts the service and tells Scout.
 """
-import base64, collections, glob, io, json, os, random, re, string, subprocess, sys, threading, time, urllib.request, wave
+import base64, collections, glob, io, json, os, random, re, string, subprocess, threading, time, urllib.request, wave
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -503,7 +503,7 @@ def main():
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
         S["mic_ok"], S["mic_err"] = True, None
         log("mic open")
-        rec, rec_t0, speech_at, heard_speech = None, 0.0, 0.0, False
+        rec, rec_t0, speech_at, heard_speech, rec_wake, vad_max = None, 0.0, 0.0, False, {}, 0.0
         need = CHUNK * 3 * 2
         try:
             while True:
