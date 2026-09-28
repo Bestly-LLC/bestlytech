@@ -102,4 +102,4 @@
     document.body.classList.remove('w5ufo'); if(SKT.tok===tok) tourStop(); }
   // test hook (only with ?wftest, e.g. a headless check from the Mac; never on the projector)
   if(/[?&]wftest/.test(location.search)) window.__w5={W5S,W5M,W5A,W5U,w5Render,w5Layout,w5Motivate,w5Air,w5HomeStrip,skitStart,w5Dnd,
-    hero:s=>{ heroQ.push(s); SIGS=[s,...SIGS.filter(x=>x.id!==s.id)]; playHero(); }, get SIGS(){ return SIGS; }, get heroBusy(){ return heroBusy; }, get S(){ return S; }};
+    hero:s=>{ heroQ.push(s); SIGS=[s,...SIGS.filter(x=>x.id!==s.id)]; playHero(); }, setSigs:l=>{ SIGS=l; W5S.key=''; renderSigs(); return l.length; }, get SIGS(){ return SIGS; }, get heroBusy(){ return heroBusy; }, get S(){ return S; }};
