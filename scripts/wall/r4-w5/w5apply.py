@@ -28,7 +28,7 @@ if bad:
     sys.exit(1)
 for f, s in files.items():
     p = os.path.join(ROOT, f)
-    if f.endswith(".html"):
+    if f.endswith(".html") and shutil.which("node"):   # the Pi has no node: deploy.sh checks the page script on the Mac
         js = "\n".join(re.findall(r"<script>(.*?)</script>", s, re.S))
         open("/tmp/r4w5_check.js", "w").write(js)
         r = subprocess.run(["node", "--check", "/tmp/r4w5_check.js"], capture_output=True, text=True)

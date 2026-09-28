@@ -42,7 +42,7 @@ E.append({"file": S, "mark": "target=w5_loop",
 G = "watchdog.py"
 E.append({"file": G, "mark": "def w5_watch(mem, hb):",
           "old": "\ndef push_status():\n", "new": "\n" + wd + "\n\ndef push_status():\n"})
-E.append({"file": G, "mark": "w5_watch(mem, hb)",
+E.append({"file": G, "mark": "w5_watch(mem, hb)   # W5 r4",
           "old": '        sky_watch(mem, hb)\n    except Exception as e:\n        log(f"sky watch error: {e}")\n',
           "new": '        sky_watch(mem, hb)\n    except Exception as e:\n        log(f"sky watch error: {e}")\n    try:\n        w5_watch(mem, hb)   # W5 r4: sign wall + Dyson purifier\n    except Exception as e:\n        log(f"w5 watch error: {e}")\n'})
 json.dump(E, open(os.path.join(D, "w5spec.json"), "w"))
