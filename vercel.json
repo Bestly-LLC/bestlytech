@@ -22,6 +22,10 @@
       "destination": "/admin.html"
     },
     {
+      "source": "/wp/:key",
+      "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wall-turo-ping?k=:key"
+    },
+    {
       "source": "/w/:token",
       "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass?t=:token"
     },
