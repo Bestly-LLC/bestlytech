@@ -100,3 +100,6 @@
     }catch(e){ if(e!=='stop'){ TOUR.err=String((e&&e.message)||e).slice(0,160); W5U.err=TOUR.err; } }
     w5Hum(false); const bm=document.getElementById('w5beam'); if(bm) bm.classList.remove('on');
     document.body.classList.remove('w5ufo'); if(SKT.tok===tok) tourStop(); }
+  // test hook (only with ?wftest, e.g. a headless check from the Mac; never on the projector)
+  if(/[?&]wftest/.test(location.search)) window.__w5={W5S,W5M,W5A,W5U,w5Render,w5Layout,w5Motivate,w5Air,w5HomeStrip,skitStart,w5Dnd,
+    hero:s=>{ heroQ.push(s); SIGS=[s,...SIGS.filter(x=>x.id!==s.id)]; playHero(); }, get SIGS(){ return SIGS; }, get heroBusy(){ return heroBusy; }, get S(){ return S; }};
