@@ -63,9 +63,9 @@ Admin RPCs (admin auth like `wall_admin_set`): `wall_admin_packages() → [{id, 
 - [ ] Packages on the wall hide once checked off in admin (W4 builds the admin tool).
 
 ## W3 Audio (server.py audio, relay, HA, AirPlay)
-- [ ] AirPlay target not showing on his iPhone — root-cause + fix + watchdog.
-- [ ] LAX tower (ATC) does not play on the HomePod — fix end to end, audible test before 10:45 PM.
-- [ ] Radio still broken — fix end to end, audible test.
+- [~] AirPlay target not showing on his iPhone — root-cause + fix + watchdog. (Root cause: the Pi never answered unicast mDNS (Apple "unicast assist" refreshes); HA zeroconf bound 192.168.1.211:5353 and swallowed them, so Bestly Wall aged out of iPhone lists while HomePods stayed. Fix: `bestly-mdns-unicast` helper (scripts/pi/airplay) + avahi IPv4-only; dig now answers v4+v6, 74/94 live Apple queries answered in the first minute. Watchdog `wall.airplay_visible` every 10 min, heal tested. Not yet seen on the iPhone itself.)
+- [x] LAX tower (ATC) does not play on the HomePod — fix end to end, audible test before 10:45 PM. (Relay ID3 header broke pyatv + zero-lead underrun killed HA stream; relay now plain frames, 4 s lead, silence fill. 4:05 PM: 45 s steady "playing", Pi mic heard it.)
+- [x] Radio still broken — fix end to end, audible test. (Same relay root cause; retry once then Scout after 2 min in plain words. 4:08 PM: KCRW AAC via wall_state.radio played, Pi mic heard it. `POST 127.0.0.1:8099/api/homepod` play/stop helper for W7.)
 
 ## W4 Admin (repo: Wall.tsx + admin shell + Scout chat)
 - [ ] Do Not Disturb back: edit times, override now, turn off (`dnd`).
