@@ -332,7 +332,7 @@ def speak(name, dur):
             vol = 0.3                                      # nearly muted: make the reply audible, restored after
     except Exception:
         pass
-    r = http_json("http://127.0.0.1:8099/api/homepod", {"src": f"{MEDIA}/{name}.wav", "name": "scout", "seconds": dur + 0.5,
+    r = http_json("http://127.0.0.1:8099/api/homepod", {"src": f"{MEDIA}/{name}.wav", "name": "scout", "seconds": max(dur, 5.0) + 0.5,
                                                            **({"volume": vol} if vol else {})}, timeout=12)
     if not (r or {}).get("ok"):
         raise RuntimeError(f"homepod helper: {(r or {}).get('msg')}")
