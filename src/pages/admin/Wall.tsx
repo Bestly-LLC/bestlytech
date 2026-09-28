@@ -61,9 +61,11 @@ type WallState = {
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
   air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airLabelsSmall?: boolean; airCard?: boolean; airCardHeli?: boolean; airCardPin?: boolean; leftDate?: boolean; radio?: WallRadio; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
-  heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; tripDismiss?: { id: string; at: number } | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
+  heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; tripDismiss?: { id: string; at: number } | null; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   /** W1 round 3 (sky): Space Station name tag, home marker, sky radius in miles (2-25), live LAX tower audio. */
   issTag?: boolean; skyHome?: boolean; airRadiusMi?: number; atc?: boolean;
+  /** W1 round 4: where home sits on the sky (0..1 of the sky box; null = middle) and a plane held on the sign-wall name tag. */
+  homePos?: { x: number; y: number } | null; airFocus?: { hex: string; until: number } | null;
   /** Strip widgets on the left side (missing = on) and the sample Turo booking pop-up (ms). W2 round 3. */
   widgets?: Partial<Record<StripWidget, boolean>> | null; bookingDemo?: number | null;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
@@ -75,7 +77,7 @@ type WallState = {
 /** One undo step from wall_geometry_history_list (newest first). can_undo / can_redo mark the next step each way. */
 type GeoStep = { id: number; at: string; reason: string; can_undo: boolean; can_redo: boolean; undone: boolean; who?: string | null };
 /** The keys undo/redo put back together (same list as the DB's wall_geo_keys()). */
-const GEO_KEYS = ["corners", "mask", "air", "wing", "airAspect", "airRot", "airFlip", "airBearing"] as const;
+const GEO_KEYS = ["corners", "mask", "air", "wing", "airAspect", "airRot", "airBearing"] as const;
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 /** "4:59 PM" today, "Sep 26, 4:59 PM" before that. Empty when the label already says the time. */
 const stepTime = (st: GeoStep) => {
@@ -1355,9 +1357,30 @@ export default function Wall() {
               {["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"].map((n, i) => <option key={n} value={i * 45}>{n}</option>)}
             </select>
           </Row>
-          <Row label="Flip the sky" detail="Turn the planes area 180° if it reads upside down." htmlFor="wall-air-flip">
-            <Switch className={swHit} id="wall-air-flip" checked={!!s.airFlip} onCheckedChange={(v) => change({ airFlip: v })} />
-          </Row>
+          {(() => {
+            // W1 round 4: move "home" on the ceiling; the whole sky (planes, rings, sun, moon, stars) re-centers on it
+            const hp = s.homePos ?? { x: 0.5, y: 0.5 };
+            const nudge = (dx: number, dy: number) => {
+              const r = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 100) / 100;
+              change({ homePos: { x: r(hp.x + dx), y: r(hp.y + dy) } });
+            };
+            const off = !s.homePos || (Math.abs(hp.x - 0.5) < 0.005 && Math.abs(hp.y - 0.5) < 0.005);
+            return (
+              <Row label="Home on the sky" detail={off ? "In the middle of the sky. Nudge it to where your desk really is." : `Moved ${Math.round(Math.abs(hp.x - 0.5) * 100)}% ${hp.x < 0.5 ? "left" : "right"}, ${Math.round(Math.abs(hp.y - 0.5) * 100)}% ${hp.y < 0.5 ? "up" : "down"}. The whole sky moves with it.`}>
+                <div role="group" aria-label="Move home on the sky" className="grid shrink-0 grid-cols-3 gap-1">
+                  <span />
+                  <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home up" onClick={() => nudge(0, -0.05)}><ArrowUp className="h-5 w-5" aria-hidden /></button>
+                  <span />
+                  <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home left" onClick={() => nudge(-0.05, 0)}><ArrowLeft className="h-5 w-5" aria-hidden /></button>
+                  <button type="button" className={cn(btn, "w-11 px-0 text-[13px]")} aria-label="Put home back in the middle" disabled={off} onClick={() => change({ homePos: null })}>Mid</button>
+                  <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home right" onClick={() => nudge(0.05, 0)}><ArrowRight className="h-5 w-5" aria-hidden /></button>
+                  <span />
+                  <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home down" onClick={() => nudge(0, 0.05)}><ArrowDown className="h-5 w-5" aria-hidden /></button>
+                  <span />
+                </div>
+              </Row>
+            );
+          })()}
         </Group>
 
         <Group title="Tests" footer="Real alerts show on their own: move the car on sweeping mornings, and anything Scout flags.">

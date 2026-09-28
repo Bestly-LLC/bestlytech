@@ -39,17 +39,17 @@ Admin RPCs (admin auth like `wall_admin_set`): `wall_admin_packages() → [{id, 
 `py_compile`, restart, bump `wall_state.version`. Never write a whole file from an old copy. Quiet hours: no audible tests after 10:45 PM.
 
 ## W1 Sky + aircraft (wall.html sky, server.py air)
-- [ ] Name tag stays up longer (+~40%) and never flickers in/out (hysteresis on "in view", one owner of the tag, no re-mount).
-- [ ] Flight card always shows from → to when a route exists (callsign route lookup + cache; United etc.).
-- [ ] Rings + red dot only on the plane in the name tag; dots animate in/out.
-- [ ] News helicopters: stored database (hex → station/channel), tag shows "KTLA 5" etc., colored blue.
-- [ ] LAPD helicopters: black-and-white checkered tail boom, white rotor end.
-- [ ] Flip-sky toggle: test; fix or remove.
-- [ ] Movable home (`homePos`): the whole sky (planes, rings, compass) re-projects around it.
-- [ ] Sky animation speed + timing pass (smooth motion, easing, no jumps).
-- [ ] Sun ⇄ moon animate + fade.
-- [ ] Sky key: move the "tail …" line under "Bigger = flying lower"; move the blue-dot "closest to you" line under the red-dot line (light bulbs block the old spots).
-- [ ] LAX tower status tag under the weather: no clipping/cut-off text (Apple HIG).
+- [x] Name tag stays up longer (+~40%) and never flickers in/out (hysteresis on "in view", one owner of the tag, no re-mount). — cause: pick re-made 4x/s (edge margin, 7th-closest cutoff, radius, 1-pass "Quiet skies") + two competing 520 ms swap timers; now one owner (TAG), 12.6 s dwell, 1.5 s grace, slack at edge/radius, one timer; Flighty-style tag; heartbeat `tag_hex`/`tag_call`; `airFocus` honored (tested live: CPA882 HKG→LAX).
+- [x] Flight card always shows from → to when a route exists (callsign route lookup + cache; United etc.). — adsbdb → adsb.lol VRS → hexdb, disk cache `route_cache.json`, plausibility by position (overflights like PDX→SAN now show); `from`/`to` = {iata, city}; "Route unknown" only when no source fits.
+- [x] Rings + red dot only on the plane in the name tag; dots animate in/out. — ceiling labels no longer get dots; red = tag plane, blue = closest; 250 ms fade + scale.
+- [x] News helicopters: stored database (hex → station/channel), tag shows "KTLA 5" etc., colored blue. — `wall_news_helis` (7 sourced: KTLA N925TV/N12YJ, KABC N71HD/N29HD, FOX 11/KCAL N50Q/N39CL, ABC News N828AP; NBC4 N358TV not seeded, destroyed 9/15) + `wall_pi_news_helis`; watchdog `wall.news_helis` (6 h).
+- [x] LAPD helicopters: black-and-white checkered tail boom, white rotor end. — LAPD = N2xxLA / N472LA / N213PF / N668PD or FAA owner "Los Angeles Police Department" (hexdb); LASD by owner; old rule called every N…LA (county fire, sheriff) LAPD.
+- [x] Flip-sky toggle: test; fix or remove. — tested on the projector: did nothing (airRot is always set and wins). Removed from admin, state, server and DB; "Wall faces" already turns the map.
+- [x] Movable home (`homePos`): the whole sky (planes, rings, compass) re-projects around it. — planes, trails, dots/rings, sun/moon/stars/ISS dome and the marker glide 0.9 s; admin Sky fit → "Home on the sky" nudge pad (tested live at 0.3, 0.65, then reset).
+- [x] Sky animation speed + timing pass (smooth motion, easing, no jumps). — planes step 20x/s (was 5x/s), auto 10x/s under 24 fps; far-off-track glides back instead of teleporting. FPS: see W1 report.
+- [x] Sun ⇄ moon animate + fade. — sun is its own SVG group; sun and moon cross-fade (2.4 s) instead of popping.
+- [x] Sky key: move the "tail …" line under "Bigger = flying lower"; move the blue-dot "closest to you" line under the red-dot line (light bulbs block the old spots). — stacked in the left column, nothing else changed.
+- [x] LAX tower status tag under the weather: no clipping/cut-off text (Apple HIG). — cause: under the weather the TV-wedge mask leaves ~30–60 px and the fixed 108 px corner squeezed the lines; now a two-line capsule ("LAX Tower" / "Live ATC") beside the temperature, 1.3 line height; the Sunset line no longer gets squeezed.
 
 ## W2 Strip + widgets (wall.html strip/widgets, server.py feeds, Supabase feeds)
 - [ ] Purple Scout to-dos: slower (hold each page longer, readable).
