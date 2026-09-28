@@ -4,8 +4,7 @@
  * Watts come from the Pi (server.py power_loop, pushed with the watchdog status about once a minute):
  * projector = the Capsule 3's own input reading (volts x amps from the charger bus), Pi = the Pi 5 power chip's
  * rails plus a little for the fan and supply. The Pi also adds up kWh per day and month. Dollars are worked out
- * here with LADWP's standard home plan (R-1A) Tier 2 price including adjustments, which is what each extra kWh
- * costs a home already past its Tier 1 allowance.
+ * here with LADWP's standard home plan (R-1A) Tier 1 price including adjustments (same rate as the wall widget).
  *
  * HIG: one grouped inset list, big live number first, tabular figures so digits don't jitter while counting,
  * numbers never wrap away from their units, the live count is not announced to screen readers every second.
@@ -19,9 +18,10 @@ export type WallPowerMeter = {
   at?: number | null; err?: string | null;
 };
 
-/** LADWP R-1A Tier 2, all-in $/kWh by month (Jan..Dec). Oct–Dec 2026 aren't published yet: Jan–Mar price used. */
-const LADWP_T2 = [0.3063, 0.3063, 0.3063, 0.30221, 0.30221, 0.30221, 0.32267, 0.32267, 0.32267, 0.3063, 0.3063, 0.3063];
-const rateNow = () => LADWP_T2[new Date().getMonth()];
+/** LADWP R-1A Tier 1, all-in $/kWh by month (Jan..Dec), the same price the wall's energy widget uses (wall_feeds
+ *  'energy' rate_c_kwh). Oct–Dec 2026 aren't published yet: the Jan–Mar price is used. */
+const LADWP_T1 = [0.24771, 0.24771, 0.24771, 0.24362, 0.24362, 0.24362, 0.26408, 0.26408, 0.26408, 0.24771, 0.24771, 0.24771];
+const rateNow = () => LADWP_T1[new Date().getMonth()];
 
 const NW = ({ children }: { children: React.ReactNode }) => <span className="whitespace-nowrap">{children}</span>;
 const money = (d: number) => (d < 1 ? `$${d.toFixed(3)}` : d < 100 ? `$${d.toFixed(2)}` : `$${Math.round(d).toLocaleString("en-US")}`);
@@ -84,8 +84,8 @@ export function WallPowerCost({ meter }: { meter: WallPowerMeter | null | undefi
         </div>
       </div>
       <p className="px-4 text-[13px] leading-snug text-white/50">
-        Estimate at LADWP's <NW>{(rate * 100).toFixed(1)}¢ per kWh</NW> (standard home plan, Tier 2 with adjustments: the price of each
-        extra kWh). The Pi also runs Home Assistant, so this counts all of it.
+        Estimate at LADWP's <NW>{(rate * 100).toFixed(1)}¢ per kWh</NW> (standard home plan with adjustments). Measured watts from the
+        projector and the Pi; the Pi also runs Home Assistant, so this counts all of it.
       </p>
     </section>
   );
