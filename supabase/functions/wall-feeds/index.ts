@@ -1,7 +1,7 @@
 // wall-feeds — fills public.wall_feeds for the projector wall's strip widgets (plan: docs/wall-round3-2026-09-27-opusplan.md, W3).
 //   op tick   (cron wall-feeds-tick, :01 and :31; also kicked by wall_feeds_watch when stale)
 //             news (NPR + PBS NewsHour), air (Open-Meteo US AQI + UV), deliveries (shipping emails in bestly_mail),
-//             mail wording (USPS scan text -> "DMV letter" via the free AI, then the scan text is dropped),
+//             mail wording (fallback: USPS scan OCR text -> sender + what, "Chase — card statement", via the free AI; text dropped),
 //             leo (one warm line a day via the free AI, curated fallback).
 //   op only   {kinds:["news",...]} run just those parts.
 // The Pi / Mac fill mail pieces, habits and appstore themselves (wall_pi_mail_put / wall_pi_feed_put).
@@ -151,13 +151,13 @@ async function deliveries() {
     const status = statusOf(subj);
     if (status === "Delivered" && Date.now() - +sent > 36 * 3600e3) { byKey.set(key, null); continue; }
     if (status !== "Delivered" && Date.now() - +sent > 8 * 864e5) { byKey.set(key, null); continue; }
-    byKey.set(key, { carrier, what: whatOf(subj, carrier), eta: status === "Out for delivery" && laDate(sent) === laDate() ? "Today" : etaOf(text, sent), status, at: m.sent_at });
+    byKey.set(key, { key, carrier, what: whatOf(subj, carrier), eta: status === "Out for delivery" && laDate(sent) === laDate() ? "Today" : etaOf(text, sent), status, at: m.sent_at });
   }
   // USPS packages from the Informed Delivery digest (posted by the Pi)
   const { data: mf } = await db.from("wall_feeds").select("meta").eq("kind", "mail").maybeSingle();
   for (const p of ((mf?.meta as any)?.usps_parcels ?? []) as any[]) {
     const key = `USPS:${p.tracking ?? p.from ?? p.eta}`;
-    if (!byKey.has(key)) byKey.set(key, { carrier: "USPS", what: p.from ? `From ${short(p.from, 24)}` : "USPS package", eta: p.eta ?? null, status: p.status ?? "On the way", at: null });
+    if (!byKey.has(key)) byKey.set(key, { key, carrier: "USPS", what: p.from ? `From ${short(p.from, 24)}` : "USPS package", eta: p.eta ?? null, status: p.status ?? "On the way", at: null });
   }
   const order = { "Out for delivery": 0, "Delayed": 1, "On the way": 2, "Update": 3, "Delivered": 4 } as Record<string, number>;
   const out = [...byKey.values()].filter(Boolean).sort((a, b) => (order[a.status] - order[b.status]) || String(b.at).localeCompare(String(a.at))).slice(0, 6);
@@ -171,23 +171,28 @@ async function mailWords() {
   if (error) throw new Error(error.message);
   const list = (rows ?? []) as { key: string; day: string; ocr: string }[];
   if (!list.length) return { n: 0 };
-  let done: { key: string; summary: string }[] = [];
+  // round 4 (W2): who sent it + what it is ("Chase" + "card statement"); never a bare "Letter". The Pi reads most pieces
+  // from the scan image (vision) itself; this text path is the fallback when the image reader could not.
+  let done: { key: string; summary: string; sender?: string | null; what?: string | null }[] = [];
   try {
     const r = await llm({
       task: "extract", json: true, paid: "never", job: "wall-mail", fn: "wall-feeds", deadlineMs: 60_000, maxTokens: 1200,
-      system: "Each item is OCR text from a USPS scan of the OUTSIDE of one envelope or postcard. For each, say who sent it and what it " +
-        "likely is, in 2 to 5 plain words, like \"DMV letter\", \"Chase statement\", \"Spectrum ad\", \"Metro ExpressLanes bill\", " +
-        "\"Postcard from Mom\". Ignore the recipient (Jared Best, 733 N Kings Rd) and postage marks. Junk mail -> \"<Company> ad\". " +
-        "If you cannot tell, say \"Letter\". Never include addresses, account numbers or names of private people other than the sender. " +
-        "Return {\"items\":[{\"key\":\"...\",\"summary\":\"...\"}]} with every key.",
+      system: "Each item is OCR text from a USPS scan of the OUTSIDE of one envelope or postcard. For each, give the SENDER (the company, " +
+        "agency or person in the return address or logo, short: \"Chase\", \"LA County\", \"DMV\", \"Metro ExpressLanes\") and WHAT it " +
+        "likely is in 1 to 3 plain words (\"card statement\", \"bill\", \"jury summons\", \"registration renewal\", \"ad\", \"postcard\"). " +
+        "Ignore the recipient (Jared Best, 733 N Kings Rd) and postage marks. OCR text is noisy: fix obvious misspellings of well-known names. " +
+        "If the sender truly cannot be read, sender = null. Never include addresses, account numbers or names of private people other than the sender. " +
+        "Return {\"items\":[{\"key\":\"...\",\"sender\":\"...\"|null,\"what\":\"...\"}]} with every key.",
       user: JSON.stringify(list.map((p) => ({ key: p.key, text: p.ocr.slice(0, 700) }))),
       validate: (j) => Array.isArray(j?.items) ? null : "items missing",
     });
-    const got = new Map<string, string>((r.json.items as any[]).map((i) => [String(i.key), String(i.summary ?? "").replace(/[\r\n]+/g, " ").slice(0, 40)]));
-    done = list.map((p) => ({ key: p.key, summary: got.get(p.key) || "Letter" }));
+    const clean = (v: unknown) => { const t = String(v ?? "").replace(/[\r\n]+/g, " ").trim(); return t && !/^(null|unknown|n\/a|none)$/i.test(t) ? t.slice(0, 36) : null; };
+    const got = new Map<string, any>((r.json.items as any[]).map((i) => [String(i.key), i]));
+    // the DB turns {sender, what} into "Chase — card statement" / "Letter from Chase" / "Letter (sender not readable)"
+    done = list.map((p) => { const i = got.get(p.key) ?? {}; return { key: p.key, sender: clean(i.sender), what: clean(i.what), summary: clean(i.summary) ?? "" }; });
   } catch (e) {
     // free AI down: pieces older than a day get a plain "Letter" so the scan text doesn't linger
-    done = list.filter((p) => Date.now() - Date.parse(p.day) > 36 * 3600e3).map((p) => ({ key: p.key, summary: "Letter" }));
+    done = list.filter((p) => Date.now() - Date.parse(p.day) > 36 * 3600e3).map((p) => ({ key: p.key, summary: "" }));
     if (!done.length) throw new Error(`free AI unavailable: ${(e as Error).message}`);
   }
   const { error: e2 } = await db.rpc("wall_mail_pieces_done", { p_rows: done });
