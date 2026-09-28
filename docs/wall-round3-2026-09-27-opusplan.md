@@ -34,17 +34,17 @@ Jared's list (attachment), answers: purple Scout = a detail list of its items; n
 - [x] ATC audio switch (`atc`): LAX tower/approach stream on the Desk HomePod. (LiveATC klax_twr MP3 verified silently; first audible play not tested - quiet hours)
 
 ## W2 Strip (wall.html strip + server.py strip parts)
-- [ ] "Show today's date" → much larger, filling text.
-- [ ] 10-day forecast: ends on the last day, holds the same time, then moves to the next widget (never back to day 1 first).
-- [ ] Ambient must show tomorrow's call with Eli (not "All clear").
-- [ ] Quotes: remove Elon Musk, add Marie Curie.
-- [ ] Purple Scout: detail view — bullet summary of its items (e.g. the 7).
-- [ ] Sleep/wake + power demos: plane name tag hides immediately; wake/sleep animation text back.
-- [ ] Audio self-heal for party, skit and all sounds (pre-built buffers like the chime) + watchdog.
-- [ ] Album artwork on the strip (Apple Music).
-- [ ] AirPods + AirPods Max on batteries; themed soft low alert (≤20% yellow arch; ≤10% red arch; ≤5% red arch flashing + middle icon flash; no sound).
-- [ ] New Turo booking pop-up on the strip + a demo screenshot for Jared.
-- [ ] Left widget: news (NPR / Ground News); render the new widgets from `wall_pi_feeds`.
+- [x] "Show today's date" → much larger, filling text. (weekday + date, each line sized to fill the left side)
+- [x] 10-day forecast: ends on the last day, holds the same time, then moves to the next widget (never back to day 1 first).
+- [x] Ambient must show tomorrow's call with Eli (not "All clear"). (the call lives in the Nextcloud calendar; the Pi now reads it next to iCloud: wall_pi_nextcloud)
+- [x] Quotes: remove Elon Musk, add Marie Curie.
+- [x] Purple Scout: detail view — bullet summary of its items (e.g. the 7). (wall_pi_scout_items, 4 per page)
+- [x] Sleep/wake + power demos: plane name tag hides immediately; wake/sleep animation text back. (text self-check + report in heartbeat snd.fx*)
+- [x] Audio self-heal for party, skit and all sounds (pre-built buffers like the chime) + watchdog. (party loops pre-rendered; Scout wall.audio)
+- [x] Album artwork on the strip (Apple Music). (HA entity_picture via /api/art + Mac agent tech.bestly.wall-nowplaying)
+- [x] AirPods + AirPods Max on batteries; themed soft low alert (≤20% yellow arch; ≤10% red arch; ≤5% red arch flashing + middle icon flash; no sound).
+- [x] New Turo booking pop-up on the strip + a demo screenshot for Jared. (admin: Strip widgets › Show a sample Turo booking)
+- [x] Left widget: news (NPR / Ground News); render the new widgets from `wall_pi_feeds`. (admin: Strip widgets switches)
 
 ## W3 Data + sign (Supabase, feed fetchers, admin sign section)
 - [x] `wall_pi_feeds`: news (NPR + Ground News), USPS Informed Delivery mail summary (rolling 7 days, from the iCloud inbox) + deliveries, App Store app statuses, Turo earnings, air quality + pollen, home energy (LADWP), streaks/habits, daily Leo line. Watchdog per feed. — LIVE 2026-09-27 11:10 PM (commits aca1da1..439deaf). Ground News has no public feed -> NPR + PBS NewsHour. Pollen null (no free keyless US source). Habits null until the iPhone step sensor is on. Energy is an estimate counted from tonight.

@@ -31,6 +31,19 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, Nfc, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf, Undo2, Redo2, Lock, Check, Minus, Plus, RadioTower } from "lucide-react";
 
+/** Left-side strip widgets (state.widgets). Each hides by itself when it has nothing to show. */
+type StripWidget = "news" | "mail" | "turo$" | "air" | "energy" | "habits" | "leo" | "appstore";
+const STRIP_WIDGETS: { id: StripWidget; label: string; detail: string }[] = [
+  { id: "news", label: "News", detail: "Headlines from NPR and Ground News, one at a time." },
+  { id: "turo$", label: "Turo earnings", detail: "This week, today, and the next payout." },
+  { id: "air", label: "Air quality and pollen", detail: "AQI, pollen and UV for home." },
+  { id: "energy", label: "Home energy", detail: "What the wall setup uses right now, today and this month." },
+  { id: "mail", label: "Mail and deliveries", detail: "Paper mail this week and packages on the way." },
+  { id: "habits", label: "Activity", detail: "Steps, Move, Exercise, Stand and your streak." },
+  { id: "leo", label: "Leo today", detail: "A one-line daily horoscope." },
+  { id: "appstore", label: "App Store", detail: "Where each app stands with Apple." },
+];
+
 type Pt = [number, number];
 type LiveKind = "plane" | "sweep" | "turo" | "show" | "sleep" | "incident";
 type Mode = "auto" | "board" | "ambient" | "demo" | "off";
@@ -49,6 +62,8 @@ type WallState = {
   heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; tripDismiss?: { id: string; at: number } | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   /** W1 round 3 (sky): Space Station name tag, home marker, sky radius in miles (2-25), live LAX tower audio. */
   issTag?: boolean; skyHome?: boolean; airRadiusMi?: number; atc?: boolean;
+  /** Strip widgets on the left side (missing = on) and the sample Turo booking pop-up (ms). W2 round 3. */
+  widgets?: Partial<Record<StripWidget, boolean>> | null; bookingDemo?: number | null;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
   sleepShow?: { at: number; mins: number; music?: boolean } | null;
   liveActs?: Partial<Record<LiveKind, boolean>> | null;
@@ -882,6 +897,24 @@ export default function Wall() {
         <Row label="Show today's date on the left" detail="The left side of the strip shows today's date instead of rotating through messages." htmlFor="wall-left-date">
           <Switch className={swHit} id="wall-left-date" checked={!!s.leftDate} onCheckedChange={(v) => act({ leftDate: v }, v ? "Today's date on the left." : "The left side rotates again.")} />
         </Row>
+      </Group>
+
+      {/* Strip widgets (W2 round 3): the left side takes turns with the clock; switch any widget off here. */}
+      <Group id="strip-widgets" title="Strip widgets" footer="The left side of the strip takes turns with the clock. A widget with nothing to show skips its turn.">
+        {STRIP_WIDGETS.map((w) => {
+          const hid = `wall-w-${w.id.replace("$", "usd")}`;
+          return (
+            <Row key={w.id} label={w.label} detail={w.detail} htmlFor={hid}>
+              <Switch className={swHit} id={hid} checked={s.widgets?.[w.id] !== false}
+                onCheckedChange={(v) => act({ widgets: { ...(s.widgets ?? {}), [w.id]: v } }, `${w.label} ${v ? "on" : "off"}.`)} />
+            </Row>
+          );
+        })}
+        <div className="px-4 py-3">
+          <button type="button" className={cn(btn, "w-full")} onClick={() => act({ bookingDemo: Date.now() }, "Showing a sample Turo booking on the strip for 20 seconds.")}>
+            <Sparkles className="h-4 w-4 shrink-0" aria-hidden /> Show a sample Turo booking
+          </button>
+        </div>
       </Group>
 
       {/* Theme: the only control for state key `theme` (null = Normal). New themes start from the copied prompt. */}
