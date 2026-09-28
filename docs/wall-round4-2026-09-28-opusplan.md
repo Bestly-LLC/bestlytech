@@ -75,8 +75,13 @@ Table `wall_news_helis(hex, reg, station, channel, notes)` + `wall_pi_news_helis
 - [ ] Sign-wall plane name tag redesigned to match it.
 - [ ] Phone and wall show the same aircraft (`airFocus`), rotating together.
 
+## W7 Voice — "Hey Scout" (Pi + NZXT USB mic)
+- [ ] Wake word "Hey Scout" on the Pi using the NZXT mic Jared plugged into it (local, always-on, low CPU; custom openWakeWord-style model, with a tuned threshold + false-wake log).
+- [ ] Pipeline: wake → listening chime + wall "listening" glow → speech-to-text → Scout (admin-chat, free LLM first) → spoken reply on the Desk HomePod (or projector speaker) + reply card on the wall.
+- [ ] Respect DND / sleep; mute switch in admin; watchdog → Scout (mic missing, wake engine down, STT/LLM failures).
+
 ## Waiting on Jared
-- [?] Dyson vacuum on the wall: mockup of a "Devices" row under batteries first; which Dyson model decides what data we can read.
+- [?] Dyson **air purifier** (not a vacuum — Jared, 3:46 PM) on the wall: a "Devices" row under batteries showing it live (on/off, air quality, filter life). Mockup first, build only after he OKs it.
 - [?] LED sign mapping (outlines, light-up, notification animations): needs the on/off/grid photos.
 
 ## Rules for every worker
