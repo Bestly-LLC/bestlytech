@@ -84,7 +84,7 @@ function UndoKeys({ onUndo, onRedo }: { onUndo: () => void; onRedo: () => void }
 }
 
 type OneInfo = { text: string; kind: string | null; source: string | null; why: string | null; checked_at: string | null; changed_at: string | null; error: string | null };
-type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string };
+type Sig = { id: number; name: string; color: string; hidden: boolean; test: boolean; at: string; emoji?: string | null };
 const DEFAULT_WING: Pt[] = [[0.02, 0.33], [0.27, 0.36], [0.27, 0.66], [0.02, 0.70]];
 const DEFAULT_AIR: Pt[] = [[0.30, 0.17], [0.99, 0.05], [0.99, 0.25], [0.30, 0.37]];
 type DemoKey = "demoLeft" | "demoNames" | "demoRight";
@@ -586,14 +586,15 @@ export default function Wall() {
     setSignMsg(null);
     const { data, error } = await rpc("wall_admin_sign_action", { p_action: action, p_id: id ?? null });
     if (error) { setSignMsg(`Didn't go through: ${error.message}`); toast.error(`Didn't go through: ${error.message}`, { id: "wall-act" }); return; }
-    const d = data as { name?: string; ping?: string } | null;
+    const d = data as { name?: string; ping?: string; emojis?: number } | null;
+    const emo = (d?.emojis ?? 0) > 0;   // hiding / deleting a name also takes that guest's emoji off the wall (Show brings it back)
     if (d?.ping) {
       try { const ch = supabase.channel(d.ping); await ch.send({ type: "broadcast", event: "sign", payload: {} }); void supabase.removeChannel(ch); } catch { /* backup nudge only */ }
     }
     if (action === "test") { setSignMsg(`Sent a test signature from “${d?.name ?? "a guest"}”. Watch the wall.`); toast.success(`Test signature from “${d?.name ?? "a guest"}” sent. Watch the wall.`, { id: "wall-act" }); }
-    if (action === "hide" || action === "show") toast.success(action === "hide" ? "Hidden from the wall." : "Back on the wall.", { id: "wall-act" });
-    if (action === "clear") { setSignMsg("Wall cleared. Names are hidden, not deleted."); toast.success("Wall cleared. Names are hidden, not deleted.", { id: "wall-act" }); }
-    if (action === "delete") { setSignMsg("Signature deleted for good."); toast.success("Signature deleted for good.", { id: "wall-act" }); setSigs((l) => l.filter((x) => x.id !== id)); }
+    if (action === "hide" || action === "show") toast.success(action === "hide" ? (emo ? "Hidden from the wall, emoji too." : "Hidden from the wall.") : (emo ? "Back on the wall, with their emoji." : "Back on the wall."), { id: "wall-act" });
+    if (action === "clear") { const m = emo ? "Wall cleared. Names are hidden and their emojis are off the wall." : "Wall cleared. Names are hidden, not deleted."; setSignMsg(m); toast.success(m, { id: "wall-act" }); }
+    if (action === "delete") { const m = emo ? "Signature and emoji deleted for good." : "Signature deleted for good."; setSignMsg(m); toast.success(m, { id: "wall-act" }); setSigs((l) => l.filter((x) => x.id !== id)); }
     void loadSigs();
   };
 
@@ -1178,7 +1179,7 @@ export default function Wall() {
           {signMsg && <p className="text-[13px] text-white/60" role="status">{signMsg}</p>}
         </div>
         {(showAllSigs ? sigs : sigs.slice(0, 3)).map((g) => (
-          <Row key={g.id} label={<span style={{ color: g.color }}>{g.name || "No name"}{g.test ? " · test" : ""}{g.hidden ? <span className="text-white/40"> · hidden</span> : null}</span>}
+          <Row key={g.id} label={<span style={{ color: g.color }}>{g.name || "No name"}{g.emoji ? <span aria-label={`emoji ${g.emoji}`}> {g.emoji}</span> : null}{g.test ? " · test" : ""}{g.hidden ? <span className="text-white/40"> · hidden</span> : null}</span>}
             detail={<NW>{new Date(g.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</NW>}>
             <div className="flex gap-2">
               <button type="button" className={cn(btn, "w-11 px-0")} aria-label={g.hidden ? `Show ${g.name || "signature"} on the wall` : `Hide ${g.name || "signature"} from the wall`}
