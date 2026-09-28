@@ -244,12 +244,15 @@ def ctx():
         out["wall_data_error"] = str(e)[:80]
     try:
         a = http_json("http://127.0.0.1:8099/api/air", timeout=3) or {}
-        ac = a.get("aircraft") or a.get("planes") or []
+        ac = a.get("list") or a.get("aircraft") or []
         if isinstance(ac, list) and ac:
             def dist(p):
-                return p.get("dist") if isinstance(p.get("dist"), (int, float)) else 99
+                return p.get("dst") if isinstance(p.get("dst"), (int, float)) else 99
             near = sorted([p for p in ac if isinstance(p, dict)], key=dist)[:3]
-            out["planes_overhead"] = {"count": len(ac), "closest": [{k: p.get(k) for k in ("flight", "callsign", "airline", "type", "alt", "from", "to", "dist") if p.get(k) is not None} for p in near]}
+            out["planes_overhead"] = {"count": len(ac), "closest": [
+                {**{k: p.get(k) for k in ("cs", "airline", "model", "owner", "alt", "gs", "from", "to", "area", "news", "police") if p.get(k) not in (None, "")},
+                 "miles_away": round(p["dst"] * 1.15, 1) if isinstance(p.get("dst"), (int, float)) else None, "alt_unit": "ft", "gs_unit": "knots"}
+                for p in near]}
     except Exception:
         pass
     s = json.dumps(out, default=str)
@@ -265,6 +268,15 @@ _voice = None
 _voice_lock = threading.Lock()
 
 
+def say_clean(t):
+    """Symbols Piper reads badly -> words."""
+    t = re.sub(r"\s*°\s*F\b", " degrees", t)
+    t = t.replace("°", " degrees").replace("%", " percent").replace("&", " and ")
+    t = re.sub(r"\bmph\b", "miles per hour", t)
+    t = re.sub(r"\b(\d{1,2}):00\s*(AM|PM)\b", r"\1 \2", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
 def tts(text):
     """Piper (en_US-lessac-medium, loaded once) -> 44.1 kHz stereo MP3 with a short lead-in so AirPlay doesn't clip it."""
     global _voice
@@ -274,7 +286,7 @@ def tts(text):
             _voice = PiperVoice.load(ROOT + "/tts/en_US-lessac-medium.onnx")
         buf = io.BytesIO()
         with wave.open(buf, "wb") as w:
-            _voice.synthesize_wav(text, w)
+            _voice.synthesize_wav(say_clean(text), w)
     raw = buf.getvalue()
     name = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
     path = f"{MEDIA}/{name}.mp3"

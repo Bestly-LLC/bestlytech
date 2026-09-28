@@ -1,0 +1,51 @@
+[
+ {
+  "file": "server.py",
+  "marker": "VOICE = {\"seq\"",
+  "where": "after",
+  "anchor": "FX = {\"id\": int(time.time() * 1000), \"name\": \"\", \"at\": 0}   # time-based, so a restart never reuses an old id\n",
+  "text": "VOICE = {\"seq\": 0, \"phase\": \"idle\", \"at\": 0}   # W7 round 4: \"Hey Scout\" phase from bestly-voice -> SSE 'voice' -> wall.html vcTake()\n"
+ },
+ {
+  "file": "server.py",
+  "marker": "# W7 round 4: Hey Scout switch",
+  "where": "before",
+  "anchor": "ALLOWED = set(DEFAULT_STATE)\n",
+  "text": "DEFAULT_STATE.update({\"voice\": {\"on\": True, \"sensitivity\": \"normal\"}})   # W7 round 4: Hey Scout switch (admin Voice card; read by /opt/bestly/voice)\n"
+ },
+ {
+  "file": "server.py",
+  "marker": "'voice': VOICE",
+  "where": "replace",
+  "anchor": "'bk': W2BK['cur']})}",
+  "text": "'bk': W2BK['cur'], 'voice': VOICE})}"
+ },
+ {
+  "file": "server.py",
+  "marker": "if p == \"/api/voice\":",
+  "where": "before",
+  "anchor": "        if p == \"/api/nowplaying\":\n",
+  "text": "        if p == \"/api/voice\":\n            # W7 round 4: \"Hey Scout\" (bestly-voice on this Pi) -> listening glow + chime, thinking, reply card on the wall\n            if not self.client_address[0].startswith(\"127.\"):\n                return self.send(403, '{\"error\":\"pi only\"}')\n            b = self.body()\n            ph = str(b.get(\"phase\", \"\"))\n            if ph not in (\"listening\", \"thinking\", \"reply\", \"idle\"):\n                return self.send(400, '{\"error\":\"bad phase\"}')\n            try:\n                hold = max(3.0, min(40.0, float(b.get(\"hold\") or 10)))\n            except Exception:\n                hold = 10.0\n            with lock:\n                VOICE.update({\"seq\": VOICE[\"seq\"] + 1, \"phase\": ph, \"at\": time.time(), \"chime\": b.get(\"chime\") is not False,\n                              \"heard\": str(b.get(\"heard\") or \"\")[:300], \"reply\": str(b.get(\"reply\") or \"\")[:600], \"hold\": hold,\n                              \"audio\": str(b.get(\"audio\") or \"\")[:200] or None})\n                version += 1\n                lock.notify_all()\n            return self.send(200, json.dumps({\"ok\": True, \"seq\": VOICE[\"seq\"]}))\n"
+ },
+ {
+  "file": "www/wall.html",
+  "marker": "/* Hey Scout voice (W7 round 4)",
+  "where": "before",
+  "anchor": "/* new Turo booking card */",
+  "text": "/* Hey Scout voice (W7 round 4): edge glow while listening/thinking + reply card (same footprint as the booking card) */\n#vcGlow{position:absolute;inset:0;z-index:58;pointer-events:none;opacity:0;transition:opacity .5s var(--ease);border-radius:40px;overflow:hidden;}\n#vcGlow.on{opacity:1;}\n#vcGlow i{position:absolute;inset:0;border-radius:40px;}\n#vcGlow i.a{box-shadow:inset 0 0 70px 14px rgba(94,92,230,.55);animation:vcBreath 1.8s ease-in-out infinite alternate;}\n#vcGlow i.b{box-shadow:inset 0 0 110px 26px rgba(100,210,255,.28);animation:vcBreath 2.6s ease-in-out infinite alternate-reverse;}\n#vcGlow.vc-thinking i.a{animation-duration:.9s;}\n#vcGlow.vc-reply i{animation:none;opacity:.5;}\n@keyframes vcBreath{from{opacity:.35}to{opacity:1}}\n#vcCard{position:absolute;left:530px;top:22px;width:950px;height:256px;z-index:59;pointer-events:none;opacity:0;transform:translateY(-26px) scale(.96);\n  transition:opacity .45s var(--ease),transform .7s var(--ease);}\n#vcCard.on{opacity:1;transform:none;}\n.vc-in{position:absolute;inset:0;display:flex;align-items:center;gap:28px;padding:0 38px;box-sizing:border-box;border-radius:44px;background:#1C1C1E;box-shadow:0 0 0 1.5px rgba(255,255,255,.1) inset;}\n.vc-ico{flex:none;width:112px;height:112px;border-radius:56px;background:linear-gradient(135deg,var(--indigo),var(--teal));display:flex;align-items:center;justify-content:center;}\n.vc-bars{display:flex;align-items:center;gap:7px;height:54px;}\n.vc-bars i{display:block;width:9px;height:54px;border-radius:5px;background:#fff;transform:scaleY(.3);}\n#vcCard.vc-listening .vc-bars i{animation:vcBar .9s ease-in-out infinite alternate;}\n#vcCard.vc-thinking .vc-bars i{animation:vcBar 1.4s ease-in-out infinite alternate;opacity:.8;}\n.vc-bars i:nth-child(2){animation-delay:.15s!important}.vc-bars i:nth-child(3){animation-delay:.3s!important}.vc-bars i:nth-child(4){animation-delay:.45s!important}.vc-bars i:nth-child(5){animation-delay:.6s!important}\n@keyframes vcBar{from{transform:scaleY(.25)}to{transform:scaleY(1)}}\n.vc-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:8px;max-height:216px;}\n.vc-eye{font:700 22px/1 var(--sf);letter-spacing:.08em;text-transform:uppercase;color:var(--teal);}\n.vc-q{font:500 24px/1.25 var(--sf);color:var(--label-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}\n.vc-t{font:700 44px/1.12 var(--sf);letter-spacing:-.02em;color:var(--label);max-height:150px;overflow:hidden;text-wrap:pretty;}\n#vcCard.vc-listening .vc-t,#vcCard.vc-thinking .vc-t{font-size:56px;}\nbody.vc-on #board .right-area{opacity:0;transition:opacity .45s var(--ease);}\n"
+ },
+ {
+  "file": "www/wall.html",
+  "marker": "vcTake(j.voice)",
+  "where": "replace",
+  "anchor": "try{ w2Take(j); }catch(e){}",
+  "text": "try{ w2Take(j); }catch(e){} try{ vcTake(j.voice); }catch(e){}"
+ },
+ {
+  "file": "www/wall.html",
+  "marker": "function vcTake(v)",
+  "where": "before",
+  "anchor": "  function w2BkShow(b){",
+  "text": "  /* ================= Hey Scout voice (W7 round 4): listening chime + glow, thinking, reply card (+ projector-speaker fallback) ================= */\n  const VC={seq:-1,t:0};\n  function vcEl(){ const st=$('#stage'); if(!st) return {}; let g=$('#vcGlow'), c=$('#vcCard');\n    if(!g){ g=document.createElement('div'); g.id='vcGlow'; g.setAttribute('aria-hidden','true'); g.innerHTML='<i class=\"a\"></i><i class=\"b\"></i>'; st.appendChild(g); }\n    if(!c){ c=document.createElement('div'); c.id='vcCard'; c.setAttribute('aria-live','polite'); st.appendChild(c); }\n    return {g,c}; }\n  function vcChime(){ try{ const c=SND.ctx; if(!c||c.state!=='running'||S.sound===false) return; const t=c.currentTime+.03;\n      [[659.25,0],[987.77,.11]].forEach(([f,d])=>{ const o=c.createOscillator(), g=c.createGain(); o.type='sine'; o.frequency.value=f;\n        g.gain.setValueAtTime(0,t+d); g.gain.linearRampToValueAtTime(.13,t+d+.015); g.gain.exponentialRampToValueAtTime(.0008,t+d+.42);\n        o.connect(g); g.connect(c.destination); o.start(t+d); o.stop(t+d+.45); }); }catch(e){} }\n  function vcHide(){ const g=$('#vcGlow'), c=$('#vcCard'); if(g) g.className=''; if(c) c.classList.remove('on');\n    setTimeout(()=>{ if(!(c&&c.classList.contains('on'))) document.body.classList.remove('vc-on'); },600); }\n  function vcTake(v){ if(!v||typeof v.seq!=='number'||v.seq===VC.seq) return; const first=VC.seq<0; VC.seq=v.seq;\n    if(first&&(Date.now()/1000-(v.at||0))>20) return;          // a page reload never replays an old turn\n    const {g,c}=vcEl(); if(!g) return; clearTimeout(VC.t);\n    if(v.phase==='idle'){ vcHide(); return; }\n    if(v.phase==='listening'&&v.chime!==false) vcChime();\n    const title=v.phase==='listening'?'Listening\u2026':v.phase==='thinking'?'Thinking\u2026':esc(v.reply||'');\n    c.className='vc-'+v.phase;\n    c.innerHTML=`<div class=\"vc-in\"><div class=\"vc-ico\"><span class=\"vc-bars\"><i></i><i></i><i></i><i></i><i></i></span></div><div class=\"vc-main\"><div class=\"vc-eye\">${v.phase==='reply'?'Scout':'Hey Scout'}</div>${v.heard&&v.phase==='reply'?`<div class=\"vc-q\">\u201c${esc(v.heard)}\u201d</div>`:''}<div class=\"vc-t\">${title}</div></div></div>`;\n    g.className='on vc-'+v.phase; document.body.classList.add('vc-on'); void c.offsetWidth; c.classList.add('on');\n    if(v.phase==='reply'){ try{ const f=c.querySelector('.vc-t'); let z=44; f.style.fontSize=z+'px'; while(f.scrollHeight>f.clientHeight+2&&z>26){ z-=2; f.style.fontSize=z+'px'; } }catch(x){}\n      if(v.audio){ try{ const a=new Audio(v.audio); a.play().catch(()=>{}); }catch(x){} }\n      VC.t=setTimeout(vcHide,(v.hold||10)*1000); }\n    else VC.t=setTimeout(vcHide,v.phase==='listening'?15000:60000); }\n"
+ }
+]
