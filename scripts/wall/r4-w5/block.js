@@ -240,17 +240,17 @@
   async function w5Air(tk){ if(W5A.busy||w5Dnd()) return; if((TOUR&&TOUR.on)||document.body.classList.contains('skit')||W5M.busy){ setTimeout(()=>w5Air(tk),5000); return; }
     W5A.busy=true; W5A.runs++; const el=w5Stage('w5air'); w5Room(el); W5A.t.forEach(clearTimeout); W5A.t=[];
     const at=(ms,f)=>W5A.t.push(setTimeout(()=>{ try{ f(); }catch(e){ w5Fail(e); } },ms));
-    const pm=tk.pm25!=null?`Indoor PM2.5 ${Math.round(tk.pm25)} µg/m³`:(tk.label?`Indoor air: ${tk.label}`:'Indoor air is stuffy');
-    const pur=tk.purifier==='on'?'Air purifier is on':tk.purifier==='failed'?'Couldn’t reach the air purifier':'';
+    const pm=tk.pm25!=null?`Indoor air · PM2.5 ${Math.round(tk.pm25)} µg/m³`:(tk.label?`Indoor air · ${tk.label}`:'Indoor air is stuffy');
+    const pur=tk.purifier==='on'?'The air purifier is on.':tk.purifier==='failed'?'Couldn’t reach the air purifier.':'';
     el.innerHTML=`<div class="a-scene"><svg class="a-house" viewBox="0 0 260 220"><path d="M20 110 L130 26 L240 110" fill="none" stroke="#FFD166" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
       <rect x="44" y="100" width="172" height="112" rx="16" fill="#1C1C1E" stroke="rgba(255,255,255,.28)" stroke-width="3"/><rect x="104" y="128" width="54" height="84" rx="8" fill="#FFB340" opacity=".9"/>
       <g class="a-door"><rect x="104" y="128" width="54" height="84" rx="8" fill="#0A84FF"/><circle cx="147" cy="172" r="4.5" fill="#fff"/></g></svg>
       <svg class="a-breeze" viewBox="0 0 600 220"><path d="M20 70 C120 20 200 120 300 70 S480 30 580 80"/><path d="M10 130 C130 90 230 170 330 120 S500 100 590 140"/><path d="M40 185 C150 150 250 215 350 175 S520 160 590 190"/></svg>
       <svg class="a-leaf l1" viewBox="0 0 40 40"><path d="M5 35 C5 12 20 5 36 4 C35 20 28 35 5 35 Z" fill="#30D158"/><path d="M8 32 L30 10" stroke="#1E8E3E" stroke-width="2"/></svg>
       <svg class="a-leaf l2" viewBox="0 0 40 40"><path d="M5 35 C5 12 20 5 36 4 C35 20 28 35 5 35 Z" fill="#9BF6A1"/><path d="M8 32 L30 10" stroke="#1E8E3E" stroke-width="2"/></svg></div>
-      <div class="a-txt"><div class="a-k">${esc(pm)}</div><div class="a-h">Let’s get some fresh air.</div><div class="a-s">Open the door for a few minutes${pur?' · '+esc(pur):''}</div></div>`;
+      <div class="a-txt"><div class="a-k">${esc(pm)}</div><div class="a-h">Let’s get some fresh air.</div><div class="a-s">Open the door for a few minutes.</div>${pur?`<div class="a-s a-s2">${esc(pur)}</div>`:''}</div>`;
     let snd=null; try{ snd=await Promise.race([w5AirSound(),new Promise(r=>setTimeout(()=>r(null),1500))]); }catch(e){}
-    document.body.classList.add('w5-air'); requestAnimationFrame(()=>el.classList.add('on')); w5Play(snd,.8);
+    document.body.classList.add('w5-air'); try{ w5Fit(el.querySelector('.a-h'),1e9,170,84,44); }catch(e){} requestAnimationFrame(()=>el.classList.add('on')); w5Play(snd,.8);
     at(1400,()=>el.classList.add('open')); at(13800,()=>el.classList.remove('on'));
     at(15000,()=>{ document.body.classList.remove('w5-air'); el.classList.remove('open'); el.innerHTML=''; W5A.busy=false; }); }
 
