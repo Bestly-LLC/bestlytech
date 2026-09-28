@@ -28,7 +28,7 @@ import { WallRadioSection, type WallRadio } from "@/components/admin/WallRadio";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, Nfc, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf, Undo2, Redo2, Lock, Check } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, Nfc, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf, Undo2, Redo2, Lock, Check, Minus, Plus, RadioTower } from "lucide-react";
 
 type Pt = [number, number];
 type LiveKind = "plane" | "sweep" | "turo" | "show" | "sleep" | "incident";
@@ -46,6 +46,8 @@ type WallState = {
   air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airLabelsSmall?: boolean; airCard?: boolean; airCardHeli?: boolean; airCardPin?: boolean; leftDate?: boolean; radio?: WallRadio; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
   heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; tripDismiss?: { id: string; at: number } | null; airFlip?: boolean; airKey?: boolean; airBearing?: number; calGrid?: boolean;
+  /** W1 round 3 (sky): Space Station name tag, home marker, sky radius in miles (2-25), live LAX tower audio. */
+  issTag?: boolean; skyHome?: boolean; airRadiusMi?: number; atc?: boolean;
   fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
   sleepShow?: { at: number; mins: number; music?: boolean } | null;
   liveActs?: Partial<Record<LiveKind, boolean>> | null;
@@ -1208,8 +1210,37 @@ export default function Wall() {
         <Row label={<span className="inline-flex items-center gap-2"><Plane className="h-4 w-4 text-white/60" aria-hidden /> Planes overhead</span>} detail="Live planes and helicopters over the house, above the strip." htmlFor="wall-air">
           <Switch className={swHit} id="wall-air" checked={s.airShow !== false} onCheckedChange={(v) => act({ airShow: v }, v ? "Planes overhead on." : "Planes overhead off.")} />
         </Row>
-        <DisclosureRow id="sky-details" label="Sky details" summary="Plane card, labels, stars, star names, grid, moon, sun, planets, key">
+        {s.airShow !== false && (() => {
+          const rad = Math.min(25, Math.max(2, Math.round(s.airRadiusMi ?? 15)));
+          const setRad = (n: number) => change({ airRadiusMi: Math.min(25, Math.max(2, n)) });
+          return (
+            <Row label="Sky radius" detail="Only planes this close to home show on the ceiling. The sky key shows it too.">
+              <div role="group" aria-label="Sky radius" className="flex shrink-0 items-center gap-1">
+                <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Smaller radius" disabled={rad <= 2} onClick={() => setRad(rad - 1)}>
+                  <Minus className="h-5 w-5" aria-hidden />
+                </button>
+                <span className="w-16 whitespace-nowrap text-center text-[17px] font-medium tabular-nums text-white" aria-live="polite">{rad}{"\u00a0"}mi</span>
+                <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Bigger radius" disabled={rad >= 25} onClick={() => setRad(rad + 1)}>
+                  <Plus className="h-5 w-5" aria-hidden />
+                </button>
+              </div>
+            </Row>
+          );
+        })()}
+        <Row label={<span className="inline-flex items-center gap-2"><RadioTower className="h-4 w-4 text-white/60" aria-hidden /> Air traffic control</span>}
+          detail="Live LAX tower radio on the Desk HomePod. Turns the radio off." htmlFor="wall-atc">
+          <Switch className={swHit} id="wall-atc" checked={!!s.atc && !s.radio?.on}
+            onCheckedChange={(v) => act(v ? { atc: true, ...(s.radio?.on ? { radio: { ...s.radio, on: false, ts: Date.now() } } : {}) } : { atc: false },
+              v ? "LAX tower is playing on the Desk HomePod." : "Air traffic control off.")} />
+        </Row>
+        <DisclosureRow id="sky-details" label="Sky details" summary="Plane card, labels, home, space station, stars, moon, sun, planets, key">
           {s.airShow !== false && <>
+            <Row label="Home marker" detail="A small house where you are, in the middle of the sky map." htmlFor="wall-sky-home">
+              <Switch className={swHit} id="wall-sky-home" checked={s.skyHome !== false} onCheckedChange={(v) => change({ skyHome: v })} />
+            </Row>
+            <Row label="Space Station name" detail="The name under the Space Station when it passes over." htmlFor="wall-iss-tag">
+              <Switch className={swHit} id="wall-iss-tag" checked={s.issTag !== false} onCheckedChange={(v) => change({ issTag: v })} />
+            </Row>
             <Row label="Nearest-plane card" detail="The big card that names the closest aircraft." htmlFor="wall-air-card">
               <Switch className={swHit} id="wall-air-card" checked={s.airCard !== false} onCheckedChange={(v) => change({ airCard: v })} />
             </Row>

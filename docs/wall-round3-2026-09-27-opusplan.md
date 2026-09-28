@@ -22,16 +22,16 @@ Jared's list (attachment), answers: purple Scout = a detail list of its items; n
 **Pi editing rule (4 workers share wall.html/server.py):** every edit = small anchored replace, done under `flock /opt/bestly/wall/.edit.lock`, re-reading the live file first, backup, `node --check` / `py_compile`, restart. Never write a whole file from an old copy. Quiet hours: no audible tests after 10:45 PM (verify streams silently / volume 0).
 
 ## W1 Sky (wall.html sky + server.py air_loop)
-- [ ] Space station: better image, halo glow behind it, `issTag` switch.
-- [ ] Closest plane: blue dot same size/look as the red dots; red dots + circle on the other tagged planes when name tags are on.
-- [ ] Home marker back + `skyHome` switch.
-- [ ] Constant jet-stream (contrail) lines on all aircraft.
-- [ ] Helicopter rotors always spin (self-heal).
-- [ ] Star labels offset so they don't sit on the stars.
-- [ ] Name tag in/out transition smooth (no lag/chop).
-- [ ] Name tags only for planes really drawn in the sky; sky key shows the radius; admin − / + radius (`airRadiusMi`).
-- [ ] Close-pass mode: when a plane/helicopter is unusually low + close (police helicopter), faster updates, smooth motion, drawn a bit larger.
-- [ ] ATC audio switch (`atc`): LAX tower/approach stream on the Desk HomePod.
+- [x] Space station: better image, halo glow behind it, `issTag` switch. (own glyph + halo globe, glides 1 s steps; admin Sky details > Space Station name)
+- [x] Closest plane: blue dot same size/look as the red dots; red dots + circle on the other tagged planes when name tags are on.
+- [x] Home marker back + `skyHome` switch.
+- [x] Constant jet-stream (contrail) lines on all aircraft. (90 s, also in lite mode)
+- [x] Helicopter rotors always spin (self-heal). (also ambient/lite; page checks the CSS spin via getAnimations and falls back to JS steps; root cause of the frozen sky: a null heading crashed every frame, fixed + each plane guarded)
+- [x] Star labels offset so they don't sit on the stars.
+- [x] Name tag in/out transition smooth (no lag/chop). (0.45 s fade+slide on own layer, 0.3/0.9 s hysteresis, no side flip-flop, tags never run off the sky)
+- [x] Name tags only for planes really drawn in the sky; sky key shows the radius; admin − / + radius (`airRadiusMi`). (routes only when they start/end within 70 mi of home)
+- [x] Close-pass mode: when a plane/helicopter is unusually low + close (police helicopter), faster updates, smooth motion, drawn a bit larger. (< 1.5 mi and < 2,000 ft: Pi polls 1.5 s, page 1 s + 20 fps motion, 1.3x)
+- [x] ATC audio switch (`atc`): LAX tower/approach stream on the Desk HomePod. (LiveATC klax_twr MP3 verified silently; first audible play not tested - quiet hours)
 
 ## W2 Strip (wall.html strip + server.py strip parts)
 - [ ] "Show today's date" → much larger, filling text.
