@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Bestly wall feeds every 30 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=30min
+AccuracySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

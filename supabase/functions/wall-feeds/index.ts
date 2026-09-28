@@ -100,7 +100,10 @@ const CARRIERS: [RegExp, string][] = [
   [/amazon\.com|amazon/i, "Amazon"], [/\bups\b|ups\.com/i, "UPS"], [/fedex/i, "FedEx"], [/usps\.com|\busps\b/i, "USPS"],
   [/dhl/i, "DHL"], [/ontrac/i, "OnTrac"], [/lasership/i, "LaserShip"], [/costco/i, "Costco"], [/target\.com/i, "Target"],
   [/walmart/i, "Walmart"], [/apple\.com/i, "Apple"], [/shop\.app|shopify/i, "Shop"],
+  [/homechef/i, "Home Chef"], [/hellofresh/i, "HelloFresh"], [/chewy/i, "Chewy"], [/etsy/i, "Etsy"], [/bestbuy/i, "Best Buy"],
+  [/wayfair/i, "Wayfair"], [/ikea/i, "IKEA"], [/nike/i, "Nike"], [/shein/i, "SHEIN"], [/temu/i, "Temu"],
 ];
+const SHIPPERS = new Set(["UPS", "FedEx", "USPS", "DHL", "OnTrac", "LaserShip"]);
 const SHIP_RE = /(shipped|out for delivery|delivered|arriving|on (its|the) way|in transit|delivery (update|scheduled|exception|attempt)|has been dispatched|shipment|package)/i;
 const NOT_SHIP_RE = /(earnings|payment|invoice|quota|support case|\bcase\b|verify|password|receipt for your payment|refund|newsletter|webinar|what we.ve shipped|shipped in q\d)/i;
 function statusOf(s: string) {
@@ -125,9 +128,7 @@ function etaOf(s: string, sent: Date) {
 function whatOf(subject: string, carrier: string) {
   const q = subject.match(/["“]([^"”]{3,60})["”]/);
   if (q) return short(q[1], 30);
-  const ord = subject.match(/order\s*(?:#|no\.?|number)?\s*[\w-]*\d{4,}/i);
-  if (ord && carrier !== "UPS" && carrier !== "FedEx" && carrier !== "USPS") return `${carrier} order`;
-  return carrier === "Amazon" ? "Amazon package" : `${carrier} package`;
+  return carrier === "Amazon" ? "Amazon package" : SHIPPERS.has(carrier) ? `${carrier} package` : `${carrier} order`;
 }
 async function deliveries() {
   const since = new Date(Date.now() - 10 * 864e5).toISOString();

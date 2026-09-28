@@ -1,0 +1,14 @@
+[Unit]
+Description=Bestly wall feeds: USPS mail digest (IMAP + OCR) and iPhone steps -> Supabase (W3 2026-09-27)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/opt/bestly/feeds
+Environment=OMP_THREAD_LIMIT=1
+Nice=10
+IOSchedulingClass=idle
+ExecStart=/usr/bin/python3 /opt/bestly/feeds/feeds.py
+TimeoutStartSec=900
