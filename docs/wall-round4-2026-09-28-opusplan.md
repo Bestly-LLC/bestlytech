@@ -21,6 +21,10 @@ Photos (3:49 PM) are in `docs/wall-round4-assets/`: `sky-key-bulbs.jpg` (bulb bl
 Table `wall_news_helis(hex, reg, station, channel, notes)` + `wall_pi_news_helis(p_token)`.
 
 **Feeds** (`wall_pi_feeds`): `mail.items[]` (one-line summaries), `energy.today_cents`, `turo.calendar[{date, status:'booked'|'blocked'|'open', guest?}]` (30 days), `claude{pct, label, resets_at, source}` (usage arch), `packages[{id, carrier, what, eta, status, done}]`.
+**Packages (W2 data, W4 UI)** — table `wall_packages(id bigint, key text unique, carrier, what, eta, status, source, done bool, done_at, first_seen, last_seen)`, filled from the `deliveries` feed + USPS Informed Delivery parcels.
+Admin RPCs (admin auth like `wall_admin_set`): `wall_admin_packages() → [{id, carrier, what, eta, status, source, done, done_at, first_seen, last_seen}]` (last 21 days, newest first) and
+`wall_package_done(p_id bigint, p_done boolean) → {ok, id, done}` (true = "got it", hides it from the wall; false = show again).
+`wall_pi_feeds.packages[{id, carrier, what, eta, status}]` excludes done ones (legacy `deliveries` also filtered).
 
 **Pi editing rule (several workers share wall.html/server.py):** every edit = small anchored replace, under
 `flock /opt/bestly/wall/.edit.lock`, re-read the live file first, backup `*.bak_r4<w>_*`, `node --check` (page script) /
