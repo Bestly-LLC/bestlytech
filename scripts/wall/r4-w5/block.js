@@ -201,8 +201,9 @@
   function w5Room(el){ let mx=1800; try{ const v=maskLeftX(20,290); if(isFinite(v)) mx=v; }catch(e){} mx=Math.max(900,Math.min(1780,mx-30));
     el.style.setProperty('--x0','40px'); el.style.setProperty('--mw',(mx-40).toFixed(0)+'px'); return mx-40; }
   function w5Stage(id){ let el=document.getElementById(id); if(!el){ el=document.createElement('div'); el.id=id; el.setAttribute('aria-hidden','true'); const st=$('#stage'); if(st) st.appendChild(el); } return el; }
-  function w5Fit(el,maxW,maxH,start,min){ let fs=start; el.style.fontSize=fs+'px'; while(fs>min&&(el.scrollWidth>maxW+2||el.scrollHeight>maxH+2)){ fs-=4; el.style.fontSize=fs+'px'; } return fs; }
-  function w5Words(el,text,delay,gap){ el.innerHTML=String(text).split(/\s+/).map((w,i)=>`<span class="w" style="animation-delay:${(delay+i*gap).toFixed(2)}s">${esc(w)}</span>`).join(' '); return String(text).split(/\s+/).length; }
+  function w5Fit(el,maxW,maxH,start,min){ const inn=el.querySelector('.m-in')||el; let fs=start; el.style.fontSize=fs+'px';
+    while(fs>min&&(inn.scrollWidth>maxW+2||inn.offsetHeight>maxH+2)){ fs-=3; el.style.fontSize=fs+'px'; } return fs; }
+  function w5Words(el,text,delay,gap){ el.innerHTML='<span class="m-in">'+String(text).split(/\s+/).map((w,i)=>`<span class="w" style="animation-delay:${(delay+i*gap).toFixed(2)}s">${esc(w)}</span>`).join(' ')+'</span>'; return String(text).split(/\s+/).length; }
   async function w5Motivate(){ if(W5M.busy) return; if((TOUR&&TOUR.on)||document.body.classList.contains('skit')){ setTimeout(w5Motivate,4000); return; }
     W5M.busy=true; W5M.runs++; W5M.at=Date.now(); const L=w5Pick(), chips=w5Chips(), el=w5Stage('w5mot'), room=w5Room(el); W5M.t.forEach(clearTimeout); W5M.t=[];
     const at=(ms,f)=>W5M.t.push(setTimeout(()=>{ try{ f(); }catch(e){ w5Fail(e); } },ms));
@@ -212,7 +213,7 @@
     const hey=el.querySelector('.m-hey'), line=el.querySelector('.m-line'), by=el.querySelector('.m-by'), ch=el.querySelector('.m-chips'), fin=el.querySelector('.m-fin');
     at(500,()=>hey.classList.add('in')); at(2700,()=>{ hey.classList.remove('in'); hey.classList.add('out'); });
     const nw=L.t.split(/\s+/).length, gap=Math.min(.16,2.2/nw), hold=Math.max(4200,nw*330);
-    at(3200,()=>{ w5Words(line,L.t,0,gap); line.classList.add('in'); w5Fit(line,room-60,236,112,54); });
+    at(3200,()=>{ w5Words(line,L.t,0,gap); line.classList.add('in'); w5Fit(line,room-40,250,112,56); });
     if(L.by) at(3200+nw*gap*1000+700,()=>{ by.textContent='— '+L.by; by.classList.add('in'); });
     const t2=3200+nw*gap*1000+hold; at(t2,()=>{ line.classList.add('out'); by.classList.remove('in'); by.classList.add('out'); });
     let t3=t2+700;
