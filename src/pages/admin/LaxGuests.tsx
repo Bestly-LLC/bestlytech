@@ -437,6 +437,82 @@ export function useGuestRows() {
   return { rows, reload: load };
 }
 
+
+const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+/** "September 28, 2026" + "12:00 PM" -> "2026-09-28 12:00" (LA wall-clock; the database does the timezone). */
+function localStamp(day: string, time: string): string | null {
+  const d = day.match(/([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})/); const t = time.match(/(\d{1,2}):(\d{2})\s*([AP])M/i);
+  if (!d || !t) return null;
+  const mo = MONTHS.indexOf(d[1].toLowerCase()) + 1; if (!mo) return null;
+  let h = Number(t[1]) % 12; if (t[3].toUpperCase() === "P") h += 12;
+  return `${d[3]}-${String(mo).padStart(2, "0")}-${d[2].padStart(2, "0")} ${String(h).padStart(2, "0")}:${t[2]}`;
+}
+/** Reads Turo's "X's trip is booked" message (email or app text). Anything it can't find stays blank for you to type. */
+function parseBooking(text: string) {
+  const first = text.match(/^\s*([^\n]+?)[’']s trip is booked/im)?.[1]?.trim() ?? "";
+  const m = text.match(/from\s+(?:\w+day,\s*)?([A-Za-z]+\s+\d{1,2},\s*\d{4}),?\s*(\d{1,2}:\d{2}\s*[AP]M)\s+to\s+(?:\w+day,\s*)?([A-Za-z]+\s+\d{1,2},\s*\d{4}),?\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
+  const earn = text.match(/earn\s+\$([\d,]+(?:\.\d+)?)/i)?.[1]?.replace(/,/g, "") ?? "";
+  const res = text.match(/(?:reservation|trip)s?\/(\d{6,10})/i)?.[1] ?? text.match(/\b(\d{8})\b/)?.[1] ?? "";
+  return { first, start: m ? localStamp(m[1], m[2]) ?? "" : "", end: m ? localStamp(m[3], m[4]) ?? "" : "", earn, res };
+}
+
+/** Fresh booking the Turo feed hasn't delivered yet: paste Turo's message, get the guest link now. */
+function AddTrip({ onDone }: { onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [f, setF] = useState({ res: "", first: "", phone: "", start: "", end: "", earn: "", lax: false });
+  const [busy, setBusy] = useState(false);
+  const [made, setMade] = useState<{ link: string; msg: string } | null>(null);
+  const fld = "h-9 rounded-lg border border-white/10 bg-transparent px-2.5 text-sm text-white bento:border-neutral-200 bento:text-neutral-900";
+  const onPaste = (v: string) => {
+    setPaste(v); const p = parseBooking(v);
+    setF((x) => ({ ...x, res: p.res || x.res, first: p.first || x.first, start: p.start || x.start, end: p.end || x.end, earn: p.earn || x.earn }));
+  };
+  const ready = /^\d{6,10}$/.test(f.res) && f.first.trim() && f.start && f.end;
+  const submit = async () => {
+    setBusy(true);
+    const { data, error } = await rpc("lax_guest_add_trip", { p_reservation: Number(f.res), p_first: f.first, p_phone: f.phone, p_start_local: f.start, p_end_local: f.end, p_lax: f.lax, p_earnings: f.earn ? Number(f.earn) : null });
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    const token = (data as { token: string }).token; const link = `${SITE}/t/${token}`;
+    const msg = f.lax
+      ? `Hi ${f.first}! Here's how to pick up your Turo car at LAX, plus the QR code that opens the lobby door (you can add it to Apple or Google Wallet): ${link}`
+      : `Hi ${f.first}! Everything for picking up the Tesla is on this page: your phone key (it shows up 2 hours before pickup), where the car is parked, and A/C buttons. ${link}`;
+    setMade({ link, msg }); onDone();
+  };
+  if (!open) return <button type="button" onClick={() => setOpen(true)} className="mt-3 text-sm font-medium text-[#409CFF] bento:text-[#007AFF]">+ Add a trip that isn't here yet</button>;
+  return (
+    <div className="mt-3 rounded-2xl bg-white/[0.04] p-3.5 ring-1 ring-white/[0.06] bento:bg-neutral-50 bento:ring-neutral-200">
+      {made ? (
+        <>
+          <p className="text-sm font-semibold text-white bento:text-neutral-900">Link ready for {f.first}</p>
+          <p className="mt-1 break-all text-sm text-white/70 bento:text-neutral-600">{made.link}</p>
+          <div className="mt-2 flex flex-wrap gap-2"><CopyButton text={made.msg} label="Copy message for Turo" /><CopyButton text={made.link} label="Copy link" /></div>
+          <button type="button" className="mt-3 text-sm text-white/55 bento:text-neutral-500" onClick={() => { setMade(null); setPaste(""); setF({ res: "", first: "", phone: "", start: "", end: "", earn: "", lax: false }); setOpen(false); }}>Done</button>
+        </>
+      ) : (
+        <>
+          <p className="text-sm font-semibold text-white bento:text-neutral-900">Add a trip</p>
+          <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Paste Turo's “trip is booked” message. Add the trip number from the trip page link (turo.com/reservation/<b>12345678</b>). Turo's own sync replaces this later.</p>
+          <textarea value={paste} onChange={(e) => onPaste(e.target.value)} rows={4} placeholder="Paste the Turo booking message here" className={cn(fld, "mt-2 h-auto w-full py-2")} />
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <input className={fld} inputMode="numeric" placeholder="Trip number" value={f.res} onChange={(e) => setF({ ...f, res: e.target.value.replace(/\D/g, "") })} />
+            <input className={fld} placeholder="Guest first name" value={f.first} onChange={(e) => setF({ ...f, first: e.target.value })} />
+            <input className={fld} placeholder="Pickup: 2026-09-28 12:00" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} />
+            <input className={fld} placeholder="Return: 2026-09-30 12:00" value={f.end} onChange={(e) => setF({ ...f, end: e.target.value })} />
+            <input className={fld} inputMode="tel" placeholder="Guest phone (optional)" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+            <label className="flex h-9 items-center gap-2 text-sm text-white/75 bento:text-neutral-600"><input type="checkbox" checked={f.lax} onChange={(e) => setF({ ...f, lax: e.target.checked })} />LAX pickup (else home)</label>
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <button type="button" disabled={!ready || busy} onClick={() => void submit()} className="h-9 rounded-full bg-[#0A84FF] bento:bg-[#007AFF] px-4 text-sm font-medium text-white disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Make guest link"}</button>
+            <button type="button" className="text-sm text-white/55 bento:text-neutral-500" onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function LaxGuests() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const load = useCallback(async () => {
@@ -451,6 +527,7 @@ export function LaxGuests() {
     <div className={card}>
       <p className="text-[17px] font-semibold text-white bento:text-neutral-900">Guests</p>
       <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Each trip gets its own page: their name, times, weather, and the car's battery and cabin temp from an hour before pickup. Reminder emails come from support@bestly.tech.</p>
+      <AddTrip onDone={load} />
       {!rows ? <Loader2 className="mt-4 h-5 w-5 animate-spin text-white/50" /> : rows.length === 0
         ? <p className="mt-4 text-sm text-white/55 bento:text-neutral-500">No upcoming trips.</p>
         : <ul className="mt-2 divide-y divide-white/[0.06] bento:divide-neutral-100">{rows.map((r) => <GuestRow key={r.reservation_id} r={r} reload={load} />)}</ul>}
