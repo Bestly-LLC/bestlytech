@@ -57,8 +57,8 @@
       if(!(SKT.man&&SKT.man.lines&&SKT.man.lines.k01n&&SKT.man.lines.k11)){ W5U.err='new voices not built; played the classic skit'; document.body.classList.remove('w5ufo'); skCard(null); return skitStartV1(); }
       await skWait(2600,tok); skCard(null); await skWait(700,tok);
       const home=w5HomeStrip(), sc=skChar('scout'), nb=skChar('nimbus'), pp=skChar('pip'), u7=skChar('unit7'), dk=skChar('desk'), jr=skChar('jared'), uf=skChar('ufo');
-      sc.s=.9; nb.s=.95; pp.s=.8; u7.s=.85; dk.s=.8; jr.s=.62; uf.s=.72;
-      const hover=[Math.max(120,Math.min(1680,home[0])), home[1]-110>=28?home[1]-110:home[1]+110], jDesk=[home[0],home[1]-12];
+      sc.s=.9; nb.s=.95; pp.s=.8; u7.s=.85; dk.s=1; jr.s=.8; uf.s=.85;
+      const hover=[Math.max(120,Math.min(1680,home[0])), home[1]-120>=34?home[1]-120:home[1]+120], jDesk=[home[0],home[1]-14];
       skPlace(sc,620,420,0); skPlace(nb,-180,190,0); skPlace(pp,1950,40,0,{flip:true}); skPlace(u7,2050,52,0); skPlace(uf,2150,-160,0);
       skPlace(dk,home[0],home[1],0); skPlace(jr,jDesk[0],jDesk[1],0); dk.el.style.opacity=0; jr.el.style.opacity=0;
       await skWait(60,tok); skPlace(sc,620,212,1300); dk.el.style.transition='opacity 1.2s'; jr.el.style.transition='opacity 1.2s'; dk.el.style.opacity=1; jr.el.style.opacity=1;
@@ -86,8 +86,8 @@
       await skSay('k16',tok,{gap:500});
       // ...and back again, one very polite returned human
       skPlace(uf,2150,-160,0); await skWait(80,tok); w5Hum(true); skPlace(uf,hover[0],hover[1],1600,{ease:'cubic-bezier(.2,.8,.25,1.05)'}); await skWait(1700,tok);
-      skLookAt('ufo'); w5Beam(uf,jDesk,true); jr.rot=0; jr.s=.3; skPlace(jr,hover[0],hover[1]+14,0); await skWait(40,tok); jr.el.style.opacity=1; jr.s=.62;
-      skPlace(jr,jDesk[0],jDesk[1],2600,{rot:0,ease:'cubic-bezier(.3,.7,.3,1)'}); await skSay('k17',tok,{gap:0}); await skWait(700,tok);
+      skLookAt('ufo'); w5Beam(uf,jDesk,true); jr.rot=0; jr.s=.3; skPlace(jr,hover[0],hover[1]+14,0); await skWait(40,tok); jr.el.style.opacity=1;
+      jr.s=.8; skPlace(jr,jDesk[0],jDesk[1],2600,{rot:0,ease:'cubic-bezier(.3,.7,.3,1)'}); await skSay('k17',tok,{gap:0}); await skWait(700,tok);
       w5Beam(uf,jDesk,false); skPlace(uf,2100,-200,1400,{ease:'cubic-bezier(.6,0,.9,.4)'}); w5Hum(false); skTween(SKT,'starDim',0,1200);
       await skSay('k18',tok,{gap:100}); skBubble('jared','Two.'); await skWait(1700,tok); skBubble(null);
       await skSay('p05',tok,{gap:250}); await skSay('s09',tok,{gap:300});
