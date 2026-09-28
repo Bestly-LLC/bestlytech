@@ -900,7 +900,7 @@ export default function Wall() {
       </Group>
 
       {/* Strip widgets (W2 round 3): the left side takes turns with the clock; switch any widget off here. */}
-      <Group id="strip-widgets" title="Strip widgets" footer="The left side of the strip takes turns with the clock. A widget with nothing to show skips its turn.">
+      <Group id="strip-widgets" title="Strip widgets" footer="The left side of the strip takes turns with the clock; Turo calendar and Claude usage take turns on the right. A widget with nothing to show skips its turn.">
         {STRIP_WIDGETS.map((w) => {
           const hid = `wall-w-${w.id.replace("$", "usd")}`;
           return (
