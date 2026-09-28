@@ -28,6 +28,7 @@ import { WallRadioSection, type WallRadio, type WallRadioLive } from "@/componen
 import { WallPowerCost, type WallPowerMeter } from "@/components/admin/WallPowerCost";
 import { Group, Row, Segmented, btn, btnPrimary, swHit, NW } from "@/components/admin/wallUi";
 import { DndCard, MotivateButton, PackagesCard, type Dnd } from "@/components/admin/WallR4";
+import { VoiceCard, type Voice } from "@/components/admin/WallVoice";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
@@ -72,6 +73,7 @@ type WallState = {
   sleepShow?: { at: number; mins: number; music?: boolean } | null;
   liveActs?: Partial<Record<LiveKind, boolean>> | null;
   /** W4 round 4: Do Not Disturb, the layout block the projector outlines while the grid is on, and Motivate me (W5 plays it). */
+  voice?: Voice | null;   // W7 round 4: Hey Scout
   dnd?: Dnd | null; layoutSel?: "corners" | "mask" | "wing" | "air" | null; motivate?: { seq: number; ts: number } | null;
 };
 /** One undo step from wall_geometry_history_list (newest first). can_undo / can_redo mark the next step each way. */
@@ -821,6 +823,8 @@ export default function Wall() {
       )}
 
       <DndCard dnd={s.dnd} onChange={(d, msg) => act({ dnd: d }, msg)} />
+
+      <VoiceCard voice={s.voice} onChange={(v, msg) => act({ voice: v }, msg)} />
 
       {/* On the wall: mode + the big message */}
       <Group title="On the wall" footer="Scout picks the one thing from today's list and updates it every 10 minutes.">
