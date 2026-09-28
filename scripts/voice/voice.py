@@ -156,7 +156,7 @@ def status_loop():
         try:
             d = status_write()
             n += 1
-            if n % 30 == 1:                     # every ~5 min: tell the admin card we're alive
+            if n % 30 == 3:                     # 30 s after start (mic + model up), then every ~5 min: tell the admin card
                 threading.Thread(target=edge, args=({"op": "status", "status": slim_status(d)},), daemon=True).start()
             prune_clips()
         except Exception as e:
