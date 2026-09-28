@@ -3,8 +3,9 @@
 Jared's list (attachment, 40 asks), grouped by system so parallel workers never fight over the same code.
 Status legend: [ ] todo · [x] done · [~] partial / needs Jared · [?] waiting on Jared's input
 
-Photos he mentions (sky key with the light bulbs, Flighty Live Activity, LED sign on/off/grid) were **not attached** —
-work from the descriptions; the LED sign mapping waits for the photos.
+Photos (3:49 PM) are in `docs/wall-round4-assets/`: `sky-key-bulbs.jpg` (bulb blocks "Tail … where it's seen" + "Closest to…"),
+`scout-chat-sticky-box.jpg` (the stuck "Fix LAX guest…" card), `flighty-live-activity.jpg` (the look for the Live Activity + sign-wall name tag),
+`led-sign-off-dark.jpg`, `led-sign-off-flash.jpg`, `led-sign-on-purple.jpg`, `led-sign-grid-C6-C7.jpg` (neon line-art sign on the sign wall, grid cells C6–C7).
 
 ## Shared contracts
 **New `wall_state.state` keys** (server.py DEFAULT_STATE + `wall_clean_toggles`/`wall_clean_patch` + admin Wall.tsx):
@@ -44,6 +45,7 @@ Table `wall_news_helis(hex, reg, station, channel, notes)` + `wall_pi_news_helis
 - [ ] 30-day Turo calendar widget on the right: booked / blocked / open with clear contrast (Apple HIG).
 - [ ] Home energy shows cents.
 - [ ] Mail widget: "2 pieces of mail" then a short summary of what they are.
+- [ ] Mail this week: never just "Letter" — say who it's from + what it likely is (read the Informed Delivery scan: sender/return address via OCR or a free vision model), e.g. "Mon · Chase — card statement".
 - [ ] Batteries: iPhone must not hide under EcoFlow when it isn't detected.
 - [ ] Claude usage widget under batteries: arch gauge + Claude mark in the middle.
 - [ ] Packages on the wall hide once checked off in admin (W4 builds the admin tool).
@@ -80,9 +82,13 @@ Table `wall_news_helis(hex, reg, station, channel, notes)` + `wall_pi_news_helis
 - [ ] Pipeline: wake → listening chime + wall "listening" glow → speech-to-text → Scout (admin-chat, free LLM first) → spoken reply on the Desk HomePod (or projector speaker) + reply card on the wall.
 - [ ] Respect DND / sleep; mute switch in admin; watchdog → Scout (mic missing, wake engine down, STT/LLM failures).
 
+## W8 LED sign mapping (wall.html sign-wall layer)
+- [ ] Trace the neon sign (legs/arms line art) from the photos + a live grid pass into a vector outline aligned to the projector (grid cells C6–C7), with an admin nudge/scale to fine-align.
+- [ ] Projected effects on/around it: make it look lit when it's off (projected neon glow along the tubes), outline trace, color washes.
+- [ ] Tie into notifications (e.g. new signature, Turo booking, motivate) with short sign animations; respect DND; watchdog.
+
 ## Waiting on Jared
 - [?] Dyson **air purifier** (not a vacuum — Jared, 3:46 PM) on the wall: a "Devices" row under batteries showing it live (on/off, air quality, filter life). Mockup first, build only after he OKs it.
-- [?] LED sign mapping (outlines, light-up, notification animations): needs the on/off/grid photos.
 
 ## Rules for every worker
 12-hour times, US units, a number never wraps from its unit, Apple HIG for UI, self-healing watchdog tied to Scout for anything new,
