@@ -211,11 +211,11 @@ export function NotificationBell() {
   };
 
   const markAll = async () => {
-    const ids = items.filter((n) => !n.read_at).map((n) => n.id);
-    if (!ids.length) return;
+    if (!items.some((n) => !n.read_at)) return;
     const at = new Date().toISOString();
-    const { data, error } = await supabase.from("admin_notifications" as any).update({ read_at: at } as any).in("id", ids).select("id");
-    if (error || !data?.length) { toast.error("Couldn't mark them read", { description: error?.message }); return; }
+    // every unread note, not just the 50 loaded here (old ones used to linger past the list)
+    const { error } = await supabase.from("admin_notifications" as any).update({ read_at: at } as any).is("read_at", null);
+    if (error) { toast.error("Couldn't mark them read", { description: error.message }); return; }
     setItems((xs) => xs.map((x) => (x.read_at ? x : { ...x, read_at: at })));
   };
 

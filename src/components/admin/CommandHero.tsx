@@ -59,6 +59,7 @@ export function CommandHero() {
   const [todos, setTodos] = useState<Todo[] | null>(null);
   const load = useCallback(async () => {
     const { data } = await supabase.from("scout_daily" as never).select("id, title, status, action").eq("kind", "call").eq("status", "open")
+      .gte("day", new Date(Date.now() - 21 * 864e5).toISOString().slice(0, 10))   // same 21-day freshness window as the sweep
       .order("created_at", { ascending: false }).limit(60);
     setTodos(((data ?? []) as unknown as Todo[]).filter((t) => String(t.action?.owner ?? "jared").toLowerCase() === "jared"));
   }, []);

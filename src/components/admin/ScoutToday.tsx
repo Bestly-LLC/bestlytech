@@ -73,11 +73,12 @@ export function ScoutToday() {
   const load = useCallback(async () => {
     const since = new Date(Date.parse(today + "T12:00:00Z") - 7 * 864e5).toISOString().slice(0, 10);
     const [{ data }, { count }] = await Promise.all([
-      supabase.from("scout_daily" as never).select("*").gte("day", since).order("created_at", { ascending: true }).limit(200),
+      // newest first, so today's rows can never be cut off by an old pile; aged-out rows (status expired) never load
+      supabase.from("scout_daily" as never).select("*").gte("day", since).neq("status", "expired").order("created_at", { ascending: false }).limit(400),
       supabase.from("monitor_issues" as never).select("key", { count: "exact", head: true })
         .eq("self_healed", true).gte("resolved_at", new Date(Date.now() - 864e5).toISOString()),
     ]);
-    setRows(((data ?? []) as unknown) as Row[]);
+    setRows((((data ?? []) as unknown) as Row[]).slice().reverse());   // back to oldest-first for display
     setHealed(count ?? 0);
   }, [today]);
 
