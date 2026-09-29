@@ -88,3 +88,8 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
 - **Sun/moon SVG image swaps:** the sun swapped every 30 minutes and the moon hourly, and the freezes clustered at :00 and :30.
   - Now the new picture is decoded off-screen first, the sun swaps every 3 hours and the moon daily. Same look.
 - **Daily clean reboot:** the first 7 AM wake each day is an `adb reboot`, for a fresh GPU driver.
+
+## Sep 29, 12:15 PM: graphics memory is spiky, not leaking
+- **Pattern:** normal is 190-240 MB. Spikes add 60-70 MB (about 8 full-screen layers) and last about a minute. The 10:43 spike stuck at 274-290 MB and froze the wall (restarted 10:46).
+- **Tracing:** the heartbeat now carries `cls` (the page's body classes, i.e. which effects are running), and the trace logs it, so each spike names its effect.
+- **Guard:** the watchdog restarts the wall app early when graphics stays at 270+ MB for 2 checks (at most every 10 minutes).
