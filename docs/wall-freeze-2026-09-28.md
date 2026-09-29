@@ -52,3 +52,15 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - How it worked: `renderer.py` plus the `bestly-wall-render` service took a Pi Chromium screenshot of a transparent strip PNG every 3 s. The projector overlaid it (`body.thin` hides `#stage`).
   - Jared's rule: the wall must look and animate identically, whatever runs behind it.
   - The service is disabled. The page only switches to thin mode when `/render/strip.json` is fresh.
+
+## Sep 29, 4 AM: overnight Scout alerts
+- **"Plane Live Activity can't reach the phone": false alarm.**
+  - Why: no phone is registered yet (the Bestly Sky app isn't installed). Network blips at 2:23 AM and 3:13 AM set `fail_since`, and only a successful push could clear it.
+  - Fix: a good health call now clears it. The watchdog only alerts once a phone is registered.
+- **"The hourly chime isn't playing":**
+  - Why: the page only chimed within the first 5 seconds of the hour, and a wall-app restart wiped `chime_at`.
+  - Fix: a 45-second window, plus the server keeps the last chime across heartbeats.
+- **Hitching / freezes:**
+  - Pattern: after the reboot, the page ran at 30+ fps for 2 to 5 minutes after each restart, then dropped to 7-9 fps even with 2 planes.
+  - Test: a 6-minute profile in the Pi's Chromium, forced into daytime board mode, stayed steady. So the slowdown is on the projector's side.
+  - Diagnostics: `slow_diag()` writes `slow_diag.log` (CPU frequency, thermal, per-thread CPU, graphics memory) whenever the wall slows. Follow-up scheduled after the 7 AM wake.
