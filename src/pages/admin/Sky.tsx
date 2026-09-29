@@ -316,8 +316,8 @@ export default function Sky() {
           {tags.map((t) => (
             <g key={`tag-${t.hex}`} onClick={() => setPick(t.hex)} style={{ cursor: "pointer" }}>
               <rect x={t.x} y={t.y} rx={t.h / (t.isF ? 3.2 : 2)} height={t.h} width={t.w} fill="#0b0f1e" fillOpacity={0.92} stroke={t.col} strokeOpacity={t.isF ? 0.85 : 0.3} strokeWidth={t.isF ? 1.6 : 1} />
-              <text x={t.x + fs * 0.65} y={t.y + fs * 1.15} fill="#ffffff" fillOpacity={1} stroke="#0b0f1e" strokeWidth={0} paintOrder="stroke" fontSize={fs} fontWeight={700}>{t.text}</text>
-              {t.sub && <text x={t.x + fs * 0.65} y={t.y + fs * 2.4} fill="#ffffff" fillOpacity={0.75} fontSize={fs * 0.88} fontWeight={500}>{t.sub}</text>}
+              <text x={t.x + fs * 0.65} y={t.y + fs * 1.15} fill="#ffffff" fillOpacity={1} fontSize={fs} fontWeight={700} style={{fill:'#ffffff'}}>{t.text}</text>
+              {t.sub && <text x={t.x + fs * 0.65} y={t.y + fs * 2.4} fill="#ffffff" fillOpacity={0.75} fontSize={fs * 0.88} fontWeight={500} style={{fill:'#ffffff'}}>{t.sub}</text>}
             </g>
           ))}
         </svg>
@@ -354,7 +354,7 @@ export default function Sky() {
                 {KINDS[fi.kind]?.[0]}{flightNo(fa) ? ` · Flight ${flightNo(fa)}` : fa.reg ? ` · ${fa.reg}` : ""}
                 {feed?.focus === fa.hex && <span className="ml-auto rounded-full bg-[#FF453A]/20 px-2 py-0.5 text-[11px] text-[#FF8A80]">On the wall</span>}
               </div>
-              <div className="mt-1 text-[22px] font-bold leading-tight">{fi.who}</div>
+              <div className="mt-1 text-[22px] font-bold leading-tight text-white">{fi.who}</div>
               {route && <div className="mt-0.5 text-[15px] text-white/80">{route}</div>}
               <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                 {[["Altitude", fmtAlt(fa.alt) || "—"], ["Speed", mph(fa.gs) || "—"], ["Away", fDist != null ? `${fDist.toFixed(1)}${NB}mi ${fDir}` : "—"]].map(([k, v]) => (
