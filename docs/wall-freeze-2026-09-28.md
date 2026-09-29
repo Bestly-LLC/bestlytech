@@ -19,3 +19,16 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
 - Watchdog: `freeze_watch` tells Scout (`wall.hitch`) after 5 minutes of >= 6 hitches a minute. `launch_wall()` now logs who asked for every wall-app restart.
 - Lead: each new aircraft adds ~100 DOM nodes (planes 12 -> 17, nodes 1235 -> 1640) and hitches line up with planes appearing. Next lever: cheaper per-plane tag/route layers.
 - Backups on the Pi: `wall.html.bak_hit_*`, `server.py.bak_hit_*`, `watchdog.py.bak_hit_*`, `watchdog.py.bak_lw_*`.
+
+## Update 9:40 PM: the real freeze (graphics memory)
+- **Symptom:** at 9:32 the wall clock still said 9:26. The sky kept moving and the page kept ticking, but the clock and cards stopped repainting.
+- **Cause:** the projector's GPU ran out of memory. logcat showed `eglCreateImage failed 0x3003` (EGL_BAD_ALLOC) about 8 times a second.
+  - There are zero errors right after a fresh start of the wall app. They build up over minutes.
+- **Why nothing caught it:** the whole-frame check could never fire, because the sky is always moving.
+- **Detector:**
+  - The heartbeat now carries `clk` (the page's clock text and its last tick time).
+  - The watchdog hashes the strip band (rows 380-700 of the raw screencap) every minute.
+  - 3 identical strip hashes while `clk` changed, or >= 150 BAD_ALLOC a minute for 2 checks, restarts the wall app (at most once every 4 minutes).
+  - It reports `wall.repaint` to Scout, and pushes an alert after 3 in an hour.
+- **Trace:** `/opt/bestly/wall/gpu_trace.log` logs one line a minute to find what eats GPU memory.
+- **Next:** cut GPU memory use (full-screen canvases at 2x, composited layers per plane).
