@@ -215,12 +215,13 @@ async function answer(text: string, ctx: unknown): Promise<{ reply: string; via:
   let reply = "", via = "";
   try {
     const r = await freeLlm(tier1Prompt({ ...(ctx as Record<string, unknown> ?? {}), scout: snap }, convo), text);
-    reply = spoken(r.text);
+    // check the raw text: spoken() drops underscores, and "NEEDSTOOLS" was once read out loud
+    reply = /NEEDS[_\s-]?TOOLS/i.test(r.text) ? "NEEDS_TOOLS" : spoken(r.text);
     via = r.via;
   } catch (e) {
     via = `tier1 failed: ${(e as Error).message}`.slice(0, 160);
   }
-  if (reply && !/NEEDS_TOOLS/i.test(reply)) {
+  if (reply && !/NEEDS[_\s-]?TOOLS/i.test(reply)) {
     if (threadId) {
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "user", body: text });
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
