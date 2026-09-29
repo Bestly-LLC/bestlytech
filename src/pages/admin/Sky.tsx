@@ -313,11 +313,16 @@ export default function Sky() {
             );
           })}
           {/* name tags on top of every plane */}
+          <defs>
+            <filter id="tag-shadow" x="-10%" y="-20%" width="120%" height="140%">
+              <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="#000" floodOpacity="0.9" />
+            </filter>
+          </defs>
           {tags.map((t) => (
             <g key={`tag-${t.hex}`} onClick={() => setPick(t.hex)} style={{ cursor: "pointer" }}>
-              <rect x={t.x} y={t.y} rx={t.h / (t.isF ? 3.2 : 2)} height={t.h} width={t.w} fill="#0b0f1e" fillOpacity={0.92} stroke={t.col} strokeOpacity={t.isF ? 0.85 : 0.3} strokeWidth={t.isF ? 1.6 : 1} />
-              <text x={t.x + fs * 0.65} y={t.y + fs * 1.15} fill="#ffffff" fillOpacity={1} fontSize={fs} fontWeight={700} style={{fill:'#ffffff'}}>{t.text}</text>
-              {t.sub && <text x={t.x + fs * 0.65} y={t.y + fs * 2.4} fill="#ffffff" fillOpacity={0.75} fontSize={fs * 0.88} fontWeight={500} style={{fill:'#ffffff'}}>{t.sub}</text>}
+              <rect x={t.x} y={t.y} rx={t.h / (t.isF ? 3.2 : 2)} height={t.h} width={t.w} fill="#0b1530" fillOpacity={0.96} stroke={t.col} strokeOpacity={t.isF ? 0.9 : 0.45} strokeWidth={t.isF ? 1.8 : 1.2} />
+              <text x={t.x + fs * 0.65} y={t.y + fs * 1.15} fontSize={fs} fontWeight={700} filter="url(#tag-shadow)" style={{ fill: '#ffffff', fontSize: fs, fontWeight: 700 }}>{t.text}</text>
+              {t.sub && <text x={t.x + fs * 0.65} y={t.y + fs * 2.4} fontSize={fs * 0.88} fontWeight={500} filter="url(#tag-shadow)" style={{ fill: '#c8deff', fontSize: fs * 0.88, fontWeight: 500 }}>{t.sub}</text>}
             </g>
           ))}
         </svg>
