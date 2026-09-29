@@ -77,3 +77,14 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - Before, the page ignored the Pi's power override and stayed black before 7 AM.
   - Now: `/api/hold` plus a page poll mean off-hours with a hold show the board.
   - The watchdog's `manual_wake_check()` holds the projector awake until 7 AM after a hand wake. A crash reboot still goes back to sleep.
+
+## Sep 29, 9:15 AM: the projector's GPU hangs, plus self-heals
+- **The underlying failure:** the projector's Mali GPU hangs.
+  - 9:03 AM: `mali JOB_READ_FAULT`.
+  - 8:25 AM: `ANR in de.ozerov.fully: stuck fence. Indicates GPU hang`, with `mali-mem-purge` at 92% CPU.
+- **The watchdog gap:** it stood back silently for 20 minutes during the 8:25 hang.
+  - Fix: `hang_check()` runs before those early returns. It triggers on an ANR window or a heartbeat dead for 3+ minutes, restarts the wall app, and reports `wall.hang`.
+  - The "in use" return now logs.
+- **Sun/moon SVG image swaps:** the sun swapped every 30 minutes and the moon hourly, and the freezes clustered at :00 and :30.
+  - Now the new picture is decoded off-screen first, the sun swaps every 3 hours and the moon daily. Same look.
+- **Daily clean reboot:** the first 7 AM wake each day is an `adb reboot`, for a fresh GPU driver.
