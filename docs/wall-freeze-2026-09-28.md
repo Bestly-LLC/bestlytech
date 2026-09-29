@@ -43,3 +43,12 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - `page_start_guard()` runs it after 3 dead-page restarts in 10 minutes and restores the newest backup that starts cleanly (`wall.bad_edit`, with a push alert).
   - **Rule:** run `pagetest.py` after every `wall.html` edit.
 - **Pi-renders-it test:** headless Chromium on the Pi falls back to software rendering (SwiftShader) and gets **15 fps**, worse than the projector. The real options are an HDMI cable from the Pi to the projector, or a GPU compositor plus a stream.
+
+## Update 11:21 PM: projector reboot, and the Pi-render experiment
+- **Trigger:** the trouble started after the projector woke from its 7:14 PM scheduled sleep (at 8:01 PM; first crash 8:15 PM). Freezes also happened on WebView 148 (11:00-11:03, with no EGL errors).
+- **Fix:** a full `adb reboot` of the projector cleared it.
+- **Escalation:** the watchdog now reboots the projector on the 3rd repaint freeze in an hour (at most once every 6 hours).
+- **Pi-render experiment (rejected by Jared, now dormant):**
+  - How it worked: `renderer.py` plus the `bestly-wall-render` service took a Pi Chromium screenshot of a transparent strip PNG every 3 s. The projector overlaid it (`body.thin` hides `#stage`).
+  - Jared's rule: the wall must look and animate identically, whatever runs behind it.
+  - The service is disabled. The page only switches to thin mode when `/render/strip.json` is fresh.
