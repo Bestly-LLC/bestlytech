@@ -34,7 +34,11 @@ SR, RATE_IN = 16000, 48000
 CHUNK = 1280                                   # 80 ms at 16 kHz (openWakeWord frame)
 PRE_S, MAX_S, START_S, SIL_S = 2.0, 12.0, 5.0, 0.9
 # threshold per sensitivity; tuning.json can override per model ({"hey_scout": {"normal": 0.55}})
-SENS = {"hey_scout": {"low": 0.7, "normal": 0.5, "high": 0.35}, "hey_jarvis": {"low": 0.7, "normal": 0.5, "high": 0.35}}
+SENS = {"hey_scout": {"low": 0.8, "normal": 0.6, "high": 0.45}, "hey_jarvis": {"low": 0.7, "normal": 0.5, "high": 0.35}}
+# consecutive 80 ms frames over the threshold before it counts. The custom model is confident on short bursts of other
+# speech: on 10.7 h of openWakeWord's validation audio, 1 frame = 2.3 false wakes/h, 2 frames = 0.3-0.5/h (0.6 thr),
+# with 88% recall on held-out synthetic "hey scout" clips.
+PATIENCE = {"hey_scout": 2, "hey_jarvis": 1}
 FALSE_PER_HOUR_RETUNE = 6
 
 os.makedirs(CLIPS, exist_ok=True)
@@ -520,7 +524,7 @@ def main():
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
         S["mic_ok"], S["mic_err"] = True, None
         log("mic open")
-        rec, rec_t0, speech_at, heard_speech, rec_wake, vad_max = None, 0.0, 0.0, False, {}, 0.0
+        rec, rec_t0, speech_at, heard_speech, rec_wake, vad_max, hits = None, 0.0, 0.0, False, {}, 0.0, 0
         need = CHUNK * 3 * 2
         try:
             while True:
@@ -588,9 +592,14 @@ def main():
                     thr = threshold_for(fam, se["sensitivity"])
                     S["threshold"] = thr
                     if sc < thr:
+                        hits = 0
                         if sc > peak[1]:
                             peak = (now, sc)
                         continue
+                    hits += 1
+                    if hits < PATIENCE.get(fam, 1):
+                        continue
+                    hits = 0
                     if now - last_fire < 2.0:
                         continue
                     last_fire = now
@@ -618,7 +627,9 @@ def main():
                     wall("listening", chime=se["sound"])
                     rec, rec_t0, speech_at, heard_speech, rec_wake, vad_max = [], now, 0.0, False, wake, 0.0
                     vad.reset_states()
-                elif peak[1] >= 0.3 and now - peak[0] > 1.5:
+                else:
+                    hits = 0
+                if sc <= 0.15 and peak[1] >= 0.3 and now - peak[0] > 1.5:
                     S["near"] = [n for n in S["near"] if now - n[0] < 3600] + [peak]    # near misses, for tuning
                     wake_log({"at": peak[0], "kind": "near", "score": round(peak[1], 3), "model": fam})
                     peak = (0.0, 0.0)
