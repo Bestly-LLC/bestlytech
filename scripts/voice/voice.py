@@ -217,7 +217,9 @@ def wall(phase, **kw):
 
 def ctx():
     """A small live snapshot for Scout: what the wall already knows (weather, next events, planes, now playing)."""
-    out = {"now": datetime.now().strftime("%A %B %-d, %-I:%M %p"), "where": "733 N Kings Rd, West Hollywood (home)"}
+    out = {"about": "Live data you CAN answer from (never say NEEDS_TOOLS for these): weather, calendar, USPS mail delivered "
+                    "today and this week (mail), packages, planes overhead, Turo trips and earnings, home energy, Scout's to-dos.",
+           "now": datetime.now().strftime("%A %B %-d, %-I:%M %p"), "where": "733 N Kings Rd, West Hollywood (home)"}
     try:
         d = http_json("http://127.0.0.1:8099/api/data", timeout=4) or {}
         w = d.get("weather") or {}
@@ -240,7 +242,8 @@ def ctx():
             out["calendar_next"] = [{k: e.get(k) for k in ("title", "start", "end", "where", "location") if e.get(k)} for e in cal[:5] if isinstance(e, dict)]
         f = d.get("feeds") or {}
         if f.get("mail"):
-            out["mail"] = {"today_pieces": f["mail"].get("today"), "today": f["mail"].get("items"), "this_week": f["mail"].get("bullets")}
+            out["mail"] = {"usps_pieces_delivered_today": f["mail"].get("today"), "delivered_today": f["mail"].get("items"),
+                           "this_week": f["mail"].get("bullets")}
         if f.get("packages") or f.get("deliveries"):
             out["packages"] = (f.get("packages") or f.get("deliveries"))[:6]
         if f.get("energy"):
