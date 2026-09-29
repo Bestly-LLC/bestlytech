@@ -64,3 +64,16 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - Pattern: after the reboot, the page ran at 30+ fps for 2 to 5 minutes after each restart, then dropped to 7-9 fps even with 2 planes.
   - Test: a 6-minute profile in the Pi's Chromium, forced into daytime board mode, stayed steady. So the slowdown is on the projector's side.
   - Diagnostics: `slow_diag()` writes `slow_diag.log` (CPU frequency, thermal, per-thread CPU, graphics memory) whenever the wall slows. Follow-up scheduled after the 7 AM wake.
+
+## Sep 29, 8:20 AM: hitching cause (the sound engine) and early wake
+- **Cause:**
+  - The live WebAudio bus (compressor + 2.4 s convolver reverb) costs the projector about 10 fps even in silence. Measured: 41-44 fps with sound locked, 26-37 with it unlocked.
+  - The wall collapsed to about 13 fps right after the 8 AM chime.
+- **Fix (`sndIdleHook`):**
+  - Suspends the AudioContext after 20 s with no active sources.
+  - Any new buffer source or oscillator resumes it instantly, so sounds are unchanged.
+  - `sndRunning()` handles the can-play checks. `sndState()` reports idle as running, so the watchdog doesn't tap.
+- **Early wake:**
+  - Before, the page ignored the Pi's power override and stayed black before 7 AM.
+  - Now: `/api/hold` plus a page poll mean off-hours with a hold show the board.
+  - The watchdog's `manual_wake_check()` holds the projector awake until 7 AM after a hand wake. A crash reboot still goes back to sleep.
