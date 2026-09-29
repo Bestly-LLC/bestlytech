@@ -168,13 +168,30 @@ async function scoutSnapshot(): Promise<Record<string, unknown>> {
   };
 }
 
-/** Voice needs a fast answer: Groq's small/fast models first (each has its own free per-minute and per-day limits, so a
- * busy Scout on gpt-oss-120b doesn't starve voice), then the shared free ladder (free-llm function). Logged in ai_spend. */
-const GROQ_FAST = ["openai/gpt-oss-20b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+/** Voice needs a fast answer: Groq models first, each with its own free per-minute and per-day limits (so a busy Scout on
+ * gpt-oss-120b doesn't starve voice), then the shared free ladder (free-llm function). The model list comes from Groq
+ * itself (cached 1 h; old names like llama-3.x vanish), a model that hit its daily cap is skipped for an hour. ai_spend logged. */
+const GROQ_PREFER = ["openai/gpt-oss-20b", "qwen/qwen3.8-27b", "openai/gpt-oss-120b"];
+const GROQ_SKIP = /whisper|guard|tts|orpheus|playai|compound|distil|embed|vision|allam/i;
+let groqList: { at: number; v: string[] } | null = null;
+const benched = new Map<string, number>();
+async function groqModels(key: string): Promise<string[]> {
+  if (groqList && Date.now() - groqList.at < 3600_000) return groqList.v;
+  let ids: string[] = [];
+  try {
+    const r = await fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(5000) });
+    const j = await r.json();
+    ids = ((j?.data ?? []) as any[]).filter((m) => m?.active !== false).map((m) => String(m.id)).filter((id) => !GROQ_SKIP.test(id));
+  } catch { /* use the preferred list */ }
+  const v = [...GROQ_PREFER.filter((m) => !ids.length || ids.includes(m)), ...ids.filter((m) => !GROQ_PREFER.includes(m))].slice(0, 6);
+  groqList = { at: Date.now(), v };
+  return v;
+}
 async function groqFast(system: string, user: string): Promise<{ text: string; via: string } | null> {
   const k = await keys();
   if (!k.groq) return null;
-  for (const model of GROQ_FAST) {
+  for (const model of await groqModels(k.groq)) {
+    if ((benched.get(model) ?? 0) > Date.now()) continue;
     const t0 = Date.now();
     let outcome = "ok", tin = 0, tout = 0, text = "";
     try {
@@ -185,8 +202,13 @@ async function groqFast(system: string, user: string): Promise<{ text: string; v
         signal: AbortSignal.timeout(12_000),
       });
       const j = await r.json().catch(() => null);
-      if (r.ok) { text = String(j?.choices?.[0]?.message?.content ?? "").trim(); tin = j?.usage?.prompt_tokens ?? 0; tout = j?.usage?.completion_tokens ?? 0; if (!text) outcome = "invalid"; }
-      else outcome = `${r.status === 429 ? "rate_limited" : "error"}: ${r.status} ${JSON.stringify(j?.error?.message ?? "").slice(0, 160)}`;
+      if (r.ok) { text = String(j?.choices?.[0]?.message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim(); tin = j?.usage?.prompt_tokens ?? 0; tout = j?.usage?.completion_tokens ?? 0; if (!text) outcome = "invalid"; }
+      else {
+        const msg = String(j?.error?.message ?? "");
+        outcome = `${r.status === 429 ? "rate_limited" : "error"}: ${r.status} ${JSON.stringify(msg).slice(0, 160)}`;
+        if (/per day|TPD|RPD/i.test(msg)) benched.set(model, Date.now() + 3600_000);
+        else if (r.status === 404) benched.set(model, Date.now() + 6 * 3600_000);
+      }
     } catch (e) { outcome = `timeout: ${(e as Error).name}`; }
     await db.from("ai_spend").insert({ fn: "voice-ask", scope: "chat", job: "voice", model, provider: "groq", input_tokens: tin, output_tokens: tout,
       cost_usd: 0, ok: outcome === "ok", ms: Date.now() - t0, outcome: outcome.slice(0, 300) }).then(() => {}, () => {});
