@@ -92,6 +92,8 @@ async function stt(wav: Uint8Array): Promise<{ text: string; via: string }> {
   throw new Error(`speech-to-text failed (${errs.join(", ") || "no keys"})`);
 }
 
+const WAKE_SAID = /\b(hey|hi|hay|heh|okay|ok|yo)[\s,.!]+(scout|scouts|scott|skout|scoot|scotty|jarvis)\b/i;
+
 /** Drop the wake word Whisper often keeps ("Hey Scout, what's ..."). */
 function stripWake(t: string): string {
   return t.replace(/^\s*(?:(?:hey|hi|hay|a|okay|ok)[\s,]+)?(?:scout|scott|jarvis)\b[\s,.!?:;-]*/i, "").trim();
@@ -286,7 +288,13 @@ Deno.serve(async (req) => {
     const t0 = Date.now();
     try {
       const r = await stt(wav);
-      text = stripWake(r.text);
+      // The Pi sends ~1.6 s from before the wake word too, so Whisper hears the wake word itself: a custom-model wake
+      // with no "hey scout" near the start is a false wake (e.g. "the boy scouts went camping" on TV).
+      if (body.wake?.verify && !WAKE_SAID.test(r.text.split(/\s+/).slice(0, 7).join(" "))) {
+        await logEvent({ kind: "turn", outcome: "junk", why: "no wake word", score: body.wake?.score, model: body.wake?.model, heard: r.text.slice(0, 200) });
+        return J({ ok: true, text: "", reply: "", ms: { stt: Date.now() - t0 }, via: r.via, rejected: "no wake word" });
+      }
+      text = body.wake?.verify ? r.text.replace(/^.*?\b(hey|hi|hay|heh|okay|ok|yo)[\s,.!]+(scout|scouts|scott|skout|scoot|scotty|jarvis)\b[\s,.!?:;-]*/i, "").trim() : stripWake(r.text);
       sttVia = r.via;
     } catch (e) {
       await logEvent({ kind: "turn", outcome: "error", why: "stt", score: body.wake?.score, model: body.wake?.model });

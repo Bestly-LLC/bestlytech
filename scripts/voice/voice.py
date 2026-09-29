@@ -415,7 +415,7 @@ def handle(pcm, wake):
             heard = (r.get("text") or "").strip()
             reply = (r.get("reply") or "").strip()
             if not heard or JUNK.match(heard):
-                outcome = "junk" if heard else "empty"
+                outcome = "junk" if heard or r.get("rejected") else "empty"
         if outcome in ("empty", "junk"):
             wall("idle")
             return outcome, heard
@@ -525,6 +525,7 @@ def main():
         S["mic_ok"], S["mic_err"] = True, None
         log("mic open")
         rec, rec_t0, speech_at, heard_speech, rec_wake, vad_max, hits = None, 0.0, 0.0, False, {}, 0.0, 0
+        rec_lead = np.zeros(0, dtype=np.int16)
         need = CHUNK * 3 * 2
         try:
             while True:
@@ -558,7 +559,7 @@ def main():
                     el = now - rec_t0
                     done = (el > MAX_S) or (not heard_speech and el > START_S) or (heard_speech and now - speech_at > SIL_S and el > 1.2)
                     if done:
-                        pcm = np.concatenate(rec)
+                        pcm = np.concatenate([rec_lead] + rec) if rec_wake.get("verify") else np.concatenate(rec)
                         wk = rec_wake
                         rec = None
                         S["busy"] = True
@@ -603,7 +604,9 @@ def main():
                     if now - last_fire < 2.0:
                         continue
                     last_fire = now
-                    wake = {"score": round(sc, 3), "model": fam, "threshold": thr, "at": now}
+                    # verify: the cloud checks Whisper heard "hey scout" in the ~1.6 s before the wake (custom model only)
+                    wake = {"score": round(sc, 3), "model": fam, "threshold": thr, "at": now, "verify": fam == "hey_scout"}
+                    lead = np.concatenate(list(pre)[-20:]) if pre else np.zeros(0, dtype=np.int16)
                     clip = f"{CLIPS}/{datetime.now().strftime('%Y%m%d-%H%M%S')}_{int(sc * 100)}.wav"
                     try:
                         with wave.open(clip, "wb") as w:
@@ -625,7 +628,7 @@ def main():
                     log(f"wake {sc:.2f} (thr {thr})")
                     wake_log({"at": now, "kind": "wake", "outcome": "listen", "score": round(sc, 3), "model": fam, "threshold": thr})
                     wall("listening", chime=se["sound"])
-                    rec, rec_t0, speech_at, heard_speech, rec_wake, vad_max = [], now, 0.0, False, wake, 0.0
+                    rec, rec_t0, speech_at, heard_speech, rec_wake, vad_max, rec_lead = [], now, 0.0, False, wake, 0.0, lead
                     vad.reset_states()
                 else:
                     hits = 0
