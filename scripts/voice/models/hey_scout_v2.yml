@@ -1,0 +1,29 @@
+model_name: "hey_scout"
+target_phrase:
+  - "hey scout"
+custom_negative_phrases: []
+n_samples: 5000
+n_samples_val: 600
+tts_batch_size: 16
+augmentation_batch_size: 16
+piper_sample_generator_path: "/home/claude/oww/work/stub"
+output_dir: "/home/claude/oww/out2"
+rir_paths:
+  - "/home/claude/oww/data/rir"
+background_paths:
+  - "/home/claude/oww/data/bg"
+background_paths_duplication_rate:
+  - 1
+false_positive_validation_data_path: "/home/claude/oww/data/validation_set_features.npy"
+augmentation_rounds: 2
+feature_data_files:
+  "ACAV100M_sample": "/home/claude/oww/data/acav_part.npy"
+batch_n_per_class:
+  "ACAV100M_sample": 1024
+  "adversarial_negative": 50
+  "positive": 50
+model_type: "dnn"
+layer_size: 32
+steps: 40000
+max_negative_weight: 3000
+target_false_positives_per_hour: 0.2
