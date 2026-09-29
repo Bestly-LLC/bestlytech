@@ -34,11 +34,11 @@ SR, RATE_IN = 16000, 48000
 CHUNK = 1280                                   # 80 ms at 16 kHz (openWakeWord frame)
 PRE_S, MAX_S, START_S, SIL_S = 2.0, 12.0, 5.0, 0.9
 # threshold per sensitivity; tuning.json can override per model ({"hey_scout": {"normal": 0.55}})
-SENS = {"hey_scout": {"low": 0.8, "normal": 0.6, "high": 0.45}, "hey_jarvis": {"low": 0.7, "normal": 0.5, "high": 0.35}}
-# consecutive 80 ms frames over the threshold before it counts. The custom model is confident on short bursts of other
-# speech: on 10.7 h of openWakeWord's validation audio, 1 frame = 2.3 false wakes/h, 2 frames = 0.3-0.5/h (0.6 thr),
-# with 88% recall on held-out synthetic "hey scout" clips.
-PATIENCE = {"hey_scout": 2, "hey_jarvis": 1}
+SENS = {"hey_scout": {"low": 0.85, "normal": 0.7, "high": 0.5}, "hey_jarvis": {"low": 0.7, "normal": 0.5, "high": 0.35}}
+# consecutive 80 ms frames over the threshold before it counts. hey_scout v2 on 10.7 h of openWakeWord's validation
+# audio: 0.47 false wakes/h at 0.7 (1 frame), 0 with 2 frames; 93% recall on held-out synthetic clips (85% with 2).
+# One frame + the cloud check (Whisper must hear "hey scout" in the pre-roll) keeps recall up without spoken false replies.
+PATIENCE = {"hey_scout": 1, "hey_jarvis": 1}
 FALSE_PER_HOUR_RETUNE = 6
 
 os.makedirs(CLIPS, exist_ok=True)
@@ -466,14 +466,15 @@ def mic_present():
 
 
 def load_model():
+    """The custom "hey_scout" model when it's installed; the stock "hey_jarvis" stays on next to it as a backup wake word
+    until tuning.json says {"also_jarvis": false} (both share one feature extractor: ~1% CPU more)."""
     from openwakeword.model import Model
     custom = ROOT + "/models/hey_scout.onnx"
-    path = custom if os.path.isfile(custom) else os.path.join(
-        os.path.dirname(__import__("openwakeword").__file__), "resources", "models", "hey_jarvis_v0.1.onnx")
-    m = Model(wakeword_models=[path], inference_framework="onnx")
-    key = list(m.models.keys())[0]
-    fam = "hey_scout" if "scout" in key else "hey_jarvis"
-    return m, key, fam, os.path.getmtime(path)
+    jarvis = os.path.join(os.path.dirname(__import__("openwakeword").__file__), "resources", "models", "hey_jarvis_v0.1.onnx")
+    paths = ([custom] if os.path.isfile(custom) else []) + ([jarvis] if not os.path.isfile(custom) or jload(TUNING, {}).get("also_jarvis", True) else [])
+    m = Model(wakeword_models=paths, inference_framework="onnx")
+    keys = {k: ("hey_scout" if "scout" in k else "hey_jarvis") for k in m.models}
+    return m, keys, "+".join(sorted(set(keys.values()), reverse=True)), (os.path.getmtime(custom) if os.path.isfile(custom) else 0)
 
 
 def threshold_for(fam, sens):
@@ -505,10 +506,11 @@ def main():
     threading.Thread(target=lambda: ThreadingHTTPServer(("0.0.0.0", PORT), Media).serve_forever(), daemon=True).start()
     threading.Thread(target=status_loop, daemon=True).start()
     threading.Thread(target=piper_voice, daemon=True).start()     # load the TTS voice now, not on the first reply
-    model, key, fam, mtime = load_model()
+    model, keys, fams, mtime = load_model()
+    fam = "hey_scout" if "hey_scout" in fams else "hey_jarvis"
     vad = VAD()
-    S["model"] = fam
-    log(f"model {key} ({fam}); mic {MIC}")
+    S["model"] = fams
+    log(f"models {list(keys)} ({fams}); mic {MIC}")
     taps = firwin(95, 7200, fs=RATE_IN)        # anti-alias before 48k -> 16k
     zi = np.zeros(len(taps) - 1)
     pre = collections.deque(maxlen=int(PRE_S * SR / CHUNK))
@@ -543,10 +545,12 @@ def main():
                 if S["frames"] % 750 == 0:              # every minute: pick up a newly trained model
                     try:
                         custom = ROOT + "/models/hey_scout.onnx"
-                        if os.path.isfile(custom) and (fam != "hey_scout" or os.path.getmtime(custom) != mtime):
-                            model, key, fam, mtime = load_model()
-                            S["model"] = fam
-                            log(f"switched to {key} ({fam})")
+                        want_j = jload(TUNING, {}).get("also_jarvis", True)
+                        if os.path.isfile(custom) and ("hey_scout" not in fams or os.path.getmtime(custom) != mtime
+                                                       or want_j != ("hey_jarvis" in fams)):
+                            model, keys, fams, mtime = load_model()
+                            S["model"] = fams
+                            log(f"switched to {list(keys)} ({fams})")
                     except Exception as e:
                         log("model reload failed", e)
                 # --- recording a request
@@ -566,12 +570,12 @@ def main():
                         if not heard_speech:
                             wall("idle")
                             ev_add("empty")
-                            wake_log({"at": now, "kind": "turn", "outcome": "empty", "score": wk.get("score"), "model": fam, "vad_max": round(vad_max, 2)})
+                            wake_log({"at": now, "kind": "turn", "outcome": "empty", "score": wk.get("score"), "model": wk.get("model"), "vad_max": round(vad_max, 2)})
                             log(f"no speech after the wake word (vad max {vad_max:.2f})")
-                            threading.Thread(target=edge, args=({"op": "log", "event": {"kind": "empty", "score": wk.get("score"), "model": fam}},), daemon=True).start()
+                            threading.Thread(target=edge, args=({"op": "log", "event": {"kind": "empty", "score": wk.get("score"), "model": wk.get("model")}},), daemon=True).start()
                             S["busy"] = False
                             model.reset()
-                            retune_if_noisy(fam, settings()["sensitivity"])
+                            retune_if_noisy(wk.get("model") or fam, settings()["sensitivity"])
                         else:
                             def run(p=pcm, w=wk):
                                 try:
@@ -579,14 +583,15 @@ def main():
                                 finally:
                                     S["busy"] = False
                                     model.reset()
-                                    retune_if_noisy(fam, settings()["sensitivity"])
+                                    retune_if_noisy(w.get("model") or fam, settings()["sensitivity"])
                             worker["t"] = threading.Thread(target=run, daemon=True)
                             worker["t"].start()
                     continue
                 if S["busy"]:
                     continue
                 pre.append(x)
-                sc = float(model.predict(x).get(key, 0.0))
+                pr = model.predict(x)
+                sc, fam = max((float(pr.get(k_, 0.0)), f_) for k_, f_ in keys.items())
                 se = None
                 if sc > 0.15:
                     se = settings()

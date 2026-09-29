@@ -37,7 +37,7 @@ export function VoiceCard({ voice, onChange }: { voice?: Voice | null; onChange:
 
   const st = info?.status;
   const fresh = info?.status_at ? Date.now() - Date.parse(info.status_at) < 12 * 60_000 : false;
-  const model = st?.model === "hey_scout" ? "Hey Scout" : "Hey Jarvis";
+  const model = st?.model === "hey_scout" ? "Hey Scout" : st?.model?.includes("hey_scout") ? "Hey Scout\u201d or \u201cHey Jarvis" : "Hey Jarvis";
   const state = !fresh ? "The Pi hasn't checked in for a while"
     : st?.mic_ok === false ? `Mic not found${st?.mic_err ? ` (${st.mic_err})` : ""}`
     : !v.on ? "Muted: not listening for the wake word"
