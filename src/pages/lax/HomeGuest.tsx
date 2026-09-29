@@ -13,7 +13,7 @@ import { Helmet } from "react-helmet-async";
 import { ArrowRight, BellRing, CheckCircle2, Flashlight, KeyRound, Loader2, MapPin, Navigation, Smartphone } from "lucide-react";
 import { TagBar, TripSheet, tripTab } from "./TripSheet";
 import { AskButton, AskSheet } from "./AskSheet";
-import { KeyHelp, useStuck } from "./KeyHelp";
+import { KeyHelp, KeyHoldNote, holdTitle, useStuck } from "./KeyHelp";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, TripChanged, WeatherCard, climateNeed, fmtWhen, type CarState, type ClimateAction, type Trip } from "./GuestExtras";
 import { HomeGuide, VideoList, VideoPlayer } from "./HomeGuide";
 import { Mail, PlayCircle, Users } from "lucide-react";
@@ -67,7 +67,7 @@ function DecoRule({ className = "" }: { className?: string }) {
 
 export type CarAction = ClimateAction | "refresh" | "honk" | "flash" | "unlock" | "nav_charger" | "nav_charger_lax" | "nav_garage_lax" | "nav_home" | "lock" | "windows_close";
 export type HomeInfo = { address: string; lat: number; lon: number; parking_note?: string | null; return_note?: string | null; host_note?: string | null };
-export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" | "problem" | "off"; opens_at?: string; link?: string | null; expires_at?: string | null; unlock?: boolean };
+export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" | "problem" | "off"; hold?: { license?: boolean; checkin?: boolean } | null; opens_at?: string; link?: string | null; expires_at?: string | null; unlock?: boolean };
 export type HomePub = {
   trip?: Trip; car?: CarState | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null;
   pickup_battery?: number | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; charging?: Charging | null;
@@ -152,7 +152,7 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
   return (
     <Section kicker="Your key" title={k.state === "added" ? "You're all set. Your phone is the key." : k.state === "ready" ? "Your key is ready. Tap the button." : "Your phone is the car key"} id="key"
       glow={k.state === "soon" || k.state === "ready"}
-      summary={k.state === "added" ? "Phone key is on. Extra drivers inside." : k.state === "ready" ? "Tap to add the car to your Tesla app." : k.state === "soon" ? (hasApp ? `Next: come back ${k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"} and tap one button.` : "Step 1: get the free Tesla app now.") : undefined}>
+      summary={k.state === "added" ? "Phone key is on. Extra drivers inside." : k.state === "ready" ? "Tap to add the car to your Tesla app." : k.state === "soon" ? (k.hold ? holdTitle(k.hold) + "." : hasApp ? `Next: come back ${k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"} and tap one button.` : "Step 1: get the free Tesla app now.") : undefined}>
       {k.state === "soon" && (
         <div>
           <p className="text-[16px] leading-relaxed text-white/85">No keys. No meetup. <b className="text-white">Your phone unlocks the car</b> with the free Tesla app. 3 easy steps:</p>
@@ -170,6 +170,7 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
                 )}
               </div>
             </li>
+            {k.hold ? <li><KeyHoldNote hold={k.hold} accent={PEACH} /></li> : (
             <li className="flex gap-3 rounded-2xl p-3 ring-1 ring-white/10">
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/15 text-[14px] font-bold text-white">2</span>
               <div className="min-w-0 flex-1">
@@ -177,6 +178,7 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
                 <p className="mt-0.5 text-[14px] leading-snug text-white/70">Come back to this page. A button shows up right here. Tap it, and the car is in your Tesla app.</p>
               </div>
             </li>
+            )}
             <li className="flex gap-3 rounded-2xl p-3 ring-1 ring-white/10">
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/15 text-[14px] font-bold text-white">3</span>
               <div className="min-w-0 flex-1">

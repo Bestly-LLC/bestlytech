@@ -7,7 +7,7 @@
  *  - useHasApp: "I already have the Tesla app", shared by every place that asks.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, CheckCircle2, KeyRound, Loader2, Lock, Smartphone, Snowflake, Undo2, UserRound, Zap } from "lucide-react";
+import { ArrowRight, CheckCircle2, IdCard, KeyRound, Loader2, Lock, ShieldCheck, Smartphone, Snowflake, Undo2, UserRound, Zap } from "lucide-react";
 import { fmtWhen, climateNeed, type CarState, type Trip } from "./GuestExtras";
 import type { KeyInfo } from "./HomeGuest";
 import { KeyPending, SendToCar, keyTapped, markKeyTapped } from "./KeyNext";
@@ -17,7 +17,7 @@ import { returnCharge } from "./ReturnCharge";
 import type { TripKind } from "./places";
 import { track } from "./track";
 import { Lines } from "./Lines";
-import { KeyHelp, useStuck } from "./KeyHelp";
+import { KeyHelp, KeyHoldNote, holdSub, holdTitle, useStuck } from "./KeyHelp";
 
 const ACCENT = "var(--trip-accent)";
 const H = 3600e3;
@@ -59,6 +59,11 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
     }
     if (r.needs) return { next: { icon: Zap, title: `Return by ${fmtWhen(trip.ends_at)}`, sub: `Bring it back at ${pickupBattery}%, same as pickup. Add about ${r.add}% before you return.`, action: "send", label: "Send nearest Supercharger to car", charging: true }, glow };
     return { next: { icon: Undo2, title: `Return by ${fmtWhen(trip.ends_at)}`, sub: `Bring it back at the same charge as pickup${pickupBattery != null ? ` (${pickupBattery}%)` : ""}.${r.known ? " You're good on charge right now." : ""}`, charging: true }, glow };
+  }
+  // Key held until the host confirms license + check-in.
+  if (k && !added && k.hold) {
+    glow.add("next");
+    return { next: { icon: k.hold.license ? IdCard : ShieldCheck, title: holdTitle(k.hold), sub: holdSub(k.hold), action: "pickup", label: "See the steps" }, glow };
   }
   // Key: not ready yet
   if (k && !added && now < opens) {
@@ -165,7 +170,8 @@ export function KeySteps({ k, token, hasApp, onHasApp, onAdded, glow }: { k: Key
         )}
       </Row>
       <Row n={2} done={added} title={added ? "Car added to your Tesla app" : "Add the car to your Tesla app"}>
-        {k.state === "soon" && (
+        {k.state === "soon" && k.hold && <KeyHoldNote hold={k.hold} accent={ACCENT} />}
+        {k.state === "soon" && !k.hold && (
           <>
             <span className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-white/[0.06] text-[15px] font-semibold text-white/55 ring-1 ring-white/10"><Lock className="h-4 w-4" /> Turns on {k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"}</span>
             <span className="mt-1.5 block text-[13px] text-white/60">Come back then. This button turns on by itself.</span>

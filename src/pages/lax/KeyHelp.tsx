@@ -3,7 +3,7 @@
  * to fix it (the helper can make or re-send the key). Used by the Home page key card and the Pickup sheet.
  */
 import { useEffect, useState } from "react";
-import { ShieldAlert, Wrench } from "lucide-react";
+import { IdCard, ShieldAlert, ShieldCheck, Wrench } from "lucide-react";
 import { track } from "./track";
 
 export const KEY_FIX_Q = "My Tesla key isn't showing up. Can you fix it?";
@@ -38,6 +38,37 @@ export function KeyHelp({ slow, accent }: { slow: boolean; accent?: string }) {
         <Wrench className="h-5 w-5" aria-hidden /> Fix it for me
       </button>
       <p className="mt-2 text-[13px] leading-snug text-white/65">The trip helper tries again right now. Still stuck? Message your host in the Turo app.</p>
+    </div>
+  );
+}
+
+/** Key held until the host confirms the license and finishes the car check-in: say why, and what the guest can do. */
+export type KeyHold = { license?: boolean; checkin?: boolean };
+export const holdTitle = (h: KeyHold) => h.license ? "Upload your driver's license" : "Your host is getting the car ready";
+export const holdSub = (h: KeyHold) => h.license
+  ? "Do it in the Turo app if you haven't yet. Your key shows up here once your host checks it."
+  : "Your key shows up here by itself as soon as the car is ready.";
+
+export function KeyHoldNote({ hold, accent }: { hold: KeyHold; accent?: string }) {
+  const c = accent ?? "var(--trip-accent, #FFB878)";
+  return (
+    <div className="space-y-2.5">
+      {hold.license && (
+        <div className="flex gap-3 rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10">
+          <IdCard className="mt-0.5 h-6 w-6 shrink-0" style={{ color: c }} aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="text-[16px] font-semibold text-white">Upload your driver's license</p>
+            <p className="mt-0.5 text-[14px] leading-snug text-white/70">Haven't yet? Open the <b className="text-white">Turo app</b>, go to this trip, and add your license. Already did it? You're all set.</p>
+          </div>
+        </div>
+      )}
+      <div className="flex gap-3 rounded-2xl p-3 ring-1 ring-white/10">
+        <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-emerald-300" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-[16px] font-semibold text-white">{hold.license ? "Then your host checks it" : "Your host is getting the car ready"}</p>
+          <p className="mt-0.5 text-[14px] leading-snug text-white/70">Your host checks your license and preps the car. Your key button shows up right here by itself. No need to refresh.</p>
+        </div>
+      </div>
     </div>
   );
 }
