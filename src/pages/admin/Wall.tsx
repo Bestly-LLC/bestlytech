@@ -36,7 +36,7 @@ import { toast } from "sonner";
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, Nfc, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf, Undo2, Redo2, Lock, Check, Minus, Plus, RadioTower } from "lucide-react";
 
 /** Left-side strip widgets (state.widgets). Each hides by itself when it has nothing to show. */
-type StripWidget = "news" | "mail" | "turo$" | "air" | "energy" | "habits" | "leo" | "appstore";
+type StripWidget = "news" | "mail" | "turo$" | "air" | "energy" | "habits" | "leo" | "appstore" | "devices";
 const STRIP_WIDGETS: { id: StripWidget; label: string; detail: string }[] = [
   { id: "news", label: "News", detail: "Headlines from NPR and Ground News, one at a time." },
   { id: "turo$", label: "Turo earnings", detail: "This week, today, and the next payout." },
@@ -46,6 +46,7 @@ const STRIP_WIDGETS: { id: StripWidget; label: string; detail: string }[] = [
   { id: "habits", label: "Activity", detail: "Steps, Move, Exercise, Stand and your streak." },
   { id: "leo", label: "Leo today", detail: "A one-line daily horoscope." },
   { id: "appstore", label: "App Store", detail: "Where each app stands with Apple." },
+  { id: "devices", label: "Devices", detail: "Right side, after Batteries: the Dyson purifier (indoor air, fan, filter)." },
 ];
 
 type Pt = [number, number];
