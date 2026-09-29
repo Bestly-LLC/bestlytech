@@ -52,15 +52,15 @@ Admin RPCs (admin auth like `wall_admin_set`): `wall_admin_packages() → [{id, 
 - [x] LAX tower status tag under the weather: no clipping/cut-off text (Apple HIG). — cause: under the weather the TV-wedge mask leaves ~30–60 px and the fixed 108 px corner squeezed the lines; now a two-line capsule ("LAX Tower" / "Live ATC") beside the temperature, 1.3 line height; the Sunset line no longer gets squeezed.
 
 ## W2 Strip + widgets (wall.html strip/widgets, server.py feeds, Supabase feeds)
-- [ ] Purple Scout to-dos: slower (hold each page longer, readable).
-- [ ] Quotes + mantras: big new set (Gandhi, Martha Stewart, Buddha, Steve Irwin, Dolly Parton, Catherine O'Hara, Robin Williams, Heath Ledger, Albert Einstein, Christopher Nolan, Jony Ive + more); shuffle-deck so nothing repeats until every one has shown.
-- [ ] 30-day Turo calendar widget on the right: booked / blocked / open with clear contrast (Apple HIG).
-- [ ] Home energy shows cents.
-- [ ] Mail widget: "2 pieces of mail" then a short summary of what they are.
-- [ ] Mail this week: never just "Letter" — say who it's from + what it likely is (read the Informed Delivery scan: sender/return address via OCR or a free vision model), e.g. "Mon · Chase — card statement".
-- [ ] Batteries: iPhone must not hide under EcoFlow when it isn't detected.
-- [ ] Claude usage widget under batteries: arch gauge + Claude mark in the middle.
-- [ ] Packages on the wall hide once checked off in admin (W4 builds the admin tool).
+- [x] Purple Scout to-dos: slower (hold each page longer, readable). — each page holds 8–10 s (by text length), up to 3 pages per visit (the card rotation waits), next visit goes on; 0.6 s cross-fade. Verified on the projector (pages 1→2→3 of 3).
+- [x] Quotes + mantras: big new set (Gandhi, Martha Stewart, Buddha, Steve Irwin, Dolly Parton, Catherine O'Hara, Robin Williams, Heath Ledger, Albert Einstein, Christopher Nolan, Jony Ive + more); shuffle-deck so nothing repeats until every one has shown. — 81 quotes in `/opt/bestly/wall/quotes.json` (Wikiquote-checked, interview/speech lines only; Catherine O'Hara skipped: nothing verifiable; Musk out, Curie in) + persisted deck `quote_deck.json` via `/api/quotes/next` (only the wall advances it; pos kept across restarts). Watchdog `wall.quotes`.
+- [x] 30-day Turo calendar widget on the right: booked / blocked / open with clear contrast (Apple HIG). — card `#cTcal` after Turo: 3×10 days, blue runs with guest names, grey stripes = blocked, dim = open, month divider, today underline, "Turo · Sep 28 – Oct 27"; switch `widgets.turoCal`. Verified on the projector.
+- [x] Home energy shows cents. — "15¢ today" ($1.12 style ≥ $1), "Month 16¢". Verified on the projector.
+- [x] Mail widget: "2 pieces of mail" then a short summary of what they are. — "Mail today · 2 pieces" + one line per piece (sender bold). Verified on the projector.
+- [x] Mail this week: never just "Letter" — say who it's from + what it likely is (read the Informed Delivery scan: sender/return address via OCR or a free vision model), e.g. "Mon · Chase — card statement". — reader = W2 data side; wall shows "Mon · Aztura — letter for HOKU"; fallbacks "Letter from <sender>" / "Letter (sender unreadable)". Verified on the projector.
+- [x] Batteries: iPhone must not hide under EcoFlow when it isn't detected. — cause: ring class `stale` = the "Data is stale" tag's class (position:absolute). Now in the row, greyed, "Not seen". Verified on the projector.
+- [x] Claude usage widget under batteries: arch gauge + Claude mark in the middle. — card `#cClaude` right after Batteries: arch gauge + original sparkle, "27%", "Scout's Claude API spend today", "$1.62 of $6 · 71 calls", "Resets 12:00 AM"; hidden when the feed is null or `widgets.claude` off. Verified on the projector.
+- [x] Packages on the wall hide once checked off in admin (W4 builds the admin tool). — tested end to end: Home Chef un-checked → on the wall; checked → gone after one 3-min poll (left checked). Watchdog `wall.strip_widgets` (render errors → reload + Scout); fps A/B unchanged (~27 median both).
 
 ## W3 Audio (server.py audio, relay, HA, AirPlay)
 - [~] AirPlay target not showing on his iPhone — root-cause + fix + watchdog. (Root cause: the Pi never answered unicast mDNS (Apple "unicast assist" refreshes); HA zeroconf bound 192.168.1.211:5353 and swallowed them, so Bestly Wall aged out of iPhone lists while HomePods stayed. Fix: `bestly-mdns-unicast` helper (scripts/pi/airplay) + avahi IPv4-only; dig now answers v4+v6, 74/94 live Apple queries answered in the first minute. Watchdog `wall.airplay_visible` every 10 min, heal tested. Not yet seen on the iPhone itself.)
