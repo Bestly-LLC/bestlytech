@@ -316,8 +316,8 @@ export default function Sky() {
           {tags.map((t) => (
             <g key={`tag-${t.hex}`} onClick={() => setPick(t.hex)} style={{ cursor: "pointer" }}>
               <rect x={t.x} y={t.y} rx={t.h / (t.isF ? 3.2 : 2)} height={t.h} width={t.w} fill="#0b0f1e" fillOpacity={0.8} stroke={t.col} strokeOpacity={t.isF ? 0.85 : 0.3} strokeWidth={t.isF ? 1.6 : 1} />
-              <text x={t.x + fs * 0.65} y={t.y + fs * 1.15} fill="#fff" fontSize={fs} fontWeight={700}>{t.text}</text>
-              {t.sub && <text x={t.x + fs * 0.65} y={t.y + fs * 2.4} fill="#fff" fillOpacity={0.7} fontSize={fs * 0.88} fontWeight={500}>{t.sub}</text>}
+              <text x={t.x + fs * 0.65} y={t.y + fs * 1.15} fill="#fff" style={{ fill: "#ffffff", color: "#ffffff" }} fontSize={fs} fontWeight={700}>{t.text}</text>
+              {t.sub && <text x={t.x + fs * 0.65} y={t.y + fs * 2.4} fill="#fff" style={{ fill: "rgba(255,255,255,0.7)", color: "#ffffff" }} fillOpacity={0.7} fontSize={fs * 0.88} fontWeight={500}>{t.sub}</text>}
             </g>
           ))}
         </svg>
