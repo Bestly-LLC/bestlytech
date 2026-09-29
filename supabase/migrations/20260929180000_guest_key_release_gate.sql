@@ -1,0 +1,5 @@
+-- Applied live 2026-09-29 as "guest_key_release_gate". A guest only gets their key link once the host has
+-- confirmed the driver's license AND finished the car check-in (tesla_guest_keys.license_ok_at / checkin_ok_at,
+-- or release_override). lax_guest_public hides the link and reports key.hold = {license, checkin} while held.
+-- Admin sets the two confirmations with guest_key_gate(reservation, license, checkin, override).
+-- (Full function bodies live in the database; see lax_guest_public and guest_key_gate.)
