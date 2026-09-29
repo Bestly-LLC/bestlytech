@@ -93,3 +93,11 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
 - **Pattern:** normal is 190-240 MB. Spikes add 60-70 MB (about 8 full-screen layers) and last about a minute. The 10:43 spike stuck at 274-290 MB and froze the wall (restarted 10:46).
 - **Tracing:** the heartbeat now carries `cls` (the page's body classes, i.e. which effects are running), and the trace logs it, so each spike names its effect.
 - **Guard:** the watchdog restarts the wall app early when graphics stays at 270+ MB for 2 checks (at most every 10 minutes).
+
+## Graphics-memory spikes: what the trace shows (3:15 PM, Sep 29)
+- **No spike since the 12:14 PM trace started.** Graphics memory stayed at 175 to 256 MB for 3 hours, never 270+. Page classes stayed the same throughout (`key-on sky-home fl-on`), and scenes made no difference: Board about 210 MB, Daily about 221 MB, Hourly about 211 MB.
+- **Today's spikes happened before the trace** (10:43 to 10:46 AM at 274 to 290 MB, 11:19 AM at 282 MB, 11:32 AM at 284 MB). The 10:43 spike came with "projector memory low (261 MB)", then a repaint stall and a restart. So the pressure seems to come from Android system memory (TV apps in the background), not from a page effect.
+- **The 12:16 PM stall** (7 fps, restart at 12:20) came right after a fresh page load, with graphics memory only at 212 to 240 MB. That's start-up load, not a spike.
+- **Nothing changed on the page.** No effect was implicated, and the rule is that the wall must look and animate exactly the same.
+- **Added** `ram=` (projector free system memory, MB) to every `gpu_trace.log` line (`watchdog.py`, backup `.bak_gfxram_151744`), so the next spike can be tied to system memory or to page classes. First line: `gfx=207 ram=306`, which is close to the 300 MB trim threshold.
+- **Still guarded:** the watchdog restarts early when graphics memory is 270+ twice in a row, and trims background apps when system memory is under 300 MB for 3 checks.
