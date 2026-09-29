@@ -238,6 +238,15 @@ def ctx():
             cal = cal.get("events") or cal.get("items")
         if isinstance(cal, list):
             out["calendar_next"] = [{k: e.get(k) for k in ("title", "start", "end", "where", "location") if e.get(k)} for e in cal[:5] if isinstance(e, dict)]
+        f = d.get("feeds") or {}
+        if f.get("mail"):
+            out["mail"] = {"today_pieces": f["mail"].get("today"), "today": f["mail"].get("items"), "this_week": f["mail"].get("bullets")}
+        if f.get("packages") or f.get("deliveries"):
+            out["packages"] = (f.get("packages") or f.get("deliveries"))[:6]
+        if f.get("energy"):
+            out["home_energy_today_cents"] = f["energy"].get("today_cents")
+        if f.get("turo"):
+            out["turo_earnings"] = {"today_usd": f["turo"].get("today"), "this_week_usd": f["turo"].get("week")}
         for k in ("trip", "media", "scout_items"):
             if d.get(k):
                 out[k] = d[k]
