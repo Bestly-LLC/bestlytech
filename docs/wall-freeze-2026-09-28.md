@@ -32,3 +32,14 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - It reports `wall.repaint` to Scout, and pushes an alert after 3 in an hour.
 - **Trace:** `/opt/bestly/wall/gpu_trace.log` logs one line a minute to find what eats GPU memory.
 - **Next:** cut GPU memory use (full-screen canvases at 2x, composited layers per plane).
+
+## Update 11:02 PM: root cause found (browser auto-update)
+- **Cause:** the projector's Android WebView auto-updated on **Sep 27 at 11:14 AM**, from 148.0.7778.215 to 155.0.8059.16. Version 155 hits the EGL_BAD_ALLOC storms roughly every 10 minutes.
+- **Rollback:** `adb shell cmd package uninstall-system-updates com.google.android.webview`. `pm uninstall-updates` doesn't exist on this Android 14. There are zero EGL errors on 148.
+- **Pin (`webview_pin()`):** checks every hour and rolls the WebView back again if Play updates it (`wall.webview`).
+- **My bad edit:** the moon-once-a-day change put a `//` comment mid-line and commented out `const im=new Image()`. The page crashed on start and showed the blank skeleton ("Saturday, September 26"). Fixed.
+- **Bad-edit guard:**
+  - `pagetest.py` loads the page in the Pi's own Chromium, with heartbeats blocked, and reports script errors.
+  - `page_start_guard()` runs it after 3 dead-page restarts in 10 minutes and restores the newest backup that starts cleanly (`wall.bad_edit`, with a push alert).
+  - **Rule:** run `pagetest.py` after every `wall.html` edit.
+- **Pi-renders-it test:** headless Chromium on the Pi falls back to software rendering (SwiftShader) and gets **15 fps**, worse than the projector. The real options are an HDMI cable from the Pi to the projector, or a GPU compositor plus a stream.
