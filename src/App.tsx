@@ -56,6 +56,7 @@ const ConfeshSupport = lazyPage(() => import("./pages/ConfeshSupport"));
 const Links = lazyPage(() => import("./pages/Links"));
 const SignWall = lazyPage(() => import("./pages/SignWall"));
 const LaxGuest = lazyPage(() => import("./pages/LaxGuest"));
+const HostGate = lazyPage(() => import("./pages/HostGate"));
 const DriverKey = lazyPage(() => import("./pages/DriverKey"));
 const ApproveDriver = lazyPage(() => import("./pages/ApproveDriver"));
 const EmailUnsubscribe = lazyPage(() => import("./pages/EmailUnsubscribe"));
@@ -187,6 +188,7 @@ const App = () => {
                 <Route path="/lax" element={<LaxGuest />} />
                 <Route path="/lax/t/:token" element={<LaxGuest />} />
                 <Route path="/t/:token" element={<LaxGuest />} />
+                <Route path="/g/:token" element={<HostGate />} />
                 <Route path="/d/:token" element={<DriverKey />} />
                 <Route path="/xa/:token" element={<ApproveDriver />} />
                 <Route path="/lax/:slug" element={<LaxGuest />} />
