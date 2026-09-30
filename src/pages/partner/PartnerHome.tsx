@@ -37,6 +37,7 @@ import { addPasskey, passkeyCount, passkeysSupported } from "@/lib/passkey";
 import { BoardSheet, CalendarSheet, CloudSheet, TalkSheet, useTalkUnread } from "./PartnerCloud";
 import { BellButton, BellSheet, ConnectClaude, useNextMeeting, usePartnerNotifs, whenLabel, type NextEvent } from "./PartnerExtras";
 import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState } from "./PartnerScout";
+import { VestaShareSheet } from "./VestaShare";
 
 /* ───────── types + helpers ───────── */
 
@@ -75,7 +76,7 @@ const PROJECTS = [
   { name: "Vesta", sub: "Women-only social + well-being", with: "with Eli and Rohit", links: [
     { label: "Framework", href: "https://vesta.bestly.tech" },
     { label: "Beta", href: "https://app.bestly.tech" },
-  ], tone: "from-rose-400/20 to-fuchsia-500/10" },
+  ], share: true, tone: "from-rose-400/20 to-fuchsia-500/10" },
   { name: "InventoryProof", sub: "Proof-of-inventory for resellers", with: "", links: [
     { label: "Open", href: "https://www.inventoryproof.com" },
   ], tone: "from-sky-400/20 to-indigo-500/10" },
@@ -161,6 +162,13 @@ export function PartnerHome({ session }: { session: Session }) {
   const [cloud, setCloud] = useState<CloudView>(null);
   const talkUnread = useTalkUnread(!!partner);
   const [bellOpen, setBellOpen] = useState(false);
+  // Share Vesta (invite codes + walkthrough): opened from the sidebar or the Vesta project card
+  const [vestaOpen, setVestaOpen] = useState(false);
+  useEffect(() => {
+    const on = () => setVestaOpen(true);
+    window.addEventListener("partner-vesta", on);
+    return () => window.removeEventListener("partner-vesta", on);
+  }, []);
   // Read once: switching tabs rewrites the address, and "view as" must survive that.
   const [asParam] = useState(() => new URLSearchParams(window.location.search).get("as")?.toLowerCase() || null);
   const notifs = usePartnerNotifs(asParam);
@@ -319,6 +327,9 @@ export function PartnerHome({ session }: { session: Session }) {
             <Bell className="h-[18px] w-[18px]" /> Studio
             {notifs.unread > 0 && <span className="ml-auto rounded-full bg-red-500 px-2 text-xs font-semibold text-[#fff]">{notifs.unread}</span>}
           </button>
+          <button onClick={() => setVestaOpen(true)} className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
+            <Users className="h-[18px] w-[18px]" /> Share Vesta
+          </button>
           <button onClick={() => setConnectOpen(true)} className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
             <Plug className="h-[18px] w-[18px]" /> Connect my Claude
           </button>
@@ -396,6 +407,7 @@ export function PartnerHome({ session }: { session: Session }) {
       <CalendarSheet open={cloud === "calendar"} onOpenChange={(o) => !o && setCloud(null)} />
       <ConnectClaude open={connectOpen} onOpenChange={setConnectOpen} />
       <BellSheet notifs={notifs} open={bellOpen} onOpenChange={setBellOpen} />
+      <VestaShareSheet open={vestaOpen} onOpenChange={setVestaOpen} />
       {tab !== "scout" && <ScoutAlert scout={scout} open={() => setTab("scout")} />}
 
       {/* Mobile tab bar */}
@@ -509,6 +521,12 @@ function HomeTab(props: {
                 <p className="text-[1.05rem] font-semibold leading-tight">{p.name}</p>
                 <p className="mt-0.5 text-xs text-white/60 bento:text-[#55525c]">{p.sub}{p.with ? ` \u00b7 ${p.with}` : ""}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
+                  {"share" in p && p.share && (
+                    <button type="button" onClick={() => window.dispatchEvent(new Event("partner-vesta"))}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-[#0A84FF] px-3 text-sm font-semibold text-[#fff] transition hover:bg-[#0A84FF]/90 active:scale-[0.98]">
+                      <Users className="h-3.5 w-3.5" /> Invite &amp; share
+                    </button>
+                  )}
                   {p.links.map((l) => (
                     <a key={l.label} href={l.href} target="_blank" rel="noreferrer"
                       className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white/[0.09] px-3 text-sm font-medium text-white transition hover:bg-white/[0.16] active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
