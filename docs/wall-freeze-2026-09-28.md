@@ -101,3 +101,12 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
 - **Nothing changed on the page.** No effect was implicated, and the rule is that the wall must look and animate exactly the same.
 - **Added** `ram=` (projector free system memory, MB) to every `gpu_trace.log` line (`watchdog.py`, backup `.bak_gfxram_151744`), so the next spike can be tied to system memory or to page classes. First line: `gfx=207 ram=306`, which is close to the 300 MB trim threshold.
 - **Still guarded:** the watchdog restarts early when graphics memory is 270+ twice in a row, and trims background apps when system memory is under 300 MB for 3 checks.
+
+## Evening graphics spikes (9:30 PM check, Sep 29)
+- **Not projector free memory.** From 5:07 PM, graphics memory ran at 250 to 440 MB with projector free memory at 250 to 460 MB. There were 10 early app restarts between 5:22 and 9:47 PM, and fps dropped to 7 to 9. Each restart only helped for a few minutes.
+- **The Halloween theme (`hw`) came on at 5:07 PM**, exactly when the spikes started. But the spikes continued after the theme was turned off at 9:42 PM (441 MB at 9:50 PM in ambient mode), so the theme isn't the only cause.
+- **The projector itself was worn out:** load around 58, swap 80% full (421 of 524 MB), and a video decoder plus Widevine DRM service active in the background.
+- **Changed with no visual change:**
+  - `wall.html`: Halloween bats canvas (`#hwDecor`, always `display:none`) no longer draws while hidden and shrinks to 1x1 (backup `.bak_hwcv_213233`, passed `pagetest`).
+  - `watchdog.py`: the 3rd graphics-memory restart within an hour now reboots the projector (at most every 6 h, shared `proj_reboot_at`). `gpu_trace` now logs `swap=`. Backup `.bak_gfxesc_215348`.
+- **Manual projector reboot at 9:54 PM:** afterward graphics memory was 241 to 249 MB at 35 to 43 fps. Swap refilled to about 78% within 7 minutes, so watch `swap=` next to spikes.
