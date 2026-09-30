@@ -18,7 +18,8 @@ export type WallRadio = { on: boolean; name: string; url: string; favicon?: stri
 
 type Station = { id: string; name: string; url: string; favicon: string; place: string; bitrate: number; codec: string };
 
-/** Radio Browser asks clients to spread load across mirrors; try the next one if a mirror is down. */
+/** Radio Browser asks clients to spread load across mirrors; try the next one if a mirror is down.
+ *  vercel.json CSP allows https://*.api.radio-browser.info, so any mirror added here is already permitted. */
 const MIRRORS = ["de1", "de2", "fi1"];
 const HOME = { lat: 34.086, lng: -118.37 }; // West Hollywood
 
