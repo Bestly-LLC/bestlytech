@@ -170,6 +170,7 @@ function VestaInvites() {
   const [current, setCurrent] = useState<{ code: string; label: string | null } | null>(null);
   const [fresh, setFresh] = useState(false);          // show the form even if an invite is open
   const [batch, setBatch] = useState<{ group: string; codes: string[]; expires: string } | null>(null);
+  const [gone, setGone] = useState<string[]>([]);    // deleted this session: hide at once, don't wait for the round trip
   const { copied, copy } = useCopy();
 
   const load = useCallback(async () => {
@@ -181,7 +182,8 @@ function VestaInvites() {
   useEffect(() => { void load(); }, [load]);
 
   // One at a time: the newest open single invite (older unused ones stay working, just not shown).
-  const open = useMemo(() => current ?? (codes ?? []).filter(isOpenSingle).map((c) => ({ code: c.code, label: c.label }))[0] ?? null, [codes, current]);
+  const open = useMemo(() => (current && !gone.includes(current.code) ? current : null)
+    ?? (codes ?? []).filter((c) => isOpenSingle(c) && !gone.includes(c.code)).map((c) => ({ code: c.code, label: c.label }))[0] ?? null, [codes, current, gone]);
   const joined = useMemo(() => (codes ?? []).filter((c) => c.uses > 0).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)), [codes]);
   const showForm = fresh || !open;
 
@@ -208,10 +210,9 @@ function VestaInvites() {
   };
 
   const remove = async (code: string) => {
-    setBusy(true);
-    try { await call({ action: "delete", code }); setCurrent(null); setFresh(false); void load(); }
-    catch (e) { setErr("Couldn't delete it. Try again."); reportToScout("vesta-share.delete", e); }
-    finally { setBusy(false); }
+    setGone((g) => [...g, code]); setCurrent(null); setFresh(true); setErr(null);
+    try { await call({ action: "delete", code }); void load(); }
+    catch (e) { setGone((g) => g.filter((x) => x !== code)); setErr("Couldn't delete it. Try again."); reportToScout("vesta-share.delete", e); }
   };
 
   const field = "h-12 w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-[17px] text-white outline-none placeholder:text-white/35 focus:border-[#0A84FF] bento:bg-[#F3F2EE]";
