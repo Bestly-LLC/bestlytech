@@ -249,18 +249,18 @@ export function FindCar({ open, onClose, kind, spot, run, demo, token, where, on
 }
 
 /** Entry button + the Find the Car screen. */
-export function FindCarButton({ kind, spot, run, demo, token, where, className = "", opensAt, onNext }: {
-  kind: Kind; spot: Spot | null; run?: Run; demo?: boolean; token?: string; where: string; className?: string; opensAt?: string | null; onNext?: () => void;
+export function FindCarButton({ kind, spot, run, demo, token, where, className = "", opensAt, onNext, held }: {
+  kind: Kind; spot: Spot | null; run?: Run; demo?: boolean; token?: string; where: string; className?: string; opensAt?: string | null; onNext?: () => void; held?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const soon = !demo && !spot;
+  const soon = !!held || (!demo && !spot);
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} disabled={soon}
         className={`flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold shadow-md shadow-black/25 transition active:scale-[0.98] disabled:bg-white/[0.06] disabled:text-white/60 disabled:shadow-none motion-reduce:transition-none ${className}`}
         style={soon ? undefined : { background: "var(--trip-accent)", color: kind === "home" ? "#132726" : "#1A1140" }}>
         <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden><path d="M12 2 20 21 12 16.5 4 21Z" fill="currentColor" /></svg>
-        {soon ? (opensAt ? "Find the Car turns on 2 hours before pickup" : "Find the Car: car location updating…") : "Find the Car"}
+        {held ? "Find the Car unlocks once your license is checked" : soon ? (opensAt ? "Find the Car turns on 2 hours before pickup" : "Find the Car: car location updating…") : "Find the Car"}
       </button>
       <FindCar open={open} onClose={() => setOpen(false)} kind={kind} spot={spot} run={run} demo={demo} token={token} where={where} onNext={onNext} />
     </>

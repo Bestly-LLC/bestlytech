@@ -40,7 +40,7 @@ import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPass, demoPub, isDemo, useDemoStage, useDemoWeather, useRealDemoKey } from "./lax/demo";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; find_hold?: boolean; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -522,8 +522,8 @@ export default function LaxGuest() {
               {!(pub.trip || pub.car) && <a href={maps} onClick={() => track(token || undefined, "directions")} className="mt-2.5 flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#1A1140] active:scale-[0.98]"><MapPin className="h-4 w-4" /> Directions</a>}
               {/* Same as Home: Find the Car right under the car card. */}
               {pub.trip && <div className="mt-2.5">
-                {pub.spot || demo
-                  ? <FindCarButton kind="lax" spot={pub.spot ?? null} run={live ? carCommand : undefined} demo={demo} token={token || undefined} where={`on Level ${level}`} />
+                {(pub.spot || demo) || pub.find_hold
+                  ? <FindCarButton kind="lax" spot={pub.spot ?? null} run={live ? carCommand : undefined} demo={demo} token={token || undefined} where={`on Level ${level}`} held={!!pub.find_hold} />
                   : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">{Date.now() >= +new Date(pub.trip.starts_at) - 2 * 3600e3 ? "Car location updating… use Honk to find it" : "Find the Car turns on 2 hours before pickup"}</span>}
               </div>}
             </section>
@@ -608,7 +608,7 @@ export default function LaxGuest() {
                   Scan at the lobby door, take the elevator to {level}.
                   {g.spot ? <> Your space is <b className="text-white">{level} · {g.spot}</b>.</> : <> I'll text your exact {level} space the day before your trip.</>}
                   <Warn><b className="text-white">{level} only.</b> Please don't park on other levels. If the QR doesn't scan, there's an intercom right next to the door; someone will buzz you in.</Warn>
-                  <FindCarButton className="mt-3" kind="lax" spot={pub.spot ?? null} run={live ? carCommand : undefined} demo={demo} token={token || undefined} where={`on Level ${level}`}
+                  <FindCarButton className="mt-3" kind="lax" spot={pub.spot ?? null} run={live ? carCommand : undefined} demo={demo} token={token || undefined} where={`on Level ${level}`} held={!!pub.find_hold}
                     opensAt={pub.trip && Date.now() < +new Date(pub.trip.starts_at) - 2 * 3600e3 ? pub.trip.starts_at : null} />
                 </Step>
                 {keySteps && (

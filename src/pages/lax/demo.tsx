@@ -80,6 +80,7 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
   home: [
     { id: "booked", label: "Booked (3 days out)" },
     { id: "key-soon", label: "3 hours before" },
+    { id: "held", label: "Pickup soon: key HELD (license not checked)" },
     { id: "key-ready", label: "Pickup soon: key ready (tap it to add)" },
     { id: "on-way", label: "On the way (30 min before, key added)" },
     { id: "on-trip", label: "On the trip (2½ days left)" },
@@ -91,6 +92,7 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
   ],
   lax: [
     { id: "booked", label: "Booked (3 days out)" },
+    { id: "held", label: "Pickup soon: key HELD (license not checked)" },
     { id: "day-of", label: "Pickup soon: key ready (tap it to add)" },
     { id: "on-way", label: "On the way (30 min before, key added)" },
     { id: "on-trip", label: "On the trip (2½ days left)" },
@@ -139,22 +141,22 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
   const now = Date.now();
   // Trip times are pinned when a stage is picked, so the minute refresh never shifts them; the page then runs in real time.
   if (anchor.stage !== stage) { anchor.stage = stage; anchor.t = now; }
-  const startIn: Record<string, number> = { booked: 72 * H, "key-soon": 3 * H, "key-ready": 1.5 * H, "key-added": 0.5 * H, "day-of": 1.5 * H, "on-way": 0.5 * H, "on-trip": -12 * H, "return-2d": -26 * H, returning: -70.5 * H, "returning-ok": -70.5 * H, grace: -72.25 * H, ended: -74 * H };
+  const startIn: Record<string, number> = { booked: 72 * H, "key-soon": 3 * H, held: 1.5 * H, "key-ready": 1.5 * H, "key-added": 0.5 * H, "day-of": 1.5 * H, "on-way": 0.5 * H, "on-trip": -12 * H, "return-2d": -26 * H, returning: -70.5 * H, "returning-ok": -70.5 * H, grace: -72.25 * H, ended: -74 * H };
   const s = anchor.t + (startIn[stage] ?? 72 * H);
   const e = s + 72 * H;
   const trip = { first: "Demo", starts_at: iso(s), ends_at: iso(e), car_opens_at: iso(s - H) };
   const keyOpens = s - 2 * H;
   let added = false; try { added = sessionStorage.getItem("demo-key-added") === "1"; } catch { /* ignore */ }
-  const controlsOn = (now >= s - H && now < e) || added;
+  const controlsOn = stage !== "held" && ((now >= s - H && now < e) || added);
   const controls_state = now >= e ? "ended" : controlsOn ? "on" : "soon";
-  let keyState = stage === "booked" || stage === "key-soon" ? "soon" : stage === "key-ready" || stage === "day-of" ? (added ? "added" : "ready") : stage === "ended" ? "ended" : "added";
+  let keyState = stage === "booked" || stage === "key-soon" || stage === "held" ? "soon" : stage === "key-ready" || stage === "day-of" ? (added ? "added" : "ready") : stage === "ended" ? "ended" : "added";
   // Host: the button is a real Tesla key ("making" for the few seconds a fresh invite takes).
   const real = keyState === "ready" && realKey ? realKey : null;
   if (real && !real.link) keyState = "making";
-  const key = { state: keyState, opens_at: iso(keyOpens), link: keyState === "ready" ? (real?.link ?? "#demo-key") : null, expires_at: keyState === "ready" ? (real?.expires_at ?? iso(now + 23 * H)) : null, unlock: false, real: !!real };
+  const key = { state: keyState, hold: stage === "held" ? { license: true, checkin: true } : undefined, opens_at: stage === "held" ? null : iso(keyOpens), link: keyState === "ready" ? (real?.link ?? "#demo-key") : null, expires_at: keyState === "ready" ? (real?.expires_at ?? iso(now + 23 * H)) : null, unlock: false, real: !!real };
   const base = {
     ok: true, kind, trip, car: (() => { const w = DEMO_WEATHER.find((x) => x.id === demoWeather())!; return { ...DEMO_CAR, inside_f: w.inside_f, outside_f: w.outside_f, observed_at: iso(now - 3 * 60e3) }; })(), controls: controls_state === "on", controls_state,
-    controls_opens_at: iso(s - H), email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: now >= s ? (stage === "returning" ? 90 : 76) : null, pickup_battery_at: now >= s ? iso(s) : null, car_connected_at: now >= s ? iso(s + 10 * 60e3) : null, demo: true,
+    controls_opens_at: iso(s - H), find_hold: stage === "held", email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: now >= s ? (stage === "returning" ? 90 : 76) : null, pickup_battery_at: now >= s ? iso(s) : null, car_connected_at: now >= s ? iso(s + 10 * 60e3) : null, demo: true,
     range_check: now >= s && now < e + 0.5 * H ? { range_mi: 188, miles: 6.4, spare: 182, status: "ok" } : null,
     charging: now < s ? null : demoCharging(s, now >= e),
     battery_health: { score: "good", pct: 80, range_full: 192 },
@@ -163,7 +165,7 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
     return {
       ...base,
       home: { address: "733 N Kings Rd, West Hollywood, CA 90069", lat: 34.0838, lon: -118.3708, parking_note: "It's parked on N Kings Rd, right by the building. Tap Exact spot to see where, or Honk to find it.", return_note: "Park on N Kings Rd near 733, lock it in the Tesla app, and take your return photos in the Turo app.", host_note: null },
-      spot: now >= s - 2 * H && now < e ? { lat: 34.0836, lon: -118.3712, observed_at: iso(now - 4 * 60e3) } : null,
+      spot: stage !== "held" && now >= s - 2 * H && now < e ? { lat: 34.0836, lon: -118.3712, observed_at: iso(now - 4 * 60e3) } : null,
       key,
     };
   }

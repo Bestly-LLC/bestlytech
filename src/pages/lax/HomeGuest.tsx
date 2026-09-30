@@ -70,7 +70,7 @@ export type HomeInfo = { address: string; lat: number; lon: number; parking_note
 export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" | "problem" | "off"; hold?: { license?: boolean; checkin?: boolean } | null; opens_at?: string; link?: string | null; expires_at?: string | null; unlock?: boolean };
 export type HomePub = {
   trip?: Trip; car?: CarState | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null;
-  pickup_battery?: number | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; key?: KeyInfo | null; charging?: Charging | null;
+  pickup_battery?: number | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; find_hold?: boolean; key?: KeyInfo | null; charging?: Charging | null;
   pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null;
 };
 
@@ -284,7 +284,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
   const live = !!pub.controls && !demo;
   // "Set Up" done at the car (the car unlocked/moved by itself after the key was accepted), or 45 min into the trip.
   const carConnected = !!pub.car_connected_at || (!!pub.trip && Date.now() > +new Date(pub.trip.starts_at) + 45 * 60e3);
-  const spot = pub.spot ?? (demoCar ? { lat: home.lat, lon: home.lon, observed_at: new Date(Date.now() - 4 * 60e3).toISOString() } : null);
+  const spot = pub.find_hold ? null : pub.spot ?? (demoCar ? { lat: home.lat, lon: home.lon, observed_at: new Date(Date.now() - 4 * 60e3).toISOString() } : null);
   const street = home.address.split(",")[0];
   const shadow = { textShadow: "0 2px 14px rgba(19,39,38,0.9), 0 1px 2px rgba(19,39,38,0.9)" };
   const ended = tripEnded(pub.trip);
@@ -364,8 +364,8 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           </div>
           <div className="mt-2.5">
             {spot
-              ? <FindCarButton kind="home" spot={spot} run={live ? run : undefined} demo={!!demoPage} token={token} where="on N Kings Rd" />
-              : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">{pub.trip && Date.now() >= +new Date(pub.trip.starts_at) - 2 * 3600e3 ? "Car location updating… use Honk to find it" : "Exact spot of the car shows 2 hours before pickup"}</span>}
+              ? <FindCarButton kind="home" spot={spot} run={live ? run : undefined} demo={!!demoPage} token={token} where="on N Kings Rd" held={!!pub.find_hold} />
+              : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">{pub.find_hold ? "Car location unlocks once your license is checked" : pub.trip && Date.now() >= +new Date(pub.trip.starts_at) - 2 * 3600e3 ? "Car location updating… use Honk to find it" : "Exact spot of the car shows 2 hours before pickup"}</span>}
           </div>
         </section>
         )}
@@ -404,7 +404,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
               <p className="mt-7 text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>Then: at the car</p>
             </>
           )}
-          <FindCarButton className="mt-3" kind="home" spot={spot} run={live ? run : undefined} demo={!!demoPage} token={token} where="on N Kings Rd"
+          <FindCarButton className="mt-3" kind="home" spot={spot} run={live ? run : undefined} demo={!!demoPage} token={token} where="on N Kings Rd" held={!!pub.find_hold}
             opensAt={pub.trip && Date.now() < +new Date(pub.trip.starts_at) - 2 * 3600e3 ? pub.trip.starts_at : null} />
           <Carousel id="home-pickup" className="mt-4" labels={["\u201cSet Up\u201d + Unlock", "Turo Guest profile"]}>
             <Step n={n0 + 1}>Next to the car (Bluetooth on), open the Tesla app. Tap <b className="text-white">&ldquo;Set Up&rdquo;</b> and follow the steps. Then tap <b className="text-white">Unlock</b>.</Step>
