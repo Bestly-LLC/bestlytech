@@ -18,7 +18,7 @@ export type Row = {
   token: string | null; email: string | null; email_by: "guest" | "host" | null; reminder_at: string | null;
   reminder_sent_at: string | null; reminder_error: string | null; suggested_reminder_at: string; kind?: "lax" | "home";
   activity?: { views: number; first_seen: string | null; last_seen: string | null; devices: string[]; asks: number; unsure?: number; host?: number; recent: { kind: string; at: string; detail: Record<string, string> | null; actor?: string }[] } | null;
-  key?: { status: string; error: string | null; ready_at: string | null; accepted_at: string | null; removed_at: string | null; driver: string | null; opens_at: string } | null;
+  key?: { status: string; error: string | null; ready_at: string | null; accepted_at: string | null; removed_at: string | null; driver: string | null; opens_at: string; license_ok?: boolean; checkin_ok?: boolean; override?: boolean; released?: boolean; gate_token?: string | null } | null;
 };
 const KEY_TEXT: Record<string, string> = {
   scheduled: "Key is made automatically", creating: "Making the key now…", ready: "Key sent to their page, waiting for them to add it",
@@ -220,6 +220,13 @@ function KeyRow({ r, reload }: { r: Row; reload: () => void }) {
     toast.success(a === "make" ? "Making the key now." : a === "resend" ? "Resetting: old invite cancelled, a fresh key link lands on their page in about a minute." : a === "remove" ? "Removing their access now." : a === "off" ? "Auto key off for this trip." : "Auto key on.");
     reload();
   };
+  const gate = async (a: Record<string, boolean>, tag: string) => {
+    setBusy(tag);
+    const { error } = await rpc("guest_key_gate", { p_reservation: r.reservation_id, ...a });
+    setBusy(null);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Saved."); reload();
+  };
   const st = k?.status ?? "scheduled";
   const line = st === "scheduled" ? `${KEY_TEXT.scheduled} ${when(k?.opens_at ?? r.starts_at)}`
     : st === "accepted" && k?.driver ? `${KEY_TEXT.accepted} (${k.driver})` : KEY_TEXT[st] ?? st;
@@ -229,6 +236,16 @@ function KeyRow({ r, reload }: { r: Row; reload: () => void }) {
       <p className={cn("flex items-center gap-1.5 text-sm", st === "failed" ? "text-red-300 bento:text-red-600" : "text-white/80 bento:text-neutral-700")}>
         <KeyRound className="h-4 w-4 shrink-0" /> {line}
       </p>
+      {k && ["ready", "accepted", "creating", "scheduled"].includes(st) && (
+        <div className="mt-2 rounded-lg bg-black/[0.03] p-2.5 bento:bg-white">
+          <p className={cn("text-xs font-medium", k.released ? "text-emerald-300 bento:text-emerald-700" : "text-amber-300 bento:text-amber-700")}>{k.released ? "Key released to the guest" : "Key held until both are confirmed"}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" className={btn} disabled={!!busy} onClick={() => gate({ p_license: !k.license_ok }, "license")}>{k.license_ok ? "License ✓ (undo)" : "License looks good"}</button>
+            <button type="button" className={btn} disabled={!!busy} onClick={() => gate({ p_checkin: !k.checkin_ok }, "checkin")}>{k.checkin_ok ? "Check-in ✓ (undo)" : "Check-in done"}</button>
+            {k.gate_token && <a className={btn} href={`/g/${k.gate_token}`} target="_blank" rel="noreferrer">Open confirm page</a>}
+          </div>
+        </div>
+      )}
       {k?.error && st === "failed" && <p className="mt-1 text-xs text-red-300/80 bento:text-red-600">{k.error}</p>}
       <div className="mt-2 flex flex-wrap gap-2">
         {["scheduled", "failed", "expired"].includes(st) && <button type="button" className={btn} disabled={!!busy} onClick={() => act("make")}>{busy === "make" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}Make key now</button>}
