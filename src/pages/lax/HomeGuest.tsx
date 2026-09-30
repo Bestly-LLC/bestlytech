@@ -428,7 +428,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           <p className="mt-5 text-[14px] text-white/60">Your key turns off by itself after the trip. Nothing to hand back.</p>
         </TripSheet>
 
-        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended} only={tripTab(pub.trip, ended, pub.car_connected_at)}
+        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended} only={tripTab(pub.trip, ended, pub.car_connected_at, pub.key?.state)}
           glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
         {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
         {!ended && <InstallToast token={token} kind="home" />}

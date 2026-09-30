@@ -14,11 +14,13 @@ type Which = "pickup" | "return";
 
 /** Which trip tab fits right now. Pickup until they're in the car (or 1 hour after the start),
  *  then Return until the trip ends. Nothing after the trip. */
-export function tripTab(trip: { starts_at: string; ends_at: string } | null | undefined, ended: boolean, inCarAt?: string | null): Which | null {
+export function tripTab(trip: { starts_at: string; ends_at: string } | null | undefined, ended: boolean, inCarAt?: string | null, keyState?: string | null): Which | null {
   if (ended) return null;
   if (!trip) return "pickup";
   const s = +new Date(trip.starts_at), now = Date.now();
   const inCar = !!inCarAt && +new Date(inCarAt) >= s - 3 * 3600e3;
+  // A late guest whose phone key isn't added yet is still picking up, however long after the start (2026-09-29).
+  if (!inCar && keyState && ["soon", "making", "ready", "problem"].includes(keyState)) return "pickup";
   return now < s + 3600e3 && !inCar ? "pickup" : "return";
 }
 

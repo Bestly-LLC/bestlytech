@@ -47,8 +47,9 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
   const added = k?.state === "added";
   const opens = k?.opens_at ? +new Date(k.opens_at) : s - 2 * H;
 
-  // After pickup
-  if (now >= s + 45 * 60e3) {
+  // After pickup. A late guest (key not added yet) stays on the key steps instead of jumping to Return (2026-09-29).
+  const keyPending = !!k && !added && ["soon", "making", "ready", "problem"].includes(k.state);
+  if (now >= s + 45 * 60e3 && !keyPending) {
     // Charging only comes up when the car would likely get back under the pickup level (= Turo recharge fee).
     const r = returnCharge(car?.battery, pickupBattery, rc);
     const chargeLine = !r.known ? "" : r.needs ? ` Charge to ${pickupBattery}% (same as pickup) first: add about ${r.add}%.` : " You're good on charge.";
@@ -73,7 +74,7 @@ export function guideFor({ trip, keyInfo, hasApp, car, controlsOn, kind, qrReady
   // Key: ready (or being made), not added yet
   if (k && !added && ["ready", "making", "problem"].includes(k.state)) {
     glow.add("next"); glow.add("pickup"); glow.add("key");
-    return { next: { icon: KeyRound, title: "Your key is ready", sub: "Add the car to your Tesla app. Takes 1 minute.", action: "pickup", label: "Start pickup" }, glow };
+    return { next: { icon: KeyRound, title: "Your key is ready", sub: "Add the car to your Tesla app (1 minute). Then the steps show you right where the car is.", action: "pickup", label: "Get key & find the car" }, glow };
   }
   // On the way: 1 hour before pickup until just after it
   if (now >= s - H && controlsOn) {
