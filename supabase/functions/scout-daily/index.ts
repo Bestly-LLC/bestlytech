@@ -176,13 +176,37 @@ async function drafts(day: string) {
     !/unsubscribe/i.test(String(m.body_text ?? "").slice(-1500))).slice(0, 40);
   if (!cands.length) return { drafted: 0, looked_at: 0 };
 
-  const out = await claude(
+  // v9 (2026-09-30): the mail goes in batches that fit Groq's 8K tokens/min per model and the Mac mini's 8K context.
+  // One ~40-email call (~28K tokens with output) only ever fit Cloudflare, so drafts failed whenever Cloudflare's
+  // daily Neurons were gone ("groq skipped_size, cloudflare rate_limited": 9/27, 9/30).
+  const system =
     `${VOICE}\nYou are Scout. From these emails, choose the ones where a real person is waiting on a reply from Jared (at most 5; zero is fine). ` +
     `Skip receipts, automated mail, marketing and anything that needs no answer. For each, write the reply he would send: short, specific to what they asked, ` +
-    `no invented facts, dates or promises (use [brackets] for anything he must fill in). Return JSON only: {"drafts":[{"mail_id":"...","why":"one line: what they need","reply":"..."}]}.`,
-    JSON.stringify(cands.map((m: any) => ({ mail_id: m.id, from: `${m.from_name ?? ""} <${m.from_addr}>`, to: m.mailbox, subject: m.subject, sent: m.sent_at, body: String(m.body_text ?? "").slice(0, 1800) }))),
-    4000, "drafts",
-  );
+    `no invented facts, dates or promises (use [brackets] for anything he must fill in). Return JSON only: {"drafts":[{"mail_id":"...","why":"one line: what they need","reply":"..."}]}.`;
+  const BATCH_CHARS = 13_000;           // ~3.7K tokens of mail + ~0.3K system + 2K output < GROQ_MAX / LOCAL_MAX (7K)
+  const batches: any[][] = [];
+  let cur: any[] = [], size = 0;
+  for (const m of cands) {
+    const item = { mail_id: m.id, from: `${m.from_name ?? ""} <${m.from_addr}>`, to: m.mailbox, subject: m.subject, sent: m.sent_at, body: String(m.body_text ?? "").slice(0, 900) };
+    const len = JSON.stringify(item).length;
+    if (cur.length && size + len > BATCH_CHARS) { batches.push(cur); cur = []; size = 0; }
+    cur.push(item); size += len;
+  }
+  if (cur.length) batches.push(cur);
+  const found: any[] = [];
+  const errors: string[] = [];
+  const t0 = Date.now();
+  for (const b of batches) {
+    if (found.length >= 5 || Date.now() - t0 > 90_000) break; // stay inside the function's time limit
+    try {
+      const r = await claude(system, JSON.stringify(b), 1000, "drafts");
+      found.push(...(r.drafts ?? []));
+    } catch (e) {
+      errors.push((e as Error).message);
+    }
+  }
+  if (!found.length && errors.length) throw new Error(errors[errors.length - 1]);
+  const out = { drafts: found };
   let n = 0;
   for (const d of (out.drafts ?? []).slice(0, 5)) {
     const m = cands.find((c: any) => c.id === d.mail_id);
