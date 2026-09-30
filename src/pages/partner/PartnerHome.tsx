@@ -37,7 +37,7 @@ import { addPasskey, passkeyCount, passkeysSupported } from "@/lib/passkey";
 import { BoardSheet, CalendarSheet, CloudSheet, TalkSheet, useTalkUnread } from "./PartnerCloud";
 import { BellButton, BellSheet, ConnectClaude, useNextMeeting, usePartnerNotifs, whenLabel, type NextEvent } from "./PartnerExtras";
 import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState } from "./PartnerScout";
-import { VestaShareSheet } from "./VestaShare";
+import { ProjectSheet, ProjectsButton, ProjectsNav } from "./PartnerProjects";
 
 /* ───────── types + helpers ───────── */
 
@@ -70,20 +70,7 @@ const SHORTCUTS = [
   { id: "calendar", opens: "calendar" as const, label: "Calendar", sub: "What's booked", tone: "from-rose-400 to-pink-600 text-pink-600" },
 ];
 
-// The three things Jared and Eli are building together. Live links, not screenshots -
-// Eli sends these to Rohit and to investors, so they go straight to the real thing.
-const PROJECTS = [
-  { name: "Vesta", sub: "Women-only social + well-being", with: "with Eli and Rohit", links: [
-    { label: "Framework", href: "https://vesta.bestly.tech" },
-    { label: "Beta", href: "https://app.bestly.tech" },
-  ], share: true, tone: "from-rose-400/20 to-fuchsia-500/10" },
-  { name: "InventoryProof", sub: "Proof-of-inventory for resellers", with: "", links: [
-    { label: "Open", href: "https://www.inventoryproof.com" },
-  ], tone: "from-sky-400/20 to-indigo-500/10" },
-  { name: "HOKU", sub: "Clean, refillable home care", with: "", links: [
-    { label: "Open", href: "https://hoku-clean.com" },
-  ], tone: "from-emerald-400/20 to-teal-500/10" },
-];
+// Projects (Vesta invites, links) live in ./PartnerProjects: sidebar folder + mobile header button.
 
 export type CloudView = "talk" | "board" | "cloud" | "calendar" | null;
 
@@ -162,13 +149,7 @@ export function PartnerHome({ session }: { session: Session }) {
   const [cloud, setCloud] = useState<CloudView>(null);
   const talkUnread = useTalkUnread(!!partner);
   const [bellOpen, setBellOpen] = useState(false);
-  // Share Vesta (invite codes + walkthrough): opened from the sidebar or the Vesta project card
-  const [vestaOpen, setVestaOpen] = useState(false);
-  useEffect(() => {
-    const on = () => setVestaOpen(true);
-    window.addEventListener("partner-vesta", on);
-    return () => window.removeEventListener("partner-vesta", on);
-  }, []);
+
   // Read once: switching tabs rewrites the address, and "view as" must survive that.
   const [asParam] = useState(() => new URLSearchParams(window.location.search).get("as")?.toLowerCase() || null);
   const notifs = usePartnerNotifs(asParam);
@@ -322,13 +303,11 @@ export function PartnerHome({ session }: { session: Session }) {
             </button>
           ))}
         </nav>
+        <div className="mt-2"><ProjectsNav /></div>
         <div className="mt-6 space-y-1 border-t border-white/[0.06] pt-4 bento:border-white/5">
           <button onClick={() => setBellOpen(true)} className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
             <Bell className="h-[18px] w-[18px]" /> Studio
             {notifs.unread > 0 && <span className="ml-auto rounded-full bg-red-500 px-2 text-xs font-semibold text-[#fff]">{notifs.unread}</span>}
-          </button>
-          <button onClick={() => setVestaOpen(true)} className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
-            <Users className="h-[18px] w-[18px]" /> Share Vesta
           </button>
           <button onClick={() => setConnectOpen(true)} className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
             <Plug className="h-[18px] w-[18px]" /> Connect my Claude
@@ -358,6 +337,7 @@ export function PartnerHome({ session }: { session: Session }) {
             <AdminMark className="h-7 w-7" /> Bestly <span className="text-white/60">· Partner</span>
           </span>
           <div className="flex items-center gap-1">
+            <ProjectsButton />
             <BellButton notifs={notifs} onClick={() => setBellOpen(true)} />
             <a href={joinUrl} target="_blank" rel="noreferrer" aria-label={nextMtg ? `Join next meeting, ${whenLabel(nextMtg.start)}` : "Join our call"}
               className="inline-flex h-9 items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 text-sm font-semibold text-[#052E1F] active:scale-95">
@@ -407,7 +387,7 @@ export function PartnerHome({ session }: { session: Session }) {
       <CalendarSheet open={cloud === "calendar"} onOpenChange={(o) => !o && setCloud(null)} />
       <ConnectClaude open={connectOpen} onOpenChange={setConnectOpen} />
       <BellSheet notifs={notifs} open={bellOpen} onOpenChange={setBellOpen} />
-      <VestaShareSheet open={vestaOpen} onOpenChange={setVestaOpen} />
+      <ProjectSheet />
       {tab !== "scout" && <ScoutAlert scout={scout} open={() => setTab("scout")} />}
 
       {/* Mobile tab bar */}
@@ -507,36 +487,6 @@ function HomeTab(props: {
                 </button>
               );
           })}
-        </div>
-      </section>
-
-      {/* Projects */}
-      <section>
-        <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-white/60">Our projects</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {PROJECTS.map((p) => (
-            <div key={p.name} className={cn(card, "relative overflow-hidden p-4")}>
-              <span aria-hidden className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br", p.tone)} />
-              <div className="relative">
-                <p className="text-[1.05rem] font-semibold leading-tight">{p.name}</p>
-                <p className="mt-0.5 text-xs text-white/60 bento:text-[#55525c]">{p.sub}{p.with ? ` \u00b7 ${p.with}` : ""}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {"share" in p && p.share && (
-                    <button type="button" onClick={() => window.dispatchEvent(new Event("partner-vesta"))}
-                      className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-[#0A84FF] px-3 text-sm font-semibold text-[#fff] transition hover:bg-[#0A84FF]/90 active:scale-[0.98]">
-                      <Users className="h-3.5 w-3.5" /> Invite &amp; share
-                    </button>
-                  )}
-                  {p.links.map((l) => (
-                    <a key={l.label} href={l.href} target="_blank" rel="noreferrer"
-                      className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white/[0.09] px-3 text-sm font-medium text-white transition hover:bg-white/[0.16] active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
-                      {l.label} <ExternalLink className="h-3.5 w-3.5 opacity-70" />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       </section>
 
