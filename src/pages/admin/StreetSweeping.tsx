@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Car, CalendarDays, BellRing, CheckCircle2, RefreshCw, Send, AlertTriangle, BellOff, Info, Clock3 } from "lucide-react";
+import { Car, CalendarDays, CheckCircle2, RefreshCw, Send, AlertTriangle, BellOff, Info, Clock3, MapPin, Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pollInterval } from "@/lib/polling";
 import {
@@ -20,9 +20,15 @@ import {
   setSkipDates,
   acknowledgeToday,
   sendTestAlert,
+  calibrateHere,
   upcomingSweepDays,
+  nextSweepFor,
+  stopsOn,
+  zoneSideOn,
   weekdayOf,
-  SWEEP_DAYS,
+  min12,
+  DAY_NAMES,
+  SweepZone,
   laNowMinutes,
   fmtDay,
   fmtLA,
@@ -42,7 +48,14 @@ const OUTCOME: Record<SweepOutcome, { label: string; className: string }> = {
 };
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const dayName = (side: CurbSide) => (side === "west" ? "Monday" : "Tuesday");
+const short = (dow: number | null) => (dow == null ? "never" : DAY_NAMES[dow].slice(0, 3));
+const windowOf = (z: SweepZone) => `${min12(z.start_min)}–${min12(z.end_min)}`;
+/** "west curb of the 800 block" */
+const curbOf = (side: CurbSide, z: SweepZone) => `${side} curb of the ${z.name}`;
+const addDaysIso = (iso: string, n: number) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+};
 const laDateOf = (ts: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ts));
 
@@ -87,10 +100,12 @@ function StreetDiagram({
   status,
   side,
   dangerSide,
+  zone,
 }: {
   status: CarStatus;
   side: CurbSide | null;
   dangerSide: CurbSide | null;
+  zone: SweepZone | null;
 }) {
   const { bento } = useAdminTheme();
   const ink = (a: number) => adminInk(bento, a);
@@ -182,13 +197,13 @@ function StreetDiagram({
             </text>
             <text x={laneX(s) + laneW / 2} y={road.y + road.h + 29} textAnchor="middle" fontSize="10"
               fill={hot ? (bento ? "#B23A16" : "#fca5a5") : ink(0.42)}>
-              {hot ? "swept next" : s === "west" ? "Mon 8–10" : "Tue 8–10"}
+              {hot ? "swept next" : zone ? `${short(s === "west" ? zone.west_dow : zone.east_dow)} 8–10` : ""}
             </text>
           </g>
         );
       })}
       <text x={road.x + road.w / 2} y={H - 6} textAnchor="middle" fontSize="9.5" fontWeight={600} fill={ink(0.38)} letterSpacing="0.08em">
-        N KINGS RD
+        {zone ? `N KINGS RD · ${zone.name.toUpperCase()}` : "N KINGS RD"}
       </text>
     </svg>
   );
@@ -197,7 +212,7 @@ function StreetDiagram({
 const CAR_VALUE: Record<CarStatus, (side: CurbSide | null) => string> = {
   on_sweep_curb: (side) => `${cap(side ?? "")} curb`,
   on_safe_curb: (side) => `${cap(side ?? "")} curb`,
-  off_street: () => "Off Kings Rd",
+  off_street: () => "Off the swept blocks",
   stale: () => "Not checked",
   unknown: () => "Unknown",
 };
@@ -205,7 +220,7 @@ const CAR_VALUE: Record<CarStatus, (side: CurbSide | null) => string> = {
 const PLACEMENT_HEADLINE: Record<CarStatus, (side: CurbSide | null) => string> = {
   on_sweep_curb: (side) => `On the ${side} curb — the side swept next`,
   on_safe_curb: (side) => `On the ${side} curb — the safe side`,
-  off_street: () => "Not parked on Kings Rd",
+  off_street: () => "Not parked on a swept block",
   stale: (side) => (side ? `Last seen on the ${side} curb` : "Position is out of date"),
   unknown: () => "Never checked",
 };
@@ -219,13 +234,13 @@ const PLACEMENT_TEXT: Record<CarStatus, string> = {
 };
 
 const PLACEMENT_DETAIL: Record<CarStatus, (side: CurbSide | null, danger: CurbSide | null, ranAt: string | null) => string> = {
-  on_sweep_curb: () => "Move it before 8am or it's a $75 ticket.",
+  on_sweep_curb: () => "Move it before 8\u00a0AM or it's a $75 ticket.",
   on_safe_curb: (_s, danger) => (danger ? `The ${danger} curb is the one being swept.` : "Nothing to do."),
-  off_street: () => "The last check found it away from the block, so no alert is coming.",
+  off_street: () => "It's away from the blocks we watch, so no alert is coming.",
   stale: (side, _d, ranAt) => side
-    ? `Checks only run Monday and Tuesday mornings, so this is where it sat on ${ranAt ? fmtLA(ranAt, { weekday: "long", month: "short", day: "numeric" }) : "the last check"} — not where it is now.`
-    : "The car is only read during a sweeping check. Nothing recent to show.",
-  unknown: () => "The first check will fill this in on the next sweep morning.",
+    ? `The car's feed hasn't updated since ${ranAt ? fmtLA(ranAt) : "the last reading"}, so this is where it was, not necessarily where it is now.`
+    : "The car's feed has nothing recent to show.",
+  unknown: () => "No position from the car yet.",
 };
 
 const DIAGRAM_ALT: Record<CarStatus, (side: CurbSide | null) => string> = {
@@ -237,6 +252,94 @@ const DIAGRAM_ALT: Record<CarStatus, (side: CurbSide | null) => string> = {
     : "No recent reading of where Blue Steel is parked",
   unknown: () => "No reading of where Blue Steel is parked yet",
 };
+
+function BlocksCard({
+  zones,
+  carZoneId,
+  carSide,
+  carFresh,
+  busy,
+  onCalibrate,
+}: {
+  zones: SweepZone[];
+  carZoneId: string | null;
+  carSide: CurbSide | null;
+  carFresh: boolean;
+  busy: boolean;
+  onCalibrate: (z: SweepZone, side: CurbSide) => void;
+}) {
+  return (
+    <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
+      <div className="flex items-start gap-2">
+        <MapPin className="h-4 w-4 text-white/55 mt-0.5 shrink-0" aria-hidden />
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-white">Blocks and calibration</h3>
+          <p className="text-xs text-white/50 mt-1">
+            Each block of Kings Rd has its own sweep days. Calibration points are spots where you confirmed the curb.
+            If the car is ever misread, tap the curb it's really on while it's parked there.
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        {zones.map((z) => {
+          const here = z.id === carZoneId;
+          return (
+            <div key={z.id} className={cn("rounded-xl border p-4", here ? "border-indigo-400/30 bg-indigo-500/[0.06]" : "border-white/[0.06] bg-white/[0.02]")}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[0.9375rem] font-semibold text-white">{z.name}</p>
+                  <p className="text-xs text-white/55">{z.street}, {z.between_streets}</p>
+                </div>
+                {here && (
+                  <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-indigo-400/30 bg-indigo-500/10 px-2 py-0.5 text-[0.6875rem] text-indigo-200">
+                    <Car className="h-3 w-3" aria-hidden /> Car is here{carSide ? `, ${carSide} curb` : ""}
+                  </span>
+                )}
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                {(["west", "east"] as CurbSide[]).map((side) => {
+                  const dow = side === "west" ? z.west_dow : z.east_dow;
+                  return (
+                    <div key={side} className="rounded-lg bg-white/[0.04] px-3 py-2">
+                      <dt className="text-[0.6875rem] uppercase tracking-wider text-white/50">{side} curb</dt>
+                      <dd className="text-white whitespace-nowrap">{dow == null ? "Not swept" : DAY_NAMES[dow]}</dd>
+                      <dd className="text-[0.6875rem] text-white/50 whitespace-nowrap">{windowOf(z)} · ${z.fine_usd}</dd>
+                    </div>
+                  );
+                })}
+              </dl>
+              {z.calibration.length > 0 && (
+                <ul className="mt-3 space-y-1">
+                  {z.calibration.map((p, i) => (
+                    <li key={i} className="text-[0.6875rem] text-white/55 flex gap-1.5">
+                      <Crosshair className="h-3 w-3 mt-[0.1rem] shrink-0" aria-hidden />
+                      <span>
+                        <span className="text-white/75">{fmtDay(p.at)}: {p.side} curb</span>
+                        {p.note ? ` · ${p.note}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {here && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(["west", "east"] as CurbSide[]).map((side) => (
+                    <Button key={side} size="sm" variant="outline" disabled={busy || !carFresh}
+                      onClick={() => onCalibrate(z, side)}
+                      className="min-h-[44px] border-white/10 text-white/70 hover:text-white hover:bg-white/5">
+                      <Crosshair className="h-3.5 w-3.5 mr-1.5" aria-hidden />
+                      It's on the {side} curb
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function StreetSweeping() {
   const [state, setState] = useState<SweepState | null>(null);
@@ -297,20 +400,28 @@ export default function StreetSweeping() {
   const derived = useMemo(() => {
     if (!state) return null;
     const today = state.la_today;
-    const todaySide = SWEEP_DAYS[weekdayOf(today)] ?? null;
+    const zones = state.zones ?? [];
+    const skip = state.config.skip_dates;
     const nowMin = laNowMinutes();
-    const days = upcomingSweepDays(today, state.config.skip_dates, 6);
+    const todayStops = stopsOn(zones, weekdayOf(today));
+    const todayList = todayStops.map((t) => curbOf(t.side, t.zone)).join(" and ");
+    const days = upcomingSweepDays(today, skip, zones, 6);
     const next = days.find((d) => !d.skipped) ?? null;
-    const car = state.last_location;
+    const car = state.car ?? null;
+    const where = car?.where ?? null;
+    const carZone = where ? zones.find((z) => z.id === where.zone) ?? null : null;
     const todaysChecks = state.runs.filter(
       (r) => laDateOf(r.ran_at) === today && ["alerted", "safe_side", "not_on_street", "location_error"].includes(r.outcome),
     );
     const latestToday = todaysChecks[0] ?? null;
-    const inWindowToday = !!todaySide && nowMin < 600 && !state.config.skip_dates.includes(today);
-    // Checks run every 30 min from 6:55am. Past 7:05 with nothing logged in 40 min, they've stopped.
+    const inWindowToday = todayStops.length > 0 && nowMin < 600 && !skip.includes(today);
+    // Checks log at least every 30 min from 6:55am. Past 7:05 with nothing logged in 40 min, they've stopped.
     const lastCheck = state.runs.find((r) => r.outcome !== "test") ?? null;
     const checksMissing = inWindowToday && nowMin >= 425
       && (!lastCheck || Date.now() - new Date(lastCheck.ran_at).getTime() > 40 * 60_000);
+    // When the car's own curb is swept next (the date that matters for it).
+    const carNext = carZone && where ? nextSweepFor(today, skip, carZone, where.side) : null;
+    const zoneOfRun = (id?: string | null) => zones.find((z) => z.id === id) ?? null;
 
     let tone: Tone = "neutral";
     let headline = "";
@@ -327,41 +438,55 @@ export default function StreetSweeping() {
     } else if (checksMissing) {
       tone = "danger";
       headline = "No check has run. Check the car yourself.";
-      detail = `${cap(todaySide!)} curb is swept today, 8–10am. `
+      detail = `Swept today, 8–10 AM: ${todayList}. `
         + (latestToday
           ? `Last check ${fmtLA(latestToday.ran_at, { hour: "numeric", minute: "2-digit" })}${latestToday.side ? ` saw it on the ${latestToday.side} curb` : ""}.`
           : "Nothing has checked the car this morning.");
     } else if (inWindowToday && latestToday?.outcome === "alerted") {
+      const z = zoneOfRun(latestToday.zone);
       tone = "danger";
-      headline = `Move Blue Steel: it's on the ${latestToday.side} curb`;
-      detail = nowMin < 480 ? "Sweeping starts at 8am. $75 ticket." : "Sweeping until 10am. $75 ticket.";
+      headline = `Move Blue Steel: it's on the ${latestToday.side} curb${z ? ` of the ${z.name}` : ""}`;
+      detail = nowMin < 480 ? "Sweeping starts at 8 AM. $75 ticket." : "Sweeping until 10 AM. $75 ticket.";
     } else if (inWindowToday && latestToday?.outcome === "location_error") {
       tone = "warn";
       headline = "Couldn't read the car's location";
-      detail = `Check it yourself: ${cap(todaySide!)} curb is swept today, 8–10am.`;
+      detail = `Check it yourself. Swept today, 8–10 AM: ${todayList}.`;
     } else if (inWindowToday && latestToday) {
       tone = "ok";
-      headline = latestToday.outcome === "safe_side" ? "Blue Steel is on the safe side" : "Blue Steel isn't parked on Kings Rd";
-      detail = `Last checked ${fmtLA(latestToday.ran_at, { hour: "numeric", minute: "2-digit" })}. Checks continue every 30 min until 9:55am.`;
+      headline = latestToday.outcome === "safe_side" ? "Blue Steel is on a curb that isn't swept today" : "Blue Steel isn't parked on a swept block";
+      detail = `Last checked ${fmtLA(latestToday.ran_at, { hour: "numeric", minute: "2-digit" })}. The check runs every 5 min until 10 AM.`;
     } else if (inWindowToday) {
-      headline = `${cap(todaySide!)} curb is swept today, 8–10am`;
-      detail = nowMin < 415 ? "First check at 6:55am." : "Waiting on the next check.";
+      headline = `Swept today, 8–10 AM: ${todayList}`;
+      detail = nowMin < 415 ? "Checks start at 6:55 AM." : "Waiting on the next check.";
+    } else if (carNext && where && carZone) {
+      // Lead with the sweep that actually applies to where the car is.
+      const soon = carNext === today || carNext === addDaysIso(today, 1);
+      tone = soon ? "warn" : "neutral";
+      headline = `The car's curb is swept ${fmtDay(carNext, { weekday: "long", month: "short", day: "numeric" })}, 8–10 AM`;
+      detail = `It's on the ${curbOf(where.side, carZone)} (${carZone.between_streets}). `
+        + "Alerts start at 6:55 AM that morning if it's still there.";
     } else if (next) {
-      const carOnNextSide = !!car?.side && car.side === next.side;
-      tone = carOnNextSide ? "warn" : "neutral";
-      headline = `Next sweep ${fmtDay(next.date, { weekday: "long", month: "short", day: "numeric" })}: ${next.side} curb`;
-      detail = carOnNextSide
-        ? `The car was last seen on the ${next.side} curb (${ago(car!.ran_at)}). Alerts start 6:55am if it's still there.`
-        : "Alerts start at 6:55am that morning if the car is on that curb.";
+      headline = `Next sweep ${fmtDay(next.date, { weekday: "long", month: "short", day: "numeric" })}`;
+      detail = `${cap(next.stops.map((t) => curbOf(t.side, t.zone)).join(" and "))}, 8–10 AM.`;
     } else {
       headline = "No sweep days in the next few weeks";
       detail = "Every upcoming sweep day is marked to skip.";
     }
 
-    const dangerSide: CurbSide | null = inWindowToday ? todaySide : next?.side ?? null;
-    // Where the car is — and whether the reading is recent enough to say "is" instead of "was".
-    const placement = carPlacement(car, dangerSide);
-    return { today, todaySide, days, next, car, tone, headline, detail, dangerSide, inWindowToday, placement };
+    // The diagram shows the car's block (home block when it's elsewhere); hatch the curb swept next there.
+    const diagramZone = carZone ?? zones[0] ?? null;
+    let dangerSide: CurbSide | null = null;
+    if (diagramZone) {
+      const todaySide = inWindowToday ? zoneSideOn(diagramZone, weekdayOf(today)) : null;
+      if (todaySide) dangerSide = todaySide;
+      else {
+        const w = nextSweepFor(today, skip, diagramZone, "west");
+        const e = nextSweepFor(today, skip, diagramZone, "east");
+        dangerSide = w && (!e || w <= e) ? "west" : e ? "east" : null;
+      }
+    }
+    const placement = carPlacement(car, carZone && where && dangerSide === where.side && diagramZone === carZone ? dangerSide : null);
+    return { today, zones, days, next, car, where, carZone, carNext, tone, headline, detail, dangerSide, diagramZone, inWindowToday, placement };
   }, [state]);
 
   const toggleSkip = (date: string) => {
@@ -375,7 +500,7 @@ export default function StreetSweeping() {
     <div className="space-y-6">
       <PageHeader
         title="Street Sweeping"
-        description="Blue Steel on N Kings Rd. West curb Mondays, east curb Tuesdays, 8–10am."
+        description="Blue Steel on N Kings Rd. Each block has its own days: 700 block (home) west Mon, east Tue; 800 block west Thu, east Fri; 8–10 AM."
         actions={
           <>
             <Button variant="outline" size="sm" onClick={load} disabled={loading}
@@ -443,22 +568,20 @@ export default function StreetSweeping() {
               label="Car"
               value={CAR_VALUE[derived.placement.status](derived.placement.side)}
               subtitle={derived.placement.ranAt
-                ? derived.placement.status === "stale"
-                  ? `${derived.placement.side ? `${derived.placement.side} curb ` : ""}${ago(derived.placement.ranAt)}, no check since`
-                  : `checked ${ago(derived.placement.ranAt)}`
+                ? `${derived.carZone ? `${derived.carZone.name} · ` : ""}${derived.placement.status === "stale" ? `seen ${ago(derived.placement.ranAt)}` : `updated ${ago(derived.placement.ranAt)}`}`
                 : "no reading yet"}
               icon={Car}
-              tooltip="The car is only read during a sweeping check (every 30 min, Mon and Tue mornings). Between checks this is history, not live."
+              tooltip="From the car's own GPS feed (the Tesla worker on the Mac mini), which updates about every 20 min."
             />
             <StatCard
-              label="Next sweep"
-              value={derived.next ? fmtDay(derived.next.date) : "None"}
-              subtitle={derived.next ? `${derived.next.side} curb, 8–10am` : "all skipped"}
+              label="Car's sweep"
+              value={derived.carNext ? fmtDay(derived.carNext) : derived.next ? "Not soon" : "None"}
+              subtitle={derived.carNext && derived.where ? `${derived.where.side} curb, 8–10 AM` : derived.next ? `next sweep ${fmtDay(derived.next.date)}` : "all skipped"}
               icon={CalendarDays}
             />
             <StatCard
               label="Today"
-              value={state.acked_today ? "Handled" : derived.todaySide ? "Sweep day" : "No sweep"}
+              value={state.acked_today ? "Handled" : derived.inWindowToday ? "Sweep day" : stopsOn(derived.zones, weekdayOf(derived.today)).length ? "Sweeping over" : "No sweep"}
               subtitle={state.acks[0] ? `last ack ${ago(state.acks[0].acked_at)}` : "no acks yet"}
               icon={CheckCircle2}
             />
@@ -499,9 +622,11 @@ export default function StreetSweeping() {
                   {derived.placement.ranAt ? (derived.placement.fresh ? "Current" : `Last check ${ago(derived.placement.ranAt)}`) : "Never checked"}
                 </span>
               </div>
-              <StreetDiagram status={derived.placement.status} side={derived.placement.side} dangerSide={derived.dangerSide} />
+              <StreetDiagram status={derived.placement.status} side={derived.placement.side} dangerSide={derived.dangerSide} zone={derived.diagramZone} />
               <p className="text-xs text-white/55 mt-2 text-center">
-                {PLACEMENT_DETAIL[derived.placement.status](derived.placement.side, derived.dangerSide, derived.placement.ranAt)}
+                {derived.placement.status === "on_sweep_curb" && derived.carNext && derived.carNext !== derived.today
+                  ? `Swept ${fmtDay(derived.carNext, { weekday: "long", month: "short", day: "numeric" })}, 8–10\u00a0AM. Move it before 8\u00a0AM that morning or it's a $75 ticket.`
+                  : PLACEMENT_DETAIL[derived.placement.status](derived.placement.side, derived.dangerSide, derived.placement.ranAt)}
               </p>
               <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[0.6875rem] text-white/55">
                 <li className="inline-flex items-center gap-1.5">
@@ -537,19 +662,32 @@ export default function StreetSweeping() {
                     )}
                   >
                     <span className={cn("block text-sm font-medium", d.skipped && "line-through")}>{fmtDay(d.date)}</span>
-                    <span className="block text-[0.6875rem] text-white/55">{d.skipped ? "skipped" : `${d.side} curb`}</span>
+                    <span className="block text-[0.6875rem] text-white/55">
+                      {d.skipped ? "skipped" : d.stops.map((t) => `${t.zone.name.replace(" block", "")} ${t.side}`).join(" · ")}
+                    </span>
                   </button>
                 ))}
               </div>
             </div>
           </div>
 
+          {/* Blocks & calibration */}
+          <BlocksCard
+            zones={derived.zones}
+            carZoneId={derived.carZone?.id ?? null}
+            carSide={derived.where?.side ?? null}
+            carFresh={derived.placement.fresh}
+            busy={busy !== null}
+            onCalibrate={(z, side) => run(`cal-${z.id}-${side}`, () => calibrateHere(z.id, side),
+              `Saved: the car's spot is the ${side} curb of the ${z.name}`)}
+          />
+
           {/* Log */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-6">
               <h3 className="text-sm font-semibold text-white mb-3">Checks</h3>
               {state.runs.length === 0 ? (
-                <p className="text-sm text-white/55 py-6 text-center">No checks yet. The first runs Monday at 6:55am.</p>
+                <p className="text-sm text-white/55 py-6 text-center">No checks yet. They start at 6:55 AM on the next sweep day.</p>
               ) : (
                 <div className="divide-y divide-white/[0.06]">
                   {state.runs.map((r) => (
@@ -559,7 +697,7 @@ export default function StreetSweeping() {
                         {OUTCOME[r.outcome]?.label ?? r.outcome}
                       </span>
                       <span className="text-sm text-white/60 min-w-0 break-words basis-full sm:basis-auto">
-                        {r.alert_body ?? r.note ?? (r.side ? `${cap(r.side)} curb` : "")}
+                        {r.alert_body ?? r.note ?? (r.side ? `${cap(r.side)} curb${derived.zones.find((z) => z.id === r.zone) ? `, ${derived.zones.find((z) => z.id === r.zone)!.name}` : ""}` : "")}
                       </span>
                     </div>
                   ))}
@@ -587,8 +725,10 @@ export default function StreetSweeping() {
           <div className="flex items-start gap-2 text-xs text-white/50">
             <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <p>
-              Checks run as two Claude scheduled tasks every 30 min, 6:55–9:55am on sweep days, reading the car from TezLab.
-              Alerts go to ntfy at top priority. Tapping the alert, its "Moved it" button, or "I moved it" here stops that morning's alerts.
+              The check runs in the database every 5 min, 6:55–10 AM on sweep days, from the car's own GPS feed. If the car is on a
+              curb swept that day it sends a critical push (about every 30 min) and shows "Move the car" on the wall and your iPhone.
+              When the car leaves, the alert clears itself. Tapping the alert, its "Moved it" button, or "I moved it" here stops that
+              morning's alerts. A watchdog tells Scout if the checks stop or the car's position goes stale.
             </p>
           </div>
         </>

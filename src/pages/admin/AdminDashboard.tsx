@@ -14,7 +14,7 @@ import { pollInterval } from "@/lib/polling";
 import { fetchSystemHealth, failingSystems, healthHeadlineStatus, type SystemHealth } from "@/lib/systemHealth";
 import { fetchAgentState, fetchPiholeStats, isAgentOnline, STATS_STALE_MS } from "@/services/homeHubApi";
 import {
-  fetchSweepState, fmtDay, laNowMinutes, upcomingSweepDays, weekdayOf, LA_TZ, SWEEP_DAYS, carPlacement,
+  fetchSweepState, fmtDay, laNowMinutes, upcomingSweepDays, weekdayOf, LA_TZ, carPlacement, stopsOn, nextSweepFor, addDays,
   type SweepState,
 } from "@/services/streetSweepingApi";
 import { TuroMini } from "@/components/admin/turo/TuroMini";
@@ -231,16 +231,18 @@ const CHECK_OUTCOMES = ["alerted", "safe_side", "not_on_street", "location_error
 
 function sweepSummary(s: SweepState): { tone: Tone; word: string; need: Need | null } {
   const today = s.la_today;
-  const todaySide = SWEEP_DAYS[weekdayOf(today)] ?? null;
+  const zones = s.zones ?? [];
+  const todayStops = stopsOn(zones, weekdayOf(today));
   const nowMin = laNowMinutes();
-  const inWindowToday = !!todaySide && nowMin < 600 && !s.config.skip_dates.includes(today);
+  const inWindowToday = todayStops.length > 0 && nowMin < 600 && !s.config.skip_dates.includes(today);
   const latestToday = s.runs.find((r) => laDateOf(r.ran_at) === today && CHECK_OUTCOMES.includes(r.outcome)) ?? null;
-  // Checks run every 30 min from 6:55am. Past 7:05 with nothing logged in 40 min, they've stopped.
+  // Checks log at least every 30 min from 6:55am. Past 7:05 with nothing logged in 40 min, they've stopped.
   const lastCheck = s.runs.find((r) => r.outcome !== "test") ?? null;
   const checksMissing = inWindowToday && nowMin >= 425
     && (!lastCheck || Date.now() - new Date(lastCheck.ran_at).getTime() > 40 * 60_000);
   const href = "/admin/street-sweeping";
-  const curb = todaySide ? `${todaySide[0].toUpperCase()}${todaySide.slice(1)} curb` : "";
+  const curbs = todayStops.map((t) => `the ${t.side} curb of the ${t.zone.name}`).join(" and ");
+  const zoneName = (id?: string | null) => zones.find((z) => z.id === id)?.name;
 
   if (!s.config.alerts_enabled) return { tone: "warn", word: "Alerts paused", need: null };
   if (inWindowToday && s.acked_today) return { tone: "ok", word: "Handled today", need: null };
@@ -248,35 +250,38 @@ function sweepSummary(s: SweepState): { tone: Tone; word: string; need: Need | n
     return {
       tone: "bad",
       word: "No check ran",
-      need: { id: "sweep-missing", urgent: true, href, title: "Check where Blue Steel is parked", why: `No street-sweeping check has run. ${curb} is swept today, 8–10am.` },
+      need: { id: "sweep-missing", urgent: true, href, title: "Check where Blue Steel is parked", why: `No street-sweeping check has run. Swept today, 8–10\u00a0AM: ${curbs}.` },
     };
   }
   if (inWindowToday && latestToday?.outcome === "alerted") {
+    const zn = zoneName(latestToday.zone);
     return {
       tone: "bad",
       word: "Move car",
-      need: { id: "sweep-move", urgent: true, href, title: "Move Blue Steel", why: `It's on the ${latestToday.side ?? todaySide} curb. Sweeping 8–10am, $75 ticket.` },
+      need: { id: "sweep-move", urgent: true, href, title: "Move Blue Steel", why: `It's on the ${latestToday.side} curb${zn ? ` of the ${zn}` : ""}. Sweeping 8–10\u00a0AM, $75 ticket.` },
     };
   }
   if (inWindowToday && latestToday?.outcome === "location_error") {
     return {
       tone: "warn",
       word: "Location unknown",
-      need: { id: "sweep-location", href, title: "Check where Blue Steel is parked", why: `Couldn't read the car's location. ${curb} is swept today, 8–10am.` },
+      need: { id: "sweep-location", href, title: "Check where Blue Steel is parked", why: `Couldn't read the car's location. Swept today, 8–10\u00a0AM: ${curbs}.` },
     };
   }
   if (inWindowToday) return { tone: "ok", word: latestToday ? "Safe today" : "Alerts on", need: null };
-  const next = upcomingSweepDays(today, s.config.skip_dates, 6).find((d) => !d.skipped);
-  if (!next) return { tone: "warn", word: "All sweeps skipped", need: null };
-  const day = fmtDay(next.date, { weekday: "short" });
-  // Only warn from a reading recent enough to still be true; older than that it's history.
-  const place = carPlacement(s.last_location, next.side);
-  if (place.side && place.side === next.side) {
-    return place.fresh
-      ? { tone: "warn", word: `Car on ${next.side} curb · ${day}`, need: null }
-      : { tone: "ok", word: `Next ${day} · last seen ${next.side} curb`, need: null };
+  // The sweep that matters is the one for the curb the car is on right now.
+  const where = s.car?.where ?? null;
+  const z = where ? zones.find((x) => x.id === where.zone) : undefined;
+  const carNext = z && where ? nextSweepFor(today, s.config.skip_dates, z, where.side) : null;
+  const place = carPlacement(s.car ?? null, where?.side ?? null);
+  if (carNext && where && place.fresh) {
+    const day = fmtDay(carNext, { weekday: "short" });
+    const soon = carNext <= addDays(today, 1);
+    return { tone: soon ? "warn" : "ok", word: `Car on ${where.side} curb · swept ${day}`, need: null };
   }
-  return { tone: "ok", word: `Next ${day} · alerts on`, need: null };
+  const next = upcomingSweepDays(today, s.config.skip_dates, zones, 6).find((d) => !d.skipped);
+  if (!next) return { tone: "warn", word: "All sweeps skipped", need: null };
+  return { tone: "ok", word: `Next ${fmtDay(next.date, { weekday: "short" })} · alerts on`, need: null };
 }
 
 /* ───────── derived: Cloud deals ───────── */
