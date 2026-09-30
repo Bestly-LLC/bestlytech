@@ -5,8 +5,8 @@
  *   Header (mobile):   a folder button that opens the same list.
  *   Picking a project opens its sheet: live links, and for Vesta the invite desk.
  *
- * Vesta invites (simplified 2026-09-30): one field, one button. Optional "for a group" switch.
- * The result is a short link + Share (phone share sheet) or Copy. "Your invites" shows live status.
+ * Vesta invites (2026-09-30 v3): one invite at a time (Share / Delete); unused ones are never listed.
+ * "Invite a group…" makes N one-time links and downloads them as an Excel file. Only joined women are listed.
  * Talks to edge fn vesta-admin v2: a partner with partners.vesta_invites = true only sees and
  * makes their own codes. Links are short: vesta-app.bestly.tech/?i=CODE. Errors go to Scout.
  */
@@ -15,8 +15,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { supabase } from "@/integrations/supabase/client";
 import { reportToScout } from "@/lib/reportToScout";
 import { cn } from "@/lib/utils";
-import { Switch } from "@/components/ui/switch";
-import { Check, ChevronLeft, ChevronRight, Copy, ExternalLink, Folder, FolderOpen, Loader2, Share2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, Folder, FolderOpen, Loader2, Minus, Plus, Share2 } from "lucide-react";
 
 /* ───────── projects ───────── */
 
@@ -103,13 +102,6 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-function status(c: Code): { text: string; done: boolean; open: boolean } {
-  if (!c.is_active) return { text: "Off", done: false, open: false };
-  if (c.expires_at && new Date(c.expires_at) < new Date()) return { text: "Expired", done: false, open: false };
-  if (c.max_uses > 1) return { text: `${c.joined} of ${c.max_uses}\u00a0joined`, done: c.uses >= c.max_uses, open: c.uses < c.max_uses };
-  return c.uses >= 1 ? { text: "Joined", done: true, open: false } : { text: "Waiting", done: false, open: true };
-}
-
 const canShare = () => typeof navigator !== "undefined" && typeof navigator.share === "function";
 
 function useCopy() {
@@ -136,16 +128,48 @@ function SendButton({ text, id, primary, copied, copy, label = "Share" }:
   );
 }
 
+const GROUP = "Group: ";
+const isGroup = (c: Code) => (c.label ?? "").startsWith(GROUP);
+const isOpenSingle = (c: Code) => c.is_active && c.uses === 0 && c.max_uses === 1 && !isGroup(c) && !(c.expires_at && new Date(c.expires_at) < new Date());
+const fileDate = () => new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Los_Angeles" });
+
+/** Build and download the group spreadsheet: one row per invite, with the link and a ready-to-send message. */
+async function downloadExcel(group: string, codes: string[], expires: string) {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Invites", { views: [{ state: "frozen", ySplit: 1 }] });
+  ws.columns = [
+    { header: "#", key: "n", width: 5 },
+    { header: "Name (fill in)", key: "who", width: 22 },
+    { header: "Invite link", key: "link", width: 44 },
+    { header: "Code", key: "code", width: 16 },
+    { header: "Message to send", key: "msg", width: 70 },
+    { header: "Expires", key: "exp", width: 14 },
+  ];
+  codes.forEach((c, i) => ws.addRow({ n: i + 1, who: "", link: { text: link(c), hyperlink: link(c) }, code: c, msg: message(c, 1), exp: expires }));
+  ws.getRow(1).font = { bold: true };
+  ws.getColumn("msg").alignment = { wrapText: true, vertical: "top" };
+  ws.getColumn("link").font = { color: { argb: "FF0A6FD8" }, underline: true };
+  const buf = await wb.xlsx.writeBuffer();
+  const url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = `Vesta invites - ${group.replace(/[\\/:*?"<>|]/g, "").slice(0, 40) || "group"} - ${fileDate()}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
 function VestaInvites() {
   const [codes, setCodes] = useState<Code[] | null>(null);
   const [members, setMembers] = useState<number | null>(null);
   const [loadErr, setLoadErr] = useState(false);
+  const [view, setView] = useState<"one" | "group">("one");
   const [who, setWho] = useState("");
-  const [group, setGroup] = useState(false);
-  const [size, setSize] = useState(10);
+  const [count, setCount] = useState(20);
   const [busy, setBusy] = useState(false);
-  const [made, setMade] = useState<{ code: string; n: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [current, setCurrent] = useState<{ code: string; label: string | null } | null>(null);
+  const [fresh, setFresh] = useState(false);          // show the form even if an invite is open
+  const [batch, setBatch] = useState<{ group: string; codes: string[]; expires: string } | null>(null);
   const { copied, copy } = useCopy();
 
   const load = useCallback(async () => {
@@ -156,102 +180,138 @@ function VestaInvites() {
   }, []);
   useEffect(() => { void load(); }, [load]);
 
-  const make = async () => {
-    const n = group ? size : 1;
-    setBusy(true); setErr(null); setMade(null);
+  // One at a time: the newest open single invite (older unused ones stay working, just not shown).
+  const open = useMemo(() => current ?? (codes ?? []).filter(isOpenSingle).map((c) => ({ code: c.code, label: c.label }))[0] ?? null, [codes, current]);
+  const joined = useMemo(() => (codes ?? []).filter((c) => c.uses > 0).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)), [codes]);
+  const showForm = fresh || !open;
+
+  const makeOne = async () => {
+    setBusy(true); setErr(null);
     try {
-      const r = await call<{ codes: string[] }>({ action: "create", count: 1, label: who.trim(), max_uses: n, expires_days: 30 });
-      setMade({ code: r.codes[0], n }); setWho(""); void load();
-    } catch (e) {
-      setErr("That didn't work. Try again in a minute."); reportToScout("vesta-share.create", e);
-    } finally { setBusy(false); }
+      const r = await call<{ codes: string[] }>({ action: "create", count: 1, label: who.trim(), max_uses: 1, expires_days: 30 });
+      setCurrent({ code: r.codes[0], label: who.trim() || null }); setWho(""); setFresh(false); void load();
+    } catch (e) { setErr("That didn't work. Try again in a minute."); reportToScout("vesta-share.create", e); }
+    finally { setBusy(false); }
   };
 
-  const turnOff = async (c: Code) => {
-    try { await call({ action: "set_active", code: c.code, active: false }); void load(); }
-    catch (e) { reportToScout("vesta-share.toggle", e); }
+  const makeGroup = async () => {
+    const group = who.trim() || "Group";
+    setBusy(true); setErr(null); setBatch(null);
+    try {
+      const r = await call<{ codes: string[] }>({ action: "create", count, label: GROUP + group, max_uses: 1, expires_days: 30 });
+      const expires = new Date(Date.now() + 30 * 864e5).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      setBatch({ group, codes: r.codes, expires }); setWho("");
+      await downloadExcel(group, r.codes, expires);
+      void load();
+    } catch (e) { setErr("That didn't work. Try again in a minute."); reportToScout("vesta-share.group", e); }
+    finally { setBusy(false); }
   };
 
-  const joined = useMemo(() => (codes ?? []).reduce((a, c) => a + (c.joined || 0), 0), [codes]);
-  const recent = useMemo(() => (codes ?? []).filter((c) => status(c).open || status(c).done).slice(0, 12), [codes]);
+  const remove = async (code: string) => {
+    setBusy(true);
+    try { await call({ action: "delete", code }); setCurrent(null); setFresh(false); void load(); }
+    catch (e) { setErr("Couldn't delete it. Try again."); reportToScout("vesta-share.delete", e); }
+    finally { setBusy(false); }
+  };
+
+  const field = "h-12 w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-[17px] text-white outline-none placeholder:text-white/35 focus:border-[#0A84FF] bento:bg-[#F3F2EE]";
+  const primary = "inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl bg-[#0A84FF] text-[17px] font-semibold text-[#fff] transition hover:bg-[#0A84FF]/90 active:scale-[0.99] disabled:opacity-50";
+  const quiet = "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 text-[15px] font-medium text-white/70 transition hover:bg-white/[0.06]";
 
   return (
     <>
-      {/* Invite */}
       <section className="rounded-3xl bg-white/[0.04] p-4 bento:bg-[#fff]">
-        <h3 className="text-[1.05rem] font-semibold">Invite a woman</h3>
-        <p className="mt-0.5 text-[15px] text-white/60">She gets a link, taps it, and joins with Face ID.</p>
-
-        {made ? (
-          <div className="mt-4">
-            <div className="rounded-2xl bg-emerald-500/[0.08] px-4 py-3 ring-1 ring-emerald-500/25">
-              <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300 bento:text-emerald-700"><Check className="h-4 w-4" /> Invite ready</p>
-              <p className="mt-1 break-all text-[15px] font-medium">{link(made.code).replace("https://", "")}</p>
-              <p className="mt-0.5 text-xs text-white/55">{made.n > 1 ? `Works for up to ${made.n}\u00a0women` : "Works once"} · expires in 30&nbsp;days</p>
-            </div>
-            <div className="mt-3 flex gap-2">
-              <SendButton primary id="made" text={message(made.code, made.n)} copied={copied} copy={copy} />
-              <button type="button" onClick={() => setMade(null)}
-                className="min-h-11 rounded-2xl px-4 text-[15px] font-medium text-white/70 hover:bg-white/[0.06]">Another</button>
-            </div>
-          </div>
-        ) : (
+        {view === "one" ? (
           <>
-            <label htmlFor="v-who" className="mb-1.5 mt-4 block px-1 text-sm text-white/60">{group ? "Group name" : "Her name"} <span className="text-white/40">(only you see this)</span></label>
-            <input id="v-who" value={who} onChange={(e) => setWho(e.target.value)} maxLength={48} autoComplete="off"
-              placeholder={group ? "Lahore mothers group" : "Priya"}
-              className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-[17px] text-white outline-none placeholder:text-white/35 focus:border-[#0A84FF] bento:bg-[#F3F2EE]" />
+            <h3 className="text-[1.05rem] font-semibold">Invite a woman</h3>
+            <p className="mt-0.5 text-[15px] text-white/60">She gets a link, taps it, and joins with Face ID.</p>
 
-            <div className="mt-3 flex min-h-11 items-center justify-between gap-3 px-1 text-[15px]">
-              <label htmlFor="v-group" className="cursor-pointer">For a group <span className="text-white/50">— one link for several women</span></label>
-              <Switch id="v-group" checked={group} onCheckedChange={setGroup} className="data-[state=checked]:bg-[#30D158]" />
-            </div>
-            {group && (
-              <div role="radiogroup" aria-label="How many women" className="mt-1 grid grid-cols-3 gap-1 rounded-2xl bg-white/[0.06] p-1 bento:bg-black/[0.05]">
-                {[10, 25, 50].map((n) => (
-                  <button key={n} type="button" role="radio" aria-checked={size === n} onClick={() => setSize(n)}
-                    className={cn("min-h-10 rounded-xl text-[15px] font-semibold transition", size === n ? "bg-white/[0.14] text-white bento:bg-[#fff]" : "text-white/60")}>
-                    {n} women</button>
-                ))}
+            {!codes && !loadErr ? <div className="mt-4 h-24 animate-pulse rounded-2xl bg-white/[0.05]" /> : showForm ? (
+              <>
+                <label htmlFor="v-who" className="mb-1.5 mt-4 block px-1 text-sm text-white/60">Her name <span className="text-white/40">(only you see this)</span></label>
+                <input id="v-who" value={who} onChange={(e) => setWho(e.target.value)} maxLength={48} autoComplete="off" placeholder="Priya" className={field} />
+                <button type="button" onClick={() => void makeOne()} disabled={busy} className={cn(primary, "mt-4")}>
+                  {busy && <Loader2 className="h-5 w-5 animate-spin" />}{busy ? "Making…" : "Create invite link"}
+                </button>
+                <div className="mt-2 flex justify-between">
+                  <button type="button" onClick={() => { setView("group"); setErr(null); }} className={quiet}>Invite a group…</button>
+                  {open && <button type="button" onClick={() => setFresh(false)} className={quiet}>Cancel</button>}
+                </div>
+              </>
+            ) : open && (
+              <div className="mt-4">
+                <div className="rounded-2xl bg-emerald-500/[0.08] px-4 py-3 ring-1 ring-emerald-500/25">
+                  <p className="text-sm font-semibold text-emerald-300 bento:text-emerald-700">{open.label ? `For ${open.label}` : "Invite ready"}</p>
+                  <p className="mt-1 break-all text-[15px] font-medium">{link(open.code).replace("https://", "")}</p>
+                  <p className="mt-0.5 text-xs text-white/55">Works once · expires in 30&nbsp;days</p>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <SendButton primary id="cur" text={message(open.code, 1)} copied={copied} copy={copy} />
+                  <button type="button" onClick={() => void remove(open.code)} disabled={busy}
+                    className="min-h-11 rounded-2xl px-4 text-[15px] font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-50 bento:text-red-600">Delete</button>
+                </div>
+                <button type="button" onClick={() => { setFresh(true); setCurrent(null); }} className={cn(quiet, "mt-1 w-full")}>New invite</button>
               </div>
             )}
-
-            <button type="button" onClick={() => void make()} disabled={busy}
-              className="mt-4 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl bg-[#0A84FF] text-[17px] font-semibold text-[#fff] transition hover:bg-[#0A84FF]/90 active:scale-[0.99] disabled:opacity-50">
-              {busy && <Loader2 className="h-5 w-5 animate-spin" />}{busy ? "Making…" : "Create invite link"}
-            </button>
-            {err && <p role="alert" className="mt-2 px-1 text-sm text-red-300 bento:text-red-600">{err}</p>}
+          </>
+        ) : (
+          <>
+            <button type="button" onClick={() => { setView("one"); setBatch(null); setErr(null); }}
+              className="-ml-2 inline-flex min-h-11 items-center gap-0.5 rounded-xl px-2 text-[15px] font-medium text-[#5AB0FF] bento:text-[#0A6FD8]"><ChevronLeft className="h-5 w-5" /> One woman</button>
+            <h3 className="mt-1 text-[1.05rem] font-semibold">Invite a group</h3>
+            <p className="mt-0.5 text-[15px] text-white/60">Makes one link per woman and downloads them in an Excel file you can hand out.</p>
+            {batch ? (
+              <div className="mt-4">
+                <div className="rounded-2xl bg-emerald-500/[0.08] px-4 py-3 ring-1 ring-emerald-500/25">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300 bento:text-emerald-700"><Check className="h-4 w-4" /> {batch.codes.length} invites made</p>
+                  <p className="mt-1 text-[15px]">{batch.group} · downloaded to your device</p>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button type="button" onClick={() => void downloadExcel(batch.group, batch.codes, batch.expires)} className={cn(primary, "flex-1")}><Download className="h-5 w-5" /> Download again</button>
+                </div>
+                <button type="button" onClick={() => setBatch(null)} className={cn(quiet, "mt-1 w-full")}>Another group</button>
+              </div>
+            ) : (
+              <>
+                <label htmlFor="v-group" className="mb-1.5 mt-4 block px-1 text-sm text-white/60">Group name</label>
+                <input id="v-group" value={who} onChange={(e) => setWho(e.target.value)} maxLength={40} autoComplete="off" placeholder="Lahore mothers group" className={field} />
+                <p className="mb-1.5 mt-4 px-1 text-sm text-white/60">How many women</p>
+                <div className="flex items-center gap-3">
+                  <button type="button" aria-label="Fewer" onClick={() => setCount((n) => Math.max(1, n - 5))} className="grid h-12 w-12 place-items-center rounded-2xl bg-white/[0.07] text-xl font-semibold bento:bg-[#F3F2EE]"><Minus className="h-5 w-5" /></button>
+                  <input aria-label="How many women" inputMode="numeric" value={count}
+                    onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value.replace(/\D/g, "")) || 1)))}
+                    className={cn(field, "w-24 text-center font-semibold tabular-nums")} />
+                  <button type="button" aria-label="More" onClick={() => setCount((n) => Math.min(100, n + 5))} className="grid h-12 w-12 place-items-center rounded-2xl bg-white/[0.07] text-xl font-semibold bento:bg-[#F3F2EE]"><Plus className="h-5 w-5" /></button>
+                  <span className="text-sm text-white/45">up to 100</span>
+                </div>
+                <button type="button" onClick={() => void makeGroup()} disabled={busy} className={cn(primary, "mt-5")}>
+                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}{busy ? "Making…" : `Make ${count} and download Excel`}
+                </button>
+              </>
+            )}
           </>
         )}
+        {err && <p role="alert" className="mt-2 px-1 text-sm text-red-300 bento:text-red-600">{err}</p>}
       </section>
 
-      {/* Invites so far */}
+      {/* Only women who actually joined */}
       <section className="mt-6">
         <div className="mb-2 flex items-baseline justify-between px-1">
-          <h3 className="text-sm font-medium text-white/60">Your invites</h3>
-          {codes && <p className="text-sm text-white/50">{joined} joined{members != null ? ` · ${members} in the beta` : ""}</p>}
+          <h3 className="text-sm font-medium text-white/60">Joined from your invites</h3>
+          {codes && <p className="text-sm text-white/50">{joined.length}{members != null ? ` · ${members} in the beta` : ""}</p>}
         </div>
-        {loadErr ? <p className="rounded-2xl bg-white/[0.04] px-4 py-4 text-[15px] text-white/60 bento:bg-[#fff]">Couldn't load them right now.</p>
-          : !codes ? <div className="h-16 animate-pulse rounded-2xl bg-white/[0.04] bento:bg-[#fff]" />
-          : recent.length === 0 ? <p className="rounded-2xl bg-white/[0.04] px-4 py-4 text-[15px] text-white/60 bento:bg-[#fff]">None yet.</p>
+        {loadErr ? <p className="rounded-2xl bg-white/[0.04] px-4 py-4 text-[15px] text-white/60 bento:bg-[#fff]">Couldn't load right now.</p>
+          : !codes ? null
+          : joined.length === 0 ? <p className="rounded-2xl bg-white/[0.04] px-4 py-4 text-[15px] text-white/60 bento:bg-[#fff]">No one yet. They show up here once they join.</p>
           : (
             <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-2xl bg-white/[0.04] bento:divide-black/5 bento:bg-[#fff]">
-              {recent.map((c) => {
-                const st = status(c);
-                return (
-                  <li key={c.code} className="flex min-h-14 items-center gap-3 px-4 py-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[15px] font-medium">{c.label || "Invite"}</p>
-                      <p className={cn("text-sm", st.done ? "text-emerald-300 bento:text-emerald-700" : "text-white/50")}>{st.done && <Check className="-mt-0.5 mr-1 inline h-3.5 w-3.5" />}{st.text}</p>
-                    </div>
-                    {st.open && <>
-                      <SendButton id={`r-${c.code}`} label="Send" text={message(c.code, c.max_uses)} copied={copied} copy={copy} />
-                      <button type="button" onClick={() => void turnOff(c)} aria-label={`Turn off invite for ${c.label || "this invite"}`}
-                        className="min-h-11 rounded-xl px-2 text-sm text-white/45 hover:text-white">Turn off</button>
-                    </>}
-                  </li>
-                );
-              })}
+              {joined.slice(0, 20).map((c) => (
+                <li key={c.code} className="flex min-h-12 items-center gap-3 px-4 py-2">
+                  <Check className="h-4 w-4 shrink-0 text-emerald-400 bento:text-emerald-600" />
+                  <p className="min-w-0 flex-1 truncate text-[15px]">{(c.label ?? "").replace(GROUP, "") || "Invite"}</p>
+                  <p className="shrink-0 text-sm text-white/50">{new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
+                </li>
+              ))}
             </ul>
           )}
       </section>
