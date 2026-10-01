@@ -75,11 +75,34 @@ export default function CookieYetiPrivacy() {
     { title: "6. Payments & Purchases", content: (
       <p className="text-muted-foreground leading-relaxed">All purchases are processed by official app marketplaces. Bestly LLC does not store or receive payment credentials. Only anonymous confirmation of purchase status is received.</p>
     )},
-    { title: "7. Third-Party Access", content: (
-      <p className="text-muted-foreground leading-relaxed">Bestly LLC does not sell your data or share it with third-party advertisers or trackers. Cookie Yeti embeds no third-party analytics or advertising SDKs. The anonymous analytics and domain-only community learning described above are sent only to Bestly's own systems to operate and improve the Service.</p>
+    { title: "7. Third-Party Access & Infrastructure", content: (
+      <>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          Bestly LLC does not sell your data or share it with third-party advertisers or trackers. Cookie Yeti embeds no third-party analytics or advertising SDKs.
+        </p>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          The anonymous analytics and domain-only community learning described above are transmitted to and stored on Bestly LLC's own backend, which is hosted on <strong>Supabase</strong> (a managed cloud database platform). Supabase processes this data solely as a data processor on our behalf and under our instructions; it does not use it for its own purposes. No other third parties receive any data from Cookie Yeti.
+        </p>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          Purchases are processed by Apple (Mac App Store) or Google (Chrome Web Store) through their official marketplaces. Bestly LLC does not receive or store any payment credentials.
+        </p>
+        <p className="text-muted-foreground leading-relaxed">
+          <strong>Complete list of parties that receive any data from Cookie Yeti:</strong>
+        </p>
+        <ul className="list-disc pl-6 space-y-2 text-muted-foreground mt-2">
+          <li><strong>Bestly LLC</strong> — anonymous analytics and domain signals only, to operate and improve the Service.</li>
+          <li><strong>Supabase</strong> — infrastructure provider hosting Bestly's database. Acts as data processor under Bestly's instructions. <a href="https://supabase.com/privacy" className="text-foreground hover:underline" target="_blank" rel="noopener noreferrer">Supabase Privacy Policy</a>.</li>
+          <li><strong>Apple / Google</strong> — purchase confirmation only, via their respective app marketplaces.</li>
+        </ul>
+        <p className="text-muted-foreground leading-relaxed mt-4">No other parties receive any information.</p>
+      </>
     )},
     { title: "8. Data Retention & Deletion", content: (
-      <p className="text-muted-foreground leading-relaxed">Your local settings remain on your device and are deleted upon uninstall, and you can clear them manually at any time. Anonymous analytics and community-learning records are tied only to a random identifier, not to you, and are retained in aggregate to operate and improve the Service.</p>
+      <>
+        <p className="text-muted-foreground leading-relaxed mb-4">Your local settings remain on your device and are deleted upon uninstall; you can clear them manually at any time in the extension settings.</p>
+        <p className="text-muted-foreground leading-relaxed mb-4">Anonymous analytics and community-learning records are tied only to a random install identifier — not to you — and are stored on Bestly's Supabase-hosted backend. These records are retained in aggregate only as long as needed to operate and improve the Service and are not associated with any individual.</p>
+        <p className="text-muted-foreground leading-relaxed">To request deletion of any anonymous records associated with your install ID, contact us at <a href="mailto:support@bestly.tech" className="text-foreground hover:underline">support@bestly.tech</a>.</p>
+      </>
     )},
     { title: "9. Children's Privacy", content: (
       <p className="text-muted-foreground leading-relaxed">Cookie Yeti is not intended for children under 13. No data is knowingly collected from children.</p>
@@ -115,6 +138,59 @@ export default function CookieYetiPrivacy() {
               <p>Last Updated: {today}</p>
             </div>
           </header>
+        </AnimatedSection>
+
+        <AnimatedSection delay={40}>
+          <div className="mb-12 rounded-xl border border-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Data type</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Collected?</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">How used</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Shared with</th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">Retained</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                <tr>
+                  <td className="px-4 py-3 text-muted-foreground">Browsing history / full URLs</td>
+                  <td className="px-4 py-3 font-medium text-green-600">No</td>
+                  <td className="px-4 py-3 text-muted-foreground">—</td>
+                  <td className="px-4 py-3 text-muted-foreground">—</td>
+                  <td className="px-4 py-3 text-muted-foreground">—</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 text-muted-foreground">Personal identifiers (name, email, IP)</td>
+                  <td className="px-4 py-3 font-medium text-green-600">No</td>
+                  <td className="px-4 py-3 text-muted-foreground">—</td>
+                  <td className="px-4 py-3 text-muted-foreground">—</td>
+                  <td className="px-4 py-3 text-muted-foreground">—</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 text-muted-foreground">Anonymous product analytics</td>
+                  <td className="px-4 py-3 font-medium text-foreground">Yes</td>
+                  <td className="px-4 py-3 text-muted-foreground">Measure reliability, improve features</td>
+                  <td className="px-4 py-3 text-muted-foreground">Bestly LLC only (hosted on Supabase)</td>
+                  <td className="px-4 py-3 text-muted-foreground">Aggregate; no personal link</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 text-muted-foreground">Site domain (community learning)</td>
+                  <td className="px-4 py-3 font-medium text-foreground">Yes</td>
+                  <td className="px-4 py-3 text-muted-foreground">Improve banner detection for all users</td>
+                  <td className="px-4 py-3 text-muted-foreground">Bestly LLC only (hosted on Supabase)</td>
+                  <td className="px-4 py-3 text-muted-foreground">Aggregate; not linked to you</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 text-muted-foreground">Local preferences (device only)</td>
+                  <td className="px-4 py-3 font-medium text-foreground">Yes</td>
+                  <td className="px-4 py-3 text-muted-foreground">Store your settings on-device</td>
+                  <td className="px-4 py-3 text-muted-foreground">Never leaves your device</td>
+                  <td className="px-4 py-3 text-muted-foreground">Deleted on uninstall</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </AnimatedSection>
 
         <div className="prose prose-neutral max-w-none">
