@@ -158,6 +158,93 @@ async function downloadExcel(group: string, codes: string[], expires: string) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+/** Team: give a teammate (e.g. Rohit) his own portal login with this same Vesta desk. */
+type Mate = { id: string; name: string; email: string; user_id: string | null; link_sent_at: string | null; claim_used_at: string | null };
+function VestaTeam() {
+  const [team, setTeam] = useState<Mate[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [made, setMade] = useState<{ name: string; url: string } | null>(null);
+  const { copied, copy } = useCopy();
+
+  const load = useCallback(async () => {
+    try { const r = await call<{ team: Mate[] }>({ action: "team_list" }); setTeam(r.team ?? []); }
+    catch (e) { setTeam([]); reportToScout("vesta-team.list", e); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const invite = async (n = name, e = email) => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await call<{ url: string; name: string }>({ action: "team_invite", name: n.trim(), email: e.trim() });
+      setMade({ name: r.name, url: r.url }); setName(""); setEmail(""); setOpen(false); void load();
+    } catch (x) {
+      const m = x instanceof Error ? x.message : "";
+      setErr(/email|name|access/i.test(m) ? m : "That didn't work. Try again in a minute.");
+      if (!/email|name|access/i.test(m)) reportToScout("vesta-team.invite", x);
+    } finally { setBusy(false); }
+  };
+
+  const msg = (m: { name: string; url: string }) =>
+    `Hi ${m.name.split(" ")[0]}, here's your Bestly partner login for Vesta. Tap it on your phone and set up Face ID:\n${m.url}\n\nFrom there you can make Vesta invite links for the women you bring in. The link works for 7 days.`;
+  const field = "h-12 w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-[17px] text-white outline-none placeholder:text-white/35 focus:border-[#0A84FF] bento:bg-[#F3F2EE]";
+
+  return (
+    <section className="mt-6">
+      <h3 className="mb-2 px-1 text-sm font-medium text-white/60">Your team</h3>
+      <div className="rounded-2xl bg-white/[0.04] p-4 bento:bg-[#fff]">
+        {team && team.length > 0 && (
+          <ul className="mb-3 divide-y divide-white/[0.06] bento:divide-black/5">
+            {team.map((m) => (
+              <li key={m.id} className="flex min-h-12 items-center gap-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[15px] font-medium">{m.name}</p>
+                  <p className={cn("text-sm", m.claim_used_at ? "text-emerald-300 bento:text-emerald-700" : "text-white/50")}>{m.claim_used_at ? "Signed in" : "Link sent, not opened yet"}</p>
+                </div>
+                {!m.claim_used_at && <button type="button" disabled={busy} onClick={() => void invite(m.name, m.email)}
+                  className="min-h-11 rounded-xl px-3 text-sm font-medium text-[#5AB0FF] disabled:opacity-50 bento:text-[#0A6FD8]">New link</button>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {made && (
+          <div className="mb-3">
+            <div className="rounded-2xl bg-emerald-500/[0.08] px-4 py-3 ring-1 ring-emerald-500/25">
+              <p className="text-sm font-semibold text-emerald-300 bento:text-emerald-700">Login link for {made.name}</p>
+              <p className="mt-0.5 text-xs text-white/55">Send it to them only. Works for 7&nbsp;days.</p>
+            </div>
+            <div className="mt-2 flex"><SendButton primary id="team" text={msg(made)} copied={copied} copy={copy} label="Send to them" /></div>
+          </div>
+        )}
+        {open ? (
+          <>
+            <label htmlFor="t-name" className="mb-1.5 block px-1 text-sm text-white/60">Name</label>
+            <input id="t-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="off" placeholder="Rohit" className={field} />
+            <label htmlFor="t-email" className="mb-1.5 mt-3 block px-1 text-sm text-white/60">Their email</label>
+            <input id="t-email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" placeholder="rohit@example.com" className={field} />
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={() => void invite()} disabled={busy}
+                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#0A84FF] px-4 text-[15px] font-semibold text-[#fff] disabled:opacity-50">
+                {busy && <Loader2 className="h-4 w-4 animate-spin" />}Make their login</button>
+              <button type="button" onClick={() => { setOpen(false); setErr(null); }} className="min-h-11 rounded-2xl px-4 text-[15px] text-white/70">Cancel</button>
+            </div>
+          </>
+        ) : (
+          <button type="button" onClick={() => { setOpen(true); setMade(null); }}
+            className="flex min-h-11 w-full items-center gap-2 text-left text-[15px] font-medium text-[#5AB0FF] bento:text-[#0A6FD8]">
+            <Plus className="h-4 w-4" /> Give someone access
+          </button>
+        )}
+        {!open && <p className="mt-1 text-sm text-white/50">They get their own login and can make Vesta invites too. Women they invite get in right away.</p>}
+        {err && <p role="alert" className="mt-2 px-1 text-sm text-red-300 bento:text-red-600">{err}</p>}
+      </div>
+    </section>
+  );
+}
+
 function VestaInvites() {
   const [codes, setCodes] = useState<Code[] | null>(null);
   const [members, setMembers] = useState<number | null>(null);
@@ -225,7 +312,7 @@ function VestaInvites() {
         {view === "one" ? (
           <>
             <h3 className="text-[1.05rem] font-semibold">Invite a woman</h3>
-            <p className="mt-0.5 text-[15px] text-white/60">She gets a link, taps it, and joins with Face ID.</p>
+            <p className="mt-0.5 text-[15px] text-white/60">She gets a link, taps it, joins with Face ID, and she's in.</p>
 
             {!codes && !loadErr ? <div className="mt-4 h-24 animate-pulse rounded-2xl bg-white/[0.05]" /> : showForm ? (
               <>
@@ -316,6 +403,8 @@ function VestaInvites() {
             </ul>
           )}
       </section>
+
+      <VestaTeam />
 
       {/* Investors */}
       <section className="mt-6">
