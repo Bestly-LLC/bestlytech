@@ -180,7 +180,17 @@ async function main() {
   await page.addInitScript(INIT);
 
   // Log in (the profile usually already is).
-  await page.goto(`${BASE}/login?redirect_url=/call/${token}`, { waitUntil: "domcontentloaded" });
+  // Retry up to 3 times: ERR_NETWORK_CHANGED is a transient Chromium hiccup.
+  for (let gotoAttempt = 1; ; gotoAttempt++) {
+    try {
+      await page.goto(`${BASE}/login?redirect_url=/call/${token}`, { waitUntil: "domcontentloaded" });
+      break;
+    } catch (e) {
+      if (gotoAttempt >= 3) throw e;
+      log(`page.goto attempt ${gotoAttempt} failed (${e.message.split('\n')[0]}), retrying...`);
+      await page.waitForTimeout(2000);
+    }
+  }
   await page.waitForSelector("input[name=password], .join-call, #talk, .app-talk", { timeout: 30000 }).catch(() => {});
   if (await page.$("input[name=password]")) {
     log("logging in");
