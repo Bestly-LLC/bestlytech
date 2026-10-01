@@ -10,11 +10,8 @@ export default function CookieYetiPrivacy() {
     }
   }, []);
 
-  const today = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const effectiveDate = "October 1, 2026";
+  const lastUpdated = "October 1, 2026";
 
   const sections = [
     { title: "1. Personal Data We Do NOT Collect", content: (
@@ -111,7 +108,7 @@ export default function CookieYetiPrivacy() {
       <p className="text-muted-foreground leading-relaxed">Users may disable, remove, or clear Cookie Yeti data at any time.</p>
     )},
     { title: "11. Security Practices", content: (
-      <p className="text-muted-foreground leading-relaxed">We use secure browser storage, minimal permissions, and transmit only the anonymous, non-personal data described in this policy.</p>
+      <p className="text-muted-foreground leading-relaxed">We use secure browser storage and minimal permissions. All data transmitted from the extension to Bestly's servers is sent over HTTPS (TLS), ensuring it is encrypted in transit. We collect and transmit only the anonymous, non-personal data described in this policy, and we do not log or store any information that could identify you.</p>
     )},
     { title: "12. Policy Changes", content: (
       <p className="text-muted-foreground leading-relaxed">We may update this policy periodically and will reflect changes on this page.</p>
@@ -134,8 +131,8 @@ export default function CookieYetiPrivacy() {
               Privacy Policy – Cookie Yeti by Bestly LLC
             </h1>
             <div className="mt-6 text-sm text-muted-foreground space-y-1">
-              <p>Effective Date: {today}</p>
-              <p>Last Updated: {today}</p>
+              <p>Effective Date: {effectiveDate}</p>
+              <p>Last Updated: {lastUpdated}</p>
             </div>
           </header>
         </AnimatedSection>
