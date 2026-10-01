@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { Maximize2, Minimize2, Plane, RotateCw } from "lucide-react";
+import { Maximize2, Minimize2, Plane, RotateCw, Compass } from "lucide-react";
 
 type Air = {
   hex: string; cs?: string | null; reg?: string | null; t?: string | null; cat?: string | null;
@@ -94,6 +94,11 @@ export default function Sky() {
   const [err, setErr] = useState<string | null>(null);
   const [pick, setPick] = useState<string | null>(null);
   const [full, setFull] = useState(false);
+  // mapUp: degrees clockwise that "up" on screen is rotated from North.
+  // 0 = North up, 90 = East up, 180 = South up, 270 = West up.
+  const [mapUp, setMapUp] = useState(0);
+  const UP_LABELS: Record<number, string> = { 0: "N↑", 90: "E↑", 180: "S↑", 270: "W↑" };
+  const cycleUp = () => setMapUp((v) => (v + 90) % 360);
   const [, setFrame] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const disp = useRef<Map<string, Disp>>(new Map());
@@ -271,22 +276,27 @@ export default function Sky() {
               <text x={500 + r * S * 0.707 + 6} y={500 - r * S * 0.707 - 6} fill="#fff" fillOpacity={0.45} fontSize={11 * u} fontWeight={600}>{r}{NB}mi</text>
             </g>
           ))}
+          <g transform={`rotate(${mapUp} 500 500)`}>
           {["N", "E", "S", "W"].map((c, n) => {
-            const a = (n * Math.PI) / 2, rr = radius * S + 14 * u;
-            return <text key={c} x={500 + Math.sin(a) * rr} y={500 - Math.cos(a) * rr + 5 * u} textAnchor="middle" fill="#fff" fillOpacity={c === "N" ? 0.85 : 0.45} fontSize={13 * u} fontWeight={700} letterSpacing={2}>{c}</text>;
+            const ang = (n * Math.PI) / 2, rr = radius * S + 14 * u;
+            const cx = 500 + Math.sin(ang) * rr, cy = 500 - Math.cos(ang) * rr + 5 * u;
+            // counter-rotate the label so text stays readable regardless of mapUp
+            return <text key={c} x={cx} y={cy} textAnchor="middle" fill="#fff" fillOpacity={c === "N" ? 0.85 : 0.45} fontSize={13 * u} fontWeight={700} letterSpacing={2} transform={`rotate(${-mapUp} ${cx} ${cy})`}>{c}</text>;
           })}
           {/* home */}
           <circle cx={500} cy={500} r={26 * u} fill="url(#sky-home)" />
           <path d="M0 -12 L11 -3 L11 10 L-11 10 L-11 -3 Z" transform={`translate(500 500) scale(${Math.max(1, u * 0.75)})`} fill="#64D2FF" stroke="#02030a" strokeWidth={2} strokeLinejoin="round" />
-          <text x={500} y={500 + 22 * u} textAnchor="middle" fill="#64D2FF" fontSize={11 * u} fontWeight={700} letterSpacing={1.5}>HOME</text>
+          <text x={500} y={500 + 22 * u} textAnchor="middle" fill="#64D2FF" fontSize={11 * u} fontWeight={700} letterSpacing={1.5} transform={`rotate(${-mapUp} 500 ${500 + 22 * u})`}>HOME</text>
 
-          {/* planes */}
+          {/* planes — all rotated to account for mapUp so aircraft face their true direction of travel */}
           {inView.map(({ a, d, i }) => {
             const x = X(d.x), y = Y(d.y);
             const col = KINDS[i.kind]?.[1] ?? "#fff";
             const low = a.alt == null ? 0.5 : Math.min(1, Math.max(0, 1 - a.alt / 14000));
             const sc = (0.9 + low * 0.9) * Math.max(1, u * 0.7);
             const isF = a.hex === focusHex;
+            // heading relative to the rotated map so the aircraft points where it is going on screen
+            const screenHdg = (d.hdg + mapUp) % 360;
             return (
               <g key={a.hex} onClick={() => setPick(a.hex)} style={{ cursor: "pointer" }}>
                 {isF && (
@@ -300,31 +310,36 @@ export default function Sky() {
                 )}
                 <circle cx={x} cy={y} r={22 * u} fill="transparent" />
                 {i.kind === "heli" || i.kind === "rescue" ? (
-                  <g transform={`translate(${x} ${y}) scale(${sc})`}>
+                  // Helicopter: body rotates with heading; rotors spin independently
+                  <g transform={`translate(${x} ${y}) rotate(${screenHdg}) scale(${sc})`}>
                     <ellipse cx={0} cy={1} rx={4.5} ry={7} fill={col} />
                     <path d="M0 7 L0 15" stroke={col} strokeWidth={2} />
                     <g transform={`rotate(${(now / 6) % 360})`}><path d="M-13 0 H13 M0 -13 V13" stroke={col} strokeOpacity={0.8} strokeWidth={1.6} /></g>
                   </g>
                 ) : (
-                  <path d={PLANE} transform={`translate(${x} ${y}) rotate(${d.hdg}) scale(${sc})`} fill={col} stroke="#02030a" strokeWidth={0.8} />
+                  <path d={PLANE} transform={`translate(${x} ${y}) rotate(${screenHdg}) scale(${sc})`} fill={col} stroke="#02030a" strokeWidth={0.8} />
                 )}
                 {isF && <circle cx={x} cy={y} r={3.5 * sc} fill="#FF453A" stroke="#fff" strokeWidth={1.5} />}
               </g>
             );
           })}
-          {/* name tags on top of every plane */}
+          {/* name tags on top of every plane — counter-rotated so text is always right-side-up */}
           <defs>
             <filter id="tag-shadow" x="-10%" y="-20%" width="120%" height="140%">
               <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="#000" floodOpacity="0.9" />
             </filter>
           </defs>
-          {tags.map((t) => (
-            <g key={`tag-${t.hex}`} onClick={() => setPick(t.hex)} style={{ cursor: "pointer" }}>
-              <rect x={t.x} y={t.y} rx={t.h / (t.isF ? 3.2 : 2)} height={t.h} width={t.w} fill="#0b1530" fillOpacity={0.96} stroke={t.col} strokeOpacity={t.isF ? 0.9 : 0.45} strokeWidth={t.isF ? 1.8 : 1.2} />
-              <text x={t.x + fs * 0.65} y={t.y + fs * 1.15} fontSize={fs} fontWeight={700} filter="url(#tag-shadow)" style={{ fill: '#ffffff', fontSize: fs, fontWeight: 700 }}>{t.text}</text>
-              {t.sub && <text x={t.x + fs * 0.65} y={t.y + fs * 2.4} fontSize={fs * 0.88} fontWeight={500} filter="url(#tag-shadow)" style={{ fill: '#c8deff', fontSize: fs * 0.88, fontWeight: 500 }}>{t.sub}</text>}
-            </g>
-          ))}
+          {tags.map((t) => {
+            const tcx = t.x + t.w / 2, tcy = t.y + t.h / 2;
+            return (
+              <g key={`tag-${t.hex}`} onClick={() => setPick(t.hex)} style={{ cursor: "pointer" }} transform={`rotate(${-mapUp} ${tcx} ${tcy})`}>
+                <rect x={t.x} y={t.y} rx={t.h / (t.isF ? 3.2 : 2)} height={t.h} width={t.w} fill="#0b1530" fillOpacity={0.96} stroke={t.col} strokeOpacity={t.isF ? 0.9 : 0.45} strokeWidth={t.isF ? 1.8 : 1.2} />
+                <text x={t.x + fs * 0.65} y={t.y + fs * 1.15} fontSize={fs} fontWeight={700} filter="url(#tag-shadow)" style={{ fill: '#ffffff', fontSize: fs, fontWeight: 700 }}>{t.text}</text>
+                {t.sub && <text x={t.x + fs * 0.65} y={t.y + fs * 2.4} fontSize={fs * 0.88} fontWeight={500} filter="url(#tag-shadow)" style={{ fill: '#c8deff', fontSize: fs * 0.88, fontWeight: 500 }}>{t.sub}</text>}
+              </g>
+            );
+          })}
+          </g>{/* end mapUp rotation group */}
         </svg>
 
         {/* top bar */}
@@ -341,6 +356,11 @@ export default function Sky() {
             <button type="button" onClick={() => { setPick(null); void pull(); }} aria-label="Refresh"
               className="grid h-11 w-11 place-items-center rounded-full bg-black/45 text-white ring-1 ring-white/10 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
               <RotateCw className="h-5 w-5" aria-hidden />
+            </button>
+            <button type="button" onClick={cycleUp} aria-label={`Map orientation: ${UP_LABELS[mapUp]} — tap to rotate`}
+              className="inline-flex h-11 items-center gap-1.5 rounded-full bg-black/45 px-3.5 text-[14px] font-semibold text-white ring-1 ring-white/10 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+              <Compass className="h-4 w-4" aria-hidden />
+              <span>{UP_LABELS[mapUp]}</span>
             </button>
             <button type="button" onClick={() => void toggleFull()} aria-label={full ? "Exit full screen" : "Full screen"} aria-pressed={full}
               className="inline-flex h-11 items-center gap-2 rounded-full bg-white px-4 text-[15px] font-semibold text-black transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
@@ -362,7 +382,18 @@ export default function Sky() {
               <div className="mt-1 text-[22px] font-bold leading-tight text-white">{fi.who}</div>
               {route && <div className="mt-0.5 text-[15px] text-white/80">{route}</div>}
               <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-                {[["Altitude", fmtAlt(fa.alt) || "—"], ["Speed", mph(fa.gs) || "—"], ["Away", fDist != null ? `${fDist.toFixed(1)}${NB}mi ${fDir}` : "—"]].map(([k, v]) => (
+                {((): [string, string][] => {
+                  const hdgBearing = fa.track != null ? `${Math.round(fa.track)}°${NB}${COMPASS[Math.round(fa.track / 45) % 8]}` : "—";
+                  const vrVal = fa.vr != null ? (fa.vr > 100 ? `▲${NB}${Math.round(fa.vr).toLocaleString()}${NB}fpm` : fa.vr < -100 ? `▼${NB}${Math.round(Math.abs(fa.vr)).toLocaleString()}${NB}fpm` : "Level") : "—";
+                  return [
+                    ["Altitude", fmtAlt(fa.alt) || "—"],
+                    ["Speed", mph(fa.gs) || "—"],
+                    ["Away", fDist != null ? `${fDist.toFixed(1)}${NB}mi${NB}${fDir}` : "—"],
+                    ["Heading", hdgBearing],
+                    ["Climb", vrVal],
+                    ["Reg", fa.reg || fa.hex || "—"],
+                  ];
+                })().map(([k, v]) => (
                   <div key={k} className="rounded-xl bg-white/[0.06] px-2 py-1.5">
                     <div className="text-[11px] uppercase tracking-[0.06em] text-white/50">{k}</div>
                     <div className="whitespace-nowrap text-[15px] font-semibold tabular-nums">{v}</div>
