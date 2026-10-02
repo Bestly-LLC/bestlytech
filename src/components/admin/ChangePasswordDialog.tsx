@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { addPasskey, type PasskeyKind } from "@/lib/passkey";
 import {
   Dialog,
   DialogContent,
@@ -22,36 +23,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-
-function bufferToBase64url(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-
-function base64urlToBuffer(base64url: string): ArrayBuffer {
-  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = base64.length % 4 === 0 ? "" : "=".repeat(4 - (base64.length % 4));
-  const binary = atob(base64 + pad);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
-}
-
-/** supabase.functions.invoke puts non-2xx bodies on error.context; pull the server's message out. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function functionErrorMessage(res: { data: any; error: any }, fallback: string): Promise<string> {
-  if (res.data?.error) return String(res.data.error);
-  const ctx = res.error?.context;
-  if (ctx && typeof ctx.json === "function") {
-    try {
-      const body = await ctx.clone().json();
-      if (body?.error) return String(body.error);
-    } catch { /* not JSON */ }
-  }
-  return res.error?.message || fallback;
-}
 
 const MIN_PASSWORD_LENGTH = 6;
 
@@ -118,81 +89,20 @@ export function ChangePasswordDialog({ inline = false }: { inline?: boolean } = 
     }
   };
 
-  const handleRegister = async (keyType: "platform" | "cross-platform") => {
+  const handleRegister = async (keyType: PasskeyKind) => {
     setRegisteringPasskey(true);
     try {
-      if (!window.PublicKeyCredential) {
-        toast.error("Your browser doesn't support passkeys.");
-        return;
-      }
-
-      const optionsRes = await supabase.functions.invoke("webauthn-register", {
-        body: {
-          action: "options",
-          origin: window.location.origin,
-          keyType: keyType === "cross-platform" ? "cross-platform" : undefined,
-        },
-      });
-      if (optionsRes.error || optionsRes.data?.error) {
-        toast.error(`Couldn't start registration: ${await functionErrorMessage(optionsRes, "no response from the server")}`);
-        return;
-      }
-
-      const options = optionsRes.data;
-      const credential = (await navigator.credentials.create({
-        publicKey: {
-          rp: options.rp,
-          user: {
-            id: base64urlToBuffer(options.user.id),
-            name: options.user.name,
-            displayName: options.user.displayName,
-          },
-          challenge: base64urlToBuffer(options.challenge),
-          pubKeyCredParams: options.pubKeyCredParams,
-          timeout: options.timeout,
-          authenticatorSelection: options.authenticatorSelection,
-          attestation: options.attestation,
-          excludeCredentials: (options.excludeCredentials || []).map((c: any) => ({
-            id: base64urlToBuffer(c.id), type: c.type,
-          })),
-        },
-      })) as PublicKeyCredential;
-
-      if (!credential) { toast.info("Registration was cancelled."); return; }
-
-      const attestationResponse = credential.response as AuthenticatorAttestationResponse;
-      const verifyRes = await supabase.functions.invoke("webauthn-register", {
-        body: {
-          action: "verify",
-          origin: window.location.origin,
-          keyType: keyType === "cross-platform" ? "cross-platform" : undefined,
-          credential: {
-            id: credential.id,
-            rawId: bufferToBase64url(credential.rawId),
-            type: credential.type,
-            authenticatorAttachment: (credential as any).authenticatorAttachment,
-            response: {
-              clientDataJSON: bufferToBase64url(attestationResponse.clientDataJSON),
-              attestationObject: bufferToBase64url(attestationResponse.attestationObject),
-            },
-          },
-        },
-      });
-
-      if (verifyRes.error || verifyRes.data?.error) {
-        toast.error(`Registration failed: ${await functionErrorMessage(verifyRes, "the server rejected the credential")}`);
-        return;
-      }
-
-      toast.success(keyType === "cross-platform" ? "Security key registered!" : "Passkey registered!");
-      await loadPasskeys();
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "NotAllowedError") {
+      const problem = await addPasskey({ keyType });
+      if (!problem) {
+        toast.success(keyType === "cross-platform" ? "Security key registered!" : "Passkey registered!");
+        await loadPasskeys();
+      } else if (problem === "cancelled") {
         toast.info("Registration was cancelled.");
-      } else if (err instanceof DOMException && err.name === "InvalidStateError") {
-        toast.info("This device is already registered.");
+      } else if (problem === "This device is already registered.") {
+        // Not a failure worth a red toast — the authenticator just told us it's already on file.
+        toast.info(problem);
       } else {
-        toast.error(err instanceof Error ? err.message : "Registration failed");
+        toast.error(problem);
       }
     } finally {
       setRegisteringPasskey(false);

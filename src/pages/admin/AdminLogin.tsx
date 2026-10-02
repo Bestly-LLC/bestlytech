@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { DeviceSignIn } from "@/components/admin/DeviceSignIn";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
@@ -9,26 +9,11 @@ import { Fingerprint } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminMark, SIGNIN_STARE_RADIUS_PX } from "@/components/AdminMark";
 import { rememberNext } from "@/lib/adminNext";
+import { signInWithPasskey } from "@/lib/passkey";
 import { BrandLoader } from "@/components/BrandLoader";
 import { useAdminFavicon } from "@/hooks/useAdminFavicon";
 import { AdminAccessDenied } from "@/components/admin/AdminAccessDenied";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
-
-function bufferToBase64url(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-
-function base64urlToBuffer(base64url: string): ArrayBuffer {
-  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = base64.length % 4 === 0 ? "" : "=".repeat(4 - (base64.length % 4));
-  const binary = atob(base64 + pad);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
-}
 
 function speakWelcome(name: string) {
   if (!("speechSynthesis" in window)) return;
@@ -151,125 +136,26 @@ export default function AdminLogin() {
   const handlePasskeySignIn = async () => {
     setPasskeyLoading(true);
     try {
-      if (!window.PublicKeyCredential) {
-        toast({
-          title: "Not Supported",
-          description: "Your browser does not support passkeys.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const optionsRes = await supabase.functions.invoke("webauthn-authenticate", {
-        body: {
-          action: "options",
-          origin: window.location.origin,
-        },
-      });
-
-      if (optionsRes.error || optionsRes.data?.error) {
-        const errMsg = optionsRes.data?.error || optionsRes.error?.message || "Failed to start passkey authentication";
-        console.error("Passkey options error:", { error: optionsRes.error, data: optionsRes.data });
-        toast({
-          title: "Passkey Error",
-          description: errMsg,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const options = optionsRes.data;
-
-      const publicKeyOptions: PublicKeyCredentialRequestOptions = {
-        challenge: base64urlToBuffer(options.challenge),
-        rpId: options.rpId,
-        timeout: options.timeout,
-        userVerification: options.userVerification as UserVerificationRequirement,
-        allowCredentials: (options.allowCredentials || []).map((c: any) => ({
-          id: base64urlToBuffer(c.id),
-          type: c.type,
-          transports: c.transports,
-        })),
-      };
-
-      const assertion = (await navigator.credentials.get({
-        publicKey: publicKeyOptions,
-      })) as PublicKeyCredential;
-
-      if (!assertion) {
+      const problem = await signInWithPasskey();
+      if (problem === "cancelled") {
         toast({
           title: "Cancelled",
           description: "Passkey authentication was cancelled.",
         });
         return;
       }
-
-      const assertionResponse = assertion.response as AuthenticatorAssertionResponse;
-
-      const verifyRes = await supabase.functions.invoke("webauthn-authenticate", {
-        body: {
-          action: "verify",
-          origin: window.location.origin,
-          credential: {
-            id: assertion.id,
-            rawId: bufferToBase64url(assertion.rawId),
-            type: assertion.type,
-            response: {
-              clientDataJSON: bufferToBase64url(assertionResponse.clientDataJSON),
-              authenticatorData: bufferToBase64url(assertionResponse.authenticatorData),
-              signature: bufferToBase64url(assertionResponse.signature),
-              userHandle: assertionResponse.userHandle
-                ? bufferToBase64url(assertionResponse.userHandle)
-                : null,
-            },
-          },
-        },
-      });
-
-      if (verifyRes.error || verifyRes.data?.error) {
-        const errMsg = verifyRes.data?.error || verifyRes.error?.message || "Passkey verification failed";
-        console.error("Passkey verify error:", { error: verifyRes.error, data: verifyRes.data });
+      if (problem) {
         toast({
-          title: "Authentication Failed",
-          description: errMsg,
+          title: "Passkey Error",
+          description: problem,
           variant: "destructive",
         });
         return;
       }
-
-      const { token_hash, email: userEmail } = verifyRes.data;
-
-      const { error: otpError } = await supabase.auth.verifyOtp({
-        token_hash,
-        type: "magiclink",
-      });
-
-      if (otpError) {
-        toast({
-          title: "Session Failed",
-          description: otpError.message,
-          variant: "destructive",
-        });
-        return;
-      }
-
+      const { data } = await supabase.auth.getSession();
       speakWelcome("Jared");
-      toast({ title: "Welcome back!", description: `Signed in as ${userEmail}` });
+      toast({ title: "Welcome back!", description: `Signed in as ${data.session?.user.email ?? "Jared"}` });
       // Navigation handled by the isAdmin redirect in the render
-    } catch (err) {
-      console.error("Passkey error:", err);
-      if (err instanceof DOMException && err.name === "NotAllowedError") {
-        toast({
-          title: "Cancelled",
-          description: "Passkey authentication was cancelled.",
-        });
-      } else {
-        toast({
-          title: "Passkey Error",
-          description: err instanceof Error ? err.message : "An unexpected error occurred",
-          variant: "destructive",
-        });
-      }
     } finally {
       setPasskeyLoading(false);
     }
