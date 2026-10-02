@@ -34,6 +34,14 @@ SUPA="https://rcqfqhguwpmaarseifqg.supabase.co"
 ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjcWZxaGd1d3BtYWFyc2VpZnFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTc1OTUsImV4cCI6MjA5MDkzMzU5NX0.MHwsTd3CmaTViv3HoFRbeF1t6hmlf5W-p_4eHFBQP9k"
 
 ok=0; warn=0; err=0
+SKIP_SITE=0; SKIP_STUDIO=0
+for a in "$@"; do
+  case "$a" in
+    --studio-only) SKIP_SITE=1 ;;
+    --site-only)   SKIP_STUDIO=1 ;;
+    *) printf 'unknown flag: %s (try --site-only or --studio-only)\n' "$a" >&2; exit 2 ;;
+  esac
+done
 log()  { printf '\n== %s\n' "$*"; }
 pass() { printf '   OK  %s\n' "$*"; ok=$((ok+1)); }
 note() { printf '   ..  %s\n' "$*"; }
@@ -43,6 +51,7 @@ epoch_iso() { python3 -c "import sys,datetime;print(int(datetime.datetime.fromis
 http_date_epoch() { python3 -c "import sys;from email.utils import parsedate_to_datetime;print(int(parsedate_to_datetime(sys.argv[1]).timestamp()))" "$1" 2>/dev/null || echo 0; }
 
 # ---------------------------------------------------------------- 1. pull
+if [ "$SKIP_SITE" -eq 0 ]; then
 log "git pull (site)"
 BEFORE=$(git rev-parse HEAD)
 if ! git pull --ff-only origin main; then fail "git pull"; exit 1; fi
@@ -95,8 +104,10 @@ if [ "$live_build" -ge "$SINCE" ]; then
 else
   fail "site did not redeploy within 4 min (live stamp $live_build, wanted >= $SINCE)"
 fi
+fi # SKIP_SITE
 
 # --------------------------------------------------- 4. redeploy: studio
+if [ "$SKIP_STUDIO" -eq 0 ]; then
 log "studio redeploy (project $STUDIO_NAME)"
 STUDIO_MOD_BEFORE=$(curl -sI --max-time 15 "$STUDIO/" | tr -d '\r' | sed -n 's/^[Ll]ast-[Mm]odified: //p')
 
@@ -203,6 +214,7 @@ BOOT=$(curl -fsS --max-time 20 -X POST "$SUPA/rest/v1/rpc/studio_boot" \
   -d '{"p_file":"index.html","p_preview":null}' 2>/dev/null || true)
 if printf '%s' "$BOOT" | grep -q '"ok": *true'; then pass "studio_boot: live build answers"
 else warn=$((warn+1)); note "studio_boot response: ${BOOT:0:200}"; fi
+fi # SKIP_STUDIO
 
 # ------------------------------------------------------------------ summary
 log "summary: $ok ok, $warn warnings, $err failed"
