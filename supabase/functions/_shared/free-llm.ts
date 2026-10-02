@@ -84,22 +84,24 @@ const CF_NEURONS: Record<string, [number, number]> = {
 const ANTHROPIC_PRICE: Record<string, [number, number]> = { haiku: [1, 5], sonnet: [3, 15], opus: [15, 75] };
 
 function routes(task: LlmTask, privacy: LlmPrivacy): Rung[] {
-  const pub: Rung[] = privacy === "public"
-    ? [{ provider: "gemini", model: M.gemini, maxIn: GEMINI_MAX }, { provider: "openrouter", model: M.openrouter, maxIn: OR_MAX }]
-    : [];
+  // Free extended rungs: Gemini + OpenRouter are now private_ok and run for all tasks before paid.
+  const ext: Rung[] = [
+    { provider: "gemini", model: M.gemini, maxIn: GEMINI_MAX },
+    { provider: "openrouter", model: M.openrouter, maxIn: OR_MAX },
+  ];
   switch (task) {
     case "judge":
     case "pick":
       return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
-        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, { provider: "local", model: M.local, maxIn: LOCAL_MAX }, ...pub];
+        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, { provider: "local", model: M.local, maxIn: LOCAL_MAX }, ...ext];
     case "classify":
       return [{ provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
-        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, { provider: "local", model: M.local, maxIn: LOCAL_MAX }, ...pub];
+        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, { provider: "local", model: M.local, maxIn: LOCAL_MAX }, ...ext];
     case "write":
-      return [{ provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }]; // used only when paid is over budget (paid "first")
-    default: // extract, reflect, triage, summarize (v2: + Groq Qwen, and the Mac mini as the last free rung)
+      return [{ provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...ext]; // used only when paid is over budget (paid "first")
+    default: // extract, reflect, triage, summarize
       return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
-        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, { provider: "local", model: M.local, maxIn: LOCAL_MAX }, ...pub];
+        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, { provider: "local", model: M.local, maxIn: LOCAL_MAX }, ...ext];
   }
 }
 
