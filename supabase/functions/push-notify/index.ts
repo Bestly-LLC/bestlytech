@@ -10,6 +10,7 @@
 // call generates them here and writes them straight to Vault — the private key is never shown.
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -20,11 +21,10 @@ const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ??
 const SERVICE = SB_SECRET;
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE, { auth: { persistSession: false } });
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const CORS = corsWith({
+  headers: "authorization, content-type, apikey, x-client-info",
+  methods: "POST, OPTIONS"
+});
 const J = (o: unknown, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 

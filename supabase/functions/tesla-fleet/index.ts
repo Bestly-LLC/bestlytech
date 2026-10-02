@@ -7,6 +7,7 @@
 // Every billable Tesla call goes through tesla_fleet_spend() first (monthly cap $8, Tesla gives $10 free).
 // Secrets: Vault tesla_fleet_client_secret / _private_key / _refresh_token / _access_token via tesla_fleet_secrets().
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -23,11 +24,10 @@ const SCOPES = "openid offline_access vehicle_device_data vehicle_cmds";
 const USER_SCOPES = `${SCOPES} vehicle_charging_cmds`;
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+const cors = corsWith({
+  headers: "authorization, apikey, content-type, x-client-info",
+  methods: "GET, POST, OPTIONS"
+});
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const back = (qs: string) => new Response(null, { status: 302, headers: { Location: `${ADMIN}?${qs}#tesla` } });
 

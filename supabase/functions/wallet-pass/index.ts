@@ -20,6 +20,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import forge from "npm:node-forge@1.3.1";
 import { zipSync, strToU8 } from "npm:fflate@0.8.2";
 import { WWDR_G4_PEM } from "./wwdr.ts";
+import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -39,11 +40,10 @@ const SHORT = "https://bestly.tech";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-};
+const cors = corsWith({
+  headers: "authorization, apikey, content-type, x-client-info",
+  methods: "GET, POST, DELETE, OPTIONS"
+});
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const empty = (status: number) => new Response(null, { status, headers: cors });
 

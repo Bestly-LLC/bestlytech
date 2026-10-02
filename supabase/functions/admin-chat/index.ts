@@ -96,6 +96,7 @@ import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: 
 //   conversation inside the tool loop. logSpend prices cache writes at 1.25x and reads at 0.1x input.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
 const MAX_TURNS = 10;
@@ -128,11 +129,10 @@ const PI_READ_ONLY = new Set([
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SECRET_KEY!, { auth: { persistSession: false } });
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const CORS = corsWith({
+  headers: "authorization, content-type, apikey, x-client-info",
+  methods: "POST, OPTIONS"
+});
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Per-request cut-off for slow tools, so one tool cannot run the reply past the platform limit.

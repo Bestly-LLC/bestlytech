@@ -19,16 +19,16 @@
 //   3. Mac mini local model (Ollama) via lax_ask_poll (no tools).
 //   4. FAQ keyword match (lax_ask_fallback).
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const cors = corsWith({
+  headers: "authorization, apikey, content-type, x-client-info",
+  methods: "POST, OPTIONS"
+});
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 type Prompt = { system: string; history: { role: string; content: string }[]; question: string; reply_id: number; model: string };

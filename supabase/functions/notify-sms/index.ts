@@ -1,8 +1,8 @@
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-maintenance-secret",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-};
+import { corsWith } from "../_shared/cors.ts";
+const cors = corsWith({
+  headers: "authorization, x-client-info, apikey, content-type, x-maintenance-secret",
+  methods: "GET, POST, PUT, DELETE, OPTIONS"
+});
 
 Deno.serve((req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });

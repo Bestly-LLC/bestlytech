@@ -9,12 +9,16 @@
 // Each Tesla call is metered through tesla_fleet_spend('data') like every other Fleet API call.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { SECRET_KEY, PUBLISHABLE_KEY, isServiceRequest } from "../_shared/keys.ts";
+import { corsWith } from "../_shared/cors.ts";
 
 const FLEET = "https://fleet-api.prd.na.vn.cloud.tesla.com";
 const TOKEN = "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token";
 const BUCKET = "tesla-invoices";
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, SECRET_KEY, { auth: { persistSession: false } });
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info", "Access-Control-Allow-Methods": "POST, OPTIONS" };
+const cors = corsWith({
+  headers: "authorization, apikey, content-type, x-client-info",
+  methods: "POST, OPTIONS"
+});
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 async function isAdmin(req: Request) {

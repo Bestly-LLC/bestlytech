@@ -16,6 +16,7 @@
 // verify_jwt is off (the new browser has no session yet); admin ops check the JWT here.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -24,11 +25,10 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, {
   auth: { persistSession: false },
 });
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const CORS = corsWith({
+  headers: "authorization, content-type, apikey, x-client-info",
+  methods: "POST, OPTIONS"
+});
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 
 async function sha256(s: string) {

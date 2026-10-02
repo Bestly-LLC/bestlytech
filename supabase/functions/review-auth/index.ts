@@ -22,6 +22,7 @@ import {
   b64uToBuf, bufToB64u, randomB64u, sha256hex,
   publicKeyFromAttestation, verifyAssertion,
 } from "./webauthn.ts";
+import { corsWith } from "../_shared/cors.ts";
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -36,10 +37,7 @@ const SESSION_DAYS = 30;
 // Deliberately shorter than the client's: a staff session can promote content.
 const STAFF_SESSION_DAYS = 14;
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
-};
+const cors = corsWith({ headers: "authorization, apikey, content-type" });
 const J = (o: unknown, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 

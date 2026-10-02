@@ -5,12 +5,12 @@
 // free ADS-B feeds (adsb.lol, then adsb.fi) around home. Browsers can't call those directly (no CORS).
 // Returns the same item shape as server.py air_loop: {hex, cs, reg, t, cat, lat, lon, alt, gs, track, vr, dst, dir}.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { corsWith } from "../_shared/cors.ts";
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-};
+const cors = corsWith({
+  headers: "authorization, x-client-info, apikey, content-type",
+  methods: "POST, GET, OPTIONS"
+});
 const HOME = { lat: 34.0835, lon: -118.3698 }; // 733 N Kings Rd (same as server.py HOME_LAT/HOME_LON)
 let cache: { at: number; nm: number; body: unknown } | null = null;
 

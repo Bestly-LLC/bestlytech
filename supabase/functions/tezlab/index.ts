@@ -35,6 +35,7 @@
 // v4: nav_charger. v3: a 401 forces a refresh and retries once.
 // Secrets: Vault tezlab_refresh_token / tezlab_access_token via tezlab_secrets() (service role only).
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -47,7 +48,10 @@ const REDIRECT = `${SB_URL}/functions/v1/tezlab/callback`;
 const ADMIN = "https://www.bestly.tech/admin/turo/lax-pass";
 const SCOPE = "mcp mcp_commands";
 const STATE_TTL = 3 * 24 * 3600e3; // one-time connect links work for 3 days
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-proxy-key", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
+const cors = corsWith({
+  headers: "authorization, apikey, content-type, x-client-info, x-proxy-key",
+  methods: "GET, POST, OPTIONS"
+});
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 const back = (qs: string) => new Response(null, { status: 302, headers: { Location: `${ADMIN}?${qs}#tezlab` } });
 const form = (o: Record<string, string>) => new URLSearchParams(o).toString();

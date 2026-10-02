@@ -3,16 +3,12 @@
 // most common server-side cause of a click->reload loop) and records the
 // report so the domain can be reviewed / suppressed. Idempotent.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders as cors } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 function json(b, s = 200) {
   return new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 }

@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
+import { pushNtfy } from "../_shared/ntfy.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -46,16 +48,6 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
  * CloudDealDetail.tsx).
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const NTFY_BASE = "https://ntfy.sh";
-const NTFY_TOPIC = "bestly-sysalert-7q2k9mx4";
-
 function ok(b: unknown, s = 200) {
   return new Response(JSON.stringify(b), {
     status: s,
@@ -67,14 +59,6 @@ function bad(reason: string, status = 400) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-function asciiHeader(s: string) {
-  return s
-    .replace(/[–—]/g, "-")
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[^\x20-\x7E]/g, "");
 }
 
 const ALLOWED_KINDS = ["sow", "acceptance", "nda"] as const;
@@ -315,25 +299,13 @@ Deno.serve(async (req) => {
   });
 
   // Operator ntfy push
-  try {
-    const headers: Record<string, string> = {
-      Title: asciiHeader(
-        `${kind.toUpperCase()} sent to ${deal.primary_contact_name}: ${deal.company_name}`
-      ),
-      Tags: "envelope_with_arrow",
-      Priority: "4",
-      Click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
-    };
-    const ntfyToken = Deno.env.get("NTFY_TOKEN");
-    if (ntfyToken) headers["Authorization"] = `Bearer ${ntfyToken}`;
-    await fetch(`${NTFY_BASE}/${NTFY_TOPIC}`, {
-      method: "POST",
-      headers,
-      body: result.sign_url,
-    });
-  } catch (e) {
-    console.error("ntfy push failed (sign create)", e);
-  }
+  await pushNtfy({
+    title: `${kind.toUpperCase()} sent to ${deal.primary_contact_name}: ${deal.company_name}`,
+    body: result.sign_url,
+    tags: "envelope_with_arrow",
+    priority: "4",
+    click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
+  });
 
   return ok({
     ok: true,

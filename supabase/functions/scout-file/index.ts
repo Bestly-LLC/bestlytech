@@ -17,6 +17,7 @@
 // Text files never reach a model at all, which is the common case and stays free.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 
 const secretKeys = (() => {
   const out: string[] = [];
@@ -33,11 +34,10 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, SECRET, {
   auth: { persistSession: false }, global: { headers: { apikey: SECRET } },
 });
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const CORS = corsWith({
+  headers: "authorization, content-type, apikey, x-client-info",
+  methods: "POST, OPTIONS"
+});
 const J = (o: unknown, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 

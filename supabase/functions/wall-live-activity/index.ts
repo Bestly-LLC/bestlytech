@@ -15,6 +15,7 @@
 // Nothing here ever returns or logs a key or a full device token.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -24,11 +25,10 @@ const BUNDLE = "tech.bestly.sky";
 const TOPIC = BUNDLE + ".push-type.liveactivity";
 const ATTR_TYPE = "AircraftAttributes";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info, x-api-key, x-sky-key",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const CORS = corsWith({
+  headers: "authorization, content-type, apikey, x-client-info, x-api-key, x-sky-key",
+  methods: "POST, OPTIONS"
+});
 const J = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 
 const b64url = (bytes: Uint8Array) => {

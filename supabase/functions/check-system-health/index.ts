@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
+import { pushNtfy } from "../_shared/ntfy.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -22,14 +24,6 @@ const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ??
  *  - If NTFY_TOKEN set, sent as Authorization: Bearer for ntfy.sh authed quota.
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
-const NTFY_BASE = "https://ntfy.sh";
-const NTFY_TOPIC_DEFAULT = "bestly-sysalert-7q2k9mx4";
 const CLICK_URL = "https://bestly.tech/admin";
 
 const CONFIRMATION_CHECKS = 2;
@@ -167,12 +161,13 @@ Deno.serve(async (req) => {
     if (shouldAlert && !quiet) {
       const m = composeMessage({ confirmedDown, newlyDown, currentDownLabels, systems });
       pushBody = m.body;
-      pushSent = await sendNtfy({
+      pushSent = (await pushNtfy({
         title: m.title,
         body: m.body,
         priority: 5,
         tags: ["rotating_light", "cookie"],
-      });
+        click: CLICK_URL,
+      })).ok;
     }
 
     if (pushSent || (newlyUp.length > 0 && !shouldAlert)) {
@@ -245,39 +240,4 @@ function composeMessage(m: MessageInput): { title: string; body: string } {
     if (sys?.lastRun) lines.push(`${name} last seen: ${sys.lastRun}`);
   }
   return { title, body: lines.join("\n") };
-}
-
-interface NtfyOpts {
-  title: string;
-  body: string;
-  priority?: 1 | 2 | 3 | 4 | 5;
-  tags?: string[];
-}
-
-async function sendNtfy(opts: NtfyOpts): Promise<boolean> {
-  const topic = Deno.env.get("NTFY_TOPIC") || NTFY_TOPIC_DEFAULT;
-  const ntfyToken = Deno.env.get("NTFY_TOKEN");
-  const headers: Record<string, string> = {
-    "Title": opts.title,
-    "Priority": String(opts.priority ?? 3),
-    "Tags": (opts.tags ?? []).join(","),
-    "Click": CLICK_URL,
-  };
-  if (ntfyToken) headers["Authorization"] = `Bearer ${ntfyToken}`;
-  try {
-    const res = await fetch(`${NTFY_BASE}/${topic}`, {
-      method: "POST",
-      headers,
-      body: opts.body,
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      console.error(`ntfy ${res.status}:`, t);
-      return false;
-    }
-    return true;
-  } catch (e) {
-    console.error("ntfy push failed:", e);
-    return false;
-  }
 }

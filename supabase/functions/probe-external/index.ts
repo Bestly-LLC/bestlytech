@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
+import { pushNtfy } from "../_shared/ntfy.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -12,18 +14,10 @@ const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ??
  * v2 (2026-04-30) - probe + DB write.
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
 const TIMEOUT_MS = 8000;
 const LATENCY_WARN_MS = 4000;
 const CONFIRM_FAILURES = 2;
 
-const NTFY_BASE = "https://ntfy.sh";
-const NTFY_TOPIC_DEFAULT = "bestly-sysalert-7q2k9mx4";
 const CLICK_URL = "https://bestly.tech/status";
 
 type Status = "ok" | "warn" | "down" | "unknown";
@@ -73,22 +67,6 @@ async function probeOne(url: string): Promise<ProbeResult> {
   } finally {
     clearTimeout(timeout);
   }
-}
-
-async function sendNtfy(title: string, body: string, priority: 1|2|3|4|5 = 4): Promise<boolean> {
-  const topic = Deno.env.get("NTFY_TOPIC") || NTFY_TOPIC_DEFAULT;
-  const ntfyToken = Deno.env.get("NTFY_TOKEN");
-  const headers: Record<string, string> = {
-    "Title": title,
-    "Priority": String(priority),
-    "Tags": "warning,globe_with_meridians",
-    "Click": CLICK_URL,
-  };
-  if (ntfyToken) headers["Authorization"] = `Bearer ${ntfyToken}`;
-  try {
-    const res = await fetch(`${NTFY_BASE}/${topic}`, { method: "POST", headers, body });
-    return res.ok;
-  } catch { return false; }
 }
 
 Deno.serve(async (req) => {
@@ -158,7 +136,7 @@ Deno.serve(async (req) => {
   if (newlyDown.length > 0) {
     const title = `External outage - ${newlyDown.length} service${newlyDown.length === 1 ? "" : "s"} down`;
     const body = newlyDown.map((d) => `- ${d.service}: ${d.reason}`).join("\n");
-    pushSent = await sendNtfy(title, body, 5);
+    pushSent = (await pushNtfy({ title, body, priority: 5, tags: "warning,globe_with_meridians", click: CLICK_URL })).ok;
   }
 
   return new Response(

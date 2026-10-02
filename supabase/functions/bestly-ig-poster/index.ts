@@ -47,16 +47,16 @@
 //   POST { action:'refresh' }                 -> roll every token nearing expiry (pg_cron)
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+const cors = corsWith({
+  headers: "authorization, x-client-info, apikey, content-type",
+  methods: "GET, POST, OPTIONS"
+});
 
 const GRAPH_IG = "https://graph.instagram.com/v23.0";
 const GRAPH_FB = "https://graph.facebook.com/v23.0";

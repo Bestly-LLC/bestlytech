@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
+import { pushNtfy } from "../_shared/ntfy.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -16,15 +18,10 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
  * v1. Locked once intake_submitted_at is set.
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
-};
-
-const NTFY_BASE = "https://ntfy.sh";
-const NTFY_TOPIC = "bestly-sysalert-7q2k9mx4";
+const corsHeaders = corsWith({
+  headers: "authorization, x-client-info, apikey, content-type",
+  methods: "GET, POST, PATCH, OPTIONS"
+});
 
 const ALLOWED_STAGES = ["network", "branding", "users", "migration", "policy"] as const;
 type StageKey = typeof ALLOWED_STAGES[number];
@@ -40,14 +37,6 @@ function bad(reason: string, status = 400) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-function asciiHeader(s: string) {
-  return s
-    .replace(/[–—]/g, "-")
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[^\x20-\x7E]/g, "");
 }
 
 Deno.serve(async (req) => {
@@ -167,20 +156,13 @@ Deno.serve(async (req) => {
       triggered_by: "client",
     });
 
-    const headers: Record<string, string> = {
-      Title: asciiHeader(`Intake submitted: ${row.company_name}`),
-      Tags: "package",
-      Priority: "5",
-      Click: `https://bestly.tech/admin/cloud/${row.lead_id}`,
-    };
-    const ntfyToken = Deno.env.get("NTFY_TOKEN");
-    if (ntfyToken) headers["Authorization"] = `Bearer ${ntfyToken}`;
-
-    fetch(`${NTFY_BASE}/${NTFY_TOPIC}`, {
-      method: "POST",
-      headers,
+    void pushNtfy({
+      title: `Intake submitted: ${row.company_name}`,
       body: `${row.primary_contact_name ?? "Client"} just finished the technical intake.`,
-    }).catch((e) => console.error("ntfy push failed", e));
+      tags: "package",
+      priority: "5",
+      click: `https://bestly.tech/admin/cloud/${row.lead_id}`,
+    });
 
     // Customer-facing thank-you
     const { data: dealFull } = await sb

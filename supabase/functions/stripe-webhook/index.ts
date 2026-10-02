@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { pushNtfy } from "../_shared/ntfy.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -177,19 +178,13 @@ serve(async (req) => {
 
           const paidAmount = `$${((session.amount_total ?? 0) / 100).toFixed(2)}`;
           const sendNtfy = async (title: string, message: string, priority: string) => {
-            try {
-              const ntfyToken = Deno.env.get("NTFY_TOKEN");
-              const headers: Record<string, string> = {
-                Title: title,
-                Tags: "money-bag",
-                Priority: priority,
-                Click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
-              };
-              if (ntfyToken) headers["Authorization"] = `Bearer ${ntfyToken}`;
-              await fetch("https://ntfy.sh/bestly-sysalert-7q2k9mx4", { method: "POST", headers, body: message });
-            } catch (ntfyErr) {
-              console.error("ntfy push failed (cloud deal)", ntfyErr);
-            }
+            await pushNtfy({
+              title,
+              body: message,
+              tags: "money-bag",
+              priority,
+              click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
+            });
           };
 
           if (customerId && typeof customerId === "string") {

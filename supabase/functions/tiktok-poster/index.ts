@@ -1,3 +1,4 @@
+import { corsWith } from "../_shared/cors.ts";
 // tiktok-poster — backend for the Cookie Yeti Poster review UI.
 // Holds the TikTok token server-side (Supabase secrets); the page never sees it.
 // Secrets required (supabase secrets set ...):
@@ -5,11 +6,10 @@
 // Actions:
 //   GET  ?action=creator-info                              -> { data: creator_info }
 //   POST { action:"post", videoUrl, caption, privacy }     -> publish status
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+const cors = corsWith({
+  headers: "authorization, x-client-info, apikey, content-type",
+  methods: "GET, POST, OPTIONS"
+});
 const API = "https://open.tiktokapis.com/v2";
 
 async function accessToken(): Promise<string> {

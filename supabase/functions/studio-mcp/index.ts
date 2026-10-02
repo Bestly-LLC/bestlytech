@@ -12,12 +12,16 @@
 // uses, so permissions, the claim gate, private memory and dual sign-off all
 // apply exactly as in Studio. Nothing here talks to tables directly.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
-const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type, authorization, mcp-session-id, mcp-protocol-version", "Access-Control-Allow-Methods": "POST, GET, OPTIONS" };
+const CORS = corsWith({
+  headers: "content-type, authorization, mcp-session-id, mcp-protocol-version",
+  methods: "POST, GET, OPTIONS"
+});
 const J = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "Content-Type": "application/json", ...CORS } });
 
 type Caller = { staff_id: string; slug: string; name: string; label: string };

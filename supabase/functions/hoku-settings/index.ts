@@ -10,6 +10,7 @@
 // access. It has been replaced and is no longer accepted.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -30,11 +31,7 @@ async function keyOk(k: string | null | undefined): Promise<boolean> {
   return false;
 }
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-settings-key",
-};
+const cors = corsWith({ headers: "authorization, x-client-info, apikey, content-type, x-settings-key" });
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 

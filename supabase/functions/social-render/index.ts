@@ -27,6 +27,7 @@ import { initWasm, Resvg } from "npm:@resvg/resvg-wasm@2.6.2";
 import { encode as jpegEncode } from "npm:jpeg-js@0.4.4";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { W, H, KINDS, GROUNDS, ACCENT, cy, ip, setAssets, type Card } from "./layout.ts";
+import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -34,7 +35,10 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
 const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
 const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
 
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-staff-token, x-proxy-key", "Access-Control-Allow-Methods": "POST, OPTIONS" };
+const cors = corsWith({
+  headers: "authorization, apikey, content-type, x-staff-token, x-proxy-key",
+  methods: "POST, OPTIONS"
+});
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
 const SB = Deno.env.get("SUPABASE_URL")!;

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -11,12 +12,6 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
 // Probe results are saved like any other untrusted submission: confidence 0.2 (below the 0.3 serving
 // threshold, same rule upsert_pattern applies to the anon key) until real extension successes
 // corroborate them, and they never bump an existing pattern's confidence or mark a domain resolved.
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
 
 // Known CMP signatures + CDN/script URL patterns (mirrored from ai-generate-pattern)
 const KNOWN_CMPS: { name: string; signatures: string[]; scriptSignatures: string[]; selector: string; action: string; cmp_fingerprint: string }[] = [

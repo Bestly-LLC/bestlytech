@@ -29,6 +29,7 @@
 // longer honored — that secret must be considered compromised and rotated.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import * as x509 from "https://esm.sh/@peculiar/x509@1.12.3";
+import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -36,11 +37,10 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
 
 x509.cryptoProvider.set(crypto as unknown as Crypto);
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const corsHeaders = corsWith({
+  headers: "authorization, x-client-info, apikey, content-type, x-internal-secret",
+  methods: "POST, OPTIONS"
+});
 function json(b: unknown, s = 200) {
   return new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }

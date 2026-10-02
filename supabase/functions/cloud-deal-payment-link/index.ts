@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -35,13 +36,6 @@ async function stripeSecret(vaultName: string, envName: string): Promise<string 
  * Also makes sure the deal has an intake_token before the customer can pay, so the
  * "deposit paid" email sent by stripe-webhook always carries the intake link.
  */
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 
 function ok(b: unknown, s = 200) {
   return new Response(JSON.stringify(b), {

@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
+import { pushNtfy } from "../_shared/ntfy.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -29,15 +31,10 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
  * unchanged status on the deal page.
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-bestly-sign-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const NTFY_BASE = "https://ntfy.sh";
-const NTFY_TOPIC = "bestly-sysalert-7q2k9mx4";
+const corsHeaders = corsWith({
+  headers: "authorization, x-client-info, apikey, content-type, x-bestly-sign-secret",
+  methods: "POST, OPTIONS"
+});
 
 function ok(b: unknown, s = 200) {
   return new Response(JSON.stringify(b), {
@@ -50,14 +47,6 @@ function bad(reason: string, status = 400) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-function asciiHeader(s: string) {
-  return s
-    .replace(/[–—]/g, "-")
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[^\x20-\x7E]/g, "");
 }
 
 function pickRequestUuid(body: any): string | null {
@@ -208,23 +197,13 @@ Deno.serve(async (req) => {
       triggered_by: "libresign-webhook",
     });
     // ntfy with priority 5 — operator should see this immediately
-    try {
-      const headers: Record<string, string> = {
-        Title: asciiHeader(`Signing declined: ${deal.company_name}`),
-        Tags: "no_entry",
-        Priority: "5",
-        Click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
-      };
-      const ntfyToken = Deno.env.get("NTFY_TOKEN");
-      if (ntfyToken) headers["Authorization"] = `Bearer ${ntfyToken}`;
-      await fetch(`${NTFY_BASE}/${NTFY_TOPIC}`, {
-        method: "POST",
-        headers,
-        body: `${deal.primary_contact_name ?? "Client"} declined the signing request.`,
-      });
-    } catch (e) {
-      console.error("ntfy decline failed", e);
-    }
+    await pushNtfy({
+      title: `Signing declined: ${deal.company_name}`,
+      body: `${deal.primary_contact_name ?? "Client"} declined the signing request.`,
+      tags: "no_entry",
+      priority: "5",
+      click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
+    });
     return ok({ ok: true, recorded: "declined" });
   }
 
@@ -280,25 +259,15 @@ Deno.serve(async (req) => {
   });
 
   // ntfy push
-  try {
-    const headers: Record<string, string> = {
-      Title: asciiHeader(`${label} signed: ${deal.company_name}`),
-      Tags: "white_check_mark",
-      Priority: "5",
-      Click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
-    };
-    const ntfyToken = Deno.env.get("NTFY_TOKEN");
-    if (ntfyToken) headers["Authorization"] = `Bearer ${ntfyToken}`;
-    await fetch(`${NTFY_BASE}/${NTFY_TOPIC}`, {
-      method: "POST",
-      headers,
-      body: `${deal.primary_contact_name ?? "Client"} just signed the ${label}.${
-        kind === "acceptance" ? " Stage 7 complete — Mark live unlocked." : ""
-      }`,
-    });
-  } catch (e) {
-    console.error("ntfy sign-complete failed", e);
-  }
+  await pushNtfy({
+    title: `${label} signed: ${deal.company_name}`,
+    body: `${deal.primary_contact_name ?? "Client"} just signed the ${label}.${
+      kind === "acceptance" ? " Stage 7 complete — Mark live unlocked." : ""
+    }`,
+    tags: "white_check_mark",
+    priority: "5",
+    click: `https://bestly.tech/admin/cloud/${deal.lead_id}`,
+  });
 
   return ok({ ok: true, recorded: `${kind}_signed` });
 });

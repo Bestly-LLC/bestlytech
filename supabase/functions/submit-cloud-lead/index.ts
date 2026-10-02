@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
+import { pushNtfy } from "../_shared/ntfy.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -14,15 +16,6 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
  *  - Return { brief_token } so frontend can redirect to /brief/[token].
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const NTFY_BASE = "https://ntfy.sh";
-const NTFY_TOPIC = "bestly-sysalert-7q2k9mx4";
 const ADMIN_CLICK_URL = "https://bestly.tech/admin";
 
 const USER_BAND = ["5", "25", "50", "100", "200+"] as const;
@@ -56,21 +49,7 @@ function isEmail(s: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
-function asciiHeader(s: string) {
-  // ntfy headers must be ASCII — strip em-dash, smart quotes, etc.
-  return s
-    .replace(/[–—]/g, "-")
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    // drop anything that isn't printable ASCII
-    .replace(/[^\x20-\x7E]/g, "");
-}
-
-async function pushNtfy(lead: LeadInput, leadId: string) {
-  const title = asciiHeader(
-    `New cloud lead: ${lead.company_name} (${lead.user_count_band} users)`
-  );
-  const tags = ["bell", "office"];
+async function pushLeadNtfy(lead: LeadInput, leadId: string) {
   const lines: string[] = [
     `${lead.contact_name} <${lead.contact_email}>`,
     lead.company_website ? lead.company_website : "",
@@ -78,26 +57,14 @@ async function pushNtfy(lead: LeadInput, leadId: string) {
     lead.primary_pain ? `Pain: ${lead.primary_pain}` : "",
     lead.primary_pain_detail ? `Note: ${lead.primary_pain_detail.slice(0, 200)}` : "",
   ].filter(Boolean);
-  const body = lines.join("\n");
 
-  const headers: Record<string, string> = {
-    Title: title,
-    Tags: tags.join(","),
-    Priority: "5",
-    Click: `${ADMIN_CLICK_URL}/cloud/${leadId}`,
-  };
-  const ntfyToken = Deno.env.get("NTFY_TOKEN");
-  if (ntfyToken) headers["Authorization"] = `Bearer ${ntfyToken}`;
-
-  try {
-    await fetch(`${NTFY_BASE}/${NTFY_TOPIC}`, {
-      method: "POST",
-      headers,
-      body,
-    });
-  } catch (err) {
-    console.error("ntfy push failed", err);
-  }
+  await pushNtfy({
+    title: `New cloud lead: ${lead.company_name} (${lead.user_count_band} users)`,
+    body: lines.join("\n"),
+    tags: ["bell", "office"],
+    priority: "5",
+    click: `${ADMIN_CLICK_URL}/cloud/${leadId}`,
+  });
 }
 
 Deno.serve(async (req) => {
@@ -176,7 +143,7 @@ Deno.serve(async (req) => {
   if (briefErr || !brief) {
     console.error("brief lookup error", briefErr);
     // Lead is saved — fail soft, return without brief token
-    await pushNtfy(lead as LeadInput, leadRow.id);
+    await pushLeadNtfy(lead as LeadInput, leadRow.id);
     return new Response(
       JSON.stringify({ ok: true, lead_id: leadRow.id, brief_token: null }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -184,7 +151,7 @@ Deno.serve(async (req) => {
   }
 
   // Fire-and-forget push to operator
-  pushNtfy(lead as LeadInput, leadRow.id).catch(() => {});
+  pushLeadNtfy(lead as LeadInput, leadRow.id).catch(() => {});
 
   // Fire-and-forget customer-facing email
   sb.functions

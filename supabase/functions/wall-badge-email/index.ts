@@ -3,16 +3,12 @@
 // One-off transactional mail: nothing is added to any list. Logged in email_send_log (template 'wall-badge');
 // the wall_sign_watchdog raises a Scout incident when these fail.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders as cors } from "../_shared/cors.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET);
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 const MESSAGES: Record<string, string> = {

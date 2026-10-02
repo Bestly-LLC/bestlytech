@@ -23,6 +23,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { llm } from "../_shared/free-llm.ts";
+import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -33,11 +34,9 @@ const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ??
 const AI_MODEL = "free:gpt-oss-120b"; // label for hoku_content_log; the actual model is whichever free provider answered
 const BRAND = "hoku";
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-gen-key, x-proxy-key, x-staff-token",
-};
+const cors = corsWith({
+  headers: "authorization, x-client-info, apikey, content-type, x-gen-key, x-proxy-key, x-staff-token"
+});
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {

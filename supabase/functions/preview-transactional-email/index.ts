@@ -1,11 +1,9 @@
 import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { TEMPLATES } from '../_shared/transactional-email-templates/registry.ts'
+import { corsWith } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type',
-}
+const corsHeaders = corsWith({ headers: "authorization, content-type" });
 
 // Renders all registered templates with their previewData.
 // Gated by LOVABLE_API_KEY — only the Go API calls this.

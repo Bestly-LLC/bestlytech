@@ -18,6 +18,7 @@
 // nudge the drain, never choose whose question gets answered or read the answer.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 
 const secretKeys = (() => {
   const out: string[] = [];
@@ -33,11 +34,10 @@ const SECRET = secretKeys[0];
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const db = createClient(URL_, SECRET, { auth: { persistSession: false }, global: { headers: { apikey: SECRET } } });
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const CORS = corsWith({
+  headers: "authorization, content-type, apikey, x-client-info",
+  methods: "POST, OPTIONS"
+});
 const J = (o: unknown, s = 200) =>
   new Response(JSON.stringify(o, null, 1), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 

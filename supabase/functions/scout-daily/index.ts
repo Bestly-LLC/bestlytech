@@ -18,6 +18,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm, LlmUnavailable, type LlmTask } from "../_shared/free-llm.ts";
+import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -35,11 +36,10 @@ const DECK_BOARD = "Bestly Ops";
 const SERVICE = SB_SECRET;
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE, { auth: { persistSession: false } });
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info, x-proxy-key",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const CORS = corsWith({
+  headers: "authorization, content-type, apikey, x-client-info, x-proxy-key",
+  methods: "POST, OPTIONS"
+});
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 
 function la(d = new Date()) {

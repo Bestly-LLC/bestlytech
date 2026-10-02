@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -11,11 +12,6 @@ const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ??
 // 2026-09-16: only learns from real cookie banners and never from Bestly's own sites. Selectors
 // that aren't obviously cookie controls are held OFF by the cy_pattern_gate trigger until the
 // robot browser confirms them (validate-pattern).
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 const CONSENT_RE = /cookie|consent|gdpr|ccpa|onetrust|optanon|didomi|cookiebot|usercentrics|trustarc|truste-|quantcast|qc-cmp|sourcepoint|sp_message|osano|iubenda|cookieyes|(^|[^a-z])cky-|cmplz|complianz|termly|klaro|borlabs|axeptio|tarteaucitron|datenschutz|einwilligung|rgpd|privacy (settings|preferences|choices)|your privacy/i;
 const BANNED_SELECTORS = ["body", "html", "head", "body *", "html *", "*"];

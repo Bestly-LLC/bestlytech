@@ -39,6 +39,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm as sharedLlm, LlmUnavailable, type LlmTask } from "../_shared/free-llm.ts";
+import { corsWith } from "../_shared/cors.ts";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const SECRETS: string[] = (() => {
@@ -50,11 +51,10 @@ const db = createClient(URL_, SECRETS[0], { auth: { persistSession: false } });
 const MODEL = Deno.env.get("TODO_CHECK_MODEL") ?? "claude-haiku-4-5";
 const TZ = "America/Los_Angeles";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const CORS = corsWith({
+  headers: "authorization, content-type, apikey, x-client-info",
+  methods: "POST, OPTIONS"
+});
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 
 function laNow(d = new Date()) {

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -9,12 +10,6 @@ const sbHeaders = (k: string): Record<string, string> => k.startsWith("sb_") ? {
 // report started ai-generate-pattern, which pays OpenAI. Reports are still always saved, but the AI
 // only starts when ai_gate allows it (ai_caps: per-day cap, and per hashed IP per hour). Otherwise the
 // domain waits for the scheduled pass, which has its own cap.
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
 
 // CY-PRIV (server defense-in-depth): reduce any URL to its origin so no path,
 // query string, or fragment is ever persisted — even from old/live clients that

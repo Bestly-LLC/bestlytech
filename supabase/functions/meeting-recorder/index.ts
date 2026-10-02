@@ -17,6 +17,7 @@
 // preflight is 401'd by the platform. Auth is done here, for both callers.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -26,11 +27,10 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, {
   auth: { persistSession: false },
 });
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info, x-recorder-key",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const CORS = corsWith({
+  headers: "authorization, content-type, apikey, x-client-info, x-recorder-key",
+  methods: "POST, OPTIONS"
+});
 const J = (o: unknown, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 
