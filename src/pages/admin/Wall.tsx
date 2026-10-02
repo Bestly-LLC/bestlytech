@@ -69,6 +69,8 @@ type WallState = {
   issTag?: boolean; skyHome?: boolean; airRadiusMi?: number; atc?: boolean;
   /** Landmarks overlay on the sky map: city labels, downtown skyline glyph, LAX runways (2026-10-01). Missing = on. */
   skyLandmarks?: boolean;
+  /** OSM roads on the sky map (dense grid near home, freeways across the basin; 2026-10-02). Missing = on. */
+  skyRoads?: boolean;
   /** W1 round 4: where home sits on the sky (0..1 of the sky box; null = middle) and a plane held on the sign-wall name tag. */
   homePos?: { x: number; y: number } | null; airFocus?: { hex: string; until: number } | null;
   /** Strip widgets on the left side (missing = on) and the sample Turo booking pop-up (ms). W2 round 3. */
@@ -1269,6 +1271,9 @@ export default function Wall() {
             </Row>
             <Row label="Landmarks" detail="City labels, the downtown skyline, and the LAX runways on the sky map." htmlFor="wall-sky-landmarks">
               <Switch className={swHit} id="wall-sky-landmarks" checked={s.skyLandmarks !== false} onCheckedChange={(v) => change({ skyLandmarks: v })} />
+            </Row>
+            <Row label="Roads" detail="Street grid around home and freeways across the basin (OpenStreetMap)." htmlFor="wall-sky-roads">
+              <Switch className={swHit} id="wall-sky-roads" checked={s.skyRoads !== false} onCheckedChange={(v) => change({ skyRoads: v })} />
             </Row>
             <Row label="Space Station name" detail="The name under the Space Station when it passes over." htmlFor="wall-iss-tag">
               <Switch className={swHit} id="wall-iss-tag" checked={s.issTag !== false} onCheckedChange={(v) => change({ issTag: v })} />
