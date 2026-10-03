@@ -373,7 +373,7 @@ export default function Sky() {
         {/* name tag card (the wall's flight card) */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-3 sm:p-4" style={{ paddingBottom: full ? "max(0.75rem, env(safe-area-inset-bottom))" : undefined }}>
           {fa && fi ? (
-            <div className="pointer-events-auto w-full max-w-[420px] rounded-3xl bg-[#0b0f1e]/85 p-4 ring-1 ring-white/12" aria-live="polite">
+            <div className="pointer-events-auto w-full max-w-[420px] rounded-3xl bg-[#0b0f1e]/85 p-4 ring-2 ring-white/80" aria-live="polite">
               <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/55">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: KINDS[fi.kind]?.[1] }} aria-hidden />
                 {KINDS[fi.kind]?.[0]}{flightNo(fa) ? ` · Flight ${flightNo(fa)}` : fa.reg ? ` · ${fa.reg}` : ""}
