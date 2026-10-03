@@ -85,10 +85,10 @@ const CF_NEURONS: Record<string, [number, number]> = {
 const ANTHROPIC_PRICE: Record<string, [number, number]> = { haiku: [1, 5], sonnet: [3, 15], opus: [15, 75] };
 
 function routes(task: LlmTask, privacy: LlmPrivacy): Rung[] {
-  // Free extended rungs: Gemini + OpenRouter + local Ollama run before paid.
-  // Local (Ollama) is last free rung — it's capable but slow and house-bound.
-  const ext: Rung[] = [
-    { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },
+  // FreeLLM goes first (unlimited free, private-ok). Then Groq/CF for speed.
+  // Gemini + OpenRouter + local Ollama are the remaining free fallbacks.
+  const freellmRung: Rung = { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX };
+  const tail: Rung[] = [
     { provider: "gemini", model: M.gemini, maxIn: GEMINI_MAX },
     { provider: "openrouter", model: M.openrouter, maxIn: OR_MAX },
     { provider: "local", model: M.local, maxIn: LOCAL_MAX },
@@ -96,16 +96,16 @@ function routes(task: LlmTask, privacy: LlmPrivacy): Rung[] {
   switch (task) {
     case "judge":
     case "pick":
-      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
-        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...ext];
+      return [freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     case "classify":
-      return [{ provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
-        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...ext];
+      return [freellmRung, { provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     case "write":
-      return [{ provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...ext]; // used only when paid is over budget (paid "first")
+      return [freellmRung, { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     default: // extract, reflect, triage, summarize
-      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
-        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...ext];
+      return [freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
   }
 }
 
