@@ -71,7 +71,7 @@ const M = {
   gemini: "gemini-2.5-flash-lite",
   openrouter: "nvidia/nemotron-3-super-120b-a12b:free",
   freellm: "auto",
-  freellmCode: "qwen2.5-coder-32b-instruct", // FreeLLM's dedicated coding agent; used for task=code
+  freellmCode: "qwen3-coder-480b", // v31: FreeLLM's best coding model (also has kimi-k2.7-code, devstral-2, codestral); task=code
 };
 // Estimated input+output ceilings per rung. Groq free = 8K tokens/min PER MODEL, so prompt + output must fit.
 // v2: LOCAL_MAX follows the Mac mini worker's num_ctx (8192, scripts/partner-ai/worker.py); it was 3000, which shut it out.
@@ -86,33 +86,31 @@ const CF_NEURONS: Record<string, [number, number]> = {
 const ANTHROPIC_PRICE: Record<string, [number, number]> = { haiku: [1, 5], sonnet: [3, 15], opus: [15, 75] };
 
 function routes(task: LlmTask, privacy: LlmPrivacy): Rung[] {
-  // v30 (2026-10-03): Groq/Cloudflare first (proven), then Gemini, OpenRouter, FreeLLM, then the Mac mini.
-  // FreeLLM used to go first, but it lives on the Mac mini behind a private Tailscale address the cloud cannot
-  // reach, so it only runs once freellm_base_url (a public https tunnel) is in Vault. Rungs without a key skip in 0 ms.
+  // v31 (2026-10-03, Jared): FreeLLM FIRST (257 free models via the Mac mini's Funnel /v1, freellm_base_url), then Groq,
+  // Cloudflare, Gemini, OpenRouter, the Mac mini's Ollama. When freellm_watch sees it down it sets a cooldown and it skips in 0 ms.
   const freellmRung: Rung = { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX };
   const freellmCodeRung: Rung = { provider: "freellm", model: M.freellmCode, maxIn: FREELLM_MAX };
   const tail: Rung[] = [
     { provider: "gemini", model: M.gemini, maxIn: GEMINI_MAX },
     { provider: "openrouter", model: M.openrouter, maxIn: OR_MAX },
-    freellmRung,
     { provider: "local", model: M.local, maxIn: LOCAL_MAX },
   ];
   switch (task) {
     case "code":
       // Coding agent first, then general FreeLLM, then Groq's best, then the rest.
-      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
-        freellmCodeRung, ...tail];
+      return [freellmCodeRung, freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
+        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     case "judge":
     case "pick":
-      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+      return [freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
         { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     case "classify":
-      return [{ provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+      return [freellmRung, { provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
         { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     case "write":
-      return [{ provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
+      return [freellmRung, { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     default: // extract, reflect, triage, summarize
-      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+      return [freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
         { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
   }
 }
@@ -524,13 +522,13 @@ export interface ChatResult { content: string; toolCalls: ChatToolCall[]; provid
 // so every turn after that became a paid-AI ask. Gemini, OpenRouter and FreeLLM now follow; each skips in 0 ms until its key
 // (and, for FreeLLM, a public freellm_base_url) is in Vault.
 const CHAT_LADDER: Rung[] = [
+  { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },        // v31: first (Jared). Tool calls verified 2026-10-03.
   { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
   { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
   { provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX },
   { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
   { provider: "gemini", model: M.gemini, maxIn: GEMINI_MAX },
   { provider: "openrouter", model: M.openrouter, maxIn: OR_MAX },
-  { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },
 ];
 
 async function postChat(url: string, key: string, body: Record<string, unknown>, timeoutMs: number): Promise<any> {
@@ -589,6 +587,8 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
     // Provider pauses (free_llm_watch) are ignored here on purpose: Jared is waiting in a live chat, a paused rung
     // costs one quick request, and false pauses were a main reason Scout asked for paid AI (scout_free_watch lifts them).
     if ((modelSkip.get(rung.model) ?? 0) > Date.now()) { skip("rate_limited"); continue; }
+    // Except FreeLLM: its cooldown means the Mac mini is unreachable (freellm_watch), so skip instead of a 25 s timeout.
+    if (rung.provider === "freellm" && p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now()) { skip("skipped_off"); continue; }
     if (need > rung.maxIn) { skip("skipped_size"); continue; }
     if (p?.daily_cap && (await usedToday(rung.provider)) >= p.daily_cap) { skip("skipped_budget"); continue; }
 
@@ -608,7 +608,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
         if (!k.groq_api_key) throw new Fail("skipped_nokey", "no groq_api_key");
         j = await postChat("https://api.groq.com/openai/v1/chat/completions", k.groq_api_key, body, Math.min(left, 25_000));
       } else if (rung.provider === "freellm") {
-        j = await postChat(freellmUrl(k), k.freellm_api_key, body, Math.min(left, 30_000));
+        j = await postChat(freellmUrl(k), k.freellm_api_key, body, Math.min(left, 25_000));
       } else if (rung.provider === "gemini") {
         if (!k.gemini_api_key) throw new Fail("skipped_nokey", "no gemini_api_key");
         j = await postChat("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", k.gemini_api_key, body, Math.min(left, 30_000));

@@ -30,12 +30,14 @@ begin
       v_status := coalesce(r.status_code::text, left(r.error_msg, 80));
       if ok then
         update freellm_watch_state set fails = 0, last_ok_at = now(), last_status = v_status, updated_at = now() where id;
-        update llm_providers set last_ok_at = now() where name = 'freellm';
+        update llm_providers set last_ok_at = now(), cooldown_until = null, cooldown_reason = null where name = 'freellm';
         if exists (select 1 from monitor_issues where key = 'ai.freellm' and status = 'open') then
           perform bestly_raise('ai.freellm', 'resolved', 'info', 'FreeLLM is reachable again', null, 'ai', null, true);
         end if;
       else
         update freellm_watch_state set fails = fails + 1, last_status = v_status, updated_at = now() where id;
+        -- Scout's ladder skips FreeLLM instantly while this is set (no 25 s timeout per turn when the Mac mini is down).
+        update llm_providers set cooldown_until = now() + interval '11 minutes', cooldown_reason = 'freellm_watch: ' || v_status where name = 'freellm';
         if st.fails + 1 >= 2 then
           perform bestly_raise('ai.freellm', 'problem', 'warning', 'FreeLLM on the Mac mini is not reachable',
             format('The cloud can''t reach it (%s). The Mac mini fixes itself every 5 min (app, Tailscale, Funnel); if this stays open, the Mac mini is probably asleep or offline.', v_status),
