@@ -60,7 +60,7 @@ async function test() {
   check("scrub", !s.includes("sk-ant-api03") && !s.includes("abcd1234abcd1234abcd") && s.includes("4820d3eb"), s);
 
   // 2. each provider answers
-  for (const p of ["groq", "cloudflare", "local"] as const) { const r = await llmProbe(p); check(`probe_${p}`, r.ok, r); }
+  for (const p of ["groq", "cloudflare", "local", "freellm"] as const) { const r = await llmProbe(p); check(`probe_${p}`, r.ok, r); }
 
   // 3. ladder: judge, JSON, private
   try {

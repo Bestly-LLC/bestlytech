@@ -16,7 +16,7 @@ import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
 export type LlmTask = "judge" | "pick" | "extract" | "triage" | "write" | "reflect" | "classify" | "summarize";
 export type LlmPrivacy = "private" | "public";
-type Provider = "groq" | "cloudflare" | "local" | "gemini" | "openrouter" | "anthropic";
+type Provider = "groq" | "cloudflare" | "local" | "gemini" | "openrouter" | "freellm" | "anthropic";
 type Outcome = "ok" | "rate_limited" | "timeout" | "error" | "bad_json" | "invalid"
   | "skipped_size" | "skipped_off" | "skipped_budget" | "skipped_privacy" | "skipped_nokey";
 
@@ -70,10 +70,11 @@ const M = {
   local: "qwen3:8b",
   gemini: "gemini-2.5-flash-lite",
   openrouter: "nvidia/nemotron-3-super-120b-a12b:free",
+  freellm: "auto",
 };
 // Estimated input+output ceilings per rung. Groq free = 8K tokens/min PER MODEL, so prompt + output must fit.
 // v2: LOCAL_MAX follows the Mac mini worker's num_ctx (8192, scripts/partner-ai/worker.py); it was 3000, which shut it out.
-const GROQ_MAX = 7000, LOCAL_MAX = 7000, CF_MAX = 120_000, GEMINI_MAX = 200_000, OR_MAX = 100_000;
+const GROQ_MAX = 7000, LOCAL_MAX = 7000, CF_MAX = 120_000, GEMINI_MAX = 200_000, OR_MAX = 100_000, FREELLM_MAX = 120_000;
 
 // Cloudflare Neurons per 1M tokens [in, out] (pricing page 2026-09-23: $0.011 per 1K Neurons).
 const CF_NEURONS: Record<string, [number, number]> = {
@@ -87,6 +88,7 @@ function routes(task: LlmTask, privacy: LlmPrivacy): Rung[] {
   // Free extended rungs: Gemini + OpenRouter + local Ollama run before paid.
   // Local (Ollama) is last free rung — it's capable but slow and house-bound.
   const ext: Rung[] = [
+    { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },
     { provider: "gemini", model: M.gemini, maxIn: GEMINI_MAX },
     { provider: "openrouter", model: M.openrouter, maxIn: OR_MAX },
     { provider: "local", model: M.local, maxIn: LOCAL_MAX },
@@ -138,6 +140,7 @@ async function keys(): Promise<Record<string, string>> {
   if (raw.cloudflare_account_id) v.cloudflare_account_id = pick(raw.cloudflare_account_id, /[0-9a-f]{32}/);
   if (raw.gemini_api_key) v.gemini_api_key = pick(raw.gemini_api_key, /AIza[0-9A-Za-z_\-]{30,}/);
   if (raw.openrouter_api_key) v.openrouter_api_key = pick(raw.openrouter_api_key, /sk-or-[A-Za-z0-9_\-]{20,}/);
+  if (raw.freellm_api_key) v.freellm_api_key = pick(raw.freellm_api_key, /freellmapi-[A-Za-z0-9]{20,}/);
   _keys = { at: Date.now(), v };
   return v;
 }
@@ -295,6 +298,11 @@ async function callOpenRouter(model: string, req: LlmRequest, t: number, k: Reco
   return openaiCompat("https://openrouter.ai/api/v1/chat/completions", k.openrouter_api_key, model, req, Math.min(t, 60_000));
 }
 
+async function callFreeLLM(model: string, req: LlmRequest, t: number, k: Record<string, string>): Promise<Call> {
+  if (!k.freellm_api_key) throw new Fail("skipped_nokey", "no freellm_api_key");
+  return openaiCompat("http://100.95.222.62:3001/v1/chat/completions", k.freellm_api_key, model, req, Math.min(t, 60_000));
+}
+
 async function callLocal(model: string, req: LlmRequest, t: number): Promise<Call> {
   const { data: st } = await db().from("partner_ai_status").select("seen_at, model").eq("id", 1).maybeSingle();
   if (!st?.seen_at || Date.now() - Date.parse(st.seen_at) > 3 * 60_000) throw new Fail("skipped_off", "Mac mini offline");
@@ -417,6 +425,7 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
         case "local": c = await callLocal(rung.model, req, left); break;
         case "gemini": c = await callGemini(rung.model, req, left, k); break;
         case "openrouter": c = await callOpenRouter(rung.model, req, left, k); break;
+        case "freellm": c = await callFreeLLM(rung.model, req, left, k); break;
         default: c = await callAnthropic(rung.model, req, left);
       }
       const ms = Date.now() - t0;
@@ -487,6 +496,7 @@ const CHAT_LADDER: Rung[] = [
   { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
   { provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX },
   { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
+  { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },
 ];
 
 async function postChat(url: string, key: string, body: Record<string, unknown>, timeoutMs: number): Promise<any> {
@@ -563,6 +573,9 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       if (rung.provider === "groq") {
         if (!k.groq_api_key) throw new Fail("skipped_nokey", "no groq_api_key");
         j = await postChat("https://api.groq.com/openai/v1/chat/completions", k.groq_api_key, body, Math.min(left, 25_000));
+      } else if (rung.provider === "freellm") {
+        if (!k.freellm_api_key) throw new Fail("skipped_nokey", "no freellm_api_key");
+        j = await postChat("http://100.95.222.62:3001/v1/chat/completions", k.freellm_api_key, body, Math.min(left, 60_000));
       } else {
         if (!k.cloudflare_ai_token || !k.cloudflare_account_id) throw new Fail("skipped_nokey", "no cloudflare token/account");
         j = await postChat(`https://api.cloudflare.com/client/v4/accounts/${k.cloudflare_account_id}/ai/v1/chat/completions`, k.cloudflare_ai_token, body, Math.min(left, 60_000));
@@ -607,13 +620,14 @@ export async function llmProbe(provider: Exclude<Provider, "anthropic">): Promis
   const k = await keys();
   const req: LlmRequest = { task: "classify", system: "You are a health check.", user: 'Return {"ok":true}', json: true, maxTokens: 200, job: "canary", fn: "free-llm" };
   const model = provider === "groq" ? M.groqSmall : provider === "cloudflare" ? M.cfBig : provider === "local" ? M.local
-    : provider === "gemini" ? M.gemini : M.openrouter;
+    : provider === "gemini" ? M.gemini : provider === "freellm" ? M.freellm : M.openrouter;
   const t0 = Date.now();
   try {
     const c = provider === "groq" ? await callGroq(model, req, 20_000, k)
       : provider === "cloudflare" ? await callCloudflare(model, req, 30_000, k)
       : provider === "local" ? await callLocal(model, req, 45_000)
-      : provider === "gemini" ? await callGemini(model, req, 20_000, k) : await callOpenRouter(model, req, 20_000, k);
+      : provider === "gemini" ? await callGemini(model, req, 20_000, k)
+      : provider === "freellm" ? await callFreeLLM(model, req, 20_000, k) : await callOpenRouter(model, req, 20_000, k);
     const ms = Date.now() - t0;
     const j = parseJson(c.text);
     await log(req, provider, c.model, j?.ok === true ? "ok" : "invalid", ms, c);
