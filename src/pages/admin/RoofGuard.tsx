@@ -1,0 +1,289 @@
+/**
+ * /admin/roofguard - RoofGuard caller, Phase 1: the lead list and the phone finder.
+ *
+ * Data: rg_leads (1,161 companies from Jared's RoofGuard sheet, admin-only RLS), rg_stats() for the
+ * health card, rg_kick() for "Find now". The finder is edge fn roofguard-enrich (pg_cron every 5 min);
+ * its watchdog is rg_watch() (every 10 min, raises roofguard.enrich to Scout). See bestly_memory
+ * roofguard/caller-agent/plan.
+ *
+ * Calling rule shown on the page: a number is dialable only once its line type is verified as a
+ * landline or VoIP (Phase 2). Scraped numbers stay "unverified" until then.
+ */
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/admin/PageHeader";
+import { AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, Loader2, Phone, RefreshCw, Search, Zap } from "lucide-react";
+
+type Contact = { name: string; title: string; linkedin: string };
+type Cand = { e164: string; display: string; source: string; url: string; score: number; hits?: number; context: string };
+type Lead = {
+  id: string; company: string; state: string; timezone: string; risk_tier: string; category: string;
+  site_model: string | null; roof_volume: string | null; priority: number; escalate: boolean;
+  contacts: Contact[]; notes: string | null; pitch: string; pitch_source: string;
+  website: string | null; phone: string | null; phone_source: string | null; phone_source_url: string | null;
+  phone_confidence: number | null; phone_candidates: Cand[]; line_type: string;
+  enrich_status: "pending" | "working" | "found" | "not_found" | "error"; enrich_error: string | null; enriched_at: string | null;
+  dnc: boolean;
+};
+type Stats = {
+  total: number; with_phone: number; dialable: number;
+  by_status: Partial<Record<Lead["enrich_status"], number>>;
+  last_run: { started_at: string; finished_at: string | null; claimed: number; found: number; not_found: number; errors: number } | null;
+  open_issue: { title: string; body: string | null; opened_at: string } | null;
+};
+
+const COLS = "id,company,state,timezone,risk_tier,category,site_model,roof_volume,priority,escalate,contacts,notes,pitch,pitch_source,website,phone,phone_source,phone_source_url,phone_confidence,phone_candidates,line_type,enrich_status,enrich_error,enriched_at,dnc";
+const PAGE = 60;
+
+const rpc = (fn: string) =>
+  supabase.rpc(fn as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
+const leadsTable = () => supabase.from("rg_leads" as never) as unknown as {
+  select: (c: string) => { order: (c: string, o: { ascending: boolean }) => { range: (a: number, b: number) => Promise<{ data: Lead[] | null; error: { message: string } | null }> } };
+  update: (p: Partial<Lead>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> };
+};
+
+const time12 = (iso: string | null | undefined) => iso
+  ? new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })
+  : "never";
+const fmtPhone = (e164: string | null) => {
+  const d = (e164 ?? "").replace(/\D/g, "").replace(/^1/, "");
+  return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : e164 ?? "";
+};
+const label = (s: string) => s.replace(/_/g, " ");
+
+const STATUS_STYLE: Record<Lead["enrich_status"], string> = {
+  found: "bg-emerald-500/15 text-emerald-300",
+  not_found: "bg-white/10 text-white/60",
+  pending: "bg-sky-500/15 text-sky-300",
+  working: "bg-sky-500/15 text-sky-300",
+  error: "bg-amber-500/15 text-amber-300",
+};
+const STATUS_TEXT: Record<Lead["enrich_status"], string> = {
+  found: "Phone found", not_found: "No number yet", pending: "In line", working: "Looking now", error: "Retrying",
+};
+
+function Stat({ n, label, tone }: { n: number | undefined; label: string; tone?: "good" | "warn" }) {
+  return (
+    <div className={cn("min-w-[104px] flex-1 rounded-2xl p-3 ring-1",
+      tone === "warn" ? "bg-amber-500/10 ring-amber-500/30" : tone === "good" ? "bg-emerald-500/[0.07] ring-emerald-500/25" : "bg-white/[0.03] ring-white/10")}>
+      <div className="text-2xl font-semibold tabular-nums text-white">{n ?? "—"}</div>
+      <div className="mt-1 text-xs text-white/55">{label}</div>
+    </div>
+  );
+}
+
+function LeadRow({ lead, onPick }: { lead: Lead; onPick: (lead: Lead, c: Cand) => void }) {
+  const [open, setOpen] = useState(false);
+  const c0 = lead.contacts?.[0];
+  return (
+    <li className="border-b border-white/[0.06] last:border-0">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-3 py-3 text-left hover:bg-white/[0.02]">
+        <div className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl text-sm font-semibold tabular-nums",
+          lead.priority >= 80 ? "bg-emerald-500/15 text-emerald-300" : lead.priority >= 60 ? "bg-white/10 text-white" : "bg-white/[0.04] text-white/50")}
+          title="Call priority (0-100)">{lead.priority}</div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[15px] text-white">{lead.company}</div>
+          <div className="truncate text-xs text-white/45">
+            {lead.state} · {label(lead.category)}{c0 ? ` · ${c0.name}, ${c0.title}` : ""}
+          </div>
+        </div>
+        <div className="hidden w-40 shrink-0 text-right sm:block">
+          {lead.phone
+            ? <><div className="text-sm tabular-nums text-white">{fmtPhone(lead.phone)}</div>
+                <div className="text-[11px] text-white/45">{lead.phone_confidence ?? "?"}% · {lead.phone_source}</div></>
+            : <div className="text-xs text-white/35">no number</div>}
+        </div>
+        <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium", STATUS_STYLE[lead.enrich_status])}>
+          {STATUS_TEXT[lead.enrich_status]}
+        </span>
+        <ChevronDown className={cn("h-4 w-4 shrink-0 text-white/40 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="mb-4 space-y-4 rounded-2xl bg-black/20 p-4 text-sm">
+          <div className="sm:hidden">
+            {lead.phone ? <span className="tabular-nums text-white">{fmtPhone(lead.phone)} · {lead.phone_confidence}%</span> : <span className="text-white/40">No number yet</span>}
+          </div>
+
+          <div>
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-white/45">Who to ask for</div>
+            <ul className="space-y-1">{lead.contacts.map((c) => (
+              <li key={c.name + c.title} className="flex flex-wrap items-center gap-x-2 text-white/85">
+                <span className="text-white">{c.name}</span><span className="text-white/50">{c.title}</span>
+                {c.linkedin && <a href={c.linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sky-300 hover:underline">LinkedIn <ExternalLink className="h-3 w-3" /></a>}
+              </li>))}</ul>
+            {lead.escalate && <p className="mt-1 text-xs text-amber-200">Sheet note: escalate past this contact to the facilities director.</p>}
+          </div>
+
+          <div>
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-white/45">
+              Pitch angle {lead.pitch_source === "bespoke" ? "(researched)" : "(by category)"}
+            </div>
+            <p className="leading-relaxed text-white/80">{lead.pitch}</p>
+          </div>
+
+          {lead.notes && (
+            <div>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-white/45">Notes</div>
+              <p className="leading-relaxed text-white/70">{lead.notes}</p>
+            </div>
+          )}
+
+          <div>
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-white/45">Phone finder</div>
+            <div className="text-xs text-white/55">
+              {lead.website ? <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-sky-300 hover:underline">{lead.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a> : "No website found"}
+              {" · "}checked {time12(lead.enriched_at)} · line type {lead.line_type}
+              {lead.enrich_error ? ` · ${lead.enrich_error}` : ""}
+            </div>
+            {lead.phone_candidates?.length > 0 && (
+              <ul className="mt-2 space-y-1.5">{lead.phone_candidates.map((c) => {
+                const chosen = c.e164 === lead.phone;
+                return (
+                  <li key={c.e164} className={cn("flex items-start gap-3 rounded-xl p-2 ring-1", chosen ? "bg-emerald-500/[0.07] ring-emerald-500/25" : "ring-white/[0.06]")}>
+                    <div className="w-32 shrink-0 tabular-nums text-white">{c.display}<div className="text-[11px] text-white/45">score {Math.round(c.score)} · {c.source}</div></div>
+                    <div className="min-w-0 flex-1 truncate text-xs text-white/50" title={c.context}>{c.context}</div>
+                    {!chosen && (
+                      <button type="button" onClick={() => onPick(lead, c)} className="shrink-0 rounded-lg px-2 py-1 text-xs text-white/80 ring-1 ring-white/15 hover:bg-white/5">Use this</button>
+                    )}
+                  </li>);
+              })}</ul>
+            )}
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
+export default function RoofGuard() {
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [kicking, setKicking] = useState(false);
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState<"all" | Lead["enrich_status"]>("all");
+  const [state, setState] = useState("all");
+  const [shown, setShown] = useState(PAGE);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [s, ...pages] = await Promise.all([
+      rpc("rg_stats"),
+      leadsTable().select(COLS).order("priority", { ascending: false }).range(0, 999),
+      leadsTable().select(COLS).order("priority", { ascending: false }).range(1000, 1999),
+    ]);
+    setLoading(false);
+    const e = s.error ?? pages.find((p) => p.error)?.error;
+    if (e) { setErr(e.message); return; }
+    setErr(null);
+    setStats(s.data as Stats);
+    setLeads(pages.flatMap((p) => p.data ?? []));
+  }, []);
+  useEffect(() => { void load(); const t = setInterval(() => void load(), 60000); return () => clearInterval(t); }, [load]);
+
+  const kick = async () => {
+    setKicking(true);
+    const { error } = await rpc("rg_kick");
+    setKicking(false);
+    if (error) { setErr(error.message); return; }
+    setTimeout(() => void load(), 45000);
+  };
+
+  const pick = async (lead: Lead, c: Cand) => {
+    const patch = { phone: c.e164, phone_source: "manual", phone_source_url: c.url, phone_confidence: 100, enrich_status: "found" as const, line_type: "unverified" };
+    const { error } = await leadsTable().update(patch).eq("id", lead.id);
+    if (error) { setErr(error.message); return; }
+    setLeads((ls) => ls.map((l) => (l.id === lead.id ? { ...l, ...patch } : l)));
+  };
+
+  const states = useMemo(() => [...new Set(leads.map((l) => l.state))].sort(), [leads]);
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return leads.filter((l) =>
+      (status === "all" || l.enrich_status === status || (status === "pending" && l.enrich_status === "working")) &&
+      (state === "all" || l.state === state) &&
+      (!needle || l.company.toLowerCase().includes(needle) || l.category.includes(needle) ||
+        l.contacts.some((c) => c.name.toLowerCase().includes(needle))));
+  }, [leads, q, status, state]);
+  useEffect(() => setShown(PAGE), [q, status, state]);
+
+  const bs = stats?.by_status ?? {};
+  const left = (bs.pending ?? 0) + (bs.working ?? 0);
+  const healthy = !!stats && !stats.open_issue;
+
+  return (
+    <div className="space-y-5">
+      <PageHeader title="RoofGuard" description="AI caller, Phase 1: your 1,161 leads, the pitch angle for each, and the phone finder."
+        actions={<div className="flex gap-2">
+          <button type="button" onClick={() => void kick()} disabled={kicking || left === 0}
+            className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm text-white ring-1 ring-white/15 hover:bg-white/15 disabled:opacity-40">
+            {kicking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Find now</button>
+          <button type="button" onClick={() => void load()} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-white/80 ring-1 ring-white/15 hover:bg-white/5">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Refresh</button>
+        </div>} />
+
+      {err && <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load: {err}</div>}
+
+      {stats && (
+        <div className={cn("rounded-3xl p-5 ring-1", healthy ? "bg-emerald-500/[0.06] ring-emerald-500/25" : "bg-amber-500/[0.06] ring-amber-500/30")}>
+          <div className="flex items-center gap-3">
+            {healthy ? <CheckCircle2 className="h-6 w-6 text-emerald-400" /> : <AlertTriangle className="h-6 w-6 text-amber-300" />}
+            <div>
+              <div className="text-lg font-semibold text-white">
+                {stats.open_issue ? stats.open_issue.title : left > 0 ? `Finding numbers · ${left} to go` : "Phone finder done"}
+              </div>
+              <div className="text-xs text-white/55">
+                Last run {time12(stats.last_run?.started_at)}
+                {stats.last_run ? ` · ${stats.last_run.found} found of ${stats.last_run.claimed}` : ""} · runs every 5 min, watchdog every 10
+              </div>
+            </div>
+          </div>
+          {stats.open_issue?.body && <p className="mt-3 text-sm text-amber-200">{stats.open_issue.body}</p>}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Stat n={stats.total} label="leads" />
+            <Stat n={stats.with_phone} label="phones found" tone="good" />
+            <Stat n={bs.not_found} label="no number yet" />
+            <Stat n={left} label="in line" />
+            <Stat n={bs.error} label="retrying" tone={(bs.error ?? 0) > 0 ? "warn" : undefined} />
+            <Stat n={stats.dialable} label="ready to dial" />
+          </div>
+          <p className="mt-3 flex items-center gap-2 text-xs text-white/45"><Phone className="h-3.5 w-3.5" />
+            Ready to dial = line type checked as a business landline or VoIP. That check comes with the dialer (Phase 2); mobiles are never called.</p>
+        </div>
+      )}
+
+      <div className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[200px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search company, contact, or category"
+              className="w-full rounded-xl bg-black/20 py-2 pl-9 pr-3 text-sm text-white placeholder:text-white/35 ring-1 ring-white/10 focus:outline-none focus:ring-white/25" />
+          </div>
+          <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}
+            className="rounded-xl bg-black/20 px-3 py-2 text-sm text-white ring-1 ring-white/10">
+            <option value="all">All statuses</option>
+            <option value="found">Phone found</option>
+            <option value="not_found">No number yet</option>
+            <option value="pending">In line</option>
+            <option value="error">Retrying</option>
+          </select>
+          <select value={state} onChange={(e) => setState(e.target.value)}
+            className="rounded-xl bg-black/20 px-3 py-2 text-sm text-white ring-1 ring-white/10">
+            <option value="all">All states</option>
+            {states.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="mb-1 text-xs text-white/45">{filtered.length} leads · highest call priority first</div>
+        <ul>{filtered.slice(0, shown).map((l) => <LeadRow key={l.id} lead={l} onPick={pick} />)}</ul>
+        {filtered.length > shown && (
+          <button type="button" onClick={() => setShown((n) => n + PAGE)} className="mt-3 w-full rounded-xl py-2 text-sm text-white/70 ring-1 ring-white/10 hover:bg-white/5">
+            Show {Math.min(PAGE, filtered.length - shown)} more
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
