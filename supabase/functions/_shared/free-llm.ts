@@ -14,7 +14,7 @@
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
-export type LlmTask = "judge" | "pick" | "extract" | "triage" | "write" | "reflect" | "classify" | "summarize";
+export type LlmTask = "judge" | "pick" | "extract" | "triage" | "write" | "reflect" | "classify" | "summarize" | "code";
 export type LlmPrivacy = "private" | "public";
 type Provider = "groq" | "cloudflare" | "local" | "gemini" | "openrouter" | "freellm" | "anthropic";
 type Outcome = "ok" | "rate_limited" | "timeout" | "error" | "bad_json" | "invalid"
@@ -71,6 +71,7 @@ const M = {
   gemini: "gemini-2.5-flash-lite",
   openrouter: "nvidia/nemotron-3-super-120b-a12b:free",
   freellm: "auto",
+  freellmCode: "qwen2.5-coder-32b-instruct", // FreeLLM's dedicated coding agent; used for task=code
 };
 // Estimated input+output ceilings per rung. Groq free = 8K tokens/min PER MODEL, so prompt + output must fit.
 // v2: LOCAL_MAX follows the Mac mini worker's num_ctx (8192, scripts/partner-ai/worker.py); it was 3000, which shut it out.
@@ -88,12 +89,17 @@ function routes(task: LlmTask, privacy: LlmPrivacy): Rung[] {
   // FreeLLM goes first (unlimited free, private-ok). Then Groq/CF for speed.
   // Gemini + OpenRouter + local Ollama are the remaining free fallbacks.
   const freellmRung: Rung = { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX };
+  const freellmCodeRung: Rung = { provider: "freellm", model: M.freellmCode, maxIn: FREELLM_MAX };
   const tail: Rung[] = [
     { provider: "gemini", model: M.gemini, maxIn: GEMINI_MAX },
     { provider: "openrouter", model: M.openrouter, maxIn: OR_MAX },
     { provider: "local", model: M.local, maxIn: LOCAL_MAX },
   ];
   switch (task) {
+    case "code":
+      // Coding agent first, then general FreeLLM, then Groq's best, then the rest.
+      return [freellmCodeRung, freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
+        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     case "judge":
     case "pick":
       return [freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
@@ -492,11 +498,12 @@ export interface ChatRequest {
 export interface ChatResult { content: string; toolCalls: ChatToolCall[]; provider: Provider; model: string; tried: LlmResult["tried"] }
 
 const CHAT_LADDER: Rung[] = [
+  { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },       // free, unlimited, private-ok — goes first
+  { provider: "freellm", model: M.freellmCode, maxIn: FREELLM_MAX },   // coding agent as secondary free rung
   { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
   { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
   { provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX },
   { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
-  { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },
 ];
 
 async function postChat(url: string, key: string, body: Record<string, unknown>, timeoutMs: number): Promise<any> {
