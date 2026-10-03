@@ -64,6 +64,7 @@ const EmailUnsubscribe = lazyPage(() => import("./pages/EmailUnsubscribe"));
 const Status = lazyPage(() => import("./pages/Status"));
 const VoiceToClaude = lazyPage(() => import("./pages/VoiceToClaude"));
 const CookieYetiDashboard = lazyPage(() => import("./pages/CookieYetiDashboard"));
+const ClientPreview = lazyPage(() => import("./pages/ClientPreview"));
 
 // Lazy admin pages. AdminRoute/AdminLayout stay eager (they're tiny wrappers
 // and keeping them eager avoids a double-load chain on /admin). The big win
@@ -199,6 +200,9 @@ const App = () => {
                 <Route path="/status" element={<Status />} />
                 <Route path="/voice-to-claude" element={<VoiceToClaude />} />
                 <Route path="/cookie-yeti/transparency" element={<CookieYetiDashboard />} />
+
+                {/* Client website preview — no password when signed into the portal */}
+                <Route path="/preview/:slug" element={<ClientPreview />} />
 
                 {/* Partner portal (Eli): its own sign-in, sees only what RLS allows a partner */}
                 <Route path="/partner" element={<PartnerPortal />} />
