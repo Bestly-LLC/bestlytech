@@ -79,6 +79,9 @@ import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: 
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v30 (2026-10-03): the Paid AI switch is the ONE gate (no hidden per-chat passes); a "Yes, use paid AI" tap flips it on for an
+//   hour, it turns itself off at the hour or the cap, and a running paid reply stops when it goes off. Free ladder adds
+//   Gemini, OpenRouter and FreeLLM after Groq/Cloudflare (see _shared/free-llm.ts).
 // v29 (2026-09-27): free agent on real function calling (llmChat: Groq gpt-oss-120b -> Qwen -> gpt-oss-20b -> Cloudflare),
 //   summary + "Keep going" instead of a bare paid ask when it runs out of steps, one nudge before giving up, and
 //   autopilot (fix ladder) tries free first. See freeAgent().
@@ -1076,6 +1079,7 @@ async function tryTodoMove(threadId: string, text: string): Promise<string | nul
 
 // Set per request from scout_settings.auto_run.
 let autoRunOn = false;
+let paidUntil: string | null = null; // v30: when the Paid AI switch turns itself off (null = until he turns it off)
 
 async function runTool(name: string, args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
   let out: Record<string, unknown>;
@@ -1445,7 +1449,10 @@ Deno.serve(async (req) => {
   // "keep going" is his yes for this request: auto-run for this one turn. Not a yes to paid AI (v21).
   const keepGoing = !autopilot && /^\s*keep going\b/i.test(String(body.body ?? ""));
   autoRunOn = (prefs as any)?.auto_run === true || keepGoing;
-  const paidAlwaysOk = (prefs as any)?.paid_ai_ok === true;
+  // v30: the Paid AI switch is the ONLY gate. scout_prefs() returns the truth (it turns itself off when the hour or the
+  // daily cap runs out). No more hidden per-chat passes: a "Yes, use paid AI" tap flips the switch on for an hour.
+  const paidOn = (prefs as any)?.paid_ai_ok === true;
+  paidUntil = (prefs as any)?.paid_ai_until ? String((prefs as any).paid_ai_until) : null;
 
   let text = String(body.body ?? "").trim();
   if (!text) return J({ ok: false, error: "body required" }, 400);
@@ -1474,23 +1481,29 @@ Deno.serve(async (req) => {
     }
   }
 
-  // v15: paid AI only with his OK.
-  if (!paidAlwaysOk) {
-    // A yes lasts one hour on this chat. "keep going" alone is NOT a yes to spending.
-    const { data: th } = await db.from("admin_chat_threads").select("paid_ok_until").eq("id", threadId).maybeSingle();
-    let paidOk = !!(th as any)?.paid_ok_until && Date.parse((th as any).paid_ok_until) > Date.now();
+  // v15/v30: paid AI only while the Paid AI switch is on.
+  if (!paidOn) {
+    // "keep going" alone is NOT a yes to spending.
+    let paidOk = false;
     const say = async (reply: string, extra: Record<string, unknown> = {}) => {
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
       await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
       return J({ ok: true, thread_id: threadId, reply, tools: [], ...extra });
     };
     if (!paidOk) {
-      if (/^always,? stop asking\.?$/i.test(text)) {
-        await db.from("scout_settings").update({ paid_ai_ok: true, updated_at: new Date().toISOString(), updated_by: uid }).eq("id", true);
-        paidOk = true;
-      } else if (/^yes,? use paid ai\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
-        await db.from("admin_chat_threads").update({ paid_ok: true, paid_ok_until: new Date(Date.now() + 3600_000).toISOString() }).eq("id", threadId);
-        paidOk = true;
+      const flip = async (minutes: number | null, reason: string) => {
+        const { data: st } = await db.rpc("scout_paid_apply", { p_on: true, p_minutes: minutes, p_reason: reason, p_by: uid ?? null });
+        if ((st as any)?.on === true) { paidUntil = (st as any).until ?? null; return true; }
+        // It can't turn on: today's cap is used up. Say so instead of pretending.
+        return false;
+      };
+      if (/^always,? stop asking\.?$/i.test(text) || /^yes,? use paid ai\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
+        const always = /^always/i.test(text);
+        paidOk = await flip(always ? null : 60, always ? "always" : "yes_tap");
+        if (!paidOk) {
+          const { data: sp } = await db.rpc("scout_paid_spend");
+          return await say(`Paid AI is at today's cap ($${Number((sp as any)?.spent ?? 0).toFixed(2)} of $${Number((sp as any)?.cap ?? 5).toFixed(2)}), so the switch can't turn on until midnight. Your message is saved.`, { capped: true });
+        }
       } else if (/^no,? skip it\.?$/i.test(text)) {
         return await say("OK, skipped. Nothing was spent.");
       } else if (autopilot) {
@@ -1517,7 +1530,7 @@ Deno.serve(async (req) => {
           );
         }
         return await say(
-          `I'd need paid AI (Claude) for this. ${free.why} A reply costs about 5 to 50 cents; a yes covers this chat for one hour.\n\nOPTIONS: Yes, use paid AI | No, skip it`,
+          `I'd need paid AI (Claude) for this. ${free.why} A reply costs about 5 to 50 cents. Yes turns the Paid AI switch on for one hour (you'll see it flip), then it turns itself off.\n\nOPTIONS: Yes, use paid AI | No, skip it`,
           { paid_needed: true },
         );
       }
@@ -1571,6 +1584,7 @@ Deno.serve(async (req) => {
   for (const n of (bell ?? []) as { severity: string }[]) unread[n.severity] = (unread[n.severity] ?? 0) + 1;
   const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder, jobs, page ?? "unknown", lessonsDigest)
     + (autoRunOn ? AUTO_RUN_ON : ASK_PLAINLY)
+    + `\n\n# Paid AI switch\nThe Paid AI switch is ON${paidUntil ? ` until ${new Date(paidUntil).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" })}` : ""}, so you (Claude, paid) are answering. If he asks what AI is running, say exactly that. Never claim paid AI is off while you are answering.`
     + (keepGoing ? "\n\n# He said keep going\nThat is his yes for everything the job needs right now. Carry on from where you stopped and do it; don't ask again." : "");
 
   // Daily chat cap: a runaway guard, even with the Paid AI switch on.
@@ -1595,6 +1609,14 @@ Deno.serve(async (req) => {
   const left = () => BUDGET_MS - (Date.now() - started);
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
+      // v30: the switch overrides everything, even a reply already running. Turned off (by him, the hour, or the cap) = stop now.
+      if (turn > 0) {
+        const { data: st } = await db.rpc("scout_paid_state_ro");
+        if ((st as any)?.on !== true) {
+          reply = `Paid AI just switched off, so I stopped here (${used.length} steps: ${[...new Set(used)].join(", ") || "none"}). Turn it back on or say "keep going" to continue on free AI.`;
+          break;
+        }
+      }
       if (turn > 0 && (left() < WRAP_MS || turn === MAX_TURNS - 1)) {
         // Out of time or steps: answer with what is already known, no more tools.
         const nudge = { type: "text", text: "(Scout: this reply is out of time or steps. Without calling tools, tell Jared plainly what you found and did so far, and what is left. He can say 'keep going'.)" };

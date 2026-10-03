@@ -86,31 +86,33 @@ const CF_NEURONS: Record<string, [number, number]> = {
 const ANTHROPIC_PRICE: Record<string, [number, number]> = { haiku: [1, 5], sonnet: [3, 15], opus: [15, 75] };
 
 function routes(task: LlmTask, privacy: LlmPrivacy): Rung[] {
-  // FreeLLM goes first (unlimited free, private-ok). Then Groq/CF for speed.
-  // Gemini + OpenRouter + local Ollama are the remaining free fallbacks.
+  // v30 (2026-10-03): Groq/Cloudflare first (proven), then Gemini, OpenRouter, FreeLLM, then the Mac mini.
+  // FreeLLM used to go first, but it lives on the Mac mini behind a private Tailscale address the cloud cannot
+  // reach, so it only runs once freellm_base_url (a public https tunnel) is in Vault. Rungs without a key skip in 0 ms.
   const freellmRung: Rung = { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX };
   const freellmCodeRung: Rung = { provider: "freellm", model: M.freellmCode, maxIn: FREELLM_MAX };
   const tail: Rung[] = [
     { provider: "gemini", model: M.gemini, maxIn: GEMINI_MAX },
     { provider: "openrouter", model: M.openrouter, maxIn: OR_MAX },
+    freellmRung,
     { provider: "local", model: M.local, maxIn: LOCAL_MAX },
   ];
   switch (task) {
     case "code":
       // Coding agent first, then general FreeLLM, then Groq's best, then the rest.
-      return [freellmCodeRung, freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
-        { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
+      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
+        freellmCodeRung, ...tail];
     case "judge":
     case "pick":
-      return [freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
         { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     case "classify":
-      return [freellmRung, { provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+      return [{ provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
         { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     case "write":
-      return [freellmRung, { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
+      return [{ provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     default: // extract, reflect, triage, summarize
-      return [freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+      return [{ provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
         { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
   }
 }
@@ -304,9 +306,20 @@ async function callOpenRouter(model: string, req: LlmRequest, t: number, k: Reco
   return openaiCompat("https://openrouter.ai/api/v1/chat/completions", k.openrouter_api_key, model, req, Math.min(t, 60_000));
 }
 
-async function callFreeLLM(model: string, req: LlmRequest, t: number, k: Record<string, string>): Promise<Call> {
+/** FreeLLM's chat URL. It runs on the Mac mini; the cloud can only reach it through a public tunnel (Vault freellm_base_url).
+ *  A private / Tailscale / LAN address would hang every call until the timeout, so those are skipped instantly. */
+function freellmUrl(k: Record<string, string>): string {
   if (!k.freellm_api_key) throw new Fail("skipped_nokey", "no freellm_api_key");
-  return openaiCompat("http://100.95.222.62:3001/v1/chat/completions", k.freellm_api_key, model, req, Math.min(t, 60_000));
+  const base = (k.freellm_base_url ?? "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
+  if (!/^https:\/\//i.test(base)) throw new Fail("skipped_off", "no public freellm_base_url (needs an https tunnel to the Mac mini)");
+  if (/^https:\/\/(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/i.test(base)) {
+    throw new Fail("skipped_off", "freellm_base_url is a private address the cloud cannot reach");
+  }
+  return `${base}/v1/chat/completions`;
+}
+
+async function callFreeLLM(model: string, req: LlmRequest, t: number, k: Record<string, string>): Promise<Call> {
+  return openaiCompat(freellmUrl(k), k.freellm_api_key, model, req, Math.min(t, 30_000));
 }
 
 async function callLocal(model: string, req: LlmRequest, t: number): Promise<Call> {
@@ -335,11 +348,21 @@ function cleanAnthropicKey(raw: string | undefined) {
   return (m ? m[0] : raw ?? "").trim();
 }
 
+/** Functions governed by Scout's Paid AI switch (keep in sync with public.scout_paid_fns()). Spark/Cookie Yeti are not. */
+const SCOUT_FNS = new Set(["admin-chat", "voice-ask", "fix-ladder", "scout-daily", "todo-check", "free-llm"]);
+
 async function callAnthropic(model: string, req: LlmRequest, t: number): Promise<Call> {
   const key = cleanAnthropicKey(Deno.env.get("ANTHROPIC_API_KEY"));
   if (!key) throw new Fail("skipped_nokey", "no ANTHROPIC_API_KEY");
   const { data: budget } = await db().rpc("ai_budget", { p_scope: req.scope ?? "background" });
-  if ((budget as any)?.ok === false) throw new Fail("skipped_budget", `cap $${(budget as any).cap}, spent $${(budget as any).spent}`);
+  if ((budget as any)?.ok === false) {
+    throw new Fail("skipped_budget", (budget as any).switch_off ? "Paid AI switch is off" : `cap $${(budget as any).cap}, spent $${(budget as any).spent}`);
+  }
+  // v30: Scout's own functions (voice, autopilot, chat) spend only while the Paid AI switch is ON. It overrides everything.
+  if (SCOUT_FNS.has(req.fn ?? "")) {
+    const { data: st } = await db().rpc("scout_paid_state_ro");
+    if ((st as any)?.on !== true) throw new Fail("skipped_budget", "Paid AI switch is off");
+  }
   const system = req.json ? `${req.system}\n\nReturn JSON only.` : req.system;
   for (let attempt = 0; attempt < 2; attempt++) {
     let r: Response;
@@ -497,13 +520,17 @@ export interface ChatRequest {
 }
 export interface ChatResult { content: string; toolCalls: ChatToolCall[]; provider: Provider; model: string; tried: LlmResult["tried"] }
 
+// v30 (2026-10-03): Groq's three models and Cloudflare's 10K Neurons run dry by midday, and this ladder stopped there,
+// so every turn after that became a paid-AI ask. Gemini, OpenRouter and FreeLLM now follow; each skips in 0 ms until its key
+// (and, for FreeLLM, a public freellm_base_url) is in Vault.
 const CHAT_LADDER: Rung[] = [
-  { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },       // free, unlimited, private-ok — goes first
-  { provider: "freellm", model: M.freellmCode, maxIn: FREELLM_MAX },   // coding agent as secondary free rung
   { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
   { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
   { provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX },
   { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
+  { provider: "gemini", model: M.gemini, maxIn: GEMINI_MAX },
+  { provider: "openrouter", model: M.openrouter, maxIn: OR_MAX },
+  { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },
 ];
 
 async function postChat(url: string, key: string, body: Record<string, unknown>, timeoutMs: number): Promise<any> {
@@ -568,7 +595,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
     const gptOss = rung.model.includes("gpt-oss");
     const body: Record<string, unknown> = {
       model: rung.model,
-      messages: rung.provider === "cloudflare" ? forCloudflare(messages) : messages,
+      messages: rung.provider === "groq" ? messages : forCloudflare(messages), // Cloudflare + Gemini want string content
       max_tokens: maxTokens,
       ...(gptOss ? { reasoning_effort: "low" } : {}),
     };
@@ -581,8 +608,13 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
         if (!k.groq_api_key) throw new Fail("skipped_nokey", "no groq_api_key");
         j = await postChat("https://api.groq.com/openai/v1/chat/completions", k.groq_api_key, body, Math.min(left, 25_000));
       } else if (rung.provider === "freellm") {
-        if (!k.freellm_api_key) throw new Fail("skipped_nokey", "no freellm_api_key");
-        j = await postChat("http://100.95.222.62:3001/v1/chat/completions", k.freellm_api_key, body, Math.min(left, 60_000));
+        j = await postChat(freellmUrl(k), k.freellm_api_key, body, Math.min(left, 30_000));
+      } else if (rung.provider === "gemini") {
+        if (!k.gemini_api_key) throw new Fail("skipped_nokey", "no gemini_api_key");
+        j = await postChat("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", k.gemini_api_key, body, Math.min(left, 30_000));
+      } else if (rung.provider === "openrouter") {
+        if (!k.openrouter_api_key) throw new Fail("skipped_nokey", "no openrouter_api_key");
+        j = await postChat("https://openrouter.ai/api/v1/chat/completions", k.openrouter_api_key, body, Math.min(left, 30_000));
       } else {
         if (!k.cloudflare_ai_token || !k.cloudflare_account_id) throw new Fail("skipped_nokey", "no cloudflare token/account");
         j = await postChat(`https://api.cloudflare.com/client/v4/accounts/${k.cloudflare_account_id}/ai/v1/chat/completions`, k.cloudflare_ai_token, body, Math.min(left, 60_000));
