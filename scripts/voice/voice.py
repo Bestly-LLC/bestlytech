@@ -34,11 +34,17 @@ SR, RATE_IN = 16000, 48000
 CHUNK = 1280                                   # 80 ms at 16 kHz (openWakeWord frame)
 PRE_S, MAX_S, START_S, SIL_S = 2.0, 12.0, 5.0, 0.9
 # threshold per sensitivity; tuning.json can override per model ({"hey_scout": {"normal": 0.55}})
-SENS = {"hey_scout": {"low": 0.85, "normal": 0.7, "high": 0.5}, "hey_jarvis": {"low": 0.7, "normal": 0.5, "high": 0.35}}
+SENS = {"hey_scout": {"low": 0.85, "normal": 0.7, "high": 0.6}, "hey_jarvis": {"low": 0.7, "normal": 0.5, "high": 0.35}}
+# v2 (2026-10-03): TV kept waking it. Real "hey scout" scores 0.75-0.97, the TV hits landed 0.52-0.67 on hey_scout and
+# 0.36-0.50 on the hey_jarvis backup (which had NO cloud check, so the TV's words got answered). Now: jarvis off unless the
+# custom model is missing, "high" floor 0.6, two frames in a row, and every wake is checked in the cloud.
+MIN_THR = {"hey_scout": 0.6, "hey_jarvis": 0.5}
 # consecutive 80 ms frames over the threshold before it counts. hey_scout v2 on 10.7 h of openWakeWord's validation
 # audio: 0.47 false wakes/h at 0.7 (1 frame), 0 with 2 frames; 93% recall on held-out synthetic clips (85% with 2).
 # One frame + the cloud check (Whisper must hear "hey scout" in the pre-roll) keeps recall up without spoken false replies.
-PATIENCE = {"hey_scout": 1, "hey_jarvis": 1}
+PATIENCE = {"hey_scout": 2, "hey_jarvis": 2}
+QUIET_AFTER_S = 3.0          # after a reply ends: ignore wakes this long (the room still echoes the reply)
+ECHO_WINDOW_S = 180          # a request that is just our own last reply played back is dropped, not answered
 FALSE_PER_HOUR_RETUNE = 6
 
 os.makedirs(CLIPS, exist_ok=True)
@@ -143,7 +149,7 @@ def status_write(extra=None):
          "busy": S["busy"], "last_wake": S["last_wake"], "last_heard": S["last_heard"], "lat": S["lat"], "retuned": S["retuned"],
          "frames": S["frames"],
          "errors": {k: [e for e in v if time.time() - e[0] < 3600][-5:] for k, v in S["errors"].items()},
-         "hour": {"wakes": cnt["wake"], "commands": cnt["command"], "false": cnt["empty"] + cnt["junk"],
+         "hour": {"wakes": cnt["wake"], "commands": cnt["command"], "false": cnt["empty"] + cnt["junk"] + cnt["echo"], "echo": cnt["echo"],
                   "ignored": cnt["ignored"], "near": len([n for n in S["near"] if time.time() - n[0] < 3600])}}
     if extra:
         d.update(extra)
@@ -352,14 +358,17 @@ def speak(name, dur):
                                                            **({"volume": vol} if vol else {})}, timeout=12)
     if not (r or {}).get("ok"):
         raise RuntimeError(f"homepod helper: {(r or {}).get('msg')}")
-    for _ in range(40):                                    # confirm it started
+    # v2: the helper took it, so it WILL play (AirPlay is often 10+ s late). Falling back to the projector here is what made
+    # replies play twice. Wait up to 20 s to log when it started, but never raise once the helper accepted it.
+    for _ in range(80):
         try:
             if ha_state(SPEAKER).get("state") == "playing":
                 return time.time() - t0
         except Exception:
             pass
         time.sleep(0.25)
-    raise RuntimeError("HomePod never started playing")
+    err_add("play", "HomePod accepted the reply but never said 'playing' (not replayed on the wall)")
+    return time.time() - t0
 
 
 class Media(BaseHTTPRequestHandler):
@@ -428,7 +437,9 @@ def handle(pcm, wake):
             reply = (r.get("reply") or "").strip()
             if not heard or JUNK.match(heard):
                 outcome = "junk" if heard or r.get("rejected") else "empty"
-        if outcome in ("empty", "junk"):
+            elif is_echo(heard):
+                outcome = "echo"                 # it heard its own last reply (or the TV saying the same): stay quiet
+        if outcome in ("empty", "junk", "echo"):
             wall("idle")
             return outcome, heard
         t1 = time.time()
@@ -449,16 +460,42 @@ def handle(pcm, wake):
             wall("reply", heard=heard, reply=reply, hold=max(10, min(30, dur + 4)), audio=f"http://{PI_LAN}:{PORT}/v/{name}.wav")
         lat["total_to_audio"] = round(time.time() - t_end, 2)
         lat["speaker"] = where
-        time.sleep(min(dur + 1.0, 30))           # don't hear ourselves: stay busy while the reply plays
+        # don't hear ourselves: stay busy while the reply plays (the projector page starts later than the HomePod)
+        time.sleep(min(dur + (3.5 if where == "wall" else 1.5), 35))
         return outcome, heard
     finally:
         S["lat"] = lat
+        S["quiet_until"] = time.time() + QUIET_AFTER_S
+        if reply and outcome == "command":
+            S["recent_replies"] = [x for x in S.get("recent_replies", []) if time.time() - x[0] < ECHO_WINDOW_S] + [(time.time(), reply)]
         if heard or reply:
             S["last_heard"] = {"text": heard, "reply": reply, "at": time.time(), "outcome": outcome}
         ev_add(outcome)
         log(f"turn: {outcome} heard={heard!r} reply={reply[:80]!r} lat={lat}")
         rec = {"at": time.time(), "kind": "turn", "outcome": outcome, "score": wake.get("score"), "model": wake.get("model"), "lat": lat}
         wake_log(rec)
+
+
+def _norm(t):
+    return re.sub(r"[^a-z0-9 ]+", "", (t or "").lower()).split()
+
+
+def is_echo(heard):
+    """True when what it heard is mostly words from one of its own replies in the last few minutes."""
+    import difflib
+    h = _norm(heard)
+    if len(h) < 3:
+        return False
+    for at, rep_ in S.get("recent_replies", []):
+        if time.time() - at > ECHO_WINDOW_S:
+            continue
+        r = _norm(rep_)
+        if not r:
+            continue
+        overlap = sum(1 for w in h if w in set(r)) / len(h)
+        if overlap >= 0.7 or difflib.SequenceMatcher(None, " ".join(h), " ".join(r)).ratio() >= 0.6:
+            return True
+    return False
 
 
 def _filler():
@@ -483,7 +520,8 @@ def load_model():
     from openwakeword.model import Model
     custom = ROOT + "/models/hey_scout.onnx"
     jarvis = os.path.join(os.path.dirname(__import__("openwakeword").__file__), "resources", "models", "hey_jarvis_v0.1.onnx")
-    paths = ([custom] if os.path.isfile(custom) else []) + ([jarvis] if not os.path.isfile(custom) or jload(TUNING, {}).get("also_jarvis", True) else [])
+    # v2: the jarvis backup now defaults OFF (it was the TV's main way in). tuning.json {"also_jarvis": true} brings it back.
+    paths = ([custom] if os.path.isfile(custom) else []) + ([jarvis] if not os.path.isfile(custom) or jload(TUNING, {}).get("also_jarvis", False) else [])
     m = Model(wakeword_models=paths, inference_framework="onnx")
     keys = {k: ("hey_scout" if "scout" in k else "hey_jarvis") for k in m.models}
     return m, keys, "+".join(sorted(set(keys.values()), reverse=True)), (os.path.getmtime(custom) if os.path.isfile(custom) else 0)
@@ -491,12 +529,12 @@ def load_model():
 
 def threshold_for(fam, sens):
     t = jload(TUNING, {}).get(fam, {})
-    return float(t.get(sens, SENS[fam][sens]))
+    return max(MIN_THR.get(fam, 0.0), float(t.get(sens, SENS[fam][sens])))
 
 
 def retune_if_noisy(fam, sens):
     """Self-heal: too many false wakes in the last hour -> raise the threshold a notch (cap 0.85), tell the watchdog."""
-    false_n = len([1 for t, k in S["events"] if time.time() - t < 3600 and k in ("empty", "junk")])
+    false_n = len([1 for t, k in S["events"] if time.time() - t < 3600 and k in ("empty", "junk", "echo")])
     if false_n < FALSE_PER_HOUR_RETUNE:
         return
     last = (S.get("retuned") or {}).get("at", 0)
@@ -557,7 +595,7 @@ def main():
                 if S["frames"] % 750 == 0:              # every minute: pick up a newly trained model
                     try:
                         custom = ROOT + "/models/hey_scout.onnx"
-                        want_j = jload(TUNING, {}).get("also_jarvis", True)
+                        want_j = jload(TUNING, {}).get("also_jarvis", False)
                         if os.path.isfile(custom) and ("hey_scout" not in fams or os.path.getmtime(custom) != mtime
                                                        or want_j != ("hey_jarvis" in fams)):
                             model, keys, fams, mtime = load_model()
@@ -603,6 +641,9 @@ def main():
                     continue
                 pre.append(x)
                 pr = model.predict(x)
+                if now < S.get("quiet_until", 0):        # v2: the room is still ringing with the reply; don't wake on it
+                    hits = 0
+                    continue
                 sc, fam = max((float(pr.get(k_, 0.0)), f_) for k_, f_ in keys.items())
                 se = None
                 if sc > 0.15:
@@ -622,7 +663,8 @@ def main():
                         continue
                     last_fire = now
                     # verify: the cloud checks Whisper heard "hey scout" in the ~1.6 s before the wake (custom model only)
-                    wake = {"score": round(sc, 3), "model": fam, "threshold": thr, "at": now, "verify": fam == "hey_scout"}
+                    # v2: every wake is checked (the jarvis backup used to skip it, so TV speech got answered)
+                    wake = {"score": round(sc, 3), "model": fam, "threshold": thr, "at": now, "verify": True}
                     lead = np.concatenate(list(pre)[-20:]) if pre else np.zeros(0, dtype=np.int16)
                     clip = f"{CLIPS}/{datetime.now().strftime('%Y%m%d-%H%M%S')}_{int(sc * 100)}.wav"
                     try:
