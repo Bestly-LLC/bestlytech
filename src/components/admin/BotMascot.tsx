@@ -1,20 +1,26 @@
 import { useMemo, useRef } from "react";
 import {
-  Activity, AudioLines, BookOpen, Bot, Brush, Briefcase, CalendarCheck, Car, ClipboardCheck, Clapperboard, Cookie, Cpu,
-  Database, Dog, Eye, GraduationCap, Hammer, HandHeart, House, Wifi, Image, Inbox, KeyRound, Landmark, Laptop,
-  Lightbulb, LineChart, ListChecks, ListTodo, Mail, MailPlus, Mails, Megaphone, MessageCircle, MessageSquareShare, Mic,
-  Moon, Network, NotebookPen, PenLine, PhoneCall, PlaneLanding, Projector, Repeat, ScanEye, Search, Send,
-  SendHorizontal, Server, ShieldCheck, Siren, Sparkles, SprayCan, Sunrise, Trash2, UserPlus, Users, Wrench, Compass,
-  GalleryHorizontal, HandHelping, Handshake, Bell, type LucideIcon,
+  AudioLines, BookOpen, Bot, Brush, Briefcase, CalendarCheck, Car, ClipboardCheck, Clapperboard, Cookie, Cpu,
+  Database, Dog, Eye, GraduationCap, Hammer, HandHeart, House, Wifi, Image, Inbox, KeyRound, Laptop,
+  Lightbulb, LineChart, Mail, MailPlus, Mails, Megaphone, MessageCircle, MessageSquareShare, Mic,
+  Moon, Network, NotebookPen, PenLine, PhoneCall, PlaneLanding, Repeat, ScanEye, Search, Send,
+  SendHorizontal, Server, ShieldCheck, Siren, Sparkles, SprayCan, Trash2, UserPlus, Users, Wrench, Compass,
+  GalleryHorizontal, HandHelping, Handshake, Bell, PiggyBank, HeartPulse, Tv, Coffee, ClipboardList, SquareCheckBig,
+  type LucideIcon,
 } from "lucide-react";
 import { ADMIN_MARK_PERIOD_MS, useStare } from "@/components/AdminMark";
 import { cn } from "@/lib/utils";
 
 /**
- * Bot mascots: every bot on the Team page drawn like Scout's binoculars — one white line drawing at Scout's
- * stroke weight, with dot eyes that glance left, right and blink on the same 3.2s beat as Scout, and stare at
- * the pointer when it comes near. Each one also has a small move that fits the job (the bulb glows, the plane
- * bobs, the dog wags). Sleeping (paused, switched off, not built yet): eyes closed, no motion.
+ * Bot mascots: every bot on the Team page drawn like Scout's binoculars — one line drawing at Scout's stroke
+ * weight, with dot eyes (three set sizes, each with a small highlight) that glance and blink on Scout's 3.2s
+ * beat and stare at the pointer when it comes near.
+ *
+ * Motion follows Apple HIG via the ui-ux-pro-max pass (2026-10-04): at rest only the eyes move, like Scout. Each
+ * bot's own move (bulb glows, plane bobs, dog wags) plays when its card is hovered or focused — an element with
+ * data-bm-host — or always for new hires and in the welcome-email GIFs (moveOn="always"). Moves use a spring
+ * curve and start right away. Sleeping (paused, switched off, not built yet): eyes closed, no motion.
+ * Reduced motion: everything still.
  *
  * The body is the lucide icon for the bot (bestly_agents.icon), drawn at 3x in Scout's 72-unit grid, so
  * stroke 1.85 there = Scout's 5.5. The eyes punch a small hole in the lines so they never collide with them.
@@ -50,7 +56,7 @@ export const MASCOTS: Record<string, Spec> = {
   "message-circle":     { Icon: MessageCircle, x: 36, y: 36, gap: 7.8, move: "bob" },
   "message-square-share": { Icon: MessageSquareShare, x: 30, y: 40, gap: 6.7, r: 6.2, move: "bob" },
   laptop:               { Icon: Laptop, x: 36, y: 31, gap: 7.8, move: "none" },
-  projector:            { Icon: Projector, x: 52, y: 48, gap: 5.0, r: 5.2, move: "flash" },
+  projector:            { Icon: Tv, x: 36, y: 44, gap: 8, move: "flash" },
   sparkles:             { Icon: Sparkles, x: 31, y: 37, gap: 5.2, r: 5.5, move: "pulse" },
   "key-round":          { Icon: KeyRound, x: 45, y: 26, gap: 5.6, r: 5.9, move: "tilt" },
   "plane-landing":      { Icon: PlaneLanding, x: 40, y: 30, gap: 5.6, r: 5.5, move: "bob" },
@@ -61,12 +67,12 @@ export const MASCOTS: Record<string, Spec> = {
   "calendar-check":     { Icon: CalendarCheck, x: 36, y: 40, gap: 9.0, move: "hop" },
   house:                { Icon: House, x: 36, y: 29, gap: 6.7, r: 6.2, move: "none" },
   "house-wifi":         { Icon: Wifi, x: 36, y: 52, gap: 6.7, r: 5.5, move: "flash" },
-  "list-checks":        { Icon: ListChecks, x: 51, y: 36, gap: 5.6, r: 5.5, move: "hop" },
-  "list-todo":          { Icon: ListTodo, x: 51, y: 36, gap: 5.6, r: 5.5, move: "hop" },
-  landmark:             { Icon: Landmark, x: 36, y: 18, gap: 5.6, r: 5.2, move: "none" },
+  "list-checks":        { Icon: SquareCheckBig, x: 30, y: 23, gap: 7, r: 4.6, move: "hop" },
+  "list-todo":          { Icon: ClipboardList, x: 36, y: 25, gap: 7, r: 4.6, move: "hop" },
+  landmark:             { Icon: PiggyBank, x: 43, y: 31, gap: 6.5, r: 4.6, move: "hop" },
   cpu:                  { Icon: Cpu, x: 36, y: 36, gap: 5.6, r: 5.2, move: "pulse" },
   database:             { Icon: Database, x: 36, y: 47, gap: 9.0, move: "bob" },
-  sunrise:              { Icon: Sunrise, x: 36, y: 50, gap: 5.0, r: 4.9, move: "hop" },
+  sunrise:              { Icon: Coffee, x: 30, y: 42, gap: 7.5, move: "hop" },
   "notebook-pen":       { Icon: NotebookPen, x: 28, y: 36, gap: 6.7, r: 5.9, move: "tilt" },
   "book-open":          { Icon: BookOpen, x: 36, y: 33, gap: 15.7, move: "sway" },
   car:                  { Icon: Car, x: 33, y: 39, gap: 6.7, r: 6.2, move: "bob" },
@@ -82,7 +88,7 @@ export const MASCOTS: Record<string, Spec> = {
   eye:                  { Icon: Eye, x: 36, y: 36, gap: 0, r: 9, one: true, move: "none" },
   "scan-eye":           { Icon: ScanEye, x: 36, y: 36, gap: 0, r: 8.1, one: true, move: "none" },
   cookie:               { Icon: Cookie, x: 33, y: 31, gap: 8.4, move: "tilt" },
-  activity:             { Icon: Activity, x: 36, y: 15, gap: 6.7, r: 5.5, move: "pulse" },
+  activity:             { Icon: HeartPulse, x: 36, y: 22, gap: 8.5, r: 5.6, move: "pulse" },
   server:               { Icon: Server, x: 44, y: 18, gap: 5.6, r: 5.2, move: "flash" },
   "line-chart":         { Icon: LineChart, x: 30, y: 26, gap: 5.6, r: 5.5, move: "hop" },
   clapperboard:         { Icon: Clapperboard, x: 36, y: 47, gap: 9.0, move: "wag" },
@@ -93,26 +99,28 @@ export const MASCOTS: Record<string, Spec> = {
   "hand-helping":       { Icon: HandHelping, x: 44, y: 30, gap: 5.6, r: 5.5, move: "bob" },
   handshake:            { Icon: Handshake, x: 36, y: 24, gap: 7, r: 5, move: "wag" },
   bell:                 { Icon: Bell, x: 36, y: 30, gap: 7, r: 5.4, move: "wag" },
-  bot:                  { Icon: Bot, x: 36, y: 42, gap: 10.1, move: "bob" },
+  bot:                  { Icon: Bot, x: 36, y: 42, gap: 9, r: 5.6, move: "bob" },   // sits exactly on the glyph's own eyes
 };
 
 /* Keyframes share Scout's 3.2s period and phase (index.html .am-* classes), so the crew looks around together. */
 const CSS = `
-.bm-look,.bm-blink,.bm-move{animation-duration:3.2s;animation-iteration-count:infinite;animation-delay:var(--bm-delay,0ms)}
+.bm-look,.bm-blink{animation-duration:3.2s;animation-iteration-count:infinite;animation-delay:var(--bm-delay,0ms)}
 .bm-look{transform-box:view-box;animation-name:bm-look;animation-timing-function:cubic-bezier(.45,1.5,.5,1)}
 .bm-blink{transform-box:fill-box;transform-origin:center;animation-name:bm-blink;animation-timing-function:ease-in-out}
 @keyframes bm-look{0%,8%{transform:translate(0,0)}14%{transform:translate(0,.6px)}22%,42%{transform:translate(-2.2px,1.1px)}52%,72%{transform:translate(2.2px,1.1px)}82%,100%{transform:translate(0,0)}}
 @keyframes bm-blink{0%,87%{transform:scaleY(1)}91%{transform:scaleY(.12)}95%,100%{transform:scaleY(1)}}
-.bm-move{transform-box:view-box;transform-origin:36px 36px;animation-timing-function:ease-in-out}
-.bm-bob{animation-name:bm-bob}@keyframes bm-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.2px)}}
-.bm-hop{animation-name:bm-hop}@keyframes bm-hop{0%,40%,60%,100%{transform:translateY(0)}48%{transform:translateY(-4px)}54%{transform:translateY(.6px)}}
-.bm-tilt{animation-name:bm-tilt}@keyframes bm-tilt{0%,100%{transform:rotate(0)}25%{transform:rotate(-5deg)}65%{transform:rotate(5deg)}}
-.bm-sway{animation-name:bm-sway}@keyframes bm-sway{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
-.bm-wag{transform-origin:36px 60px;animation-name:bm-wag}@keyframes bm-wag{0%,30%,70%,100%{transform:rotate(0)}38%{transform:rotate(-7deg)}46%{transform:rotate(7deg)}54%{transform:rotate(-5deg)}62%{transform:rotate(3deg)}}
-.bm-pulse{animation-name:bm-pulse}@keyframes bm-pulse{0%,100%{transform:scale(1);filter:none}50%{transform:scale(1.06);filter:drop-shadow(0 0 3px currentColor)}}
-.bm-flash{animation-name:bm-flash}@keyframes bm-flash{0%,44%,56%,100%{opacity:1;filter:none}48%,52%{opacity:.55;filter:drop-shadow(0 0 4px currentColor)}}
+.bm-move{transform-box:view-box;transform-origin:36px 36px;animation-duration:3.2s;animation-iteration-count:infinite;animation-timing-function:cubic-bezier(.34,1.56,.64,1)}
+.bm-always .bm-move{animation-name:var(--bm-anim);animation-delay:var(--bm-delay,0ms)}
+[data-bm-host]:hover .bm-move,[data-bm-host]:focus-visible .bm-move{animation-name:var(--bm-anim);animation-delay:0ms}
+.bm-bob{--bm-anim:bm-bob}@keyframes bm-bob{0%{transform:translateY(0)}14%{transform:translateY(-2.8px)}30%,100%{transform:translateY(0)}}
+.bm-hop{--bm-anim:bm-hop}@keyframes bm-hop{0%{transform:translateY(0)}9%{transform:translateY(-4.5px)}17%{transform:translateY(.8px)}24%,100%{transform:translateY(0)}}
+.bm-tilt{--bm-anim:bm-tilt}@keyframes bm-tilt{0%{transform:rotate(0)}12%{transform:rotate(-6deg)}26%{transform:rotate(5deg)}38%,100%{transform:rotate(0)}}
+.bm-sway{--bm-anim:bm-sway}@keyframes bm-sway{0%{transform:rotate(0)}15%{transform:rotate(-4deg)}32%{transform:rotate(3deg)}45%,100%{transform:rotate(0)}}
+.bm-wag{--bm-anim:bm-wag;transform-origin:36px 60px}@keyframes bm-wag{0%{transform:rotate(0)}6%{transform:rotate(-7deg)}12%{transform:rotate(7deg)}18%{transform:rotate(-5deg)}24%{transform:rotate(3deg)}30%,100%{transform:rotate(0)}}
+.bm-pulse{--bm-anim:bm-pulse}@keyframes bm-pulse{0%{transform:scale(1);filter:none}16%{transform:scale(1.07);filter:drop-shadow(0 0 3px currentColor)}36%,100%{transform:scale(1);filter:none}}
+.bm-flash{--bm-anim:bm-flash}@keyframes bm-flash{0%,12%,24%,100%{opacity:1;filter:none}6%,18%{opacity:.55;filter:drop-shadow(0 0 4px currentColor)}}
 .bm-watching .bm-look,.bm-watching .bm-blink{animation:none;transition:transform .18s cubic-bezier(.2,.8,.2,1)}
-.bm-asleep .bm-move{animation:none}
+.bm-asleep .bm-move{animation:none!important}
 @media (prefers-reduced-motion:reduce){.bm-look,.bm-blink,.bm-move{animation:none!important}.bm-watching .bm-look{transition:none}}
 `;
 if (typeof document !== "undefined" && !document.getElementById("bm-css")) {
@@ -121,6 +129,8 @@ if (typeof document !== "undefined" && !document.getElementById("bm-css")) {
   el.textContent = CSS;
   document.head.appendChild(el);
 }
+
+const EYE_SIZES = [4.6, 5.6, 6.6];
 
 export function hasMascot(icon: string | null | undefined) {
   return !!icon && icon in MASCOTS;
@@ -137,6 +147,7 @@ export function BotMascot({
   seed = "",
   asleep = false,
   watchCursor = true,
+  moveOn = "hover",
   className,
   label,
 }: {
@@ -146,12 +157,16 @@ export function BotMascot({
   /** paused, switched off or not built yet: eyes closed, no motion */
   asleep?: boolean;
   watchCursor?: boolean;
+  /** "hover": its own move plays while a parent [data-bm-host] is hovered/focused (calm at rest).
+   *  "always": keeps playing (new hires, welcome-email GIFs). */
+  moveOn?: "hover" | "always";
   className?: string;
   label?: string;
 }) {
   const spec = (icon && MASCOTS[icon]) || MASCOTS.bot;
   const ref = useRef<SVGSVGElement>(null);
-  const r = spec.r ?? 6.6;
+  // three eye sizes only (small / medium / large), like a type scale; a single big eye keeps its own size
+  const r = spec.one ? spec.r ?? 8 : EYE_SIZES.reduce((a, b) => (Math.abs(b - (spec.r ?? 6.6)) < Math.abs(a - (spec.r ?? 6.6)) ? b : a));
   const stare = useStare(ref, watchCursor && !asleep, { x: spec.one ? 2.6 : 2.4, y: 1.8 }, spec.y / 72);
   const delay = useMemo(() => {
     const now = typeof performance !== "undefined" ? performance.now() : 0;
@@ -169,7 +184,7 @@ export function BotMascot({
     <svg
       ref={ref}
       viewBox="0 0 72 72"
-      className={cn("select-none overflow-visible", stare && "bm-watching", asleep && "bm-asleep", className)}
+      className={cn("select-none overflow-visible", moveOn === "always" && "bm-always", stare && "bm-watching", asleep && "bm-asleep", className)}
       style={{ ["--bm-delay" as string]: delay } as React.CSSProperties}
       role={label ? "img" : undefined}
       aria-label={label}
@@ -181,6 +196,13 @@ export function BotMascot({
           <rect x="-8" y="-8" width="88" height="88" fill="#fff" />
           {eyes.map((x) => <circle key={x} cx={x} cy={spec.y} r={r + 2} fill="#000" />)}
         </mask>
+        {/* catchlight: a small highlight knocked out of each pupil, upper left (moves and blinks with the eye) */}
+        {eyes.map((x, i) => (
+          <mask key={x} id={`${uid}e${i}`} maskUnits="userSpaceOnUse" x="-8" y="-8" width="88" height="88">
+            <rect x="-8" y="-8" width="88" height="88" fill="#fff" />
+            <circle cx={x - r * 0.34} cy={spec.y - r * 0.36} r={r * 0.3} fill="#000" />
+          </mask>
+        ))}
       </defs>
       <g className={move}>
         <g mask={`url(#${uid})`}>
@@ -189,13 +211,13 @@ export function BotMascot({
         {asleep ? (
           eyes.map((x) => (
             <path key={x} d={`M${x - r} ${spec.y - 0.6}Q${x} ${spec.y + r * 1.1} ${x + r} ${spec.y - 0.6}`}
-              fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" />
+              fill="none" stroke="currentColor" strokeWidth={Math.max(2.4, r * 0.44)} strokeLinecap="round" />
           ))
         ) : (
           <g className="bm-look" style={look}>
-            {eyes.map((x) => (
+            {eyes.map((x, i) => (
               <g key={x} className="bm-blink" style={squint}>
-                <circle cx={x} cy={spec.y} r={r} fill="currentColor" />
+                <circle cx={x} cy={spec.y} r={r} fill="currentColor" mask={`url(#${uid}e${i})`} />
               </g>
             ))}
           </g>

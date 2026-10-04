@@ -161,6 +161,7 @@ function AgentIcon({ a, size = "md" }: { a: Agent; size?: "md" | "lg" }) {
     <span className={cn(box, "grid shrink-0 place-items-center", tone)}>
       {mascot ? (
         <BotMascot icon={a.icon && hasMascot(a.icon) ? a.icon : "bot"} seed={a.slug}
+          moveOn={a.status === "new" ? "always" : "hover"}
           asleep={a.health === "planned" || a.health === "paused" || isOff(a)}
           className={size === "lg" ? "h-10 w-10" : "h-8 w-8"} />
       ) : (
@@ -187,6 +188,7 @@ function AgentCard({ a, onOpen, lead }: { a: Agent; onOpen: (a: Agent) => void; 
   return (
     <button
       type="button"
+      data-bm-host
       onClick={() => onOpen(a)}
       className={cn(
         "group flex w-full min-h-[64px] items-start gap-3 rounded-[16px] p-3 text-left transition-colors duration-150",

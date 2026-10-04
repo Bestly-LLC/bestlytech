@@ -6,7 +6,7 @@ createRoot(document.getElementById("r")!).render(
   <>
     {Object.keys(MASCOTS).map((k) => (
       <div key={k} className="tile" data-icon={k}>
-        <BotMascot icon={k} seed="" watchCursor={false} />
+        <BotMascot icon={k} seed="" watchCursor={false} moveOn="always" />
       </div>
     ))}
   </>,
