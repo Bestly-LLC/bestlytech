@@ -81,7 +81,7 @@
     {
       "id": "airplay",
       "title": "AirPlay",
-      "icon": "mdi:apple-airplay"
+      "icon": "mdi:cast-variant"
     },
     {
       "id": "sign",

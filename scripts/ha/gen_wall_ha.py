@@ -76,7 +76,7 @@ ICON = {
     "voice_on": "mdi:microphone", "voice_sensitivity": "mdi:ear-hearing",
     "widget_news": "mdi:newspaper-variant-outline", "widget_turo_usd": "mdi:car-key", "widget_air": "mdi:air-filter",
     "widget_energy": "mdi:lightning-bolt-outline", "widget_mail": "mdi:email-outline", "widget_habits": "mdi:run",
-    "widget_leo": "mdi:zodiac-leo", "widget_appstore": "mdi:apple", "widget_devices": "mdi:devices",
+    "widget_leo": "mdi:zodiac-leo", "widget_appstore": "mdi:storefront-outline", "widget_devices": "mdi:devices",
     "show_play": "mdi:play-circle-outline", "show_party": "mdi:party-popper", "show_skit": "mdi:drama-masks",
     "show_stop": "mdi:stop-circle-outline", "show_hshow": "mdi:halloween", "show_hparty": "mdi:ghost-outline",
     "motivate": "mdi:arm-flex-outline", "sleep_start": "mdi:sheep", "sleep_stop": "mdi:stop-circle-outline",
@@ -85,7 +85,7 @@ ICON = {
     "live_plane": "mdi:airplane", "live_sweep": "mdi:car-wash", "live_turo": "mdi:car-key",
     "live_show": "mdi:party-popper", "live_sleep": "mdi:sheep", "live_incident": "mdi:alert-outline",
     "theme": "mdi:palette-outline", "volume": "mdi:volume-high", "sound": "mdi:music-note-outline",
-    "sound_pack": "mdi:piano", "radio_on": "mdi:radio", "airplay": "mdi:apple-airplay", "airplay_restart": "mdi:restart",
+    "sound_pack": "mdi:piano", "radio_on": "mdi:radio", "airplay": "mdi:cast-variant", "airplay_restart": "mdi:restart",
     "sign_show": "mdi:draw", "air_show": "mdi:airplane", "air_radius": "mdi:radius-outline",
     "atc": "mdi:radio-tower", "sky_home": "mdi:home-map-marker", "sky_landmarks": "mdi:city-variant-outline",
     "sky_roads": "mdi:road-variant", "sky_traffic": "mdi:traffic-light-outline", "iss_tag": "mdi:space-station",
@@ -111,7 +111,8 @@ ACTION = {"show_stop": "Stop", "sleep_stop": "Stop", "alarm_stop": "Stop", "alar
           "show_hparty": "Play", "motivate": "Play", "airplay_restart": "Restart", "relaunch": "Restart", "focus": "Focus",
           "focus_left": "Nudge", "focus_right": "Nudge", "sign_near": "Test", "sound_test": "Test", "fx_wake_sleep": "Test",
           "neon_play_sign": "Play", "neon_play_turo": "Play", "neon_play_motivate": "Play", "neon_play_scout": "Play",
-          "dnd_schedule": "Reset"}
+          "dnd_schedule": "Reset", "dnd_quiet_hour": "Quiet", "dnd_quiet_morning": "Quiet", "dnd_allow_hour": "Allow",
+          "dnd_allow_morning": "Allow", "dnd_allow_tonight": "Allow"}
 
 # ---- local helpers (sleep length / lullaby) feed $input: tokens ----
 input_select, input_boolean, input_text = {}, {}, {}
