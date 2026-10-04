@@ -9,6 +9,9 @@ reported to `pi_jobs`; `pi_jobs_watch` alerts Scout if a job goes quiet).
 | `studio_regen` | `33 * * * *` | "Bestly Studio — regen pass (hourly)" | free ladder, only when an item waits |
 | `bestly_social daily` | `40 10 * * *` (skips Tuesday) | "Bestly — daily Instagram + Facebook post" | free ladder caption + rule checks in code |
 | `bestly_social carousel` | `47 10 * * 2` | "Bestly — weekly Instagram carousel" | same |
+| `brand_maker make/stats/learn` | `40 0 * * *` / `25 21 * * *` / `30 20 * * 0` | Cookie Yeti + InventoryProof daily posts, made fresh | free ladder (JSON mode) + claim_check hard and soft + fact pass |
+| `hoku_maker make/stats/learn` | `10 1 * * *` / `27 21 * * *` / `35 20 * * 0` | HOKU daily posts, made fresh (renderer: social/scripts/card-kit/hoku) | same + hoku_soft_claim_violation |
+| `cy_maker make` | `20 6 * * 1` | Centering YOU: one carousel draft a week into Studio To review (never posts) | same, her rules + sells-the-deck |
 
 Database side: `supabase/migrations/20261004000000_pi_wave_b_c.sql` (Spark sessions, `pi_http_result`,
 `pi_bestly_ig_recent`, `bestly_social_history`).
