@@ -35,7 +35,11 @@ type Agent = {
   slug: string; name: string; role: string; what_it_does: string; dept: string; reports_to: string | null;
   kind: "human" | "agent" | "job" | "open_role"; status: "active" | "paused" | "planned" | "new";
   relation: string | null; liaison_to: string | null;
-  profile: { field_name?: string; personality?: string; superpower?: string; quirk?: string; motto?: string; first_week?: string } | null;
+  profile: {
+    field_name?: string; personality?: string; superpower?: string; quirk?: string; motto?: string; first_week?: string;
+    /** duties this bot took over in reorgs */
+    inherited?: { reorg_id: string; from_slug: string; from_name: string; duties: string[]; at: string }[];
+  } | null;
   runs_on: string | null; schedule: string | null; admin_url: string | null; icon: string | null; private: boolean; sort: number;
   last_at: string | null; last_ok: boolean | null; summary: string | null; gap_min: number | null; on_demand: boolean;
   watched: boolean; source: string | null; issues: Issue[]; health: Health;
@@ -224,6 +228,11 @@ function AgentCard({ a, onOpen, lead }: { a: Agent; onOpen: (a: Agent) => void; 
           {a.liaison_to === "eli" && (
             <span className="whitespace-nowrap rounded-full bg-[#64D2FF26] px-2 py-0.5 text-[11px] font-semibold text-[#64D2FF] bento:bg-[#32ADE61f] bento:text-[#0071A4]">Works with Eli</span>
           )}
+          {!!a.profile?.inherited?.length && (
+            <span className="whitespace-nowrap rounded-full bg-[#FF9F0A26] px-2 py-0.5 text-[11px] font-semibold text-[#FF9F0A] bento:text-[#C93400]">
+              {a.profile.inherited.length === 1 ? `Took over ${a.profile.inherited[0].from_name}'s work` : `Took over work from ${a.profile.inherited.length} bots`}
+            </span>
+          )}
         </span>
       </span>
       <ChevronRight className={cn("mt-3 h-4 w-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100", tertiary)} aria-hidden />
@@ -367,6 +376,22 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
               </div>
             ) : null;
           })()}
+
+          {!!a.profile?.inherited?.length && (
+            <div className="space-y-2">
+              <h4 className={cn("px-1 text-[13px] font-semibold uppercase tracking-[0.02em]", secondary)}>Took over in reorgs</h4>
+              <ul className={cn(card, "divide-y divide-[#38383A] bento:divide-[#E5E5EA]")}>
+                {a.profile.inherited.map((h) => (
+                  <li key={h.reorg_id} className="space-y-1 p-3">
+                    <p className={cn("text-[15px] font-medium", label)}>From {h.from_name} <span className={cn("font-normal", tertiary)}>· {when(h.at)}</span></p>
+                    <ul className={cn("list-disc space-y-0.5 pl-5 text-[14px] leading-snug", secondary)}>
+                      {h.duties.map((d, i) => <li key={i}>{d}</li>)}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {a.profile?.personality && (
             <div className="space-y-2">
@@ -768,7 +793,51 @@ type Reorg = {
   why: string | null; change: string | null; saves: string | null; risk: string | null; improver_note: string | null;
   improver_score: number | null; status: "proposed" | "done"; decided_at: string | null;
   name: string; role: string | null; icon: string | null; what_it_does: string | null; into_name: string | null; into_icon: string | null;
+  handover?: {
+    duties: { duty: string; to: string | null; to_name: string | null; to_icon: string | null }[];
+    reports: { slug: string; name: string }[];
+    reports_to: { slug: string; name: string } | null;
+  };
 };
+
+/** "Who takes over what": every duty of the departing bot and the bot taking it (or Dropped). */
+function Handover({ m, onOpen }: { m: Reorg; onOpen: (slug: string) => void }) {
+  const duties = m.handover?.duties ?? [];
+  const reports = m.handover?.reports ?? [];
+  if (!duties.length && !reports.length) return null;
+  return (
+    <div className="space-y-1.5 rounded-[12px] bg-[#1C1C1E] p-3 bento:bg-white">
+      <p className={cn("text-[12px] font-semibold uppercase tracking-[0.02em]", secondary)}>Who takes over what</p>
+      <ul className="space-y-1.5">
+        {duties.map((d, i) => (
+          <li key={i} className="flex items-start gap-2">
+            <span className={cn("min-w-0 flex-1 text-[13px] leading-snug", label)} style={{ textWrap: "pretty" } as never}>{nb(d.duty)}</span>
+            {d.to ? (
+              <button type="button" onClick={() => onOpen(d.to!)}
+                className={cn("flex shrink-0 items-center gap-1 whitespace-nowrap text-[13px] font-semibold", tint.blue)}>
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                <span className="grid h-6 w-6 place-items-center rounded-[7px] bg-[#0A84FF1f] text-[#409CFF] bento:bg-[#007AFF14] bento:text-[#007AFF]">
+                  <BotMascot icon={d.to_icon && hasMascot(d.to_icon) ? d.to_icon : "bot"} seed={d.to} watchCursor={false} className="h-[18px] w-[18px]" />
+                </span>
+                {d.to_name}
+              </button>
+            ) : (
+              <span className={cn("shrink-0 whitespace-nowrap text-[13px]", tertiary)}>Dropped</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {reports.length > 0 && (
+        <p className={cn("border-t border-[#38383A] pt-1.5 text-[13px] leading-snug bento:border-[#E5E5EA]", secondary)}>
+          {m.status === "done" ? "Moved: " : "Also moves: "}
+          <span className={label}>{reports.map((r) => r.name).join(", ")}</span>
+          {m.status === "done" ? " now report" : " will report"}{reports.length === 1 && m.status === "done" ? "s" : ""} to{" "}
+          <span className={label}>{m.handover?.reports_to?.name ?? "Scout"}</span>.
+        </p>
+      )}
+    </div>
+  );
+}
 
 function MiniMascot({ icon, seed, tone = "blue" }: { icon: string | null; seed: string; tone?: "blue" | "gray" }) {
   return (
@@ -807,7 +876,8 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
     for (const m of list) {
       const { error } = await supabase.rpc("admin_reorg_execute" as never, { p_id: m.id } as never);
       if (error) toast.error(`${m.name}: ${error.message}`);
-      else gone.push({ id: m.id, slug: m.slug, name: m.name, icon: m.icon, intoName: m.into_name });
+      else gone.push({ id: m.id, slug: m.slug, name: m.name, icon: m.icon, intoName: m.into_name,
+        duties: (m.handover?.duties ?? []).map((d) => ({ duty: d.duty, toName: d.to_name })) });
     }
     setBusy(false);
     if (gone.length) setScene(gone);
@@ -823,7 +893,8 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
         "I let these bots go in a reorg on the Team page. They're retired on the chart; their jobs may still be running.",
         ...gone.map((g) => {
           const m = byId.get(g.id);
-          return `- ${g.name} (${g.slug}): ${m?.kind === "merge" && g.intoName ? `its duties move to ${g.intoName} (${m?.into_slug})` : "its job isn't needed"}.${m?.change ? ` ${m.change}` : ""}`;
+          const duties = (m?.handover?.duties ?? []).map((d) => `    • ${d.duty} -> ${d.to_name ? `${d.to_name} (${d.to})` : "dropped"}`).join("\n");
+          return `- ${g.name} (${g.slug}): ${m?.kind === "merge" && g.intoName ? `its duties move to ${g.intoName} (${m?.into_slug})` : "its job isn't needed"}.${m?.change ? ` ${m.change}` : ""}${duties ? `\n  Handover:\n${duties}` : ""}`;
         }),
         "For each: find where it runs (database schedule, Pi job, scheduled task, edge function), plan how to switch it off",
         "and hand over anything the other bot needs. Show me the plan and wait for my yes before switching anything off.",
@@ -898,7 +969,8 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <p className={cn("text-[15px]", secondary)}>Nobody to let go. The next review is Monday at 9:30&nbsp;AM.</p>
           <button type="button" className={btnPlain}
-            onClick={() => setPreview({ key: Date.now(), leavers: [{ id: "preview", slug: "preview", name: "Demo Bot", icon: "bot", intoName: "Scout" }] })}>
+            onClick={() => setPreview({ key: Date.now(), leavers: [{ id: "preview", slug: "preview", name: "Demo Bot", icon: "bot", intoName: "Scout",
+              duties: [{ duty: "Checks the inbox every morning", toName: "Mail Bridge" }, { duty: "Sends a daily summary", toName: "Scout" }, { duty: "Weekly backup reminder", toName: null }] }] })}>
             Preview the farewell
           </button>
         </div>
@@ -921,9 +993,16 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
               <div>
                 <p className={cn("text-[17px] font-semibold leading-snug", label)}>Let go: {m.name}</p>
                 <p className={cn("text-[13px]", secondary)}>
-                  {m.kind === "merge" && m.into_name ? `Its work moves to ${m.into_name}` : "Its job isn't needed any more"}
+                  {(() => {
+                    const moving = (m.handover?.duties ?? []).filter((d) => d.to).length;
+                    const total = m.handover?.duties?.length ?? 0;
+                    if (!total) return m.kind === "merge" && m.into_name ? `Its work moves to ${m.into_name}` : "Its job isn't needed any more";
+                    if (!moving) return `Nobody takes over: ${total === 1 ? "its job isn't" : "its jobs aren't"} needed any more`;
+                    return `${moving} of ${total} ${total === 1 ? "duty moves" : "duties move"} to another bot`;
+                  })()}
                 </p>
               </div>
+              <Handover m={m} onOpen={onOpen} />
               {m.why && <p className={cn("text-[13px] leading-snug", secondary)} style={{ textWrap: "pretty" } as never}><span className={cn("font-semibold", label)}>The Recruiter: </span>{nb(m.why)}</p>}
               {m.improver_note && <p className={cn("text-[13px] leading-snug", secondary)} style={{ textWrap: "pretty" } as never}><span className={cn("font-semibold", label)}>The Improver: </span>{nb(m.improver_note)}</p>}
               {m.saves && <p className={cn("text-[13px] leading-snug", tint.green)}>Saves: {nb(m.saves)}</p>}
@@ -946,7 +1025,12 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
                 <MiniMascot icon={m.icon} seed={m.slug} tone="gray" />
                 <span className="min-w-0 flex-1">
                   <span className={cn("block text-[15px] font-medium", label)}>{m.name}</span>
-                  <span className={cn("block text-[13px]", tertiary)}>{m.into_name ? `Work moved to ${m.into_name}` : "Job retired"}</span>
+                  <span className={cn("block text-[13px]", tertiary)}>
+                    {(() => {
+                      const to = [...new Set((m.handover?.duties ?? []).map((d) => d.to_name).filter(Boolean))] as string[];
+                      return to.length ? `Work moved to ${to.join(", ")}` : m.into_name ? `Work moved to ${m.into_name}` : "Job retired";
+                    })()}
+                  </span>
                 </span>
                 <button type="button" className={btnPlain} onClick={() => undo([m.id])}>Bring back</button>
               </li>

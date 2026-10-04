@@ -13,7 +13,11 @@ import { cn } from "@/lib/utils";
  *   4. caption: who left and where the work went, with Done and Undo
  * Reduced motion: the final caption only. Interruptible: Skip jumps to the end at any time (Apple HIG).
  */
-export type Leaver = { id: string; slug: string; name: string; icon: string | null; intoName?: string | null };
+export type Leaver = {
+  id: string; slug: string; name: string; icon: string | null; intoName?: string | null;
+  /** who takes over what */
+  duties?: { duty: string; toName: string | null }[];
+};
 
 const SPRING = { type: "spring", stiffness: 380, damping: 26 } as const;
 
@@ -45,10 +49,12 @@ export function FarewellScene({ leavers, onDone, onUndo, preview = false }: {
 
   const one = leavers.length === 1;
   const shown = leavers.slice(0, 5);
-  const heirs = [...new Set(leavers.map((l) => l.intoName).filter(Boolean))] as string[];
+  const heirs = [...new Set(leavers.flatMap((l) => (l.duties?.length ? l.duties.map((d) => d.toName) : [l.intoName])).filter(Boolean))] as string[];
+  const oneDuties = one ? leavers[0].duties ?? [] : [];
   const title = one ? `${leavers[0].name} has left the crew` : `${leavers.length} bots left the crew`;
   const detail = one
-    ? leavers[0].intoName ? `${leavers[0].intoName} picks up its work.` : "Its job wasn't needed any more."
+    ? oneDuties.length ? (heirs.length ? "Here's who takes over what:" : "Its job wasn't needed any more.")
+      : leavers[0].intoName ? `${leavers[0].intoName} picks up its work.` : "Its job wasn't needed any more."
     : heirs.length ? `Their work moves to ${heirs.join(", ")}.` : "Their jobs weren't needed any more.";
 
   return (
@@ -132,6 +138,34 @@ export function FarewellScene({ leavers, onDone, onUndo, preview = false }: {
             <motion.div key="cap" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={SPRING} className="space-y-1 pt-1">
               <p className="text-[20px] font-semibold leading-tight">{title}</p>
               <p className="text-[15px] leading-snug opacity-80">{detail}</p>
+              {one && heirs.length > 0 && oneDuties.length > 0 && (
+                <ul className="space-y-1 py-1">
+                  {oneDuties.slice(0, 4).map((d, i) => (
+                    <li key={i} className="flex items-start gap-2 text-[14px] leading-snug">
+                      <span className="min-w-0 flex-1 opacity-80">{d.duty}</span>
+                      <span className={cn("shrink-0 whitespace-nowrap font-semibold", d.toName ? "text-[#409CFF] bento:text-[#007AFF]" : "opacity-50 font-normal")}>
+                        {d.toName ? `→ ${d.toName}` : "Dropped"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!one && (
+                <ul className="space-y-1 py-1">
+                  {leavers.slice(0, 5).map((l) => {
+                    const to = [...new Set((l.duties ?? []).map((d) => d.toName).filter(Boolean))] as string[];
+                    const heir = to.length ? to.join(", ") : l.intoName;
+                    return (
+                      <li key={l.id} className="flex items-start gap-2 text-[14px] leading-snug">
+                        <span className="min-w-0 flex-1 opacity-80">{l.name}</span>
+                        <span className={cn("shrink-0 whitespace-nowrap font-semibold", heir ? "text-[#409CFF] bento:text-[#007AFF]" : "opacity-50 font-normal")}>
+                          {heir ? `→ ${heir}` : "Not needed"}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
               <p className="pt-1 text-[13px] leading-snug opacity-60">
                 {preview ? "Just a preview. Nobody actually left." : `Scout has the plan to switch ${one ? "its job" : "their jobs"} off and waits for your yes.`}
               </p>

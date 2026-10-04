@@ -289,12 +289,17 @@ async function reorg() {
     "is no longer needed (idle, duplicated, switched off for good, failing with nobody missing it). Evidence must come from the data " +
     "(team health and last run, failing jobs, AI spend, noisy problems, recent decisions). Never pick a bot in protected, a person, " +
     "or one in past_reorgs. Proposing nothing is a fine answer when the crew is lean. Plain words for someone busy. " +
+    "For every move, list its handover: split the bot's job into 1 to 4 duties and say which bot (slug from roster) takes each one, " +
+    "or null if that duty is simply dropped. " +
     'Return JSON only: {"moves":[{"bot":"slug","kind":"merge|retire","into":"slug or null","why":"the evidence, one or two sentences",' +
-    '"change":"what moves where, one line","saves":"what it saves, one line","risk":"what could break, one line"}]}',
+    '"change":"what moves where, one line","saves":"what it saves, one line","risk":"what could break, one line",' +
+    '"handover":[{"duty":"one duty, plain words","to":"slug or null"}]}]}',
     JSON.stringify(ctx), 1500);
   const moves = (Array.isArray(pitch?.moves) ? pitch.moves : [])
     .filter((m: any) => m?.bot && slugs.has(m.bot) && !PROTECTED.has(m.bot))
-    .map((m: any) => ({ ...m, into: m.into && slugs.has(m.into) && m.into !== m.bot ? m.into : null, kind: m.kind === "merge" && m.into ? "merge" : "retire" }))
+    .map((m: any) => ({ ...m, into: m.into && slugs.has(m.into) && m.into !== m.bot ? m.into : null, kind: m.kind === "merge" && m.into ? "merge" : "retire",
+      handover: (Array.isArray(m.handover) ? m.handover : []).filter((h: any) => h?.duty).slice(0, 4)
+        .map((h: any) => ({ duty: String(h.duty), to: h.to && slugs.has(h.to) && h.to !== m.bot ? h.to : null })) }))
     .slice(0, 3);
   if (pitch == null) {
     await db.rpc("agent_beat", { p_slug: "hr", p_ok: false, p_summary: "Reorg review: free AI did not answer; will try again next run" });
@@ -309,7 +314,8 @@ async function reorg() {
   const review = await freeJson("reflect",
     "You are The Improver, Bestly's continuous-improvement analyst. The Recruiter proposes letting these bots go. For each, check the " +
     "data: is the job really covered elsewhere or not needed, would Jared lose anything he relies on, does the bot taking over actually " +
-    "do similar work? Back only moves that clearly simplify the business without losing anything important. " +
+    "do similar work, and does every duty in the handover land somewhere sensible (or is it truly safe to drop)? " +
+    "Back only moves that clearly simplify the business without losing anything important. " +
     'Return JSON only: {"reviews":[{"bot":"exact slug","verdict":"back|pass","score":1-5,"note":"one or two sentences, plain words"}]}',
     JSON.stringify({ moves, roster: ctx.roster, team: ctx.team, failing_db_jobs_7d: ctx.failing_db_jobs_7d, ai_spend_7d: ctx.ai_spend_7d,
       improver_ideas: ctx.improver_ideas }), 1200);
@@ -346,6 +352,15 @@ async function farewell(id: string) {
   if (!key) return { ok: false, error: "RESEND_API_KEY missing" };
   const mascot = await mascotUrl(a.icon ?? null);
   const where = ctx.heir?.name ? `${ctx.heir.name} (${ctx.heir.role}) picks up its work.` : "Its job wasn't needed any more.";
+  const duties: any[] = ctx.handover?.duties ?? [];
+  const reports: any[] = ctx.handover?.reports ?? [];
+  const handoverHtml = duties.length ? `
+      <p style="margin:6px 0 6px;color:#1d1d1f;font-size:13px;font-weight:600;letter-spacing:.02em;text-transform:uppercase">Who takes over what</p>
+      <table style="width:100%;border-collapse:collapse;border-top:1px solid #e5e5ea;margin:0 0 12px">
+        ${duties.map((d) => `<tr><td style="padding:8px 8px 8px 0;color:#1d1d1f;font-size:14px;line-height:1.4;vertical-align:top">${esc(d.duty)}</td>
+          <td style="padding:8px 0;font-size:14px;line-height:1.4;vertical-align:top;text-align:right;white-space:nowrap;${d.to_name ? "color:#0a84ff;font-weight:600" : "color:#8e8e93"}">${d.to_name ? `&rarr; ${esc(d.to_name)}` : "Dropped"}</td></tr>`).join("")}
+      </table>
+      ${reports.length ? `<p style="margin:0 0 12px;color:#6e6e73;font-size:14px;line-height:1.5">${esc(reports.map((r) => r.name).join(", "))} now report${reports.length === 1 ? "s" : ""} to ${esc(ctx.handover?.reports_to?.name ?? "Scout")}.</p>` : ""}` : "";
   const motto = a.profile?.motto ? `Its motto was "${a.profile.motto}"` : "";
   const html = `<!doctype html><html><body style="margin:0;background:#f2f2f7;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Arial,sans-serif">
   <div style="max-width:560px;margin:0 auto;padding:28px 16px">
@@ -355,6 +370,7 @@ async function farewell(id: string) {
       <h1 style="margin:0 0 4px;color:#1d1d1f;font-size:26px;line-height:1.15">Farewell, ${esc(a.name)}</h1>
       <p style="margin:0 0 18px;color:#6e6e73;font-size:15px">${esc(a.role)} · packed its box and left the expedition</p>
       <p style="margin:0 0 12px;color:#1d1d1f;font-size:16px;line-height:1.5">${esc(where)}</p>
+      ${handoverHtml}
       ${r.why ? `<p style="margin:0 0 12px;color:#6e6e73;font-size:14px;line-height:1.5"><b style="color:#1d1d1f">Why:</b> ${esc(r.why)}</p>` : ""}
       ${r.saves ? `<p style="margin:0 0 12px;color:#248A3D;font-size:14px;line-height:1.5">Saves: ${esc(r.saves)}</p>` : ""}
       ${motto ? `<p style="margin:0 0 12px;color:#6e6e73;font-size:14px;font-style:italic">${esc(motto)}</p>` : ""}
