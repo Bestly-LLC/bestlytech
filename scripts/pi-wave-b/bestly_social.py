@@ -578,9 +578,19 @@ def _learn(deadline):
              "each one line, each ending with the sample size like (N=6). Never call anything a winner or proven unless N >= 10; "
              "below that it is an observation. Include at least one idea worth testing. Reply with a JSON array of strings only."},
             {"role": "user", "content": json.dumps(stats, default=str)[:12000]}]
-    msg, _ = freellm.chat(msgs, None, max_tokens=1500, deadline=deadline)
-    m = re.search(r"\[.*\]", msg.get("content") or "", re.S)
-    lessons = [str(x)[:240] for x in json.loads(m.group(0))][:5] if m else []
+    lessons = []
+    for _ in range(2):
+        msg, _ = freellm.chat(msgs, None, max_tokens=4000, deadline=deadline)
+        text = msg.get("content") or ""
+        m = re.search(r"\[.*\]", text, re.S)
+        try:
+            lessons = [str(x)[:240] for x in json.loads(m.group(0))][:5] if m else []
+        except ValueError:
+            lessons = []
+        if not lessons:   # a plain list instead of JSON is fine too
+            lessons = [re.sub(r"^\s*(?:[-*\d.)]+)\s*", "", l).strip()[:240] for l in text.splitlines() if "(N=" in l][:5]
+        if lessons:
+            break
     if not lessons:
         raise RuntimeError("no lessons came back")
     lib._req("POST", "/rest/v1/social_lessons", {"brand": "bestly", "lessons": lessons, "stats": stats})
