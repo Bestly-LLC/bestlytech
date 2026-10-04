@@ -117,7 +117,7 @@ const WRAP_MS = 28_000;         // leave this much for a final no-tools answer
 const PI_ACTIONS: Record<string, string[]> = {
   nextcloud: ["status", "restart"],
   homebridge: ["restart", "refresh"],
-  homeassistant: ["refresh", "toggle_automation"],
+  homeassistant: ["refresh", "toggle_automation", "states", "call"],
   pihole: ["enable", "disable", "update_gravity", "recent_blocked", "allow", "unallow"],
   network: ["diagnose", "find_device", "domain", "ping", "dns", "wifi_scan", "speed"],
   router: ["probe"],
@@ -125,7 +125,7 @@ const PI_ACTIONS: Record<string, string[]> = {
 };
 // v19: network diagnosis from the Pi (agent >= 1.5.0) is read-only, so it never needs a yes.
 const PI_READ_ONLY = new Set([
-  "nextcloud.status", "homebridge.refresh", "homeassistant.refresh",
+  "nextcloud.status", "homebridge.refresh", "homeassistant.refresh", "homeassistant.states",
   "pihole.recent_blocked", "network.diagnose", "network.find_device", "network.domain", "network.ping",
   "network.dns", "network.wifi_scan", "network.speed", "router.probe",
 ]);
@@ -176,7 +176,7 @@ const TOOLS = [
     description:
       "Run a job on bestly-pi through the Home Hub agent and wait up to a minute for the answer. " +
       "nextcloud: status (full diagnosis) | restart (heal ladder: compose up, finish a pending occ upgrade, restart proxy, tunnel, app). " +
-      "homebridge: restart | refresh. homeassistant: refresh | toggle_automation {automation_id, enabled}. " +
+      "homebridge: restart | refresh. homeassistant: refresh | toggle_automation {automation_id, enabled} | states {entity_id | prefix | match, limit?} (LIVE read of any entity: laundry is prefix 'sensor.laundry', e.g. sensor.laundry_best_time and the washer/dryer sensors) | call {service:'light.turn_on', entity_id, data?} (lights, switches, scenes, scripts, input_booleans incl. input_boolean.sexy_time, media players, climate, covers, fans; lock.lock only). " +
       "pihole: enable | disable {seconds} | update_gravity | recent_blocked {minutes, client?, match?} | allow {domain} | unallow {domain}. " +
       "network (the home LAN, seen from the Pi): diagnose {host?, match?} (router + internet ping, DNS via Pi-hole/router/Cloudflare, speed, Wi-Fi scan, router WAN state, verdicts) | " +
       "find_device {match?} (every device on the home LAN right now from a live scan: IP, MAC, maker, the name the router's DHCP knows, ping; plus the Pi-hole clients) | " +

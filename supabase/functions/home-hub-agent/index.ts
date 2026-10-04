@@ -60,6 +60,15 @@ const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
         ? null
         : "toggle_automation needs automation_id (automation.<id>) and enabled (boolean)",
     refresh: none,
+    // agent >= 1.5.4: live Home Assistant reads (laundry, sensors, anything) and allowlisted service calls.
+    states: (p) =>
+      p.entity_id !== undefined || typeof p.prefix === "string" || typeof p.match === "string"
+        ? null
+        : "states needs entity_id, prefix (e.g. sensor.laundry) or match",
+    call: (p) =>
+      typeof p.service === "string" && /^[a-z_]+\.[a-z0-9_]+$/.test(p.service)
+        ? null
+        : "call needs service like light.turn_on (plus entity_id and optional data)",
     // agent >= 1.4.0: the admin's emergency button. full = charge the EcoFlow DELTA 2 to 100%,
     // storage = back to its storage level, status = read only (battery, limit, NWS alerts).
     ecoflow: (p) =>
