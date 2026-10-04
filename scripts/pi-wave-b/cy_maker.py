@@ -50,6 +50,8 @@ DECK = """Centering YOU is a postpartum card deck made by Elizabeth O'Brien, LPC
 therapist) and Dr. Marianela Rodriguez. 48 cards: an intention or prompt on the front, a skill on the back, and a wooden
 stand. How it works: pull a card, place it on the stand where you can see it, practice the skill on the back, share it.
 There is an English edition and a Spanish edition (Centrada en ti). Web address: centeringyou.com.
+You do NOT know what any individual card says: never quote a card, never name or describe a specific skill or exercise
+"on the back" (say "the skill on the back" in general), and never invent features beyond these facts.
 It is a therapeutic, educational resource; it is not a replacement for therapy, medical care or crisis support."""
 
 VOICE = """Her voice and her rules (from her Field Guide and her own notes; these are not negotiable):
@@ -93,7 +95,9 @@ REVIEW = """You are Elizabeth O'Brien's careful editor and fact checker for her 
 
 {voice}
 
-Check every slide and both captions against those rules and for anything clinically inaccurate or overstated. Then
+Check every slide and both captions against those rules and for anything clinically inaccurate or overstated,
+and for any description of what a specific card says or which exercise is on a card (nobody here knows the cards'
+contents, so that is invented) or any claim that a pause or skill restores, fixes or changes how someone feels. Then
 score it 1-10 as a post she would approve without changes: warm, specific, clinically careful, slides that read as full
 connected sentences, and a last slide that clearly bridges to the deck.
 Reply with ONE JSON object only: {{"ok": true|false, "score": <1-10>, "problems": ["<where>: <what>"],
