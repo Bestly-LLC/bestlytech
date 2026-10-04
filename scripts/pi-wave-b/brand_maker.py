@@ -301,7 +301,10 @@ def _make_one(brand, cfg, recent, bank_open, deadline, dry):
     word = cards[0].get("big", "").lower() or None if comp == "word" else None
     slug = (("cy-" if brand == "cookieyeti" else "ip-") + re.sub(r"[^a-z0-9]+", "-", _plain(plan["title"]).lower()).strip("-")[:40]
             + "-" + time.strftime("%m%d"))
-    row = {"brand": brand, "slug": slug, "title": _plain(plan["title"])[:200], "caption": plan["caption"].strip(),
+    caption = plan["caption"].strip()
+    if not caption.lower().startswith(_plain(plan["title"]).lower().rstrip(".")):
+        caption = _plain(plan["title"]).strip() + "\n\n" + caption      # house style: the hook is the first line
+    row = {"brand": brand, "slug": slug, "title": _plain(plan["title"])[:200], "caption": caption,
            "hashtags": cfg["hashtags"], "cards": cards, "topic": (plan.get("topic") or topic)[:60].lower(),
            "ground": ground, "composition": comp, "pose": pose, "display_word": word, "priority": 100,
            "approved": True, "approved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": "daily-maker"}
