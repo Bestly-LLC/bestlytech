@@ -958,6 +958,7 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
       <AnimatePresence>
         {scene && (
           <FarewellScene
+            key="farewell"
             leavers={scene}
             onDone={finish}
             onUndo={() => { const ids = scene.map((l) => l.id); setScene(null); void undo(ids); }}
