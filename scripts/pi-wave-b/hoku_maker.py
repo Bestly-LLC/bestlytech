@@ -290,28 +290,37 @@ def _check(fmt, layout, p, past):
     return e
 
 
-REVIEW = """You are a strict fact checker for HOKU Instagram posts that go live with no human review. {about}
+REVIEW = """You are a strict fact checker and editor for HOKU Instagram posts that go live with no human review. {about}
 Check every line for: any claim about what the mist does for skin, health, germs or how skin looks or feels; anything
 beyond the facts above; anything misleading about the can, the ingredients or HOCl; anything a careful regulator would
-flag. Also score it 1-10 as a post a thoughtful reader would stop on: clear, specific, calm, not repetitive, not vague.
-Reply with ONE JSON object only: {{"ok": true|false, "score": <1-10>, "problems": ["<where>: <what is wrong>", ...]}}"""
+flag. Then score it 1-10 as a post a thoughtful reader would stop on: specific, concrete, calm, quietly surprising,
+not generic or repetitive. HOKU's voice is deliberately understated; do not ask for hype.
+Reply with ONE JSON object only:
+{{"ok": true|false, "score": <1-10>, "problems": ["<where>: <what is wrong>", ...],
+  "improve": "<one or two concrete edits that would raise the score, naming the line>"}}"""
 
 
 def _review(plan, deadline):
+    """-> (problems, score). problems is empty only when the post is factually fine AND scores 8+."""
     msgs = [{"role": "system", "content": REVIEW.format(about=ABOUT)},
             {"role": "user", "content": json.dumps({k: v for k, v in plan.items() if k not in ("graphic", "topic")})[:5000]}]
     msg, _ = freellm.chat(msgs, None, max_tokens=2500, deadline=deadline, json_mode=True)
     try:
         r = bm._json(msg.get("content"))
     except ValueError:
-        return []
+        return [], 8.0          # an unreadable review is not a rejection; every rule check already passed
     try:
         score = float(r.get("score") or 0)
     except (TypeError, ValueError):
-        score = 0
-    if r.get("ok") and score >= 8:
-        return []
-    return [f"fact check: {x}" for x in (r.get("problems") or [])][:6] or [f"quality score {score:g}/10: make it clearer and more specific"]
+        score = 0.0
+    probs = [f"fact check: {x}" for x in (r.get("problems") or [])][:6]
+    if not r.get("ok") and not probs:
+        probs = ["fact check: not ok (no reason given); stay strictly inside the facts"]
+    if probs:
+        return probs, score
+    if score >= 8:
+        return [], score
+    return [f"editor (score {score:g}/10): {str(r.get('improve') or 'make it more specific and concrete')[:300]}"], score
 
 
 def _write(fmt, layout, topic, posts, past, deadline):
@@ -330,15 +339,18 @@ def _write(fmt, layout, topic, posts, past, deadline):
             + ("\nWhat we have learned (observations with sample sizes):\n" + "\n".join(f"- {l}" for l in lessons[:5]) if lessons else ""))
     msgs = [{"role": "system", "content": SYS.format(about=ABOUT, format_rules=rules, schema=schema)},
             {"role": "user", "content": user}]
-    errs, plan, prov, tries = [], None, None, []
+    errs, plan, prov, tries, near = [], None, None, [], None
     for _ in range(4):
         msg, prov = freellm.chat(msgs, None, max_tokens=3000, deadline=deadline, json_mode=True)
         try:
             plan = bm._json(msg.get("content"))
-            errs = _check(fmt, layout, plan, past)
+            errs, score = _check(fmt, layout, plan, past), 0.0
             if not errs:
-                errs = _review(plan, deadline)
-            tries.append(f"{prov}: '{plan.get('title')}' -> {'; '.join(errs)[:200] or 'ok'}")
+                errs, score = _review(plan, deadline)
+                # Factually clean and a 7: keep it as the fallback; a 7 in HOKU's quiet voice beats a re-run.
+                if errs and all(e.startswith("editor") for e in errs) and score >= 7 and (not near or score > near[1]):
+                    near = (plan, score, prov)
+            tries.append(f"{prov}: {json.dumps(plan)[:260]} -> {'; '.join(errs)[:220] or 'ok'}")
         except (ValueError, TypeError, KeyError, AttributeError) as e:
             plan, errs = None, [f"reply was not the JSON asked for ({e}; {prov})"]
             continue
@@ -346,6 +358,8 @@ def _write(fmt, layout, topic, posts, past, deadline):
             return plan, prov
         msgs += [{"role": "assistant", "content": (msg.get("content") or "")[:4000]},
                  {"role": "user", "content": "Fix these and reply with the JSON only: " + "; ".join(errs)}]
+    if near:
+        return near[0], f"{near[2]} (editor score {near[1]:g})"
     raise RuntimeError(f"[{fmt}/{layout}, {topic}] post failed the rules 4 times: " + " || ".join(tries)[:900])
 
 
