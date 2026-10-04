@@ -196,7 +196,7 @@ def _check(brand, cfg, kinds, p):
         for where, t in [("caption", cap)] + [(f"card {i}", f"{_plain(c.get('head'))}. {c.get('body') or ''}")
                                               for i, c in enumerate(cards, start=1)]:
             r = lib.rpc("claim_check", _client_slug=cfg["claim"], _text=t, _context="brand_maker") or {}
-            if r.get("ok") is False:   # hard OR soft: nobody reviews these before they post
+            if r.get("ok") is False or r.get("severity") == "soft":   # soft comes back ok:true; block it anyway, nobody reviews these
                 e.append(f"{where} broke the claim rule '{r.get('reason')}' - rephrase without it")
     return e
 

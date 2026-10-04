@@ -1,0 +1,171 @@
+<!doctype html>
+<!-- HOKU card kit for the Pi (2026-10-04). A port of hoku-clean/social/slide_v3.mjs + graphics.mjs:
+     same 1080x1350 geometry, themes, layouts and monoline icons, but self-contained and self-fitting.
+     Spec = JSON in the URL hash. The page steps the headline down (4px at a time, floor 56) until it fits in
+     its line budget with no overflow, then reports {ok,size,lines,overflow} in <body data-fit>.
+     Build: python3 build.py (inlines the icon set from gfx.json into card.html). -->
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:'Newsreader';src:url(fonts/newsreader.woff2) format('woff2');font-weight:200 800;font-style:normal}
+@font-face{font-family:'Inter';src:url(fonts/inter-400.woff2) format('woff2');font-weight:400}
+@font-face{font-family:'Inter';src:url(fonts/inter-500.woff2) format('woff2');font-weight:500}
+@font-face{font-family:'Inter';src:url(fonts/inter-600.woff2) format('woff2');font-weight:600 700}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+</style><style id="theme"></style></head>
+<body><div id="root"></div>
+<script>
+const GFX = {"pump": "<rect x=\"50\" y=\"82\" width=\"100\" height=\"94\" rx=\"20\"/> <path d=\"M82 82V68h36v14\"/> <path d=\"M100 68V48\"/> <rect x=\"76\" y=\"32\" width=\"48\" height=\"16\" rx=\"8\"/> <path d=\"M76 40H50\"/>", "bag": "<rect x=\"56\" y=\"56\" width=\"88\" height=\"120\" rx=\"30\"/> <path d=\"M84 56V34h32v22\"/>", "canbag": "<rect x=\"44\" y=\"50\" width=\"112\" height=\"126\" rx=\"20\"/> <path d=\"M80 50V28h40v22\"/> <circle cx=\"100\" cy=\"39\" r=\"4\" fill=\"currentColor\" stroke=\"none\"/> <rect x=\"66\" y=\"74\" width=\"68\" height=\"82\" rx=\"16\"/>", "mist": "<rect x=\"24\" y=\"88\" width=\"38\" height=\"24\" rx=\"8\"/> <g fill=\"currentColor\" stroke=\"none\"> <circle cx=\"90\" cy=\"100\" r=\"5\"/> <circle cx=\"116\" cy=\"84\" r=\"5\"/><circle cx=\"116\" cy=\"116\" r=\"5\"/> <circle cx=\"142\" cy=\"68\" r=\"5\"/><circle cx=\"142\" cy=\"100\" r=\"5\"/><circle cx=\"142\" cy=\"132\" r=\"5\"/> <circle cx=\"168\" cy=\"52\" r=\"5\"/><circle cx=\"168\" cy=\"84\" r=\"5\"/><circle cx=\"168\" cy=\"116\" r=\"5\"/><circle cx=\"168\" cy=\"148\" r=\"5\"/> </g>", "air": "<path d=\"M30 76h84a16 16 0 1 0-16-16\"/> <path d=\"M30 104h120a16 16 0 1 1-16 16\"/> <path d=\"M30 132h60a12 12 0 1 1-12 12\"/>", "cycle": "<path d=\"M48 80A56 56 0 0 1 152 80\"/><path d=\"M157 65L152 80L138 72\"/> <path d=\"M152 120A56 56 0 0 1 48 120\"/><path d=\"M43 135L48 120L62 128\"/>", "drop": "<path d=\"M100 26C128 66 152 92 152 120a52 52 0 0 1-104 0C48 92 72 66 100 26Z\"/>", "leaf": "<path d=\"M176 24C120 24 40 60 30 150c-2 12-2 20-2 26 30-2 90-12 122-50 30-36 26-70 26-102Z\"/> <path d=\"M28 172C60 120 100 80 150 50\"/>", "recipe": "<path d=\"M112 24L56 108h40l-8 68 56-84h-40l8-68Z\"/>", "flask": "<path d=\"M78 26h44M88 26v44l-40 72a14 14 0 0 0 12 22h80a14 14 0 0 0 12-22l-40-72V26\"/> <path d=\"M64 132h72\"/>", "label": "<rect x=\"44\" y=\"30\" width=\"112\" height=\"140\" rx=\"20\"/> <path d=\"M70 74h60M70 100h44M70 126h52\"/>", "strike": "<rect x=\"28\" y=\"70\" width=\"144\" height=\"60\" rx=\"30\"/> <path d=\"M60 100h80\"/> <path d=\"M40 160L160 40\"/>", "claim": "<path d=\"M48 38a12 12 0 0 1 12-12h58l34 34v104a12 12 0 0 1-12 12H60a12 12 0 0 1-12-12Z\"/> <path d=\"M118 26v34h34\"/> <path d=\"M72 106h56M72 132h34\"/>", "scale": "<path d=\"M100 36v136M60 172h80M36 66h128\"/> <path d=\"M36 66l-20 46h40ZM164 66l-20 46h40Z\"/>", "search": "<circle cx=\"88\" cy=\"88\" r=\"54\"/><path d=\"M128 128l44 44\"/>", "shield": "<path d=\"M100 24l60 26v46c0 40-26 68-60 82-34-14-60-42-60-82V50Z\"/> <path d=\"M74 104l16 16 34-34\"/>", "list": "<g fill=\"currentColor\" stroke=\"none\"><circle cx=\"44\" cy=\"60\" r=\"6\"/><circle cx=\"44\" cy=\"100\" r=\"6\"/><circle cx=\"44\" cy=\"140\" r=\"6\"/></g> <path d=\"M68 60h88M68 100h64M68 140h80\"/>", "hand": "<path d=\"M60 126V68a10 10 0 0 1 20 0v36V48a10 10 0 0 1 20 0v56V56a10 10 0 0 1 20 0v52V80a10 10 0 0 1 20 0v56c0 24-18 40-42 40h-2c-20 0-36-16-36-36v-14\"/> <path d=\"M60 140L40 112a10 10 0 0 1 16-12l4 6\"/>", "face": "<path d=\"M84 176v-22C60 146 44 122 44 94 44 56 74 26 110 26c22 0 36 14 40 34 4 12 10 22 15 30 3 5 1 10-4 10h-6C158 114 158 132 148 144 142 152 134 158 126 158v18\"/> <g fill=\"currentColor\" stroke=\"none\"><circle cx=\"170\" cy=\"52\" r=\"5\"/><circle cx=\"180\" cy=\"86\" r=\"5\"/><circle cx=\"170\" cy=\"120\" r=\"5\"/></g>", "gym": "<rect x=\"24\" y=\"80\" width=\"152\" height=\"84\" rx=\"26\"/> <path d=\"M74 80V62a26 26 0 0 1 52 0v18\"/>", "steps": "<path d=\"M24 172h38v-37h38v-37h38V61h38V24\"/>", "clock": "<circle cx=\"100\" cy=\"100\" r=\"76\"/><path d=\"M100 56v44l30 18\"/>", "calendar": "<rect x=\"28\" y=\"44\" width=\"144\" height=\"128\" rx=\"20\"/> <path d=\"M28 84h144M68 30v28M132 30v28\"/> <g fill=\"currentColor\" stroke=\"none\"><circle cx=\"68\" cy=\"120\" r=\"5\"/><circle cx=\"100\" cy=\"120\" r=\"5\"/><circle cx=\"132\" cy=\"120\" r=\"5\"/><circle cx=\"68\" cy=\"148\" r=\"5\"/><circle cx=\"100\" cy=\"148\" r=\"5\"/></g>", "weather": "<circle cx=\"100\" cy=\"100\" r=\"30\"/> <path d=\"M100 38V24M100 176v-14M38 100H24M176 100h-14M56 56l-10-10M154 154l-10-10M56 144l-10 10M154 46l-10 10\"/>", "save": "<path d=\"M56 26h88a8 8 0 0 1 8 8v142l-52-34-52 34V34a8 8 0 0 1 8-8Z\"/>", "chat": "<path d=\"M52 36h96a24 24 0 0 1 24 24v56a24 24 0 0 1-24 24H96l-34 28v-28H52a24 24 0 0 1-24-24V60a24 24 0 0 1 24-24Z\"/> <g fill=\"currentColor\" stroke=\"none\"><circle cx=\"76\" cy=\"98\" r=\"5\"/><circle cx=\"100\" cy=\"98\" r=\"5\"/><circle cx=\"124\" cy=\"98\" r=\"5\"/></g>", "question": "<path d=\"M52 36h96a24 24 0 0 1 24 24v56a24 24 0 0 1-24 24H96l-34 28v-28H52a24 24 0 0 1-24-24V60a24 24 0 0 1 24-24Z\"/> <path d=\"M86 82a14 14 0 1 1 22 12c-6 4-8 8-8 14\"/><circle cx=\"100\" cy=\"124\" r=\"5\" fill=\"currentColor\" stroke=\"none\"/>"};
+const THEMES = {
+  gold:   { bg:'#C29A55', ink:'#292010', dim:'#3D3218', accent:'#4A3A18', line:'rgba(41,32,16,.28)', logo:'dark'  },
+  forest: { bg:'#25301F', ink:'#F6F2E9', dim:'#C6CEBB', accent:'#CBA76C', line:'rgba(246,242,233,.22)', logo:'light' },
+  sage:   { bg:'#9EB4A7', ink:'#101B15', dim:'#2C3A31', accent:'#33463A', line:'rgba(16,27,21,.25)', logo:'dark'  },
+  brown:  { bg:'#6A4A33', ink:'#FFF6EA', dim:'#E2D4C4', accent:'#D9B683', line:'rgba(255,246,234,.22)', logo:'light' },
+  paper:  { bg:'#F6F2E9', ink:'#25301F', dim:'#4A5742', accent:'#8A6A34', line:'rgba(37,48,31,.18)', logo:'dark'  },
+};
+const esc = s => String(s ?? '').replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m]));
+const rich = s => esc(s).replace(/&lt;(\/?)(b|br|i)&gt;/g, '<$1$2>');
+
+function gfx(key, size, color, theme) {
+  if (key === 'hokucan') {            // Jared's can illustration, pre-tinted per theme. Aspect 218:575.
+    const h = size, w = Math.round(size * 218 / 575);
+    return `<img class="gfx" src="art/hoku-can-${theme}.png" width="${w}" height="${h}" alt="">`;
+  }
+  const inner = GFX[key];
+  if (!inner) return '';
+  return `<svg class="gfx" viewBox="0 0 200 200" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+}
+
+function css(t, s, hSize, centered) {
+  const logoFilter = t.logo === 'light' ? '' : 'filter:brightness(0);opacity:.66;';
+  return `
+body{background:${t.bg};color:${t.ink}}
+.slide{position:relative;width:1080px;height:1350px}
+.stack{position:absolute;left:84px;right:89px;top:0;height:1180px;display:flex;flex-direction:column;justify-content:center;
+  ${centered ? 'align-items:center;text-align:center;' : ''}}
+.copy{display:flex;flex-direction:column;${centered ? 'align-items:center;' : ''}}
+.L-bar .copy{border-left:5px solid ${t.accent};padding-left:44px}
+.gwrap{margin-bottom:44px;line-height:0}
+.gwrap svg,.gwrap img{display:block;opacity:.94}
+.kicker{font-size:20px;letter-spacing:.30em;text-transform:uppercase;color:${t.accent};font-weight:500}
+.rule{width:62px;height:2px;background:${t.accent};margin-top:14px;opacity:.9}
+.krule{width:62px;height:2px;background:${t.accent};margin-bottom:22px;opacity:.9}
+h1{font-family:'Newsreader',Georgia,serif;font-weight:400;font-size:${hSize}px;line-height:1.14;letter-spacing:-.004em;margin-top:${s.kicker ? 87 : 0}px;max-width:910px}
+.L-bold h1::after{content:'';display:block;width:82px;height:3px;background:${t.accent};margin-top:34px}
+p.sub{font-size:34px;line-height:1.32;color:${t.dim};margin-top:44px;max-width:910px}
+p.sub.small{font-size:30px;margin-top:18px}
+.big{font-family:'Newsreader',Georgia,serif;font-size:300px;line-height:.92;letter-spacing:-.02em;margin-top:40px;color:${t.ink}}
+.big + h1{margin-top:42px}
+ol.list{list-style:none;margin-top:54px;max-width:910px}
+ol.list li{display:flex;gap:30px;margin-bottom:38px}
+ol.list .n{font-size:22px;color:${t.accent};letter-spacing:.06em;padding-top:8px;min-width:44px}
+ol.list b{display:block;font-size:34px;font-weight:600;line-height:1.25}
+ol.list span{display:block;font-size:27px;line-height:1.4;color:${t.dim};margin-top:6px;max-width:800px}
+.cta{margin-top:18px;padding-top:30px;border-top:2px solid ${t.line};max-width:910px;display:flex;justify-content:space-between;align-items:baseline;gap:24px}
+.cta span{font-size:30px;font-weight:600;color:${t.ink}}
+.cta em{font-style:normal;font-size:24px;letter-spacing:.06em;color:${t.accent}}
+.L-product .stack{right:56px}
+.prod{display:flex;align-items:center;gap:44px;width:100%}
+.pcol{flex:1;min-width:0}
+.pimg{flex:0 0 auto;line-height:0}
+.pimg img{display:block}
+.L-product h1{max-width:none}
+.L-product ol.list{margin-top:46px}
+.L-product ol.list li{gap:22px;margin-bottom:26px}
+.L-product ol.list .n{min-width:34px;font-size:20px}
+.L-product ol.list b{font-size:29px}
+.L-product ol.list span{font-size:23px;margin-top:4px}
+.L-product .cta{flex-direction:column;align-items:flex-start;gap:6px;margin-top:10px;padding-top:24px}
+.L-product .cta span{font-size:27px}
+.duo{margin-top:52px;display:flex;flex-direction:column;gap:38px;max-width:910px}
+.duo .blk{border-left:4px solid ${t.accent};padding-left:30px}
+.duo .lbl{font-size:18px;letter-spacing:.22em;text-transform:uppercase;color:${t.accent};font-weight:600}
+.duo .txt{font-size:30px;line-height:1.38;margin-top:10px;color:${t.ink}}
+.lines{max-width:910px}
+.ln{font-family:'Newsreader',Georgia,serif;font-size:80px;line-height:1.1;padding:26px 0;border-bottom:2px solid ${t.line}}
+.ln:last-child{border-bottom:0}
+p.lead{font-size:34px;font-weight:600;margin-top:40px;color:${t.ink}}
+.biglogo{height:150px;width:auto;${logoFilter}margin-bottom:56px}
+h1.endh{font-size:78px;margin-top:0}
+.L-end .sub{margin-top:26px;max-width:760px}
+.url{font-size:26px;color:${t.dim};margin-top:34px}
+.handle{font-size:24px;letter-spacing:.28em;color:${t.accent};font-weight:600;margin-top:12px}
+.foot{position:absolute;left:84px;right:89px;bottom:76px;display:flex;align-items:center;justify-content:space-between}
+.foot img{height:80px;width:auto;${logoFilter}}
+.pg,.swipe{font-size:19px;letter-spacing:.22em;text-transform:uppercase;color:${t.accent};opacity:.9}`;
+}
+
+function slide(s, hSize) {
+  const tname = THEMES[s.theme] ? s.theme : 'paper';
+  const t = THEMES[tname];
+  const logo = t.logo === 'light' ? 'lockup_w.webp' : 'lockup.webp';
+  const layout = s.layout || 'text';
+  const centered = layout === 'center' || layout === 'end';
+  const kicker = s.kicker
+    ? (centered ? `<div class="krule"></div><div class="kicker">${esc(s.kicker)}</div>`
+                : `<div class="kicker">${esc(s.kicker)}</div><div class="rule"></div>`) : '';
+  let body = '';
+  if (layout === 'list' || layout === 'product') {
+    body = `<ol class="list">${(s.items || []).map(([h, d], i) =>
+      `<li><span class="n">${String(i + 1).padStart(2, '0')}</span><div><b>${rich(h)}</b><span>${rich(d)}</span></div></li>`).join('')}</ol>`
+      + (s.cta ? `<div class="cta"><span>${rich(s.cta)}</span><em>${esc(s.url || 'hoku-clean.com')}</em></div>` : '');
+  } else if (layout === 'duo') {
+    body = `<div class="duo">
+      <div class="blk"><div class="lbl">${esc(s.aLabel)}</div><div class="txt">${rich(s.a)}</div></div>
+      <div class="blk"><div class="lbl">${esc(s.bLabel)}</div><div class="txt">${rich(s.b)}</div></div></div>`;
+  } else if (layout === 'stack') {
+    body = `<div class="lines">${(s.lines || []).map(l => `<div class="ln">${rich(l)}</div>`).join('')}</div>
+      <p class="lead">${rich(s.title)}</p>${s.body ? `<p class="sub small">${rich(s.body)}</p>` : ''}`;
+  } else if (s.body) {
+    body = `<p class="sub">${rich(s.body)}</p>`;
+  }
+  const stat = layout === 'stat' ? `<div class="big">${esc(s.stat)}</div>` : '';
+  const h1 = layout === 'stack' ? '' : `<h1>${rich(s.title)}</h1>`;
+  const gSize = s.gSize || (['list','duo','stat','stack'].includes(layout) ? 300 : 520);
+  const g = s.graphic ? `<div class="gwrap">${gfx(s.graphic, gSize, t.accent, tname)}</div>` : '';
+  let inner;
+  if (layout === 'product') {
+    inner = `<div class="prod"><div class="pcol">${kicker}${h1}${body}</div><div class="pimg">${gfx('hokucan', s.canH || 760, t.accent, tname)}</div></div>`;
+  } else if (layout === 'end') {
+    inner = `<img class="biglogo" src="${logo}" alt="HOKU"><h1 class="endh">${rich(s.title)}</h1>
+       <p class="sub">${rich(s.body)}</p><div class="url">${esc(s.url || 'hoku-clean.com')}</div>
+       <div class="handle">${esc(s.handle || '@HOKU_HOCL')}</div>`;
+  } else {
+    inner = `${g}${kicker}${stat}${h1}${body}`;
+  }
+  document.getElementById('theme').textContent = css(t, s, hSize, centered);
+  document.getElementById('root').innerHTML = `<div class="slide L-${layout}">
+  <div class="stack"><div class="copy">${inner}</div></div>
+  <div class="foot">${layout === 'end' ? '<span></span>' : `<img src="${logo}" alt="HOKU">`}
+    <div class="pg">${s.page ? esc(s.page) : ''}</div><div class="swipe">${s.swipe ? 'Swipe &rsaquo;' : ''}</div></div></div>`;
+}
+
+function measure(layout) {
+  const h = document.querySelector('h1'), st = document.querySelector('.stack');
+  const lines = h ? Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)) : 0;
+  return { lines, overflow: st.scrollHeight > st.clientHeight + 2 };
+}
+
+async function run() {
+  let s = {};
+  try { s = JSON.parse(decodeURIComponent(location.hash.slice(1))); } catch (e) {}
+  const layout = s.layout || 'text';
+  const max = ['list','duo','stat'].includes(layout) ? 2 : 3;
+  let size = layout === 'product' ? 72 : layout === 'end' ? 78 : (['list','duo'].includes(layout) ? 84 : layout === 'stat' ? 76 : 106);
+  let m = { lines: 99, overflow: true };
+  for (; size >= 56; size -= 4) {
+    slide(s, size);
+    await document.fonts.ready;
+    await Promise.all([...document.images].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
+    m = measure(layout);
+    if (m.lines <= max && !m.overflow) break;
+  }
+  if (size < 56) { size = 56; slide(s, size); m = measure(layout); }
+  const fontsOk = document.fonts.check("40px Newsreader") && document.fonts.check("30px Inter");
+  const imgsOk = [...document.images].every(i => i.naturalWidth > 0);
+  document.body.setAttribute('data-fit', JSON.stringify({ ok: m.lines <= max && !m.overflow && fontsOk && imgsOk,
+    size, lines: m.lines, max, overflow: m.overflow, fonts: fontsOk, images: imgsOk }));
+}
+run();
+</script></body></html>

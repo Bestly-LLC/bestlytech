@@ -1,0 +1,171 @@
+<!doctype html>
+<!-- HOKU card kit for the Pi (2026-10-04). A port of hoku-clean/social/slide_v3.mjs + graphics.mjs:
+     same 1080x1350 geometry, themes, layouts and monoline icons, but self-contained and self-fitting.
+     Spec = JSON in the URL hash. The page steps the headline down (4px at a time, floor 56) until it fits in
+     its line budget with no overflow, then reports {ok,size,lines,overflow} in <body data-fit>.
+     Build: python3 build.py (inlines the icon set from gfx.json into card.html). -->
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:'Newsreader';src:url(fonts/newsreader.woff2) format('woff2');font-weight:200 800;font-style:normal}
+@font-face{font-family:'Inter';src:url(fonts/inter-400.woff2) format('woff2');font-weight:400}
+@font-face{font-family:'Inter';src:url(fonts/inter-500.woff2) format('woff2');font-weight:500}
+@font-face{font-family:'Inter';src:url(fonts/inter-600.woff2) format('woff2');font-weight:600 700}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+</style><style id="theme"></style></head>
+<body><div id="root"></div>
+<script>
+const GFX = __GFX__;
+const THEMES = {
+  gold:   { bg:'#C29A55', ink:'#292010', dim:'#3D3218', accent:'#4A3A18', line:'rgba(41,32,16,.28)', logo:'dark'  },
+  forest: { bg:'#25301F', ink:'#F6F2E9', dim:'#C6CEBB', accent:'#CBA76C', line:'rgba(246,242,233,.22)', logo:'light' },
+  sage:   { bg:'#9EB4A7', ink:'#101B15', dim:'#2C3A31', accent:'#33463A', line:'rgba(16,27,21,.25)', logo:'dark'  },
+  brown:  { bg:'#6A4A33', ink:'#FFF6EA', dim:'#E2D4C4', accent:'#D9B683', line:'rgba(255,246,234,.22)', logo:'light' },
+  paper:  { bg:'#F6F2E9', ink:'#25301F', dim:'#4A5742', accent:'#8A6A34', line:'rgba(37,48,31,.18)', logo:'dark'  },
+};
+const esc = s => String(s ?? '').replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m]));
+const rich = s => esc(s).replace(/&lt;(\/?)(b|br|i)&gt;/g, '<$1$2>');
+
+function gfx(key, size, color, theme) {
+  if (key === 'hokucan') {            // Jared's can illustration, pre-tinted per theme. Aspect 218:575.
+    const h = size, w = Math.round(size * 218 / 575);
+    return `<img class="gfx" src="art/hoku-can-${theme}.png" width="${w}" height="${h}" alt="">`;
+  }
+  const inner = GFX[key];
+  if (!inner) return '';
+  return `<svg class="gfx" viewBox="0 0 200 200" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+}
+
+function css(t, s, hSize, centered) {
+  const logoFilter = t.logo === 'light' ? '' : 'filter:brightness(0);opacity:.66;';
+  return `
+body{background:${t.bg};color:${t.ink}}
+.slide{position:relative;width:1080px;height:1350px}
+.stack{position:absolute;left:84px;right:89px;top:0;height:1180px;display:flex;flex-direction:column;justify-content:center;
+  ${centered ? 'align-items:center;text-align:center;' : ''}}
+.copy{display:flex;flex-direction:column;${centered ? 'align-items:center;' : ''}}
+.L-bar .copy{border-left:5px solid ${t.accent};padding-left:44px}
+.gwrap{margin-bottom:44px;line-height:0}
+.gwrap svg,.gwrap img{display:block;opacity:.94}
+.kicker{font-size:20px;letter-spacing:.30em;text-transform:uppercase;color:${t.accent};font-weight:500}
+.rule{width:62px;height:2px;background:${t.accent};margin-top:14px;opacity:.9}
+.krule{width:62px;height:2px;background:${t.accent};margin-bottom:22px;opacity:.9}
+h1{font-family:'Newsreader',Georgia,serif;font-weight:400;font-size:${hSize}px;line-height:1.14;letter-spacing:-.004em;margin-top:${s.kicker ? 87 : 0}px;max-width:910px}
+.L-bold h1::after{content:'';display:block;width:82px;height:3px;background:${t.accent};margin-top:34px}
+p.sub{font-size:34px;line-height:1.32;color:${t.dim};margin-top:44px;max-width:910px}
+p.sub.small{font-size:30px;margin-top:18px}
+.big{font-family:'Newsreader',Georgia,serif;font-size:300px;line-height:.92;letter-spacing:-.02em;margin-top:40px;color:${t.ink}}
+.big + h1{margin-top:42px}
+ol.list{list-style:none;margin-top:54px;max-width:910px}
+ol.list li{display:flex;gap:30px;margin-bottom:38px}
+ol.list .n{font-size:22px;color:${t.accent};letter-spacing:.06em;padding-top:8px;min-width:44px}
+ol.list b{display:block;font-size:34px;font-weight:600;line-height:1.25}
+ol.list span{display:block;font-size:27px;line-height:1.4;color:${t.dim};margin-top:6px;max-width:800px}
+.cta{margin-top:18px;padding-top:30px;border-top:2px solid ${t.line};max-width:910px;display:flex;justify-content:space-between;align-items:baseline;gap:24px}
+.cta span{font-size:30px;font-weight:600;color:${t.ink}}
+.cta em{font-style:normal;font-size:24px;letter-spacing:.06em;color:${t.accent}}
+.L-product .stack{right:56px}
+.prod{display:flex;align-items:center;gap:44px;width:100%}
+.pcol{flex:1;min-width:0}
+.pimg{flex:0 0 auto;line-height:0}
+.pimg img{display:block}
+.L-product h1{max-width:none}
+.L-product ol.list{margin-top:46px}
+.L-product ol.list li{gap:22px;margin-bottom:26px}
+.L-product ol.list .n{min-width:34px;font-size:20px}
+.L-product ol.list b{font-size:29px}
+.L-product ol.list span{font-size:23px;margin-top:4px}
+.L-product .cta{flex-direction:column;align-items:flex-start;gap:6px;margin-top:10px;padding-top:24px}
+.L-product .cta span{font-size:27px}
+.duo{margin-top:52px;display:flex;flex-direction:column;gap:38px;max-width:910px}
+.duo .blk{border-left:4px solid ${t.accent};padding-left:30px}
+.duo .lbl{font-size:18px;letter-spacing:.22em;text-transform:uppercase;color:${t.accent};font-weight:600}
+.duo .txt{font-size:30px;line-height:1.38;margin-top:10px;color:${t.ink}}
+.lines{max-width:910px}
+.ln{font-family:'Newsreader',Georgia,serif;font-size:80px;line-height:1.1;padding:26px 0;border-bottom:2px solid ${t.line}}
+.ln:last-child{border-bottom:0}
+p.lead{font-size:34px;font-weight:600;margin-top:40px;color:${t.ink}}
+.biglogo{height:150px;width:auto;${logoFilter}margin-bottom:56px}
+h1.endh{font-size:78px;margin-top:0}
+.L-end .sub{margin-top:26px;max-width:760px}
+.url{font-size:26px;color:${t.dim};margin-top:34px}
+.handle{font-size:24px;letter-spacing:.28em;color:${t.accent};font-weight:600;margin-top:12px}
+.foot{position:absolute;left:84px;right:89px;bottom:76px;display:flex;align-items:center;justify-content:space-between}
+.foot img{height:80px;width:auto;${logoFilter}}
+.pg,.swipe{font-size:19px;letter-spacing:.22em;text-transform:uppercase;color:${t.accent};opacity:.9}`;
+}
+
+function slide(s, hSize) {
+  const tname = THEMES[s.theme] ? s.theme : 'paper';
+  const t = THEMES[tname];
+  const logo = t.logo === 'light' ? 'lockup_w.webp' : 'lockup.webp';
+  const layout = s.layout || 'text';
+  const centered = layout === 'center' || layout === 'end';
+  const kicker = s.kicker
+    ? (centered ? `<div class="krule"></div><div class="kicker">${esc(s.kicker)}</div>`
+                : `<div class="kicker">${esc(s.kicker)}</div><div class="rule"></div>`) : '';
+  let body = '';
+  if (layout === 'list' || layout === 'product') {
+    body = `<ol class="list">${(s.items || []).map(([h, d], i) =>
+      `<li><span class="n">${String(i + 1).padStart(2, '0')}</span><div><b>${rich(h)}</b><span>${rich(d)}</span></div></li>`).join('')}</ol>`
+      + (s.cta ? `<div class="cta"><span>${rich(s.cta)}</span><em>${esc(s.url || 'hoku-clean.com')}</em></div>` : '');
+  } else if (layout === 'duo') {
+    body = `<div class="duo">
+      <div class="blk"><div class="lbl">${esc(s.aLabel)}</div><div class="txt">${rich(s.a)}</div></div>
+      <div class="blk"><div class="lbl">${esc(s.bLabel)}</div><div class="txt">${rich(s.b)}</div></div></div>`;
+  } else if (layout === 'stack') {
+    body = `<div class="lines">${(s.lines || []).map(l => `<div class="ln">${rich(l)}</div>`).join('')}</div>
+      <p class="lead">${rich(s.title)}</p>${s.body ? `<p class="sub small">${rich(s.body)}</p>` : ''}`;
+  } else if (s.body) {
+    body = `<p class="sub">${rich(s.body)}</p>`;
+  }
+  const stat = layout === 'stat' ? `<div class="big">${esc(s.stat)}</div>` : '';
+  const h1 = layout === 'stack' ? '' : `<h1>${rich(s.title)}</h1>`;
+  const gSize = s.gSize || (['list','duo','stat','stack'].includes(layout) ? 300 : 520);
+  const g = s.graphic ? `<div class="gwrap">${gfx(s.graphic, gSize, t.accent, tname)}</div>` : '';
+  let inner;
+  if (layout === 'product') {
+    inner = `<div class="prod"><div class="pcol">${kicker}${h1}${body}</div><div class="pimg">${gfx('hokucan', s.canH || 760, t.accent, tname)}</div></div>`;
+  } else if (layout === 'end') {
+    inner = `<img class="biglogo" src="${logo}" alt="HOKU"><h1 class="endh">${rich(s.title)}</h1>
+       <p class="sub">${rich(s.body)}</p><div class="url">${esc(s.url || 'hoku-clean.com')}</div>
+       <div class="handle">${esc(s.handle || '@HOKU_HOCL')}</div>`;
+  } else {
+    inner = `${g}${kicker}${stat}${h1}${body}`;
+  }
+  document.getElementById('theme').textContent = css(t, s, hSize, centered);
+  document.getElementById('root').innerHTML = `<div class="slide L-${layout}">
+  <div class="stack"><div class="copy">${inner}</div></div>
+  <div class="foot">${layout === 'end' ? '<span></span>' : `<img src="${logo}" alt="HOKU">`}
+    <div class="pg">${s.page ? esc(s.page) : ''}</div><div class="swipe">${s.swipe ? 'Swipe &rsaquo;' : ''}</div></div></div>`;
+}
+
+function measure(layout) {
+  const h = document.querySelector('h1'), st = document.querySelector('.stack');
+  const lines = h ? Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)) : 0;
+  return { lines, overflow: st.scrollHeight > st.clientHeight + 2 };
+}
+
+async function run() {
+  let s = {};
+  try { s = JSON.parse(decodeURIComponent(location.hash.slice(1))); } catch (e) {}
+  const layout = s.layout || 'text';
+  const max = ['list','duo','stat'].includes(layout) ? 2 : 3;
+  let size = layout === 'product' ? 72 : layout === 'end' ? 78 : (['list','duo'].includes(layout) ? 84 : layout === 'stat' ? 76 : 106);
+  let m = { lines: 99, overflow: true };
+  for (; size >= 56; size -= 4) {
+    slide(s, size);
+    await document.fonts.ready;
+    await Promise.all([...document.images].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
+    m = measure(layout);
+    if (m.lines <= max && !m.overflow) break;
+  }
+  if (size < 56) { size = 56; slide(s, size); m = measure(layout); }
+  const fontsOk = document.fonts.check("40px Newsreader") && document.fonts.check("30px Inter");
+  const imgsOk = [...document.images].every(i => i.naturalWidth > 0);
+  document.body.setAttribute('data-fit', JSON.stringify({ ok: m.lines <= max && !m.overflow && fontsOk && imgsOk,
+    size, lines: m.lines, max, overflow: m.overflow, fonts: fontsOk, images: imgsOk }));
+}
+run();
+</script></body></html>
