@@ -3,6 +3,9 @@
 //                       Called by the bestly_agents insert trigger and retried by team_welcome_sweep.
 //   op improve         The Improver: read the whole picture (improver_context) and save 3-6 ranked ideas.
 //                       Weekly cron + the "Ask The Improver now" button. Nothing is changed by this function.
+//   op recruit         The Recruiter + The Improver: the Recruiter proposes new bots for real gaps (hr_context),
+//                       The Improver vets each one; only hires both back show up in "Suggested hires" (hr_save).
+//                       Weekly cron (Mon 9:15 AM, after The Improver) + the "Look for hires now" button.
 // Free AI only (the free-llm function's op run, paid: never). If every free model is down, welcome still sends
 // with a plain profile, and improve records a failed check-in so Team Watch tells Scout.
 // Auth: service key (apikey or Bearer) or an admin JWT. verify_jwt = false (new sb_secret keys are not JWTs).
@@ -68,6 +71,7 @@ async function welcome(slug: string) {
   if (error || !ctx?.agent) return { ok: false, error: error?.message ?? "no such bot" };
   if (ctx.welcome?.sent_at) return { ok: true, skipped: "already welcomed" };
   const a = ctx.agent;
+  const training = a.status === "planned";   // hired from Suggested hires, Scout still building it
 
   let profile = a.profile && a.profile.personality ? a.profile : null;
   if (!profile) {
@@ -105,6 +109,7 @@ async function welcome(slug: string) {
       <p style="margin:0;color:#0a84ff;font-size:13px;font-weight:600">Suggested field name: ${esc(profile.field_name)}</p>
       <h1 style="margin:6px 0 2px;color:#1d1d1f;font-size:28px;line-height:1.15">Welcome aboard, ${esc(a.name)}</h1>
       <p style="margin:0 0 18px;color:#6e6e73;font-size:15px">${esc(a.role)}${ctx.boss?.name ? ` · reports to ${esc(ctx.boss.name)}` : ""}</p>
+      ${training ? `<p style="margin:0 0 18px;background:#fff4e5;color:#8a4b00;border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.45">In training. You hired it from Suggested hires; Scout has the build plan and waits for your yes before anything runs.</p>` : ""}
       <p style="margin:0 0 18px;color:#1d1d1f;font-size:16px;line-height:1.5">${esc(profile.personality)}</p>
       <table style="width:100%;border-collapse:collapse;border-top:1px solid #e5e5ea">
         ${row("The job", a.what_it_does)}
@@ -127,7 +132,7 @@ async function welcome(slug: string) {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: "Scout at Bestly <noreply@bestly.tech>", to: [TO],
-        subject: `New crew member: ${a.name} joined the expedition`, html }),
+        subject: training ? `New hire: ${a.name} joined the expedition (in training)` : `New crew member: ${a.name} joined the expedition`, html }),
     });
     ok = r.ok;
     if (!ok) err = `resend ${r.status}: ${(await r.text()).slice(0, 200)}`;
@@ -173,6 +178,73 @@ async function improve() {
   return { ok: true, saved, ideas: ideas.map((i: any) => i.title) };
 }
 
+/* ---------------------------------------------------------------- The Recruiter (+ The Improver's second opinion) */
+
+async function recruit() {
+  const { data: ctx, error } = await db.rpc("hr_context");
+  if (error) {
+    await db.rpc("agent_beat", { p_slug: "hr", p_ok: false, p_summary: `Could not read the picture: ${error.message}`.slice(0, 200) });
+    return { ok: false, error: error.message };
+  }
+
+  // 1. The Recruiter: where is a bot missing?
+  const pitch = await freeJson("reflect",
+    "You are The Recruiter, HR for Bestly's crew of AI bots. Bestly is a one-person product studio run by Jared; " +
+    "Scout is Chief of Staff and the bots in roster already exist. Find 1 to 4 jobs NO current bot covers that a new bot " +
+    "could take off Jared's plate. Evidence must come from the data: The Improver's ideas, problems that keep coming back, " +
+    "failing jobs, open roles, recent decisions. Never propose a bot that overlaps one in roster or past_hires. " +
+    "Prefer cheap: runs on the always-on Raspberry Pi (pi) with free AI models; use claude only when it truly needs it. " +
+    "Nothing that needs Jared to ask a third party for anything. Plain words for someone busy. Names are short job titles " +
+    "like Invoice Chaser or Alert Tamer. reports_to must be a slug from roster (an existing lead, or scout). " +
+    'Return JSON only: {"candidates":[{"name":"2-3 words","role":"under 6 words","dept":"one of departments",' +
+    '"reports_to":"slug","what_it_does":"one or two sentences","why":"the evidence for the gap, one or two sentences",' +
+    '"saves":"what it saves Jared, one line","runs_on":"pi|cloud|claude|mac_mini","schedule":"how often, plain words",' +
+    '"cost":"rough monthly cost in plain words","first_task":"the first thing it would do"}]}',
+    JSON.stringify(ctx), 1800);
+  const cands = Array.isArray(pitch?.candidates) ? pitch.candidates.filter((c: any) => c?.name).slice(0, 4) : [];
+  if (!cands.length) {
+    await db.rpc("agent_beat", { p_slug: "hr", p_ok: false, p_summary: "Free AI did not answer this week; will try again next run" });
+    return { ok: false, error: "no candidates from free AI" };
+  }
+
+  // 2. The Improver vets every candidate against the same picture
+  const review = await freeJson("reflect",
+    "You are The Improver, Bestly's continuous-improvement analyst. The Recruiter wants to hire these new bots. " +
+    "Check each one against the data: does it fix something real, does it overlap a bot in roster, is it worth what it costs " +
+    "in tokens, money and upkeep, could an existing bot or a small change do it instead? Be tough: back only hires that clearly pay off. " +
+    'Return JSON only: {"reviews":[{"name":"exact candidate name","verdict":"back|pass","score":1-5,"note":"one or two sentences, plain words"}]}',
+    JSON.stringify({ candidates: cands, roster: ctx.roster, ai_spend_7d: ctx.ai_spend_7d, noisy_problems_14d: ctx.noisy_problems_14d,
+      failing_db_jobs_7d: ctx.failing_db_jobs_7d, improver_ideas: ctx.improver_ideas }), 1200);
+  const reviews: any[] = Array.isArray(review?.reviews) ? review.reviews : [];
+  const byName = new Map(reviews.map((r) => [String(r?.name ?? "").toLowerCase().trim(), r]));
+  if (!reviews.length) {
+    // no second opinion = nobody gets through; try again next run rather than hire on one bot's word
+    await db.rpc("agent_beat", { p_slug: "hr", p_ok: false, p_summary: "The Improver could not review the candidates; trying again next run" });
+    return { ok: false, error: "no review from The Improver" };
+  }
+  const rows = cands.map((c: any) => {
+    const r = byName.get(String(c.name).toLowerCase().trim());
+    // free models vary the wording ("Back", "backed", "yes", "hire"); a missing verdict with a 4-5 score counts as backing
+    const v = String(r?.verdict ?? "").toLowerCase().trim();
+    const score = Number(r?.score ?? 0);
+    const backs = /^(back|yes|hire|approve)/.test(v) || (!/^(pass|no|reject|veto)/.test(v) && score >= 4);
+    return { ...c, verdict: backs ? "back" : "pass", improver_score: Number.isFinite(score) && score > 0 ? score : null, improver_note: r?.note ?? "No review" };
+  });
+
+  const { data: saved } = await db.rpc("hr_save", { p_hires: rows });
+  const backed = rows.filter((r: any) => r.verdict === "back");
+  const summary = backed.length
+    ? `${backed.length} hire${backed.length === 1 ? "" : "s"} backed by The Improver, waiting for you`
+    : `Looked at ${rows.length}; The Improver passed on all of them`;
+  await db.rpc("agent_beat", { p_slug: "hr", p_ok: true, p_summary: summary });
+  if (backed.length && (saved ?? 0) > 0) {
+    await db.rpc("scout_notify", { p_title: `${backed.length} suggested hire${backed.length === 1 ? "" : "s"} for the crew`,
+      p_body: backed.map((b: any) => `• ${b.name}: ${b.role ?? ""}`).join("\n"), p_severity: "info", p_push: false,
+      p_url: "/admin/team#hires", p_dedupe: `hr-${new Date().toISOString().slice(0, 10)}` });
+  }
+  return { ok: true, saved, backed: backed.map((b: any) => b.name), passed: rows.filter((r: any) => r.verdict !== "back").map((r: any) => r.name) };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return J({ ok: false, error: "POST only" }, 405);
@@ -182,7 +254,8 @@ Deno.serve(async (req) => {
   try {
     if (body.op === "welcome") return J(await welcome(String(body.slug ?? "")));
     if (body.op === "improve") return J(await improve());
-    return J({ ok: false, error: "op must be welcome or improve" }, 400);
+    if (body.op === "recruit") return J(await recruit());
+    return J({ ok: false, error: "op must be welcome, improve or recruit" }, 400);
   } catch (e) {
     return J({ ok: false, error: (e as Error).message }, 200);
   }

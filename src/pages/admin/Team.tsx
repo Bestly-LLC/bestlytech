@@ -8,7 +8,7 @@ import {
   KeyRound, Landmark, Laptop, LineChart, ListChecks, ListTodo, Lock, Mail, MailPlus, Mails, Megaphone,
   MessageCircle, MessageSquareShare, Mic, Moon, NotebookPen, PauseCircle, PenLine, PhoneCall, PlaneLanding,
   Projector, Repeat, ScanEye, Search, Send, SendHorizontal, Server, ShieldCheck, Siren, Sparkles, SprayCan,
-  Sunrise, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network, Lightbulb, Compass, Sparkle,
+  Sunrise, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network, Lightbulb, Compass, Sparkle, UserPlus,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -62,7 +62,7 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   siren: Siren, brush: Brush, "mail-plus": MailPlus, search: Search, "phone-call": PhoneCall, house: House,
   "message-circle": MessageCircle, "hand-heart": HandHeart, sunrise: Sunrise, inbox: Inbox, "send-horizontal": SendHorizontal,
   mails: Mails, "trash-2": Trash2, "house-wifi": House, projector: Projector, "scan-eye": ScanEye, "list-todo": ListTodo,
-  megaphone: Megaphone, landmark: Landmark, briefcase: Briefcase, mail: Mail,
+  megaphone: Megaphone, landmark: Landmark, briefcase: Briefcase, mail: Mail, "user-plus": UserPlus, sparkle: Sparkle,
 };
 
 const RUNS_ON: Record<string, string> = {
@@ -607,6 +607,148 @@ function ImproverIdeas({ onOpenImprover }: { onOpenImprover: () => void }) {
   );
 }
 
+/* ---------------------------------------------------------------- Suggested hires (The Recruiter + The Improver) */
+
+type Hire = {
+  id: string; created_at: string; name: string; role: string | null; dept: string | null; reports_to: string | null;
+  what_it_does: string | null; why: string | null; saves: string | null; runs_on: string | null; schedule: string | null;
+  cost: string | null; first_task: string | null; improver_note: string | null; improver_score: number | null;
+  status: "proposed" | "vetoed" | "hired" | "passed"; decided_at: string | null; hired_slug: string | null;
+};
+const RUNS_ON_WORDS: Record<string, string> = { pi: "On the Pi", cloud: "In the cloud", claude: "Uses Claude", mac_mini: "On the Mac mini", macbook: "On your MacBook" };
+
+function SuggestedHires({ onOpen, nameOf }: { onOpen: (slug: string) => void; nameOf: (slug: string | null) => string | null }) {
+  const qc = useQueryClient();
+  const [looking, setLooking] = useState(false);
+  const { data: hires = [] } = useQuery({
+    queryKey: ["team-hires"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("admin_team_hires" as never);
+      if (error) throw error;
+      return (data ?? []) as unknown as Hire[];
+    },
+    refetchInterval: () => (document.hidden ? false : pollInterval(120_000)),
+    placeholderData: keepPreviousData,
+  });
+
+  const hire = async (h: Hire) => {
+    const { data, error } = await supabase.rpc("admin_hire_accept" as never, { p_id: h.id } as never);
+    if (error) { toast.error(error.message); return; }
+    const slug = String(data ?? "");
+    toast.success(`${h.name} is hired. Welcome email on its way; Scout has the build plan.`);
+    qc.invalidateQueries({ queryKey: ["team-hires"] });
+    qc.invalidateQueries({ queryKey: ["org-chart"] });
+    askScout(`Build our new hire: ${h.name}`, {
+      about: [
+        `New bot: ${h.name} (${h.role ?? "new role"})${slug ? `, on the Team page as "${slug}"` : ""}.`,
+        h.what_it_does ? `What it does: ${h.what_it_does}` : "",
+        h.why ? `Why (The Recruiter): ${h.why}` : "",
+        h.improver_note ? `The Improver's take: ${h.improver_note}` : "",
+        h.runs_on ? `Runs: ${RUNS_ON_WORDS[h.runs_on] ?? h.runs_on}${h.schedule ? `, ${h.schedule}` : ""}` : "",
+        h.cost ? `Expected cost: ${h.cost}` : "",
+        h.first_task ? `First task: ${h.first_task}` : "",
+        "Plan how to build it (cheapest way first: Pi + free AI), with a self-healing watchdog: it must call agent_beat with its slug every run.",
+        "When it works, set it to active on the Team page. Show me the plan and wait for my yes before building anything.",
+      ].filter(Boolean).join("\n"),
+    });
+  };
+
+  const pass = async (h: Hire) => {
+    const { error } = await supabase.rpc("admin_hire_pass" as never, { p_id: h.id } as never);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Okay. Neither of them will suggest it again for 90 days.");
+    qc.invalidateQueries({ queryKey: ["team-hires"] });
+  };
+
+  const lookNow = async () => {
+    setLooking(true);
+    toast("The Recruiter is looking for gaps, then The Improver checks each one. About a minute.");
+    try {
+      const { data, error } = await supabase.functions.invoke("team-hr", { body: { op: "recruit" } });
+      if (error) throw error;
+      const r = data as { ok: boolean; backed?: string[]; passed?: string[]; error?: string };
+      if (!r?.ok) throw new Error(r?.error || "No candidates this time");
+      const b = r.backed?.length ?? 0, p = r.passed?.length ?? 0;
+      toast.success(b ? `${b} hire${b === 1 ? "" : "s"} both of them back` : `The Improver passed on all ${p}. Nothing worth hiring right now.`);
+      qc.invalidateQueries({ queryKey: ["team-hires"] });
+      qc.invalidateQueries({ queryKey: ["org-chart"] });
+    } catch (e) {
+      toast.error((e as Error).message || "The Recruiter couldn't finish");
+    } finally {
+      setLooking(false);
+    }
+  };
+
+  const open = hires.filter((h) => h.status === "proposed");
+  const hired = hires.filter((h) => h.status === "hired");
+
+  return (
+    <section id="hires" className={cn(card, "scroll-mt-24 space-y-3 p-4 sm:p-5")} aria-label="Suggested hires">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <button type="button" onClick={() => onOpen("hr")} className="flex min-w-0 items-start gap-3 text-left">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[#BF5AF226] text-[#BF5AF2] bento:bg-[#AF52DE1f] bento:text-[#8944AB]">
+            <UserPlus className="h-[22px] w-[22px]" />
+          </span>
+          <span className="min-w-0">
+            <span className={cn("block text-[17px] font-semibold", label)}>Suggested hires</span>
+            <span className={cn("block text-[13px] leading-snug", secondary)}>
+              The Recruiter spots jobs no bot covers. The Improver checks if each one pays off. Only hires they both back show up here.
+            </span>
+          </span>
+        </button>
+        <button type="button" className={btnTinted} onClick={lookNow} disabled={looking}>
+          {looking ? "Looking…" : "Look for hires now"}
+        </button>
+      </header>
+
+      {open.length === 0 && hired.length === 0 ? (
+        <p className={cn("px-1 text-[15px]", secondary)}>No hires waiting. They look again Monday at 9:15&nbsp;AM.</p>
+      ) : (
+        <ul className="grid gap-3 lg:grid-cols-2">
+          {[...open, ...hired].map((h) => (
+            <li key={h.id} className="flex flex-col gap-2 rounded-[16px] bg-[#2C2C2E] p-4 bento:bg-[#F2F2F7]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-[#BF5AF226] px-2 py-0.5 text-[11px] font-semibold text-[#BF5AF2] bento:text-[#8944AB]">Backed by both</span>
+                {h.runs_on && <span className={cn("rounded-full bg-[#7676803d] px-2 py-0.5 text-[11px] font-medium bento:bg-[#7676801f]", secondary)}>{RUNS_ON_WORDS[h.runs_on] ?? h.runs_on}</span>}
+                {h.cost && <span className={cn("text-[12px]", tertiary)}>{nb(h.cost)}</span>}
+                {h.status === "hired" && <span className={cn("ml-auto text-[12px] font-semibold", tint.blue)}>Hired · in training</span>}
+              </div>
+              <div>
+                <p className={cn("text-[17px] font-semibold leading-snug", label)}>{h.name}</p>
+                <p className={cn("text-[13px]", secondary)}>
+                  {h.role}{nameOf(h.reports_to) ? ` · would report to ${nameOf(h.reports_to)}` : ""}{h.schedule ? ` · ${h.schedule}` : ""}
+                </p>
+              </div>
+              {h.what_it_does && <p className={cn("text-[15px] leading-snug", label)} style={{ textWrap: "pretty" } as never}>{nb(h.what_it_does)}</p>}
+              {h.why && (
+                <p className={cn("text-[13px] leading-snug", secondary)} style={{ textWrap: "pretty" } as never}>
+                  <span className={cn("font-semibold", label)}>The Recruiter: </span>{nb(h.why)}
+                </p>
+              )}
+              {h.improver_note && (
+                <p className={cn("text-[13px] leading-snug", secondary)} style={{ textWrap: "pretty" } as never}>
+                  <span className={cn("font-semibold", label)}>The Improver: </span>{nb(h.improver_note)}
+                </p>
+              )}
+              {h.saves && <p className={cn("text-[13px] leading-snug", tint.green)} style={{ textWrap: "pretty" } as never}>Saves you: {nb(h.saves)}</p>}
+              <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+                {h.status === "proposed" ? (
+                  <>
+                    <button type="button" className={btnPrimary} onClick={() => hire(h)}>Hire</button>
+                    <button type="button" className={btnPlain} onClick={() => pass(h)}>Not now</button>
+                  </>
+                ) : h.hired_slug ? (
+                  <button type="button" className={btnPlain} onClick={() => onOpen(h.hired_slug!)}>See its card</button>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 /* ---------------------------------------------------------------- page */
 
 type Filter = "all" | "attention" | "new" | "open";
@@ -726,7 +868,12 @@ export default function Team() {
             </div>
           )}
 
-          {filter === "all" && <ImproverIdeas onOpenImprover={() => setOpenSlug("improver")} />}
+          {filter === "all" && (
+            <div className="space-y-4">
+              <ImproverIdeas onOpenImprover={() => setOpenSlug("improver")} />
+              <SuggestedHires onOpen={setOpenSlug} nameOf={(s) => (s ? bySlug.get(s)?.name ?? null : null)} />
+            </div>
+          )}
 
           {/* departments */}
           <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
