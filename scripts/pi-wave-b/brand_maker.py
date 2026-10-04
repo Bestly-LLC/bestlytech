@@ -235,15 +235,17 @@ def _make_one(brand, cfg, recent, bank_open, deadline, dry):
     msgs = [{"role": "system", "content": SYS.format(name=cfg["name"], about=cfg["about"], n=len(kinds))},
             {"role": "user", "content": user}]
     errs, plan, prov = [], None, None
-    for _ in range(3):
+    for _ in range(4):
         msg, prov = freellm.chat(msgs, None, max_tokens=3000, deadline=deadline)
         try:
             plan = _json(msg.get("content"))
             errs = _check(brand, cfg, kinds, plan)
             if not errs:
                 errs = _review(cfg, plan, deadline)
-        except (ValueError, TypeError, KeyError) as e:
-            plan, errs = None, [f"reply was not the JSON asked for ({e})"]
+        except (ValueError, TypeError, KeyError, AttributeError) as e:
+            # Unreadable reply (some free models answer in prose): try again fresh rather than arguing with it.
+            plan, errs = None, [f"reply was not the JSON asked for ({e}; {prov}: {(msg.get('content') or '')[:80]!r})"]
+            continue
         if plan and not errs:
             break
         msgs += [{"role": "assistant", "content": (msg.get("content") or "")[:4000]},
