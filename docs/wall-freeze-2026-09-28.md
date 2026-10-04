@@ -182,3 +182,32 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - More than 90 dropped frames a minute, or the Pi copy under 24 fps, for 5 minutes → reload the Pi copy (max 2 an hour) and tell Scout (key `wall.smooth`).
   - It re-applies the Ollama cap hourly if the container was recreated.
 - **Also Oct 4:** the Pi had no emoji font, so the sign wall's 🔥 showed as a box. Fixed by installing `fonts-noto-color-emoji` and restarting the stream (Chromium reads fonts only at startup).
+
+## Oct 4, 1 PM: the Mac mini draws the wall at 60 fps ("butter smooth")
+
+**Why the Mac:** the Pi has no H.264 encoder chip. It drew the page at 21–27 fps and spent about 1.5 cores on software x264. Jared asked for butter-smooth and chose the Mac mini (M4, wired, always on via `tech.bestly.stay-awake`).
+
+**How it works:**
+- **The agent.** `~/Bestly/wall-mac/agent.mjs` (Node 22, no dependencies), run by LaunchAgent `tech.bestly.wall-mac`.
+  - It starts hidden Chrome (`--headless=new`, window 1922×1224 so the captured page is exactly 1920×1080) and opens the wall at `http://127.0.0.1:18099/?src=pi`.
+  - That address is an SSH tunnel to the Pi's 127.0.0.1:8099, so the Pi's wall server treats this copy exactly like the Pi's own copy.
+- **Capture and encode.** The agent captures the tab (`--auto-accept-this-tab-capture`) and sends WebRTC to go2rtc `wallmac` through a tunnel to 127.0.0.1:1984. Media goes direct to the Pi on port 8555.
+  - H.264 **High** profile is preferred. The Mac's VideoToolbox chip handles only High; constrained baseline falls back to software OpenH264.
+  - The answer is rewritten with `x-google-min-bitrate=8000` (go2rtc sends no bandwidth feedback, so Chrome's estimate sat at about 60 Kbps).
+  - Encoding uses `maintain-resolution`, because a mid-stream size change breaks the projector's MSE player.
+- **Results.** Mac page: 60 fps of animation, VideoToolbox, 1920×1080, up to 60 fps sent.
+  - Frames are only sent when something moves, so the rate varies.
+  - The sky planes used to step every 50 ms (20 Hz). `wall.html` now steps them every frame when the page runs at 55+ fps, which only happens on the Mac (backup `.bak_sky60_*`).
+- **The Pi:**
+  - `server.py` `wall_src()`: `/wall.mp4` plays `wallmac` whenever it is arriving, else `wall`.
+  - `airplay.py` and `go2rtc.yaml` define the `wallmac` stream.
+  - `watchdog.py` `mac_arbiter`: when Mac video has been rising for 2 checks, it stops `bestly-wall-stream` (the Pi copy). When the Mac stops for 2 checks, it starts the Pi copy and tells Scout (key `wall.mac`).
+- **Self-heal (Mac):**
+  - Tunnel, Chrome, a crashed page, and a link that says "connected" but sends no bytes for 15 s each trigger a restart or republish.
+  - Daily fresh page at 4:10 AM.
+  - Status in `~/Bestly/wall-mac/status.json`; log in `agent.log`.
+  - Create the file `~/Bestly/wall-mac/OFF` to pause it, and the Pi takes over.
+- **Projector player:** goes fullscreen on the first tap (the watchdog taps after every launch).
+- **Still open:** at 60 fps the projector plays about 55 and drops frames in bursts. Fully (WebView compositing) uses about 120% CPU; its hardware decoder is only at 18%.
+  - The next lever is Fully's native video player (`fully.playVideo`, a hardware overlay). It needs Fully's JavaScript Interface turned on in its settings, which is off today.
+  - **Lesson:** never change `maxFramerate` live with `setParameters`; it stalled the encoder (12:51 PM). Republish instead.
