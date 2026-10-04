@@ -190,7 +190,7 @@ for c in C:
     elif k == "button":
         e = base(c, "button")
         if "power" in c:
-            e["press"] = [{"action": "rest_command.bestly_wall_power", "data": {"on": c["power"]}},
+            e["press"] = [{"action": "rest_command.bestly_wall_power", "data": {"want_on": c["power"]}},
                           {"delay": 2}, {"action": "homeassistant.update_entity", "target": {"entity_id": STATE}}]
         elif "command" in c:
             e["press"] = [{"action": "rest_command.bestly_wall_command", "data": {"cmd": c["command"]}},
@@ -281,6 +281,9 @@ pkg = {
 }
 
 
+YAML_BOOL_WORDS = {"on", "off", "yes", "no", "y", "n", "true", "false"}
+
+
 # ---- YAML writer (JSON-flow values; "!secret x" strings become real tags) ----
 def y(v, ind=0):
     sp = "  " * ind
@@ -289,10 +292,11 @@ def y(v, ind=0):
             return " {}"
         out = ""
         for k, x in v.items():
+            kk = k if (k.replace("_", "").isalnum() and k.lower() not in YAML_BOOL_WORDS) else J(k)  # never let on/off/yes/no turn into booleans
             if isinstance(x, (dict, list)) and x:
-                out += f"\n{sp}{k}:" + y(x, ind + 1)
+                out += f"\n{sp}{kk}:" + y(x, ind + 1)
             else:
-                out += f"\n{sp}{k}: " + y(x, ind + 1).lstrip()
+                out += f"\n{sp}{kk}: " + y(x, ind + 1).lstrip()
         return out
     if isinstance(v, list):
         if not v:
