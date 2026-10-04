@@ -281,6 +281,27 @@ async function reorg() {
   }
   const slugs = new Set((ctx.roster ?? []).map((r: any) => r.slug));
 
+  // 0. Bots Jared already asked to let go (profile.let_go_requested): always proposed, no second-guessing.
+  //    Still waits for his Approve tap on the Team page, nothing is switched off here.
+  const asked = (Array.isArray(ctx.let_go_requested) ? ctx.let_go_requested : [])
+    .filter((x: any) => x?.bot && slugs.has(x.bot) && !PROTECTED.has(x.bot))
+    .map((x: any) => ({
+      bot: x.bot, kind: "retire", into: null,
+      why: x.note || "You asked to let this one go.",
+      change: `Let ${x.name ?? x.bot} go; its job is dropped.`,
+      saves: "One less bot to watch, and no more false alarms from it.",
+      risk: "Whatever it did stops until you bring it back (Undo works for 7 days).",
+      handover: [{ duty: `${x.name ?? x.bot}'s job`, to: null }],
+      verdict: "back", improver_score: 5, improver_note: "You asked for this one, so it is on the list.",
+    }));
+  const askedSlugs = new Set(asked.map((a: any) => a.bot));
+  const savedAsked: number = asked.length ? ((await db.rpc("reorg_save", { p_moves: asked })).data ?? 0) : 0;
+  if (savedAsked > 0) {
+    await db.rpc("scout_notify", { p_title: `Reorg: ${savedAsked} bot${savedAsked === 1 ? "" : "s"} you asked to let go`,
+      p_body: asked.map((b: any) => `• ${b.bot}`).join("\n"), p_severity: "info", p_push: false,
+      p_url: "/admin/team#reorg", p_dedupe: `reorg-asked-${new Date().toISOString().slice(0, 10)}` });
+  }
+
   // 1. The Recruiter: where is the crew bigger than the work?
   const pitch = await freeJson("reflect",
     "You are The Recruiter, HR for Bestly's crew of AI bots, running this week's reorg review. Bestly is a one-person product " +
@@ -296,18 +317,18 @@ async function reorg() {
     '"handover":[{"duty":"one duty, plain words","to":"slug or null"}]}]}',
     JSON.stringify(ctx), 1500);
   const moves = (Array.isArray(pitch?.moves) ? pitch.moves : [])
-    .filter((m: any) => m?.bot && slugs.has(m.bot) && !PROTECTED.has(m.bot))
+    .filter((m: any) => m?.bot && slugs.has(m.bot) && !PROTECTED.has(m.bot) && !askedSlugs.has(m.bot))
     .map((m: any) => ({ ...m, into: m.into && slugs.has(m.into) && m.into !== m.bot ? m.into : null, kind: m.kind === "merge" && m.into ? "merge" : "retire",
       handover: (Array.isArray(m.handover) ? m.handover : []).filter((h: any) => h?.duty).slice(0, 4)
         .map((h: any) => ({ duty: String(h.duty), to: h.to && slugs.has(h.to) && h.to !== m.bot ? h.to : null })) }))
     .slice(0, 3);
   if (pitch == null) {
     await db.rpc("agent_beat", { p_slug: "hr", p_ok: false, p_summary: "Reorg review: free AI did not answer; will try again next run" });
-    return { ok: false, error: "no answer from free AI" };
+    return savedAsked ? { ok: true, saved: savedAsked, backed: [...askedSlugs], passed: [] } : { ok: false, error: "no answer from free AI" };
   }
   if (!moves.length) {
     await db.rpc("agent_beat", { p_slug: "hr", p_ok: true, p_summary: "Reorg review: the crew is lean, nobody to let go this week" });
-    return { ok: true, saved: 0, backed: [], passed: [] };
+    return { ok: true, saved: savedAsked, backed: [...askedSlugs], passed: [] };
   }
 
   // 2. The Improver vets every move against the same picture
@@ -322,7 +343,7 @@ async function reorg() {
   const reviews: any[] = Array.isArray(review?.reviews) ? review.reviews : [];
   if (!reviews.length) {
     await db.rpc("agent_beat", { p_slug: "hr", p_ok: false, p_summary: "Reorg review: The Improver could not review; trying again next run" });
-    return { ok: false, error: "no review from The Improver" };
+    return savedAsked ? { ok: true, saved: savedAsked, backed: [...askedSlugs], passed: [] } : { ok: false, error: "no review from The Improver" };
   }
   const byBot = new Map(reviews.map((r) => [String(r?.bot ?? "").toLowerCase().trim(), r]));
   const rows = moves.map((m: any) => {
@@ -341,7 +362,7 @@ async function reorg() {
       p_body: backed.map((b: any) => `• ${b.bot}${b.into ? ` (work moves to ${b.into})` : ""}`).join("\n"), p_severity: "info", p_push: false,
       p_url: "/admin/team#reorg", p_dedupe: `reorg-${new Date().toISOString().slice(0, 10)}` });
   }
-  return { ok: true, saved, backed: backed.map((b: any) => b.bot), passed: rows.filter((r: any) => r.verdict !== "back").map((r: any) => r.bot) };
+  return { ok: true, saved: (saved ?? 0) + savedAsked, backed: [...askedSlugs, ...backed.map((b: any) => b.bot)], passed: rows.filter((r: any) => r.verdict !== "back").map((r: any) => r.bot) };
 }
 
 async function farewell(id: string) {
