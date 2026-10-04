@@ -115,7 +115,7 @@ Reply with ONE JSON object only: {{"ok": true}} or {{"ok": false, "problems": ["
 def _review(cfg, plan, deadline):
     msgs = [{"role": "system", "content": REVIEW.format(name=cfg["name"], about=cfg["about"])},
             {"role": "user", "content": json.dumps({"caption": plan.get("caption"), "cards": plan.get("cards")})[:6000]}]
-    msg, _ = freellm.chat(msgs, None, max_tokens=2500, deadline=deadline)
+    msg, _ = freellm.chat(msgs, None, max_tokens=2500, deadline=deadline, json_mode=True)
     try:
         r = _json(msg.get("content"))
     except ValueError:
@@ -236,7 +236,7 @@ def _make_one(brand, cfg, recent, bank_open, deadline, dry):
             {"role": "user", "content": user}]
     errs, plan, prov = [], None, None
     for _ in range(4):
-        msg, prov = freellm.chat(msgs, None, max_tokens=3000, deadline=deadline)
+        msg, prov = freellm.chat(msgs, None, max_tokens=3000, deadline=deadline, json_mode=True)
         try:
             plan = _json(msg.get("content"))
             errs = _check(brand, cfg, kinds, plan)
