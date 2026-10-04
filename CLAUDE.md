@@ -125,6 +125,8 @@ See the TodoList for current state. Major decisions still open:
 
 ## A few rules of the road
 
+- **Save tokens; run it local.** If a job can run on the Pi or the Mac mini on its own (script, cron, free AI via FreeLLM), it runs there, not through Claude (claude.ai scheduled tasks, paid AI). Use Claude only when the work truly needs it (code changes, a logged-in Chrome, real judgment). When building or reviewing any bot, pick the Pi or Mac mini first, free AI before paid, and flag any Claude scheduled task that could move. Jared's standing rule (2026-10-04).
+
 - **Light/dark mode.** Site defaults to **light**. The admin dashboard runs **dark** (`admin-shell` wrapper class on `AdminLayout`). Don't accidentally invert.
 - **Brand voice.** Bestly is privacy-first, plain-spoken, anti-big-tech. Read the brochure (`In-House Cloud — Brochure.pdf` in `/uploads/`) for the canonical voice. No emoji on customer-facing surfaces. Internal admin can be more relaxed.
 - **No new emojis on existing pages** unless explicitly asked.
