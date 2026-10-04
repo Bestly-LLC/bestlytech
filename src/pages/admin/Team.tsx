@@ -8,7 +8,7 @@ import {
   KeyRound, Landmark, Laptop, LineChart, ListChecks, ListTodo, Lock, Mail, MailPlus, Mails, Megaphone,
   MessageCircle, MessageSquareShare, Mic, Moon, NotebookPen, PauseCircle, PenLine, PhoneCall, PlaneLanding,
   Projector, Repeat, ScanEye, Search, Send, SendHorizontal, Server, ShieldCheck, Siren, Sparkles, SprayCan,
-  Sunrise, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network,
+  Sunrise, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network, Lightbulb, Compass, Sparkle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -31,6 +31,8 @@ type Issue = { key: string; title: string; severity: string; fix_stage: string |
 type Agent = {
   slug: string; name: string; role: string; what_it_does: string; dept: string; reports_to: string | null;
   kind: "human" | "agent" | "job" | "open_role"; status: "active" | "paused" | "planned" | "new";
+  relation: string | null; liaison_to: string | null;
+  profile: { field_name?: string; personality?: string; superpower?: string; quirk?: string; motto?: string; first_week?: string } | null;
   runs_on: string | null; schedule: string | null; admin_url: string | null; icon: string | null; private: boolean; sort: number;
   last_at: string | null; last_ok: boolean | null; summary: string | null; gap_min: number | null; on_demand: boolean;
   watched: boolean; source: string | null; issues: Issue[]; health: Health;
@@ -50,7 +52,7 @@ const DEPTS: { key: string; title: string; blurb: string }[] = [
 ];
 
 const ICONS: Record<string, ComponentType<{ className?: string }>> = {
-  crown: Crown, binoculars: Binoculars, moon: Moon, "calendar-check": CalendarCheck, "graduation-cap": GraduationCap,
+  crown: Crown, binoculars: Binoculars, lightbulb: Lightbulb, compass: Compass, moon: Moon, "calendar-check": CalendarCheck, "graduation-cap": GraduationCap,
   mic: Mic, "notebook-pen": NotebookPen, "audio-lines": AudioLines, handshake: Handshake, "list-checks": ListChecks,
   ladder: Network, activity: Activity, dog: Dog, wrench: Wrench, "shield-check": ShieldCheck, eye: Eye, database: Database,
   cpu: Cpu, server: Server, laptop: Laptop, users: Users, repeat: Repeat, sparkles: Sparkles, "pen-line": PenLine,
@@ -97,10 +99,15 @@ export function nb(s: string | null | undefined): string {
   return (s ?? "").replace(/(\d)\s+(?=[A-Za-z%])/g, "$1 ");
 }
 
+/** Switched off on purpose (schedule or Pi job turned off) — shown as paused, never as "gone quiet". */
+const isOff = (a: Agent) => !a.last_at && /^Switched off|schedule entry is gone/.test(a.summary ?? "");
+
 function statusLine(a: Agent): string {
+  if (a.relation === "partner") return "Partner — not on the payroll";
   if (a.kind === "human") return "That's you";
   if (a.health === "planned") return "Not hired yet";
   if (a.health === "paused") return "Paused — no alerts";
+  if (isOff(a)) return a.summary ?? "Switched off";
   if (!a.last_at) return a.source === "none" ? "Can't see this one from here" : "Waiting for its first check-in";
   return `${a.on_demand ? "Last worked" : "Last ran"} ${when(a.last_at)}`;
 }
@@ -144,7 +151,8 @@ function AgentIcon({ a, size = "md" }: { a: Agent; size?: "md" | "lg" }) {
   }
   const Icon = (a.icon && ICONS[a.icon]) || (a.kind === "human" ? Crown : Bot);
   const tone =
-    a.kind === "human" ? "bg-[#FFD60A26] text-[#FFD60A] bento:bg-[#FFCC001f] bento:text-[#A05A00]"
+    a.relation === "partner" ? "bg-[#64D2FF26] text-[#64D2FF] bento:bg-[#32ADE61f] bento:text-[#0071A4]"
+      : a.kind === "human" ? "bg-[#FFD60A26] text-[#FFD60A] bento:bg-[#FFCC001f] bento:text-[#A05A00]"
       : a.health === "planned" ? "bg-transparent border border-dashed border-[#8E8E93] text-[#8E8E93]"
       : "bg-[#0A84FF1f] text-[#409CFF] bento:bg-[#007AFF14] bento:text-[#007AFF]";
   return (
@@ -156,12 +164,12 @@ function AgentIcon({ a, size = "md" }: { a: Agent; size?: "md" | "lg" }) {
 
 function HealthTag({ a }: { a: Agent }) {
   if (a.kind === "human") return null;
-  const h = HEALTH[a.health] ?? HEALTH.unknown;
+  const h = isOff(a) ? HEALTH.paused : HEALTH[a.health] ?? HEALTH.unknown;
   const Icon = h.icon;
   return (
     <span className={cn("inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-medium", h.text)}>
       <Icon className="h-3.5 w-3.5" aria-hidden />
-      {a.status === "new" ? "New hire" : h.word}
+      {a.status === "new" ? "New hire" : isOff(a) ? "Switched off" : h.word}
     </span>
   );
 }
@@ -200,6 +208,9 @@ function AgentCard({ a, onOpen, lead }: { a: Agent; onOpen: (a: Agent) => void; 
           )}
           {a.status === "new" && (
             <span className="rounded-full bg-[#FF9F0A26] px-2 py-0.5 text-[11px] font-semibold text-[#FF9F0A] bento:text-[#C93400]">Place me</span>
+          )}
+          {a.liaison_to === "eli" && (
+            <span className="whitespace-nowrap rounded-full bg-[#64D2FF26] px-2 py-0.5 text-[11px] font-semibold text-[#64D2FF] bento:bg-[#32ADE61f] bento:text-[#0071A4]">Works with Eli</span>
           )}
         </span>
       </span>
@@ -258,7 +269,7 @@ function Connector() {
 
 /* ---------------------------------------------------------------- detail sheet */
 
-function DetailSheet({ a, all, onClose }: { a: Agent | null; all: Agent[]; onClose: () => void }) {
+function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[]; onClose: () => void; onOpen: (slug: string) => void }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Partial<Agent>>({});
@@ -320,6 +331,57 @@ function DetailSheet({ a, all, onClose }: { a: Agent | null; all: Agent[]; onClo
           </div>
 
           <p className={cn("text-[15px] leading-relaxed", label)} style={{ textWrap: "pretty" } as never}>{nb(a.what_it_does)}</p>
+
+          {a.relation === "partner" && (() => {
+            const helpers = all.filter((x) => x.liaison_to === a.slug);
+            return helpers.length > 0 ? (
+              <div className="space-y-2">
+                <h4 className={cn("px-1 text-[13px] font-semibold uppercase tracking-[0.02em]", secondary)}>Works with {a.name.split(" ")[0]} on your behalf</h4>
+                <ul className="divide-y divide-[#38383A] rounded-[14px] bg-[#2C2C2E] bento:divide-[#C6C6C8] bento:bg-[#fff]">
+                  {helpers.map((h) => (
+                    <li key={h.slug}>
+                      <button type="button" onClick={() => onOpen(h.slug)}
+                        className="flex min-h-[44px] w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-[#ffffff0a] bento:hover:bg-[#0000000a]">
+                        <span className="min-w-0">
+                          <span className={cn("block text-[15px] font-medium", label)}>{h.name}</span>
+                          <span className={cn("block text-[13px] leading-snug", secondary)}>{nb(h.what_it_does)}</span>
+                        </span>
+                        <ChevronRight className={cn("h-4 w-4 shrink-0", tertiary)} aria-hidden />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className={cn("px-1 text-[12px]", tertiary)}>Partners aren't watched or alerted on. Only the bots are.</p>
+              </div>
+            ) : null;
+          })()}
+
+          {a.profile?.personality && (
+            <div className="space-y-2">
+              <h4 className={cn("px-1 text-[13px] font-semibold uppercase tracking-[0.02em]", secondary)}>Crew profile</h4>
+              <div className="space-y-2 rounded-[14px] bg-[#2C2C2E] px-4 py-3 bento:bg-[#fff]">
+                {a.profile.field_name && (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className={cn("inline-flex items-center gap-1.5 text-[13px] font-semibold", tint.blue)}>
+                      <Compass className="h-3.5 w-3.5" aria-hidden /> Suggested field name: {a.profile.field_name}
+                    </span>
+                    {a.name !== a.profile.field_name && (
+                      <button type="button" className={cn(btnPlain, "min-h-[36px] text-[13px]")} disabled={busy}
+                        onClick={() => save({ name: a.profile!.field_name }, `${a.name} is now ${a.profile!.field_name}`)}>
+                        Use this name
+                      </button>
+                    )}
+                  </div>
+                )}
+                <p className={cn("text-[15px] leading-relaxed", label)} style={{ textWrap: "pretty" } as never}>{a.profile.personality}</p>
+                <dl className="space-y-1 text-[13px]">
+                  {a.profile.superpower && <div><dt className={cn("inline", secondary)}>Superpower: </dt><dd className={cn("inline", label)}>{a.profile.superpower}</dd></div>}
+                  {a.profile.quirk && <div><dt className={cn("inline", secondary)}>Quirk: </dt><dd className={cn("inline", label)}>{a.profile.quirk}</dd></div>}
+                  {a.profile.motto && <div><dt className={cn("inline", secondary)}>Motto: </dt><dd className={cn("inline italic", label)}>{a.profile.motto}</dd></div>}
+                </dl>
+              </div>
+            </div>
+          )}
 
           {a.kind !== "human" && (
             <dl className="divide-y divide-[#38383A] rounded-[14px] bg-[#2C2C2E] px-4 text-[15px] bento:divide-[#C6C6C8] bento:bg-[#fff]">
@@ -432,6 +494,119 @@ function Field({ name, children }: { name: string; children: React.ReactNode }) 
   );
 }
 
+/* ---------------------------------------------------------------- The Improver's ideas */
+
+type Idea = {
+  id: string; created_at: string; title: string; area: string | null; kind: string | null; why: string | null; change: string | null;
+  effort: "S" | "M" | "L" | null; impact: number | null; status: "new" | "accepted" | "dismissed" | "done"; decided_at: string | null;
+};
+const KIND_WORDS: Record<string, string> = {
+  tokens: "Saves tokens", money: "Saves money", ux: "Easier to use", workflow: "Smoother workflow", reliability: "Fewer breakdowns", security: "Safer",
+};
+const EFFORT_WORDS: Record<string, string> = { S: "Quick fix", M: "An afternoon", L: "A project" };
+
+function ImproverIdeas({ onOpenImprover }: { onOpenImprover: () => void }) {
+  const qc = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  const { data: ideas = [] } = useQuery({
+    queryKey: ["improver-ideas"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("admin_improver_ideas" as never);
+      if (error) throw error;
+      return (data ?? []) as unknown as Idea[];
+    },
+    refetchInterval: () => (document.hidden ? false : pollInterval(120_000)),
+    placeholderData: keepPreviousData,
+  });
+
+  const set = async (i: Idea, status: Idea["status"], msg: string) => {
+    const { error } = await supabase.rpc("admin_improver_set" as never, { p_id: i.id, p_status: status } as never);
+    if (error) { toast.error(error.message); return; }
+    toast.success(msg);
+    qc.invalidateQueries({ queryKey: ["improver-ideas"] });
+  };
+
+  const doIt = async (i: Idea) => {
+    await set(i, "accepted", "Handed to Scout. Nothing changes until you tap yes there.");
+    askScout(`Let's do this improvement from The Improver: ${i.title}`, {
+      about: [`Idea: ${i.title}`, i.area ? `Area: ${i.area}` : "", i.why ? `Why: ${i.why}` : "", i.change ? `Suggested change: ${i.change}` : "",
+        "Plan it, show me exactly what will change, and wait for my yes before running anything."].filter(Boolean).join("\n"),
+    });
+  };
+
+  const askNow = async () => {
+    setAsking(true);
+    toast("The Improver is looking at everything. About a minute.");
+    try {
+      const { data, error } = await supabase.functions.invoke("team-hr", { body: { op: "improve" } });
+      if (error) throw error;
+      const r = data as { ok: boolean; saved?: number; error?: string };
+      if (!r?.ok) throw new Error(r?.error || "No ideas this time");
+      toast.success(r.saved ? `${r.saved} new idea${r.saved === 1 ? "" : "s"}` : "Nothing new worth your time this week.");
+      qc.invalidateQueries({ queryKey: ["improver-ideas"] });
+      qc.invalidateQueries({ queryKey: ["org-chart"] });
+    } catch (e) {
+      toast.error((e as Error).message || "The Improver couldn't finish");
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  const open = ideas.filter((i) => i.status === "new");
+  const accepted = ideas.filter((i) => i.status === "accepted");
+
+  return (
+    <section id="ideas" className={cn(card, "scroll-mt-24 space-y-3 p-4 sm:p-5")} aria-label="Ideas from The Improver">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <button type="button" onClick={onOpenImprover} className="flex min-w-0 items-start gap-3 text-left">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[#FFD60A26] text-[#FFD60A] bento:bg-[#FFCC001f] bento:text-[#A05A00]">
+            <Lightbulb className="h-[22px] w-[22px]" />
+          </span>
+          <span className="min-w-0">
+            <span className={cn("block text-[17px] font-semibold", label)}>Ideas from The Improver</span>
+            <span className={cn("block text-[13px] leading-snug", secondary)}>
+              Ways to save tokens, money and time, from the whole picture. Nothing changes until you tap Do it.
+            </span>
+          </span>
+        </button>
+        <button type="button" className={btnTinted} onClick={askNow} disabled={asking}>
+          {asking ? "Looking…" : "Ask for ideas now"}
+        </button>
+      </header>
+
+      {open.length === 0 && accepted.length === 0 ? (
+        <p className={cn("px-1 text-[15px]", secondary)}>No ideas waiting. The Improver looks again Monday at 8:45&nbsp;AM.</p>
+      ) : (
+        <ul className="grid gap-3 lg:grid-cols-2">
+          {[...open, ...accepted].map((i) => (
+            <li key={i.id} className="flex flex-col gap-2 rounded-[16px] bg-[#2C2C2E] p-4 bento:bg-[#F2F2F7]">
+              <div className="flex flex-wrap items-center gap-2">
+                {i.kind && <span className="rounded-full bg-[#30D15826] px-2 py-0.5 text-[11px] font-semibold text-[#30D158] bento:text-[#248A3D]">{KIND_WORDS[i.kind] ?? i.kind}</span>}
+                {i.effort && <span className={cn("rounded-full bg-[#7676803d] px-2 py-0.5 text-[11px] font-medium bento:bg-[#7676801f]", secondary)}>{EFFORT_WORDS[i.effort]}</span>}
+                {i.area && <span className={cn("text-[12px]", tertiary)}>{i.area}</span>}
+                {i.status === "accepted" && <span className={cn("ml-auto text-[12px] font-semibold", tint.blue)}>With Scout</span>}
+              </div>
+              <p className={cn("text-[15px] font-semibold leading-snug", label)} style={{ textWrap: "pretty" } as never}>{nb(i.title)}</p>
+              {i.why && <p className={cn("text-[13px] leading-snug", secondary)} style={{ textWrap: "pretty" } as never}>{nb(i.why)}</p>}
+              {i.change && <p className={cn("text-[13px] leading-snug", label)} style={{ textWrap: "pretty" } as never}><span className={secondary}>Change: </span>{nb(i.change)}</p>}
+              <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+                {i.status === "new" ? (
+                  <>
+                    <button type="button" className={btnPrimary} onClick={() => doIt(i)}>Do it</button>
+                    <button type="button" className={btnPlain} onClick={() => set(i, "dismissed", "Okay. It won't come back.")}>Not now</button>
+                  </>
+                ) : (
+                  <button type="button" className={btnPlain} onClick={() => set(i, "done", "Marked done")}>Mark done</button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 /* ---------------------------------------------------------------- page */
 
 type Filter = "all" | "attention" | "new" | "open";
@@ -464,6 +639,7 @@ export default function Team() {
       : a.health === "planned";
 
   const jared = bySlug.get("jared");
+  const partners = useMemo(() => agents.filter((a) => a.relation === "partner"), [agents]);
   const scout = bySlug.get("scout");
   const watchStale = data?.checked_at ? Date.now() - new Date(data.checked_at).getTime() > 30 * 60_000 : false;
 
@@ -517,13 +693,40 @@ export default function Team() {
 
           {/* top of the chart */}
           {filter === "all" && jared && scout && (
-            <div className="mx-auto max-w-md">
-              <div className={cn(card, "p-2")}><AgentCard a={jared} onOpen={(x) => setOpenSlug(x.slug)} lead /></div>
-              <Connector />
-              <div className={cn(card, "p-2 ring-[#0A84FF40] bento:ring-[#007AFF33]")}><AgentCard a={scout} onOpen={(x) => setOpenSlug(x.slug)} lead /></div>
-              <Connector />
+            <div className="mx-auto max-w-5xl">
+              {/* Jared in the middle; partners (Eli) beside him on a dashed line, not above or below: they don't report either way */}
+              <div className="grid gap-3 md:grid-cols-3 md:items-center">
+                <div className="hidden md:block" aria-hidden />
+                <div className={cn(card, "p-2")}><AgentCard a={jared} onOpen={(x) => setOpenSlug(x.slug)} lead /></div>
+                {partners.length > 0 && (
+                  <div className="relative space-y-2">
+                    <div aria-hidden className="absolute -left-3 top-1/2 hidden w-3 border-t border-dashed border-[#64D2FF99] md:block" />
+                    {partners.map((p) => {
+                      const helpers = agents.filter((x) => x.liaison_to === p.slug).length;
+                      return (
+                        <div key={p.slug} className={cn(card, "border border-dashed border-[#64D2FF66] p-2 ring-0 bento:border-[#0071A466]")}>
+                          <p className={cn("px-3 pt-1 text-[11px] font-semibold uppercase tracking-[0.06em]", "text-[#64D2FF] bento:text-[#0071A4]")}>
+                            Partner{helpers ? ` · ${helpers}\u00a0bots work with ${p.name.split(" ")[0]} for you` : ""}
+                          </p>
+                          <AgentCard a={p} onOpen={(x) => setOpenSlug(x.slug)} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="md:grid md:grid-cols-3">
+                <div className="hidden md:block" aria-hidden />
+                <div>
+                  <Connector />
+                  <div className={cn(card, "p-2 ring-[#0A84FF40] bento:ring-[#007AFF33]")}><AgentCard a={scout} onOpen={(x) => setOpenSlug(x.slug)} lead /></div>
+                  <Connector />
+                </div>
+              </div>
             </div>
           )}
+
+          {filter === "all" && <ImproverIdeas onOpenImprover={() => setOpenSlug("improver")} />}
 
           {/* departments */}
           <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -550,7 +753,7 @@ export default function Team() {
         </>
       ) : null}
 
-      <DetailSheet a={opened} all={agents} onClose={() => setOpenSlug(null)} />
+      <DetailSheet a={opened} all={agents} onClose={() => setOpenSlug(null)} onOpen={(slug) => setOpenSlug(slug)} />
     </div>
   );
 }
