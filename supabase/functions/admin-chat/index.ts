@@ -79,6 +79,11 @@ import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: 
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v32 (2026-10-04): Ask User Questions. Scout (paid and free) has an ask_user tool: when something is unclear, it is
+//   unsure which way Jared wants it, or it needs a detail no tool can find, it asks 1-4 multiple-choice questions instead
+//   of guessing. The turn ends with a QUESTIONS: {json} line that his window turns into a one-question-at-a-time card
+//   (tappable answers + "Other"); his answers come back as his next message. "Ask me questions" makes it ask first.
+//   Autopilot never asks (nobody is there).
 // v31 (2026-10-04, "Chat Router", hired on the Team page): at the daily cap Scout keeps going on the free AI (with tools)
 //   instead of stopping, and "Raise today's cap by $5" / "override" adds $5 for today only (scout_cap_boost, max +$20/day)
 //   and turns paid back on for an hour. Every routed reply checks in as chat-router (agent_beat) so the Team page sees it.
@@ -357,7 +362,53 @@ const TOOLS = [
     description: "Clear one card off the queue: a Cookie Yeti release waiting on Jared ('cy:mac') or an unread alert ('bell:<uuid>'). Only when he plainly asks, or once the thing it asked for is done.",
     input_schema: { type: "object", properties: { key: { type: "string" } }, required: ["key"] },
   },
+  {
+    name: "ask_user",
+    description:
+      "Ask Jared 1-4 multiple-choice questions, shown as tappable answers (he can always type his own instead). Use it when the ask is " +
+      "unclear, you're unsure which way he wants something, or you need a detail no tool can find - instead of guessing. Never ask what a " +
+      "tool can tell you. Recommended choice first, with \"(Recommended)\" at the end of its label. Calling this ends your turn; his answers " +
+      "come back as his next message.",
+    input_schema: {
+      type: "object",
+      properties: {
+        questions: {
+          type: "array", minItems: 1, maxItems: 4,
+          items: {
+            type: "object",
+            properties: {
+              question: { type: "string", description: "The full question, ending in a question mark." },
+              header: { type: "string", description: "1-3 word label, e.g. \"Which car\"." },
+              options: {
+                type: "array", minItems: 2, maxItems: 4,
+                items: { type: "object", properties: { label: { type: "string", description: "1-5 words" }, description: { type: "string", description: "optional, one short line" } }, required: ["label"] },
+              },
+              multi_select: { type: "boolean", description: "true when more than one answer can apply" },
+            },
+            required: ["question", "options"],
+          },
+        },
+      },
+      required: ["questions"],
+    },
+  },
 ];
+
+/** v32: a valid ask_user call becomes the QUESTIONS line his window renders as a card; anything malformed returns null. */
+function questionsLine(input: any): string | null {
+  const qs = (Array.isArray(input?.questions) ? input.questions : []).slice(0, 4).map((q: any) => ({
+    question: String(q?.question ?? "").trim().slice(0, 220),
+    header: String(q?.header ?? "").trim().slice(0, 18) || undefined,
+    multi_select: q?.multi_select === true || undefined,
+    options: (Array.isArray(q?.options) ? q.options : []).slice(0, 4).map((o: any) => (typeof o === "string" ? { label: o } : o))
+      .map((o: any) => ({ label: String(o?.label ?? "").trim().slice(0, 60), description: o?.description ? String(o.description).trim().slice(0, 120) : undefined }))
+      .filter((o: any) => o.label),
+  })).filter((q: any) => q.question && q.options.length >= 2);
+  return qs.length ? `QUESTIONS: ${JSON.stringify({ questions: qs })}` : null;
+}
+/** v32: he asked Scout to ask him questions (first). */
+const ASKS_FOR_QUESTIONS = /\bask (me|the user|user)\b[^.?!]{0,30}\bquestions?\b|\bask user questions?\b|\bask me (first|before)\b|\bquiz me\b/i;
+const ASK_FIRST_NOTE = "He asked you to ask him questions first. Before doing anything else, call ask_user with 1-4 questions about what you need to know to do this well.";
 
 const AUTO_RUN_ON = `
 
@@ -430,7 +481,7 @@ Read the file first, every time. Keep the change small. Use commit_files edits (
 - ${ADHD_RULE}
 - Lead with the answer. He has ADHD: no preamble, no recap, no "I'd be happy to". Under 70 words unless he asked for detail (a debrief may run longer, but stays tight).
 - Plain text. The chat renders no markdown - no asterisks, no headings, no bullet characters. A list is one short line per item.
-- One question at most, and only when you genuinely cannot proceed.
+- When the ask is unclear, you're unsure which way he wants it, or you need a detail no tool can find, call ask_user (1-4 tappable questions) instead of guessing. Never ask what a tool can tell you. If he says "ask me questions", ask before doing anything.
 - Never invent a number, a file name, a function or a commit. If you do not know, read it or say so.
 
 # Never make him type
@@ -789,7 +840,7 @@ ${convo}`;
  */
 const FREE_TOOLS = new Set([
   "today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "notify", "mark_done",
-  "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn",
+  "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user",
 ]);
 const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript"]);
 const FREE_STEPS = 10;
@@ -837,7 +888,7 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["clear_alerts", "resolve_incident"], /\b(alerts?|incidents?|bell|resolve|clear|fixed|warning|notification)\b/i],
   [["learn"], /\b(learn|remember|lesson|next time)\b/i],
 ];
-const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file"]);
+const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "ask_user"]);
 
 function freeToolDefs(autopilot: boolean, convo: string) {
   const want = new Set(ALWAYS_TOOLS);
@@ -878,7 +929,7 @@ function trimForBudget(msgs: Msg[], maxTokens = 3800) {
 /** The message holding his current request: trimming never drops it. */
 const KEEP = new WeakSet<Msg>();
 
-async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean } = {}):
+async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean; askFirst?: boolean } = {}):
   Promise<{ answer?: string; why: string; tools?: string[]; note?: string }> {
   const autopilot = !!opts.autopilot;
   const until = Date.now() + FREE_BUDGET_MS;
@@ -907,7 +958,8 @@ How to work:
 - ${yesRule}
 - mac_run: propose a short, safe, idempotent zsh script with a plain title and why; it waits for his Run tap.
 - Only say something is done if a tool result in this turn shows ok:true for it.
-- If a tool fails, change approach. Call ask_paid only for a code change, a data change (INSERT/UPDATE/DELETE), or when you truly can't finish.
+- If a tool fails, change approach. Call ask_paid only for a code change, a data change (INSERT/UPDATE/DELETE), or when you truly can't finish.${autopilot ? "" : `
+- If the ask is unclear or you need a detail no tool can find, call ask_user (1-4 tappable questions) instead of guessing.${opts.askFirst ? ` ${ASK_FIRST_NOTE}` : ""}`}
 ${autopilot
     ? `Reply: plain words, under 90 words, then ONE last line that is exactly one of these three (pick one, never list them):
 FIXED: <what fixed it, or "already clear" and the evidence>
@@ -988,6 +1040,12 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     for (const [n, c] of r.toolCalls.entries()) {
       const answer = (out: unknown) => { let s = JSON.stringify(out); if (s.length > 2500) s = s.slice(0, 2500) + "...(cut)"; msgs.push({ role: "tool", tool_call_id: c.id, content: s }); };
       if (n >= 3) { answer({ ok: false, error: "skipped: run at most 3 tools at once" }); continue; }
+      if (c.name === "ask_user") {
+        const line = questionsLine(c.args);
+        if (!line) { answer({ ok: false, error: "bad_questions", hint: "1-4 questions, each with a question and 2-4 options (label, optional description)." }); continue; }
+        const lead = String(r.content ?? "").replace(/^\s*OPTIONS:.*$/m, "").trim() || "A few quick questions first.";
+        return { answer: `${lead}\n\n${line}`, why: "", tools: [...used, "ask_user"] };
+      }
       if (c.name === "ask_paid") {
         const kind = String(c.args.kind ?? "HARD").toUpperCase();
         const note = String(c.args.why ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
@@ -1275,6 +1333,10 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
       out = error ? { ok: false, error: error.message } : { ok: true, cleared: data };
       break;
     }
+    case "ask_user":
+      // Reached only when the questions were malformed (a valid call ends the turn before tools run).
+      out = { ok: false, error: "bad_questions", hint: "1-4 questions, each with a question and 2-4 options (label, optional description)." };
+      break;
     default:
       out = { ok: false, error: `unknown tool ${name}` };
   }
@@ -1387,7 +1449,7 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
 }
 
 // Tools autopilot never runs even without a confirmed flag: they reach Jared or a machine.
-const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "db_write", "clear_alerts"]);
+const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "db_write", "clear_alerts", "ask_user"]);
 
 
 /**
@@ -1544,10 +1606,11 @@ Deno.serve(async (req) => {
           : agent.note ? `The free AI looked (${(agent.tools ?? []).length} checks) and handed off: ${agent.note}\n` : "";
         return await say(`${diag}NEEDS_YES: Let Scout work on this with paid AI (Claude). It costs a few cents.`, { paid_needed: true, tools: agent.tools ?? [] });
       } else {
-        let free = await freeTry(threadId, text, body.page);
+        const askFirst = ASKS_FOR_QUESTIONS.test(text);
+        let free = askFirst ? { why: "" } as { answer?: string; why: string } : await freeTry(threadId, text, body.page);
         if (free.answer) return await say(free.answer, { free: true });
         // v28: before asking to spend, the free model tries the job itself with tools.
-        const agent = await freeAgent(threadId, text, body.page);
+        const agent = await freeAgent(threadId, text, body.page, { askFirst });
         if (agent.answer) return await say(agent.answer, { free: true, tools: agent.tools ?? [] });
         free = { why: agent.why || free.why };
         // Don't offer a paid run that can't happen: say the real blocker instead.
@@ -1613,6 +1676,7 @@ Deno.serve(async (req) => {
   const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder, jobs, page ?? "unknown", lessonsDigest)
     + (autoRunOn ? AUTO_RUN_ON : ASK_PLAINLY)
     + `\n\n# Paid AI switch\nThe Paid AI switch is ON${paidUntil ? ` until ${new Date(paidUntil).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" })}` : ""}, so you (Claude, paid) are answering. If he asks what AI is running, say exactly that. Never claim paid AI is off while you are answering.`
+    + (ASKS_FOR_QUESTIONS.test(text) ? `\n\n# He wants questions first\n${ASK_FIRST_NOTE}` : "")
     + (keepGoing ? "\n\n# He said keep going\nThat is his yes for everything the job needs right now. Carry on from where you stopped and do it; don't ask again." : "");
 
   // Daily chat cap: a runaway guard, even with the Paid AI switch on.
@@ -1669,6 +1733,16 @@ Deno.serve(async (req) => {
       const calls = (res.content ?? []).filter((c: any) => c.type === "tool_use");
       const said = (res.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n").trim();
       if (!calls.length) { reply = said; break; }
+      // v32: ask_user ends the turn with his question card (autopilot never asks: it falls through to the needs_yes guard).
+      const askCall = !autopilot ? calls.find((c: any) => c.name === "ask_user") : null;
+      if (askCall) {
+        const line = questionsLine(askCall.input);
+        if (line) {
+          used.push("ask_user");
+          reply = `${said.replace(/^\s*OPTIONS:.*$/m, "").trim() || "A few quick questions first."}\n\n${line}`;
+          break;
+        }
+      }
       messages.push({ role: "assistant", content: res.content });
       const results = [];
       for (const c of calls) {

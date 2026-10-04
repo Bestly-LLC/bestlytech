@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { QuestionCard, splitQuestions } from "@/components/admin/ScoutQuestions";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -989,7 +990,7 @@ export function Scout() {
                           have been imported and unused since before the chip work - so anything
                           Scout suggested running showed up as plain text with backticks around
                           it, which is the one kind of reply you most want to copy. */}
-                      {splitFences(splitOptions(m.body).text).map((part, k) =>
+                      {splitFences(splitOptions(splitQuestions(m.body).text).text).map((part, k) =>
                         part.kind === "code" ? (
                           <CopyBlock key={k} text={part.content} className="max-w-[85%] sm:max-w-[80%]" />
                         ) : part.content.trim() ? (
@@ -998,6 +999,14 @@ export function Scout() {
                           </p>
                         ) : null,
                       )}
+                      {(() => {
+                        const qs = splitQuestions(m.body).questions;
+                        return qs.length ? (
+                          <p className="mt-1 text-xs text-white/45">
+                            Asked you: {qs.map((q) => q.header || q.question).join(" · ")}
+                          </p>
+                        ) : null;
+                      })()}
                     </div>
                     <Button
                       variant="ghost"
@@ -1007,7 +1016,7 @@ export function Scout() {
                         // copyText, not navigator.clipboard directly: the raw call rejects in a
                         // non-secure context and on older Safari, and nothing awaited it, so this
                         // used to show a tick whether or not anything reached the clipboard.
-                        if (await copyText(splitOptions(m.body).text)) {
+                        if (await copyText(splitOptions(splitQuestions(m.body).text).text)) {
                           setCopied(i);
                           setTimeout(() => setCopied(null), 1200);
                         }
@@ -1060,7 +1069,11 @@ export function Scout() {
             {!busy && !editing && (() => {
               const lastBot = [...msgs].reverse().find((m) => m.role !== "user");
               if (!lastBot) return null;
-              const { text: botText, options } = splitOptions(lastBot.body);
+              const asked = splitQuestions(lastBot.body);
+              if (asked.questions.length) {
+                return <QuestionCard questions={asked.questions} onSubmit={(msg) => send(msg)} disabled={busy} />;
+              }
+              const { text: botText, options } = splitOptions(asked.text);
               const chips = options.length ? options : fallbackOptions(botText);
               const lastAsk = [...msgs].reverse().find((m) => m.role === "user")?.body;
               return (
