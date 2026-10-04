@@ -367,7 +367,7 @@ hero = section([
      "badges": [{"type": "entity", "entity": "sensor.wall_issues", "show_state": True, "show_icon": True,
                  "visibility": [{"condition": "numeric_state", "entity": "sensor.wall_issues", "above": 0}]}]},
     {"type": "tile", "entity": STATE, "name": "Projector", "grid_options": {"columns": 6}},
-    {"type": "tile", "entity": "light.wall", "name": "Wall light", "grid_options": {"columns": 6}},
+    {"type": "tile", "entity": "light.wall", "name": "Wall light", "icon": "mdi:wall-sconce-flat-outline", "grid_options": {"columns": 6}},
     {"type": "tile", "entity": "button.wall_power_on", "name": "Turn on", "icon": "mdi:power", "hide_state": True, "vertical": True,
      "grid_options": {"columns": 4}, "tap_action": {"action": "perform-action", "perform_action": "button.press",
                                                      "target": {"entity_id": "button.wall_power_on"}}},
@@ -439,18 +439,28 @@ quick = [row(BY_ID["mode"]), row(BY_ID["volume"]), row(BY_ID["sound"]), row(BY_I
          btn_row("dnd_allow_hour", action="Allow", conds=QUIET), btn_row("dnd_allow_tonight", action="Allow", conds=QUIET),
          btn_row("dnd_schedule", conds=OVR)]
 listen = [row(BY_ID["radio_on"]), {"entity": "sensor.wall_radio_station", "name": "Station"}] + radio_rows[2:]
-moments = [btn_row("show_play", "Play the show"), btn_row("show_party"), btn_row("motivate"), btn_row("show_stop", "Stop the show"),
-           btn_row("sleep_start", "Count sheep"), btn_row("sleep_stop", "Stop sheep")]
 alarm_now = [row(BY_ID["alarm_on"]), row(BY_ID["alarm_time"])]
-nav_rows = [{"type": "weblink", "name": p["title"], "icon": p["icon"], "url": "/bestly-home/wall-" + p["id"]} for p in M["panes"]]
+def nav_tile(p):
+    return {"type": "button", "name": p["title"], "icon": p["icon"], "show_state": False, "icon_height": "28px",
+            "grid_options": {"columns": 4, "rows": 2},
+            "tap_action": {"action": "navigate", "navigation_path": "/bestly-home/wall-" + p["id"]}}
+
+
+def press_tile(cid, name=None, icon=None):
+    c = BY_ID[cid]
+    return {"type": "tile", "entity": ent(c), "name": name or c["label"], "icon": icon or ICON.get(cid), "vertical": True,
+            "hide_state": True, "grid_options": {"columns": 4},
+            "tap_action": {"action": "perform-action", "perform_action": "button.press", "target": {"entity_id": ent(c)}}}
 
 main = {"title": "Wall", "path": "wall", "icon": "mdi:projector", "type": "sections", "max_columns": 3, "sections": [
     hero,
     section([header("Controls"), card("Controls", "", quick)]),
     section([header("Listen"), card("Listen", "", listen)]),
-    section([header("Moments"), card("Moments", "", moments)]),
+    section([header("Moments"), press_tile("show_play", "Show"), press_tile("show_party", "Party"),
+             press_tile("motivate", "Motivate"), press_tile("sleep_start", "Sheep"),
+             press_tile("show_stop", "Stop show"), press_tile("sleep_stop", "Stop sheep")]),
     section([header("Alarm"), card("Alarm", "", alarm_now)]),
-    section([header("Settings"), card("Settings", "", nav_rows)], 2),
+    section([header("Settings")] + [nav_tile(p) for p in M["panes"]], 2),
 ]}
 panes = [{"title": p["title"], "path": "wall-" + p["id"], "icon": p["icon"], "type": "sections", "max_columns": 3,
           "subview": True, "back_path": "/bestly-home/wall", "sections": pane_sections(p)} for p in M["panes"]]
