@@ -82,7 +82,8 @@ Card rules:
 - "eyebrow": 1 to 4 lowercase words, a small label above the head (first card always has one).
 - "big": only on a "word" card: ONE striking word or very short phrase (max 2 words, or a short number like "400 days").
 - The "closing" card has only a head, 5 to 14 words, and it is the only card that names {name}.
-- Cards before the closing card never name {name}; they must be useful to someone who never installs anything.
+- Only the closing card (and, in a carousel, the card just before it) may name {name}; the others must be useful to someone who never installs anything.
+- Every card says something new: no card repeats another card or the caption word for word.
 Caption rules: first line = the cover head without asterisks. Then 2 to 4 short paragraphs that tell the idea once
 in prose. {name} appears only in the LAST paragraph, once or twice. 35 to 140 words. No emoji, no hashtags (they
 are added separately), no questions to the reader, no "link in bio", no statistics or prices you cannot source.
@@ -109,7 +110,8 @@ def _json(text):
 REVIEW = """You are a strict fact checker for {name} posts that go live with no human review. Facts about {name}: {about}
 Check every card and the caption for: anything technically wrong or misleading about how websites, browsers, apps,
 insurance or law work; anything said about {name} beyond the facts; scare tactics; advice that could hurt someone.
-Reply with ONE JSON object only: {{"ok": true}} or {{"ok": false, "problems": ["<card or caption>: <what is wrong>", ...]}}"""
+Also score it 1-10 as a post a thoughtful reader would save: clear, accurate, specific, not repetitive, not vague or hedgy.
+Reply with ONE JSON object only: {{"ok": true|false, "score": <1-10>, "problems": ["<card or caption>: <what is wrong>", ...]}}"""
 
 
 def _review(cfg, plan, deadline):
@@ -120,7 +122,14 @@ def _review(cfg, plan, deadline):
         r = _json(msg.get("content"))
     except ValueError:
         return []          # an unreadable review is not a rejection; the rule checks already passed
-    return [] if r.get("ok") else [f"fact check: {p}" for p in (r.get("problems") or [])][:6]
+    probs = [f"fact check: {p}" for p in (r.get("problems") or [])][:6]
+    try:
+        score = float(r.get("score") or 0)
+    except (TypeError, ValueError):
+        score = 0
+    if r.get("ok") and score >= 8:
+        return []
+    return probs or [f"quality score {score:g}/10: make it clearer, more specific and more useful"]
 
 
 def _plain(t):
@@ -152,8 +161,8 @@ def _check(brand, cfg, kinds, p):
         else:
             if not 3 <= hw <= 13:
                 e.append(f"card {i} head is {hw} words")
-            if name.lower() in (head + " " + (c.get("body") or "")).lower():
-                e.append(f"card {i} names {name} (only the closing card may)")
+            if name.lower() in (head + " " + (c.get("body") or "")).lower() and i < len(kinds) - 1:
+                e.append(f"card {i} names {name} (only the last two cards may)")
             bw = len((c.get("body") or "").split())
             if not 6 <= bw <= 34:
                 e.append(f"card {i} body is {bw} words")
@@ -163,6 +172,12 @@ def _check(brand, cfg, kinds, p):
             e.append(f"card {i} (word) needs a 'big' of 1-2 words")
         if "?" in head:
             e.append(f"card {i} head asks a question")
+    import difflib
+    texts = [(c.get("body") or "").strip().lower() for c in cards if (c.get("body") or "").strip()]
+    for a in range(len(texts)):
+        for b in range(a + 1, len(texts)):
+            if difflib.SequenceMatcher(None, texts[a], texts[b]).ratio() > 0.7:
+                e.append(f"cards repeat each other ('{texts[a][:40]}...'); every card must add something new")
     blob = cap + " " + " ".join(f"{c.get('eyebrow','')} {c.get('head','')} {c.get('body','')} {c.get('big','')}" for c in cards)
     if EMOJI.search(blob) or "#" in blob:
         e.append("no emoji or hashtags anywhere")
@@ -283,6 +298,31 @@ def _make_one(brand, cfg, recent, bank_open, deadline, dry):
     return f"{brand}: '{row['title']}' [{comp}/{ground}{'/' + pose if pose else ''}, {topic}: {why}, via {prov}]", row
 
 
+def _rerun(brand, dry):
+    """Fallback when nothing new passes the bar: re-run the best-performing post from 4+ weeks ago (human-written,
+    already checked), as a fresh bank row. Better a proven post than a weak new one or an empty day."""
+    old = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 28 * 86400))
+    posts = lib.get("social_posts", f"select=id,likes,comments,scheduled_at&brand=eq.{brand}&platform=eq.instagram"
+                    f"&status=eq.posted&scheduled_at=lt.{old}&order=scheduled_at.asc&limit=60") or []
+    posts.sort(key=lambda p: -((p.get("likes") or 0) + 2 * (p.get("comments") or 0)))
+    recent_reruns = {r["slug"].split("-rerun-")[0] for r in (lib.get("social_content_bank", f"select=slug&brand=eq.{brand}&source=eq.rerun") or [])}
+    for p in posts:
+        src = (lib.get("social_content_bank", f"select=*&brand=eq.{brand}&post_id=eq.{p['id']}") or [None])[0]
+        if not src or src["slug"] in recent_reruns:
+            continue
+        row = {k: src[k] for k in ("brand", "title", "caption", "hashtags", "cards", "topic", "ground", "composition", "pose", "display_word")}
+        row.update({"slug": src["slug"] + "-rerun-" + time.strftime("%m%d"), "priority": 90, "approved": True,
+                    "approved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": "rerun"})
+        chk = lib.rpc("social_plan_check", p_brand=brand, p_ground=row["ground"], p_composition=row["composition"],
+                      p_topic=row["topic"], p_pose=row["pose"], p_word=None) or {}
+        if not chk.get("ok"):
+            continue
+        if not dry:
+            lib._req("POST", "/rest/v1/social_content_bank", row)
+        return f"{brand}: re-running '{row['title']}' (best older post)"
+    return None
+
+
 def _make(brands, dry):
     out, deadline = [], time.time() + 1500
     for brand in brands:
@@ -301,6 +341,11 @@ def _make(brands, dry):
                 out.append(line + ("\n" + json.dumps(row)[:1500] if dry else ""))
             except Exception as e:  # noqa: BLE001  one brand failing must not stop the other
                 out.append(f"{brand}: FAILED {type(e).__name__}: {str(e)[:300]}")
+                if len(bank_open) == 0:
+                    rr = _rerun(brand, dry)
+                    if rr:
+                        out.append(rr)
+                        bank_open.append({"rerun": True})
     failed = [l for l in out if "FAILED" in l]
     if failed and not dry:
         lib.notify("Daily post maker had trouble", "\n".join(failed)[:1200], severity="warning", push=False,
