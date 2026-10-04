@@ -1,0 +1,67 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+/* Bestly social card, rendered on the Pi by headless Chromium (bestly_social). Data comes in the URL hash.
+   It fits itself: shrinks the headline (then the device) until text and device don't touch, and writes
+   what it did to <body data-fit> so the job can check it with --dump-dom before posting. */
+@font-face{font-family:S;src:url(serif700.woff2);font-weight:700}
+@font-face{font-family:S;src:url(serif600.woff2);font-weight:600}
+@font-face{font-family:I;src:url(inter400.woff2);font-weight:400}
+@font-face{font-family:I;src:url(inter600.woff2);font-weight:600}
+*{box-sizing:border-box;margin:0}
+html,body{width:1080px;height:1080px;overflow:hidden;background:#08080c}
+.c{position:relative;width:1080px;height:1080px;overflow:hidden;color:#fff;
+ background:radial-gradient(circle at 92% 62%, #232b5c 0%, #151a38 30%, #0b0c18 62%, #08080c 100%)}
+.pill{position:absolute;left:70px;top:48px;width:242px;z-index:2}
+.cat{position:absolute;right:76px;top:80px;font:600 21px I;letter-spacing:.24em;color:#8a8fa8;text-transform:uppercase;z-index:2}
+.dev{position:absolute;z-index:1}
+.txt{position:absolute;left:76px;right:76px;z-index:2}
+.kick{font:600 21px I;letter-spacing:.2em;color:#8b9bf0;text-transform:uppercase;margin-bottom:28px}
+h1{font:700 88px/1.1 S;letter-spacing:-.01em;color:#fff;text-wrap:balance}
+h1 em{font-style:normal;color:#8b9bf0;white-space:nowrap}
+.bar{width:220px;height:9px;background:#8b9bf0;margin:36px 0 34px}
+p{font:400 31px/1.45 I;color:#9ea6bc}
+.foot{position:absolute;left:76px;bottom:62px;font:400 23px I;color:#c9cde0;display:flex;align-items:center;gap:12px;z-index:2}
+.foot:before{content:"";width:10px;height:10px;border-radius:50%;background:#8b9bf0}
+.swipe{position:absolute;left:76px;bottom:120px;font:600 26px I;color:#c9cde0;z-index:2}
+.num{position:absolute;right:-10px;bottom:-90px;font:700 520px/1 I;color:rgba(139,155,240,.06)}
+</style></head><body><div class="c" id="c"></div>
+<script>
+const d = JSON.parse(decodeURIComponent(location.hash.slice(1)));
+const L = {
+  A:   {top:190, hs:88, min:62, pw:600, dev:{w:640, right:-110, bottom:-70}, limit:975},
+  B:   {top:640, hs:80, min:58, pw:860, dev:{w:500, right:0, top:120}, limit:975},
+  C:   {top:200, hs:118, min:76, pw:640, dev:{w:380, right:50, bottom:70}, limit:975},
+  S1:  {top:190, hs:90, min:62, pw:600, dev:{w:640, right:-110, bottom:-70}, limit:900, swipe:true},
+  MID: {top:260, hs:80, min:58, pw:860, limit:960},
+  S5:  {top:600, hs:74, min:56, pw:880, dev:{w:500, right:-10, top:110}, limit:975},
+}[d.layout || "A"];
+const esc = s => String(s||"").replace(/[&<>]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));
+let head = esc(d.h);
+if (d.accent && d.h.includes(d.accent)) head = esc(d.h).replace(esc(d.accent), "<em>" + esc(d.accent) + "</em>");
+let h = `<img class="pill" src="pill.png">`;
+if (d.cat) h += `<div class="cat">${esc(d.cat)}</div>`;
+if (d.num) h += `<div class="num">${esc(d.num)}</div>`;
+if (L.dev && d.dev) h += `<img class="dev" id="dev" src="devices/${esc(d.dev)}">`;
+h += `<div class="txt" id="txt" style="top:${L.top}px">${d.kick?`<div class="kick">${esc(d.kick)}</div>`:''}<h1 id="h1">${head}</h1><div class="bar"></div>${d.p?`<p style="max-width:${L.pw}px">${esc(d.p)}</p>`:''}</div>`;
+if (L.swipe) h += `<div class="swipe">Swipe &rarr;</div>`;
+h += `<div class="foot">bestly.tech</div>`;
+document.getElementById('c').innerHTML = h;
+const dev = document.getElementById('dev'), txt = document.getElementById('txt'), h1 = document.getElementById('h1');
+function placeDev(w){ if(!dev) return; const s=dev.style; s.width=w+'px'; for (const k of ['right','bottom','top']) if (L.dev[k]!==undefined) s[k]=L.dev[k]+'px'; }
+function lineRects(){ const out=[]; for (const el of txt.querySelectorAll('h1,p,.kick,.bar')) {
+    if (el.classList.contains('bar')) { out.push(el.getBoundingClientRect()); continue; }
+    const r=document.createRange(); r.selectNodeContents(el); for (const x of r.getClientRects()) out.push(x); } return out; }
+function hit(){ const t=txt.getBoundingClientRect(); if (t.bottom > L.limit) return 'bottom';
+  if (!dev) return ''; const r=dev.getBoundingClientRect(), pad=-24;  // keep at least 24px clear of the device
+  // actual text lines vs the device box (plus a 24px gap)
+  return lineRects().some(x => x.left < r.right-pad && x.right > r.left+pad && x.top < r.bottom-pad && x.bottom > r.top+pad) ? 'device' : ''; }
+async function fit(){
+  await document.fonts.ready; if (dev && !dev.complete) await new Promise(r => dev.onload = r);
+  let hs = L.hs, w = L.dev ? L.dev.w : 0; h1.style.fontSize = hs+'px'; placeDev(w);
+  // Pass 1: shrink the headline. Pass 2: shrink the device.
+  for (let i=0; i<20 && hit() && hs > L.min; i++) { hs -= 3; h1.style.fontSize = hs+'px'; }
+  for (let i=0; i<4 && hit()==='device' && w > 300; i++) { w = Math.round(w*0.85); placeDev(w); }
+  const t = txt.getBoundingClientRect();
+  document.body.dataset.fit = JSON.stringify({ok: !hit(), why: hit(), hs, dev: w, bottom: Math.round(t.bottom)});
+}
+fit();
+</script></body></html>
