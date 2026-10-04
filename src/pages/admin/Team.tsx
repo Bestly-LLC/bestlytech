@@ -112,7 +112,14 @@ const isOff = (a: Agent) => !a.last_at && /^Switched off|schedule entry is gone/
 function statusLine(a: Agent): string {
   if (a.relation === "partner") return "Partner — not on the payroll";
   if (a.kind === "human") return "That's you";
-  if (a.health === "planned") return "Not hired yet";
+  if (a.health === "planned") {
+    const st = (a.profile as { onboarding?: { stage?: string } } | null)?.onboarding?.stage;
+    if (st) {
+      const i = Math.max(0, ["hired", "building", "built"].indexOf(st));
+      return `In training · step ${i + 1} of 4: ${["waiting to be built", "being built", "waiting for its first run"][i]}`;
+    }
+    return "Not hired yet";
+  }
   if (a.health === "paused") return "Paused — no alerts";
   if (isOff(a)) return a.summary ?? "Switched off";
   if (!a.last_at) return a.source === "none" ? "Can't see this one from here" : "Waiting for its first check-in";
@@ -651,7 +658,126 @@ type Hire = {
   what_it_does: string | null; why: string | null; saves: string | null; runs_on: string | null; schedule: string | null;
   cost: string | null; first_task: string | null; improver_note: string | null; improver_score: number | null;
   status: "proposed" | "vetoed" | "hired" | "passed"; decided_at: string | null; hired_slug: string | null;
+  live_at?: string | null;
+  onboarding?: { stage?: Stage; hired_at?: string; building_at?: string; built_at?: string; live_at?: string; note?: string } | null;
 };
+type Stage = "hired" | "building" | "built" | "live";
+const STAGES: { key: Stage; word: string }[] = [
+  { key: "hired", word: "Hired" }, { key: "building", word: "Being built" }, { key: "built", word: "First run" }, { key: "live", word: "Working" },
+];
+const NEXT_WORDS: Record<Stage, string> = {
+  hired: "Next: someone builds it. Copy the build plan into a Claude session. Nothing builds new bots on its own yet.",
+  building: "Next: the builder finishes and switches it on.",
+  built: "Next: its first run. The moment it checks in, it joins the crew and leaves this list.",
+  live: "Working.",
+};
+
+/** Everything a Claude build session needs, including how the hire graduates by itself. */
+function buildPlan(h: Hire): string {
+  const slug = h.hired_slug ?? "";
+  return [
+    `Build Bestly's new AI hire "${h.name}" (Team page slug: ${slug}).`,
+    "",
+    `Role: ${h.role ?? "—"}`,
+    h.what_it_does ? `What it does: ${h.what_it_does}` : "",
+    h.why ? `Why we hired it (The Recruiter): ${h.why}` : "",
+    h.improver_note ? `The Improver's take: ${h.improver_note}` : "",
+    h.runs_on ? `Runs: ${RUNS_ON_WORDS[h.runs_on] ?? h.runs_on}${h.schedule ? `, ${h.schedule}` : ""}` : "",
+    h.cost ? `Budget: ${h.cost}` : "",
+    h.first_task ? `First task: ${h.first_task}` : "",
+    "",
+    "Rules:",
+    "- Repo bestlytech (Vite/React + Supabase project rcqfqhguwpmaarseifqg). Read bestly_memory first; write decisions back when done.",
+    "- Cheapest way first: a Pi job or database schedule with free AI (free-llm edge function, paid: never). Secrets only in Supabase Vault.",
+    "- Check first that no existing bot already does this; if one does, stop and tell Jared instead of building a duplicate.",
+    `- When you start: select public.hire_stage_set('${slug}', 'building');`,
+    `- When it's deployed: select public.hire_stage_set('${slug}', 'built');`,
+    `- Watchdog: every run must call select public.agent_beat('${slug}', true, '<one-line summary>'); (ok=false when it fails).`,
+    "  Its first OK check-in graduates it to a working crew member automatically, and Team Watch tells Scout if it ever goes quiet.",
+    "- Anything that sends messages, spends money or deletes data waits for Jared's yes.",
+    "- Commit and push to main when done.",
+  ].filter((l) => l !== null && l !== undefined && l !== false as never).join("\n");
+}
+
+/** One hire in training: four steps, what's next, and the actions that move it along. */
+function TrainingCard({ h, onOpen, onChanged }: { h: Hire; onOpen: (slug: string) => void; onChanged: () => void }) {
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const stage: Stage = h.onboarding?.stage && STAGES.some((x) => x.key === h.onboarding!.stage) ? h.onboarding.stage : "hired";
+  const idx = STAGES.findIndex((x) => x.key === stage);
+  const next = STAGES[idx + 1];
+  const at = (k: Stage) => (h.onboarding as Record<string, string | undefined> | null | undefined)?.[`${k}_at`] ?? (k === "hired" ? h.decided_at ?? undefined : undefined);
+
+  const copyPlan = async () => {
+    try {
+      await navigator.clipboard.writeText(buildPlan(h));
+      toast.success("Build plan copied. Paste it into a Claude session.");
+    } catch {
+      toast.error("Couldn't copy. Open its card and ask Scout instead.");
+    }
+  };
+  const advance = async () => {
+    if (!next || !h.hired_slug) return;
+    const { error } = await supabase.rpc("hire_stage_set" as never, { p_slug: h.hired_slug, p_stage: next.key } as never);
+    if (error) { toast.error(error.message); return; }
+    toast.success(next.key === "live" ? `${h.name} is on the job.` : `${h.name}: ${next.word.toLowerCase()}.`);
+    onChanged();
+  };
+  const cancel = async () => {
+    if (!h.hired_slug) return;
+    if (!confirmCancel) { setConfirmCancel(true); window.setTimeout(() => setConfirmCancel(false), 4000); return; }
+    const { error } = await supabase.rpc("admin_hire_cancel" as never, { p_slug: h.hired_slug } as never);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${h.name}'s hire is cancelled.`);
+    onChanged();
+  };
+
+  return (
+    <li className="flex flex-col gap-3 rounded-[16px] bg-[#2C2C2E] p-4 bento:bg-[#F2F2F7]">
+      <div className="flex items-start gap-3">
+        <button type="button" onClick={() => h.hired_slug && onOpen(h.hired_slug)} aria-label={`Open ${h.name}`}
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] border border-dashed border-[#8E8E93] text-[#8E8E93]">
+          <BotMascot icon="sparkle" seed={h.hired_slug ?? h.id} asleep={stage === "hired"} className="h-8 w-8" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className={cn("text-[17px] font-semibold leading-snug", label)}>{h.name}</p>
+          <p className={cn("text-[13px]", secondary)}>{h.role}{h.runs_on ? ` · ${RUNS_ON_WORDS[h.runs_on] ?? h.runs_on}` : ""}</p>
+        </div>
+        <span className={cn("whitespace-nowrap text-[12px] font-semibold", tint.blue)}>Step {idx + 1} of 4</span>
+      </div>
+
+      {/* the four steps */}
+      <ol className="grid grid-cols-4 gap-1.5" aria-label={`Training progress: ${STAGES[idx].word}`}>
+        {STAGES.map((st, i) => {
+          const done = i < idx, now = i === idx;
+          return (
+            <li key={st.key} className="min-w-0 space-y-1">
+              <span className={cn("block h-1.5 rounded-full",
+                done ? "bg-[#30D158]" : now ? "bg-[#0A84FF] animate-pulse" : "bg-[#48484A] bento:bg-[#D1D1D6]")} />
+              <span className={cn("block truncate text-[11px] font-medium", done || now ? label : tertiary)}>{st.word}</span>
+              {(done || now) && at(st.key) && <span className={cn("block truncate text-[10px]", tertiary)}>{when(at(st.key))}</span>}
+            </li>
+          );
+        })}
+      </ol>
+
+      <p className={cn("text-[13px] leading-snug", secondary)} style={{ textWrap: "pretty" } as never}>{NEXT_WORDS[stage]}</p>
+      {h.onboarding?.note && <p className={cn("text-[12px] leading-snug", tertiary)}>Latest: {h.onboarding.note}</p>}
+
+      <div className="mt-auto flex flex-wrap items-center gap-2">
+        {stage !== "built" && <button type="button" className={btnPrimary} onClick={copyPlan}>Copy build plan</button>}
+        {next && (
+          <button type="button" className={stage === "built" ? btnPrimary : btnTinted} onClick={advance}>
+            {next.key === "building" ? "Mark as being built" : next.key === "built" ? "Mark as built" : "Mark as working"}
+          </button>
+        )}
+        <button type="button" className={cn(btnPlain, "text-[#FF453A] bento:text-[#FF3B30]")} onClick={cancel}>
+          {confirmCancel ? "Tap again to cancel" : "Cancel hire"}
+        </button>
+      </div>
+    </li>
+  );
+}
+
 const RUNS_ON_WORDS: Record<string, string> = { pi: "On the Pi", cloud: "In the cloud", claude: "Uses Claude", mac_mini: "On the Mac mini", macbook: "On your MacBook" };
 
 function SuggestedHires({ onOpen, nameOf }: { onOpen: (slug: string) => void; nameOf: (slug: string | null) => string | null }) {
@@ -672,22 +798,10 @@ function SuggestedHires({ onOpen, nameOf }: { onOpen: (slug: string) => void; na
     const { data, error } = await supabase.rpc("admin_hire_accept" as never, { p_id: h.id } as never);
     if (error) { toast.error(error.message); return; }
     const slug = String(data ?? "");
-    toast.success(`${h.name} is hired. Welcome email on its way; Scout has the build plan.`);
+    toast.success(`${h.name} is hired and in training. Welcome email on its way. Copy its build plan below to get it built.`);
+    void slug;
     qc.invalidateQueries({ queryKey: ["team-hires"] });
     qc.invalidateQueries({ queryKey: ["org-chart"] });
-    askScout(`Build our new hire: ${h.name}`, {
-      about: [
-        `New bot: ${h.name} (${h.role ?? "new role"})${slug ? `, on the Team page as "${slug}"` : ""}.`,
-        h.what_it_does ? `What it does: ${h.what_it_does}` : "",
-        h.why ? `Why (The Recruiter): ${h.why}` : "",
-        h.improver_note ? `The Improver's take: ${h.improver_note}` : "",
-        h.runs_on ? `Runs: ${RUNS_ON_WORDS[h.runs_on] ?? h.runs_on}${h.schedule ? `, ${h.schedule}` : ""}` : "",
-        h.cost ? `Expected cost: ${h.cost}` : "",
-        h.first_task ? `First task: ${h.first_task}` : "",
-        "Plan how to build it (cheapest way first: Pi + free AI), with a self-healing watchdog: it must call agent_beat with its slug every run.",
-        "When it works, set it to active on the Team page. Show me the plan and wait for my yes before building anything.",
-      ].filter(Boolean).join("\n"),
-    });
   };
 
   const pass = async (h: Hire) => {
@@ -717,7 +831,8 @@ function SuggestedHires({ onOpen, nameOf }: { onOpen: (slug: string) => void; na
   };
 
   const open = hires.filter((h) => h.status === "proposed");
-  const hired = hires.filter((h) => h.status === "hired");
+  const hired = hires.filter((h) => h.status === "hired" && !h.live_at);
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["team-hires"] }); qc.invalidateQueries({ queryKey: ["org-chart"] }); };
 
   return (
     <section id="hires" className={cn(card, "scroll-mt-24 space-y-3 p-4 sm:p-5")} aria-label="Suggested hires">
@@ -738,17 +853,31 @@ function SuggestedHires({ onOpen, nameOf }: { onOpen: (slug: string) => void; na
         </button>
       </header>
 
+      {hired.length > 0 && (
+        <div className="space-y-2">
+          <p className={cn("px-1 text-[13px] font-semibold", secondary)}>
+            In training ({hired.length}) · each one leaves this list the moment it starts working
+          </p>
+          <ul className="grid gap-3 lg:grid-cols-2">
+            {hired.map((h) => <TrainingCard key={h.id} h={h} onOpen={onOpen} onChanged={refresh} />)}
+          </ul>
+        </div>
+      )}
+
+      {hired.length > 0 && open.length > 0 && (
+        <p className={cn("px-1 pt-1 text-[13px] font-semibold", secondary)}>Waiting for your call ({open.length})</p>
+      )}
+
       {open.length === 0 && hired.length === 0 ? (
         <p className={cn("px-1 text-[15px]", secondary)}>No hires waiting. They look again Monday at 9:15&nbsp;AM.</p>
-      ) : (
+      ) : open.length === 0 ? null : (
         <ul className="grid gap-3 lg:grid-cols-2">
-          {[...open, ...hired].map((h) => (
+          {open.map((h) => (
             <li key={h.id} className="flex flex-col gap-2 rounded-[16px] bg-[#2C2C2E] p-4 bento:bg-[#F2F2F7]">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-[#BF5AF226] px-2 py-0.5 text-[11px] font-semibold text-[#BF5AF2] bento:text-[#8944AB]">Backed by both</span>
                 {h.runs_on && <span className={cn("rounded-full bg-[#7676803d] px-2 py-0.5 text-[11px] font-medium bento:bg-[#7676801f]", secondary)}>{RUNS_ON_WORDS[h.runs_on] ?? h.runs_on}</span>}
                 {h.cost && <span className={cn("text-[12px]", tertiary)}>{nb(h.cost)}</span>}
-                {h.status === "hired" && <span className={cn("ml-auto text-[12px] font-semibold", tint.blue)}>Hired · in training</span>}
               </div>
               <div>
                 <p className={cn("text-[17px] font-semibold leading-snug", label)}>{h.name}</p>
@@ -769,14 +898,8 @@ function SuggestedHires({ onOpen, nameOf }: { onOpen: (slug: string) => void; na
               )}
               {h.saves && <p className={cn("text-[13px] leading-snug", tint.green)} style={{ textWrap: "pretty" } as never}>Saves you: {nb(h.saves)}</p>}
               <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
-                {h.status === "proposed" ? (
-                  <>
-                    <button type="button" className={btnPrimary} onClick={() => hire(h)}>Hire</button>
-                    <button type="button" className={btnPlain} onClick={() => pass(h)}>Not now</button>
-                  </>
-                ) : h.hired_slug ? (
-                  <button type="button" className={btnPlain} onClick={() => onOpen(h.hired_slug!)}>See its card</button>
-                ) : null}
+                <button type="button" className={btnPrimary} onClick={() => hire(h)}>Hire</button>
+                <button type="button" className={btnPlain} onClick={() => pass(h)}>Not now</button>
               </div>
             </li>
           ))}
