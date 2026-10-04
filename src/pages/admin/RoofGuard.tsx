@@ -214,8 +214,11 @@ function LeadRow({ lead, onPick }: { lead: Lead; onPick: (lead: Lead, c: Cand) =
 // Calling side (Phase 2). Built and guarded, switched off until the voice + phone accounts exist.
 type CallStats = {
   settings: { calling_enabled: boolean; window_start_hour: number; window_end_hour: number; max_attempts: number;
-    min_gap_bdays: number; daily_cap: number; pilot_limit: number | null; agent_id: string | null; phone_number_id: string | null };
-  unverified: number; dialable: number; calls_total: number; calls_24h: number; booked: number; dnc: number;
+    min_gap_bdays: number; daily_cap: number; pilot_limit: number | null; agent_id: string | null; phone_number_id: string | null;
+    test_phone: string | null; callback_number: string | null; from_number: string | null; setup_log: { at: string; m: string }[] };
+  keys: Record<"elevenlabs_api_key" | "twilio_account_sid" | "twilio_auth_token" | "elevenlabs_webhook_secret", boolean>;
+  unverified: number; dialable: number; mobile: number; calls_total: number; test_calls: number; calls_24h: number;
+  booked: number; dnc: number; callbacks_due: number;
   by_outcome: Record<string, number>;
   openers: { key: string; label: string; active: boolean; calls: number; reached: number; kept_talking: number;
     booked: number; book_rate: number | null; score: number; script: string }[];
@@ -255,32 +258,114 @@ function OpenerTest({ openers }: { openers: CallStats["openers"] }) {
 }
 const hour12 = (h: number) => `${((h + 11) % 12) + 1}:00\u00a0${h < 12 || h === 24 ? "AM" : "PM"}`;
 
+const settingsTable = () => supabase.from("rg_settings" as never) as unknown as {
+  update: (p: Record<string, unknown>) => { eq: (c: string, v: boolean) => Promise<{ error: { message: string } | null }> };
+};
+const toE164 = (v: string) => {
+  const d = v.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+  return d.length === 10 ? `+1${d}` : null;
+};
+
+const KEY_FIELDS: { name: "elevenlabs_api_key" | "twilio_account_sid" | "twilio_auth_token"; label: string; hint: string }[] = [
+  { name: "elevenlabs_api_key", label: "ElevenLabs API key", hint: "elevenlabs.io → Developers → API keys" },
+  { name: "twilio_account_sid", label: "Twilio Account SID", hint: "Twilio Console home page, starts with AC" },
+  { name: "twilio_auth_token", label: "Twilio Auth Token", hint: "Right under the Account SID" },
+];
+
+function KeySlot({ f, saved, onSaved }: { f: (typeof KEY_FIELDS)[number]; saved: boolean; onSaved: () => void }) {
+  const [v, setV] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const save = async () => {
+    setBusy(true); setErr(null);
+    const { error } = await (supabase.rpc as unknown as (fn: string, a: Record<string, string>) => Promise<{ error: { message: string } | null }>)("rg_key_put", { p_name: f.name, p_value: v });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    setV(""); onSaved();
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="w-40 shrink-0 text-xs text-white/70">{f.label}</div>
+      {saved && !v ? <span className="inline-flex items-center gap-1 text-xs text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" /> Saved in Vault</span> : null}
+      <input type="password" autoComplete="off" value={v} onChange={(e) => setV(e.target.value)} placeholder={saved ? "Replace…" : f.hint}
+        className="min-w-[180px] flex-1 rounded-lg bg-black/20 px-2.5 py-1.5 text-xs text-white placeholder:text-white/30 ring-1 ring-white/10 focus:outline-none focus:ring-white/25" />
+      <button type="button" disabled={!v || busy} onClick={() => void save()} className="rounded-lg px-2.5 py-1.5 text-xs text-white ring-1 ring-white/15 hover:bg-white/10 disabled:opacity-40">
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}</button>
+      {err && <div className="w-full text-xs text-red-300">{err}</div>}
+    </div>
+  );
+}
+
+// Defined outside CallingCard so typing in a step's inputs never remounts them.
+function Step({ n, done, title, children }: { n: number; done: boolean; title: string; children?: React.ReactNode }) {
+  return (
+    <li className="flex gap-3">
+      {done ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+        : <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] text-white/70 ring-1 ring-white/25">{n}</span>}
+      <div className="min-w-0 flex-1">
+        <div className={cn("text-sm", done ? "text-white/55" : "text-white")}>{title}</div>
+        {children && <div className="mt-2 space-y-2">{children}</div>}
+      </div>
+    </li>
+  );
+}
+function Btn({ id, busy, onClick, children, disabled }: { id: string; busy: string | null; onClick: () => void; children: React.ReactNode; disabled?: boolean }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled || busy !== null}
+      className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white ring-1 ring-white/15 hover:bg-white/15 disabled:opacity-40">
+      {busy === id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}{children}</button>
+  );
+}
+
 function CallingCard() {
   const [c, setC] = useState<CallStats | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    void (async () => {
-      const { data, error } = await rpc("rg_call_stats");
-      if (error) setErr(error.message); else setC(data as CallStats);
-    })();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [testPhone, setTestPhone] = useState("");
+  const [cbNumber, setCbNumber] = useState("");
+  const load = useCallback(async () => {
+    const { data, error } = await rpc("rg_call_stats");
+    if (error) { setErr(error.message); return; }
+    const cs = data as CallStats;
+    setErr(null); setC(cs);
+    setTestPhone((t) => t || cs.settings.test_phone || "");
+    setCbNumber((t) => t || cs.settings.callback_number || "");
   }, []);
-  if (err) return <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load calling status: {err}</div>;
+  useEffect(() => { void load(); }, [load]);
+
+  const action = async (a: "setup" | "test_call" | "line_types", msg: string) => {
+    setBusy(a); setNote(null);
+    const { error } = await (supabase.rpc as unknown as (fn: string, x: Record<string, string>) => Promise<{ error: { message: string } | null }>)("rg_caller_action", { p_action: a });
+    setBusy(null);
+    if (error) { setErr(error.message); return; }
+    setNote(msg);
+    setTimeout(() => void load(), a === "line_types" ? 90000 : 30000);
+  };
+  const saveSetting = async (patch: Record<string, unknown>, what: string) => {
+    const { error } = await settingsTable().update({ ...patch, updated_at: new Date().toISOString(), updated_by: "admin" }).eq("id", true);
+    if (error) { setErr(error.message); return; }
+    setNote(`${what} saved.`); void load();
+  };
+
+  if (err) return <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Calling: {err}</div>;
   if (!c) return null;
   const s = c.settings;
-  const ready = !!s.agent_id && !!s.phone_number_id;
-  const steps = [
-    { done: ready, text: "Voice agent and caller phone number set up (needs your ElevenLabs and Twilio accounts)" },
-    { done: c.dialable > 0, text: `Line-type check on the ${c.unverified} found numbers, so only business landlines and VoIP get dialed` },
-    { done: false, text: "You approve the caller script, then a few test calls to your own phone" },
-    { done: s.calling_enabled, text: "Switch on for the 20-call pilot" },
-  ];
+  const keysIn = c.keys.elevenlabs_api_key && c.keys.twilio_account_sid && c.keys.twilio_auth_token;
+  const setUp = !!s.agent_id && !!s.phone_number_id;
+  const linesChecked = c.unverified === 0 && c.dialable > 0;
+  const tested = c.test_calls > 0;
+  const hasCallback = !!s.callback_number;
+  const canGoLive = keysIn && setUp && linesChecked && tested && hasCallback;
+  const lookupCost = (c.unverified * 0.008).toFixed(2);
+
   return (
     <div className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10">
       <div className="flex items-center gap-3">
         <div className={cn("grid h-10 w-10 place-items-center rounded-xl", s.calling_enabled ? "bg-emerald-500/15 text-emerald-300" : "bg-white/10 text-white/60")}>
           <Phone className="h-5 w-5" />
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="text-lg font-semibold text-white">Calling: {s.calling_enabled ? "on" : "off"}</div>
           <div className="text-xs text-white/55">
             Weekdays {hour12(s.window_start_hour)}–{hour12(s.window_end_hour)} lead's local time · up to {s.max_attempts} tries, {s.min_gap_bdays}+ business days apart · {s.daily_cap} calls/day{s.pilot_limit ? ` · pilot: ${s.pilot_limit} leads` : ""}
@@ -288,21 +373,56 @@ function CallingCard() {
         </div>
       </div>
       {c.open_issue && <p className="mt-3 text-sm text-amber-200">{c.open_issue.title}{c.open_issue.body ? `: ${c.open_issue.body}` : ""}</p>}
+      {note && <p className="mt-3 text-sm text-sky-200">{note}</p>}
       <div className="mt-4 flex flex-wrap gap-2">
         <Stat n={c.dialable} label="ready to dial" />
         <Stat n={c.calls_total} label="calls made" />
         <Stat n={c.booked} label="meetings booked" tone={c.booked > 0 ? "good" : undefined} />
+        <Stat n={c.callbacks_due} label="callbacks set" />
         <Stat n={c.dnc} label="do-not-call" />
       </div>
+
       {c.openers?.length > 0 && <OpenerTest openers={c.openers} />}
+
       {!s.calling_enabled && (
+        <div className="mt-5">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/45">Go live</div>
+          <ol className="space-y-4">
+            <Step n={1} done={keysIn} title="Open an ElevenLabs account and a Twilio account, buy one local number in Twilio, then paste the 3 keys here. They go straight to Vault and never show again.">
+              {KEY_FIELDS.map((f) => <KeySlot key={f.name} f={f} saved={c.keys[f.name]} onSaved={() => { setNote(`${f.label} saved in Vault.`); void load(); }} />)}
+            </Step>
+            <Step n={2} done={setUp} title={setUp ? `Voice agent set up, calling from ${s.from_number ?? "your Twilio number"}` : "Set up the voice agent (script, voice, 3 openers, voicemail, call logging), all automatic"}>
+              {keysIn && <Btn busy={busy} id="setup" onClick={() => void action("setup", "Setting up the voice agent… this takes about 30 seconds.")}>{setUp ? "Re-run setup" : "Set up voice agent"}</Btn>}
+              {s.setup_log?.length > 0 && <ul className="space-y-0.5 text-xs text-white/50">{s.setup_log.map((l, i) => <li key={i}>{l.m}</li>)}</ul>}
+            </Step>
+            <Step n={3} done={linesChecked} title={linesChecked ? `Line types checked · ${c.mobile} mobiles skipped` : `Check which of the ${c.unverified} numbers are business lines (about $${lookupCost} in Twilio lookups); mobiles are never called`}>
+              {keysIn && !linesChecked && <Btn busy={busy} id="line_types" onClick={() => void action("line_types", "Checking line types… up to 400 per run, about 90 seconds. Press again if some remain.")}>Check line types</Btn>}
+            </Step>
+            <Step n={4} done={tested} title={tested ? `Test call done (${c.test_calls})` : "Test call: Ava calls your phone with a real lead's script"}>
+              <div className="flex flex-wrap items-center gap-2">
+                <input value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="Your cell, e.g. (816) 500-7236" inputMode="tel"
+                  className="w-56 rounded-lg bg-black/20 px-2.5 py-1.5 text-xs text-white placeholder:text-white/30 ring-1 ring-white/10 focus:outline-none focus:ring-white/25" />
+                <Btn busy={busy} id="test_phone" disabled={!toE164(testPhone)} onClick={() => void saveSetting({ test_phone: toE164(testPhone) }, "Test number")}>Save</Btn>
+                {setUp && s.test_phone && <Btn busy={busy} id="test_call" onClick={() => void action("test_call", "Calling your phone now…")}>Call my phone</Btn>}
+              </div>
+            </Step>
+            <Step n={5} done={hasCallback} title="Callback number Ava reads out in voicemails (required on automated calls)">
+              <div className="flex flex-wrap items-center gap-2">
+                <input value={cbNumber} onChange={(e) => setCbNumber(e.target.value)} placeholder="Number prospects can call back" inputMode="tel"
+                  className="w-56 rounded-lg bg-black/20 px-2.5 py-1.5 text-xs text-white placeholder:text-white/30 ring-1 ring-white/10 focus:outline-none focus:ring-white/25" />
+                <Btn busy={busy} id="cb" disabled={!toE164(cbNumber)} onClick={() => void saveSetting({ callback_number: toE164(cbNumber) }, "Callback number")}>Save</Btn>
+              </div>
+            </Step>
+            <Step n={6} done={false} title="Turn on the 20-lead pilot (weekdays, local business hours, max 20 calls a day)">
+              <Btn busy={busy} id="golive" disabled={!canGoLive} onClick={() => void saveSetting({ calling_enabled: true, pilot_limit: 20 }, "Pilot is on")}>Start pilot</Btn>
+              {!canGoLive && <div className="text-xs text-white/40">Unlocks when steps 1–5 are done.</div>}
+            </Step>
+          </ol>
+        </div>
+      )}
+      {s.calling_enabled && (
         <div className="mt-4">
-          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">Before the first call</div>
-          <ol className="space-y-1.5">{steps.map((st, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm">
-              {st.done ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" /> : <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] text-white/60 ring-1 ring-white/25">{i + 1}</span>}
-              <span className={st.done ? "text-white/50 line-through" : "text-white/80"}>{st.text}</span>
-            </li>))}</ol>
+          <Btn busy={busy} id="pause" onClick={() => void saveSetting({ calling_enabled: false }, "Calling paused")}>Pause calling</Btn>
         </div>
       )}
     </div>

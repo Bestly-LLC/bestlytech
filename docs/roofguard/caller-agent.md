@@ -212,3 +212,18 @@ writes them through rg_record_call().
 
 Webhook URL (after deploy): `https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/roofguard-caller?hook=elevenlabs`,
 HMAC secret stored in Vault as `elevenlabs_webhook_secret`. Dynamic variables passed on every call: `lead_id`, `opener_key`, `gk_opener`, `dm_opener` (slots already filled), `industry_plural`, `industry_hook`, plus the lead fields.
+
+## Go-live checklist (built 2026-10-04, all on /admin/roofguard → Calling)
+
+1. Jared opens ElevenLabs + Twilio accounts, buys one local Twilio number, pastes 3 keys into the page
+   (rg_key_put → Vault, write-only): elevenlabs_api_key, twilio_account_sid, twilio_auth_token.
+2. "Set up voice agent" → roofguard-caller `setup`: finds the Twilio number, creates the HMAC post-call webhook
+   (secret → Vault via rg_secret_put), creates/updates the agent (prompt, voice Sarah EXAVITQu4vr4xnSDxMaL,
+   eleven_flash_v2_5, gemini-2.5-flash, end_call + voicemail_detection, data collection), imports the number.
+3. "Check line types" → Twilio Lookup line_type_intelligence (~$0.008 each), mobiles marked and never dialed.
+4. "Call my phone" → one is_test call with a real lead's script; never touches the lead or the A/B scoreboard.
+5. Callback number for voicemails (required on artificial-voice calls).
+6. "Start pilot" → calling_enabled = true, pilot_limit = 20. cron roofguard-dial runs tick every 5 min only while on.
+
+Also running: callbacks (rg_leads.next_call_at, due 10 min early, ahead of the queue), daily Scout report
+(cron roofguard-daily-report, weekdays ~5:20 PM Pacific), watchdog rg_watch_calls (every 10 min).
