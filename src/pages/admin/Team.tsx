@@ -13,6 +13,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { AdminMark } from "@/components/AdminMark";
+import { BotMascot, hasMascot } from "@/components/admin/BotMascot";
 import { askScout } from "@/components/admin/scoutBus";
 import { pollInterval } from "@/lib/polling";
 import { cn } from "@/lib/utils";
@@ -150,6 +151,7 @@ function AgentIcon({ a, size = "md" }: { a: Agent; size?: "md" | "lg" }) {
     );
   }
   const Icon = (a.icon && ICONS[a.icon]) || (a.kind === "human" ? Crown : Bot);
+  const mascot = a.kind !== "human";   // every bot gets an animated mascot like Scout; people keep their icon
   const tone =
     a.relation === "partner" ? "bg-[#64D2FF26] text-[#64D2FF] bento:bg-[#32ADE61f] bento:text-[#0071A4]"
       : a.kind === "human" ? "bg-[#FFD60A26] text-[#FFD60A] bento:bg-[#FFCC001f] bento:text-[#A05A00]"
@@ -157,7 +159,13 @@ function AgentIcon({ a, size = "md" }: { a: Agent; size?: "md" | "lg" }) {
       : "bg-[#0A84FF1f] text-[#409CFF] bento:bg-[#007AFF14] bento:text-[#007AFF]";
   return (
     <span className={cn(box, "grid shrink-0 place-items-center", tone)}>
-      <Icon className={size === "lg" ? "h-7 w-7" : "h-[22px] w-[22px]"} />
+      {mascot ? (
+        <BotMascot icon={a.icon && hasMascot(a.icon) ? a.icon : "bot"} seed={a.slug}
+          asleep={a.health === "planned" || a.health === "paused" || isOff(a)}
+          className={size === "lg" ? "h-10 w-10" : "h-8 w-8"} />
+      ) : (
+        <Icon className={size === "lg" ? "h-7 w-7" : "h-[22px] w-[22px]"} />
+      )}
     </span>
   );
 }
