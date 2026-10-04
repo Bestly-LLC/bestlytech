@@ -60,14 +60,16 @@ class Dav:
                               {"Depth": "0", "Content-Type": "application/xml"}, ok=(207, 404))
         if code != 404:
             return False
-        self.req("MKCALENDAR", self.cal, f'''<?xml version="1.0" encoding="UTF-8"?>
-<c:mkcalendar xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:a="http://apple.com/ns/ical/">
+        # Extended MKCOL (RFC 5689): the proxy in front of Nextcloud answers 501 to the MKCALENDAR method.
+        self.req("MKCOL", self.cal, f'''<?xml version="1.0" encoding="UTF-8"?>
+<d:mkcol xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:a="http://apple.com/ns/ical/">
  <d:set><d:prop>
+  <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
   <d:displayname>{LIST_NAME}</d:displayname>
   <a:calendar-color>#2F6FEB</a:calendar-color>
   <c:supported-calendar-component-set><c:comp name="VTODO"/></c:supported-calendar-component-set>
  </d:prop></d:set>
-</c:mkcalendar>''', {"Content-Type": "application/xml"})
+</d:mkcol>''', {"Content-Type": "application/xml"})
         return True
 
     def items(self):
