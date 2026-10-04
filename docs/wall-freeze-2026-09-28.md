@@ -116,3 +116,47 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - **After the 9:54 PM projector reboot there were still 3 graphics restarts** (10:14, 10:50 and 11:04 PM, in ambient mode). The new escalation correctly held off because of the 6-hour reboot cap.
   - **After 11:04 PM it was steady** at 212 to 217 MB and 44 fps until the trace stopped at 11:16 PM.
   - **Overnight the projector shut itself off in standby** again: unreachable since 1:34 AM, ping silent, and Wake-on-LAN every 15 minutes had no effect. The Pi raised `wall.offline` at 6:59 AM ("press the power button on the Nebula remote"). This is still the known deep-standby crash, and it needs someone to press the button.
+
+## Oct 3, 10 PM: the Pi now draws the wall, and the projector only plays video
+
+**Why.** Every freeze traced back to the projector drawing the page itself. It has 2 GB RAM, a weak GPU, and Google TV running alongside. Graphics memory sat at 200–440 MB, and the GPU hangs start at about 270 MB. Jared's goal: stable, with the same look and the same connection.
+
+**How it works now.**
+- `bestly-wall-stream.service` on the Pi (user pi) runs `/opt/bestly/stream/stream.sh`:
+  - cage (headless Wayland, V3D GPU) runs Chromium in kiosk mode at `http://127.0.0.1:8099/?src=pi`. It's the exact same wall page, unchanged.
+  - wf-recorder captures it with x264 (ultrafast, zerolatency, 25 fps), and ffmpeg adds the page sound (from the snd-aloop "Loopback" card, encoded as opus).
+  - The result is published over RTSP to go2rtc as stream `wall`.
+- The projector's Fully kiosk opens `http://192.168.1.211:8099/stream` (`www/player.html`):
+  - It plays `/wall.mp4` through MediaSource. `server.py` proxies go2rtc's `stream.mp4`.
+  - It keeps itself near live: it plays at 1.12x when more than 0.7 s behind, and seeks when more than 3 s behind.
+- **Fallback is automatic.** If the player gets no video for 25 s, it loads the normal wall page, so the projector draws it again, exactly like before. `stream_watch` brings the projector back to the stream once the stream has been healthy for 2 minutes.
+- **Switch:** the file `/opt/bestly/stream/ON`. Delete it to go back to the old method; the watchdog's `WALL_URL` follows the file.
+- WebRTC was tried and dropped: about 30% RTP loss on the projector and 0 decoded frames. Plain progressive MP4 also played, but drifted about 4 minutes behind.
+
+**Results at the first check (9:53 PM):**
+
+| | Before (projector draws) | Now (stream) |
+|---|---|---|
+| Projector graphics memory | 200–440 MB | 62 MB |
+| Frame rate on the wall | 10–28 fps | 24–28 fps |
+| Delay | — | about 1 s (lag 0.8–2 s) |
+| Sound | — | plays |
+
+- Pi CPU is about 50% for the whole pipeline.
+
+**Watchdog (`watchdog.py`, Oct 3 10 PM patch, backup `.bak_streammode_*`):**
+- `stream_mode(hb)` is true when the flag exists and the player reports `showing=stream`. In that mode the heartbeat's fps and clock come from the Pi's copy of the page.
+- `hang_check` and the main "page heartbeat stale" check use the player's beat (`stream.player_age_s`) for projector liveness. A stale Pi page is `stream_watch`'s job.
+- `stream_slow_check`:
+  - Pi copy under 12 fps for 3 checks → reload just that page over CDP (`pi_tap.py reload`). The stream keeps running and the projector isn't touched.
+  - Player under 12 fps for 3 checks → restart Fully.
+  - Max 2 fixes an hour each, then it tells Scout.
+- `slow_diag` (which records projector CPU and GPU) is skipped in stream mode.
+- **Night:** when the projector sleeps, the watchdog stops the stream service, and starts it again on wake. During that minute the projector shows its own copy, then the watchdog moves it back to the stream.
+- These still apply unchanged, since they watch the projector itself: the graphics-memory guard, the repaint-stall and frozen-screen checks, and memory trimming.
+- `stream.sh` heals itself:
+  - It restarts the encoder if it dies.
+  - It exits (and systemd restarts the service) if the Pi page heartbeat stays over 90 s for 3 checks.
+  - It clicks to unlock the Pi page's sound when that sound is locked.
+  - It refreshes the page daily at 4:10 AM.
+- Scout key: `wall.stream`.
