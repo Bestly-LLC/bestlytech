@@ -146,6 +146,8 @@ def _check(brand, cfg, kinds, p):
     w = len(cap.split())
     if w < 30 or w > 160:
         e.append(f"caption is {w} words (want 35-140)")
+    if len(paras) < 3:
+        e.append("caption needs 3 to 5 short paragraphs separated by blank lines")
     if name.lower() not in (paras[-1].lower() if paras else ""):
         e.append(f"caption must name {name} in its last paragraph")
     if any(name.lower() in x.lower() for x in paras[:-1]):
@@ -173,6 +175,11 @@ def _check(brand, cfg, kinds, p):
         if "?" in head:
             e.append(f"card {i} head asks a question")
     import difflib
+    title = _plain(p.get("title") or "").lower()
+    for old in _PAST.get(brand, []):
+        if difflib.SequenceMatcher(None, title, old.lower()).ratio() > 0.6:
+            e.append(f"too close to an earlier post ('{old}'); pick a different idea")
+            break
     texts = [(c.get("body") or "").strip().lower() for c in cards if (c.get("body") or "").strip()]
     for a in range(len(texts)):
         for b in range(a + 1, len(texts)):
@@ -192,6 +199,9 @@ def _check(brand, cfg, kinds, p):
             if r.get("ok") is False:   # hard OR soft: nobody reviews these before they post
                 e.append(f"{where} broke the claim rule '{r.get('reason')}' - rephrase without it")
     return e
+
+
+_PAST = {}   # brand -> every title it has used (novelty check)
 
 
 def _recent(brand, n=14):
@@ -238,13 +248,15 @@ def _pick(brand, cfg, recent, bank_open):
 def _make_one(brand, cfg, recent, bank_open, deadline, dry):
     topic, why, comp, ground, pose = _pick(brand, cfg, recent, bank_open)
     kinds = cfg["comps"][comp]
-    ex = lib.get("social_content_bank", f"select=title,caption,cards&brand=eq.{brand}&composition=eq.{comp}"
-                 "&order=created_at.desc&limit=2") or []
+    ex = [x for x in (lib.get("social_content_bank", f"select=title,caption,cards,topic&brand=eq.{brand}&composition=eq.{comp}"
+                              "&order=created_at.desc&limit=6") or []) if (x.get("topic") or "") != topic][:2]
+    for x in ex:
+        x.pop("topic", None)
     lessons = _lessons(brand)
     recent_titles = "\n".join(f"- {(r.get('caption') or '').splitlines()[0][:90]} (likes {r.get('likes')}, comments {r.get('comments')})"
                               for r in recent[:12])
     user = (f"Topic: {topic}\nCard layout (kinds in order): {kinds}\n\n"
-            f"Two earlier posts with this layout, for voice and length (do not reuse their ideas):\n{json.dumps(ex)[:3500]}\n\n"
+            f"Two earlier posts with this layout, ONLY for voice and length. Do not reuse their ideas, facts or words:\n{json.dumps(ex)[:3500]}\n\n"
             f"Recent posts (do not repeat their ideas):\n{recent_titles}\n"
             + ("\nWhat we have learned (observations with sample sizes):\n" + "\n".join(f"- {l}" for l in lessons[:5]) if lessons else ""))
     msgs = [{"role": "system", "content": SYS.format(name=cfg["name"], about=cfg["about"], n=len(kinds))},
@@ -334,6 +346,7 @@ def _make(brands, dry):
             out.append(f"{brand}: {len(bank_open)} ready, nothing to make")
             continue
         recent = _recent(brand)
+        _PAST[brand] = [r["title"] for r in (lib.get("social_content_bank", f"select=title&brand=eq.{brand}") or []) if r.get("title")]
         for _ in range(max(need, 1)):
             try:
                 line, row = _make_one(brand, cfg, recent, bank_open, deadline, dry)
