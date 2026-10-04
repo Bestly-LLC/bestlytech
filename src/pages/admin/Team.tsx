@@ -784,6 +784,7 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
   const [looking, setLooking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scene, setScene] = useState<Leaver[] | null>(null);
+  const [preview, setPreview] = useState<{ key: number; leavers: Leaver[] } | null>(null);
   const { data: moves = [] } = useQuery({
     queryKey: ["team-reorgs"],
     queryFn: async () => {
@@ -894,7 +895,13 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
       </header>
 
       {open.length === 0 ? (
-        <p className={cn("px-1 text-[15px]", secondary)}>Nobody to let go. The next review is Monday at 9:30&nbsp;AM.</p>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <p className={cn("text-[15px]", secondary)}>Nobody to let go. The next review is Monday at 9:30&nbsp;AM.</p>
+          <button type="button" className={btnPlain}
+            onClick={() => setPreview({ key: Date.now(), leavers: [{ id: "preview", slug: "preview", name: "Demo Bot", icon: "bot", intoName: "Scout" }] })}>
+            Preview the farewell
+          </button>
+        </div>
       ) : (
         <ul className="grid gap-3 lg:grid-cols-2">
           {open.map((m) => (
@@ -954,6 +961,15 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
             leavers={scene}
             onDone={finish}
             onUndo={() => { const ids = scene.map((l) => l.id); setScene(null); void undo(ids); }}
+          />
+        )}
+        {preview && (
+          <FarewellScene
+            key={preview.key}
+            preview
+            leavers={preview.leavers}
+            onDone={() => setPreview(null)}
+            onUndo={() => setPreview({ ...preview, key: Date.now() })}
           />
         )}
       </AnimatePresence>

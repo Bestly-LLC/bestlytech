@@ -17,10 +17,12 @@ export type Leaver = { id: string; slug: string; name: string; icon: string | nu
 
 const SPRING = { type: "spring", stiffness: 380, damping: 26 } as const;
 
-export function FarewellScene({ leavers, onDone, onUndo }: {
+export function FarewellScene({ leavers, onDone, onUndo, preview = false }: {
   leavers: Leaver[];
   onDone: () => void;
   onUndo: () => void;
+  /** play the scene without anyone actually leaving */
+  preview?: boolean;
 }) {
   const reduce = useReducedMotion();
   // 0 enter · 1 thanks · 2 box · 3 sigh · 4 walk out · 5 caption
@@ -131,17 +133,24 @@ export function FarewellScene({ leavers, onDone, onUndo }: {
               <p className="text-[20px] font-semibold leading-tight">{title}</p>
               <p className="text-[15px] leading-snug opacity-80">{detail}</p>
               <p className="pt-1 text-[13px] leading-snug opacity-60">
-                Scout has the plan to switch {one ? "its job" : "their jobs"} off and waits for your yes.
+                {preview ? "Just a preview. Nobody actually left." : `Scout has the plan to switch ${one ? "its job" : "their jobs"} off and waits for your yes.`}
               </p>
               <div className="flex flex-wrap items-center gap-2 pt-3">
                 <button type="button" autoFocus onClick={onDone}
                   className="min-h-[44px] rounded-full bg-[#0A84FF] px-5 text-[15px] font-semibold text-white active:opacity-80">
                   Done
                 </button>
-                <button type="button" onClick={onUndo}
-                  className="min-h-[44px] rounded-full px-4 text-[15px] font-medium text-[#409CFF] active:opacity-70 bento:text-[#007AFF]">
-                  Undo
-                </button>
+                {preview ? (
+                  <button type="button" onClick={onUndo}
+                    className="min-h-[44px] rounded-full px-4 text-[15px] font-medium text-[#409CFF] active:opacity-70 bento:text-[#007AFF]">
+                    Play again
+                  </button>
+                ) : (
+                  <button type="button" onClick={onUndo}
+                    className="min-h-[44px] rounded-full px-4 text-[15px] font-medium text-[#409CFF] active:opacity-70 bento:text-[#007AFF]">
+                    Undo
+                  </button>
+                )}
               </div>
             </motion.div>
           ) : (
