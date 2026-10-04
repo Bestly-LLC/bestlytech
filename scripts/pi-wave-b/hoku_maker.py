@@ -330,7 +330,7 @@ def _write(fmt, layout, topic, posts, past, deadline):
             + ("\nWhat we have learned (observations with sample sizes):\n" + "\n".join(f"- {l}" for l in lessons[:5]) if lessons else ""))
     msgs = [{"role": "system", "content": SYS.format(about=ABOUT, format_rules=rules, schema=schema)},
             {"role": "user", "content": user}]
-    errs, plan, prov = [], None, None
+    errs, plan, prov, tries = [], None, None, []
     for _ in range(4):
         msg, prov = freellm.chat(msgs, None, max_tokens=3000, deadline=deadline, json_mode=True)
         try:
@@ -338,6 +338,7 @@ def _write(fmt, layout, topic, posts, past, deadline):
             errs = _check(fmt, layout, plan, past)
             if not errs:
                 errs = _review(plan, deadline)
+            tries.append(f"{prov}: '{plan.get('title')}' -> {'; '.join(errs)[:200] or 'ok'}")
         except (ValueError, TypeError, KeyError, AttributeError) as e:
             plan, errs = None, [f"reply was not the JSON asked for ({e}; {prov})"]
             continue
@@ -345,7 +346,7 @@ def _write(fmt, layout, topic, posts, past, deadline):
             return plan, prov
         msgs += [{"role": "assistant", "content": (msg.get("content") or "")[:4000]},
                  {"role": "user", "content": "Fix these and reply with the JSON only: " + "; ".join(errs)}]
-    raise RuntimeError("post failed the rules 4 times: " + "; ".join(errs)[:500])
+    raise RuntimeError(f"[{fmt}/{layout}, {topic}] post failed the rules 4 times: " + " || ".join(tries)[:900])
 
 
 # ---------------------------------------------------------------- render + upload
