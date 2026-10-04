@@ -211,6 +211,69 @@ function LeadRow({ lead, onPick }: { lead: Lead; onPick: (lead: Lead, c: Cand) =
   );
 }
 
+// Calling side (Phase 2). Built and guarded, switched off until the voice + phone accounts exist.
+type CallStats = {
+  settings: { calling_enabled: boolean; window_start_hour: number; window_end_hour: number; max_attempts: number;
+    min_gap_bdays: number; daily_cap: number; pilot_limit: number | null; agent_id: string | null; phone_number_id: string | null };
+  unverified: number; dialable: number; calls_total: number; calls_24h: number; booked: number; dnc: number;
+  by_outcome: Record<string, number>;
+  open_issue: { title: string; body: string | null } | null;
+};
+const hour12 = (h: number) => `${((h + 11) % 12) + 1}:00\u00a0${h < 12 || h === 24 ? "AM" : "PM"}`;
+
+function CallingCard() {
+  const [c, setC] = useState<CallStats | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    void (async () => {
+      const { data, error } = await rpc("rg_call_stats");
+      if (error) setErr(error.message); else setC(data as CallStats);
+    })();
+  }, []);
+  if (err) return <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load calling status: {err}</div>;
+  if (!c) return null;
+  const s = c.settings;
+  const ready = !!s.agent_id && !!s.phone_number_id;
+  const steps = [
+    { done: ready, text: "Voice agent and caller phone number set up (needs your ElevenLabs and Twilio accounts)" },
+    { done: c.dialable > 0, text: `Line-type check on the ${c.unverified} found numbers, so only business landlines and VoIP get dialed` },
+    { done: false, text: "You approve the caller script, then a few test calls to your own phone" },
+    { done: s.calling_enabled, text: "Switch on for the 20-call pilot" },
+  ];
+  return (
+    <div className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10">
+      <div className="flex items-center gap-3">
+        <div className={cn("grid h-10 w-10 place-items-center rounded-xl", s.calling_enabled ? "bg-emerald-500/15 text-emerald-300" : "bg-white/10 text-white/60")}>
+          <Phone className="h-5 w-5" />
+        </div>
+        <div>
+          <div className="text-lg font-semibold text-white">Calling: {s.calling_enabled ? "on" : "off"}</div>
+          <div className="text-xs text-white/55">
+            Weekdays {hour12(s.window_start_hour)}–{hour12(s.window_end_hour)} lead's local time · up to {s.max_attempts} tries, {s.min_gap_bdays}+ business days apart · {s.daily_cap} calls/day{s.pilot_limit ? ` · pilot: ${s.pilot_limit} leads` : ""}
+          </div>
+        </div>
+      </div>
+      {c.open_issue && <p className="mt-3 text-sm text-amber-200">{c.open_issue.title}{c.open_issue.body ? `: ${c.open_issue.body}` : ""}</p>}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Stat n={c.dialable} label="ready to dial" />
+        <Stat n={c.calls_total} label="calls made" />
+        <Stat n={c.booked} label="meetings booked" tone={c.booked > 0 ? "good" : undefined} />
+        <Stat n={c.dnc} label="do-not-call" />
+      </div>
+      {!s.calling_enabled && (
+        <div className="mt-4">
+          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">Before the first call</div>
+          <ol className="space-y-1.5">{steps.map((st, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm">
+              {st.done ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" /> : <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] text-white/60 ring-1 ring-white/25">{i + 1}</span>}
+              <span className={st.done ? "text-white/50 line-through" : "text-white/80"}>{st.text}</span>
+            </li>))}</ol>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RoofGuard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -308,6 +371,8 @@ export default function RoofGuard() {
             Ready to dial = line type checked as a business landline or VoIP. That check comes with the dialer (Phase 2); mobiles are never called.</p>
         </div>
       )}
+
+      <CallingCard />
 
       <div className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10">
         <div className="mb-3 flex flex-wrap items-center gap-2">

@@ -215,10 +215,16 @@ function extract(html: string, url: string, lead: Lead, footerBias: boolean): Ca
     const ctx = `${before} ${textOf(m[2])}`;
     out.push({ e164: n.e164, display: n.display, source: "website", url, context: ctx.trim().slice(-120), score: scoreNumber(n, lead, 62, ctx) });
   }
+  // schema.org JSON-LD / microdata "telephone": sites put the main line here even when the page renders it with JS
+  for (const m of html.matchAll(/["']telephone["']\s*:\s*["']([^"']{7,30})["']|itemprop=["']telephone["'][^>]*>([^<]{7,30})</gi)) {
+    const n = normalize(m[1] ?? m[2] ?? "");
+    if (!n) continue;
+    out.push({ e164: n.e164, display: n.display, source: "website", url, context: "schema.org telephone", score: scoreNumber(n, lead, 64, "main phone") });
+  }
   const text = textOf(html);
   for (const m of text.matchAll(PHONE_RE)) {
-    const pre = text.slice(Math.max(0, m.index! - 4), m.index!);
-    if (/[+\d]\s?\d{0,3}$/.test(pre) && !m[0].startsWith("+1")) continue; // tail of an international number
+    const pre = text.slice(Math.max(0, m.index! - 7), m.index!);
+    if (/\+\d{1,3}[\s.\-]?\(?$/.test(pre) && !m[0].startsWith("+1")) continue; // tail of an international number (a zip code before it is fine)
     const n = normalize(m[0]);
     if (!n) continue;
     const ctx = text.slice(Math.max(0, m.index! - 70), m.index! + m[0].length);
@@ -247,9 +253,20 @@ async function scrapeSite(site: string, lead: Lead, prefetched?: string): Promis
   if (!home.ok && site.startsWith("http://")) home = await get(site.replace("http://", "https://"), { browser: true });
   if (!home.ok || isBotWall(home.body)) return { cands: [], final: site };
   const cands = extract(home.body, home.url, lead, true);
+  const origin = new URL(home.url).origin;
+  // a deep link (a campus page, a /zh-tw/ locale) can hide the main line that the site root shows
+  if (new URL(home.url).pathname.length > 1) {
+    const root = await get(origin + "/", { browser: true });
+    if (root.ok && !isBotWall(root.body)) cands.push(...extract(root.body, root.url, lead, true));
+  }
   const pages = contactLinks(home.body, home.url);
-  if (!pages.length) pages.push(new URL("/contact", home.url).toString(), new URL("/contact-us", home.url).toString());
-  for (const p of pages.slice(0, 2)) {
+  for (const fallback of ["/contact", "/contact-us", "/about", "/about-us", "/locations"]) {
+    if (pages.length >= 4) break;
+    const u = origin + fallback;
+    if (!pages.includes(u)) pages.push(u);
+  }
+  for (const p of pages.slice(0, 4)) {
+    if (cands.some((c) => c.score >= 75)) break;
     const r = await get(p, { browser: true });
     if (r.ok) cands.push(...extract(r.body, r.url, lead, false).map((c) => ({ ...c, score: c.score + 3 })));
   }
