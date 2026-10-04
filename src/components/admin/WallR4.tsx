@@ -72,38 +72,50 @@ function TimeSelect({ id, value, onChange, label, disabled }: { id: string; valu
   );
 }
 
-/** Do Not Disturb card: status line, schedule switch, from/to, and quick overrides. */
-export function DndCard({ dnd, onChange }: { dnd: Dnd | null | undefined; onChange: (d: Dnd, msg: string) => void }) {
-  const [, tick] = useState(0);
-  useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 20000); return () => clearInterval(t); }, []);
+type DndQuick = { id: string; label: React.ReactNode; p: Partial<Dnd>; msg: string; icon: React.ElementType };
+
+/** Status line and the quick overrides that fit right now. Shared by the full card and the compact Now version.
+ *  Quick ids match the manifest (src/config/wall-controls.json) control ids without the "dnd_" prefix. */
+function dndModel(dnd: Dnd | null | undefined, now = Date.now()) {
   const d: Dnd = { ...DND_DEFAULT, ...(dnd ?? {}) };
-  const now = Date.now();
   const ev = dndEval(d, now);
   const ovr = ev.why === "override";
   const status = ev.on
     ? (ev.until ? <>Quiet until <NW>{time12(ev.until)}</NW></> : "Quiet")
     : ev.why === "off" ? "Off. Sounds and pop-ups any time."
     : ev.until ? <>Sounds on. Quiet starts at <NW>{time12(ev.until)}</NW></> : "Sounds on";
-  const set = (p: Partial<Dnd>, msg: string) => onChange({ ...d, ...p }, msg);
   const hour = now + 3600_000;
   const morning = nextAt(d.to, now);
   const night = nextAt(d.from, now);
-  type Quick = { label: React.ReactNode; p: Partial<Dnd>; msg: string; icon: React.ElementType };
-  const quick: Quick[] = ev.on
-    ? [{ label: <>Allow sounds for 1{" "}hour</>, p: { override: { mode: "off" as const, until: hour } }, msg: `Sounds allowed until ${time12(hour)}.`, icon: Volume2 },
+  const quick: DndQuick[] = ev.on
+    ? [{ id: "allow_hour", label: <>Allow sounds for 1{" "}hour</>, p: { override: { mode: "off" as const, until: hour } }, msg: `Sounds allowed until ${time12(hour)}.`, icon: Volume2 },
 ]
-    : [{ label: <>Quiet for 1{" "}hour</>, p: { override: { mode: "on" as const, until: hour } }, msg: `Quiet until ${time12(hour)}.`, icon: Moon },
-       { label: <>Quiet until <NW>{label12(d.to)}</NW></>, p: { override: { mode: "on" as const, until: morning } }, msg: `Quiet until ${time12(morning)}.`, icon: Moon }];
+    : [{ id: "quiet_hour", label: <>Quiet for 1{" "}hour</>, p: { override: { mode: "on" as const, until: hour } }, msg: `Quiet until ${time12(hour)}.`, icon: Moon },
+       { id: "quiet_morning", label: <>Quiet until <NW>{label12(d.to)}</NW></>, p: { override: { mode: "on" as const, until: morning } }, msg: `Quiet until ${time12(morning)}.`, icon: Moon }];
   if (ev.on && d.on && !ovr) {
-    quick.push({ label: <>Allow sounds until <NW>{label12(d.to)}</NW></>, p: { override: { mode: "off" as const, until: morning } }, msg: `Sounds allowed until ${time12(morning)}.`, icon: Volume2 });
+    quick.push({ id: "allow_morning", label: <>Allow sounds until <NW>{label12(d.to)}</NW></>, p: { override: { mode: "off" as const, until: morning } }, msg: `Sounds allowed until ${time12(morning)}.`, icon: Volume2 });
   }
   if (!ev.on && d.on && !ovr && night - now < 6 * 3600_000) {
-    quick.push({ label: <>Allow sounds past <NW>{label12(d.from)}</NW></>, p: { override: { mode: "off" as const, until: nextAt(d.to, night) } }, msg: `Sounds allowed tonight, until ${time12(nextAt(d.to, night))}.`, icon: Volume2 });
+    quick.push({ id: "allow_tonight", label: <>Allow sounds past <NW>{label12(d.from)}</NW></>, p: { override: { mode: "off" as const, until: nextAt(d.to, night) } }, msg: `Sounds allowed tonight, until ${time12(nextAt(d.to, night))}.`, icon: Volume2 });
   }
+  return { d, ev, ovr, status, quick };
+}
+
+/** Do Not Disturb card: status line, schedule switch, from/to, and quick overrides.
+ *  `compact` (the Now area) keeps only the status line, Schedule and the quick buttons listed in `only`. */
+export function DndCard({ dnd, onChange, compact, only }: {
+  dnd: Dnd | null | undefined; onChange: (d: Dnd, msg: string) => void;
+  compact?: boolean; only?: string[];
+}) {
+  const [, tick] = useState(0);
+  useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 20000); return () => clearInterval(t); }, []);
+  const { d, ev, ovr, status, quick: all } = dndModel(dnd, Date.now());
+  const quick = only ? all.filter((q) => only.includes(`dnd_${q.id}`)) : all;
+  const set = (p: Partial<Dnd>, msg: string) => onChange({ ...d, ...p }, msg);
   return (
-    <Group id="dnd" title="Do Not Disturb"
-      footer="Quiets wall sounds, the hourly chime, pop-ups and spoken announcements. Alarms and heads-ups you set still ring.">
-      <div className="flex items-center gap-3 border-b border-white/[0.07] px-4 py-3">
+    <Group id={compact ? undefined : "dnd"} title="Do Not Disturb"
+      footer={compact ? undefined : "Quiets wall sounds, the hourly chime, pop-ups and spoken announcements. Alarms and heads-ups you set still ring."}>
+      <div className={cn("flex items-center gap-3 border-b border-white/[0.07] px-4 py-3", compact && quick.length === 0 && "border-b-0")}>
         <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full", ev.on ? "bg-indigo-500 text-white" : "bg-white/[0.08] text-white/60")} aria-hidden>
           <Moon className="h-[18px] w-[18px]" />
         </span>
@@ -114,11 +126,12 @@ export function DndCard({ dnd, onChange }: { dnd: Dnd | null | undefined; onChan
           </div>
         </div>
         {ovr && (
-          <button type="button" className={cn(btn, "shrink-0 px-3 text-[14px]")} onClick={() => set({ override: null }, "Back on the schedule.")}>
+          <button type="button" className={cn(btn, "shrink-0 px-3 text-[14px]")} aria-label="Back on the schedule" onClick={() => set({ override: null }, "Back on the schedule.")}>
             <RotateCcw className="h-4 w-4" aria-hidden /> Schedule
           </button>
         )}
       </div>
+      {!compact && <>
       <Row label="Scheduled" detail="Quiet every night between these times." htmlFor="wall-dnd-on">
         <Switch className={swHit} id="wall-dnd-on" checked={d.on !== false}
           onCheckedChange={(v) => set({ on: v, override: null }, v ? `Do Not Disturb on, ${label12(d.from)} to ${label12(d.to)}.` : "Do Not Disturb off. Sounds any time.")} />
@@ -135,19 +148,23 @@ export function DndCard({ dnd, onChange }: { dnd: Dnd | null | undefined; onChan
             onChange={(v) => set({ to: v }, `Quiet until ${label12(v)}.`)} />
         </label>
       </div>
-      <div className="grid gap-2 px-4 py-3 sm:grid-cols-2" role="group" aria-label="Quick changes">
-        {quick.map((q, i) => (
-          <button key={i} type="button" className={cn(btn, "justify-start px-3 text-[15px]")} onClick={() => set(q.p, q.msg)}>
-            <q.icon className="h-4 w-4 shrink-0 text-white/70" aria-hidden /> <span className="min-w-0 text-left">{q.label}</span>
-          </button>
-        ))}
-      </div>
+      </>}
+      {quick.length > 0 && (
+        <div className="grid gap-2 px-4 py-3 sm:grid-cols-2" role="group" aria-label="Quick changes">
+          {quick.map((q) => (
+            <button key={q.id} type="button" className={cn(btn, "justify-start px-3 text-[15px]")} onClick={() => set(q.p, q.msg)}>
+              <q.icon className="h-4 w-4 shrink-0 text-white/70" aria-hidden /> <span className="min-w-0 text-left">{q.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </Group>
   );
 }
 
-/** "Motivate me": bumps motivate.seq; the wall plays the pep-talk show once per new seq (W5). */
-export function MotivateButton({ seq, onFire }: { seq: number; onFire: (next: { seq: number; ts: number }) => void }) {
+/** "Motivate me": bumps motivate.seq; the wall plays the pep-talk show once per new seq (W5).
+ *  `tile` draws it as a square tile for the Moments row in the Now area. */
+export function MotivateButton({ seq, onFire, tile }: { seq: number; onFire: (next: { seq: number; ts: number }) => void; tile?: boolean }) {
   const [sent, setSent] = useState(false);
   return (
     <button type="button" disabled={sent}
@@ -157,13 +174,15 @@ export function MotivateButton({ seq, onFire }: { seq: number; onFire: (next: { 
         window.setTimeout(() => setSent(false), 6000);
       }}
       className={cn(
-        "group relative mt-3 flex min-h-[56px] w-full items-center justify-center gap-2.5 overflow-hidden rounded-2xl px-4 text-[17px] font-semibold text-white",
+        tile
+          ? "flex min-h-[76px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-2xl px-1 py-2 text-center text-[13px] font-semibold leading-tight text-white"
+          : "group relative mt-3 flex min-h-[56px] w-full items-center justify-center gap-2.5 overflow-hidden rounded-2xl px-4 text-[17px] font-semibold text-white",
         "bg-[linear-gradient(135deg,#FF9F0A_0%,#FF375F_55%,#BF5AF2_100%)] shadow-[0_8px_24px_-10px_rgba(255,55,95,0.6)]",
         "transition-[transform,filter] duration-150 hover:brightness-110 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:opacity-80 touch-manipulation",
       )}>
-      {sent ? <Check className="h-5 w-5" aria-hidden /> : <Sparkles className="h-5 w-5" aria-hidden />}
-      <span aria-live="polite">{sent ? "On its way to the wall" : "Motivate me"}</span>
+      {sent ? <Check className={cn("shrink-0", tile ? "h-6 w-6" : "h-5 w-5")} aria-hidden /> : <Sparkles className={cn("shrink-0", tile ? "h-6 w-6" : "h-5 w-5")} aria-hidden />}
+      <span aria-live="polite">{sent ? (tile ? "On its way" : "On its way to the wall") : "Motivate me"}</span>
     </button>
   );
 }

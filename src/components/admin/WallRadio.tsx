@@ -105,6 +105,54 @@ const ROWS = 6;
 /** What the Pi reports back (server.py radio_health, pushed about once a minute). */
 export type WallRadioLive = { want?: boolean; state?: string | null; err?: string | null; title?: string | null; fail_min?: number | null } | null;
 
+/** Station, what the Pi reports, and Play / Stop. The Radio section and the Now area both use it.
+ *  `onBrowse` (Now area) adds a Stations button when nothing has been picked yet. */
+export function RadioNowPlaying({ radio, live, onPlay, onStop, onBrowse }: {
+  radio: WallRadio | undefined;
+  live?: WallRadioLive;
+  onPlay: (r: NonNullable<WallRadio>) => void;
+  onStop: () => void;
+  onBrowse?: () => void;
+}) {
+  const on = !!radio?.on;
+  const nowTitle = radio?.name ? split(radio.name).title : null;
+  return (
+    <div className="flex min-h-[72px] items-center gap-3 border-b border-white/[0.07] px-4 py-3 last:border-b-0" aria-live="polite">
+      <Logo src={radio?.favicon} className="h-12 w-12 rounded-xl" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[17px] font-semibold text-white">{on && nowTitle ? nowTitle : nowTitle ?? "Nothing playing"}</div>
+        {on && live?.want && live.err ? (
+          <div className="line-clamp-2 text-[13px] text-amber-300">{live.err}</div>
+        ) : (
+          <div className="truncate text-[13px] text-white/55">
+            {on
+              ? live?.want && live.state === "playing"
+                ? live.title ? `Now playing: ${live.title}` : "Playing on the Desk HomePod"
+                : "Starting on the Desk HomePod…"
+              : nowTitle ? (onBrowse ? "Stopped" : "Stopped. Tap Play to pick it back up.") : onBrowse ? "Plays on the Desk HomePod" : "Pick a station below. It plays on the Desk HomePod."}
+          </div>
+        )}
+      </div>
+      {on ? (
+        <button type="button" onClick={onStop}
+          className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl bg-white px-4 text-[15px] font-semibold text-black transition-colors duration-150 hover:bg-white/90 active:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+          <Square className="h-4 w-4 fill-current" aria-hidden /> Stop
+        </button>
+      ) : radio?.url ? (
+        <button type="button" onClick={() => onPlay({ ...radio, on: true, ts: Date.now() })}
+          className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl bg-white px-4 text-[15px] font-semibold text-black transition-colors duration-150 hover:bg-white/90 active:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+          <Volume2 className="h-4 w-4" aria-hidden /> Play
+        </button>
+      ) : onBrowse ? (
+        <button type="button" onClick={onBrowse}
+          className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl px-4 text-[15px] font-medium text-white ring-1 ring-white/15 transition-colors duration-150 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+          <RadioIcon className="h-4 w-4" aria-hidden /> Stations
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function WallRadioSection({ radio, live, onPlay, onStop }: {
   radio: WallRadio | undefined;
   live?: WallRadioLive;
@@ -153,7 +201,6 @@ export function WallRadioSection({ radio, live, onPlay, onStop }: {
   }, [onPlay]);
 
   const on = !!radio?.on;
-  const nowTitle = radio?.name ? split(radio.name).title : null;
   const list = results ?? favs;
   const listing = q.trim().length >= 2;
   const cap = listing ? 8 : ROWS;
@@ -165,34 +212,7 @@ export function WallRadioSection({ radio, live, onPlay, onStop }: {
       <h2 className="px-4 text-[13px] font-medium uppercase tracking-[0.06em] text-white/50">Radio</h2>
       <div className="overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/10">
         {/* Now playing: same height whether on or off, so the list below never moves. */}
-        <div className="flex min-h-[72px] items-center gap-3 border-b border-white/[0.07] px-4 py-3" aria-live="polite">
-          <Logo src={radio?.favicon} className="h-12 w-12 rounded-xl" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[17px] font-semibold text-white">{on && nowTitle ? nowTitle : nowTitle ?? "Nothing playing"}</div>
-            {on && live?.want && live.err ? (
-              <div className="line-clamp-2 text-[13px] text-amber-300">{live.err}</div>
-            ) : (
-              <div className="truncate text-[13px] text-white/55">
-                {on
-                  ? live?.want && live.state === "playing"
-                    ? live.title ? `Now playing: ${live.title}` : "Playing on the Desk HomePod"
-                    : "Starting on the Desk HomePod…"
-                  : nowTitle ? "Stopped. Tap Play to pick it back up." : "Pick a station below. It plays on the Desk HomePod."}
-              </div>
-            )}
-          </div>
-          {on ? (
-            <button type="button" onClick={onStop}
-              className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl bg-white px-4 text-[15px] font-semibold text-black transition-colors duration-150 hover:bg-white/90 active:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
-              <Square className="h-4 w-4 fill-current" aria-hidden /> Stop
-            </button>
-          ) : radio?.url ? (
-            <button type="button" onClick={() => onPlay({ ...radio, on: true, ts: Date.now() })}
-              className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl bg-white px-4 text-[15px] font-semibold text-black transition-colors duration-150 hover:bg-white/90 active:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
-              <Volume2 className="h-4 w-4" aria-hidden /> Play
-            </button>
-          ) : null}
-        </div>
+        <RadioNowPlaying radio={radio} live={live} onPlay={onPlay} onStop={onStop} />
 
         {/* Search */}
         <div className="flex items-center gap-2 border-b border-white/[0.07] px-4">

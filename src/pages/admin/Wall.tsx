@@ -9,16 +9,20 @@
  *      (throttled while dragging). The Pi re-reads it as a backup and after restarts.
  * Status comes from the Pi watchdog every minute. See bestly_memory house/wall/projector-strip-v1.
  *
- * Layout follows Apple's HIG: grouped inset sections, one control per job
- * (segmented control, switches, stepper-style nudge pad), 44 pt targets, plain-language labels.
- * Order is answer-first: a Now card (status, mode, what's playing, 4 quick actions), then daily
- * controls, then Live Activities, and an Advanced disclosure for alignment, sky fit, power tools and tests.
- * Every action confirms with a toast (sonner, one at a time).
+ * Layout follows Apple's HIG and the shared manifest src/config/wall-controls.json (the same information
+ * architecture Home Assistant uses, 2026-10-04):
+ *   - Now: a hero card (status, power, what's playing, Scout's one thing), then the everyday controls listed in
+ *     manifest `now.controls`, in that order (mode, volume, sounds, Hey Scout, Do Not Disturb, radio, Moments, alarm).
+ *   - Settings: one row per manifest `panes` entry (icon, title, summary, chevron). A row opens that pane, which
+ *     shows the pane's `groups` in order. Panes are deep-linkable with ?pane=<id>, so browser back returns to the list.
+ * Controls reachable from both Now and a pane share the same state and handlers. Grouped inset sections,
+ * 44 pt targets, plain-language labels. Every action confirms with a toast (sonner, one at a time).
  *
- * Deep links (iPhone Live Activities open these): #sleep, #show, #live, #theme scroll to that section
- * once the page has loaded, opening any collapsed disclosure that holds it.
+ * Deep links (iPhone Live Activities open these): #sleep, #show, #live, #theme (and other section ids) open the
+ * pane that holds that section, then scroll to it.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -29,11 +33,13 @@ import { WallPowerCost, type WallPowerMeter } from "@/components/admin/WallPower
 import { WallLedSign, type LedSign, type LedSignHealth } from "@/components/admin/WallLedSign";
 import { Group, Row, Segmented, btn, btnPrimary, swHit, NW } from "@/components/admin/wallUi";
 import { DndCard, MotivateButton, PackagesCard, type Dnd } from "@/components/admin/WallR4";
-import { VoiceCard, type Voice } from "@/components/admin/WallVoice";
+import { HeyScoutRow, VoiceCard, type Voice } from "@/components/admin/WallVoice";
+import { RadioNowPlaying } from "@/components/admin/WallRadio";
+import { now as NOW_MANIFEST, panes as PANES_MANIFEST } from "@/config/wall-controls.json";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, Nfc, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf, Undo2, Redo2, Lock, Check, Minus, Plus, RadioTower } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, Nfc, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf, Undo2, Redo2, Lock, Check, Minus, Plus, RadioTower, ChevronLeft, ChevronRight, LayoutDashboard, AlarmClock, Bell, Lightbulb, FlaskConical, Settings } from "lucide-react";
 
 /** Left-side strip widgets (state.widgets). Each hides by itself when it has nothing to show. */
 type StripWidget = "news" | "mail" | "turo$" | "air" | "energy" | "habits" | "leo" | "appstore" | "devices";
@@ -189,6 +195,39 @@ const THEMES: { id: "normal" | ThemeId; label: string; detail: string }[] = [
 ];
 const THEME_ICON: Partial<Record<"normal" | ThemeId, React.ElementType>> = { halloween: Ghost, thanksgiving: Leaf };
 
+/* ───────── Now + Settings panes (shared manifest: src/config/wall-controls.json) ───────── */
+
+type Pane = { id: string; title: string; icon: string; summary: string; groups: string[] };
+const PANES: Pane[] = PANES_MANIFEST as Pane[];
+/** Control ids shown in the Now area (DND quick buttons filter on these). */
+const NOW_IDS: string[] = NOW_MANIFEST.controls;
+/** Icon tile per pane (manifest icons are MDI names for Home Assistant; these are the lucide twins). */
+const PANE_LOOK: Record<string, { icon: React.ElementType; tint: string }> = {
+  display: { icon: LayoutDashboard, tint: "bg-sky-500" },
+  sound: { icon: Volume2, tint: "bg-rose-500" },
+  sky: { icon: Plane, tint: "bg-indigo-500" },
+  alarm: { icon: AlarmClock, tint: "bg-orange-500" },
+  alerts: { icon: Bell, tint: "bg-red-500" },
+  shows: { icon: PartyPopper, tint: "bg-fuchsia-500" },
+  neon: { icon: Lightbulb, tint: "bg-violet-500" },
+  projector: { icon: Projector, tint: "bg-zinc-500" },
+  tests: { icon: FlaskConical, tint: "bg-emerald-600" },
+};
+/** Old section anchors (Live Activities and bookmarks use #sleep, #show, #live, #theme) -> the pane that holds them. */
+const HASH_PANE: Record<string, string> = {
+  sleep: "alarm", show: "shows", live: "alerts", packages: "alerts", theme: "display", "new-theme": "display",
+  "strip-widgets": "display", dnd: "sound", voice: "sound", radio: "sound", "sky-details": "sky", advanced: "projector",
+};
+
+/** Scroll the admin's scrolling area (and the window) back to the top. */
+function scrollToTop(from: HTMLElement | null) {
+  for (let el = from?.parentElement ?? null; el; el = el.parentElement) {
+    const oy = getComputedStyle(el).overflowY;
+    if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight) { el.scrollTop = 0; break; }
+  }
+  window.scrollTo({ top: 0 });
+}
+
 /** Copied by "Add a new theme". The idea Jared types goes after the last line. */
 const NEW_THEME_PROMPT = `Build a new theme for the Bestly Wall, end to end, and ship it.
 
@@ -268,24 +307,6 @@ function useRemembered(key: string, fallback: boolean, opensFor: string[] = []) 
   return [open, toggle] as const;
 }
 
-/** Collapsible section for rarely used tools (progressive disclosure). */
-function Disclosure({ id, title, summary, opensFor = [], children }: { id: string; title: string; summary?: string; opensFor?: string[]; children: React.ReactNode }) {
-  const [open, toggle] = useRemembered(`wall-open-${id}`, false, [id, ...opensFor]);
-  return (
-    <section id={id} className="scroll-mt-20 space-y-4">
-      <button type="button" aria-expanded={open} aria-controls={`wall-${id}-panel`} onClick={toggle}
-        className="flex min-h-[56px] w-full items-center gap-3 rounded-2xl bg-white/[0.04] px-4 py-2 text-left ring-1 ring-white/10 transition-colors duration-150 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
-        <span className="min-w-0 flex-1">
-          <span className="block text-[17px] font-semibold text-white">{title}</span>
-          {summary && <span className="block text-[13px] text-white/50">{summary}</span>}
-        </span>
-        <ChevronDown className={cn("h-5 w-5 shrink-0 text-white/50 transition-transform duration-200 motion-reduce:transition-none", open && "rotate-180")} aria-hidden />
-      </button>
-      {open && <div id={`wall-${id}-panel`} className="space-y-6">{children}</div>}
-    </section>
-  );
-}
-
 /** A "More" row inside a group that reveals extra rows below it. */
 function DisclosureRow({ id, label, summary, opensFor = [], children }: { id: string; label: string; summary?: string; opensFor?: string[]; children: React.ReactNode }) {
   const [open, toggle] = useRemembered(`wall-open-${id}`, false, [id, ...opensFor]);
@@ -337,10 +358,24 @@ export default function Wall() {
   const [demo, setDemo] = useState<Record<DemoKey, string>>({ demoLeft: "", demoNames: "", demoRight: "" });
   const [pending, setPending] = useState(0);
   const [powerMsg, setPowerMsg] = useState<string | null>(null);
+  /** Focus / Restart feedback, shown under the Projector group (power feedback stays under Power). */
+  const [projMsg, setProjMsg] = useState<string | null>(null);
   /** What you last asked the projector to do, so the Now button flips right away instead of waiting a minute for the Pi. */
   const [powerHint, setPowerHint] = useState<{ on: boolean; at: number } | null>(null);
   const [, bump] = useState(0);
   const repaint = () => bump((n) => n + 1);
+  /** The open settings pane (?pane=<id>), or null for the Now + Settings list. */
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const pane = PANES.find((p) => p.id === params.get("pane")) ?? null;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const lastPane = useRef<string | null>(null);
+  const openPane = (id: string, hash = "") => navigate({ search: `?pane=${id}`, hash }, { state: { wallPane: true } });
+  const closePane = () => {
+    if ((location.state as { wallPane?: boolean } | null)?.wallPane) navigate(-1);
+    else navigate({ search: "", hash: "" }, { replace: true });
+  };
 
   const S = useRef<WallState | null>(null);
   const dragging = useRef(false);
@@ -591,9 +626,9 @@ export default function Wall() {
   };
 
   const restartWall = async () => {
-    setPowerMsg("Restarting the wall… back in about 15 seconds.");
+    setProjMsg("Restarting the wall… back in about 15 seconds.");
     const { error } = await rpc("wall_admin_command", { p_cmd: "relaunch" });
-    setPowerMsg(error ? `Didn't go through: ${error.message}` : "Restart sent. The wall wakes, reopens and comes back in about 15\u00a0seconds.");
+    setProjMsg(error ? `Didn't go through: ${error.message}` : "Restart sent. The wall wakes, reopens and comes back in about 15\u00a0seconds.");
     if (error) toast.error(`Didn't go through: ${error.message}`, { id: "wall-act" }); else toast.success("Restarting. Back in about 15\u00a0seconds.", { id: "wall-act" });
     void load();
   };
@@ -608,17 +643,17 @@ export default function Wall() {
   };
 
   const nudgeFocus = async (dir: "focus_left" | "focus_right") => {
-    setPowerMsg("Moving the lens one step. The focus screen shows for a few seconds, then the wall comes back.");
+    setProjMsg("Moving the lens one step. The focus screen shows for a few seconds, then the wall comes back.");
     const { error } = await rpc("wall_admin_command", { p_cmd: dir });
-    setPowerMsg(error ? `Didn't go through: ${error.message}` : "Moved one step. Look at the sign wall: tap again the same way if it got sharper, the other way if it got softer.");
+    setProjMsg(error ? `Didn't go through: ${error.message}` : "Moved one step. Look at the sign wall: tap again the same way if it got sharper, the other way if it got softer.");
     if (error) toast.error(`Didn't go through: ${error.message}`, { id: "wall-act" });
     void load();
   };
 
   const focus = async () => {
-    setPowerMsg("Focusing… the picture blurs for about 15 seconds.");
+    setProjMsg("Focusing… the picture blurs for about 15 seconds.");
     const { error } = await rpc("wall_admin_command", { p_cmd: "focus" });
-    setPowerMsg(error ? `Didn't go through: ${error.message}` : "Focus sent. Tap again if it still looks soft.");
+    setProjMsg(error ? `Didn't go through: ${error.message}` : "Focus sent. Tap again if it still looks soft.");
     if (error) toast.error(`Didn't go through: ${error.message}`, { id: "wall-act" }); else toast.success("Focusing. Tap again if it still looks soft.", { id: "wall-act" });
     void load();
   };
@@ -675,30 +710,41 @@ export default function Wall() {
       ? { dot: "bg-amber-400 animate-pulse", text: "Saving…" }
       : { dot: "bg-emerald-400", text: "Synced" };
 
-  /* ───── deep links: /admin/wall#sleep, #show, #live (Live Activities), #theme ───── */
-  // Sign-in and the first load render a placeholder, so wait until the real sections exist, then scroll.
-  // Two frames let any disclosure that holds the target open first (useRemembered opensFor).
+  /* ───── deep links and panes ───── */
+  // /admin/wall#sleep (Live Activities) opens the pane that holds #sleep, then scrolls to it once it exists.
+  // Sign-in and the first load render a placeholder, so wait until the real sections exist. A pane opened from
+  // the list starts at the top; going back to the list puts focus on that pane's row.
   const ready = !!r && !!s;
+  const paneId = pane?.id ?? null;
   useEffect(() => {
     if (!ready) return;
     let raf = 0;
     const go = () => {
       const id = hashId();
-      if (!id) return;
+      const want = id ? HASH_PANE[id] : undefined;
+      if (want && want !== paneId) { navigate({ search: `?pane=${want}`, hash: `#${id}` }, { replace: true }); return; }
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         raf = requestAnimationFrame(() => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-          el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+          const el = id ? document.getElementById(id) : null;
+          if (el) {
+            const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+            el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+          } else if (paneId && lastPane.current !== paneId) {
+            scrollToTop(rootRef.current);
+            document.getElementById("wall-pane-title")?.focus({ preventScroll: true });
+          } else if (!paneId && lastPane.current) {
+            scrollToTop(rootRef.current);
+            document.getElementById(`wall-pane-row-${lastPane.current}`)?.focus();
+          }
+          lastPane.current = paneId;
         });
       });
     };
     go();
     window.addEventListener("hashchange", go);
     return () => { cancelAnimationFrame(raf); window.removeEventListener("hashchange", go); };
-  }, [ready]);
+  }, [ready, paneId, navigate]);
 
   if (!r || !s) {
     return (
@@ -745,6 +791,32 @@ export default function Wall() {
   const stopShow = () => act({ tour: { cmd: "stop", at: Date.now() } }, "Stopping. The wall goes back to normal.");
   const startSheep = () => act({ sleepShow: { at: Date.now(), mins: Number(sheepMins), music: sheepMusic } }, `Counting sheep for ${sheepLen}. Good night.`);
   const stopSheep = () => act({ sleepShow: null }, "Sleep mode stopped.");
+  /* Handlers shared by the Now area and the panes (one write path each). */
+  const setMode = (m: Mode) => act({ mode: m }, `Mode: ${MODES.find((x) => x.id === m)?.label ?? m}.`);
+  const setSound = (v: boolean) => act({ sound: v }, v ? "Wall sounds on." : "Wall sounds off.");
+  const setVoice = (v: Voice, msg: string) => act({ voice: v }, msg);
+  const setDnd = (d: Dnd, msg: string) => act({ dnd: d }, msg);
+  const radioPlay = (r: NonNullable<WallRadio>) => act({ radio: r }, `Playing ${r.name.split(/\s+[-|–]\s+/)[0]} on the Desk HomePod.`);
+  const radioStop = () => act({ radio: s.radio ? { ...s.radio, on: false, ts: Date.now() } : null }, "Radio stopped.");
+  const volumeSlider = (
+    <div className="flex min-h-[52px] items-center gap-3 border-b border-white/[0.07] px-4 py-3 last:border-b-0">
+      <VolumeX className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
+      <Slider aria-label="Projector volume" min={0} max={100} step={5} value={[volDraft ?? s.volume ?? 100]}
+        onValueChange={(v) => setVolDraft(v[0])} onValueCommit={(v) => { setVolDraft(null); act({ volume: v[0] }, `Volume ${v[0]}%.`); }} className="flex-1" />
+      <Volume2 className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
+      <span className="w-12 whitespace-nowrap text-right text-[15px] tabular-nums text-white/80">{volDraft ?? s.volume ?? 100}%</span>
+    </div>
+  );
+  /** Wake-up alarm: the Pi wakes the projector, unmutes, raises the volume; the wall plays a sunrise with bells. */
+  const alarmA = s.alarm ?? null;
+  const alarmOn = !!alarmA?.on;
+  const alarmTime = alarmA?.time ?? "07:00";
+  const alarmDays = alarmA?.days ?? "once";
+  const setAlarm = (p: Partial<NonNullable<WallState["alarm"]>>) => change({ alarm: { on: alarmOn, time: alarmTime, days: alarmDays, vol: alarmA?.vol ?? 60, ...(alarmA ?? {}), ...p, set_at: Date.now() } as WallState["alarm"] });
+  const alarmPretty = (() => { const [hh, mm] = alarmTime.split(":").map(Number); return new Date(2000, 0, 1, hh || 0, mm || 0).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); })();
+  const alarmDaysTxt = alarmDays === "once" ? "once" : alarmDays === "weekdays" ? "weekdays" : alarmDays === "weekends" ? "weekends" : "every day";
+  const toggleAlarm = (v: boolean) => { setAlarm({ on: v }); toast.success(v ? `Alarm set for ${alarmPretty}, ${alarmDaysTxt}.` : "Alarm off.", { id: "wall-act" }); };
+
   /** The one place the theme is written: Normal -> null, anything else -> its value. */
   const themeNow = THEMES.find((t) => t.id === (s.theme ?? "normal")) ?? THEMES[0];
   const setTheme = (id: (typeof THEMES)[number]["id"]) => {
@@ -759,8 +831,744 @@ export default function Wall() {
     toast.success("Copied. Paste it into a Claude chat.", { id: "wall-act" });
   };
 
+  /** One manifest group's JSX (moved as-is from the old single page). Non-manifest blocks ride with the group
+   *  they belong to: projector health before Power, power cost after Projector, packages after Live Activities. */
+  const renderGroup = (id: string): React.ReactNode => {
+    switch (id) {
+      case "wall": return (<>
+            <Group title="On the wall">
+              <Row label="Off when I leave home" detail={"Uses your iPhone's location in Home Assistant. Turns off 10\u00a0min after you leave, back on when you get home (7\u00a0AM to bedtime)."} htmlFor="wall-presence">
+                <Switch className={swHit} id="wall-presence" checked={s.presence !== false} onCheckedChange={(v) => act({ presence: v }, v ? "The wall turns off when you leave home." : "The wall stays on its schedule when you leave.")} />
+              </Row>
+              <div className="p-2">
+                <Segmented compact label="Mode" value={s.mode} onChange={setMode}
+                  options={MODES.map((m) => ({ id: m.id, label: m.label }))} />
+                {modeAbout && <p className="px-2 pb-1 pt-2 text-[13px] leading-snug text-white/55">{modeAbout}</p>}
+              </div>
+              <Row label="Show today's date on the left" detail="The left side of the strip shows today's date instead of rotating through messages." htmlFor="wall-left-date">
+                <Switch className={swHit} id="wall-left-date" checked={!!s.leftDate} onCheckedChange={(v) => act({ leftDate: v }, v ? "Today's date on the left." : "The left side rotates again.")} />
+              </Row>
+            </Group>
+            {/* Demo text: only while Demo mode is showing */}
+            {s.mode === "demo" && (
+              <Group title="Demo text" footer="Left and right can be two lines. Changes show on the wall as you type.">
+                {DEMO_FIELDS.map((f) => (
+                  <div key={f.key} className="flex items-start gap-3 border-b border-white/[0.07] px-4 py-2 last:border-b-0">
+                    <label htmlFor={`wall-${f.key}`} className="min-h-[44px] w-16 shrink-0 pt-3 text-[15px] text-white/60">{f.label}</label>
+                    <textarea
+                      id={`wall-${f.key}`} rows={f.lines} maxLength={60} value={demo[f.key]} placeholder={f.placeholder.replace("\n", " / ")}
+                      autoComplete="off" spellCheck={false}
+                      onFocus={() => (typing.current = true)}
+                      onBlur={() => { typing.current = false; }}
+                      onChange={(e) => {
+                        const v = f.lines === 1 ? e.target.value.replace(/\n/g, " ") : e.target.value.split("\n").slice(0, 2).join("\n");
+                        setDemo((d) => ({ ...d, [f.key]: v }));
+                        change({ [f.key]: v } as Partial<WallState>, { now: false });
+                      }}
+                      className="min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[17px] leading-snug text-white placeholder:text-white/35 focus:outline-none"
+                    />
+                  </div>
+                ))}
+              </Group>
+            )}
+      </>);
+      case "strip": return (<>
+            {/* Strip widgets (W2 round 3): the left side takes turns with the clock; switch any widget off here. */}
+            <Group id="strip-widgets" title="Strip widgets" footer="The left side of the strip takes turns with the clock; Turo calendar and Claude usage take turns on the right. A widget with nothing to show skips its turn.">
+              {STRIP_WIDGETS.map((w) => {
+                const hid = `wall-w-${w.id.replace("$", "usd")}`;
+                return (
+                  <Row key={w.id} label={w.label} detail={w.detail} htmlFor={hid}>
+                    <Switch className={swHit} id={hid} checked={s.widgets?.[w.id] !== false}
+                      onCheckedChange={(v) => act({ widgets: { ...(s.widgets ?? {}), [w.id]: v } }, `${w.label} ${v ? "on" : "off"}.`)} />
+                  </Row>
+                );
+              })}
+              <div className="px-4 py-3">
+                <button type="button" className={cn(btn, "w-full")} onClick={() => act({ bookingDemo: Date.now() }, "Showing a sample Turo booking on the strip for 20 seconds.")}>
+                  <Sparkles className="h-4 w-4 shrink-0" aria-hidden /> Show a sample Turo booking
+                </button>
+              </div>
+            </Group>
+      </>);
+      case "theme": return (<>
+            {/* Theme: the only control for state key `theme` (null = Normal). New themes start from the copied prompt. */}
+            <Group id="theme" title="Theme">
+              <div className="border-b border-white/[0.07] p-2">
+                {/* compact + icons from sm up, so all three labels fit one row on a 390 pt phone */}
+                <Segmented label="Theme" value={themeNow.id} onChange={setTheme} compact
+                  options={THEMES.map((t) => {
+                    const Icon = THEME_ICON[t.id];
+                    return { id: t.id, label: Icon ? <><Icon className="hidden h-4 w-4 shrink-0 sm:block" aria-hidden />{t.label}</> : t.label };
+                  })} />
+                <p className="px-2 pb-1 pt-2 text-[13px] leading-snug text-white/55">{themeNow.detail}</p>
+              </div>
+              <DisclosureRow id="new-theme" label="Add a new theme" summary="Copy a prompt that has Claude build it">
+                <div className="space-y-3 px-4 py-3">
+                  <label htmlFor="wall-theme-idea" className="block text-[16px] text-white">Theme name or idea</label>
+                  <textarea
+                    id="wall-theme-idea" rows={3} maxLength={600} value={themeIdea} autoComplete="off"
+                    placeholder="e.g. Christmas: snow falling, twinkly lights, a sleigh crossing the ceiling"
+                    onChange={(e) => setThemeIdea(e.target.value)}
+                    className="min-h-[88px] w-full resize-none rounded-xl bg-white/[0.07] px-3 py-2.5 text-[16px] leading-snug text-white ring-1 ring-white/10 placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  />
+                  <button type="button" className={cn(btnPrimary, "w-full")} disabled={!themeIdea.trim()} onClick={() => void copyThemePrompt()}>
+                    {copiedTheme ? <CheckCircle2 className="h-5 w-5" aria-hidden /> : <Copy className="h-5 w-5" aria-hidden />}
+                    {copiedTheme ? "Copied" : "Copy prompt"}
+                  </button>
+                  <p className="text-[13px] text-white/50">Paste it into a new Claude chat. Claude builds the theme on the Pi and adds it here when it's done.</p>
+                </div>
+              </DisclosureRow>
+            </Group>
+      </>);
+      case "sign": return (<>
+            {/* Sign the wall */}
+            <Group id="sign" title="Sign the wall"
+              footer={<>Guests tap a coaster (NFC), sign with a finger, and it writes itself onto the left wall. Auto shows names when someone is near or right after a new signature.</>}>
+              <div className="space-y-3 px-4 py-3">
+                <Segmented label="Show names" value={s.signShow ?? "auto"} onChange={(v) => act({ signShow: v }, `Names: ${v === "auto" ? "Auto" : v === "on" ? "Always" : "Off"}.`)}
+                  options={[{ id: "auto", label: "Auto" }, { id: "on", label: "Always" }, { id: "off", label: "Off" }]} />
+                <div className="grid grid-cols-2 gap-2">
+                  <a className={cn(btn, "px-2")} href="/sign/jg8h" target="_blank" rel="noreferrer">
+                    <Nfc className="h-4 w-4 shrink-0" aria-hidden /> Guest page
+                  </a>
+                  <button type="button" className={cn(btn, "px-2", confirmClear && "text-red-400 ring-red-400/60")}
+                    onClick={() => { if (confirmClear) { setConfirmClear(false); void signAction("clear"); } else { setConfirmClear(true); window.setTimeout(() => setConfirmClear(false), 4000); } }}>
+                    <EyeOff className="h-4 w-4 shrink-0" aria-hidden /> {confirmClear ? "Tap to confirm" : "Clear the wall"}
+                  </button>
+                </div>
+                {signMsg && <p className="text-[13px] text-white/60" role="status">{signMsg}</p>}
+              </div>
+              {(showAllSigs ? sigs : sigs.slice(0, 3)).map((g) => (
+                <Row key={g.id} label={<span style={{ color: g.color }}>{g.name || "No name"}{g.emoji ? <span aria-label={`emoji ${g.emoji}`}> {g.emoji}</span> : null}{g.test ? " · test" : ""}{g.hidden ? <span className="text-white/40"> · hidden</span> : null}</span>}
+                  detail={<NW>{new Date(g.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</NW>}>
+                  <div className="flex gap-2">
+                    <button type="button" className={cn(btn, "w-11 px-0")} aria-label={g.hidden ? `Show ${g.name || "signature"} on the wall` : `Hide ${g.name || "signature"} from the wall`}
+                      onClick={() => void signAction(g.hidden ? "show" : "hide", g.id)}>
+                      {g.hidden ? <Eye className="h-4 w-4" aria-hidden /> : <EyeOff className="h-4 w-4" aria-hidden />}
+                    </button>
+                    <button type="button" aria-label={confirmDel === g.id ? "Tap again to delete for good" : `Delete ${g.name || "signature"}`}
+                      className={cn(btn, "px-3 text-[14px] text-red-400", confirmDel === g.id ? "bg-red-500/15 ring-red-400/60" : "w-11 px-0")}
+                      onClick={() => {
+                        if (confirmDel === g.id) { setConfirmDel(null); void signAction("delete", g.id); }
+                        else { setConfirmDel(g.id); window.setTimeout(() => setConfirmDel((c) => (c === g.id ? null : c)), 4000); }
+                      }}>
+                      <Trash2 className="h-4 w-4" aria-hidden />{confirmDel === g.id && " Delete"}
+                    </button>
+                  </div>
+                </Row>
+              ))}
+              {sigs.length > 3 && (
+                <div className="px-4">
+                  <button type="button" className="min-h-[44px] text-[15px] font-medium text-sky-400" onClick={() => setShowAllSigs((v) => !v)}>
+                    {showAllSigs ? "Show fewer" : `Show all ${sigs.length} signatures`}
+                  </button>
+                </div>
+              )}
+            </Group>
+      </>);
+      case "sound": return (<>
+            {/* Sound: projector speaker + wall chimes. Google TV's home screen is always muted by the Pi (autoplay guard). */}
+            <Group id="sound" title="Sound" footer="Wall sounds follow Do Not Disturb. Google TV's home screen is kept silent so previews can't blast through the wall.">
+              {volumeSlider}
+              <Row label="Wall sounds" detail="Chimes and whooshes when things change on the wall." htmlFor="wall-sound">
+                <Switch className={swHit} id="wall-sound" checked={s.sound !== false} onCheckedChange={setSound} />
+              </Row>
+              <div className="px-4 py-3">
+                <Segmented label="Sound style" value={s.soundPack ?? "glass"}
+                  onChange={(v) => act({ soundPack: v, soundTest: Date.now() }, "Sound style changed. Playing a sample.")}
+                  options={[{ id: "glass", label: "Glass" }, { id: "marimba", label: "Marimba" }, { id: "keys", label: "Soft keys" }]} />
+              </div>
+            </Group>
+      </>);
+      case "dnd": return <DndCard dnd={s.dnd} onChange={setDnd} />;
+      case "voice": return <VoiceCard voice={s.voice} onChange={setVoice} />;
+      case "radio": return (<>
+            {/* Radio: Radio Browser stations -> state.radio {on, name, url, favicon, ts}; the Pi plays it on the Desk HomePod. */}
+            <WallRadioSection radio={s.radio} live={st?.radio ?? null}
+              onPlay={radioPlay} onStop={radioStop} />
+      </>);
+      case "airplay": return (<>
+            {/* AirPlay: the Pi is an AirPlay receiver ("Bestly Wall"); video plays where the clock and today are. */}
+            {(() => {
+              const off = s.airplay === false;
+              const fresh = !!ap && ap.age_s != null && ap.age_s < 90 && statusAge != null && statusAge < 150;
+              const since = ap?.since ? time12(ap.since * 1000) : null;
+              const detail = off ? "Off. Your phone won't see the wall."
+                : !ap ? "Checking with the Pi…"
+                : ap.casting ? <>Playing {ap.kind === "audio" ? "audio" : "video"}{since ? <> since <NW>{since}</NW></> : ""}{ap.page && ap.page.startsWith("playing") ? "" : " · connecting on the wall"}</>
+                : ap.on && fresh ? "Ready. On your iPhone: Control Center, Screen Mirroring, Bestly\u00a0Wall."
+                : "Not running right now. The Pi keeps retrying and Scout will tell you if it stays down.";
+              return (
+                <Group id="airplay" title="AirPlay" footer="Mirror your iPhone or Mac, or AirPlay a video to Bestly Wall. It plays where the clock is and the rest of the wall moves over. Anyone on your Wi-Fi can pick it.">
+                  <Row htmlFor="wall-airplay" label={<span className="inline-flex items-center gap-2"><Airplay className="h-4 w-4 text-white/60" aria-hidden />Bestly Wall in AirPlay</span>}
+                    detail={<span className={cn(!off && ap && !ap.casting && !(ap.on && fresh) && "text-amber-300")}>{detail}{ap?.rtc === "no-h264" ? " The projector's browser can't play this video format." : ""}</span>}>
+                    <Switch className={swHit} id="wall-airplay" checked={!off} onCheckedChange={(v) => act({ airplay: v }, v ? "AirPlay on." : "AirPlay off.")} />
+                  </Row>
+                  <div className="px-4 py-2">
+                    <button type="button" className="inline-flex min-h-[44px] items-center gap-2 text-[15px] font-medium text-sky-400 disabled:opacity-40" disabled={off} onClick={() => void restartAirplay()}>
+                      <RotateCw className="h-4 w-4" aria-hidden /> Restart AirPlay
+                    </button>
+                    {apMsg && <p className="text-[13px] text-white/60" role="status">{apMsg}</p>}
+                  </div>
+                </Group>
+              );
+            })()}
+      </>);
+      case "sky": return (<>
+            {/* Sky: live planes over the house, plus stars, moon, sun and planets */}
+            <Group id="sky" title="Sky on the ceiling">
+              <Row label={<span className="inline-flex items-center gap-2"><Plane className="h-4 w-4 text-white/60" aria-hidden /> Planes overhead</span>} detail="Live planes and helicopters over the house, above the strip." htmlFor="wall-air">
+                <Switch className={swHit} id="wall-air" checked={s.airShow !== false} onCheckedChange={(v) => act({ airShow: v }, v ? "Planes overhead on." : "Planes overhead off.")} />
+              </Row>
+              {s.airShow !== false && (() => {
+                const rad = Math.min(25, Math.max(2, Math.round(s.airRadiusMi ?? 15)));
+                const setRad = (n: number) => change({ airRadiusMi: Math.min(25, Math.max(2, n)) });
+                return (
+                  <Row label="Sky radius" detail="Only planes this close to home show on the ceiling. The sky key shows it too.">
+                    <div role="group" aria-label="Sky radius" className="flex shrink-0 items-center gap-1">
+                      <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Smaller radius" disabled={rad <= 2} onClick={() => setRad(rad - 1)}>
+                        <Minus className="h-5 w-5" aria-hidden />
+                      </button>
+                      <span className="w-16 whitespace-nowrap text-center text-[17px] font-medium tabular-nums text-white" aria-live="polite">{rad}{"\u00a0"}mi</span>
+                      <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Bigger radius" disabled={rad >= 25} onClick={() => setRad(rad + 1)}>
+                        <Plus className="h-5 w-5" aria-hidden />
+                      </button>
+                    </div>
+                  </Row>
+                );
+              })()}
+              <Row label={<span className="inline-flex items-center gap-2"><RadioTower className="h-4 w-4 text-white/60" aria-hidden /> Air traffic control</span>}
+                detail="Live LAX tower radio on the Desk HomePod. Turns the radio off." htmlFor="wall-atc">
+                <Switch className={swHit} id="wall-atc" checked={!!s.atc && !s.radio?.on}
+                  onCheckedChange={(v) => act(v ? { atc: true, ...(s.radio?.on ? { radio: { ...s.radio, on: false, ts: Date.now() } } : {}) } : { atc: false },
+                    v ? "LAX tower is playing on the Desk HomePod." : "Air traffic control off.")} />
+              </Row>
+              <DisclosureRow id="sky-details" label="Sky details" summary="Plane card, labels, home, space station, stars, moon, sun, planets, key">
+                {s.airShow !== false && <>
+                  <Row label="Home marker" detail="A small house where you are, in the middle of the sky map." htmlFor="wall-sky-home">
+                    <Switch className={swHit} id="wall-sky-home" checked={s.skyHome !== false} onCheckedChange={(v) => change({ skyHome: v })} />
+                  </Row>
+                  <Row label="Landmarks" detail="City labels, the downtown skyline, and the LAX runways on the sky map." htmlFor="wall-sky-landmarks">
+                    <Switch className={swHit} id="wall-sky-landmarks" checked={s.skyLandmarks !== false} onCheckedChange={(v) => change({ skyLandmarks: v })} />
+                  </Row>
+                  <Row label="Roads" detail="Street grid around home and freeways across the basin (OpenStreetMap)." htmlFor="wall-sky-roads">
+                    <Switch className={swHit} id="wall-sky-roads" checked={s.skyRoads !== false} onCheckedChange={(v) => change({ skyRoads: v })} />
+                  </Row>
+                  <Row label="Traffic" detail="Live congestion colors on the roads (TomTom; the Pi refreshes every 15 min)." htmlFor="wall-sky-traffic">
+                    <Switch className={swHit} id="wall-sky-traffic" checked={s.skyTraffic !== false} onCheckedChange={(v) => change({ skyTraffic: v })} />
+                  </Row>
+                  <Row label="Space Station name" detail="The name under the Space Station when it passes over." htmlFor="wall-iss-tag">
+                    <Switch className={swHit} id="wall-iss-tag" checked={s.issTag !== false} onCheckedChange={(v) => change({ issTag: v })} />
+                  </Row>
+                  <Row label="Nearest-plane card" detail="The big card that names the closest aircraft." htmlFor="wall-air-card">
+                    <Switch className={swHit} id="wall-air-card" checked={s.airCard !== false} onCheckedChange={(v) => change({ airCard: v })} />
+                  </Row>
+                  <Row label="Keep flight card up" htmlFor="wall-air-card-pin" dim={s.airCard === false}
+                    detail={s.airCard === false ? "Turn on Nearest-plane card to use this." : "The card stays up and rotates through the planes in view. The closest plane gets its own color."}>
+                    <Switch className={swHit} id="wall-air-card-pin" disabled={s.airCard === false} checked={!!s.airCardPin}
+                      onCheckedChange={(v) => act({ airCardPin: v }, v ? "Flight card stays up and rotates through planes." : "Flight card shows only for the closest plane.")} />
+                  </Row>
+                  {s.airCard !== false && (
+                    <Row label="Helicopters in the card" detail="Off: helicopters (like LAPD circling) never take the big card. They still fly across." htmlFor="wall-air-card-heli">
+                      <Switch className={swHit} id="wall-air-card-heli" checked={s.airCardHeli !== false} onCheckedChange={(v) => change({ airCardHeli: v })} />
+                    </Row>
+                  )}
+                  <Row label="Plane labels" detail="Name tags next to each plane and helicopter." htmlFor="wall-air-labels">
+                    <Switch className={swHit} id="wall-air-labels" checked={s.airLabels !== false} onCheckedChange={(v) => change({ airLabels: v })} />
+                  </Row>
+                  <Row label="Tags on small planes & helicopters" htmlFor="wall-air-labels-small" dim={s.airLabels === false}
+                    detail={s.airLabels === false ? "Turn on Plane labels to use this." : "Off: only airline flights get a name tag."}>
+                    <Switch className={swHit} id="wall-air-labels-small" disabled={s.airLabels === false} checked={s.airLabelsSmall !== false}
+                      onCheckedChange={(v) => act({ airLabelsSmall: v }, v ? "Tags on every plane and helicopter." : "Tags on airline flights only.")} />
+                  </Row>
+                  <Row label="Stars and constellations" detail="Bright stars plus Orion and the Big Dipper, at night." htmlFor="wall-sky-stars">
+                    <Switch className={swHit} id="wall-sky-stars" checked={s.skyStars !== false} onCheckedChange={(v) => change({ skyStars: v })} />
+                  </Row>
+                  <Row label="Star names" htmlFor="wall-sky-star-labels" dim={s.skyStars === false}
+                    detail={s.skyStars === false ? "Turn on Stars and constellations to use this." : "Show the names of bright stars and constellations."}>
+                    <Switch className={swHit} id="wall-sky-star-labels" disabled={s.skyStars === false} checked={s.skyStarLabels !== false} onCheckedChange={(v) => change({ skyStarLabels: v })} />
+                  </Row>
+                  <Row label="Sky grid" htmlFor="wall-sky-grid" dim={s.skyStars === false}
+                    detail={s.skyStars === false ? "Turn on Stars and constellations to use this." : "A faint planetarium grid over the stars (only while stars are on)."}>
+                    <Switch className={swHit} id="wall-sky-grid" disabled={s.skyStars === false} checked={s.skyGrid !== false} onCheckedChange={(v) => change({ skyGrid: v })} />
+                  </Row>
+                  <Row label="Moon" detail="Where the moon is, with tonight's real phase." htmlFor="wall-sky-moon">
+                    <Switch className={swHit} id="wall-sky-moon" checked={s.skyMoon !== false} onCheckedChange={(v) => change({ skyMoon: v })} />
+                  </Row>
+                  <Row label="Sun" detail="Where the sun is, while it's up." htmlFor="wall-sky-sun">
+                    <Switch className={swHit} id="wall-sky-sun" checked={s.skySun !== false} onCheckedChange={(v) => change({ skySun: v })} />
+                  </Row>
+                  <Row label="Planets" detail="Mercury to Saturn when they're up at dusk and night." htmlFor="wall-sky-planets">
+                    <Switch className={swHit} id="wall-sky-planets" checked={s.skyPlanets !== false} onCheckedChange={(v) => change({ skyPlanets: v })} />
+                  </Row>
+                </>}
+                <Row label="Sky key" detail="Explains the colors and symbols on the ceiling. Handy when showing people." htmlFor="wall-air-key">
+                  <Switch className={swHit} id="wall-air-key" checked={!!s.airKey} onCheckedChange={(v) => change({ airKey: v })} />
+                </Row>
+              </DisclosureRow>
+            </Group>
+      </>);
+      case "alarm": return (<>
+            {/* Wake-up alarm: the Pi wakes the projector, unmutes, raises the volume; the wall plays a sunrise with bells. */}
+            {(() => {
+              const a = alarmA, on = alarmOn, time = alarmTime, days = alarmDays, setA = setAlarm, pretty = alarmPretty, daysTxt = alarmDaysTxt;
+              return (
+                <Group id="alarm" title="Alarm" footer="The wall wakes a minute early, turns the sound on, and a sunrise with bells fills the strip. The bells get louder until you tap Stop. Your phone gets a notification if the wall can't ring.">
+                  <Row htmlFor="wall-alarm" label="Wake-up alarm" detail={on ? <><NW>{pretty}</NW>, {daysTxt}</> : "Off"}>
+                    <Switch className={swHit} id="wall-alarm" checked={on} onCheckedChange={toggleAlarm} />
+                  </Row>
+                  <div className="space-y-3 px-4 py-3">
+                    {on && <>
+                    <label className="flex items-center justify-between gap-3 text-[16px] text-white">
+                      <span>Time</span>
+                      <input type="time" value={time} onChange={(e) => e.target.value && setA({ time: e.target.value, on: true })}
+                        className="min-h-[44px] rounded-lg bg-white/[0.07] px-3 text-[16px] text-white [color-scheme:dark]" />
+                    </label>
+                    <Segmented compact label="Repeat" value={days} onChange={(v) => setA({ days: v })}
+                      options={[{ id: "once", label: "Once" }, { id: "weekdays", label: "Weekdays" }, { id: "weekends", label: "Weekends" }, { id: "daily", label: "Daily" }]} />
+                    </>}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" className={cn(btn, "px-2")} onClick={() => act({ alarm: { ...(a ?? { on: false, time }), stop: Date.now() } as WallState["alarm"] }, "Alarm stopped.")}>
+                        <Square className="h-4 w-4 shrink-0" aria-hidden /> Stop alarm
+                      </button>
+                      <button type="button" className={cn(btn, "px-2")} onClick={() => act({ alarm: { ...(a ?? { on: false, time }), test: Date.now() } as WallState["alarm"] }, "Playing a 20-second preview on the wall.")}>
+                        <Sun className="h-4 w-4 shrink-0" aria-hidden /> Preview
+                      </button>
+                    </div>
+                  </div>
+                </Group>
+              );
+            })()}
+      </>);
+      case "sleep": return (<>
+            {/* Sleep mode: counting sheep */}
+            <Group id="sleep" title="Sleep mode" footer={`Sheep hop a fence while a soft lullaby plays. It slows down as you drift off, says good night, and turns the projector off until 7\u00a0AM.`}>
+              {sheepOn ? (
+                /* Counting: Stop is the one filled button, so it's the obvious tap (the Live Activity lands here). */
+                <div className="space-y-3 px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Moon className="h-5 w-5 shrink-0 text-indigo-300" aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[17px] font-semibold text-white">Counting sheep</div>
+                      <div className="text-[15px] text-white/60">Ends at <NW>{time12(sheepEnd)}</NW></div>
+                    </div>
+                  </div>
+                  <button type="button" className={cn(btnPrimary, "w-full")} onClick={stopSheep}>
+                    <Square className="h-5 w-5" aria-hidden /> Stop counting sheep
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3 px-4 py-3">
+                  <Segmented label="Length" value={sheepMins} onChange={(v) => setSheepMins(v as "15" | "30" | "60")}
+                    options={[{ id: "15", label: "15\u00a0min" }, { id: "30", label: "30\u00a0min" }, { id: "60", label: "1\u00a0hour" }]} />
+                  <div className="flex min-h-[44px] items-center justify-between">
+                    <label htmlFor="wall-sheep-music" className="text-[16px] text-white">Lullaby music</label>
+                    <Switch className={swHit} id="wall-sheep-music" checked={sheepMusic} onCheckedChange={setSheepMusic} />
+                  </div>
+                  <button type="button" className={cn(btnPrimary, "w-full bg-indigo-500 text-white hover:bg-indigo-500/90 active:bg-indigo-500/80")} onClick={startSheep}>
+                    <Moon className="h-5 w-5" aria-hidden /> Start counting sheep
+                  </button>
+                </div>
+              )}
+            </Group>
+      </>);
+      case "heads": return (<>
+            {/* Heads-up: a card grows on the wall 15 minutes before ("soon", quiet), then "now" with a chime + a phone push. */}
+            {(() => {
+              const list = (s.heads ?? []).filter((h) => h && h.at > Date.now() - 20 * 60000).sort((x, y) => x.at - y.at);
+              if (list.length === 0) return null; // heads-ups are added from elsewhere; nothing to show until one exists
+              return (
+                <Group title="Heads-up" footer={`A card appears on the wall 15\u00a0minutes before, then at the time it chimes and your phone gets a notification.`}>
+                  {list.map((h) => (
+                    <Row key={h.id} label={h.title} detail={<><NW>{new Date(h.at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}</NW>{h.sub ? ` · ${h.sub}` : ""}</>}>
+                      <button type="button" className={cn(btn, "px-3 text-[14px]")}
+                        onClick={() => act({ heads: (s.heads ?? []).filter((x) => x.id !== h.id) }, `Removed “${h.title}”.`)}>Remove</button>
+                    </Row>
+                  ))}
+                  <div className="px-4 py-3">
+                    <button type="button" className={cn(btn, "w-full")} onClick={() => act({ headsStop: Date.now() }, "Dismissed on the wall and your phone.")}>
+                      <Square className="h-4 w-4" aria-hidden /> Dismiss what's showing
+                    </button>
+                  </div>
+                </Group>
+              );
+            })()}
+      </>);
+      case "live": return (<>
+            {/* Live Activities: the wall server drives these on Jared's iPhone. liveActs is {kind: boolean}; missing = on. */}
+            {(() => {
+              const acts = s.liveActs ?? {};
+              const setAct = (id: LiveKind, v: boolean) => {
+                const full = Object.fromEntries(LIVE_ACTS.map((x) => [x.id, x.id === id ? v : acts[x.id] !== false])) as Record<LiveKind, boolean>;
+                const label = LIVE_ACTS.find((x) => x.id === id)?.label ?? id;
+                act({ liveActs: full }, `${label} ${v ? "on" : "off"} for your iPhone.`);
+              };
+              const onCount = LIVE_ACTS.filter((x) => acts[x.id] !== false).length;
+              return (
+                <Group id="live" title="Live Activities" footer={`Live cards on your iPhone's Lock Screen and Dynamic Island, sent by the wall. ${onCount} of ${LIVE_ACTS.length} on.`}>
+                  {LIVE_ACTS.map((x) => (
+                    <Row key={x.id} htmlFor={`wall-la-${x.id}`} detail={x.detail}
+                      label={<span className="inline-flex items-center gap-2"><x.icon className={cn("h-4 w-4 shrink-0", x.id === "incident" ? "text-red-400" : "text-white/60")} aria-hidden />{x.label}</span>}>
+                      <Switch className={swHit} id={`wall-la-${x.id}`} checked={acts[x.id] !== false} onCheckedChange={(v) => setAct(x.id, v)} />
+                    </Row>
+                  ))}
+                </Group>
+              );
+            })()}
+            {/* Packages: "Got it" hides one from the wall (W2 data: wall_admin_packages / wall_package_done). */}
+            <PackagesCard />
+      </>);
+      case "shows": return (<>
+            {/* Show for friends: a ~2 minute tour, then a party loop until you stop it (45 min max). */}
+            <Group id="show" title="Show for friends"
+              footer={<>The show is a 2-minute tour, then a party until you stop it (45{"\u00a0"}minutes max). The skit is a 2-minute cartoon with speech bubbles. Music and voices play when wall sound is on and Do Not Disturb isn't; otherwise it's lights only.</>}>
+              {tour ? (
+                /* Playing: Stop is the one filled button, so it's the obvious tap (the Live Activity lands here). */
+                <div className="space-y-3 px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    {skitOn ? <Clapperboard className="h-5 w-5 shrink-0 text-red-300" aria-hidden /> : <PartyPopper className="h-5 w-5 shrink-0 text-red-300" aria-hidden />}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[17px] font-semibold text-white">{TOUR_NAME[tour.cmd]} is playing</div>
+                      <div className="text-[15px] text-white/60">Started <NW>{time12(tour.at)}</NW></div>
+                    </div>
+                  </div>
+                  <button type="button" className={cn(btnPrimary, "w-full bg-red-500 text-white hover:bg-red-500/90 active:bg-red-500/80")} onClick={stopShow}>
+                    <Square className="h-5 w-5" aria-hidden /> {skitOn ? "Stop the skit" : "Stop the show"}
+                  </button>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("play")}>
+                      <Presentation className="h-4 w-4 shrink-0" aria-hidden /> Show
+                    </button>
+                    <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("party")}>
+                      <PartyPopper className="h-4 w-4 shrink-0" aria-hidden /> Party
+                    </button>
+                    <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("skit")}>
+                      <Clapperboard className="h-4 w-4 shrink-0" aria-hidden /> Skit
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 px-4 py-3">
+                  <button type="button" className={cn(btnPrimary, "w-full")} onClick={() => playShow("play")}>
+                    <Presentation className="h-5 w-5" aria-hidden /> Play the show
+                  </button>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("party")}>
+                      <PartyPopper className="h-4 w-4 shrink-0" aria-hidden /> Party
+                    </button>
+                    <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("skit")}>
+                      <Clapperboard className="h-4 w-4 shrink-0" aria-hidden /> Skit
+                    </button>
+                    <button type="button" className={cn(btn, "px-2")} onClick={stopShow}>
+                      <Square className="h-4 w-4 shrink-0" aria-hidden /> Stop
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2 border-t border-white/[0.07] px-4 py-3">
+                <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("hshow")}>
+                  <Ghost className="h-4 w-4 shrink-0" aria-hidden /> Halloween show
+                </button>
+                <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("hparty")}>
+                  <Skull className="h-4 w-4 shrink-0" aria-hidden /> Halloween party
+                </button>
+              </div>
+            </Group>
+      </>);
+      case "neon": return (<>
+            {/* W8 round 4: the projection-mapped neon sign on the sign wall (glow, looks, alert animations, fine-align) */}
+            <WallLedSign value={s.ledSign} health={(st as { lsign?: LedSignHealth } | null)?.lsign} onChange={(v) => change({ ledSign: v })} />
+      </>);
+      case "power": return (<>
+            <ProjectorHealth health={st?.health} />
+            <Group id="power" title="Power" footer={powerMsg ?? "Turn on and Turn off hold until the next switch at 7\u00a0AM or midnight."}>
+              <div className="grid grid-cols-2 gap-2 border-b border-white/[0.07] p-2">
+                <button type="button" className={btn} onClick={() => void power(true)}><Sun className="h-5 w-5" aria-hidden /> Turn on</button>
+                <button type="button" className={btn} onClick={() => void power(false)}><Moon className="h-5 w-5" aria-hidden /> Turn off</button>
+              </div>
+              <Row label="Away mode" detail="Taking it to a gig. The Pi won't wake it, open the wall or send offline alerts." htmlFor="wall-away">
+                <Switch className={swHit} id="wall-away" checked={s.away} onCheckedChange={(v) => act({ away: v }, v ? "Away mode on. The Pi leaves the projector alone." : "Away mode off.")} />
+              </Row>
+            </Group>
+      </>);
+      case "projector": return (<>
+            <Group id="projector" title="Projector" footer={projMsg ?? undefined}>
+              <div className="grid grid-cols-2 gap-2 border-b border-white/[0.07] p-2">
+                <button type="button" className={btn} onClick={() => void focus()}><Focus className="h-5 w-5" aria-hidden /> Focus</button>
+                <button type="button" className={btn} onClick={() => void restartWall()}><RotateCw className="h-5 w-5" aria-hidden /> Restart</button>
+              </div>
+              <Row label="Sign wall focus"
+                detail={<>
+                  One lens can only be sharpest at one distance, and the sign wall sits a few inches behind the strip. Nudge until both look good; the wall remembers it and puts it back after Focus and every morning.
+                  {st?.focus?.tuned ? <> Saved: <NW>{st.focus.offset ?? 0} {Math.abs(st.focus.offset ?? 0) === 1 ? "step" : "steps"}</NW> from autofocus.</> : null}
+                  {st?.focus?.err ? <span className="text-amber-300"> {st.focus.err}</span> : null}
+                </>}>
+                <div className="flex shrink-0 gap-2" role="group" aria-label="Nudge focus">
+                  <button type="button" className={cn(btn, "px-3")} disabled={!!st?.focus?.busy} onClick={() => void nudgeFocus("focus_left")} aria-label="Nudge focus left">
+                    <ArrowLeft className="h-5 w-5" aria-hidden />
+                  </button>
+                  <button type="button" className={cn(btn, "px-3")} disabled={!!st?.focus?.busy} onClick={() => void nudgeFocus("focus_right")} aria-label="Nudge focus right">
+                    <ArrowRight className="h-5 w-5" aria-hidden />
+                  </button>
+                </div>
+              </Row>
+              <Row label="Auto keystone" detail="Off keeps the picture square so your alignment doesn't shift. Turn on only if you move the projector." htmlFor="wall-keystone">
+                <Switch className={swHit} id="wall-keystone" checked={!!s.autoKeystone} onCheckedChange={(v) => act({ autoKeystone: v }, v ? "Auto keystone on." : "Auto keystone off.")} />
+              </Row>
+            </Group>
+            {/* Electricity: live watts + LADWP cost estimate (server.py power_loop via the watchdog status) */}
+            <WallPowerCost meter={st?.power_meter} />
+      </>);
+      case "skyfit": return (<>
+            <Group id="sky-fit" title="Sky fit" footer="The sky is a map seen from below. These make planes move the right way from your desk.">
+              <Row label="Wall faces" detail="The direction your wall faces." htmlFor="wall-bearing">
+                <select id="wall-bearing" value={String(s.airBearing ?? 0)} onChange={(e) => act({ airBearing: Number(e.target.value) }, "Sky direction saved.")}
+                  className="min-h-[44px] rounded-lg bg-white/[0.08] px-3 text-[16px] text-white ring-1 ring-white/15 focus:outline-none focus:ring-2 focus:ring-sky-400">
+                  {["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"].map((n, i) => <option key={n} value={i * 45}>{n}</option>)}
+                </select>
+              </Row>
+              {(() => {
+                // W1 round 4: move "home" on the ceiling; the whole sky (planes, rings, sun, moon, stars) re-centers on it
+                const hp = s.homePos ?? { x: 0.5, y: 0.5 };
+                const nudge = (dx: number, dy: number) => {
+                  const r = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 100) / 100;
+                  change({ homePos: { x: r(hp.x + dx), y: r(hp.y + dy) } });
+                };
+                const off = !s.homePos || (Math.abs(hp.x - 0.5) < 0.005 && Math.abs(hp.y - 0.5) < 0.005);
+                return (
+                  <Row label="Home on the sky" detail={off ? "In the middle of the sky. Nudge it to where your desk really is." : `Moved ${Math.round(Math.abs(hp.x - 0.5) * 100)}% ${hp.x < 0.5 ? "left" : "right"}, ${Math.round(Math.abs(hp.y - 0.5) * 100)}% ${hp.y < 0.5 ? "up" : "down"}. The whole sky moves with it.`}>
+                    <div role="group" aria-label="Move home on the sky" className="grid shrink-0 grid-cols-3 gap-1">
+                      <span />
+                      <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home up" onClick={() => nudge(0, -0.05)}><ArrowUp className="h-5 w-5" aria-hidden /></button>
+                      <span />
+                      <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home left" onClick={() => nudge(-0.05, 0)}><ArrowLeft className="h-5 w-5" aria-hidden /></button>
+                      <button type="button" className={cn(btn, "w-11 px-0 text-[13px]")} aria-label="Put home back in the middle" disabled={off} onClick={() => change({ homePos: null })}>Mid</button>
+                      <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home right" onClick={() => nudge(0.05, 0)}><ArrowRight className="h-5 w-5" aria-hidden /></button>
+                      <span />
+                      <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home down" onClick={() => nudge(0, 0.05)}><ArrowDown className="h-5 w-5" aria-hidden /></button>
+                      <span />
+                    </div>
+                  </Row>
+                );
+              })()}
+            </Group>
+      </>);
+      case "alignment": return (<>
+            <Group id="alignment" title="Alignment"
+              footer={tool === "air"
+                ? "The violet box is the sky: live planes fly across it. Put it on the open wall above the strip."
+                : tool === "wing"
+                ? "The teal box is the Sign the wall area. Drag it onto the open wall on the left. Bars stretch a side; Bigger and Smaller keep the shape."
+                : tool === "corners"
+                ? "The black box is the projector's whole picture. Drag the white dots onto the corners of your strip. Bars stretch one side, the blue dot moves everything, and Bigger and Smaller keep the shape."
+                : "Drag the orange dots over the shadow where the TV blocks the light. The wall stays dark there and moves text out of the way."}>
+              <div className="space-y-2 px-4 py-3">
+                <button type="button" className={cn(btnPrimary, "w-full")}
+                  onClick={async () => {
+                    change({ calGrid: true });
+                    const prompt = "Wall alignment: the alignment grid is on the wall now. I'm attaching 2 photos taken from where I usually sit (one with the lights on, one with the lights off). Re-fit the strip, the sign wall, the blocked TV area and the sky (fill the whole ceiling, text and planes must look straight from where I sit). Save it, turn the grid off, and check it on the projector. Use the wall-realign skill.";
+                    await copyText(prompt);
+                    setCopiedAlign(true); setTimeout(() => setCopiedAlign(false), 2500);
+                    toast.success("Grid is on and the prompt is copied. Take 2 photos from your usual spot.", { id: "wall-act" });
+                  }}>
+                  {copiedAlign ? <CheckCircle2 className="h-5 w-5" aria-hidden /> : <Copy className="h-5 w-5" aria-hidden />}
+                  {copiedAlign ? "Copied. Grid is on" : "Re-align with Claude"}
+                </button>
+                <p className="text-[13px] text-white/50">Turns on the grid and copies a prompt. Take 2 photos from your usual spot (lights on and off) and paste the prompt with them to Claude.</p>
+              </div>
+              <Row label="Alignment grid" detail="Fills the projector with a labeled grid. While you adjust, the block you picked below glows on the wall." htmlFor="wall-cal">
+                <Switch className={swHit} id="wall-cal" checked={!!s.calGrid} onCheckedChange={(v) => change({ calGrid: v })} />
+              </Row>
+              <Row label="Move everything together" detail="Bumped the projector? Drag the blue dot and every area slides as one." htmlFor="wall-link">
+                <Switch className={swHit} id="wall-link" checked={linkAll} onCheckedChange={setLinkAll} />
+              </Row>
+              <Row label="Show guides on the wall" detail="Outlines the strip and blocked area so you can line them up." htmlFor="wall-guides">
+                <Switch className={swHit} id="wall-guides" checked={s.mapping} onCheckedChange={(v) => change({ mapping: v })} />
+              </Row>
+              <div className="space-y-3 px-4 py-3">
+                <UndoKeys onUndo={doUndo} onRedo={doRedo} />
+                <div className="flex items-center gap-3">
+                  <p className="min-w-0 flex-1 text-[13px] text-white/55" aria-live="polite">
+                    {editing ? "Editing. Drag the dots, then tap Done." : "Locked, so a stray swipe can't move the wall."}
+                  </p>
+                  <button type="button" aria-pressed={editing} onClick={() => setEditing((v) => !v)}
+                    className={cn(btn, "shrink-0", editing && "font-semibold text-sky-400")}>
+                    {editing ? <Check className="h-4 w-4" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}
+                    {editing ? "Done" : "Edit layout"}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2" role="group" aria-label="Undo and redo layout changes">
+                  {([["undo", nextUndo, Undo2], ["redo", nextRedo, Redo2]] as const).map(([dir, st, Icon]) => {
+                    const name = dir === "undo" ? "Undo" : "Redo";
+                    const when = st ? stepTime(st) : "";
+                    const keys = dir === "undo" ? (isMac ? "\u2318Z" : "Ctrl+Z") : (isMac ? "\u21E7\u2318Z" : "Ctrl+Shift+Z");
+                    return (
+                      <button key={dir} type="button" disabled={!st || geoWorking} onClick={dir === "undo" ? doUndo : doRedo}
+                        aria-label={st ? `${name}: ${st.reason}${when ? `, ${when}` : ""}` : `Nothing to ${dir}`}
+                        title={`${name} (${keys})`} aria-keyshortcuts={dir === "undo" ? "Meta+Z Control+Z" : "Meta+Shift+Z Control+Shift+Z"}
+                        className={cn(btn, "min-h-[52px] min-w-0 flex-col items-start justify-center gap-0 px-3 py-1.5 text-left")}>
+                        <span className="flex items-center gap-1.5 text-[15px] font-semibold">
+                          {geoWorking ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <Icon className="h-4 w-4" aria-hidden />}
+                          {name}
+                        </span>
+                        <span className="block w-full truncate text-[12px] font-normal text-white/55">
+                          {st ? <>{st.reason}{when && <> · <NW>{when}</NW></>}</> : `Nothing to ${dir}`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <Segmented compact label="What to adjust" value={tool}
+                  onChange={(t) => {
+                    if (t === "mask" && !s.mask) {
+                      if (editing) addMask(); else toast("Tap Edit layout first, then add the blocked area.", { id: "wall-act" });
+                    } else { setTool(t); setSel(0); }
+                  }}
+                  options={[{ id: "corners", label: "Strip" }, { id: "mask", label: <><Triangle className="h-4 w-4" aria-hidden /> Blocked</> }, { id: "wing", label: <><PenLine className="h-4 w-4" aria-hidden /> Sign</> }, { id: "air", label: <><Plane className="h-4 w-4" aria-hidden /> Sky</> }]} />
+              <div ref={padRef} className={cn("relative aspect-video w-full select-none overflow-hidden rounded-xl ring-1 ring-white/15", editing ? "touch-none" : "touch-pan-y")} style={{ background: "#000" }}>
+                <svg viewBox="0 0 1600 900" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
+                  <polygon points={s.corners.map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
+                    fill="rgba(255,248,236,0.14)" stroke="#FFF8EC" strokeWidth={tool === "corners" ? 5 : 3} />
+                  <polygon points={(s.air ?? DEFAULT_AIR).map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
+                    fill="rgba(191,90,242,0.14)" stroke="#BF5AF2" strokeWidth={tool === "air" ? 5 : 2} strokeDasharray={tool === "air" ? undefined : "14 10"} />
+                  <polygon points={(s.wing ?? DEFAULT_WING).map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
+                    fill="rgba(100,210,255,0.16)" stroke="#64D2FF" strokeWidth={tool === "wing" ? 5 : 2} strokeDasharray={tool === "wing" ? undefined : "14 10"} />
+                  {s.mask && (
+                    <polygon points={s.mask.map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
+                      fill="rgba(255,149,0,0.28)" stroke="#FF9500" strokeWidth={tool === "mask" ? 5 : 3} />
+                  )}
+                </svg>
+                {tool !== "mask" && quad && quad.map((a, n) => {
+                  const b = quad[(n + 1) % quad.length];
+                  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+                  const deg = (Math.atan2((b[1] - a[1]) * 9, (b[0] - a[0]) * 16) * 180) / Math.PI;
+                  const id = EDGE + n;
+                  return (
+                    <button key={`edge-${n}`} type="button" disabled={!editing}
+                      aria-label={`Stretch the ${["top", "right", "bottom", "left"][n]} side`}
+                      aria-pressed={sel === id}
+                      onPointerDown={startDrag(id)} onFocus={() => setSel(id)}
+                      onKeyDown={(e) => {
+                        const k: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+                        if (k[e.key]) { e.preventDefault(); nudge(...k[e.key]); }
+                      }}
+                      style={{ left: `${mx * 100}%`, top: `${my * 100}%`, transform: `rotate(${deg}deg)` }}
+                      className="absolute -ml-[22px] -mt-[22px] flex h-11 w-11 touch-none items-center justify-center focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50">
+                      <span className={cn(
+                        "block h-[9px] w-7 rounded-full border-2 border-black bg-[#FFF8EC] shadow-[0_0_0_2px_rgba(0,0,0,0.55)] transition-transform duration-100",
+                        sel === id && "scale-125 ring-4 ring-sky-400/70",
+                      )} />
+                    </button>
+                  );
+                })}
+                {handles.map((p, i) => {
+                  const isAll = i === handles.length - 1;
+                  return (
+                    <button key={`${tool}-${i}`} type="button" disabled={!editing}
+                      aria-label={isAll ? "Move the whole shape" : `${tool === "mask" ? "Blocked area" : tool === "wing" ? "Sign wall" : tool === "air" ? "Sky" : "Corner"} point ${i + 1}`}
+                      aria-pressed={sel === i}
+                      onPointerDown={startDrag(i)} onFocus={() => setSel(i)}
+                      onKeyDown={(e) => {
+                        const k: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+                        if (k[e.key]) { e.preventDefault(); nudge(...k[e.key]); }
+                      }}
+                      style={{ left: `${p[0] * 100}%`, top: `${p[1] * 100}%` }}
+                      className="absolute -ml-[22px] -mt-[22px] flex h-11 w-11 touch-none items-center justify-center rounded-full focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50">
+                      <span className={cn(
+                        "block h-5 w-5 rounded-full border-[2.5px] shadow-[0_0_0_2px_rgba(0,0,0,0.55)] transition-transform duration-100",
+                        isAll ? "border-white bg-sky-400" : tool === "mask" ? "border-white bg-orange-400" : tool === "wing" ? "border-black bg-[#64D2FF]" : tool === "air" ? "border-black bg-[#BF5AF2]" : "border-black bg-[#FFF8EC]",
+                        sel === i && "scale-125 ring-4 ring-sky-400/70",
+                      )} />
+                    </button>
+                  );
+                })}
+                {!editing && (
+                  <span className="pointer-events-none absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-black/70 px-3 py-1 text-[12px] text-white/80 ring-1 ring-white/15">
+                    <Lock className="h-3 w-3" aria-hidden /> Locked
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Nudge the selected point">
+                  <span />
+                  <button type="button" disabled={!editing} aria-label="Nudge up" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, -1)}><ArrowUp className="h-5 w-5" /></button>
+                  <span />
+                  <button type="button" disabled={!editing} aria-label="Nudge left" className={cn(btn, "w-11 px-0")} onClick={() => nudge(-1, 0)}><ArrowLeft className="h-5 w-5" /></button>
+                  <span className="flex h-11 w-11 items-center justify-center text-[12px] text-white/45">{sel >= EDGE ? ["Top", "Right", "Bottom", "Left"][sel - EDGE] : sel === handles.length - 1 ? "All" : sel + 1}</span>
+                  <button type="button" disabled={!editing} aria-label="Nudge right" className={cn(btn, "w-11 px-0")} onClick={() => nudge(1, 0)}><ArrowRight className="h-5 w-5" /></button>
+                  <span />
+                  <button type="button" disabled={!editing} aria-label="Nudge down" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, 1)}><ArrowDown className="h-5 w-5" /></button>
+                  <span />
+                </div>
+                <div className="min-w-[180px] flex-1 space-y-2">
+                  <Segmented label="Drag precision" value={fine ? "fine" : "fast"} onChange={(v) => setFine(v === "fine")}
+                    options={[{ id: "fine", label: "Precise" }, { id: "fast", label: "Fast" }]} />
+                  {tool !== "mask" ? (
+                    <>
+                      <div className="flex gap-2" role="group" aria-label="Resize the strip, same shape">
+                        <button type="button" disabled={!editing} className={cn(btn, "flex-1")} onClick={() => scale(false)}>
+                          <Minimize2 className="h-4 w-4" aria-hidden /> Smaller
+                        </button>
+                        <button type="button" disabled={!editing} className={cn(btn, "flex-1")} onClick={() => scale(true)}>
+                          <Maximize2 className="h-4 w-4" aria-hidden /> Bigger
+                        </button>
+                      </div>
+                      <button type="button" disabled={!editing} className={cn(btn, "w-full")} onClick={() => change(tool === "wing" ? { wing: DEFAULT_WING } : tool === "air" ? { air: DEFAULT_AIR } : { corners: DEFAULT_CORNERS })}>
+                        <RotateCcw className="h-4 w-4" aria-hidden /> {tool === "wing" ? "Reset sign wall" : tool === "air" ? "Reset sky" : "Reset corners"}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex gap-2">
+                      {s.mask && s.mask.length < 6 && (
+                        <button type="button" disabled={!editing} className={cn(btn, "flex-1")} onClick={() => {
+                          const m = s.mask!; const a = m[m.length - 1], b = m[0];
+                          change({ mask: [...m, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]] });
+                        }}>Add point</button>
+                      )}
+                      <button type="button" disabled={!editing} className={cn(btn, "flex-1 text-red-400")} onClick={() => { change({ mask: null }); setTool("corners"); setSel(0); }}>
+                        <Trash2 className="h-4 w-4" aria-hidden /> Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Group>
+      </>);
+      case "tests": return (<>
+            <Group id="tests" title="Tests" footer="Real alerts show on their own: move the car on sweeping mornings, and anything Scout flags.">
+              <Row label="Move-car alert" htmlFor="wall-t-sweep">
+                <Switch className={swHit} id="wall-t-sweep" checked={s.testSweep} onCheckedChange={(v) => change({ testSweep: v })} />
+              </Row>
+              <Row label="Scout alert" htmlFor="wall-t-scout">
+                <Switch className={swHit} id="wall-t-scout" checked={s.testScout} onCheckedChange={(v) => change({ testScout: v })} />
+              </Row>
+              <div className="grid grid-cols-2 gap-2 px-4 py-3">
+                <button type="button" className={cn(btn, "px-2")} onClick={() => void signAction("test")}>
+                  <Sparkles className="h-4 w-4 shrink-0" aria-hidden /> Test signature
+                </button>
+                <button type="button" className={cn(btn, "px-2")} onClick={() => act({ signNear: Date.now() }, "Showing names like someone walked up.")}>
+                  <UserRound className="h-4 w-4 shrink-0" aria-hidden /> Someone's near
+                </button>
+                <button type="button" className={cn(btn, "px-2")} onClick={() => act({ soundTest: Date.now() }, "Playing every wall sound: chime, mode switch, alert, signature, celebration.")}>
+                  <Volume2 className="h-4 w-4 shrink-0" aria-hidden /> Every sound
+                </button>
+                <button type="button" className={cn(btn, "px-2")} onClick={() => act({ fxPlay: { name: "show", at: Date.now() } }, "The wall powers down, then wakes back up.")}>
+                  <Sparkles className="h-4 w-4 shrink-0" aria-hidden /> Wake + sleep
+                </button>
+              </div>
+            </Group>
+      </>);
+      default: return null;
+    }
+  };
+
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-10 xl:max-w-[1640px]">
+    <div ref={rootRef} className="mx-auto max-w-2xl space-y-6 pb-10 xl:max-w-[1400px]">
+      {/* Phone: an open pane replaces the whole page (its own large title and back control). */}
+      <div className={cn(pane && "hidden xl:block")}>
       <PageHeader
         title="Wall"
         description="The projector strip above your desk. Changes show up as you make them."
@@ -770,6 +1578,7 @@ export default function Wall() {
           </span>
         )}
       />
+      </div>
 
       {err && (
         <div role="alert" className="flex items-start gap-2 rounded-2xl bg-red-500/10 p-4 text-[15px] text-red-200 ring-1 ring-red-500/30">
@@ -778,12 +1587,12 @@ export default function Wall() {
         </div>
       )}
 
-      {/* Desktop: grouped cards in columns. 1280 px: two columns (Now + Sky and guests | Shows and alerts + Sound);
-          1536 px: three (Now | Shows and alerts | Sound, then Sky and guests). Phone: one column in this order. */}
-      <div className="grid items-start gap-6 xl:grid-cols-2 xl:gap-8 2xl:grid-cols-3">
-      <div className="flex min-w-0 flex-col gap-6 xl:col-start-1 xl:row-start-1 2xl:row-span-2">
+      {/* Phone: Now, then the Settings list (a pane replaces both). Desktop (1280 px+): Now on the left,
+          the Settings list or the open pane on the right, like Settings on iPad. */}
+      <div className="grid items-start gap-6 xl:grid-cols-2 xl:gap-8">
+      <div className={cn("flex min-w-0 flex-col gap-6", pane && "hidden xl:flex")}>
       <h2 className="hidden px-1 text-[20px] font-semibold tracking-tight text-white xl:block">Now</h2>
-      {/* Now: status, what's on the wall, and the four things you reach for most */}
+      {/* Now: status, power, what's on the wall and Scout's one thing */}
       {hero && (
         <section aria-label="Now" className={cn("rounded-2xl p-4 ring-1", toneRing[hero.tone as keyof typeof toneRing])}>
           <div className="flex items-start gap-3">
@@ -792,62 +1601,24 @@ export default function Wall() {
               <div className="text-[17px] font-semibold leading-snug text-white">{hero.title}</div>
               {hero.sub && <div className="mt-0.5 text-[15px] leading-snug text-white/65">{hero.sub}</div>}
             </div>
+            {/* Power: filled (the one primary action) only while the projector is off. */}
+            <button type="button" onClick={() => void power(asleep)} aria-label={asleep ? "Turn on the projector" : "Turn off the projector"}
+              className={cn(asleep ? btnPrimary : btn, "-mr-1 shrink-0 px-3.5")}>
+              <Power className="h-5 w-5" aria-hidden /> {asleep ? "Turn on" : "Turn off"}
+            </button>
           </div>
           <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[15px]">
             <dt className="text-white/50">Mode</dt><dd className="text-white">{modeLabel}</dd>
             {s.theme && <><dt className="text-white/50">Theme</dt><dd className="text-white">{themeNow.label}</dd></>}
             <dt className="text-white/50">Playing</dt><dd className="text-white">{playing ?? <span className="text-white/60">Nothing extra</span>}</dd>
-            {s.one && <><dt className="text-white/50">One thing</dt><dd className="min-w-0 truncate text-white">{s.one}</dd></>}
           </dl>
           <div className="mt-2 text-[13px] text-white/45" aria-live="polite">
             {sync && <span className="mr-1.5 inline-flex items-center gap-1.5 text-white/70 sm:hidden"><span className={cn("h-2 w-2 rounded-full", sync.dot)} aria-hidden />{sync.text} ·</span>}
             Last check {agoText(statusAge)}
             {st?.override && st.override.until * 1000 > Date.now() && <> · held {st.override.on ? "on" : "off"} until <NW>{time12(st.override.until * 1000)}</NW></>}
           </div>
-          {!!r.issues?.length && (
-            <ul className="mt-3 space-y-2 border-t border-white/10 pt-3">
-              {r.issues.map((i) => (
-                <li key={i.key} className="flex items-start gap-2 text-[15px]">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden />
-                  <span><span className="text-white">{i.title}</span>{i.needs && <span className="block text-white/60">{i.needs}</span>}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="mt-4 grid grid-cols-4 gap-2" role="group" aria-label="Quick actions">
-            <QuickAction icon={Power} label={asleep ? "Turn on" : "Turn off"} onClick={() => void power(asleep)} />
-            <QuickAction icon={showOn ? Square : Presentation} label={showOn ? "Stop show" : "Play show"} active={showOn}
-              onClick={() => (showOn ? stopShow() : playShow("play"))} />
-            <QuickAction icon={skitOn ? Square : Clapperboard} label={skitOn ? "Stop skit" : "Skit"} active={skitOn}
-              onClick={() => (skitOn ? stopShow() : playShow("skit"))} />
-            <QuickAction icon={Moon} label={sheepOn ? "Stop sheep" : "Sleep mode"} active={sheepOn}
-              onClick={() => (sheepOn ? stopSheep() : startSheep())} />
-          </div>
-          <MotivateButton seq={s.motivate?.seq ?? 0} onFire={(m) => act({ motivate: m }, "Motivate me: a pep talk is on its way to the wall.")} />
-          {s.away && (
-            <button type="button" className={cn(btn, "mt-2 w-full")} onClick={() => act({ away: false }, "Away mode off. The Pi looks after the projector again.")}>
-              <Plane className="h-4 w-4" aria-hidden /> Turn off Away mode
-            </button>
-          )}
-        </section>
-      )}
-
-      <DndCard dnd={s.dnd} onChange={(d, msg) => act({ dnd: d }, msg)} />
-
-      <VoiceCard voice={s.voice} onChange={(v, msg) => act({ voice: v }, msg)} />
-
-      {/* On the wall: mode + the big message */}
-      <Group title="On the wall" footer="Scout picks the one thing from today's list and updates it every 10 minutes.">
-        <Row label="Off when I leave home" detail={"Uses your iPhone's location in Home Assistant. Turns off 10\u00a0min after you leave, back on when you get home (7\u00a0AM to bedtime)."} htmlFor="wall-presence">
-          <Switch className={swHit} id="wall-presence" checked={s.presence !== false} onCheckedChange={(v) => act({ presence: v }, v ? "The wall turns off when you leave home." : "The wall stays on its schedule when you leave.")} />
-        </Row>
-        <div className="p-2">
-          <Segmented compact label="Mode" value={s.mode} onChange={(m) => act({ mode: m }, `Mode: ${MODES.find((x) => x.id === m)?.label ?? m}.`)}
-            options={MODES.map((m) => ({ id: m.id, label: m.label }))} />
-          {modeAbout && <p className="px-2 pb-1 pt-2 text-[13px] leading-snug text-white/55">{modeAbout}</p>}
-        </div>
         {/* The one thing: read-only. Scout fills it (wall_one_thing_tick every 10 min); no typing here. */}
-        <div className="flex items-start gap-3 border-y border-white/[0.07] px-4 py-3">
+        <div className="mt-3 flex items-start gap-3 border-t border-white/10 pt-3">
           <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" aria-hidden />
           <div className="min-w-0 flex-1" aria-live="polite">
             <div className="text-[13px] font-medium uppercase tracking-[0.06em] text-white/50">The one thing · picked by Scout</div>
@@ -867,179 +1638,23 @@ export default function Wall() {
             <RotateCw className={cn("h-5 w-5", oneBusy && "animate-spin motion-reduce:animate-none")} aria-hidden />
           </button>
         </div>
-        <Row label="Show today's date on the left" detail="The left side of the strip shows today's date instead of rotating through messages." htmlFor="wall-left-date">
-          <Switch className={swHit} id="wall-left-date" checked={!!s.leftDate} onCheckedChange={(v) => act({ leftDate: v }, v ? "Today's date on the left." : "The left side rotates again.")} />
-        </Row>
-      </Group>
-
-      {/* Strip widgets (W2 round 3): the left side takes turns with the clock; switch any widget off here. */}
-      <Group id="strip-widgets" title="Strip widgets" footer="The left side of the strip takes turns with the clock; Turo calendar and Claude usage take turns on the right. A widget with nothing to show skips its turn.">
-        {STRIP_WIDGETS.map((w) => {
-          const hid = `wall-w-${w.id.replace("$", "usd")}`;
-          return (
-            <Row key={w.id} label={w.label} detail={w.detail} htmlFor={hid}>
-              <Switch className={swHit} id={hid} checked={s.widgets?.[w.id] !== false}
-                onCheckedChange={(v) => act({ widgets: { ...(s.widgets ?? {}), [w.id]: v } }, `${w.label} ${v ? "on" : "off"}.`)} />
-            </Row>
-          );
-        })}
-        <div className="px-4 py-3">
-          <button type="button" className={cn(btn, "w-full")} onClick={() => act({ bookingDemo: Date.now() }, "Showing a sample Turo booking on the strip for 20 seconds.")}>
-            <Sparkles className="h-4 w-4 shrink-0" aria-hidden /> Show a sample Turo booking
-          </button>
-        </div>
-      </Group>
-
-      {/* Demo text: only while Demo mode is showing */}
-      {s.mode === "demo" && (
-        <Group title="Demo text" footer="Left and right can be two lines. Changes show on the wall as you type.">
-          {DEMO_FIELDS.map((f) => (
-            <div key={f.key} className="flex items-start gap-3 border-b border-white/[0.07] px-4 py-2 last:border-b-0">
-              <label htmlFor={`wall-${f.key}`} className="min-h-[44px] w-16 shrink-0 pt-3 text-[15px] text-white/60">{f.label}</label>
-              <textarea
-                id={`wall-${f.key}`} rows={f.lines} maxLength={60} value={demo[f.key]} placeholder={f.placeholder.replace("\n", " / ")}
-                autoComplete="off" spellCheck={false}
-                onFocus={() => (typing.current = true)}
-                onBlur={() => { typing.current = false; }}
-                onChange={(e) => {
-                  const v = f.lines === 1 ? e.target.value.replace(/\n/g, " ") : e.target.value.split("\n").slice(0, 2).join("\n");
-                  setDemo((d) => ({ ...d, [f.key]: v }));
-                  change({ [f.key]: v } as Partial<WallState>, { now: false });
-                }}
-                className="min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[17px] leading-snug text-white placeholder:text-white/35 focus:outline-none"
-              />
-            </div>
-          ))}
-        </Group>
+          {!!r.issues?.length && (
+            <ul className="mt-3 space-y-2 border-t border-white/10 pt-3">
+              {r.issues.map((i) => (
+                <li key={i.key} className="flex items-start gap-2 text-[15px]">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden />
+                  <span><span className="text-white">{i.title}</span>{i.needs && <span className="block text-white/60">{i.needs}</span>}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {s.away && (
+            <button type="button" className={cn(btn, "mt-2 w-full")} onClick={() => act({ away: false }, "Away mode off. The Pi looks after the projector again.")}>
+              <Plane className="h-4 w-4" aria-hidden /> Turn off Away mode
+            </button>
+          )}
+        </section>
       )}
-
-      </div>
-      <div className="flex min-w-0 flex-col gap-6 xl:col-start-2 xl:row-start-1 2xl:row-span-2">
-      <h2 className="hidden px-1 text-[20px] font-semibold tracking-tight text-white xl:block">Shows and alerts</h2>
-      {/* Show for friends: a ~2 minute tour, then a party loop until you stop it (45 min max). */}
-      <Group id="show" title="Show for friends"
-        footer={<>The show is a 2-minute tour, then a party until you stop it (45{"\u00a0"}minutes max). The skit is a 2-minute cartoon with speech bubbles. Music and voices play when wall sound is on and Do Not Disturb isn't; otherwise it's lights only.</>}>
-        {tour ? (
-          /* Playing: Stop is the one filled button, so it's the obvious tap (the Live Activity lands here). */
-          <div className="space-y-3 px-4 py-3">
-            <div className="flex items-center gap-3">
-              {skitOn ? <Clapperboard className="h-5 w-5 shrink-0 text-red-300" aria-hidden /> : <PartyPopper className="h-5 w-5 shrink-0 text-red-300" aria-hidden />}
-              <div className="min-w-0 flex-1">
-                <div className="text-[17px] font-semibold text-white">{TOUR_NAME[tour.cmd]} is playing</div>
-                <div className="text-[15px] text-white/60">Started <NW>{time12(tour.at)}</NW></div>
-              </div>
-            </div>
-            <button type="button" className={cn(btnPrimary, "w-full bg-red-500 text-white hover:bg-red-500/90 active:bg-red-500/80")} onClick={stopShow}>
-              <Square className="h-5 w-5" aria-hidden /> {skitOn ? "Stop the skit" : "Stop the show"}
-            </button>
-            <div className="grid grid-cols-3 gap-2">
-              <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("play")}>
-                <Presentation className="h-4 w-4 shrink-0" aria-hidden /> Show
-              </button>
-              <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("party")}>
-                <PartyPopper className="h-4 w-4 shrink-0" aria-hidden /> Party
-              </button>
-              <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("skit")}>
-                <Clapperboard className="h-4 w-4 shrink-0" aria-hidden /> Skit
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2 px-4 py-3">
-            <button type="button" className={cn(btnPrimary, "w-full")} onClick={() => playShow("play")}>
-              <Presentation className="h-5 w-5" aria-hidden /> Play the show
-            </button>
-            <div className="grid grid-cols-3 gap-2">
-              <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("party")}>
-                <PartyPopper className="h-4 w-4 shrink-0" aria-hidden /> Party
-              </button>
-              <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("skit")}>
-                <Clapperboard className="h-4 w-4 shrink-0" aria-hidden /> Skit
-              </button>
-              <button type="button" className={cn(btn, "px-2")} onClick={stopShow}>
-                <Square className="h-4 w-4 shrink-0" aria-hidden /> Stop
-              </button>
-            </div>
-          </div>
-        )}
-        <div className="grid grid-cols-2 gap-2 border-t border-white/[0.07] px-4 py-3">
-          <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("hshow")}>
-            <Ghost className="h-4 w-4 shrink-0" aria-hidden /> Halloween show
-          </button>
-          <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("hparty")}>
-            <Skull className="h-4 w-4 shrink-0" aria-hidden /> Halloween party
-          </button>
-        </div>
-      </Group>
-
-      {/* Sleep mode: counting sheep */}
-      <Group id="sleep" title="Sleep mode" footer={`Sheep hop a fence while a soft lullaby plays. It slows down as you drift off, says good night, and turns the projector off until 7\u00a0AM.`}>
-        {sheepOn ? (
-          /* Counting: Stop is the one filled button, so it's the obvious tap (the Live Activity lands here). */
-          <div className="space-y-3 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <Moon className="h-5 w-5 shrink-0 text-indigo-300" aria-hidden />
-              <div className="min-w-0 flex-1">
-                <div className="text-[17px] font-semibold text-white">Counting sheep</div>
-                <div className="text-[15px] text-white/60">Ends at <NW>{time12(sheepEnd)}</NW></div>
-              </div>
-            </div>
-            <button type="button" className={cn(btnPrimary, "w-full")} onClick={stopSheep}>
-              <Square className="h-5 w-5" aria-hidden /> Stop counting sheep
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3 px-4 py-3">
-            <Segmented label="Length" value={sheepMins} onChange={(v) => setSheepMins(v as "15" | "30" | "60")}
-              options={[{ id: "15", label: "15\u00a0min" }, { id: "30", label: "30\u00a0min" }, { id: "60", label: "1\u00a0hour" }]} />
-            <div className="flex min-h-[44px] items-center justify-between">
-              <label htmlFor="wall-sheep-music" className="text-[16px] text-white">Lullaby music</label>
-              <Switch className={swHit} id="wall-sheep-music" checked={sheepMusic} onCheckedChange={setSheepMusic} />
-            </div>
-            <button type="button" className={cn(btnPrimary, "w-full bg-indigo-500 text-white hover:bg-indigo-500/90 active:bg-indigo-500/80")} onClick={startSheep}>
-              <Moon className="h-5 w-5" aria-hidden /> Start counting sheep
-            </button>
-          </div>
-        )}
-      </Group>
-
-      {/* Wake-up alarm: the Pi wakes the projector, unmutes, raises the volume; the wall plays a sunrise with bells. */}
-      {(() => {
-        const a = s.alarm ?? null;
-        const on = !!a?.on;
-        const time = a?.time ?? "07:00";
-        const days = a?.days ?? "once";
-        const setA = (p: Partial<NonNullable<WallState["alarm"]>>) => change({ alarm: { on, time, days, vol: a?.vol ?? 60, ...(a ?? {}), ...p, set_at: Date.now() } as WallState["alarm"] });
-        const [hh, mm] = time.split(":").map(Number);
-        const pretty = new Date(2000, 0, 1, hh || 0, mm || 0).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-        const daysTxt = days === "once" ? "once" : days === "weekdays" ? "weekdays" : days === "weekends" ? "weekends" : "every day";
-        return (
-          <Group title="Alarm" footer="The wall wakes a minute early, turns the sound on, and a sunrise with bells fills the strip. The bells get louder until you tap Stop. Your phone gets a notification if the wall can't ring.">
-            <Row htmlFor="wall-alarm" label="Wake-up alarm" detail={on ? <><NW>{pretty}</NW>, {daysTxt}</> : "Off"}>
-              <Switch className={swHit} id="wall-alarm" checked={on} onCheckedChange={(v) => { setA({ on: v }); toast.success(v ? `Alarm set for ${pretty}, ${daysTxt}.` : "Alarm off.", { id: "wall-act" }); }} />
-            </Row>
-            <div className="space-y-3 px-4 py-3">
-              {on && <>
-              <label className="flex items-center justify-between gap-3 text-[16px] text-white">
-                <span>Time</span>
-                <input type="time" value={time} onChange={(e) => e.target.value && setA({ time: e.target.value, on: true })}
-                  className="min-h-[44px] rounded-lg bg-white/[0.07] px-3 text-[16px] text-white [color-scheme:dark]" />
-              </label>
-              <Segmented compact label="Repeat" value={days} onChange={(v) => setA({ days: v })}
-                options={[{ id: "once", label: "Once" }, { id: "weekdays", label: "Weekdays" }, { id: "weekends", label: "Weekends" }, { id: "daily", label: "Daily" }]} />
-              </>}
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" className={cn(btn, "px-2")} onClick={() => act({ alarm: { ...(a ?? { on: false, time }), stop: Date.now() } as WallState["alarm"] }, "Alarm stopped.")}>
-                  <Square className="h-4 w-4 shrink-0" aria-hidden /> Stop alarm
-                </button>
-                <button type="button" className={cn(btn, "px-2")} onClick={() => act({ alarm: { ...(a ?? { on: false, time }), test: Date.now() } as WallState["alarm"] }, "Playing a 20-second preview on the wall.")}>
-                  <Sun className="h-4 w-4 shrink-0" aria-hidden /> Preview
-                </button>
-              </div>
-            </div>
-          </Group>
-        );
-      })()}
 
       {/* Turo handoff: the wall's inline trip card (server.py trip_loop). Dismiss (state.tripDismiss {id, at}) hides it on
           the wall and ends the iPhone Live Activity. It also ends on its own (car left the spot / trip started / 2 h late). */}
@@ -1063,561 +1678,91 @@ export default function Wall() {
         );
       })()}
 
-      {/* Heads-up: a card grows on the wall 15 minutes before ("soon", quiet), then "now" with a chime + a phone push. */}
-      {(() => {
-        const list = (s.heads ?? []).filter((h) => h && h.at > Date.now() - 20 * 60000).sort((x, y) => x.at - y.at);
-        if (list.length === 0) return null; // heads-ups are added from elsewhere; nothing to show until one exists
-        return (
-          <Group title="Heads-up" footer={`A card appears on the wall 15\u00a0minutes before, then at the time it chimes and your phone gets a notification.`}>
-            {list.map((h) => (
-              <Row key={h.id} label={h.title} detail={<><NW>{new Date(h.at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}</NW>{h.sub ? ` · ${h.sub}` : ""}</>}>
-                <button type="button" className={cn(btn, "px-3 text-[14px]")}
-                  onClick={() => act({ heads: (s.heads ?? []).filter((x) => x.id !== h.id) }, `Removed “${h.title}”.`)}>Remove</button>
-              </Row>
-            ))}
-            <div className="px-4 py-3">
-              <button type="button" className={cn(btn, "w-full")} onClick={() => act({ headsStop: Date.now() }, "Dismissed on the wall and your phone.")}>
-                <Square className="h-4 w-4" aria-hidden /> Dismiss what's showing
-              </button>
-            </div>
-          </Group>
-        );
-      })()}
-
-      {/* Packages: "Got it" hides one from the wall (W2 data: wall_admin_packages / wall_package_done). */}
-      <PackagesCard />
-
-      {/* Live Activities: the wall server drives these on Jared's iPhone. liveActs is {kind: boolean}; missing = on. */}
-      {(() => {
-        const acts = s.liveActs ?? {};
-        const setAct = (id: LiveKind, v: boolean) => {
-          const full = Object.fromEntries(LIVE_ACTS.map((x) => [x.id, x.id === id ? v : acts[x.id] !== false])) as Record<LiveKind, boolean>;
-          const label = LIVE_ACTS.find((x) => x.id === id)?.label ?? id;
-          act({ liveActs: full }, `${label} ${v ? "on" : "off"} for your iPhone.`);
-        };
-        const onCount = LIVE_ACTS.filter((x) => acts[x.id] !== false).length;
-        return (
-          <Group id="live" title="Live Activities" footer={`Live cards on your iPhone's Lock Screen and Dynamic Island, sent by the wall. ${onCount} of ${LIVE_ACTS.length} on.`}>
-            {LIVE_ACTS.map((x) => (
-              <Row key={x.id} htmlFor={`wall-la-${x.id}`} detail={x.detail}
-                label={<span className="inline-flex items-center gap-2"><x.icon className={cn("h-4 w-4 shrink-0", x.id === "incident" ? "text-red-400" : "text-white/60")} aria-hidden />{x.label}</span>}>
-                <Switch className={swHit} id={`wall-la-${x.id}`} checked={acts[x.id] !== false} onCheckedChange={(v) => setAct(x.id, v)} />
-              </Row>
-            ))}
-          </Group>
-        );
-      })()}
-
-      {/* Theme: the only control for state key `theme` (null = Normal). New themes start from the copied prompt. */}
-      <Group id="theme" title="Theme">
+      {/* Everyday controls, in manifest now.controls order. Each shares its handler with the pane that owns it. */}
+      <Group>
         <div className="border-b border-white/[0.07] p-2">
-          {/* compact + icons from sm up, so all three labels fit one row on a 390 pt phone */}
-          <Segmented label="Theme" value={themeNow.id} onChange={setTheme} compact
-            options={THEMES.map((t) => {
-              const Icon = THEME_ICON[t.id];
-              return { id: t.id, label: Icon ? <><Icon className="hidden h-4 w-4 shrink-0 sm:block" aria-hidden />{t.label}</> : t.label };
-            })} />
-          <p className="px-2 pb-1 pt-2 text-[13px] leading-snug text-white/55">{themeNow.detail}</p>
+          <Segmented compact label="Mode" value={s.mode} onChange={setMode} options={MODES.map((m) => ({ id: m.id, label: m.label }))} />
+          {modeAbout && <p className="px-2 pb-1 pt-2 text-[13px] leading-snug text-white/55">{modeAbout}</p>}
         </div>
-        <DisclosureRow id="new-theme" label="Add a new theme" summary="Copy a prompt that has Claude build it">
-          <div className="space-y-3 px-4 py-3">
-            <label htmlFor="wall-theme-idea" className="block text-[16px] text-white">Theme name or idea</label>
-            <textarea
-              id="wall-theme-idea" rows={3} maxLength={600} value={themeIdea} autoComplete="off"
-              placeholder="e.g. Christmas: snow falling, twinkly lights, a sleigh crossing the ceiling"
-              onChange={(e) => setThemeIdea(e.target.value)}
-              className="min-h-[88px] w-full resize-none rounded-xl bg-white/[0.07] px-3 py-2.5 text-[16px] leading-snug text-white ring-1 ring-white/10 placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-sky-400"
-            />
-            <button type="button" className={cn(btnPrimary, "w-full")} disabled={!themeIdea.trim()} onClick={() => void copyThemePrompt()}>
-              {copiedTheme ? <CheckCircle2 className="h-5 w-5" aria-hidden /> : <Copy className="h-5 w-5" aria-hidden />}
-              {copiedTheme ? "Copied" : "Copy prompt"}
-            </button>
-            <p className="text-[13px] text-white/50">Paste it into a new Claude chat. Claude builds the theme on the Pi and adds it here when it's done.</p>
-          </div>
-        </DisclosureRow>
-      </Group>
-
-      </div>
-      <div className="flex min-w-0 flex-col gap-6 xl:col-start-2 xl:row-start-2 2xl:col-start-3 2xl:row-start-1">
-      <h2 className="hidden px-1 text-[20px] font-semibold tracking-tight text-white xl:block">Sound</h2>
-      {/* Sound: projector speaker + wall chimes. Google TV's home screen is always muted by the Pi (autoplay guard). */}
-      <Group title="Sound" footer="Wall sounds follow Do Not Disturb. Google TV's home screen is kept silent so previews can't blast through the wall.">
-        <div className="flex min-h-[52px] items-center gap-3 border-b border-white/[0.07] px-4 py-3">
-          <VolumeX className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
-          <Slider aria-label="Projector volume" min={0} max={100} step={5} value={[volDraft ?? s.volume ?? 100]}
-            onValueChange={(v) => setVolDraft(v[0])} onValueCommit={(v) => { setVolDraft(null); act({ volume: v[0] }, `Volume ${v[0]}%.`); }} className="flex-1" />
-          <Volume2 className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
-          <span className="w-12 whitespace-nowrap text-right text-[15px] tabular-nums text-white/80">{volDraft ?? s.volume ?? 100}%</span>
-        </div>
-        <Row label="Wall sounds" detail="Chimes and whooshes when things change on the wall." htmlFor="wall-sound">
-          <Switch className={swHit} id="wall-sound" checked={s.sound !== false} onCheckedChange={(v) => act({ sound: v }, v ? "Wall sounds on." : "Wall sounds off.")} />
+        {volumeSlider}
+        <Row label="Wall sounds" detail="Chimes and whooshes when things change." htmlFor="wall-now-sound">
+          <Switch className={swHit} id="wall-now-sound" checked={s.sound !== false} onCheckedChange={setSound} />
         </Row>
-        <div className="px-4 py-3">
-          <Segmented label="Sound style" value={s.soundPack ?? "glass"}
-            onChange={(v) => act({ soundPack: v, soundTest: Date.now() }, "Sound style changed. Playing a sample.")}
-            options={[{ id: "glass", label: "Glass" }, { id: "marimba", label: "Marimba" }, { id: "keys", label: "Soft keys" }]} />
+        <HeyScoutRow voice={s.voice} onChange={setVoice} />
+      </Group>
+
+      <DndCard compact only={NOW_IDS} dnd={s.dnd} onChange={setDnd} />
+
+      <Group title="Radio">
+        <RadioNowPlaying radio={s.radio} live={st?.radio ?? null} onPlay={radioPlay} onStop={radioStop} onBrowse={() => openPane("sound", "#radio")} />
+      </Group>
+
+      <Group title="Moments">
+        <div className="grid grid-cols-4 gap-2 p-2" role="group" aria-label="Moments">
+          <QuickAction icon={tour ? Square : Presentation} label={tour ? (skitOn ? "Stop skit" : "Stop show") : "Play the show"} active={!!tour}
+            onClick={() => (tour ? stopShow() : playShow("play"))} />
+          <QuickAction icon={PartyPopper} label="Party" active={tour?.cmd === "party"} onClick={() => playShow("party")} />
+          <MotivateButton tile seq={s.motivate?.seq ?? 0} onFire={(m) => act({ motivate: m }, "Motivate me: a pep talk is on its way to the wall.")} />
+          <QuickAction icon={sheepOn ? Square : Moon} label={sheepOn ? "Stop sheep" : "Count sheep"} active={sheepOn}
+            onClick={() => (sheepOn ? stopSheep() : startSheep())} />
         </div>
       </Group>
 
-      {/* Radio: Radio Browser stations -> state.radio {on, name, url, favicon, ts}; the Pi plays it on the Desk HomePod. */}
-      <WallRadioSection radio={s.radio} live={st?.radio ?? null}
-        onPlay={(r) => act({ radio: r }, `Playing ${r.name.split(/\s+[-|–]\s+/)[0]} on the Desk HomePod.`)}
-        onStop={() => act({ radio: s.radio ? { ...s.radio, on: false, ts: Date.now() } : null }, "Radio stopped.")} />
-
-      {/* AirPlay: the Pi is an AirPlay receiver ("Bestly Wall"); video plays where the clock and today are. */}
-      {(() => {
-        const off = s.airplay === false;
-        const fresh = !!ap && ap.age_s != null && ap.age_s < 90 && statusAge != null && statusAge < 150;
-        const since = ap?.since ? time12(ap.since * 1000) : null;
-        const detail = off ? "Off. Your phone won't see the wall."
-          : !ap ? "Checking with the Pi…"
-          : ap.casting ? <>Playing {ap.kind === "audio" ? "audio" : "video"}{since ? <> since <NW>{since}</NW></> : ""}{ap.page && ap.page.startsWith("playing") ? "" : " · connecting on the wall"}</>
-          : ap.on && fresh ? "Ready. On your iPhone: Control Center, Screen Mirroring, Bestly\u00a0Wall."
-          : "Not running right now. The Pi keeps retrying and Scout will tell you if it stays down.";
-        return (
-          <Group title="AirPlay" footer="Mirror your iPhone or Mac, or AirPlay a video to Bestly Wall. It plays where the clock is and the rest of the wall moves over. Anyone on your Wi-Fi can pick it.">
-            <Row htmlFor="wall-airplay" label={<span className="inline-flex items-center gap-2"><Airplay className="h-4 w-4 text-white/60" aria-hidden />Bestly Wall in AirPlay</span>}
-              detail={<span className={cn(!off && ap && !ap.casting && !(ap.on && fresh) && "text-amber-300")}>{detail}{ap?.rtc === "no-h264" ? " The projector's browser can't play this video format." : ""}</span>}>
-              <Switch className={swHit} id="wall-airplay" checked={!off} onCheckedChange={(v) => act({ airplay: v }, v ? "AirPlay on." : "AirPlay off.")} />
-            </Row>
-            <div className="px-4 py-2">
-              <button type="button" className="inline-flex min-h-[44px] items-center gap-2 text-[15px] font-medium text-sky-400 disabled:opacity-40" disabled={off} onClick={() => void restartAirplay()}>
-                <RotateCw className="h-4 w-4" aria-hidden /> Restart AirPlay
-              </button>
-              {apMsg && <p className="text-[13px] text-white/60" role="status">{apMsg}</p>}
-            </div>
-          </Group>
-        );
-      })()}
-
-      </div>
-      <div className="flex min-w-0 flex-col gap-6 xl:col-start-1 xl:row-start-2 2xl:col-start-3 2xl:row-start-2">
-      <h2 className="hidden px-1 text-[20px] font-semibold tracking-tight text-white xl:block">Sky and guests</h2>
-      {/* Sign the wall */}
-      <Group title="Sign the wall"
-        footer={<>Guests tap a coaster (NFC), sign with a finger, and it writes itself onto the left wall. Auto shows names when someone is near or right after a new signature.</>}>
-        <div className="space-y-3 px-4 py-3">
-          <Segmented label="Show names" value={s.signShow ?? "auto"} onChange={(v) => act({ signShow: v }, `Names: ${v === "auto" ? "Auto" : v === "on" ? "Always" : "Off"}.`)}
-            options={[{ id: "auto", label: "Auto" }, { id: "on", label: "Always" }, { id: "off", label: "Off" }]} />
-          <div className="grid grid-cols-2 gap-2">
-            <a className={cn(btn, "px-2")} href="/sign/jg8h" target="_blank" rel="noreferrer">
-              <Nfc className="h-4 w-4 shrink-0" aria-hidden /> Guest page
-            </a>
-            <button type="button" className={cn(btn, "px-2", confirmClear && "text-red-400 ring-red-400/60")}
-              onClick={() => { if (confirmClear) { setConfirmClear(false); void signAction("clear"); } else { setConfirmClear(true); window.setTimeout(() => setConfirmClear(false), 4000); } }}>
-              <EyeOff className="h-4 w-4 shrink-0" aria-hidden /> {confirmClear ? "Tap to confirm" : "Clear the wall"}
-            </button>
-          </div>
-          {signMsg && <p className="text-[13px] text-white/60" role="status">{signMsg}</p>}
-        </div>
-        {(showAllSigs ? sigs : sigs.slice(0, 3)).map((g) => (
-          <Row key={g.id} label={<span style={{ color: g.color }}>{g.name || "No name"}{g.emoji ? <span aria-label={`emoji ${g.emoji}`}> {g.emoji}</span> : null}{g.test ? " · test" : ""}{g.hidden ? <span className="text-white/40"> · hidden</span> : null}</span>}
-            detail={<NW>{new Date(g.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</NW>}>
-            <div className="flex gap-2">
-              <button type="button" className={cn(btn, "w-11 px-0")} aria-label={g.hidden ? `Show ${g.name || "signature"} on the wall` : `Hide ${g.name || "signature"} from the wall`}
-                onClick={() => void signAction(g.hidden ? "show" : "hide", g.id)}>
-                {g.hidden ? <Eye className="h-4 w-4" aria-hidden /> : <EyeOff className="h-4 w-4" aria-hidden />}
-              </button>
-              <button type="button" aria-label={confirmDel === g.id ? "Tap again to delete for good" : `Delete ${g.name || "signature"}`}
-                className={cn(btn, "px-3 text-[14px] text-red-400", confirmDel === g.id ? "bg-red-500/15 ring-red-400/60" : "w-11 px-0")}
-                onClick={() => {
-                  if (confirmDel === g.id) { setConfirmDel(null); void signAction("delete", g.id); }
-                  else { setConfirmDel(g.id); window.setTimeout(() => setConfirmDel((c) => (c === g.id ? null : c)), 4000); }
-                }}>
-                <Trash2 className="h-4 w-4" aria-hidden />{confirmDel === g.id && " Delete"}
-              </button>
-            </div>
+      <Group title="Alarm">
+        <Row htmlFor="wall-now-alarm" label="Wake-up alarm" detail={alarmOn ? <><NW>{alarmPretty}</NW>, {alarmDaysTxt}</> : "Off"}>
+          <Switch className={swHit} id="wall-now-alarm" checked={alarmOn} onCheckedChange={toggleAlarm} />
+        </Row>
+        {alarmOn && (
+          <Row label="Time" htmlFor="wall-now-alarm-time">
+            <input id="wall-now-alarm-time" type="time" value={alarmTime} onChange={(e) => e.target.value && setAlarm({ time: e.target.value, on: true })}
+              className="min-h-[44px] rounded-lg bg-white/[0.07] px-3 text-[16px] text-white [color-scheme:dark]" />
           </Row>
-        ))}
-        {sigs.length > 3 && (
-          <div className="px-4">
-            <button type="button" className="min-h-[44px] text-[15px] font-medium text-sky-400" onClick={() => setShowAllSigs((v) => !v)}>
-              {showAllSigs ? "Show fewer" : `Show all ${sigs.length} signatures`}
-            </button>
-          </div>
         )}
       </Group>
-
-      {/* Sky: live planes over the house, plus stars, moon, sun and planets */}
-      <Group title="Sky on the ceiling">
-        <Row label={<span className="inline-flex items-center gap-2"><Plane className="h-4 w-4 text-white/60" aria-hidden /> Planes overhead</span>} detail="Live planes and helicopters over the house, above the strip." htmlFor="wall-air">
-          <Switch className={swHit} id="wall-air" checked={s.airShow !== false} onCheckedChange={(v) => act({ airShow: v }, v ? "Planes overhead on." : "Planes overhead off.")} />
-        </Row>
-        {s.airShow !== false && (() => {
-          const rad = Math.min(25, Math.max(2, Math.round(s.airRadiusMi ?? 15)));
-          const setRad = (n: number) => change({ airRadiusMi: Math.min(25, Math.max(2, n)) });
-          return (
-            <Row label="Sky radius" detail="Only planes this close to home show on the ceiling. The sky key shows it too.">
-              <div role="group" aria-label="Sky radius" className="flex shrink-0 items-center gap-1">
-                <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Smaller radius" disabled={rad <= 2} onClick={() => setRad(rad - 1)}>
-                  <Minus className="h-5 w-5" aria-hidden />
-                </button>
-                <span className="w-16 whitespace-nowrap text-center text-[17px] font-medium tabular-nums text-white" aria-live="polite">{rad}{"\u00a0"}mi</span>
-                <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Bigger radius" disabled={rad >= 25} onClick={() => setRad(rad + 1)}>
-                  <Plus className="h-5 w-5" aria-hidden />
-                </button>
-              </div>
-            </Row>
-          );
-        })()}
-        <Row label={<span className="inline-flex items-center gap-2"><RadioTower className="h-4 w-4 text-white/60" aria-hidden /> Air traffic control</span>}
-          detail="Live LAX tower radio on the Desk HomePod. Turns the radio off." htmlFor="wall-atc">
-          <Switch className={swHit} id="wall-atc" checked={!!s.atc && !s.radio?.on}
-            onCheckedChange={(v) => act(v ? { atc: true, ...(s.radio?.on ? { radio: { ...s.radio, on: false, ts: Date.now() } } : {}) } : { atc: false },
-              v ? "LAX tower is playing on the Desk HomePod." : "Air traffic control off.")} />
-        </Row>
-        <DisclosureRow id="sky-details" label="Sky details" summary="Plane card, labels, home, space station, stars, moon, sun, planets, key">
-          {s.airShow !== false && <>
-            <Row label="Home marker" detail="A small house where you are, in the middle of the sky map." htmlFor="wall-sky-home">
-              <Switch className={swHit} id="wall-sky-home" checked={s.skyHome !== false} onCheckedChange={(v) => change({ skyHome: v })} />
-            </Row>
-            <Row label="Landmarks" detail="City labels, the downtown skyline, and the LAX runways on the sky map." htmlFor="wall-sky-landmarks">
-              <Switch className={swHit} id="wall-sky-landmarks" checked={s.skyLandmarks !== false} onCheckedChange={(v) => change({ skyLandmarks: v })} />
-            </Row>
-            <Row label="Roads" detail="Street grid around home and freeways across the basin (OpenStreetMap)." htmlFor="wall-sky-roads">
-              <Switch className={swHit} id="wall-sky-roads" checked={s.skyRoads !== false} onCheckedChange={(v) => change({ skyRoads: v })} />
-            </Row>
-            <Row label="Traffic" detail="Live congestion colors on the roads (TomTom; the Pi refreshes every 15 min)." htmlFor="wall-sky-traffic">
-              <Switch className={swHit} id="wall-sky-traffic" checked={s.skyTraffic !== false} onCheckedChange={(v) => change({ skyTraffic: v })} />
-            </Row>
-            <Row label="Space Station name" detail="The name under the Space Station when it passes over." htmlFor="wall-iss-tag">
-              <Switch className={swHit} id="wall-iss-tag" checked={s.issTag !== false} onCheckedChange={(v) => change({ issTag: v })} />
-            </Row>
-            <Row label="Nearest-plane card" detail="The big card that names the closest aircraft." htmlFor="wall-air-card">
-              <Switch className={swHit} id="wall-air-card" checked={s.airCard !== false} onCheckedChange={(v) => change({ airCard: v })} />
-            </Row>
-            <Row label="Keep flight card up" htmlFor="wall-air-card-pin" dim={s.airCard === false}
-              detail={s.airCard === false ? "Turn on Nearest-plane card to use this." : "The card stays up and rotates through the planes in view. The closest plane gets its own color."}>
-              <Switch className={swHit} id="wall-air-card-pin" disabled={s.airCard === false} checked={!!s.airCardPin}
-                onCheckedChange={(v) => act({ airCardPin: v }, v ? "Flight card stays up and rotates through planes." : "Flight card shows only for the closest plane.")} />
-            </Row>
-            {s.airCard !== false && (
-              <Row label="Helicopters in the card" detail="Off: helicopters (like LAPD circling) never take the big card. They still fly across." htmlFor="wall-air-card-heli">
-                <Switch className={swHit} id="wall-air-card-heli" checked={s.airCardHeli !== false} onCheckedChange={(v) => change({ airCardHeli: v })} />
-              </Row>
-            )}
-            <Row label="Plane labels" detail="Name tags next to each plane and helicopter." htmlFor="wall-air-labels">
-              <Switch className={swHit} id="wall-air-labels" checked={s.airLabels !== false} onCheckedChange={(v) => change({ airLabels: v })} />
-            </Row>
-            <Row label="Tags on small planes & helicopters" htmlFor="wall-air-labels-small" dim={s.airLabels === false}
-              detail={s.airLabels === false ? "Turn on Plane labels to use this." : "Off: only airline flights get a name tag."}>
-              <Switch className={swHit} id="wall-air-labels-small" disabled={s.airLabels === false} checked={s.airLabelsSmall !== false}
-                onCheckedChange={(v) => act({ airLabelsSmall: v }, v ? "Tags on every plane and helicopter." : "Tags on airline flights only.")} />
-            </Row>
-            <Row label="Stars and constellations" detail="Bright stars plus Orion and the Big Dipper, at night." htmlFor="wall-sky-stars">
-              <Switch className={swHit} id="wall-sky-stars" checked={s.skyStars !== false} onCheckedChange={(v) => change({ skyStars: v })} />
-            </Row>
-            <Row label="Star names" htmlFor="wall-sky-star-labels" dim={s.skyStars === false}
-              detail={s.skyStars === false ? "Turn on Stars and constellations to use this." : "Show the names of bright stars and constellations."}>
-              <Switch className={swHit} id="wall-sky-star-labels" disabled={s.skyStars === false} checked={s.skyStarLabels !== false} onCheckedChange={(v) => change({ skyStarLabels: v })} />
-            </Row>
-            <Row label="Sky grid" htmlFor="wall-sky-grid" dim={s.skyStars === false}
-              detail={s.skyStars === false ? "Turn on Stars and constellations to use this." : "A faint planetarium grid over the stars (only while stars are on)."}>
-              <Switch className={swHit} id="wall-sky-grid" disabled={s.skyStars === false} checked={s.skyGrid !== false} onCheckedChange={(v) => change({ skyGrid: v })} />
-            </Row>
-            <Row label="Moon" detail="Where the moon is, with tonight's real phase." htmlFor="wall-sky-moon">
-              <Switch className={swHit} id="wall-sky-moon" checked={s.skyMoon !== false} onCheckedChange={(v) => change({ skyMoon: v })} />
-            </Row>
-            <Row label="Sun" detail="Where the sun is, while it's up." htmlFor="wall-sky-sun">
-              <Switch className={swHit} id="wall-sky-sun" checked={s.skySun !== false} onCheckedChange={(v) => change({ skySun: v })} />
-            </Row>
-            <Row label="Planets" detail="Mercury to Saturn when they're up at dusk and night." htmlFor="wall-sky-planets">
-              <Switch className={swHit} id="wall-sky-planets" checked={s.skyPlanets !== false} onCheckedChange={(v) => change({ skyPlanets: v })} />
-            </Row>
-          </>}
-          <Row label="Sky key" detail="Explains the colors and symbols on the ceiling. Handy when showing people." htmlFor="wall-air-key">
-            <Switch className={swHit} id="wall-air-key" checked={!!s.airKey} onCheckedChange={(v) => change({ airKey: v })} />
-          </Row>
-        </DisclosureRow>
-      </Group>
-
-      </div>
       </div>
 
-      {/* Advanced: rarely used tools, one tap away */}
-      <Disclosure id="advanced" title="Advanced" summary="Projector health and power, alignment, sky fit, tests">
-        <div className="grid items-start gap-6 xl:grid-cols-2 xl:gap-8">
-        <div className="min-w-0 space-y-6">
-        <ProjectorHealth health={st?.health} />
-
-        <Group title="Projector" footer={powerMsg ?? "Turn on and Turn off hold until the next switch at 7\u00a0AM or midnight."}>
-          <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-4">
-            <button type="button" className={btn} onClick={() => void power(true)}><Sun className="h-5 w-5" aria-hidden /> Turn on</button>
-            <button type="button" className={btn} onClick={() => void power(false)}><Moon className="h-5 w-5" aria-hidden /> Turn off</button>
-            <button type="button" className={btn} onClick={() => void focus()}><Focus className="h-5 w-5" aria-hidden /> Focus</button>
-            <button type="button" className={btn} onClick={() => void restartWall()}><RotateCw className="h-5 w-5" aria-hidden /> Restart</button>
+      <div className="min-w-0">
+      {pane ? (
+        /* A settings pane: back control, large title, then the pane's groups in manifest order. */
+        <section aria-labelledby="wall-pane-title" className="space-y-6">
+          <div className="space-y-1">
+            <button type="button" onClick={closePane}
+              className="-ml-2 inline-flex min-h-[44px] items-center gap-0.5 rounded-xl pl-1 pr-3 text-[17px] text-sky-400 transition-colors duration-150 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+              <ChevronLeft className="h-6 w-6" aria-hidden /> Wall
+            </button>
+            <h2 id="wall-pane-title" tabIndex={-1} className="px-1 text-[28px] font-bold leading-tight tracking-tight text-white focus:outline-none">{pane.title}</h2>
           </div>
-          <Row label="Sign wall focus"
-            detail={<>
-              One lens can only be sharpest at one distance, and the sign wall sits a few inches behind the strip. Nudge until both look good; the wall remembers it and puts it back after Focus and every morning.
-              {st?.focus?.tuned ? <> Saved: <NW>{st.focus.offset ?? 0} {Math.abs(st.focus.offset ?? 0) === 1 ? "step" : "steps"}</NW> from autofocus.</> : null}
-              {st?.focus?.err ? <span className="text-amber-300"> {st.focus.err}</span> : null}
-            </>}>
-            <div className="flex shrink-0 gap-2" role="group" aria-label="Nudge focus">
-              <button type="button" className={cn(btn, "px-3")} disabled={!!st?.focus?.busy} onClick={() => void nudgeFocus("focus_left")} aria-label="Nudge focus left">
-                <ArrowLeft className="h-5 w-5" aria-hidden />
-              </button>
-              <button type="button" className={cn(btn, "px-3")} disabled={!!st?.focus?.busy} onClick={() => void nudgeFocus("focus_right")} aria-label="Nudge focus right">
-                <ArrowRight className="h-5 w-5" aria-hidden />
-              </button>
-            </div>
-          </Row>
-          <Row label="Auto keystone" detail="Off keeps the picture square so your alignment doesn't shift. Turn on only if you move the projector." htmlFor="wall-keystone">
-            <Switch className={swHit} id="wall-keystone" checked={!!s.autoKeystone} onCheckedChange={(v) => act({ autoKeystone: v }, v ? "Auto keystone on." : "Auto keystone off.")} />
-          </Row>
-          <Row label="Away mode" detail="Taking it to a gig. The Pi won't wake it, open the wall or send offline alerts." htmlFor="wall-away">
-            <Switch className={swHit} id="wall-away" checked={s.away} onCheckedChange={(v) => act({ away: v }, v ? "Away mode on. The Pi leaves the projector alone." : "Away mode off.")} />
-          </Row>
-        </Group>
-
-        {/* Electricity: live watts + LADWP cost estimate (server.py power_loop via the watchdog status) */}
-        <WallPowerCost meter={st?.power_meter} />
-
-        <Group title="Sky fit" footer="The sky is a map seen from below. These make planes move the right way from your desk.">
-          <Row label="Wall faces" detail="The direction your wall faces." htmlFor="wall-bearing">
-            <select id="wall-bearing" value={String(s.airBearing ?? 0)} onChange={(e) => act({ airBearing: Number(e.target.value) }, "Sky direction saved.")}
-              className="min-h-[44px] rounded-lg bg-white/[0.08] px-3 text-[16px] text-white ring-1 ring-white/15 focus:outline-none focus:ring-2 focus:ring-sky-400">
-              {["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"].map((n, i) => <option key={n} value={i * 45}>{n}</option>)}
-            </select>
-          </Row>
-          {(() => {
-            // W1 round 4: move "home" on the ceiling; the whole sky (planes, rings, sun, moon, stars) re-centers on it
-            const hp = s.homePos ?? { x: 0.5, y: 0.5 };
-            const nudge = (dx: number, dy: number) => {
-              const r = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 100) / 100;
-              change({ homePos: { x: r(hp.x + dx), y: r(hp.y + dy) } });
-            };
-            const off = !s.homePos || (Math.abs(hp.x - 0.5) < 0.005 && Math.abs(hp.y - 0.5) < 0.005);
-            return (
-              <Row label="Home on the sky" detail={off ? "In the middle of the sky. Nudge it to where your desk really is." : `Moved ${Math.round(Math.abs(hp.x - 0.5) * 100)}% ${hp.x < 0.5 ? "left" : "right"}, ${Math.round(Math.abs(hp.y - 0.5) * 100)}% ${hp.y < 0.5 ? "up" : "down"}. The whole sky moves with it.`}>
-                <div role="group" aria-label="Move home on the sky" className="grid shrink-0 grid-cols-3 gap-1">
-                  <span />
-                  <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home up" onClick={() => nudge(0, -0.05)}><ArrowUp className="h-5 w-5" aria-hidden /></button>
-                  <span />
-                  <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home left" onClick={() => nudge(-0.05, 0)}><ArrowLeft className="h-5 w-5" aria-hidden /></button>
-                  <button type="button" className={cn(btn, "w-11 px-0 text-[13px]")} aria-label="Put home back in the middle" disabled={off} onClick={() => change({ homePos: null })}>Mid</button>
-                  <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home right" onClick={() => nudge(0.05, 0)}><ArrowRight className="h-5 w-5" aria-hidden /></button>
-                  <span />
-                  <button type="button" className={cn(btn, "w-11 px-0")} aria-label="Move home down" onClick={() => nudge(0, 0.05)}><ArrowDown className="h-5 w-5" aria-hidden /></button>
-                  <span />
-                </div>
-              </Row>
-            );
-          })()}
-        </Group>
-
-        <Group title="Tests" footer="Real alerts show on their own: move the car on sweeping mornings, and anything Scout flags.">
-          <Row label="Move-car alert" htmlFor="wall-t-sweep">
-            <Switch className={swHit} id="wall-t-sweep" checked={s.testSweep} onCheckedChange={(v) => change({ testSweep: v })} />
-          </Row>
-          <Row label="Scout alert" htmlFor="wall-t-scout">
-            <Switch className={swHit} id="wall-t-scout" checked={s.testScout} onCheckedChange={(v) => change({ testScout: v })} />
-          </Row>
-          <div className="grid grid-cols-2 gap-2 px-4 py-3">
-            <button type="button" className={cn(btn, "px-2")} onClick={() => void signAction("test")}>
-              <Sparkles className="h-4 w-4 shrink-0" aria-hidden /> Test signature
-            </button>
-            <button type="button" className={cn(btn, "px-2")} onClick={() => act({ signNear: Date.now() }, "Showing names like someone walked up.")}>
-              <UserRound className="h-4 w-4 shrink-0" aria-hidden /> Someone's near
-            </button>
-            <button type="button" className={cn(btn, "px-2")} onClick={() => act({ soundTest: Date.now() }, "Playing every wall sound: chime, mode switch, alert, signature, celebration.")}>
-              <Volume2 className="h-4 w-4 shrink-0" aria-hidden /> Every sound
-            </button>
-            <button type="button" className={cn(btn, "px-2")} onClick={() => act({ fxPlay: { name: "show", at: Date.now() } }, "The wall powers down, then wakes back up.")}>
-              <Sparkles className="h-4 w-4 shrink-0" aria-hidden /> Wake + sleep
-            </button>
-          </div>
-        </Group>
-        </div>
-        <div className="min-w-0 space-y-6">
-        <Group title="Alignment"
-          footer={tool === "air"
-            ? "The violet box is the sky: live planes fly across it. Put it on the open wall above the strip."
-            : tool === "wing"
-            ? "The teal box is the Sign the wall area. Drag it onto the open wall on the left. Bars stretch a side; Bigger and Smaller keep the shape."
-            : tool === "corners"
-            ? "The black box is the projector's whole picture. Drag the white dots onto the corners of your strip. Bars stretch one side, the blue dot moves everything, and Bigger and Smaller keep the shape."
-            : "Drag the orange dots over the shadow where the TV blocks the light. The wall stays dark there and moves text out of the way."}>
-          <div className="space-y-2 px-4 py-3">
-            <button type="button" className={cn(btnPrimary, "w-full")}
-              onClick={async () => {
-                change({ calGrid: true });
-                const prompt = "Wall alignment: the alignment grid is on the wall now. I'm attaching 2 photos taken from where I usually sit (one with the lights on, one with the lights off). Re-fit the strip, the sign wall, the blocked TV area and the sky (fill the whole ceiling, text and planes must look straight from where I sit). Save it, turn the grid off, and check it on the projector. Use the wall-realign skill.";
-                await copyText(prompt);
-                setCopiedAlign(true); setTimeout(() => setCopiedAlign(false), 2500);
-                toast.success("Grid is on and the prompt is copied. Take 2 photos from your usual spot.", { id: "wall-act" });
-              }}>
-              {copiedAlign ? <CheckCircle2 className="h-5 w-5" aria-hidden /> : <Copy className="h-5 w-5" aria-hidden />}
-              {copiedAlign ? "Copied. Grid is on" : "Re-align with Claude"}
-            </button>
-            <p className="text-[13px] text-white/50">Turns on the grid and copies a prompt. Take 2 photos from your usual spot (lights on and off) and paste the prompt with them to Claude.</p>
-          </div>
-          <Row label="Alignment grid" detail="Fills the projector with a labeled grid. While you adjust, the block you picked below glows on the wall." htmlFor="wall-cal">
-            <Switch className={swHit} id="wall-cal" checked={!!s.calGrid} onCheckedChange={(v) => change({ calGrid: v })} />
-          </Row>
-          <Row label="Move everything together" detail="Bumped the projector? Drag the blue dot and every area slides as one." htmlFor="wall-link">
-            <Switch className={swHit} id="wall-link" checked={linkAll} onCheckedChange={setLinkAll} />
-          </Row>
-          <Row label="Show guides on the wall" detail="Outlines the strip and blocked area so you can line them up." htmlFor="wall-guides">
-            <Switch className={swHit} id="wall-guides" checked={s.mapping} onCheckedChange={(v) => change({ mapping: v })} />
-          </Row>
-          <div className="space-y-3 px-4 py-3">
-            <UndoKeys onUndo={doUndo} onRedo={doRedo} />
-            <div className="flex items-center gap-3">
-              <p className="min-w-0 flex-1 text-[13px] text-white/55" aria-live="polite">
-                {editing ? "Editing. Drag the dots, then tap Done." : "Locked, so a stray swipe can't move the wall."}
-              </p>
-              <button type="button" aria-pressed={editing} onClick={() => setEditing((v) => !v)}
-                className={cn(btn, "shrink-0", editing && "font-semibold text-sky-400")}>
-                {editing ? <Check className="h-4 w-4" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}
-                {editing ? "Done" : "Edit layout"}
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2" role="group" aria-label="Undo and redo layout changes">
-              {([["undo", nextUndo, Undo2], ["redo", nextRedo, Redo2]] as const).map(([dir, st, Icon]) => {
-                const name = dir === "undo" ? "Undo" : "Redo";
-                const when = st ? stepTime(st) : "";
-                const keys = dir === "undo" ? (isMac ? "\u2318Z" : "Ctrl+Z") : (isMac ? "\u21E7\u2318Z" : "Ctrl+Shift+Z");
-                return (
-                  <button key={dir} type="button" disabled={!st || geoWorking} onClick={dir === "undo" ? doUndo : doRedo}
-                    aria-label={st ? `${name}: ${st.reason}${when ? `, ${when}` : ""}` : `Nothing to ${dir}`}
-                    title={`${name} (${keys})`} aria-keyshortcuts={dir === "undo" ? "Meta+Z Control+Z" : "Meta+Shift+Z Control+Shift+Z"}
-                    className={cn(btn, "min-h-[52px] min-w-0 flex-col items-start justify-center gap-0 px-3 py-1.5 text-left")}>
-                    <span className="flex items-center gap-1.5 text-[15px] font-semibold">
-                      {geoWorking ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <Icon className="h-4 w-4" aria-hidden />}
-                      {name}
+          {pane.groups.map((g) => <Fragment key={g}>{renderGroup(g)}</Fragment>)}
+        </section>
+      ) : (
+        <nav aria-labelledby="wall-settings-title" className="space-y-2">
+          <h2 id="wall-settings-title" className="px-4 text-[13px] font-medium uppercase tracking-[0.06em] text-white/50 xl:px-1 xl:text-[20px] xl:font-semibold xl:normal-case xl:tracking-tight xl:text-white">Settings</h2>
+          <ul className="overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/10">
+            {PANES.map((p, i) => {
+              const look = PANE_LOOK[p.id] ?? { icon: Settings, tint: "bg-zinc-500" };
+              return (
+                <li key={p.id}>
+                  <button type="button" id={`wall-pane-row-${p.id}`} onClick={() => openPane(p.id)}
+                    className="flex min-h-[60px] w-full items-center gap-3 pl-4 text-left transition-colors duration-150 hover:bg-white/[0.04] active:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400">
+                    <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[9px] text-white", look.tint)} aria-hidden>
+                      <look.icon className="h-[18px] w-[18px]" />
                     </span>
-                    <span className="block w-full truncate text-[12px] font-normal text-white/55">
-                      {st ? <>{st.reason}{when && <> · <NW>{when}</NW></>}</> : `Nothing to ${dir}`}
+                    <span className={cn("flex min-h-[60px] min-w-0 flex-1 items-center gap-2 py-2.5 pr-3", i < PANES.length - 1 && "border-b border-white/[0.07]")}>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[16px] text-white">{p.title}</span>
+                        <span className="block truncate text-[13px] text-white/50">{p.summary}</span>
+                      </span>
+                      <ChevronRight className="h-5 w-5 shrink-0 text-white/30" aria-hidden />
                     </span>
                   </button>
-                );
-              })}
-            </div>
-            <Segmented compact label="What to adjust" value={tool}
-              onChange={(t) => {
-                if (t === "mask" && !s.mask) {
-                  if (editing) addMask(); else toast("Tap Edit layout first, then add the blocked area.", { id: "wall-act" });
-                } else { setTool(t); setSel(0); }
-              }}
-              options={[{ id: "corners", label: "Strip" }, { id: "mask", label: <><Triangle className="h-4 w-4" aria-hidden /> Blocked</> }, { id: "wing", label: <><PenLine className="h-4 w-4" aria-hidden /> Sign</> }, { id: "air", label: <><Plane className="h-4 w-4" aria-hidden /> Sky</> }]} />
-          <div ref={padRef} className={cn("relative aspect-video w-full select-none overflow-hidden rounded-xl ring-1 ring-white/15", editing ? "touch-none" : "touch-pan-y")} style={{ background: "#000" }}>
-            <svg viewBox="0 0 1600 900" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
-              <polygon points={s.corners.map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
-                fill="rgba(255,248,236,0.14)" stroke="#FFF8EC" strokeWidth={tool === "corners" ? 5 : 3} />
-              <polygon points={(s.air ?? DEFAULT_AIR).map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
-                fill="rgba(191,90,242,0.14)" stroke="#BF5AF2" strokeWidth={tool === "air" ? 5 : 2} strokeDasharray={tool === "air" ? undefined : "14 10"} />
-              <polygon points={(s.wing ?? DEFAULT_WING).map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
-                fill="rgba(100,210,255,0.16)" stroke="#64D2FF" strokeWidth={tool === "wing" ? 5 : 2} strokeDasharray={tool === "wing" ? undefined : "14 10"} />
-              {s.mask && (
-                <polygon points={s.mask.map(([x, y]) => `${x * 1600},${y * 900}`).join(" ")}
-                  fill="rgba(255,149,0,0.28)" stroke="#FF9500" strokeWidth={tool === "mask" ? 5 : 3} />
-              )}
-            </svg>
-            {tool !== "mask" && quad && quad.map((a, n) => {
-              const b = quad[(n + 1) % quad.length];
-              const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
-              const deg = (Math.atan2((b[1] - a[1]) * 9, (b[0] - a[0]) * 16) * 180) / Math.PI;
-              const id = EDGE + n;
-              return (
-                <button key={`edge-${n}`} type="button" disabled={!editing}
-                  aria-label={`Stretch the ${["top", "right", "bottom", "left"][n]} side`}
-                  aria-pressed={sel === id}
-                  onPointerDown={startDrag(id)} onFocus={() => setSel(id)}
-                  onKeyDown={(e) => {
-                    const k: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
-                    if (k[e.key]) { e.preventDefault(); nudge(...k[e.key]); }
-                  }}
-                  style={{ left: `${mx * 100}%`, top: `${my * 100}%`, transform: `rotate(${deg}deg)` }}
-                  className="absolute -ml-[22px] -mt-[22px] flex h-11 w-11 touch-none items-center justify-center focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50">
-                  <span className={cn(
-                    "block h-[9px] w-7 rounded-full border-2 border-black bg-[#FFF8EC] shadow-[0_0_0_2px_rgba(0,0,0,0.55)] transition-transform duration-100",
-                    sel === id && "scale-125 ring-4 ring-sky-400/70",
-                  )} />
-                </button>
+                </li>
               );
             })}
-            {handles.map((p, i) => {
-              const isAll = i === handles.length - 1;
-              return (
-                <button key={`${tool}-${i}`} type="button" disabled={!editing}
-                  aria-label={isAll ? "Move the whole shape" : `${tool === "mask" ? "Blocked area" : tool === "wing" ? "Sign wall" : tool === "air" ? "Sky" : "Corner"} point ${i + 1}`}
-                  aria-pressed={sel === i}
-                  onPointerDown={startDrag(i)} onFocus={() => setSel(i)}
-                  onKeyDown={(e) => {
-                    const k: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
-                    if (k[e.key]) { e.preventDefault(); nudge(...k[e.key]); }
-                  }}
-                  style={{ left: `${p[0] * 100}%`, top: `${p[1] * 100}%` }}
-                  className="absolute -ml-[22px] -mt-[22px] flex h-11 w-11 touch-none items-center justify-center rounded-full focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50">
-                  <span className={cn(
-                    "block h-5 w-5 rounded-full border-[2.5px] shadow-[0_0_0_2px_rgba(0,0,0,0.55)] transition-transform duration-100",
-                    isAll ? "border-white bg-sky-400" : tool === "mask" ? "border-white bg-orange-400" : tool === "wing" ? "border-black bg-[#64D2FF]" : tool === "air" ? "border-black bg-[#BF5AF2]" : "border-black bg-[#FFF8EC]",
-                    sel === i && "scale-125 ring-4 ring-sky-400/70",
-                  )} />
-                </button>
-              );
-            })}
-            {!editing && (
-              <span className="pointer-events-none absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-black/70 px-3 py-1 text-[12px] text-white/80 ring-1 ring-white/15">
-                <Lock className="h-3 w-3" aria-hidden /> Locked
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Nudge the selected point">
-              <span />
-              <button type="button" disabled={!editing} aria-label="Nudge up" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, -1)}><ArrowUp className="h-5 w-5" /></button>
-              <span />
-              <button type="button" disabled={!editing} aria-label="Nudge left" className={cn(btn, "w-11 px-0")} onClick={() => nudge(-1, 0)}><ArrowLeft className="h-5 w-5" /></button>
-              <span className="flex h-11 w-11 items-center justify-center text-[12px] text-white/45">{sel >= EDGE ? ["Top", "Right", "Bottom", "Left"][sel - EDGE] : sel === handles.length - 1 ? "All" : sel + 1}</span>
-              <button type="button" disabled={!editing} aria-label="Nudge right" className={cn(btn, "w-11 px-0")} onClick={() => nudge(1, 0)}><ArrowRight className="h-5 w-5" /></button>
-              <span />
-              <button type="button" disabled={!editing} aria-label="Nudge down" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, 1)}><ArrowDown className="h-5 w-5" /></button>
-              <span />
-            </div>
-            <div className="min-w-[180px] flex-1 space-y-2">
-              <Segmented label="Drag precision" value={fine ? "fine" : "fast"} onChange={(v) => setFine(v === "fine")}
-                options={[{ id: "fine", label: "Precise" }, { id: "fast", label: "Fast" }]} />
-              {tool !== "mask" ? (
-                <>
-                  <div className="flex gap-2" role="group" aria-label="Resize the strip, same shape">
-                    <button type="button" disabled={!editing} className={cn(btn, "flex-1")} onClick={() => scale(false)}>
-                      <Minimize2 className="h-4 w-4" aria-hidden /> Smaller
-                    </button>
-                    <button type="button" disabled={!editing} className={cn(btn, "flex-1")} onClick={() => scale(true)}>
-                      <Maximize2 className="h-4 w-4" aria-hidden /> Bigger
-                    </button>
-                  </div>
-                  <button type="button" disabled={!editing} className={cn(btn, "w-full")} onClick={() => change(tool === "wing" ? { wing: DEFAULT_WING } : tool === "air" ? { air: DEFAULT_AIR } : { corners: DEFAULT_CORNERS })}>
-                    <RotateCcw className="h-4 w-4" aria-hidden /> {tool === "wing" ? "Reset sign wall" : tool === "air" ? "Reset sky" : "Reset corners"}
-                  </button>
-                </>
-              ) : (
-                <div className="flex gap-2">
-                  {s.mask && s.mask.length < 6 && (
-                    <button type="button" disabled={!editing} className={cn(btn, "flex-1")} onClick={() => {
-                      const m = s.mask!; const a = m[m.length - 1], b = m[0];
-                      change({ mask: [...m, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]] });
-                    }}>Add point</button>
-                  )}
-                  <button type="button" disabled={!editing} className={cn(btn, "flex-1 text-red-400")} onClick={() => { change({ mask: null }); setTool("corners"); setSel(0); }}>
-                    <Trash2 className="h-4 w-4" aria-hidden /> Remove
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </Group>
-
-      {/* W8 round 4: the projection-mapped neon sign on the sign wall (glow, looks, alert animations, fine-align) */}
-      <WallLedSign value={s.ledSign} health={(st as { lsign?: LedSignHealth } | null)?.lsign} onChange={(v) => change({ ledSign: v })} />
-
-        </div>
-        </div>
-      </Disclosure>
+          </ul>
+        </nav>
+      )}
+      </div>
+      </div>
     </div>
   );
 }

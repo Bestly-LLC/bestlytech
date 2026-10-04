@@ -26,6 +26,21 @@ const when = (iso: string) => {
   return today ? t : `${d.toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", weekday: "short" })} ${t}`;
 };
 
+/** The one place Hey Scout is switched on or off (the full card and the Now area both use it). */
+export const voiceSwitch = (voice: Voice | null | undefined, on: boolean): [Voice, string] =>
+  [{ ...VOICE_DEFAULT, ...(voice ?? {}), on }, on ? "Hey Scout is listening." : "Hey Scout is muted."];
+
+/** Compact Hey Scout switch row for the Now area. */
+export function HeyScoutRow({ voice, onChange, id = "wall-now-voice" }: { voice?: Voice | null; onChange: (v: Voice, msg: string) => void; id?: string }) {
+  const on = { ...VOICE_DEFAULT, ...(voice ?? {}) }.on;
+  return (
+    <Row label={<span className="inline-flex items-center gap-2">{on ? <Mic className="h-4 w-4 text-sky-400" aria-hidden /> : <MicOff className="h-4 w-4 text-white/50" aria-hidden />}Hey Scout</span>}
+      detail={on ? "Listening for the wake word" : "Muted"} htmlFor={id}>
+      <Switch id={id} className={swHit} checked={on} onCheckedChange={(v) => onChange(...voiceSwitch(voice, v))} />
+    </Row>
+  );
+}
+
 export function VoiceCard({ voice, onChange }: { voice?: Voice | null; onChange: (v: Voice, msg: string) => void }) {
   const v = { ...VOICE_DEFAULT, ...(voice ?? {}) };
   const [info, setInfo] = useState<Info | null>(null);
@@ -52,7 +67,7 @@ export function VoiceCard({ voice, onChange }: { voice?: Voice | null; onChange:
       <Row label={<span className="inline-flex items-center gap-2">{v.on ? <Mic className="h-4 w-4 text-sky-400" aria-hidden /> : <MicOff className="h-4 w-4 text-white/50" aria-hidden />}Hey Scout</span>}
         detail={state} htmlFor="wall-voice">
         <Switch id="wall-voice" className={swHit} checked={v.on}
-          onCheckedChange={(on) => onChange({ ...v, on }, on ? "Hey Scout is listening." : "Hey Scout is muted.")} />
+          onCheckedChange={(on) => onChange(...voiceSwitch(voice, on))} />
       </Row>
       <div className="border-b border-white/[0.07] px-4 py-3">
         <div className="mb-2 text-[16px] text-white">Sensitivity</div>
