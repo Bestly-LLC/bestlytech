@@ -160,3 +160,25 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - It clicks to unlock the Pi page's sound when that sound is locked.
   - It refreshes the page daily at 4:10 AM.
 - Scout key: `wall.stream`.
+
+## Oct 4, 11 AM: stream smoothness (choppy and laggy)
+
+**Causes (measured):**
+- **Uneven frame timing.** 25 fps on the projector's 60 Hz screen holds frames for 2 or 3 refreshes unevenly, which shows as judder.
+- **The player chased a 0.3 s delay.** It sped up to 1.12x and jumped, so motion lurched.
+- **The Pi's CPU was contended.** The x264 encoder uses about 1.5 to 1.7 cores. Ollama (`llama-server` in the docker container `ollama`) could take 3 cores when asked something, and voice.py spikes to about 70%. That made the Pi's copy of the page dip to 22 fps.
+
+**Fixes:**
+
+| Change | Where | Backup |
+|---|---|---|
+| Capture at 30 fps, keyframe every 2 s (`-r 30`, `g=60`) | `stream.sh` | `.bak_smooth_*` |
+| Player holds a steady ~1.2 s cushion at 1x speed: 1.03x only past 2 s behind, a jump only past 5 s | `player.html` | `.bak_smooth_*` |
+| `CPUWeight=1000` (the stream wins CPU contention) | `bestly-wall-stream` via `systemctl set-property` | — |
+| `docker update --cpus 2 --cpu-shares 256` | `ollama` container | — |
+
+- **Result:** player steady at 30 fps, 2 dropped frames in about 3,400, 0 stalls, delay about 1.1 s.
+- **Watchdog `stream_smooth_watch`** (every minute while the projector plays the stream):
+  - More than 90 dropped frames a minute, or the Pi copy under 24 fps, for 5 minutes → reload the Pi copy (max 2 an hour) and tell Scout (key `wall.smooth`).
+  - It re-applies the Ollama cap hourly if the container was recreated.
+- **Also Oct 4:** the Pi had no emoji font, so the sign wall's 🔥 showed as a box. Fixed by installing `fonts-noto-color-emoji` and restarting the stream (Chromium reads fonts only at startup).
