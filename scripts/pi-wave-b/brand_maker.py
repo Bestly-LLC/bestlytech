@@ -75,6 +75,7 @@ PRICE = re.compile(r"\$\s*\d|\b\d+\s*(dollars|bucks)\b", re.I)
 SYS = """You write one Instagram post for {name}. {about}
 
 You are given the card layout: a list of card kinds in order. Write the words for each card and the caption.
+Write only what is true and verifiable about how the web, browsers, apps, insurance and homes work; if unsure, say less.
 Card rules:
 - "head": 4 to 12 words, a flat statement (no question). In a head you may wrap 1 to 4 words in *asterisks* to color them.
 - "body": 8 to 30 words, plain and concrete. Not on the closing card.
@@ -94,10 +95,32 @@ The cards array must have exactly {n} entries in the order given."""
 
 
 def _json(text):
-    m = re.search(r"\{.*\}", (text or "").strip(), re.S)
-    if not m:
+    """First JSON object in the reply; tolerates prose around it, code fences and trailing commas."""
+    t = (text or "").strip()
+    t = re.sub(r"^```(?:json)?\s*|\s*```$", "", t)
+    i = t.find("{")
+    if i < 0:
         raise ValueError("no JSON in reply")
-    return json.loads(m.group(0))
+    t = re.sub(r",\s*([}\]])", r"\1", t[i:])
+    obj, _ = json.JSONDecoder().raw_decode(t)
+    return obj
+
+
+REVIEW = """You are a strict fact checker for {name} posts that go live with no human review. Facts about {name}: {about}
+Check every card and the caption for: anything technically wrong or misleading about how websites, browsers, apps,
+insurance or law work; anything said about {name} beyond the facts; scare tactics; advice that could hurt someone.
+Reply with ONE JSON object only: {{"ok": true}} or {{"ok": false, "problems": ["<card or caption>: <what is wrong>", ...]}}"""
+
+
+def _review(cfg, plan, deadline):
+    msgs = [{"role": "system", "content": REVIEW.format(name=cfg["name"], about=cfg["about"])},
+            {"role": "user", "content": json.dumps({"caption": plan.get("caption"), "cards": plan.get("cards")})[:6000]}]
+    msg, _ = freellm.chat(msgs, None, max_tokens=2500, deadline=deadline)
+    try:
+        r = _json(msg.get("content"))
+    except ValueError:
+        return []          # an unreadable review is not a rejection; the rule checks already passed
+    return [] if r.get("ok") else [f"fact check: {p}" for p in (r.get("problems") or [])][:6]
 
 
 def _plain(t):
@@ -217,6 +240,8 @@ def _make_one(brand, cfg, recent, bank_open, deadline, dry):
         try:
             plan = _json(msg.get("content"))
             errs = _check(brand, cfg, kinds, plan)
+            if not errs:
+                errs = _review(cfg, plan, deadline)
         except (ValueError, TypeError, KeyError) as e:
             plan, errs = None, [f"reply was not the JSON asked for ({e})"]
         if plan and not errs:
@@ -257,7 +282,7 @@ def _make_one(brand, cfg, recent, bank_open, deadline, dry):
 
 
 def _make(brands, dry):
-    out, deadline = [], time.time() + 480
+    out, deadline = [], time.time() + 1500
     for brand in brands:
         cfg = BRANDS[brand]
         bank_open = lib.get("social_content_bank", f"select=id,topic,composition,ground&brand=eq.{brand}"
