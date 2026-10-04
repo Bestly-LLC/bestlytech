@@ -2178,5 +2178,124 @@
       "default": false,
       "admin": "WallLedSign.tsx:142"
     }
+  ],
+  "panes_note": "Layout both the admin (/admin/wall) and Home Assistant follow (2026-10-04, Jared: 'as if Apple or Tesla designed it'). The top of the page is 'now': the everyday controls in the listed order. Everything else lives in a settings pane, opened from a short list of rows (title + one-line summary + chevron), Apple Settings style. A pane shows its groups in order. Every control still belongs to exactly one group; panes only decide where a group is shown.",
+  "now": {
+    "controls": [
+      "mode",
+      "volume",
+      "sound",
+      "voice_on",
+      "dnd_quiet_hour",
+      "dnd_quiet_morning",
+      "dnd_allow_hour",
+      "dnd_allow_tonight",
+      "dnd_schedule",
+      "radio_on",
+      "show_play",
+      "show_party",
+      "motivate",
+      "show_stop",
+      "sleep_start",
+      "sleep_stop",
+      "alarm_on",
+      "alarm_time"
+    ],
+    "note": "Power (Turn on / Turn off), status and Scout's one thing sit above these in a hero card. DND buttons show contextually (quiet buttons while sounds are allowed, allow buttons while it's quiet, Back on the schedule while an override is active)."
+  },
+  "panes": [
+    {
+      "id": "display",
+      "title": "Display",
+      "icon": "mdi:view-dashboard-outline",
+      "summary": "Left side, strip widgets, theme, names",
+      "groups": [
+        "wall",
+        "strip",
+        "theme",
+        "sign"
+      ]
+    },
+    {
+      "id": "sound",
+      "title": "Sound & Voice",
+      "icon": "mdi:volume-high",
+      "summary": "Quiet hours, Hey Scout, radio, AirPlay",
+      "groups": [
+        "sound",
+        "dnd",
+        "voice",
+        "radio",
+        "airplay"
+      ]
+    },
+    {
+      "id": "sky",
+      "title": "Sky",
+      "icon": "mdi:airplane",
+      "summary": "Planes, stars, map layers on the ceiling",
+      "groups": [
+        "sky"
+      ]
+    },
+    {
+      "id": "alarm",
+      "title": "Alarm & Sleep",
+      "icon": "mdi:alarm",
+      "summary": "Wake-up alarm, counting sheep",
+      "groups": [
+        "alarm",
+        "sleep"
+      ]
+    },
+    {
+      "id": "alerts",
+      "title": "Notifications",
+      "icon": "mdi:bell-outline",
+      "summary": "Heads-up cards, Live Activities",
+      "groups": [
+        "heads",
+        "live"
+      ]
+    },
+    {
+      "id": "shows",
+      "title": "Show for friends",
+      "icon": "mdi:party-popper",
+      "summary": "Shows, party, skits",
+      "groups": [
+        "shows"
+      ]
+    },
+    {
+      "id": "neon",
+      "title": "Neon sign",
+      "icon": "mdi:led-strip-variant",
+      "summary": "Glow, color, reactions",
+      "groups": [
+        "neon"
+      ]
+    },
+    {
+      "id": "projector",
+      "title": "Projector",
+      "icon": "mdi:projector",
+      "summary": "Power, focus, alignment, sky fit",
+      "groups": [
+        "power",
+        "projector",
+        "skyfit",
+        "alignment"
+      ]
+    },
+    {
+      "id": "tests",
+      "title": "Tests",
+      "icon": "mdi:test-tube",
+      "summary": "Try alerts and sounds",
+      "groups": [
+        "tests"
+      ]
+    }
   ]
 }
