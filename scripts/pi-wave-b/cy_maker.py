@@ -292,7 +292,9 @@ def _make(dry):
                       "copy": {"headline": s["head"].strip(), "body": s["body"].strip()}})
     # The closing card prints centeringyou.com itself, in red, under the body; drop it from the body so it is not said twice.
     close_body = re.sub(r"\s*(?:(?:visit|explore|find|see|learn more|more)\b[^.]*?\s+)?(?:at\s+)?centeringyou\.com\.?", "",
-                        plan["closing"]["body"].strip(), flags=re.I).strip() or plan["closing"]["body"].strip()
+                        plan["closing"]["body"].strip(), flags=re.I).strip()
+    if not re.search(r"[.!?]$", close_body):      # the address was part of a sentence ("The deck lives at ..."): keep it
+        close_body = plan["closing"]["body"].strip()
     specs.append({"template": template, "pat": pat, "px": random.randint(0, 1100), "py": random.randint(0, 1100),
                   "slide": {"type": "cta", "head": plan["closing"]["head"].strip(), "body": close_body, "n": n, "of": n},
                   "copy": {"kicker": "Centering YOU", "headline": plan["closing"]["head"].strip(),
