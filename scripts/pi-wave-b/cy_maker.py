@@ -82,7 +82,7 @@ Captions:
   Centering YOU and ends with centeringyou.com. No hashtags in the text.
 - "hashtags_instagram": exactly 3 relevant lowercase hashtags. "caption_tiktok": 25 to 70 words, names the deck and
   ends with centeringyou.com. "hashtags_tiktok": exactly 4.
-- "alt_text": one sentence describing the slides for screen readers.
+- "alt_text": one sentence describing the slides for screen readers, at most 95 characters.
 Reply with ONE JSON object only:
 {{"topic": "...", "title": "<short post title, 3 to 9 words>", "cover": {{"kicker": "...", "head": "..."}},
   "slides": [{{"head": "...", "body": "..."}}, ...], "closing": {{"head": "...", "body": "..."}},
@@ -279,7 +279,7 @@ def _make(dry):
 
     n = mid + 2
     slug = re.sub(r"[^a-z0-9]+", "-", plan["title"].lower()).strip("-")[:48]
-    folder = f"carousel/{'_dry/' if dry else ''}cy-weekly-{slug}-{time.strftime('%y%m%d')}/v1"
+    folder = f"carousel/{'_dry/' if dry else ''}cy-weekly-{slug}-{time.strftime('%y%m%d-%H%M')}/v1"
     faces = ["teal", "red", "teal", "red", "teal", "red"]
     pat = random.choice(["pat-a", "pat-b"])
     specs = [{"template": template, "pat": pat, "px": random.randint(0, 1100), "py": random.randint(0, 1100), "face": "red",
@@ -306,6 +306,8 @@ def _make(dry):
         slides.append({"media_url": _upload(out, f"{folder}/{i:02d}.jpg"), "copy": sp["copy"]})
         os.remove(out)
 
+    alt = (plan.get("alt_text") or "").strip()
+    alt_ig = alt if len(alt) <= 100 else alt[:97].rsplit(" ", 1)[0].rstrip(",;:") + "..."   # Studio caps Instagram alt at 100
     ig = plan["caption_instagram"].strip()
     tt = plan["caption_tiktok"].strip()
     why = (f"Made by the weekly maker (Spark, on the Pi). Topic: {topic}. Template: {template}, {n} slides. "
@@ -315,8 +317,8 @@ def _make(dry):
     payload = {"client": "centering-you", "title": plan["title"].strip(), "caption": ig, "audience": "parents",
                "provenance": {"topic": topic, "template": template, "writer": prov, "editor_score": score},
                "slides": slides, "note": why,
-               "variants": [{"platform": "instagram", "caption": ig, "hashtags": plan["hashtags_instagram"], "alt_text": plan.get("alt_text")},
-                            {"platform": "tiktok", "caption": tt, "hashtags": plan["hashtags_tiktok"], "alt_text": plan.get("alt_text")}]}
+               "variants": [{"platform": "instagram", "caption": ig, "hashtags": plan["hashtags_instagram"], "alt_text": alt_ig},
+                            {"platform": "tiktok", "caption": tt, "hashtags": plan["hashtags_tiktok"], "alt_text": alt[:300]}]}
     if dry:
         return ("dry: " + json.dumps({k: payload[k] for k in ("title", "caption", "provenance")}) + "\n"
                 + "\n".join(s["media_url"] for s in slides) + "\n" + json.dumps(plan)[:3000])
