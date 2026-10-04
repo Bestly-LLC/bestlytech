@@ -79,11 +79,12 @@ LESSONS_EDU = ["the sealed can", "three ingredients", "what we leave out", "read
 
 ABOUT = """HOKU Facial Mist is a face mist that is not on sale yet; people join a waitlist (link in bio, hoku-clean.com).
 Facts you may use, and NOTHING beyond them:
-- It comes in a 4 fl oz sealed can (bag-on-valve): the liquid sits in a sealed bag inside the can, and the air that
+- It comes in a 4 fl oz sealed can: the liquid sits in a sealed bag inside the can, and the air that
   pushes it out stays outside the bag, so air never gets back in to the liquid. It sprays at any angle, upside down
   included, as a fine mist, and empties almost completely. There is no pump and no straw.
 - Three ingredients: water, salt, and an electric current run through them, which makes hypochlorous acid (HOCl).
-  Nothing is added after. No fragrance, no alcohol, no oils.
+  Nothing is added after. No fragrance, no alcohol, no oils. Never print the abbreviation HOCl or the words
+  "bag-on-valve" or "electrolysis": say "a sealed bag inside the can" and "salt water with a current run through it".
 - How people use it: mist it on the face, don't rub it in, let it dry on its own, carry on. It is one product, not a
   routine, and it does not replace a cleanser.
 - White blood cells make the same molecule. That is a fact about the molecule, not a promise about the spray.
@@ -92,7 +93,8 @@ Voice: plain, honest, a little dry, calm. Short sentences. "We" for the brand, "
 NEVER say what it does for skin or how skin will look or feel (no results, benefits, conditions, germs, "hydrating",
 "soothing", "refreshing your skin"), never compare it to chlorine or bleach, never give a strength number, never
 mention surfaces or cleaning, never call it first, only, natural, organic, pure, clinical, or safe for anyone in
-particular, never mention prices, a launch date or a sale."""
+particular, never mention prices, a launch date or a sale. Never use: effective, powerful, potent, proven, results,
+restore, renew, refresh your skin, pores, immune, eco, sustainable, recyclable, ppm."""
 
 SYS = """You write one Instagram post for HOKU. {about}
 
@@ -129,6 +131,13 @@ SINGLE_TAIL = """
 "graphic": one icon chosen from: {icons} (use "" for none).
 This kind of post shows our work: the can, the label, the ingredients, what we will and will not say."""
 
+# Beats already used on the hand-made October carousels (their words live only in the images); new posts add theirs
+# to hoku_post_render.subhead, and _past_beats() reads both.
+SEED_BEATS = ["After a flight. Before a call. End of a hike.", "Bag down. Mist. Let it dry.", "Boots off. Water. Mist.",
+              "By your keys. On the desk. Not in a cabinet.", "Eyes off the screen. Mist. Back to it.", "Kettle on. Mist. Pour.",
+              "Mist. Dry. Join.", "Mist. Let it dry. Keep walking.", "Park. Mist. Mirror, then go.", "Tote. Backpack. Gym bag.",
+              "Unclip. Mist. Let it dry.", "Wash. Mist. Bed."]
+
 EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿⬀-⯿️]")
 DIGITS_OK = re.compile(r"\b4\s*(fl\.?\s*)?oz\b", re.I)
 
@@ -158,6 +167,11 @@ def _posts(n=80):
 
 def _score(r):
     return (r.get("likes") or 0) + 2 * (r.get("comments") or 0)
+
+
+def _past_beats():
+    rows = lib.get("hoku_post_render", "select=subhead&layout=eq.moment&order=created_at.desc&limit=60") or []
+    return SEED_BEATS + [r["subhead"] for r in rows if r.get("subhead")]
 
 
 def _empty_slots(posts):
@@ -229,6 +243,11 @@ def _check(fmt, layout, p, past):
             if not 1 <= _wc(l) <= 4 or not str(l).strip().endswith("."):
                 e.append(f"beat {i} must be 1-4 words ending with a period")
         rng("lead", p.get("lead"), 3, 9)
+        beats = " ".join(str(l).strip() for l in lines)
+        for old in _PAST_BEATS:
+            if difflib.SequenceMatcher(None, beats.lower(), old.lower()).ratio() > 0.55:
+                e.append(f"the 3 beats are too close to an earlier post ('{old}'); find beats that belong to THIS moment only")
+                break
         rng("caption", cap, 12, 65)
         if p.get("graphic") not in ICONS_MOMENT:
             e.append(f"graphic must be one of {ICONS_MOMENT}")
@@ -287,6 +306,9 @@ def _check(fmt, layout, p, past):
             r = lib.rpc("claim_check", _client_slug="hoku", _text=t, _context="hoku_maker") or {}
             if r.get("ok") is False or r.get("severity") == "soft":
                 e.append(f"{where} broke the claim rule '{r.get('reason')}' - say it without that")
+            v = lib.rpc("hoku_soft_claim_violation", _text=t)   # the database gate social_posts_hoku_gate runs at insert
+            if v:
+                e.append(f"{where} uses a banned word ({v}) - say it without that")
     return e
 
 
@@ -323,6 +345,9 @@ def _review(plan, deadline):
     return [f"editor (score {score:g}/10): {str(r.get('improve') or 'make it more specific and concrete')[:300]}"], score
 
 
+_PAST_BEATS = []
+
+
 def _write(fmt, layout, topic, posts, past, deadline):
     if fmt == "moment":
         rules = MOMENT_RULES.format(icons=", ".join(ICONS_MOMENT))
@@ -335,7 +360,11 @@ def _write(fmt, layout, topic, posts, past, deadline):
     lessons = bm._lessons("hoku")
     recent = "\n".join(f"- {(r.get('caption') or '').splitlines()[0][:90]} (likes {r.get('likes')}, comments {r.get('comments')})"
                        for r in posts[:14])
-    user = (f"Topic: {topic}\n\nRecent HOKU posts (match the voice; do not repeat their ideas or lines):\n{recent}\n"
+    if fmt == "moment":
+        _PAST_BEATS[:] = _past_beats()
+    user = (f"Topic: {topic}\n\n"
+            + (f"Beats already used (do not reuse their words or rhythm): {' | '.join(_PAST_BEATS[-20:])}\n\n" if fmt == "moment" else "")
+            + f"Recent HOKU posts (match the voice; do not repeat their ideas or lines):\n{recent}\n"
             + ("\nWhat we have learned (observations with sample sizes):\n" + "\n".join(f"- {l}" for l in lessons[:5]) if lessons else ""))
     msgs = [{"role": "system", "content": SYS.format(about=ABOUT, format_rules=rules, schema=schema)},
             {"role": "user", "content": user}]
@@ -465,6 +494,10 @@ def _make_one(day, at, posts, past, deadline, dry):
     lib._req("POST", "/rest/v1/social_posts", row)
     lib._req("POST", "/rest/v1/social_post_dims", {"post_id": pid, "brand": "hoku", "topic": (plan.get("topic") or topic)[:60].lower(),
                                                     "ground": theme, "composition": layout, "pose": fmt, "display_word": None})
+    lib._req("POST", "/rest/v1/hoku_post_render", {
+        "post_id": pid, "eyebrow": (plan.get("kicker") or "")[:80], "headline": plan["title"][:200], "layout": layout,
+        "subhead": " ".join(l.strip() for l in plan.get("lines") or []) if fmt == "moment" else (plan.get("body") or "")[:300],
+        "og_url": urls[0]})
     return f"{day}: queued {label}", plan, {"fmt": fmt, "layout": layout, "theme": theme}
 
 
