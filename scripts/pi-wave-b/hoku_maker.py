@@ -218,8 +218,9 @@ def _pick(posts):
         recent_layouts = [r["dims"].get("composition") for r in posts[:3]]
         layout = random.choice([l for l in SINGLE_LAYOUTS if l not in recent_layouts] or SINGLE_LAYOUTS)
     pool_all = MOMENTS if fmt == "moment" else LESSONS_EDU
-    used = [r["dims"].get("topic") for r in posts[:10]]
-    pool = [t for t in pool_all if t not in used] or pool_all
+    ever = {r["dims"].get("topic") for r in posts}
+    recent = [r["dims"].get("topic") for r in posts[:10]]
+    pool = [t for t in pool_all if t not in ever] or [t for t in pool_all if t not in recent] or pool_all
     top, n = best("topic", pool, 2)
     if top and random.random() > 0.3:
         topic, why2 = top, f"topic exploit (N={n})"
@@ -283,6 +284,8 @@ def _check(fmt, layout, p, past):
             e.append(f"graphic must be one of {ICONS_SINGLE} or empty")
     if "?" in title:
         e.append("the title asks a question")
+    elif not title.endswith("."):
+        e.append("the title must end with a period (house style)")
     paras = [x for x in re.split(r"\n\s*\n", cap) if x.strip()]
     if len(paras) > 3:
         e.append("caption has more than 3 paragraphs")
@@ -478,7 +481,7 @@ def _make_one(day, at, posts, past, deadline, dry):
     folder = "hoku/dry" if dry else "hoku/daily"
     urls = []
     for i, s in enumerate(specs, 1):
-        out = f"/tmp/hk-{stamp}-{i:02d}.jpg"
+        out = f"/tmp/hk-{stamp}-{os.getpid()}-{i:02d}.jpg"
         _render(s, out)
         urls.append(_upload(out, f"{folder}/hk-{stamp}-{int(time.time())}-{i:02d}.jpg"))
     cap = plan["caption"].strip()

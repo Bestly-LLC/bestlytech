@@ -1,0 +1,108 @@
+<!doctype html>
+<!-- Centering YOU carousel card for the Pi (2026-10-04). Rebuilds two of her five Studio templates from her own
+     brand rules (brand/centering-you/RULES.*.md §3a-3b) and measured slides (tile v12, deck v12):
+       tile  peach page, flat cream card (56px inset, 64px radius), optional square of her pattern, red rule + kicker,
+             League Gothic headline in Deep Teal, Clear Sans body, foot = centeringyou.com + card number
+       deck  her pattern full-bleed in the card, a flat face at her measured inset (16% sides, 6.7% top, 6.8% bottom)
+             in teal / red / cream, type knocked out of the face
+     Every carousel ends on a closing card ("cta") with the deck photo. Headlines uppercase League Gothic.
+     Fonts and art are HER files, fetched from storage at install (never committed to the public repo).
+     Spec = JSON in the URL hash: {template, slide:{type, kicker, head, body, n, of}, face, pat, px, py}
+     The page shrinks the whole type scale together until nothing overflows, then reports <body data-fit>. -->
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:'League Gothic';src:url(fonts/LeagueGothic-Regular.ttf)}
+@font-face{font-family:'Clear Sans';src:url(fonts/ClearSans-Regular.ttf);font-weight:400}
+@font-face{font-family:'Clear Sans';src:url(fonts/ClearSans-Medium.ttf);font-weight:500}
+@font-face{font-family:'Clear Sans';src:url(fonts/ClearSans-Bold.ttf);font-weight:700}
+:root{--red:#D44934;--gold:#F4C459;--deep:#2A6566;--teal:#489597;--cream:#EFE4D6;--peach:#EFCAB6;--k:1}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden;background:var(--peach)}
+body{font-family:'Clear Sans',sans-serif;-webkit-font-smoothing:antialiased}
+.card{position:absolute;left:56px;top:56px;width:968px;height:1238px;border-radius:64px;overflow:hidden;background:var(--cream)}
+.pat{position:absolute;background-size:2400px 2400px;background-repeat:no-repeat}
+/* tile */
+.T .pat{left:58px;top:58px;width:322px;height:322px;border-radius:34px}
+.T .col{position:absolute;left:58px;right:96px;top:58px;bottom:150px;display:flex;flex-direction:column;justify-content:flex-end}
+.T.cover .col,.T.cta .col{justify-content:flex-start;padding-top:calc(322px + 64px)}
+.T.text .col{justify-content:center}
+.rule{width:88px;height:4px;background:var(--red);margin-bottom:28px}
+.kicker{font-size:calc(26px*var(--k));letter-spacing:.16em;text-transform:uppercase;color:var(--red);font-weight:500;margin-bottom:40px;font-family:'League Gothic';letter-spacing:.12em;font-size:calc(34px*var(--k))}
+h1{font-family:'League Gothic',sans-serif;font-weight:400;text-transform:uppercase;line-height:1.04;letter-spacing:.005em;
+   font-size:calc(118px*var(--k));color:var(--deep)}
+.body{font-size:calc(40px*var(--k));line-height:1.45;color:var(--deep);margin-top:calc(40px*var(--k));max-width:800px}
+.url{font-weight:700;color:var(--red);font-size:calc(40px*var(--k));margin-top:calc(44px*var(--k))}
+.deckshot{position:absolute;left:46px;top:40px;width:420px;height:auto}
+.foot{position:absolute;left:58px;right:62px;bottom:52px;display:flex;justify-content:space-between;align-items:baseline}
+.foot b{font-size:30px;font-weight:700;color:var(--deep)}
+.foot span{font-size:22px;letter-spacing:.12em;color:var(--deep);opacity:.8}
+/* deck */
+.D .pat{left:0;top:0;width:968px;height:1238px}
+.D .face{position:absolute;left:155px;right:155px;top:83px;bottom:84px;border-radius:56px;display:flex;flex-direction:column;
+   justify-content:flex-end;padding:0 56px 140px}
+.D .face.top{justify-content:flex-start;padding-top:96px}
+.D .face h1{font-size:calc(104px*var(--k))}
+.D .face .body{font-size:calc(36px*var(--k))}
+.D .face .kicker{margin-bottom:28px}
+.D .foot{left:56px;right:56px;bottom:52px}
+.D.cta .face{justify-content:flex-start;padding-top:470px}
+.D.cta .deckshot{left:48px;top:48px;width:400px}
+.f-teal{background:var(--deep)} .f-teal h1,.f-teal .body,.f-teal .foot b,.f-teal .foot span{color:var(--cream)} .f-teal .kicker{color:var(--gold)} .f-teal .url{color:var(--gold)}
+.f-red{background:var(--red)} .f-red h1,.f-red .body,.f-red .foot b,.f-red .foot span{color:var(--cream)} .f-red .kicker{color:var(--gold)} .f-red .url{color:var(--cream)}
+.f-cream{background:var(--cream)}
+</style></head>
+<body><div id="root"></div>
+<script>
+const esc = s => String(s ?? '').replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m]));
+function build(spec) {
+  const t = spec.template === 'deck' ? 'D' : 'T';
+  const s = spec.slide || {};
+  const type = s.type || 'text';                    // cover | text | cta
+  const pat = `background-image:url(art/${spec.pat || 'pat-a'}.png);background-position:-${Math.min(+spec.px || 0, 2400 - 968)}px -${Math.min(+spec.py || 0, 2400 - 1238)}px`;
+  const foot = `<div class="foot"><b>centeringyou.com</b><span>${esc(s.n)} / ${esc(s.of)}</span></div>`;
+  const kick = s.kicker ? (t === 'T' ? `<div class="rule"></div>` : '') + `<div class="kicker">${esc(s.kicker)}</div>` : '';
+  const body = s.body ? `<p class="body">${esc(s.body)}</p>` : '';
+  const url = type === 'cta' ? `<div class="url">centeringyou.com</div>` : '';
+  const shot = type === 'cta' ? `<img class="deckshot" src="art/deck-shot.png">` : '';
+  let inner;
+  if (t === 'T') {
+    const square = type === 'cover' ? `<div class="pat" style="${pat}"></div>` : '';
+    inner = `${square}${shot}<div class="col">${kick}<h1>${esc(s.head)}</h1>${body}${url}</div>${type === 'cta' ? '' : foot}`;
+  } else {
+    const face = type === 'cta' ? 'f-cream' : ('f-' + (spec.face || 'teal'));
+    inner = `<div class="pat" style="${pat}"></div><div class="face ${face}">${shot}${kick}<h1>${esc(s.head)}</h1>${body}${url}${type === 'cta' ? '' : foot}</div>`;
+  }
+  document.getElementById('root').innerHTML = `<div class="card ${t} ${type}">${inner}</div>`;
+}
+function overflow() {
+  const box = document.querySelector('.T .col, .D .face');
+  const kids = box ? [...box.children].filter(c => !c.classList.contains('foot') && !c.classList.contains('deckshot')) : [];
+  if (!box) return false;
+  // content must not run past its box, nor into the foot
+  if (box.scrollHeight > box.clientHeight + 2) return true;
+  const last = kids[kids.length - 1], foot = document.querySelector('.foot');
+  if (last && foot && last.getBoundingClientRect().bottom > foot.getBoundingClientRect().top - 24) return true;
+  const shot = document.querySelector('.deckshot'), first = box.querySelector('h1, .kicker, .rule');
+  if (shot && first && first.getBoundingClientRect().top < shot.getBoundingClientRect().bottom + 16) return true;
+  return false;
+}
+async function run() {
+  let spec = {};
+  try { spec = JSON.parse(decodeURIComponent(location.hash.slice(1))); } catch (e) {}
+  build(spec);
+  await document.fonts.ready;
+  await Promise.all([...document.images].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
+  let k = 1;
+  for (; k >= 0.6; k -= 0.04) {
+    document.documentElement.style.setProperty('--k', k.toFixed(2));
+    if (!overflow()) break;
+  }
+  const over = overflow();
+  const fonts = document.fonts.check("40px 'League Gothic'") && document.fonts.check("30px 'Clear Sans'");
+  const imgs = [...document.images].every(i => i.naturalWidth > 0);
+  const pat = new Image(); pat.src = `art/${spec.pat || 'pat-a'}.png`;
+  await new Promise(r => { pat.onload = pat.onerror = r; if (pat.complete) r(); });
+  document.body.setAttribute('data-fit', JSON.stringify({ ok: !over && fonts && imgs && pat.naturalWidth > 0, scale: +k.toFixed(2), overflow: over, fonts, images: imgs }));
+}
+run();
+</script></body></html>
