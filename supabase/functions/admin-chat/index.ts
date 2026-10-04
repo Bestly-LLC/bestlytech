@@ -79,6 +79,9 @@ import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: 
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v31 (2026-10-04, "Chat Router", hired on the Team page): at the daily cap Scout keeps going on the free AI (with tools)
+//   instead of stopping, and "Raise today's cap by $5" / "override" adds $5 for today only (scout_cap_boost, max +$20/day)
+//   and turns paid back on for an hour. Every routed reply checks in as chat-router (agent_beat) so the Team page sees it.
 // v30 (2026-10-03): the Paid AI switch is the ONE gate (no hidden per-chat passes); a "Yes, use paid AI" tap flips it on for an
 //   hour, it turns itself off at the hour or the cap, and a running paid reply stops when it goes off. Free ladder adds
 //   Gemini, OpenRouter and FreeLLM after Groq/Cloudflare (see _shared/free-llm.ts).
@@ -1346,6 +1349,14 @@ function systemBlocks(system: string) {
   return parts.map((text, i) => (i < parts.length - 1 ? { type: "text", text, cache_control: { type: "ephemeral" } } : { type: "text", text }));
 }
 
+/** v31: Chat Router's check-in (Team page watchdog). Never blocks or fails a reply. */
+function routerBeat(summary: string, ok = true) {
+  db.rpc("agent_beat", { p_slug: "chat-router", p_ok: ok, p_summary: summary.slice(0, 200) }).then(() => {}, () => {});
+}
+
+const RAISE_CAP = /^(raise today'?s cap( by \$?5)?|override( (this|it|the cap))?)\.?!?$/i;
+const CAP_OPTIONS = "OPTIONS: Raise today's cap by $5 | Wait until midnight";
+
 async function ask(messages: any[], system: string, apiKey: string, opts: { timeoutMs?: number; noTools?: boolean } = {}) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1492,6 +1503,7 @@ Deno.serve(async (req) => {
     // "keep going" alone is NOT a yes to spending.
     let paidOk = false;
     const say = async (reply: string, extra: Record<string, unknown> = {}) => {
+      if (extra.free) routerBeat(`Free reply${Array.isArray(extra.tools) && extra.tools.length ? ` (${extra.tools.length} steps)` : ""}`);
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
       await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
       return J({ ok: true, thread_id: threadId, reply, tools: [], ...extra });
@@ -1503,12 +1515,22 @@ Deno.serve(async (req) => {
         // It can't turn on: today's cap is used up. Say so instead of pretending.
         return false;
       };
-      if (/^always,? stop asking\.?$/i.test(text) || /^yes,? use paid ai\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
+      if (!autopilot && RAISE_CAP.test(text)) {
+        // v31: his tap raises today's cap by $5 (today only) and turns paid on for an hour; the paid reply then
+        // answers the message that hit the cap (it reads the thread).
+        const { data: b } = await db.rpc("scout_cap_boost", { p_extra: 5, p_by: uid ?? null, p_reason: "raised in chat" });
+        if ((b as any)?.ok !== true) {
+          return await say(`Today's cap is already raised as far as it goes ($${Number((b as any)?.cap ?? 0).toFixed(2)}). It resets at midnight. Until then I'm on free AI.`, { capped: true });
+        }
+        paidOk = await flip(60, "cap_raised");
+        routerBeat(`Cap raised to $${Number((b as any)?.cap ?? 0).toFixed(2)} for today`);
+        if (!paidOk) return await say("I raised today's cap but the Paid AI switch didn't turn on. Try \"Yes, use paid AI\".", { capped: true });
+      } else if (/^always,? stop asking\.?$/i.test(text) || /^yes,? use paid ai\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
         const always = /^always/i.test(text);
         paidOk = await flip(always ? null : 60, always ? "always" : "yes_tap");
         if (!paidOk) {
           const { data: sp } = await db.rpc("scout_paid_spend");
-          return await say(`Paid AI is at today's cap ($${Number((sp as any)?.spent ?? 0).toFixed(2)} of $${Number((sp as any)?.cap ?? 5).toFixed(2)}), so the switch can't turn on until midnight. Your message is saved.`, { capped: true });
+          return await say(`Paid AI is at today's cap ($${Number((sp as any)?.spent ?? 0).toFixed(2)} of $${Number((sp as any)?.cap ?? 5).toFixed(2)}). I can raise it by $5 for today, or wait until midnight. Your message is saved.\n\n${CAP_OPTIONS}`, { capped: true });
         }
       } else if (/^no,? skip it\.?$/i.test(text)) {
         return await say("OK, skipped. Nothing was spent.");
@@ -1596,9 +1618,16 @@ Deno.serve(async (req) => {
   // Daily chat cap: a runaway guard, even with the Paid AI switch on.
   const { data: budget } = await db.rpc("ai_budget", { p_scope: "chat" });
   if ((budget as any)?.ok === false) {
-    const why = `Paid AI hit today's cap ($${Number((budget as any).spent).toFixed(2)} of $${Number((budget as any).cap).toFixed(2)}), so I stopped. It resets at midnight. Your message is saved.`;
+    // v31: don't stop. Hand this message to the free AI (with tools), and offer to raise today's cap.
+    const head = `Paid AI hit today's cap ($${Number((budget as any).spent).toFixed(2)} of $${Number((budget as any).cap).toFixed(2)}), so I'm on free AI for now.`;
+    const agent = await freeAgent(threadId, text, body.page, { autopilot }).catch(() => ({ why: "", tools: [] as string[] }) as { answer?: string; why: string; tools?: string[] });
+    const done = !!agent.answer && !/^STUCK:/m.test(agent.answer);
+    const why = done
+      ? `${head}\n\n${agent.answer}${autopilot || /^\s*OPTIONS:/m.test(agent.answer!) ? "" : `\n\n${CAP_OPTIONS}`}`
+      : `${head} The free AI couldn't finish this one${agent.why ? `: ${agent.why}` : "."} Your message is saved.${autopilot ? "" : `\n\n${CAP_OPTIONS}`}`;
+    routerBeat(done ? "Cap hit; answered on free AI" : "Cap hit; free AI couldn't finish", true);
     await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
-    return J({ ok: true, thread_id: threadId, reply: why, capped: true });
+    return J({ ok: true, thread_id: threadId, reply: why, capped: true, free: done, tools: agent.tools ?? [] });
   }
   // One paid reply per chat at a time.
   const { data: locked } = await db.from("admin_chat_threads").update({ busy_until: new Date(Date.now() + 150_000).toISOString() })
@@ -1701,6 +1730,7 @@ Deno.serve(async (req) => {
   }
 
   if (!reply) reply = "Done.";
+  routerBeat(`Paid reply, ${used.length} step${used.length === 1 ? "" : "s"}, $${spentNow.toFixed(3)}`);
   // Paid AI answered, so any "out of credit" card is stale: clear it so Scout offers paid AI again.
   await db.from("admin_notifications").update({ read_at: new Date().toISOString() }).like("dedupe_key", "scout.credit:%").is("read_at", null);
   await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
