@@ -1,0 +1,2182 @@
+{
+  "version": 1,
+  "note": "One list of wall controls. Admin (Wall.tsx) and Home Assistant (generated package) both follow it. Edit here first.",
+  "write_note": "Writes go through wall_admin_set (p_patch). The DB merges only top-level keys (state || cleaned patch), and the cleaners rebuild each object key whole, filling anything missing with its default (ledSign, dnd, voice, alarm, radio) or dropping missing members (widgets, liveActs). So a control whose path has a dot (e.g. dnd.on, widgets.news, ledSign.notify) must read the current parent object, change that one member, and write the whole parent back. If the parent is missing, start from the defaults of its sibling controls in this file (alarm needs time, default 07:00; the admin sends on, time, days, vol 60). The same applies to dotted keys inside a button's set/also_set. widgets and liveActs: the admin writes every member each time (missing = on).",
+  "tokens": {
+    "$now": "Current time in ms since epoch.",
+    "$now+<ms>": "Current time plus that many ms.",
+    "$inc:<path>": "Current number at <path> (0 if missing) plus 1.",
+    "$nextLA:<path>": "Next time (ms, rounded down to the minute) the Los Angeles clock reads the HH:MM stored at <path>; if it reads that now, the same time tomorrow.",
+    "$nextLA:<a>:after:<b>": "Next time the LA clock reads <a>, counted from the next time it reads <b>.",
+    "$input:<control id>": "Current value of a local (unsaved) control in this file."
+  },
+  "fields_note": "default = what the admin and wall use when the key is missing. requires = admin disables the control while that path is off. shown_if = admin hides the control unless that is true. also_set = extra keys the admin writes with every change; also_set_when_on = only when switching on. local = not in wall state, only feeds a button. needs = the control can only turn on while that path is set.",
+  "radio_note": "Radio is state.radio = {on, name, url, favicon, ts} or null (the DB checks url is http(s) and at most 500 chars, name at most 60). The admin has no saved favorites and no stations table: WallRadio.tsx fetches stations live from the free Radio Browser API in the browser (de1/de2/fi1.api.radio-browser.info). 'Popular near you' = the 12 most-voted working stations within 40 km of West Hollywood (/json/stations/search?geo_lat=34.086&geo_long=-118.37&geo_distance=40000&order=votes&reverse=true&limit=24&hidebroken=true, codecs MP3/OGG/FLAC/AAC/OPUS only), plus a name search box. Tapping a station writes {on:true, name, url, favicon, ts:now}. Stop writes {...radio, on:false, ts:now} and keeps the station, and Play then brings that same station back. So HA can stop the radio any time but can only turn it on while radio.url holds a station; picking a new one needs a station url (HA could call the same Radio Browser search). The Pi plays it on the Desk HomePod. Radio and Air traffic control are exclusive: radio on sets atc false in the DB, and atc:true sent without a radio object makes the DB write radio {on:false, url:null}, which forgets the station. Right now the saved radio has url null, so there is nothing to resume until a station is picked again.",
+  "groups": [
+    {
+      "id": "power",
+      "title": "Power",
+      "icon": "mdi:power"
+    },
+    {
+      "id": "wall",
+      "title": "On the wall",
+      "icon": "mdi:projector-screen"
+    },
+    {
+      "id": "dnd",
+      "title": "Do Not Disturb",
+      "icon": "mdi:bell-sleep"
+    },
+    {
+      "id": "voice",
+      "title": "Voice (Hey Scout)",
+      "icon": "mdi:microphone"
+    },
+    {
+      "id": "strip",
+      "title": "Strip widgets",
+      "icon": "mdi:view-dashboard-variant"
+    },
+    {
+      "id": "shows",
+      "title": "Show for friends",
+      "icon": "mdi:party-popper"
+    },
+    {
+      "id": "sleep",
+      "title": "Sleep mode",
+      "icon": "mdi:sleep"
+    },
+    {
+      "id": "alarm",
+      "title": "Alarm",
+      "icon": "mdi:alarm"
+    },
+    {
+      "id": "heads",
+      "title": "Heads-up",
+      "icon": "mdi:bell-ring"
+    },
+    {
+      "id": "live",
+      "title": "Live Activities",
+      "icon": "mdi:cellphone-text"
+    },
+    {
+      "id": "theme",
+      "title": "Theme",
+      "icon": "mdi:palette"
+    },
+    {
+      "id": "sound",
+      "title": "Sound",
+      "icon": "mdi:volume-high"
+    },
+    {
+      "id": "radio",
+      "title": "Radio",
+      "icon": "mdi:radio"
+    },
+    {
+      "id": "airplay",
+      "title": "AirPlay",
+      "icon": "mdi:apple-airplay"
+    },
+    {
+      "id": "sign",
+      "title": "Sign the wall",
+      "icon": "mdi:draw"
+    },
+    {
+      "id": "sky",
+      "title": "Sky on the ceiling",
+      "icon": "mdi:airplane"
+    },
+    {
+      "id": "projector",
+      "title": "Projector",
+      "icon": "mdi:projector",
+      "advanced": true
+    },
+    {
+      "id": "skyfit",
+      "title": "Sky fit",
+      "icon": "mdi:compass-outline",
+      "advanced": true
+    },
+    {
+      "id": "tests",
+      "title": "Tests",
+      "icon": "mdi:test-tube",
+      "advanced": true
+    },
+    {
+      "id": "alignment",
+      "title": "Alignment",
+      "icon": "mdi:grid",
+      "advanced": true
+    },
+    {
+      "id": "neon",
+      "title": "Neon sign",
+      "icon": "mdi:led-strip-variant",
+      "advanced": true
+    }
+  ],
+  "controls": [
+    {
+      "id": "power_on",
+      "group": "power",
+      "label": "Turn on",
+      "kind": "button",
+      "power": true,
+      "admin": "Wall.tsx:1345"
+    },
+    {
+      "id": "power_off",
+      "group": "power",
+      "label": "Turn off",
+      "kind": "button",
+      "power": false,
+      "admin": "Wall.tsx:1346"
+    },
+    {
+      "id": "away",
+      "group": "power",
+      "label": "Away mode",
+      "kind": "switch",
+      "path": "away",
+      "default": false,
+      "admin": "Wall.tsx:1369"
+    },
+    {
+      "id": "presence",
+      "group": "wall",
+      "label": "Off when I leave home",
+      "kind": "switch",
+      "path": "presence",
+      "default": true,
+      "admin": "Wall.tsx:842"
+    },
+    {
+      "id": "mode",
+      "group": "wall",
+      "label": "Mode",
+      "kind": "select",
+      "path": "mode",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Auto"
+        },
+        {
+          "value": "board",
+          "label": "Board"
+        },
+        {
+          "value": "ambient",
+          "label": "Ambient"
+        },
+        {
+          "value": "demo",
+          "label": "Demo"
+        },
+        {
+          "value": "off",
+          "label": "Black"
+        }
+      ],
+      "default": "auto",
+      "admin": "Wall.tsx:845"
+    },
+    {
+      "id": "left_date",
+      "group": "wall",
+      "label": "Show today's date on the left",
+      "kind": "switch",
+      "path": "leftDate",
+      "default": false,
+      "admin": "Wall.tsx:871"
+    },
+    {
+      "id": "demo_left",
+      "group": "wall",
+      "label": "Demo text: Left",
+      "kind": "text",
+      "path": "demoLeft",
+      "max": 60,
+      "default": "Oct 18\n2026",
+      "shown_if": "mode == demo",
+      "admin": "Wall.tsx:900"
+    },
+    {
+      "id": "demo_names",
+      "group": "wall",
+      "label": "Demo text: Middle",
+      "kind": "text",
+      "path": "demoNames",
+      "max": 60,
+      "default": "Maya & Jordan",
+      "shown_if": "mode == demo",
+      "admin": "Wall.tsx:900"
+    },
+    {
+      "id": "demo_right",
+      "group": "wall",
+      "label": "Demo text: Right",
+      "kind": "text",
+      "path": "demoRight",
+      "max": 60,
+      "default": "Welcome\nfriends",
+      "shown_if": "mode == demo",
+      "admin": "Wall.tsx:900"
+    },
+    {
+      "id": "dnd_on",
+      "group": "dnd",
+      "label": "Scheduled",
+      "kind": "switch",
+      "path": "dnd.on",
+      "default": true,
+      "admin": "WallR4.tsx:123",
+      "also_set": {
+        "dnd.override": null
+      }
+    },
+    {
+      "id": "dnd_from",
+      "group": "dnd",
+      "label": "From",
+      "kind": "select",
+      "path": "dnd.from",
+      "options": [
+        {
+          "value": "00:00",
+          "label": "12:00 AM"
+        },
+        {
+          "value": "00:15",
+          "label": "12:15 AM"
+        },
+        {
+          "value": "00:30",
+          "label": "12:30 AM"
+        },
+        {
+          "value": "00:45",
+          "label": "12:45 AM"
+        },
+        {
+          "value": "01:00",
+          "label": "1:00 AM"
+        },
+        {
+          "value": "01:15",
+          "label": "1:15 AM"
+        },
+        {
+          "value": "01:30",
+          "label": "1:30 AM"
+        },
+        {
+          "value": "01:45",
+          "label": "1:45 AM"
+        },
+        {
+          "value": "02:00",
+          "label": "2:00 AM"
+        },
+        {
+          "value": "02:15",
+          "label": "2:15 AM"
+        },
+        {
+          "value": "02:30",
+          "label": "2:30 AM"
+        },
+        {
+          "value": "02:45",
+          "label": "2:45 AM"
+        },
+        {
+          "value": "03:00",
+          "label": "3:00 AM"
+        },
+        {
+          "value": "03:15",
+          "label": "3:15 AM"
+        },
+        {
+          "value": "03:30",
+          "label": "3:30 AM"
+        },
+        {
+          "value": "03:45",
+          "label": "3:45 AM"
+        },
+        {
+          "value": "04:00",
+          "label": "4:00 AM"
+        },
+        {
+          "value": "04:15",
+          "label": "4:15 AM"
+        },
+        {
+          "value": "04:30",
+          "label": "4:30 AM"
+        },
+        {
+          "value": "04:45",
+          "label": "4:45 AM"
+        },
+        {
+          "value": "05:00",
+          "label": "5:00 AM"
+        },
+        {
+          "value": "05:15",
+          "label": "5:15 AM"
+        },
+        {
+          "value": "05:30",
+          "label": "5:30 AM"
+        },
+        {
+          "value": "05:45",
+          "label": "5:45 AM"
+        },
+        {
+          "value": "06:00",
+          "label": "6:00 AM"
+        },
+        {
+          "value": "06:15",
+          "label": "6:15 AM"
+        },
+        {
+          "value": "06:30",
+          "label": "6:30 AM"
+        },
+        {
+          "value": "06:45",
+          "label": "6:45 AM"
+        },
+        {
+          "value": "07:00",
+          "label": "7:00 AM"
+        },
+        {
+          "value": "07:15",
+          "label": "7:15 AM"
+        },
+        {
+          "value": "07:30",
+          "label": "7:30 AM"
+        },
+        {
+          "value": "07:45",
+          "label": "7:45 AM"
+        },
+        {
+          "value": "08:00",
+          "label": "8:00 AM"
+        },
+        {
+          "value": "08:15",
+          "label": "8:15 AM"
+        },
+        {
+          "value": "08:30",
+          "label": "8:30 AM"
+        },
+        {
+          "value": "08:45",
+          "label": "8:45 AM"
+        },
+        {
+          "value": "09:00",
+          "label": "9:00 AM"
+        },
+        {
+          "value": "09:15",
+          "label": "9:15 AM"
+        },
+        {
+          "value": "09:30",
+          "label": "9:30 AM"
+        },
+        {
+          "value": "09:45",
+          "label": "9:45 AM"
+        },
+        {
+          "value": "10:00",
+          "label": "10:00 AM"
+        },
+        {
+          "value": "10:15",
+          "label": "10:15 AM"
+        },
+        {
+          "value": "10:30",
+          "label": "10:30 AM"
+        },
+        {
+          "value": "10:45",
+          "label": "10:45 AM"
+        },
+        {
+          "value": "11:00",
+          "label": "11:00 AM"
+        },
+        {
+          "value": "11:15",
+          "label": "11:15 AM"
+        },
+        {
+          "value": "11:30",
+          "label": "11:30 AM"
+        },
+        {
+          "value": "11:45",
+          "label": "11:45 AM"
+        },
+        {
+          "value": "12:00",
+          "label": "12:00 PM"
+        },
+        {
+          "value": "12:15",
+          "label": "12:15 PM"
+        },
+        {
+          "value": "12:30",
+          "label": "12:30 PM"
+        },
+        {
+          "value": "12:45",
+          "label": "12:45 PM"
+        },
+        {
+          "value": "13:00",
+          "label": "1:00 PM"
+        },
+        {
+          "value": "13:15",
+          "label": "1:15 PM"
+        },
+        {
+          "value": "13:30",
+          "label": "1:30 PM"
+        },
+        {
+          "value": "13:45",
+          "label": "1:45 PM"
+        },
+        {
+          "value": "14:00",
+          "label": "2:00 PM"
+        },
+        {
+          "value": "14:15",
+          "label": "2:15 PM"
+        },
+        {
+          "value": "14:30",
+          "label": "2:30 PM"
+        },
+        {
+          "value": "14:45",
+          "label": "2:45 PM"
+        },
+        {
+          "value": "15:00",
+          "label": "3:00 PM"
+        },
+        {
+          "value": "15:15",
+          "label": "3:15 PM"
+        },
+        {
+          "value": "15:30",
+          "label": "3:30 PM"
+        },
+        {
+          "value": "15:45",
+          "label": "3:45 PM"
+        },
+        {
+          "value": "16:00",
+          "label": "4:00 PM"
+        },
+        {
+          "value": "16:15",
+          "label": "4:15 PM"
+        },
+        {
+          "value": "16:30",
+          "label": "4:30 PM"
+        },
+        {
+          "value": "16:45",
+          "label": "4:45 PM"
+        },
+        {
+          "value": "17:00",
+          "label": "5:00 PM"
+        },
+        {
+          "value": "17:15",
+          "label": "5:15 PM"
+        },
+        {
+          "value": "17:30",
+          "label": "5:30 PM"
+        },
+        {
+          "value": "17:45",
+          "label": "5:45 PM"
+        },
+        {
+          "value": "18:00",
+          "label": "6:00 PM"
+        },
+        {
+          "value": "18:15",
+          "label": "6:15 PM"
+        },
+        {
+          "value": "18:30",
+          "label": "6:30 PM"
+        },
+        {
+          "value": "18:45",
+          "label": "6:45 PM"
+        },
+        {
+          "value": "19:00",
+          "label": "7:00 PM"
+        },
+        {
+          "value": "19:15",
+          "label": "7:15 PM"
+        },
+        {
+          "value": "19:30",
+          "label": "7:30 PM"
+        },
+        {
+          "value": "19:45",
+          "label": "7:45 PM"
+        },
+        {
+          "value": "20:00",
+          "label": "8:00 PM"
+        },
+        {
+          "value": "20:15",
+          "label": "8:15 PM"
+        },
+        {
+          "value": "20:30",
+          "label": "8:30 PM"
+        },
+        {
+          "value": "20:45",
+          "label": "8:45 PM"
+        },
+        {
+          "value": "21:00",
+          "label": "9:00 PM"
+        },
+        {
+          "value": "21:15",
+          "label": "9:15 PM"
+        },
+        {
+          "value": "21:30",
+          "label": "9:30 PM"
+        },
+        {
+          "value": "21:45",
+          "label": "9:45 PM"
+        },
+        {
+          "value": "22:00",
+          "label": "10:00 PM"
+        },
+        {
+          "value": "22:15",
+          "label": "10:15 PM"
+        },
+        {
+          "value": "22:30",
+          "label": "10:30 PM"
+        },
+        {
+          "value": "22:45",
+          "label": "10:45 PM"
+        },
+        {
+          "value": "23:00",
+          "label": "11:00 PM"
+        },
+        {
+          "value": "23:15",
+          "label": "11:15 PM"
+        },
+        {
+          "value": "23:30",
+          "label": "11:30 PM"
+        },
+        {
+          "value": "23:45",
+          "label": "11:45 PM"
+        }
+      ],
+      "default": "22:30",
+      "admin": "WallR4.tsx:129",
+      "requires": "dnd.on"
+    },
+    {
+      "id": "dnd_to",
+      "group": "dnd",
+      "label": "To",
+      "kind": "select",
+      "path": "dnd.to",
+      "options": [
+        {
+          "value": "00:00",
+          "label": "12:00 AM"
+        },
+        {
+          "value": "00:15",
+          "label": "12:15 AM"
+        },
+        {
+          "value": "00:30",
+          "label": "12:30 AM"
+        },
+        {
+          "value": "00:45",
+          "label": "12:45 AM"
+        },
+        {
+          "value": "01:00",
+          "label": "1:00 AM"
+        },
+        {
+          "value": "01:15",
+          "label": "1:15 AM"
+        },
+        {
+          "value": "01:30",
+          "label": "1:30 AM"
+        },
+        {
+          "value": "01:45",
+          "label": "1:45 AM"
+        },
+        {
+          "value": "02:00",
+          "label": "2:00 AM"
+        },
+        {
+          "value": "02:15",
+          "label": "2:15 AM"
+        },
+        {
+          "value": "02:30",
+          "label": "2:30 AM"
+        },
+        {
+          "value": "02:45",
+          "label": "2:45 AM"
+        },
+        {
+          "value": "03:00",
+          "label": "3:00 AM"
+        },
+        {
+          "value": "03:15",
+          "label": "3:15 AM"
+        },
+        {
+          "value": "03:30",
+          "label": "3:30 AM"
+        },
+        {
+          "value": "03:45",
+          "label": "3:45 AM"
+        },
+        {
+          "value": "04:00",
+          "label": "4:00 AM"
+        },
+        {
+          "value": "04:15",
+          "label": "4:15 AM"
+        },
+        {
+          "value": "04:30",
+          "label": "4:30 AM"
+        },
+        {
+          "value": "04:45",
+          "label": "4:45 AM"
+        },
+        {
+          "value": "05:00",
+          "label": "5:00 AM"
+        },
+        {
+          "value": "05:15",
+          "label": "5:15 AM"
+        },
+        {
+          "value": "05:30",
+          "label": "5:30 AM"
+        },
+        {
+          "value": "05:45",
+          "label": "5:45 AM"
+        },
+        {
+          "value": "06:00",
+          "label": "6:00 AM"
+        },
+        {
+          "value": "06:15",
+          "label": "6:15 AM"
+        },
+        {
+          "value": "06:30",
+          "label": "6:30 AM"
+        },
+        {
+          "value": "06:45",
+          "label": "6:45 AM"
+        },
+        {
+          "value": "07:00",
+          "label": "7:00 AM"
+        },
+        {
+          "value": "07:15",
+          "label": "7:15 AM"
+        },
+        {
+          "value": "07:30",
+          "label": "7:30 AM"
+        },
+        {
+          "value": "07:45",
+          "label": "7:45 AM"
+        },
+        {
+          "value": "08:00",
+          "label": "8:00 AM"
+        },
+        {
+          "value": "08:15",
+          "label": "8:15 AM"
+        },
+        {
+          "value": "08:30",
+          "label": "8:30 AM"
+        },
+        {
+          "value": "08:45",
+          "label": "8:45 AM"
+        },
+        {
+          "value": "09:00",
+          "label": "9:00 AM"
+        },
+        {
+          "value": "09:15",
+          "label": "9:15 AM"
+        },
+        {
+          "value": "09:30",
+          "label": "9:30 AM"
+        },
+        {
+          "value": "09:45",
+          "label": "9:45 AM"
+        },
+        {
+          "value": "10:00",
+          "label": "10:00 AM"
+        },
+        {
+          "value": "10:15",
+          "label": "10:15 AM"
+        },
+        {
+          "value": "10:30",
+          "label": "10:30 AM"
+        },
+        {
+          "value": "10:45",
+          "label": "10:45 AM"
+        },
+        {
+          "value": "11:00",
+          "label": "11:00 AM"
+        },
+        {
+          "value": "11:15",
+          "label": "11:15 AM"
+        },
+        {
+          "value": "11:30",
+          "label": "11:30 AM"
+        },
+        {
+          "value": "11:45",
+          "label": "11:45 AM"
+        },
+        {
+          "value": "12:00",
+          "label": "12:00 PM"
+        },
+        {
+          "value": "12:15",
+          "label": "12:15 PM"
+        },
+        {
+          "value": "12:30",
+          "label": "12:30 PM"
+        },
+        {
+          "value": "12:45",
+          "label": "12:45 PM"
+        },
+        {
+          "value": "13:00",
+          "label": "1:00 PM"
+        },
+        {
+          "value": "13:15",
+          "label": "1:15 PM"
+        },
+        {
+          "value": "13:30",
+          "label": "1:30 PM"
+        },
+        {
+          "value": "13:45",
+          "label": "1:45 PM"
+        },
+        {
+          "value": "14:00",
+          "label": "2:00 PM"
+        },
+        {
+          "value": "14:15",
+          "label": "2:15 PM"
+        },
+        {
+          "value": "14:30",
+          "label": "2:30 PM"
+        },
+        {
+          "value": "14:45",
+          "label": "2:45 PM"
+        },
+        {
+          "value": "15:00",
+          "label": "3:00 PM"
+        },
+        {
+          "value": "15:15",
+          "label": "3:15 PM"
+        },
+        {
+          "value": "15:30",
+          "label": "3:30 PM"
+        },
+        {
+          "value": "15:45",
+          "label": "3:45 PM"
+        },
+        {
+          "value": "16:00",
+          "label": "4:00 PM"
+        },
+        {
+          "value": "16:15",
+          "label": "4:15 PM"
+        },
+        {
+          "value": "16:30",
+          "label": "4:30 PM"
+        },
+        {
+          "value": "16:45",
+          "label": "4:45 PM"
+        },
+        {
+          "value": "17:00",
+          "label": "5:00 PM"
+        },
+        {
+          "value": "17:15",
+          "label": "5:15 PM"
+        },
+        {
+          "value": "17:30",
+          "label": "5:30 PM"
+        },
+        {
+          "value": "17:45",
+          "label": "5:45 PM"
+        },
+        {
+          "value": "18:00",
+          "label": "6:00 PM"
+        },
+        {
+          "value": "18:15",
+          "label": "6:15 PM"
+        },
+        {
+          "value": "18:30",
+          "label": "6:30 PM"
+        },
+        {
+          "value": "18:45",
+          "label": "6:45 PM"
+        },
+        {
+          "value": "19:00",
+          "label": "7:00 PM"
+        },
+        {
+          "value": "19:15",
+          "label": "7:15 PM"
+        },
+        {
+          "value": "19:30",
+          "label": "7:30 PM"
+        },
+        {
+          "value": "19:45",
+          "label": "7:45 PM"
+        },
+        {
+          "value": "20:00",
+          "label": "8:00 PM"
+        },
+        {
+          "value": "20:15",
+          "label": "8:15 PM"
+        },
+        {
+          "value": "20:30",
+          "label": "8:30 PM"
+        },
+        {
+          "value": "20:45",
+          "label": "8:45 PM"
+        },
+        {
+          "value": "21:00",
+          "label": "9:00 PM"
+        },
+        {
+          "value": "21:15",
+          "label": "9:15 PM"
+        },
+        {
+          "value": "21:30",
+          "label": "9:30 PM"
+        },
+        {
+          "value": "21:45",
+          "label": "9:45 PM"
+        },
+        {
+          "value": "22:00",
+          "label": "10:00 PM"
+        },
+        {
+          "value": "22:15",
+          "label": "10:15 PM"
+        },
+        {
+          "value": "22:30",
+          "label": "10:30 PM"
+        },
+        {
+          "value": "22:45",
+          "label": "10:45 PM"
+        },
+        {
+          "value": "23:00",
+          "label": "11:00 PM"
+        },
+        {
+          "value": "23:15",
+          "label": "11:15 PM"
+        },
+        {
+          "value": "23:30",
+          "label": "11:30 PM"
+        },
+        {
+          "value": "23:45",
+          "label": "11:45 PM"
+        }
+      ],
+      "default": "07:00",
+      "admin": "WallR4.tsx:134",
+      "requires": "dnd.on"
+    },
+    {
+      "id": "dnd_quiet_hour",
+      "group": "dnd",
+      "label": "Quiet for 1 hour",
+      "kind": "button",
+      "set": {
+        "dnd.override": {
+          "mode": "on",
+          "until": "$now+3600000"
+        }
+      },
+      "how": "Override until now + 1 hour. Admin shows it while sounds are allowed.",
+      "admin": "WallR4.tsx:95"
+    },
+    {
+      "id": "dnd_quiet_morning",
+      "group": "dnd",
+      "label": "Quiet until morning",
+      "kind": "button",
+      "set": {
+        "dnd.override": {
+          "mode": "on",
+          "until": "$nextLA:dnd.to"
+        }
+      },
+      "how": "Override until the next time the Los Angeles clock reads dnd.to (admin label: 'Quiet until 7:00 AM'). Shown while sounds are allowed.",
+      "admin": "WallR4.tsx:96"
+    },
+    {
+      "id": "dnd_allow_hour",
+      "group": "dnd",
+      "label": "Allow sounds for 1 hour",
+      "kind": "button",
+      "set": {
+        "dnd.override": {
+          "mode": "off",
+          "until": "$now+3600000"
+        }
+      },
+      "how": "Override until now + 1 hour. Admin shows it while it's quiet.",
+      "admin": "WallR4.tsx:93"
+    },
+    {
+      "id": "dnd_allow_morning",
+      "group": "dnd",
+      "label": "Allow sounds until morning",
+      "kind": "button",
+      "set": {
+        "dnd.override": {
+          "mode": "off",
+          "until": "$nextLA:dnd.to"
+        }
+      },
+      "how": "Override until the next dnd.to in Los Angeles time (admin label: 'Allow sounds until 7:00 AM'). Shown while the schedule has it quiet.",
+      "admin": "WallR4.tsx:98"
+    },
+    {
+      "id": "dnd_allow_tonight",
+      "group": "dnd",
+      "label": "Allow sounds tonight",
+      "kind": "button",
+      "set": {
+        "dnd.override": {
+          "mode": "off",
+          "until": "$nextLA:dnd.to:after:dnd.from"
+        }
+      },
+      "how": "Override until the first dnd.to after the next dnd.from (admin label: 'Allow sounds past 10:30 PM'). Admin shows it within 6 hours of quiet starting.",
+      "admin": "WallR4.tsx:101"
+    },
+    {
+      "id": "dnd_schedule",
+      "group": "dnd",
+      "label": "Back on the schedule",
+      "kind": "button",
+      "set": {
+        "dnd.override": null
+      },
+      "how": "Clears the override. Admin label is 'Schedule', shown while an override is active.",
+      "admin": "WallR4.tsx:117"
+    },
+    {
+      "id": "voice_on",
+      "group": "voice",
+      "label": "Hey Scout",
+      "kind": "switch",
+      "path": "voice.on",
+      "default": true,
+      "admin": "WallVoice.tsx:54"
+    },
+    {
+      "id": "voice_sensitivity",
+      "group": "voice",
+      "label": "Sensitivity",
+      "kind": "select",
+      "path": "voice.sensitivity",
+      "options": [
+        {
+          "value": "low",
+          "label": "Low"
+        },
+        {
+          "value": "normal",
+          "label": "Normal"
+        },
+        {
+          "value": "high",
+          "label": "High"
+        }
+      ],
+      "default": "normal",
+      "admin": "WallVoice.tsx:59"
+    },
+    {
+      "id": "widget_news",
+      "group": "strip",
+      "label": "News",
+      "kind": "switch",
+      "path": "widgets.news",
+      "default": true,
+      "admin": "Wall.tsx:881"
+    },
+    {
+      "id": "widget_turo_usd",
+      "group": "strip",
+      "label": "Turo earnings",
+      "kind": "switch",
+      "path": "widgets.turo$",
+      "default": true,
+      "admin": "Wall.tsx:881"
+    },
+    {
+      "id": "widget_air",
+      "group": "strip",
+      "label": "Air quality and pollen",
+      "kind": "switch",
+      "path": "widgets.air",
+      "default": true,
+      "admin": "Wall.tsx:881"
+    },
+    {
+      "id": "widget_energy",
+      "group": "strip",
+      "label": "Home energy",
+      "kind": "switch",
+      "path": "widgets.energy",
+      "default": true,
+      "admin": "Wall.tsx:881"
+    },
+    {
+      "id": "widget_mail",
+      "group": "strip",
+      "label": "Mail and deliveries",
+      "kind": "switch",
+      "path": "widgets.mail",
+      "default": true,
+      "admin": "Wall.tsx:881"
+    },
+    {
+      "id": "widget_habits",
+      "group": "strip",
+      "label": "Activity",
+      "kind": "switch",
+      "path": "widgets.habits",
+      "default": true,
+      "admin": "Wall.tsx:881"
+    },
+    {
+      "id": "widget_leo",
+      "group": "strip",
+      "label": "Leo today",
+      "kind": "switch",
+      "path": "widgets.leo",
+      "default": true,
+      "admin": "Wall.tsx:881"
+    },
+    {
+      "id": "widget_appstore",
+      "group": "strip",
+      "label": "App Store",
+      "kind": "switch",
+      "path": "widgets.appstore",
+      "default": true,
+      "admin": "Wall.tsx:881"
+    },
+    {
+      "id": "widget_devices",
+      "group": "strip",
+      "label": "Devices",
+      "kind": "switch",
+      "path": "widgets.devices",
+      "default": true,
+      "admin": "Wall.tsx:881"
+    },
+    {
+      "id": "show_play",
+      "group": "shows",
+      "label": "Play the show",
+      "kind": "button",
+      "set": {
+        "tour": {
+          "cmd": "play",
+          "at": "$now"
+        }
+      },
+      "admin": "Wall.tsx:949"
+    },
+    {
+      "id": "show_party",
+      "group": "shows",
+      "label": "Party",
+      "kind": "button",
+      "set": {
+        "tour": {
+          "cmd": "party",
+          "at": "$now"
+        }
+      },
+      "admin": "Wall.tsx:953"
+    },
+    {
+      "id": "show_skit",
+      "group": "shows",
+      "label": "Skit",
+      "kind": "button",
+      "set": {
+        "tour": {
+          "cmd": "skit",
+          "at": "$now"
+        }
+      },
+      "admin": "Wall.tsx:956"
+    },
+    {
+      "id": "show_stop",
+      "group": "shows",
+      "label": "Stop",
+      "kind": "button",
+      "set": {
+        "tour": {
+          "cmd": "stop",
+          "at": "$now"
+        }
+      },
+      "admin": "Wall.tsx:959"
+    },
+    {
+      "id": "show_hshow",
+      "group": "shows",
+      "label": "Halloween show",
+      "kind": "button",
+      "set": {
+        "tour": {
+          "cmd": "hshow",
+          "at": "$now"
+        }
+      },
+      "admin": "Wall.tsx:966"
+    },
+    {
+      "id": "show_hparty",
+      "group": "shows",
+      "label": "Halloween party",
+      "kind": "button",
+      "set": {
+        "tour": {
+          "cmd": "hparty",
+          "at": "$now"
+        }
+      },
+      "admin": "Wall.tsx:969"
+    },
+    {
+      "id": "motivate",
+      "group": "shows",
+      "label": "Motivate me",
+      "kind": "button",
+      "set": {
+        "motivate": {
+          "seq": "$inc:motivate.seq",
+          "ts": "$now"
+        }
+      },
+      "how": "seq = current motivate.seq (0 if missing) + 1; the wall plays the pep talk once per new seq.",
+      "admin": "WallR4.tsx:150"
+    },
+    {
+      "id": "sleep_length",
+      "group": "sleep",
+      "label": "Length",
+      "kind": "select",
+      "path": null,
+      "local": true,
+      "options": [
+        {
+          "value": 15,
+          "label": "15 min"
+        },
+        {
+          "value": 30,
+          "label": "30 min"
+        },
+        {
+          "value": 60,
+          "label": "1 hour"
+        }
+      ],
+      "default": 30,
+      "admin": "Wall.tsx:993",
+      "how": "Not saved in wall state; it only sets the minutes for Start counting sheep."
+    },
+    {
+      "id": "sleep_music",
+      "group": "sleep",
+      "label": "Lullaby music",
+      "kind": "switch",
+      "path": null,
+      "local": true,
+      "default": true,
+      "admin": "Wall.tsx:997",
+      "how": "Not saved in wall state; it only sets music for Start counting sheep."
+    },
+    {
+      "id": "sleep_start",
+      "group": "sleep",
+      "label": "Start counting sheep",
+      "kind": "button",
+      "set": {
+        "sleepShow": {
+          "at": "$now",
+          "mins": "$input:sleep_length",
+          "music": "$input:sleep_music"
+        }
+      },
+      "how": "Uses the Length and Lullaby music inputs above.",
+      "admin": "Wall.tsx:999"
+    },
+    {
+      "id": "sleep_stop",
+      "group": "sleep",
+      "label": "Stop counting sheep",
+      "kind": "button",
+      "set": {
+        "sleepShow": null
+      },
+      "admin": "Wall.tsx:987"
+    },
+    {
+      "id": "alarm_on",
+      "group": "alarm",
+      "label": "Wake-up alarm",
+      "kind": "switch",
+      "path": "alarm.on",
+      "default": false,
+      "admin": "Wall.tsx:1019",
+      "also_set": {
+        "alarm.set_at": "$now"
+      }
+    },
+    {
+      "id": "alarm_time",
+      "group": "alarm",
+      "label": "Time",
+      "kind": "text",
+      "path": "alarm.time",
+      "pattern": "^\\d{1,2}:\\d{2}$",
+      "default": "07:00",
+      "shown_if": "alarm.on",
+      "admin": "Wall.tsx:1025",
+      "also_set": {
+        "alarm.on": true,
+        "alarm.set_at": "$now"
+      },
+      "how": "24-hour H:MM or HH:MM (the admin's time picker writes HH:MM). Changing it also turns the alarm on."
+    },
+    {
+      "id": "alarm_days",
+      "group": "alarm",
+      "label": "Repeat",
+      "kind": "select",
+      "path": "alarm.days",
+      "options": [
+        {
+          "value": "once",
+          "label": "Once"
+        },
+        {
+          "value": "weekdays",
+          "label": "Weekdays"
+        },
+        {
+          "value": "weekends",
+          "label": "Weekends"
+        },
+        {
+          "value": "daily",
+          "label": "Daily"
+        }
+      ],
+      "default": "once",
+      "admin": "Wall.tsx:1028",
+      "shown_if": "alarm.on",
+      "also_set": {
+        "alarm.set_at": "$now"
+      }
+    },
+    {
+      "id": "alarm_stop",
+      "group": "alarm",
+      "label": "Stop alarm",
+      "kind": "button",
+      "set": {
+        "alarm.stop": "$now"
+      },
+      "admin": "Wall.tsx:1032"
+    },
+    {
+      "id": "alarm_preview",
+      "group": "alarm",
+      "label": "Preview",
+      "kind": "button",
+      "set": {
+        "alarm.test": "$now"
+      },
+      "how": "Plays a 20-second preview on the wall.",
+      "admin": "Wall.tsx:1035"
+    },
+    {
+      "id": "heads_dismiss",
+      "group": "heads",
+      "label": "Dismiss what's showing",
+      "kind": "button",
+      "set": {
+        "headsStop": "$now"
+      },
+      "shown_if": "heads",
+      "how": "Admin shows this only while a heads-up from the last 20 minutes or later is in the list.",
+      "admin": "Wall.tsx:1079"
+    },
+    {
+      "id": "live_plane",
+      "group": "live",
+      "label": "Nearby aircraft",
+      "kind": "switch",
+      "path": "liveActs.plane",
+      "default": true,
+      "admin": "Wall.tsx:1104"
+    },
+    {
+      "id": "live_sweep",
+      "group": "live",
+      "label": "Move the car",
+      "kind": "switch",
+      "path": "liveActs.sweep",
+      "default": true,
+      "admin": "Wall.tsx:1104"
+    },
+    {
+      "id": "live_turo",
+      "group": "live",
+      "label": "Turo trips",
+      "kind": "switch",
+      "path": "liveActs.turo",
+      "default": true,
+      "admin": "Wall.tsx:1104"
+    },
+    {
+      "id": "live_show",
+      "group": "live",
+      "label": "Show for friends",
+      "kind": "switch",
+      "path": "liveActs.show",
+      "default": true,
+      "admin": "Wall.tsx:1104"
+    },
+    {
+      "id": "live_sleep",
+      "group": "live",
+      "label": "Sleep mode",
+      "kind": "switch",
+      "path": "liveActs.sleep",
+      "default": true,
+      "admin": "Wall.tsx:1104"
+    },
+    {
+      "id": "live_incident",
+      "group": "live",
+      "label": "Something's broken",
+      "kind": "switch",
+      "path": "liveActs.incident",
+      "default": true,
+      "admin": "Wall.tsx:1104"
+    },
+    {
+      "id": "theme",
+      "group": "theme",
+      "label": "Theme",
+      "kind": "select",
+      "path": "theme",
+      "options": [
+        {
+          "value": null,
+          "label": "Normal"
+        },
+        {
+          "value": "halloween",
+          "label": "Halloween"
+        },
+        {
+          "value": "thanksgiving",
+          "label": "Thanksgiving"
+        }
+      ],
+      "default": null,
+      "admin": "Wall.tsx:1115"
+    },
+    {
+      "id": "volume",
+      "group": "sound",
+      "label": "Projector volume",
+      "kind": "number",
+      "path": "volume",
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "default": 100,
+      "admin": "Wall.tsx:1147"
+    },
+    {
+      "id": "sound",
+      "group": "sound",
+      "label": "Wall sounds",
+      "kind": "switch",
+      "path": "sound",
+      "default": true,
+      "admin": "Wall.tsx:1153"
+    },
+    {
+      "id": "sound_pack",
+      "group": "sound",
+      "label": "Sound style",
+      "kind": "select",
+      "path": "soundPack",
+      "options": [
+        {
+          "value": "glass",
+          "label": "Glass"
+        },
+        {
+          "value": "marimba",
+          "label": "Marimba"
+        },
+        {
+          "value": "keys",
+          "label": "Soft keys"
+        }
+      ],
+      "default": "glass",
+      "admin": "Wall.tsx:1156",
+      "also_set": {
+        "soundTest": "$now"
+      },
+      "how": "The admin plays a sample whenever the style changes."
+    },
+    {
+      "id": "radio_on",
+      "group": "radio",
+      "label": "Radio",
+      "kind": "switch",
+      "path": "radio.on",
+      "default": false,
+      "admin": "WallRadio.tsx:185",
+      "needs": "radio.url",
+      "also_set": {
+        "radio.ts": "$now"
+      },
+      "how": "Off writes {...radio, on:false, ts:$now} and keeps the station. On replays the saved station ({...radio, on:true, ts:$now}) and only works while radio.url is set; the DB drops on:true without a valid url. Turning radio on also turns atc off (DB)."
+    },
+    {
+      "id": "airplay",
+      "group": "airplay",
+      "label": "Bestly Wall in AirPlay",
+      "kind": "switch",
+      "path": "airplay",
+      "default": true,
+      "admin": "Wall.tsx:1181"
+    },
+    {
+      "id": "airplay_restart",
+      "group": "airplay",
+      "label": "Restart AirPlay",
+      "kind": "button",
+      "command": "airplay_restart",
+      "requires": "airplay",
+      "admin": "Wall.tsx:1184"
+    },
+    {
+      "id": "sign_show",
+      "group": "sign",
+      "label": "Show names",
+      "kind": "select",
+      "path": "signShow",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Auto"
+        },
+        {
+          "value": "on",
+          "label": "Always"
+        },
+        {
+          "value": "off",
+          "label": "Off"
+        }
+      ],
+      "default": "auto",
+      "admin": "Wall.tsx:1200"
+    },
+    {
+      "id": "air_show",
+      "group": "sky",
+      "label": "Planes overhead",
+      "kind": "switch",
+      "path": "airShow",
+      "default": true,
+      "admin": "Wall.tsx:1244"
+    },
+    {
+      "id": "air_radius",
+      "group": "sky",
+      "label": "Sky radius",
+      "kind": "number",
+      "path": "airRadiusMi",
+      "min": 2,
+      "max": 25,
+      "step": 1,
+      "unit": "mi",
+      "default": 15,
+      "shown_if": "airShow",
+      "admin": "Wall.tsx:1247"
+    },
+    {
+      "id": "atc",
+      "group": "sky",
+      "label": "Air traffic control",
+      "kind": "switch",
+      "path": "atc",
+      "default": false,
+      "admin": "Wall.tsx:1265",
+      "also_set_when_on": {
+        "radio.on": false,
+        "radio.ts": "$now"
+      },
+      "how": "Admin shows it on only when atc is true and radio.on is not. Turning it on also stops the radio: write {...radio, on:false, ts:$now} with the station kept. Sending atc:true without radio makes the DB write a radio object with url null, which forgets the station."
+    },
+    {
+      "id": "sky_home",
+      "group": "sky",
+      "label": "Home marker",
+      "kind": "switch",
+      "path": "skyHome",
+      "default": true,
+      "admin": "Wall.tsx:1272",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "sky_landmarks",
+      "group": "sky",
+      "label": "Landmarks",
+      "kind": "switch",
+      "path": "skyLandmarks",
+      "default": true,
+      "shown_if": "airShow",
+      "admin": "Wall.tsx:1274"
+    },
+    {
+      "id": "sky_roads",
+      "group": "sky",
+      "label": "Roads",
+      "kind": "switch",
+      "path": "skyRoads",
+      "default": true,
+      "shown_if": "airShow",
+      "admin": "Wall.tsx:1277"
+    },
+    {
+      "id": "sky_traffic",
+      "group": "sky",
+      "label": "Traffic",
+      "kind": "switch",
+      "path": "skyTraffic",
+      "default": true,
+      "shown_if": "airShow",
+      "admin": "Wall.tsx:1280"
+    },
+    {
+      "id": "iss_tag",
+      "group": "sky",
+      "label": "Space Station name",
+      "kind": "switch",
+      "path": "issTag",
+      "default": true,
+      "admin": "Wall.tsx:1284",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "air_card",
+      "group": "sky",
+      "label": "Nearest-plane card",
+      "kind": "switch",
+      "path": "airCard",
+      "default": true,
+      "admin": "Wall.tsx:1287",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "air_card_pin",
+      "group": "sky",
+      "label": "Keep flight card up",
+      "kind": "switch",
+      "path": "airCardPin",
+      "default": false,
+      "admin": "Wall.tsx:1291",
+      "requires": "airCard",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "air_card_heli",
+      "group": "sky",
+      "label": "Helicopters in the card",
+      "kind": "switch",
+      "path": "airCardHeli",
+      "default": true,
+      "admin": "Wall.tsx:1296",
+      "shown_if": "airShow && airCard"
+    },
+    {
+      "id": "air_labels",
+      "group": "sky",
+      "label": "Plane labels",
+      "kind": "switch",
+      "path": "airLabels",
+      "default": true,
+      "admin": "Wall.tsx:1300",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "air_labels_small",
+      "group": "sky",
+      "label": "Tags on small planes & helicopters",
+      "kind": "switch",
+      "path": "airLabelsSmall",
+      "default": true,
+      "admin": "Wall.tsx:1304",
+      "requires": "airLabels",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "sky_stars",
+      "group": "sky",
+      "label": "Stars and constellations",
+      "kind": "switch",
+      "path": "skyStars",
+      "default": true,
+      "admin": "Wall.tsx:1308",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "sky_star_labels",
+      "group": "sky",
+      "label": "Star names",
+      "kind": "switch",
+      "path": "skyStarLabels",
+      "default": true,
+      "admin": "Wall.tsx:1312",
+      "requires": "skyStars",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "sky_grid",
+      "group": "sky",
+      "label": "Sky grid",
+      "kind": "switch",
+      "path": "skyGrid",
+      "default": true,
+      "admin": "Wall.tsx:1316",
+      "requires": "skyStars",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "sky_moon",
+      "group": "sky",
+      "label": "Moon",
+      "kind": "switch",
+      "path": "skyMoon",
+      "default": true,
+      "admin": "Wall.tsx:1319",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "sky_sun",
+      "group": "sky",
+      "label": "Sun",
+      "kind": "switch",
+      "path": "skySun",
+      "default": true,
+      "admin": "Wall.tsx:1322",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "sky_planets",
+      "group": "sky",
+      "label": "Planets",
+      "kind": "switch",
+      "path": "skyPlanets",
+      "default": true,
+      "admin": "Wall.tsx:1325",
+      "shown_if": "airShow"
+    },
+    {
+      "id": "air_key",
+      "group": "sky",
+      "label": "Sky key",
+      "kind": "switch",
+      "path": "airKey",
+      "default": false,
+      "admin": "Wall.tsx:1329"
+    },
+    {
+      "id": "focus",
+      "group": "projector",
+      "label": "Focus",
+      "kind": "button",
+      "command": "focus",
+      "admin": "Wall.tsx:1347"
+    },
+    {
+      "id": "relaunch",
+      "group": "projector",
+      "label": "Restart",
+      "kind": "button",
+      "command": "relaunch",
+      "how": "Restarts the wall page; back in about 15 seconds.",
+      "admin": "Wall.tsx:1348"
+    },
+    {
+      "id": "focus_left",
+      "group": "projector",
+      "label": "Sign wall focus: nudge left",
+      "kind": "button",
+      "command": "focus_left",
+      "admin": "Wall.tsx:1357"
+    },
+    {
+      "id": "focus_right",
+      "group": "projector",
+      "label": "Sign wall focus: nudge right",
+      "kind": "button",
+      "command": "focus_right",
+      "admin": "Wall.tsx:1360"
+    },
+    {
+      "id": "auto_keystone",
+      "group": "projector",
+      "label": "Auto keystone",
+      "kind": "switch",
+      "path": "autoKeystone",
+      "default": false,
+      "admin": "Wall.tsx:1366"
+    },
+    {
+      "id": "air_bearing",
+      "group": "skyfit",
+      "label": "Wall faces",
+      "kind": "select",
+      "path": "airBearing",
+      "options": [
+        {
+          "value": 0,
+          "label": "North"
+        },
+        {
+          "value": 45,
+          "label": "Northeast"
+        },
+        {
+          "value": 90,
+          "label": "East"
+        },
+        {
+          "value": 135,
+          "label": "Southeast"
+        },
+        {
+          "value": 180,
+          "label": "South"
+        },
+        {
+          "value": 225,
+          "label": "Southwest"
+        },
+        {
+          "value": 270,
+          "label": "West"
+        },
+        {
+          "value": 315,
+          "label": "Northwest"
+        }
+      ],
+      "default": 0,
+      "admin": "Wall.tsx:1378"
+    },
+    {
+      "id": "test_sweep",
+      "group": "tests",
+      "label": "Move-car alert",
+      "kind": "switch",
+      "path": "testSweep",
+      "default": false,
+      "admin": "Wall.tsx:1411"
+    },
+    {
+      "id": "test_scout",
+      "group": "tests",
+      "label": "Scout alert",
+      "kind": "switch",
+      "path": "testScout",
+      "default": false,
+      "admin": "Wall.tsx:1414"
+    },
+    {
+      "id": "sign_near",
+      "group": "tests",
+      "label": "Someone's near",
+      "kind": "button",
+      "set": {
+        "signNear": "$now"
+      },
+      "admin": "Wall.tsx:1420"
+    },
+    {
+      "id": "sound_test",
+      "group": "tests",
+      "label": "Every sound",
+      "kind": "button",
+      "set": {
+        "soundTest": "$now"
+      },
+      "admin": "Wall.tsx:1423"
+    },
+    {
+      "id": "fx_wake_sleep",
+      "group": "tests",
+      "label": "Wake + sleep",
+      "kind": "button",
+      "set": {
+        "fxPlay": {
+          "name": "show",
+          "at": "$now"
+        }
+      },
+      "admin": "Wall.tsx:1426"
+    },
+    {
+      "id": "cal_grid",
+      "group": "alignment",
+      "label": "Alignment grid",
+      "kind": "switch",
+      "path": "calGrid",
+      "default": false,
+      "admin": "Wall.tsx:1456"
+    },
+    {
+      "id": "mapping",
+      "group": "alignment",
+      "label": "Show guides on the wall",
+      "kind": "switch",
+      "path": "mapping",
+      "default": false,
+      "admin": "Wall.tsx:1462"
+    },
+    {
+      "id": "neon_on",
+      "group": "neon",
+      "label": "Make the sign glow",
+      "kind": "switch",
+      "path": "ledSign.on",
+      "default": true,
+      "admin": "WallLedSign.tsx:89"
+    },
+    {
+      "id": "neon_look",
+      "group": "neon",
+      "label": "Sign look",
+      "kind": "select",
+      "path": "ledSign.look",
+      "options": [
+        {
+          "value": "lit",
+          "label": "Lit"
+        },
+        {
+          "value": "breathe",
+          "label": "Breathe"
+        },
+        {
+          "value": "wash",
+          "label": "Color"
+        },
+        {
+          "value": "trace",
+          "label": "Trace"
+        },
+        {
+          "value": "none",
+          "label": "Off"
+        }
+      ],
+      "default": "lit",
+      "admin": "WallLedSign.tsx:96"
+    },
+    {
+      "id": "neon_color",
+      "group": "neon",
+      "label": "Glow color",
+      "kind": "select",
+      "path": "ledSign.color",
+      "options": [
+        {
+          "value": "#F4EEFF",
+          "label": "Cool white"
+        },
+        {
+          "value": "#FFF1DC",
+          "label": "Warm white"
+        },
+        {
+          "value": "#FF6FD8",
+          "label": "Pink"
+        },
+        {
+          "value": "#A78BFA",
+          "label": "Violet"
+        },
+        {
+          "value": "#64D2FF",
+          "label": "Blue"
+        },
+        {
+          "value": "#FFB340",
+          "label": "Amber"
+        }
+      ],
+      "default": "#F4EEFF",
+      "admin": "WallLedSign.tsx:109"
+    },
+    {
+      "id": "neon_notify",
+      "group": "neon",
+      "label": "React to alerts",
+      "kind": "switch",
+      "path": "ledSign.notify",
+      "default": true,
+      "admin": "WallLedSign.tsx:120"
+    },
+    {
+      "id": "neon_shield",
+      "group": "neon",
+      "label": "Keep other wall content off it",
+      "kind": "switch",
+      "path": "ledSign.shield",
+      "default": true,
+      "admin": "WallLedSign.tsx:123"
+    },
+    {
+      "id": "neon_play_sign",
+      "group": "neon",
+      "label": "Play: New signature",
+      "kind": "button",
+      "set": {
+        "ledSign.test": {
+          "fx": "sign",
+          "at": "$now"
+        },
+        "ledSign.outline": false
+      },
+      "admin": "WallLedSign.tsx:130"
+    },
+    {
+      "id": "neon_play_turo",
+      "group": "neon",
+      "label": "Play: Turo booking",
+      "kind": "button",
+      "set": {
+        "ledSign.test": {
+          "fx": "turo",
+          "at": "$now"
+        },
+        "ledSign.outline": false
+      },
+      "admin": "WallLedSign.tsx:130"
+    },
+    {
+      "id": "neon_play_motivate",
+      "group": "neon",
+      "label": "Play: Motivate me",
+      "kind": "button",
+      "set": {
+        "ledSign.test": {
+          "fx": "motivate",
+          "at": "$now"
+        },
+        "ledSign.outline": false
+      },
+      "admin": "WallLedSign.tsx:130"
+    },
+    {
+      "id": "neon_play_scout",
+      "group": "neon",
+      "label": "Play: Scout alert",
+      "kind": "button",
+      "set": {
+        "ledSign.test": {
+          "fx": "scout",
+          "at": "$now"
+        },
+        "ledSign.outline": false
+      },
+      "admin": "WallLedSign.tsx:130"
+    },
+    {
+      "id": "neon_outline",
+      "group": "neon",
+      "label": "Show outline on the wall",
+      "kind": "switch",
+      "path": "ledSign.outline",
+      "default": false,
+      "admin": "WallLedSign.tsx:142"
+    }
+  ]
+}
