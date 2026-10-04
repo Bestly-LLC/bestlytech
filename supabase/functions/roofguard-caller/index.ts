@@ -265,7 +265,15 @@ async function setup(): Promise<Response> {
   log.push(`Calling number: ${num.phone_number}`);
 
   // 2. Telnyx SIP trunk for ElevenLabs: outbound profile (US/Canada only, $10/day spend cap) + credential connection
+  // Each piece is saved the moment it exists, and found by name if an earlier run made it but stopped before saving,
+  // so a re-run never creates duplicates.
+  const save = (p: Record<string, unknown>) => db.from("rg_settings").update(p).eq("id", true);
   let ovpId = s?.telnyx_ovp_id as string | null;
+  if (!ovpId) {
+    const f = await tx(`/outbound_voice_profiles?filter[name][contains]=${encodeURIComponent("RoofGuard caller")}`, "GET");
+    ovpId = ((await f.json().catch(() => ({}))).data ?? [])[0]?.id ?? null;
+    if (ovpId) { await save({ telnyx_ovp_id: ovpId }); log.push("Found the Telnyx outbound profile from an earlier run."); }
+  }
   if (!ovpId) {
     const r = await tx("/outbound_voice_profiles", "POST", { name: "RoofGuard caller", traffic_type: "conversational",
       service_plan: "global", usage_payment_method: "rate-deck", whitelisted_destinations: ["US", "CA"],
@@ -273,10 +281,16 @@ async function setup(): Promise<Response> {
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.data?.id) { log.push(`Could not create the Telnyx outbound profile (${r.status}): ${JSON.stringify(j).slice(0, 300)}`); return done(false); }
     ovpId = j.data.id;
+    await save({ telnyx_ovp_id: ovpId });
     log.push("Telnyx outbound profile created (US and Canada only, $10/day spend cap, 5 calls at once).");
   }
   let connId = s?.telnyx_connection_id as string | null;
   let sipUser = "", sipPass = await vault("telnyx_sip_password");
+  if (!connId && sipPass) {
+    const f = await tx(`/credential_connections?filter[connection_name][contains]=${encodeURIComponent("RoofGuard ElevenLabs")}`, "GET");
+    connId = ((await f.json().catch(() => ({}))).data ?? [])[0]?.id ?? null;
+    if (connId) { await save({ telnyx_connection_id: connId }); log.push("Found the Telnyx SIP connection from an earlier run."); }
+  }
   if (!connId || !sipPass) {
     const rnd = (n: number) => [...crypto.getRandomValues(new Uint8Array(n))].map((b) => b.toString(16).padStart(2, "0")).join("");
     sipUser = `roofguard${rnd(4)}`;
@@ -287,6 +301,7 @@ async function setup(): Promise<Response> {
     if (!r.ok || !j.data?.id) { log.push(`Could not create the Telnyx SIP connection (${r.status}): ${JSON.stringify(j).slice(0, 300)}`); return done(false); }
     connId = j.data.id;
     await db.rpc("rg_secret_put", { p_name: "telnyx_sip_password", p_value: sipPass });
+    await save({ telnyx_connection_id: connId });
     log.push("Telnyx SIP connection created; its password is stored in Vault.");
   } else {
     const r = await tx(`/credential_connections/${connId}`, "GET");
@@ -297,6 +312,12 @@ async function setup(): Promise<Response> {
 
   // 3. signed post-call webhook (its secret goes straight to Vault)
   let webhookId = s?.webhook_id as string | null;
+  if (!webhookId && await vault("elevenlabs_webhook_secret")) {
+    const f = await xi("/workspace/webhooks", "GET");
+    const list = ((await f.json().catch(() => ({}))).webhooks ?? []) as { webhook_id: string; name: string }[];
+    webhookId = list.find((w) => w.name === "RoofGuard post-call")?.webhook_id ?? null;
+    if (webhookId) { await save({ webhook_id: webhookId }); log.push("Found the post-call webhook from an earlier run."); }
+  }
   if (!webhookId) {
     const r = await xi("/workspace/webhooks", "POST", { settings: { auth_type: "hmac", name: "RoofGuard post-call",
       webhook_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/roofguard-caller?hook=elevenlabs` } });
@@ -304,6 +325,7 @@ async function setup(): Promise<Response> {
     if (!r.ok || !j.webhook_id) { log.push(`Could not create the post-call webhook (${r.status}).`); return done(false); }
     webhookId = j.webhook_id;
     if (j.webhook_secret) await db.rpc("rg_secret_put", { p_name: "elevenlabs_webhook_secret", p_value: j.webhook_secret });
+    await save({ webhook_id: webhookId });
     log.push("Post-call webhook created; signing secret stored in Vault.");
   }
 
@@ -322,7 +344,7 @@ async function setup(): Promise<Response> {
           },
         },
       },
-      tts: { voice_id: s?.voice_id ?? "EXAVITQu4vr4xnSDxMaL", model_id: "eleven_flash_v2_5" },
+      tts: { voice_id: s?.voice_id ?? "EXAVITQu4vr4xnSDxMaL", model_id: "eleven_flash_v2" }, // English agents must use flash/turbo v2 (v2_5 is rejected)
     },
     platform_settings: {
       data_collection: DATA_COLLECTION,
@@ -334,6 +356,7 @@ async function setup(): Promise<Response> {
   const aj = await ar.json().catch(() => ({}));
   if (!ar.ok) { log.push(`Agent ${agentId ? "update" : "create"} failed (${ar.status}): ${JSON.stringify(aj).slice(0, 300)}`); return done(false); }
   agentId = agentId ?? aj.agent_id;
+  await save({ agent_id: agentId });
   log.push(`Agent ready: ${agentId}`);
 
   // 5. the number in ElevenLabs, as a SIP trunk through Telnyx, pointed at the agent
