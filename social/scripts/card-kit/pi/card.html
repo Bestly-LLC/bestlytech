@@ -58,8 +58,12 @@ async function fit(){
   await document.fonts.ready; if (dev && !dev.complete) await new Promise(r => dev.onload = r);
   let hs = L.hs, w = L.dev ? L.dev.w : 0; h1.style.fontSize = hs+'px'; placeDev(w);
   // Pass 1: shrink the headline. Pass 2: shrink the device.
-  for (let i=0; i<20 && hit() && hs > L.min; i++) { hs -= 3; h1.style.fontSize = hs+'px'; }
+  // Shrink the headline a little, then the device, then the headline the rest of the way: a big headline
+  // reads better than a big device.
+  const soft = Math.max(L.min, Math.round(L.hs*0.82));
+  for (let i=0; i<20 && hit() && hs > soft; i++) { hs -= 3; h1.style.fontSize = hs+'px'; }
   for (let i=0; i<4 && hit()==='device' && w > 300; i++) { w = Math.round(w*0.85); placeDev(w); }
+  for (let i=0; i<20 && hit() && hs > L.min; i++) { hs -= 3; h1.style.fontSize = hs+'px'; }
   const t = txt.getBoundingClientRect();
   document.body.dataset.fit = JSON.stringify({ok: !hit(), why: hit(), hs, dev: w, bottom: Math.round(t.bottom)});
 }

@@ -44,10 +44,22 @@ KIT = "/opt/bestly/social-kit"
 BUCKET = "social-media"
 DEVICES = [f"dev{i:02d}.png" for i in range(1, 13)]
 
+
+def _wide_devices():
+    """Renders wider than tall sit well in the corner layouts (A, C, slide 1); tall ones only in B / slide 5."""
+    try:
+        from PIL import Image
+        return [d for d in DEVICES if (lambda s: s[0] >= s[1])(Image.open(f"{KIT}/devices/{d}").size)] or DEVICES
+    except Exception:  # noqa: BLE001
+        return DEVICES
+
 PRODUCT = ("Bestly Cloud is a private cloud for small businesses: files, calendar, contacts, chat, a password vault and notes "
            "in one box, run for them as a managed appliance or kept on-site. No per-seat pricing, no lock-in. Voice: "
            "privacy-first, plain-spoken, \"we run it, so you don't have to\". Never claim unlimited anything, speed, HIPAA or "
-           "SOC 2, or any price.")
+           "SOC 2, or any price. What Bestly Cloud does, and the ONLY things you may say it does: runs those apps on one box "
+           "the business owns; on the managed plan Bestly handles monitoring, updates, backups and support; each person gets "
+           "one account; data stays in open formats the owner can export. Never invent any other feature (no automated "
+           "restore tests, no AI, no alerts, no compliance features).")
 
 # Seed themes (the planner may add new ones). Each is a real small-business IT problem.
 THEMES = {
@@ -375,8 +387,9 @@ def _make_single(hist, deadline):
     plan, prov = _ask_json(PLAN_SINGLE_SYS, user, check, deadline)
     last_layouts = [h.get("layout") for h in hist[:1]]
     layout = random.choice([l for l in "ABC" if l not in last_layouts])
-    devs = [d for d in DEVICES if d not in _last(hist, "device", 4)]
-    dev = random.choice(devs or DEVICES)
+    fits = _wide_devices() if layout in "AC" else DEVICES
+    devs = [d for d in fits if d not in _last(hist, "device", 4)]
+    dev = random.choice(devs or fits)
     spec = {"layout": layout, "cat": plan["category"][:24], "h": plan["headline"].strip(),
             "accent": (plan.get("accent") or "").strip(), "p": plan["subline"].strip(), "dev": dev}
     out = f"/tmp/bestly-card-{uuid.uuid4().hex[:8]}.png"
@@ -428,7 +441,7 @@ def _carousel_fresh(dry, render_only, deadline):
             e.append("slide 5 text must name Bestly Cloud exactly once")
         return e
     plan, prov = _ask_json(PLAN_CAROUSEL_SYS, f"Theme: {theme} - {THEMES[theme]}\n\n{_learning_brief(hist)}", check, deadline)
-    devs = random.sample(DEVICES, 2)
+    devs = [random.choice(_wide_devices()), random.choice(DEVICES)]
     kicks = ["Why it hides", "Do this", "The catch"]
     specs = [{"layout": "S1", "cat": "1 / 5", "h": plan["hook"], "accent": plan.get("accent") or "", "dev": devs[0]}]
     for i, sl in enumerate(plan["slides"][:3]):
