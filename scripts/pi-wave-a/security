@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Pi stand-in for macOS `security` (Bestly, 2026-10-03). Installed at /opt/bestly/bin/security.
+
+Scripts moved from the Mac mini call `security find-generic-password -s SERVICE [-a ACCOUNT] -w`.
+On the Pi that reads Supabase Vault secret "pi:SERVICE:ACCOUNT" (ACCOUNT "-" when omitted) through the
+service-role RPC pi_secret_get, so no password is ever written to the Pi's disk.
+Extra verb for the one-time move:  security put -s SERVICE [-a ACCOUNT]   (value on stdin, never echoed).
+"""
+import json, sys, urllib.request
+
+def env():
+    d = {}
+    for line in open("/home/pi/scripts/.env"):
+        if "=" in line and not line.lstrip().startswith("#"):
+            k, v = line.split("=", 1)
+            d[k.strip()] = v.strip().strip('"').strip("'")
+    return d
+
+def rpc(fn, body):
+    e = env()
+    key = e["SUPABASE_SERVICE_ROLE_KEY"]
+    req = urllib.request.Request(e["SUPABASE_URL"].rstrip("/") + "/rest/v1/rpc/" + fn, data=json.dumps(body).encode(),
+                                 headers={"apikey": key, "Authorization": "Bearer " + key, "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read() or b"null")
+
+def args(a):
+    out = {"s": None, "a": "-"}
+    i = 0
+    while i < len(a):
+        if a[i] in ("-s", "-a") and i + 1 < len(a):
+            out[a[i][1]] = a[i + 1]; i += 2
+        else:
+            i += 1
+    return out
+
+def main():
+    if len(sys.argv) < 2:
+        sys.exit(2)
+    verb, rest = sys.argv[1], sys.argv[2:]
+    o = args(rest)
+    if not o["s"]:
+        sys.exit(2)
+    name = f"pi:{o['s']}:{o['a']}"
+    if verb == "find-generic-password":
+        try:
+            v = rpc("pi_secret_get", {"p_name": name})
+        except Exception as e:
+            print(f"security: lookup failed for {name}: {e}", file=sys.stderr); sys.exit(44)
+        if not v:
+            print(f"security: The specified item could not be found ({name}).", file=sys.stderr); sys.exit(44)
+        print(v)
+    elif verb == "put":
+        v = sys.stdin.read().rstrip("\n")
+        rpc("pi_secret_put", {"p_name": name, "p_value": v})
+        print(f"saved {name} ({len(v)} chars)")
+    else:
+        sys.exit(2)
+
+if __name__ == "__main__":
+    main()
