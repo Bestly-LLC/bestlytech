@@ -9,11 +9,11 @@
  * Calling rule shown on the page: a number is dialable only once its line type is verified as a
  * landline or VoIP (Phase 2). Scraped numbers stay "unverified" until then.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, Loader2, Phone, RefreshCw, Search, Zap } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Loader2, Phone, RefreshCw, Search, Zap } from "lucide-react";
 
 type Contact = { name: string; title: string; linkedin: string };
 type Cand = { e164: string; display: string; source: string; url: string; score: number; hits?: number; context: string };
@@ -73,12 +73,59 @@ function Stat({ n, label, tone }: { n: number | undefined; label: string; tone?:
   );
 }
 
+// One-tap copy: a small pill that copies its text and flashes "Copied".
+function CopyButton({ text, label = "Copy", className }: { text: string; label?: string; className?: string }) {
+  const [done, setDone] = useState(false);
+  const copy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const t = document.createElement("textarea");
+      t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove();
+    }
+    setDone(true);
+    setTimeout(() => setDone(false), 1200);
+  };
+  return (
+    <button type="button" onClick={copy} title={`Copy ${text.length > 60 ? text.slice(0, 60) + "…" : text}`}
+      className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1 text-xs ring-1 transition-colors",
+        done ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30" : "text-white/75 ring-white/15 hover:bg-white/10 hover:text-white", className)}>
+      {done ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{done ? "Copied" : label}
+    </button>
+  );
+}
+
+// Everything needed for a call, as one paste.
+const callCard = (l: Lead) => [
+  l.company,
+  l.phone ? `Phone: ${fmtPhone(l.phone)}` : "Phone: not found yet",
+  ...l.contacts.map((c) => `Ask for: ${c.name}, ${c.title}`),
+  l.website ? `Website: ${l.website}` : "",
+  "",
+  `Angle: ${l.pitch}`,
+].filter((x, i, arr) => x !== "" || (i > 0 && arr[i - 1] !== "")).join("\n");
+
+function Section({ title, copy, children }: { title: string; copy?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wider text-white/45">{title}</div>
+        {copy && <CopyButton text={copy} />}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function LeadRow({ lead, onPick }: { lead: Lead; onPick: (lead: Lead, c: Cand) => void }) {
   const [open, setOpen] = useState(false);
   const c0 = lead.contacts?.[0];
+  const toggle = () => setOpen((o) => !o);
   return (
     <li className="border-b border-white/[0.06] last:border-0">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-3 py-3 text-left hover:bg-white/[0.02]">
+      <div role="button" tabIndex={0} onClick={toggle} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), toggle())}
+        className="flex w-full cursor-pointer items-center gap-3 py-3 text-left hover:bg-white/[0.02]">
         <div className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl text-sm font-semibold tabular-nums",
           lead.priority >= 80 ? "bg-emerald-500/15 text-emerald-300" : lead.priority >= 60 ? "bg-white/10 text-white" : "bg-white/[0.04] text-white/50")}
           title="Call priority (0-100)">{lead.priority}</div>
@@ -88,50 +135,56 @@ function LeadRow({ lead, onPick }: { lead: Lead; onPick: (lead: Lead, c: Cand) =
             {lead.state} · {label(lead.category)}{c0 ? ` · ${c0.name}, ${c0.title}` : ""}
           </div>
         </div>
-        <div className="hidden w-40 shrink-0 text-right sm:block">
-          {lead.phone
-            ? <><div className="text-sm tabular-nums text-white">{fmtPhone(lead.phone)}</div>
-                <div className="text-[11px] text-white/45">{lead.phone_confidence ?? "?"}% · {lead.phone_source}</div></>
-            : <div className="text-xs text-white/35">no number</div>}
-        </div>
-        <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium", STATUS_STYLE[lead.enrich_status])}>
+        {lead.phone ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="hidden text-right sm:block">
+              <div className="whitespace-nowrap text-sm tabular-nums text-white">{fmtPhone(lead.phone)}</div>
+              <div className="whitespace-nowrap text-[11px] text-white/45">{lead.phone_confidence ?? "?"}% · {lead.phone_source}</div>
+            </div>
+            <CopyButton text={fmtPhone(lead.phone)} label="Phone" />
+          </div>
+        ) : <div className="hidden w-28 shrink-0 text-right text-xs text-white/35 sm:block">no number</div>}
+        <span className={cn("hidden shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium md:inline", STATUS_STYLE[lead.enrich_status])}>
           {STATUS_TEXT[lead.enrich_status]}
         </span>
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-white/40 transition-transform", open && "rotate-180")} />
-      </button>
+      </div>
 
       {open && (
         <div className="mb-4 space-y-4 rounded-2xl bg-black/20 p-4 text-sm">
-          <div className="sm:hidden">
-            {lead.phone ? <span className="tabular-nums text-white">{fmtPhone(lead.phone)} · {lead.phone_confidence}%</span> : <span className="text-white/40">No number yet</span>}
+          <div className="flex flex-wrap items-center gap-2">
+            <CopyButton text={callCard(lead)} label="Copy call card" className="bg-white/10 text-white" />
+            <CopyButton text={lead.company} label="Company" />
+            {lead.phone && <CopyButton text={fmtPhone(lead.phone)} label={fmtPhone(lead.phone)} />}
+            {lead.website && <CopyButton text={lead.website} label="Website" />}
           </div>
 
-          <div>
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-white/45">Who to ask for</div>
-            <ul className="space-y-1">{lead.contacts.map((c) => (
-              <li key={c.name + c.title} className="flex flex-wrap items-center gap-x-2 text-white/85">
+          <Section title="Who to ask for">
+            <ul className="space-y-1.5">{lead.contacts.map((c) => (
+              <li key={c.name + c.title} className="flex flex-wrap items-center gap-2 text-white/85">
                 <span className="text-white">{c.name}</span><span className="text-white/50">{c.title}</span>
-                {c.linkedin && <a href={c.linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sky-300 hover:underline">LinkedIn <ExternalLink className="h-3 w-3" /></a>}
+                <CopyButton text={c.name} label="Name" />
+                <CopyButton text={`${c.name}, ${c.title}`} label="Name + title" />
+                {c.linkedin && <>
+                  <CopyButton text={c.linkedin} label="LinkedIn" />
+                  <a href={c.linkedin} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 text-xs text-sky-300 hover:underline">Open <ExternalLink className="h-3 w-3" /></a>
+                </>}
               </li>))}</ul>
             {lead.escalate && <p className="mt-1 text-xs text-amber-200">Sheet note: escalate past this contact to the facilities director.</p>}
-          </div>
+          </Section>
 
-          <div>
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-white/45">
-              Pitch angle {lead.pitch_source === "bespoke" ? "(researched)" : "(by category)"}
-            </div>
+          <Section title={`Pitch angle ${lead.pitch_source === "bespoke" ? "(researched)" : "(by category)"}`} copy={lead.pitch}>
             <p className="leading-relaxed text-white/80">{lead.pitch}</p>
-          </div>
+          </Section>
 
           {lead.notes && (
-            <div>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-white/45">Notes</div>
+            <Section title="Notes" copy={lead.notes}>
               <p className="leading-relaxed text-white/70">{lead.notes}</p>
-            </div>
+            </Section>
           )}
 
-          <div>
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-white/45">Phone finder</div>
+          <Section title="Phone finder">
             <div className="text-xs text-white/55">
               {lead.website ? <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-sky-300 hover:underline">{lead.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a> : "No website found"}
               {" · "}checked {time12(lead.enriched_at)} · line type {lead.line_type}
@@ -141,16 +194,17 @@ function LeadRow({ lead, onPick }: { lead: Lead; onPick: (lead: Lead, c: Cand) =
               <ul className="mt-2 space-y-1.5">{lead.phone_candidates.map((c) => {
                 const chosen = c.e164 === lead.phone;
                 return (
-                  <li key={c.e164} className={cn("flex items-start gap-3 rounded-xl p-2 ring-1", chosen ? "bg-emerald-500/[0.07] ring-emerald-500/25" : "ring-white/[0.06]")}>
-                    <div className="w-32 shrink-0 tabular-nums text-white">{c.display}<div className="text-[11px] text-white/45">score {Math.round(c.score)} · {c.source}</div></div>
+                  <li key={c.e164} className={cn("flex items-center gap-3 rounded-xl p-2 ring-1", chosen ? "bg-emerald-500/[0.07] ring-emerald-500/25" : "ring-white/[0.06]")}>
+                    <div className="w-32 shrink-0 tabular-nums text-white"><span className="whitespace-nowrap">{c.display}</span><div className="whitespace-nowrap text-[11px] text-white/45">score {Math.round(c.score)} · {c.source}</div></div>
                     <div className="min-w-0 flex-1 truncate text-xs text-white/50" title={c.context}>{c.context}</div>
+                    <CopyButton text={c.display} />
                     {!chosen && (
-                      <button type="button" onClick={() => onPick(lead, c)} className="shrink-0 rounded-lg px-2 py-1 text-xs text-white/80 ring-1 ring-white/15 hover:bg-white/5">Use this</button>
+                      <button type="button" onClick={() => onPick(lead, c)} className="shrink-0 whitespace-nowrap rounded-lg px-2 py-1 text-xs text-white/80 ring-1 ring-white/15 hover:bg-white/5">Use this</button>
                     )}
                   </li>);
               })}</ul>
             )}
-          </div>
+          </Section>
         </div>
       )}
     </li>
