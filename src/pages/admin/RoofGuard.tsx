@@ -217,8 +217,42 @@ type CallStats = {
     min_gap_bdays: number; daily_cap: number; pilot_limit: number | null; agent_id: string | null; phone_number_id: string | null };
   unverified: number; dialable: number; calls_total: number; calls_24h: number; booked: number; dnc: number;
   by_outcome: Record<string, number>;
+  openers: { key: string; label: string; active: boolean; calls: number; reached: number; kept_talking: number;
+    booked: number; book_rate: number | null; score: number; script: string }[];
   open_issue: { title: string; body: string | null } | null;
 };
+
+const pct = (n: number, d: number) => (d > 0 ? `${Math.round((100 * n) / d)}%` : "—");
+
+function OpenerTest({ openers }: { openers: CallStats["openers"] }) {
+  const active = openers.filter((o) => o.active);
+  const exploring = active.some((o) => o.reached < 30);
+  const leader = !exploring ? [...active].sort((a, b) => b.score - a.score)[0]?.key : undefined;
+  return (
+    <div className="mt-4">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wider text-white/45">Opener test</div>
+        <div className="text-[11px] text-white/45">
+          {exploring ? "Testing evenly until each opener reaches 30 decision makers" : "80% of calls use the leader, 20% keep testing"}
+        </div>
+      </div>
+      <ul className="space-y-1.5">{openers.map((o) => (
+        <li key={o.key} className={cn("rounded-xl p-3 ring-1", o.key === leader ? "bg-emerald-500/[0.07] ring-emerald-500/25" : "ring-white/[0.08]")}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-sm font-medium text-white">{o.label}</span>
+            {o.key === leader && <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-300">Leading</span>}
+            {!o.active && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/50">Paused</span>}
+            <span className="ml-auto flex gap-3 whitespace-nowrap text-xs tabular-nums text-white/60">
+              <span>{o.reached} reached</span>
+              <span>{pct(o.kept_talking, o.reached)} kept talking</span>
+              <span className="text-white">{o.booked} booked ({pct(o.booked, o.reached)})</span>
+            </span>
+          </div>
+          <div className="mt-1 text-xs leading-relaxed text-white/50">{o.script.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => `[${k.replace(/_/g, " ")}]`)}</div>
+        </li>))}</ul>
+    </div>
+  );
+}
 const hour12 = (h: number) => `${((h + 11) % 12) + 1}:00\u00a0${h < 12 || h === 24 ? "AM" : "PM"}`;
 
 function CallingCard() {
@@ -260,6 +294,7 @@ function CallingCard() {
         <Stat n={c.booked} label="meetings booked" tone={c.booked > 0 ? "good" : undefined} />
         <Stat n={c.dnc} label="do-not-call" />
       </div>
+      {c.openers?.length > 0 && <OpenerTest openers={c.openers} />}
       {!s.calling_enabled && (
         <div className="mt-4">
           <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">Before the first call</div>

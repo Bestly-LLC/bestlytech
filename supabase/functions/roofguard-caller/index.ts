@@ -4,7 +4,7 @@
 //   POST {action:"tick"}     (pg_cron, every 5 min once switched on) -> asks rg_next_call_batch() who may be
 //                            dialed now, submits them to ElevenLabs batch calling, logs a queued rg_calls row each.
 //   POST ?hook=elevenlabs    ElevenLabs post-call webhook -> verifies the HMAC signature, maps the agent's
-//                            data-collection fields to an outcome, writes through rg_record_call().
+//                            data-collection fields to an outcome, writes through rg_log_call() (with the A/B fields).
 //
 // Safety, in order:
 //   1. rg_settings.calling_enabled must be true (defaults to false).
@@ -63,6 +63,24 @@ async function tick(): Promise<Response> {
   const go = leads.filter((l) => !blocked.has(l.phone));
   if (!go.length) return Response.json({ ok: true, dialed: 0 });
 
+  // A/B: one decision-maker opener per call (balanced while exploring, then 80% best / 20% explore)
+  const { data: openerKeys } = await db.rpc("rg_assign_openers", { p_n: go.length });
+  const { data: openerRows } = await db.from("rg_openers").select("key, script, audience").eq("active", true);
+  const scripts = new Map((openerRows ?? []).map((o: { key: string; script: string }) => [o.key, o.script]));
+  const gkOpener = scripts.get("gk_name_first") ?? "Hi, it's Ava from RoofGuard, on a recorded line. Is {{contact_name}} in today?";
+  const plan = await Promise.all(go.map(async (l, i) => {
+    const key = (openerKeys as string[] | null)?.[i] ?? "dm_permission";
+    const { data: iv } = await db.rpc("rg_lead_opener_vars", { p_lead: l.lead_id });
+    const industry = (iv ?? {}) as Record<string, string>;
+    // fill the opener's own slots here: the voice platform does not expand variables inside a variable
+    // receptionist hears the full name ("Is Dana Ruiz in today?"), the decision maker the first name ("Hi Dana")
+    const fill = (t: string, full = false) => t
+      .replaceAll("{{contact_name}}", (full ? l.contact_name : l.contact_name?.split(" ")[0]) ?? "there")
+      .replaceAll("{{industry_plural}}", industry.industry_plural ?? "facilities teams")
+      .replaceAll("{{industry_hook}}", industry.industry_hook ?? "keeping roof leaks from turning into downtime");
+    return { lead: l, opener_key: key, opener: fill(scripts.get(key) ?? ""), gk: fill(gkOpener, true), industry };
+  }));
+
   const res = await fetch(`${XI}/convai/batch-calling/submit`, {
     method: "POST",
     headers: { "xi-api-key": key, "content-type": "application/json" },
@@ -70,13 +88,16 @@ async function tick(): Promise<Response> {
       call_name: `roofguard-${new Date().toISOString().slice(0, 16)}`,
       agent_id: s.agent_id,
       agent_phone_number_id: s.phone_number_id,
-      recipients: go.map((l) => ({
+      recipients: plan.map(({ lead: l, opener_key, opener, gk, industry }) => ({
         phone_number: l.phone,
         conversation_initiation_client_data: {
           dynamic_variables: {
             lead_id: l.lead_id, company: l.company, contact_name: l.contact_name ?? "the facilities director",
             contact_title: l.contact_title ?? "", pitch_angle: l.pitch_angle, category: l.category, state: l.state,
             callback_number: s.callback_number ?? "",
+            opener_key, gk_opener: gk, dm_opener: opener,
+            industry_plural: industry.industry_plural ?? "facilities teams",
+            industry_hook: industry.industry_hook ?? "keeping roof leaks from turning into downtime",
           },
         },
       })),
@@ -85,7 +106,7 @@ async function tick(): Promise<Response> {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return Response.json({ ok: false, status: res.status, error: body }, { status: 502 });
 
-  await db.from("rg_calls").insert(go.map((l) => ({ lead_id: l.lead_id, attempt: l.attempt, to_number: l.phone, batch_id: body.id ?? null, status: "queued" })));
+  await db.from("rg_calls").insert(plan.map(({ lead: l, opener_key }) => ({ lead_id: l.lead_id, attempt: l.attempt, to_number: l.phone, batch_id: body.id ?? null, status: "queued", opener_key })));
   await db.from("rg_leads").update({ call_status: "in_progress" }).in("id", go.map((l) => l.lead_id));
   return Response.json({ ok: true, dialed: go.length, batch_id: body.id ?? null });
 }
@@ -122,13 +143,15 @@ async function hook(req: Request): Promise<Response> {
   if (String(val("dnc_requested") ?? "").toLowerCase() === "true") outcome = "do_not_call";
   const callbackAt = val("callback_at");
 
-  const { data, error } = await db.rpc("rg_record_call", {
+  const yes = (k: string) => String(val(k) ?? "").toLowerCase() === "true";
+  const { data, error } = await db.rpc("rg_log_call", {
     p_conversation_id: d.conversation_id, p_lead_id: vars.lead_id, p_to_number: vars.system__called_number ?? d.metadata?.phone_call?.external_number ?? "",
     p_status: "completed", p_outcome: outcome, p_summary: d.analysis?.transcript_summary ?? null,
     p_duration_sec: d.metadata?.call_duration_secs ?? null, p_meeting_times: val("meeting_times"), p_meeting_email: val("meeting_email"),
     p_callback_at: callbackAt && !isNaN(Date.parse(callbackAt)) ? new Date(callbackAt).toISOString() : null,
     p_dm_name: val("dm_name"), p_dm_title: val("dm_title"), p_notes: val("notes"),
     p_transcript: d.transcript ?? null, p_recording_url: null,
+    p_opener_key: vars.opener_key ?? null, p_dm_reached: yes("dm_reached"), p_kept_talking: yes("kept_talking"),
   });
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
   return Response.json(data);
