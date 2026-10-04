@@ -3,12 +3,13 @@
 // Jobs:
 //   {action:"tick"}        pg_cron every 5 min, only while calling_enabled -> rg_next_call_batch() decides who may
 //                          be dialed now; submits them to ElevenLabs batch calling; logs a queued rg_calls row each.
-//   {action:"setup"}       admin button, after Jared puts the keys in Vault -> finds his Twilio number, creates the
-//                          signed post-call webhook, creates/updates the ElevenLabs agent (prompt, voice, openers,
-//                          voicemail, data collection), imports the number, saves the ids. Safe to re-run.
+//   {action:"setup"}       admin button, after Jared puts the keys in Vault -> finds his Telnyx number, builds the
+//                          Telnyx SIP trunk (outbound voice profile with a daily spend cap + credential connection),
+//                          creates the signed post-call webhook, creates/updates the ElevenLabs agent (prompt, voice,
+//                          openers, voicemail, data collection), imports the number as a SIP trunk. Safe to re-run.
 //   {action:"test_call"}   admin button -> one real call to rg_settings.test_phone with a real lead's script,
 //                          logged as is_test (never touches the lead or the opener scoreboard).
-//   {action:"line_types"}  admin button -> Twilio Lookup line type for unverified numbers (about $0.008 each);
+//   {action:"line_types"}  admin button -> Telnyx number lookup (carrier type) for unverified numbers;
 //                          mobile numbers are marked and never dialed.
 //   ?hook=elevenlabs       post-call webhook -> verifies the HMAC signature, maps the agent's data-collection
 //                          fields to an outcome, writes through rg_log_call() (with the A/B fields).
@@ -20,7 +21,8 @@
 //      so this function cannot dial anyone the database would not allow.
 //   4. Numbers are re-checked against rg_dnc right before submit.
 //
-// Secrets: read per call from Vault through rg_secret() (service role only, an allowlist of 4 names), never env or code.
+// Secrets: read per call from Vault through rg_secret() (service role only, an allowlist), never env or code.
+// Phone provider: Telnyx (Jared, 2026-10-04: cheapest with good quality). ElevenLabs is the voice.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -157,25 +159,26 @@ async function testCall(): Promise<Response> {
   return Response.json({ ok: true, calling: s.test_phone, as_lead: lead.company, opener: p.opener_key });
 }
 
-// ---------- line types (Twilio Lookup) ----------
+// ---------- line types (Telnyx number lookup) ----------
 async function lineTypes(): Promise<Response> {
-  const sid = await vault("twilio_account_sid"), token = await vault("twilio_auth_token");
-  if (!sid || !token) return Response.json({ ok: false, skipped: "Twilio keys missing from Vault" }, { status: 412 });
-  const auth = "Basic " + btoa(`${sid}:${token}`);
+  const tk = await vault("telnyx_api_key");
+  if (!tk) return Response.json({ ok: false, skipped: "telnyx_api_key missing from Vault" }, { status: 412 });
   const started = Date.now();
   const { data: rows } = await db.from("rg_leads").select("id, phone").not("phone", "is", null)
     .eq("line_type", "unverified").order("priority", { ascending: false }).limit(400);
   const queue = [...(rows ?? [])] as { id: string; phone: string }[];
   const tally: Record<string, number> = {};
-  const MAP: Record<string, string> = { landline: "landline", fixedVoip: "voip", nonFixedVoip: "voip", tollFree: "voip",
-    mobile: "mobile", personal: "mobile", pager: "unknown", voicemail: "unknown", uan: "voip", sharedCost: "voip" };
+  // Telnyx carrier types -> ours. Only landline/voip get dialed; anything that may be a mobile is never called.
+  const MAP: Record<string, string> = { "fixed line": "landline", voip: "voip", "toll free": "voip", uan: "voip",
+    "shared cost": "voip", mobile: "mobile", "fixed line or mobile": "mobile", "personal number": "mobile",
+    pager: "unknown", voicemail: "unknown", "premium rate": "unknown", unknown: "unknown" };
   const worker = async () => {
     while (queue.length && Date.now() - started < 110_000) {
       const r = queue.shift()!;
-      const res = await fetch(`https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(r.phone)}?Fields=line_type_intelligence`, { headers: { authorization: auth } });
+      const res = await fetch(`https://api.telnyx.com/v2/number_lookup/${encodeURIComponent(r.phone)}?type=carrier`, { headers: { authorization: `Bearer ${tk}` } });
       if (!res.ok) { tally.error = (tally.error ?? 0) + 1; continue; }
       const j = await res.json();
-      const type = MAP[j.line_type_intelligence?.type ?? ""] ?? "unknown";
+      const type = MAP[String(j.data?.carrier?.type ?? "unknown").toLowerCase()] ?? "unknown";
       tally[type] = (tally[type] ?? 0) + 1;
       await db.from("rg_leads").update({ line_type: type, line_type_checked_at: new Date().toISOString() }).eq("id", r.id);
     }
@@ -247,20 +250,52 @@ async function setup(): Promise<Response> {
     await db.from("rg_settings").update({ setup_log: log.map((m) => ({ at: new Date().toISOString(), m })), updated_at: new Date().toISOString(), updated_by: "roofguard-caller setup" }).eq("id", true);
     return Response.json({ ok, log, ...extra }, { status: ok ? 200 : 412 });
   };
-  const key = await vault("elevenlabs_api_key"), sid = await vault("twilio_account_sid"), token = await vault("twilio_auth_token");
-  if (!key || !sid || !token) { log.push("Missing keys in Vault: " + [!key && "elevenlabs_api_key", !sid && "twilio_account_sid", !token && "twilio_auth_token"].filter(Boolean).join(", ")); return done(false); }
+  const key = await vault("elevenlabs_api_key"), tk = await vault("telnyx_api_key");
+  if (!key || !tk) { log.push("Missing keys in Vault: " + [!key && "elevenlabs_api_key", !tk && "telnyx_api_key"].filter(Boolean).join(", ")); return done(false); }
   const { data: s } = await db.from("rg_settings").select("*").eq("id", true).single();
   const xi = (path: string, method: string, body?: unknown) => fetch(`${XI}${path}`, { method, headers: { "xi-api-key": key, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const tx = (path: string, method: string, body?: unknown) => fetch(`https://api.telnyx.com/v2${path}`, { method, headers: { authorization: `Bearer ${tk}`, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
 
-  // 1. the Twilio number she calls from
-  const tw = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers.json?PageSize=20`, { headers: { authorization: "Basic " + btoa(`${sid}:${token}`) } });
-  if (!tw.ok) { log.push(`Twilio rejected the keys (${tw.status}).`); return done(false); }
-  const nums = ((await tw.json()).incoming_phone_numbers ?? []) as { phone_number: string }[];
-  const from = (s?.from_number && nums.find((n) => n.phone_number === s.from_number)?.phone_number) ?? nums[0]?.phone_number;
-  if (!from) { log.push("No phone number on the Twilio account yet. Buy one local number in Twilio, then run setup again."); return done(false); }
-  log.push(`Calling number: ${from}`);
+  // 1. the Telnyx number she calls from
+  const nr = await tx("/phone_numbers?page[size]=20", "GET");
+  if (!nr.ok) { log.push(`Telnyx rejected the API key (${nr.status}).`); return done(false); }
+  const nums = ((await nr.json()).data ?? []) as { id: string; phone_number: string }[];
+  const num = (s?.from_number && nums.find((n) => n.phone_number === s.from_number)) || nums[0];
+  if (!num) { log.push("No phone number on the Telnyx account yet. Buy one local number in Telnyx, then run setup again."); return done(false); }
+  log.push(`Calling number: ${num.phone_number}`);
 
-  // 2. signed post-call webhook (its secret goes straight to Vault)
+  // 2. Telnyx SIP trunk for ElevenLabs: outbound profile (US/Canada only, $10/day spend cap) + credential connection
+  let ovpId = s?.telnyx_ovp_id as string | null;
+  if (!ovpId) {
+    const r = await tx("/outbound_voice_profiles", "POST", { name: "RoofGuard caller", traffic_type: "conversational",
+      service_plan: "global", usage_payment_method: "rate-deck", whitelisted_destinations: ["US", "CA"],
+      concurrent_call_limit: 5, daily_spend_limit: "10.00", daily_spend_limit_enabled: true });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.data?.id) { log.push(`Could not create the Telnyx outbound profile (${r.status}): ${JSON.stringify(j).slice(0, 300)}`); return done(false); }
+    ovpId = j.data.id;
+    log.push("Telnyx outbound profile created (US and Canada only, $10/day spend cap, 5 calls at once).");
+  }
+  let connId = s?.telnyx_connection_id as string | null;
+  let sipUser = "", sipPass = await vault("telnyx_sip_password");
+  if (!connId || !sipPass) {
+    const rnd = (n: number) => [...crypto.getRandomValues(new Uint8Array(n))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    sipUser = `roofguard${rnd(4)}`;
+    sipPass = rnd(16);
+    const r = await tx("/credential_connections", "POST", { connection_name: "RoofGuard ElevenLabs", user_name: sipUser,
+      password: sipPass, outbound: { outbound_voice_profile_id: ovpId } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.data?.id) { log.push(`Could not create the Telnyx SIP connection (${r.status}): ${JSON.stringify(j).slice(0, 300)}`); return done(false); }
+    connId = j.data.id;
+    await db.rpc("rg_secret_put", { p_name: "telnyx_sip_password", p_value: sipPass });
+    log.push("Telnyx SIP connection created; its password is stored in Vault.");
+  } else {
+    const r = await tx(`/credential_connections/${connId}`, "GET");
+    sipUser = (await r.json().catch(() => ({}))).data?.user_name ?? "";
+  }
+  const pa = await tx(`/phone_numbers/${num.id}`, "PATCH", { connection_id: connId });
+  if (!pa.ok) log.push(`Note: could not attach the number to the SIP connection (${pa.status}); calls may show a different caller ID.`);
+
+  // 3. signed post-call webhook (its secret goes straight to Vault)
   let webhookId = s?.webhook_id as string | null;
   if (!webhookId) {
     const r = await xi("/workspace/webhooks", "POST", { settings: { auth_type: "hmac", name: "RoofGuard post-call",
@@ -272,7 +307,7 @@ async function setup(): Promise<Response> {
     log.push("Post-call webhook created; signing secret stored in Vault.");
   }
 
-  // 3. the agent
+  // 4. the agent
   const agentBody = {
     name: "RoofGuard caller (Ava)",
     conversation_config: {
@@ -301,11 +336,12 @@ async function setup(): Promise<Response> {
   agentId = agentId ?? aj.agent_id;
   log.push(`Agent ready: ${agentId}`);
 
-  // 4. import the number into ElevenLabs and point it at the agent
+  // 5. the number in ElevenLabs, as a SIP trunk through Telnyx, pointed at the agent
   let phoneId = s?.phone_number_id as string | null;
   if (!phoneId) {
-    const pr = await xi("/convai/phone-numbers", "POST", { provider: "twilio", phone_number: from, label: "RoofGuard",
-      sid, token, agent_id: agentId, supports_inbound: false, supports_outbound: true });
+    const pr = await xi("/convai/phone-numbers", "POST", { provider: "sip_trunk", phone_number: num.phone_number, label: "RoofGuard (Telnyx)",
+      agent_id: agentId, supports_inbound: false, supports_outbound: true,
+      outbound_trunk_config: { address: "sip.telnyx.com", credentials: { username: sipUser, password: sipPass } } });
     const pj = await pr.json().catch(() => ({}));
     if (!pr.ok || !pj.phone_number_id) { log.push(`Number import failed (${pr.status}): ${JSON.stringify(pj).slice(0, 300)}`); return done(false); }
     phoneId = pj.phone_number_id;
@@ -314,9 +350,10 @@ async function setup(): Promise<Response> {
   }
   log.push("Number connected to the agent.");
 
-  await db.from("rg_settings").update({ agent_id: agentId, phone_number_id: phoneId, from_number: from, webhook_id: webhookId }).eq("id", true);
+  await db.from("rg_settings").update({ agent_id: agentId, phone_number_id: phoneId, from_number: num.phone_number, webhook_id: webhookId,
+    telnyx_connection_id: connId, telnyx_ovp_id: ovpId, phone_provider: "telnyx" }).eq("id", true);
   log.push(s?.callback_number ? "Ready for a test call." : "Ready for a test call. Before going live, set the callback number voicemails read out.");
-  return done(true, { agent_id: agentId, phone_number_id: phoneId, from_number: from });
+  return done(true, { agent_id: agentId, phone_number_id: phoneId, from_number: num.phone_number });
 }
 
 // ---------- post-call webhook ----------

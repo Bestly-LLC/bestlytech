@@ -216,7 +216,7 @@ type CallStats = {
   settings: { calling_enabled: boolean; window_start_hour: number; window_end_hour: number; max_attempts: number;
     min_gap_bdays: number; daily_cap: number; pilot_limit: number | null; agent_id: string | null; phone_number_id: string | null;
     test_phone: string | null; callback_number: string | null; from_number: string | null; setup_log: { at: string; m: string }[] };
-  keys: Record<"elevenlabs_api_key" | "twilio_account_sid" | "twilio_auth_token" | "elevenlabs_webhook_secret", boolean>;
+  keys: Record<"elevenlabs_api_key" | "telnyx_api_key" | "elevenlabs_webhook_secret", boolean>;
   unverified: number; dialable: number; mobile: number; calls_total: number; test_calls: number; calls_24h: number;
   booked: number; dnc: number; callbacks_due: number;
   by_outcome: Record<string, number>;
@@ -266,10 +266,9 @@ const toE164 = (v: string) => {
   return d.length === 10 ? `+1${d}` : null;
 };
 
-const KEY_FIELDS: { name: "elevenlabs_api_key" | "twilio_account_sid" | "twilio_auth_token"; label: string; hint: string }[] = [
+const KEY_FIELDS: { name: "elevenlabs_api_key" | "telnyx_api_key"; label: string; hint: string }[] = [
   { name: "elevenlabs_api_key", label: "ElevenLabs API key", hint: "elevenlabs.io → Developers → API keys" },
-  { name: "twilio_account_sid", label: "Twilio Account SID", hint: "Twilio Console home page, starts with AC" },
-  { name: "twilio_auth_token", label: "Twilio Auth Token", hint: "Right under the Account SID" },
+  { name: "telnyx_api_key", label: "Telnyx API key", hint: "portal.telnyx.com → Auth → API Keys, starts with KEY" },
 ];
 
 function KeySlot({ f, saved, onSaved }: { f: (typeof KEY_FIELDS)[number]; saved: boolean; onSaved: () => void }) {
@@ -351,13 +350,12 @@ function CallingCard() {
   if (err) return <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Calling: {err}</div>;
   if (!c) return null;
   const s = c.settings;
-  const keysIn = c.keys.elevenlabs_api_key && c.keys.twilio_account_sid && c.keys.twilio_auth_token;
+  const keysIn = c.keys.elevenlabs_api_key && c.keys.telnyx_api_key;
   const setUp = !!s.agent_id && !!s.phone_number_id;
   const linesChecked = c.unverified === 0 && c.dialable > 0;
   const tested = c.test_calls > 0;
   const hasCallback = !!s.callback_number;
   const canGoLive = keysIn && setUp && linesChecked && tested && hasCallback;
-  const lookupCost = (c.unverified * 0.008).toFixed(2);
 
   return (
     <div className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10">
@@ -388,14 +386,14 @@ function CallingCard() {
         <div className="mt-5">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/45">Go live</div>
           <ol className="space-y-4">
-            <Step n={1} done={keysIn} title="Open an ElevenLabs account and a Twilio account, buy one local number in Twilio, then paste the 3 keys here. They go straight to Vault and never show again.">
+            <Step n={1} done={keysIn} title="Open an ElevenLabs account and a Telnyx account, buy one local number in Telnyx (about $1/month), then paste the 2 keys here. They go straight to Vault and never show again.">
               {KEY_FIELDS.map((f) => <KeySlot key={f.name} f={f} saved={c.keys[f.name]} onSaved={() => { setNote(`${f.label} saved in Vault.`); void load(); }} />)}
             </Step>
-            <Step n={2} done={setUp} title={setUp ? `Voice agent set up, calling from ${s.from_number ?? "your Twilio number"}` : "Set up the voice agent (script, voice, 3 openers, voicemail, call logging), all automatic"}>
+            <Step n={2} done={setUp} title={setUp ? `Voice agent set up, calling from ${s.from_number ?? "your Telnyx number"}` : "Set up the voice agent (script, voice, 3 openers, voicemail, call logging, Telnyx phone line), all automatic"}>
               {keysIn && <Btn busy={busy} id="setup" onClick={() => void action("setup", "Setting up the voice agent… this takes about 30 seconds.")}>{setUp ? "Re-run setup" : "Set up voice agent"}</Btn>}
               {s.setup_log?.length > 0 && <ul className="space-y-0.5 text-xs text-white/50">{s.setup_log.map((l, i) => <li key={i}>{l.m}</li>)}</ul>}
             </Step>
-            <Step n={3} done={linesChecked} title={linesChecked ? `Line types checked · ${c.mobile} mobiles skipped` : `Check which of the ${c.unverified} numbers are business lines (about $${lookupCost} in Twilio lookups); mobiles are never called`}>
+            <Step n={3} done={linesChecked} title={linesChecked ? `Line types checked · ${c.mobile} mobiles skipped` : `Check which of the ${c.unverified} numbers are business lines (Telnyx lookup, a fraction of a cent each); mobiles are never called`}>
               {keysIn && !linesChecked && <Btn busy={busy} id="line_types" onClick={() => void action("line_types", "Checking line types… up to 400 per run, about 90 seconds. Press again if some remain.")}>Check line types</Btn>}
             </Step>
             <Step n={4} done={tested} title={tested ? `Test call done (${c.test_calls})` : "Test call: Ava calls your phone with a real lead's script"}>

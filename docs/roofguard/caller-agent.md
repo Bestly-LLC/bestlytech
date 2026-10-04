@@ -213,17 +213,22 @@ writes them through rg_record_call().
 Webhook URL (after deploy): `https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/roofguard-caller?hook=elevenlabs`,
 HMAC secret stored in Vault as `elevenlabs_webhook_secret`. Dynamic variables passed on every call: `lead_id`, `opener_key`, `gk_opener`, `dm_opener` (slots already filled), `industry_plural`, `industry_hook`, plus the lead fields.
 
-## Go-live checklist (built 2026-10-04, all on /admin/roofguard → Calling)
+## Go-live checklist (built 2026-10-04, provider switched to Telnyx the same day; all on /admin/roofguard → Calling)
 
-1. Jared opens ElevenLabs + Twilio accounts, buys one local Twilio number, pastes 3 keys into the page
-   (rg_key_put → Vault, write-only): elevenlabs_api_key, twilio_account_sid, twilio_auth_token.
-2. "Set up voice agent" → roofguard-caller `setup`: finds the Twilio number, creates the HMAC post-call webhook
-   (secret → Vault via rg_secret_put), creates/updates the agent (prompt, voice Sarah EXAVITQu4vr4xnSDxMaL,
-   eleven_flash_v2_5, gemini-2.5-flash, end_call + voicemail_detection, data collection), imports the number.
-3. "Check line types" → Twilio Lookup line_type_intelligence (~$0.008 each), mobiles marked and never dialed.
+1. Jared opens ElevenLabs + Telnyx accounts, buys one local Telnyx number (~$1/mo), pastes 2 keys into the page
+   (rg_key_put → Vault, write-only): elevenlabs_api_key, telnyx_api_key.
+2. "Set up voice agent" → roofguard-caller `setup`: finds the Telnyx number, creates a Telnyx outbound voice profile
+   (US/CA only, $10/day spend cap, 5 concurrent) + credential connection (SIP password → Vault), attaches the number,
+   creates the HMAC post-call webhook (secret → Vault), creates/updates the agent (prompt, voice Sarah
+   EXAVITQu4vr4xnSDxMaL, eleven_flash_v2_5, gemini-2.5-flash, end_call + voicemail_detection, data collection),
+   imports the number into ElevenLabs as a SIP trunk (sip.telnyx.com).
+3. "Check line types" → Telnyx number lookup (carrier type); mobiles and "fixed line or mobile" are never dialed.
 4. "Call my phone" → one is_test call with a real lead's script; never touches the lead or the A/B scoreboard.
 5. Callback number for voicemails (required on artificial-voice calls).
 6. "Start pilot" → calling_enabled = true, pilot_limit = 20. cron roofguard-dial runs tick every 5 min only while on.
+
+Why Telnyx: Jared wants it as cheap as possible with quality kept. Telnyx lists about $0.007/min US outbound SIP
+(roughly half of Twilio) and $1/mo per number; ElevenLabs stays the voice because it sounds near-human.
 
 Also running: callbacks (rg_leads.next_call_at, due 10 min early, ahead of the queue), daily Scout report
 (cron roofguard-daily-report, weekdays ~5:20 PM Pacific), watchdog rg_watch_calls (every 10 min).
