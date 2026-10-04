@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "updated": "2026-09-02",
+  "version": 4,
+  "updated": "2026-10-04",
   "base_url": "https://bestly.tech/social/",
   "note": "Public image pool for the daily Instagram + Facebook poster. Instagram requires a publicly fetchable image_url; these qualify. Rotation rule in social/config/MEDIA.md applies: never repeat within a rolling 5-post window.",
   "layouts": {
@@ -50,6 +50,48 @@
       "theme": "infrastructure",
       "headline": "Thirteen services. One box.",
       "accent": "One box."
+    },
+    {
+      "file": "a_keys.png",
+      "layout": "A",
+      "theme": "access",
+      "headline": "Know who holds your keys.",
+      "accent": "your keys"
+    },
+    {
+      "file": "b_leavers.png",
+      "layout": "B",
+      "theme": "offboarding",
+      "headline": "Close every login the day someone leaves.",
+      "accent": "someone leaves"
+    },
+    {
+      "file": "c_renewal.png",
+      "layout": "C",
+      "theme": "contracts",
+      "headline": "Read the auto-renew date.",
+      "accent": "auto-renew"
+    },
+    {
+      "file": "a_domain.png",
+      "layout": "A",
+      "theme": "domains",
+      "headline": "Your domain belongs in your name.",
+      "accent": "your name"
+    },
+    {
+      "file": "b_three_copies.png",
+      "layout": "B",
+      "theme": "backups",
+      "headline": "Three copies. Two places. One offline.",
+      "accent": "One offline."
+    },
+    {
+      "file": "c_free_tools.png",
+      "layout": "C",
+      "theme": "privacy",
+      "headline": "Free tools charge in data.",
+      "accent": "data"
     }
   ],
   "carousel_structure": {
@@ -91,6 +133,30 @@
         "carousels/export-test/03.png",
         "carousels/export-test/04.png",
         "carousels/export-test/05.png"
+      ]
+    },
+    {
+      "id": "who-holds-the-keys",
+      "theme": "access",
+      "hook": "You may not hold all your own keys.",
+      "slides": [
+        "carousels/who-holds-the-keys/01.png",
+        "carousels/who-holds-the-keys/02.png",
+        "carousels/who-holds-the-keys/03.png",
+        "carousels/who-holds-the-keys/04.png",
+        "carousels/who-holds-the-keys/05.png"
+      ]
+    },
+    {
+      "id": "when-someone-leaves",
+      "theme": "offboarding",
+      "hook": "When someone leaves, their logins stay.",
+      "slides": [
+        "carousels/when-someone-leaves/01.png",
+        "carousels/when-someone-leaves/02.png",
+        "carousels/when-someone-leaves/03.png",
+        "carousels/when-someone-leaves/04.png",
+        "carousels/when-someone-leaves/05.png"
       ]
     }
   ]
