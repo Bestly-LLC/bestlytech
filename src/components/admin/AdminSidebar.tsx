@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { AdminMark } from "@/components/AdminMark";
-import { BookOpen, GripVertical, Plane, Projector } from "lucide-react";
+import { BookOpen, GripVertical, Network, Plane, Projector } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
@@ -48,6 +48,7 @@ const workItems = [
   { title: "Waitlist", url: "/admin/waitlist", icon: ListChecks },
   { title: "Meetings", url: "/admin/meetings", icon: Mic },
   { title: "Partners", url: "/admin/partners", icon: Handshake },
+  { title: "Team", url: "/admin/team", icon: Network },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 
@@ -181,6 +182,11 @@ export function AdminSidebar() {
       }
       for (const b of ((bell ?? []) as unknown as { url: string | null; severity: string; title: string }[])) {
         if (b.severity === "warning" || b.severity === "critical" || b.severity === "error") bump(b.url, b.severity === "warning" ? "amber" : "red", b.title);
+      }
+      // Team: any bot gone quiet puts a red dot on the Team page.
+      const { data: teamRed } = await supabase.rpc("admin_team_red_count" as never);
+      if (typeof teamRed === "number" && teamRed > 0) {
+        att["/admin/team"] = { level: "red", n: teamRed, why: `${teamRed} bot${teamRed === 1 ? " has" : "s have"} gone quiet` };
       }
       setAttention(att);
       const keys: CountKeys[] = ["leads", "contacts", "cySubscribers"];
