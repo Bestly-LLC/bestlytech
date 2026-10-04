@@ -68,7 +68,7 @@ const pacific = (d = new Date()) =>
 
 const FIELD_NAMES = ["Lantern", "Compass", "Sextant", "Ranger", "Meridian", "Tracker", "Beacon", "Atlas", "Fieldnote", "Waypoint", "Trailhead", "Spyglass"];
 
-const SITE = "https://bestly.tech";
+const SITE = "https://www.bestly.tech";   // canonical host (bestly.tech 308s here)
 
 /** The bot's mascot GIF; falls back to the plain bot face if its GIF isn't built yet (never a broken image). */
 async function mascotUrl(icon: string | null) {
