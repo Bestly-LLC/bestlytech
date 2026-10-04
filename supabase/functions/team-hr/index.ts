@@ -8,6 +8,10 @@
 //   op recruit         The Recruiter + The Improver: the Recruiter proposes new bots for real gaps (hr_context),
 //                       The Improver vets each one; only hires both back show up in "Suggested hires" (hr_save).
 //                       Weekly cron (Mon 9:15 AM, after The Improver) + the "Look for hires now" button.
+//   op reorg           Reorg round ("layoffs"): The Recruiter finds bots whose jobs overlap, sit idle or aren't needed,
+//                       The Improver vets each; only moves both back reach Jared in "Reorg" (reorg_save).
+//                       Weekly cron (Mon 9:30 AM) + the "Run a reorg review" button. Changes nothing by itself.
+//   op farewell {id}   After Jared lets a bot go: a short farewell email with its mascot GIF and where its work went.
 // Free AI only (the free-llm function's op run, paid: never). If every free model is down, welcome still sends
 // with a plain profile, and improve records a failed check-in so Team Watch tells Scout.
 // Auth: service key (apikey or Bearer) or an admin JWT. verify_jwt = false (new sb_secret keys are not JWTs).
@@ -265,6 +269,117 @@ async function recruit() {
   return { ok: true, saved, backed: backed.map((b: any) => b.name), passed: rows.filter((r: any) => r.verdict !== "back").map((r: any) => r.name) };
 }
 
+/* ---------------------------------------------------------------- reorgs (The Recruiter + The Improver) */
+
+const PROTECTED = new Set(["scout", "improver", "hr", "fix-ladder", "team-watch", "team-watch-ping"]);
+
+async function reorg() {
+  const { data: ctx, error } = await db.rpc("reorg_context");
+  if (error) {
+    await db.rpc("agent_beat", { p_slug: "hr", p_ok: false, p_summary: `Reorg review could not read the picture: ${error.message}`.slice(0, 200) });
+    return { ok: false, error: error.message };
+  }
+  const slugs = new Set((ctx.roster ?? []).map((r: any) => r.slug));
+
+  // 1. The Recruiter: where is the crew bigger than the work?
+  const pitch = await freeJson("reflect",
+    "You are The Recruiter, HR for Bestly's crew of AI bots, running this week's reorg review. Bestly is a one-person product " +
+    "studio run by Jared. Goal: only the bots needed to run the business, nothing convoluted. Find 0 to 3 bots in roster to let go: " +
+    "kind merge = its job overlaps another bot, so its duties move to that bot (give into = that bot's slug); kind retire = its job " +
+    "is no longer needed (idle, duplicated, switched off for good, failing with nobody missing it). Evidence must come from the data " +
+    "(team health and last run, failing jobs, AI spend, noisy problems, recent decisions). Never pick a bot in protected, a person, " +
+    "or one in past_reorgs. Proposing nothing is a fine answer when the crew is lean. Plain words for someone busy. " +
+    'Return JSON only: {"moves":[{"bot":"slug","kind":"merge|retire","into":"slug or null","why":"the evidence, one or two sentences",' +
+    '"change":"what moves where, one line","saves":"what it saves, one line","risk":"what could break, one line"}]}',
+    JSON.stringify(ctx), 1500);
+  const moves = (Array.isArray(pitch?.moves) ? pitch.moves : [])
+    .filter((m: any) => m?.bot && slugs.has(m.bot) && !PROTECTED.has(m.bot))
+    .map((m: any) => ({ ...m, into: m.into && slugs.has(m.into) && m.into !== m.bot ? m.into : null, kind: m.kind === "merge" && m.into ? "merge" : "retire" }))
+    .slice(0, 3);
+  if (pitch == null) {
+    await db.rpc("agent_beat", { p_slug: "hr", p_ok: false, p_summary: "Reorg review: free AI did not answer; will try again next run" });
+    return { ok: false, error: "no answer from free AI" };
+  }
+  if (!moves.length) {
+    await db.rpc("agent_beat", { p_slug: "hr", p_ok: true, p_summary: "Reorg review: the crew is lean, nobody to let go this week" });
+    return { ok: true, saved: 0, backed: [], passed: [] };
+  }
+
+  // 2. The Improver vets every move against the same picture
+  const review = await freeJson("reflect",
+    "You are The Improver, Bestly's continuous-improvement analyst. The Recruiter proposes letting these bots go. For each, check the " +
+    "data: is the job really covered elsewhere or not needed, would Jared lose anything he relies on, does the bot taking over actually " +
+    "do similar work? Back only moves that clearly simplify the business without losing anything important. " +
+    'Return JSON only: {"reviews":[{"bot":"exact slug","verdict":"back|pass","score":1-5,"note":"one or two sentences, plain words"}]}',
+    JSON.stringify({ moves, roster: ctx.roster, team: ctx.team, failing_db_jobs_7d: ctx.failing_db_jobs_7d, ai_spend_7d: ctx.ai_spend_7d,
+      improver_ideas: ctx.improver_ideas }), 1200);
+  const reviews: any[] = Array.isArray(review?.reviews) ? review.reviews : [];
+  if (!reviews.length) {
+    await db.rpc("agent_beat", { p_slug: "hr", p_ok: false, p_summary: "Reorg review: The Improver could not review; trying again next run" });
+    return { ok: false, error: "no review from The Improver" };
+  }
+  const byBot = new Map(reviews.map((r) => [String(r?.bot ?? "").toLowerCase().trim(), r]));
+  const rows = moves.map((m: any) => {
+    const r = byBot.get(String(m.bot).toLowerCase());
+    const v = String(r?.verdict ?? "").toLowerCase().trim();
+    const score = Number(r?.score ?? 0);
+    const backs = /^(back|yes|approve|agree)/.test(v) || (!/^(pass|no|reject|veto|keep)/.test(v) && score >= 4);
+    return { ...m, verdict: backs ? "back" : "pass", improver_score: score > 0 ? score : null, improver_note: r?.note ?? "No review" };
+  });
+  const { data: saved } = await db.rpc("reorg_save", { p_moves: rows });
+  const backed = rows.filter((r: any) => r.verdict === "back");
+  await db.rpc("agent_beat", { p_slug: "hr", p_ok: true,
+    p_summary: backed.length ? `Reorg review: ${backed.length} bot${backed.length === 1 ? "" : "s"} to let go, waiting for you` : "Reorg review: The Improver kept everyone this week" });
+  if (backed.length && (saved ?? 0) > 0) {
+    await db.rpc("scout_notify", { p_title: `Reorg: ${backed.length} bot${backed.length === 1 ? "" : "s"} could be let go`,
+      p_body: backed.map((b: any) => `• ${b.bot}${b.into ? ` (work moves to ${b.into})` : ""}`).join("\n"), p_severity: "info", p_push: false,
+      p_url: "/admin/team#reorg", p_dedupe: `reorg-${new Date().toISOString().slice(0, 10)}` });
+  }
+  return { ok: true, saved, backed: backed.map((b: any) => b.bot), passed: rows.filter((r: any) => r.verdict !== "back").map((r: any) => r.bot) };
+}
+
+async function farewell(id: string) {
+  const { data: ctx, error } = await db.rpc("reorg_farewell_get", { p_id: id });
+  if (error || !ctx?.agent) return { ok: false, error: error?.message ?? "no such reorg" };
+  const a = ctx.agent, r = ctx.reorg;
+  const key = Deno.env.get("RESEND_API_KEY");
+  if (!key) return { ok: false, error: "RESEND_API_KEY missing" };
+  const mascot = await mascotUrl(a.icon ?? null);
+  const where = ctx.heir?.name ? `${ctx.heir.name} (${ctx.heir.role}) picks up its work.` : "Its job wasn't needed any more.";
+  const motto = a.profile?.motto ? `Its motto was "${a.profile.motto}"` : "";
+  const html = `<!doctype html><html><body style="margin:0;background:#f2f2f7;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Arial,sans-serif">
+  <div style="max-width:560px;margin:0 auto;padding:28px 16px">
+    <p style="margin:0 0 12px;color:#6e6e73;font-size:13px;letter-spacing:.04em;text-transform:uppercase">Bestly expedition · reorg</p>
+    <div style="background:#fff;border-radius:22px;padding:28px 24px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      ${mascot ? `<img src="${mascot.url}" width="96" height="96" alt="${esc(a.name)}" style="display:block;width:96px;height:96px;border:0;margin:0 0 14px;opacity:.85">` : ""}
+      <h1 style="margin:0 0 4px;color:#1d1d1f;font-size:26px;line-height:1.15">Farewell, ${esc(a.name)}</h1>
+      <p style="margin:0 0 18px;color:#6e6e73;font-size:15px">${esc(a.role)} · packed its box and left the expedition</p>
+      <p style="margin:0 0 12px;color:#1d1d1f;font-size:16px;line-height:1.5">${esc(where)}</p>
+      ${r.why ? `<p style="margin:0 0 12px;color:#6e6e73;font-size:14px;line-height:1.5"><b style="color:#1d1d1f">Why:</b> ${esc(r.why)}</p>` : ""}
+      ${r.saves ? `<p style="margin:0 0 12px;color:#248A3D;font-size:14px;line-height:1.5">Saves: ${esc(r.saves)}</p>` : ""}
+      ${motto ? `<p style="margin:0 0 12px;color:#6e6e73;font-size:14px;font-style:italic">${esc(motto)}</p>` : ""}
+      <p style="margin:16px 0 0;color:#6e6e73;font-size:13px;line-height:1.5">Scout has the plan to switch its job off and waits for your yes. Changed your mind? Tap Bring back on the Team page within 7 days.</p>
+      <a href="https://bestly.tech/admin/team#reorg" style="display:inline-block;margin-top:18px;background:#0a84ff;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 20px;border-radius:999px">See the crew</a>
+    </div>
+    <p style="margin:14px 4px 0;color:#8e8e93;font-size:12px">Left ${esc(pacific())} · crew of ${esc(ctx.team_size)} now.</p>
+  </div></body></html>`;
+  let ok = false, err = "";
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: "Scout at Bestly <noreply@bestly.tech>", to: [TO], subject: `Farewell, ${a.name}: it left the expedition`, html }),
+    });
+    ok = res.ok;
+    if (!ok) err = `resend ${res.status}: ${(await res.text()).slice(0, 200)}`;
+  } catch (e) {
+    err = (e as Error).message;
+  }
+  await db.from("email_send_log").insert({ message_id: crypto.randomUUID(), template_name: "team-farewell", recipient_email: TO,
+    status: ok ? "sent" : "failed", error_message: ok ? null : err, metadata: { slug: a.slug, reorg_id: id, provider: "resend", mascot: mascot?.url ?? null } });
+  return { ok, error: ok ? undefined : err };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return J({ ok: false, error: "POST only" }, 405);
@@ -275,7 +390,9 @@ Deno.serve(async (req) => {
     if (body.op === "welcome") return J(await welcome(String(body.slug ?? ""), body.preview === true));
     if (body.op === "improve") return J(await improve());
     if (body.op === "recruit") return J(await recruit());
-    return J({ ok: false, error: "op must be welcome, improve or recruit" }, 400);
+    if (body.op === "reorg") return J(await reorg());
+    if (body.op === "farewell") return J(await farewell(String(body.id ?? "")));
+    return J({ ok: false, error: "op must be welcome, improve, recruit, reorg or farewell" }, 400);
   } catch (e) {
     return J({ ok: false, error: (e as Error).message }, 200);
   }

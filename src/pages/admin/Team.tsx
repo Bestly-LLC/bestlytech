@@ -1,4 +1,5 @@
 import { useMemo, useState, type ComponentType } from "react";
+import { AnimatePresence } from "framer-motion";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -8,12 +9,13 @@ import {
   KeyRound, Landmark, Laptop, LineChart, ListChecks, ListTodo, Lock, Mail, MailPlus, Mails, Megaphone,
   MessageCircle, MessageSquareShare, Mic, Moon, NotebookPen, PauseCircle, PenLine, PhoneCall, PlaneLanding,
   Projector, Repeat, ScanEye, Search, Send, SendHorizontal, Server, ShieldCheck, Siren, Sparkles, SprayCan,
-  Sunrise, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network, Lightbulb, Compass, Sparkle, UserPlus, Bell,
+  Sunrise, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network, Lightbulb, Compass, Sparkle, UserPlus, Bell, Shuffle, ArrowRight,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { AdminMark } from "@/components/AdminMark";
 import { BotMascot, hasMascot } from "@/components/admin/BotMascot";
+import { FarewellScene, type Leaver } from "@/components/admin/FarewellScene";
 import { askScout } from "@/components/admin/scoutBus";
 import { pollInterval } from "@/lib/polling";
 import { cn } from "@/lib/utils";
@@ -759,6 +761,206 @@ function SuggestedHires({ onOpen, nameOf }: { onOpen: (slug: string) => void; na
   );
 }
 
+/* ---------------------------------------------------------------- Reorg (layoffs): The Recruiter + The Improver */
+
+type Reorg = {
+  id: string; round_id: string; created_at: string; kind: "merge" | "retire"; slug: string; into_slug: string | null;
+  why: string | null; change: string | null; saves: string | null; risk: string | null; improver_note: string | null;
+  improver_score: number | null; status: "proposed" | "done"; decided_at: string | null;
+  name: string; role: string | null; icon: string | null; what_it_does: string | null; into_name: string | null; into_icon: string | null;
+};
+
+function MiniMascot({ icon, seed, tone = "blue" }: { icon: string | null; seed: string; tone?: "blue" | "gray" }) {
+  return (
+    <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-[13px]",
+      tone === "blue" ? "bg-[#0A84FF1f] text-[#409CFF] bento:bg-[#007AFF14] bento:text-[#007AFF]" : "bg-[#7676803d] text-[#8E8E93] bento:bg-[#7676801f]")}>
+      <BotMascot icon={icon && hasMascot(icon) ? icon : "bot"} seed={seed} className="h-8 w-8" />
+    </span>
+  );
+}
+
+function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
+  const qc = useQueryClient();
+  const [looking, setLooking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [scene, setScene] = useState<Leaver[] | null>(null);
+  const { data: moves = [] } = useQuery({
+    queryKey: ["team-reorgs"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("admin_team_reorgs" as never);
+      if (error) throw error;
+      return (data ?? []) as unknown as Reorg[];
+    },
+    refetchInterval: () => (document.hidden ? false : pollInterval(120_000)),
+    placeholderData: keepPreviousData,
+  });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["team-reorgs"] });
+    qc.invalidateQueries({ queryKey: ["org-chart"] });
+  };
+
+  const letGo = async (list: Reorg[]) => {
+    if (busy || !list.length) return;
+    setBusy(true);
+    const gone: Leaver[] = [];
+    for (const m of list) {
+      const { error } = await supabase.rpc("admin_reorg_execute" as never, { p_id: m.id } as never);
+      if (error) toast.error(`${m.name}: ${error.message}`);
+      else gone.push({ id: m.id, slug: m.slug, name: m.name, icon: m.icon, intoName: m.into_name });
+    }
+    setBusy(false);
+    if (gone.length) setScene(gone);
+    refresh();
+  };
+
+  const finish = () => {
+    const gone = scene ?? [];
+    setScene(null);
+    const byId = new Map(moves.map((m) => [m.id, m]));
+    askScout(gone.length === 1 ? `Off-board ${gone[0].name} (reorg)` : `Off-board ${gone.length} bots (reorg)`, {
+      about: [
+        "I let these bots go in a reorg on the Team page. They're retired on the chart; their jobs may still be running.",
+        ...gone.map((g) => {
+          const m = byId.get(g.id);
+          return `- ${g.name} (${g.slug}): ${m?.kind === "merge" && g.intoName ? `its duties move to ${g.intoName} (${m?.into_slug})` : "its job isn't needed"}.${m?.change ? ` ${m.change}` : ""}`;
+        }),
+        "For each: find where it runs (database schedule, Pi job, scheduled task, edge function), plan how to switch it off",
+        "and hand over anything the other bot needs. Show me the plan and wait for my yes before switching anything off.",
+      ].join("\n"),
+    });
+  };
+
+  const undo = async (ids: string[], quiet = false) => {
+    for (const id of ids) {
+      const { error } = await supabase.rpc("admin_reorg_undo" as never, { p_id: id } as never);
+      if (error) { toast.error(error.message); return; }
+    }
+    if (!quiet) toast.success(ids.length === 1 ? "Brought back. Welcome home." : "Everyone's back.");
+    refresh();
+  };
+
+  const keep = async (m: Reorg) => {
+    const { error } = await supabase.rpc("admin_reorg_keep" as never, { p_id: m.id } as never);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${m.name} stays. It won't come up again for 60 days.`);
+    refresh();
+  };
+
+  const lookNow = async () => {
+    setLooking(true);
+    toast("The Recruiter is looking for overlap, then The Improver checks. About a minute.");
+    try {
+      const { data, error } = await supabase.functions.invoke("team-hr", { body: { op: "reorg" } });
+      if (error) throw error;
+      const r = data as { ok: boolean; backed?: string[]; passed?: string[]; error?: string };
+      if (!r?.ok) throw new Error(r?.error || "The review couldn't finish");
+      const b = r.backed?.length ?? 0;
+      toast.success(b ? `${b} bot${b === 1 ? "" : "s"} both of them would let go` : "The crew is lean. Nobody to let go.");
+      refresh();
+    } catch (e) {
+      toast.error((e as Error).message || "The review couldn't finish");
+    } finally {
+      setLooking(false);
+    }
+  };
+
+  const open = moves.filter((m) => m.status === "proposed");
+  const done = moves.filter((m) => m.status === "done");
+
+  return (
+    <section id="reorg" className={cn(card, "scroll-mt-24 space-y-3 p-4 sm:p-5")} aria-label="Reorg">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <button type="button" onClick={() => onOpen("hr")} className="flex min-w-0 items-start gap-3 text-left">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[#FF9F0A26] text-[#FF9F0A] bento:bg-[#FF95001f] bento:text-[#C93400]">
+            <Shuffle className="h-[22px] w-[22px]" />
+          </span>
+          <span className="min-w-0">
+            <span className={cn("block text-[17px] font-semibold", label)}>Reorg</span>
+            <span className={cn("block text-[13px] leading-snug", secondary)}>
+              Every Monday The Recruiter looks for bots whose jobs overlap or aren't needed. The Improver double-checks. Only moves they both agree on show up here.
+            </span>
+          </span>
+        </button>
+        <div className="flex flex-wrap gap-2">
+          {open.length > 1 && (
+            <button type="button" className={cn(btnPrimary, "bg-[#FF453A] bento:bg-[#FF3B30]")} disabled={busy} onClick={() => letGo(open)}>
+              {busy ? "Letting go…" : `Approve the reorg (${open.length})`}
+            </button>
+          )}
+          <button type="button" className={btnTinted} onClick={lookNow} disabled={looking}>
+            {looking ? "Looking…" : "Run a reorg review"}
+          </button>
+        </div>
+      </header>
+
+      {open.length === 0 ? (
+        <p className={cn("px-1 text-[15px]", secondary)}>Nobody to let go. The next review is Monday at 9:30&nbsp;AM.</p>
+      ) : (
+        <ul className="grid gap-3 lg:grid-cols-2">
+          {open.map((m) => (
+            <li key={m.id} className="flex flex-col gap-2 rounded-[16px] bg-[#2C2C2E] p-4 bento:bg-[#F2F2F7]">
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => onOpen(m.slug)} aria-label={`Open ${m.name}`}><MiniMascot icon={m.icon} seed={m.slug} /></button>
+                {m.kind === "merge" && m.into_slug ? (
+                  <>
+                    <ArrowRight className={cn("h-4 w-4 shrink-0", tertiary)} aria-hidden />
+                    <button type="button" onClick={() => onOpen(m.into_slug!)} aria-label={`Open ${m.into_name}`}><MiniMascot icon={m.into_icon} seed={m.into_slug} /></button>
+                  </>
+                ) : null}
+                <span className="ml-auto rounded-full bg-[#FF9F0A26] px-2 py-0.5 text-[11px] font-semibold text-[#FF9F0A] bento:text-[#C93400]">
+                  {m.kind === "merge" ? "Merge" : "Not needed"}
+                </span>
+              </div>
+              <div>
+                <p className={cn("text-[17px] font-semibold leading-snug", label)}>Let go: {m.name}</p>
+                <p className={cn("text-[13px]", secondary)}>
+                  {m.kind === "merge" && m.into_name ? `Its work moves to ${m.into_name}` : "Its job isn't needed any more"}
+                </p>
+              </div>
+              {m.why && <p className={cn("text-[13px] leading-snug", secondary)} style={{ textWrap: "pretty" } as never}><span className={cn("font-semibold", label)}>The Recruiter: </span>{nb(m.why)}</p>}
+              {m.improver_note && <p className={cn("text-[13px] leading-snug", secondary)} style={{ textWrap: "pretty" } as never}><span className={cn("font-semibold", label)}>The Improver: </span>{nb(m.improver_note)}</p>}
+              {m.saves && <p className={cn("text-[13px] leading-snug", tint.green)}>Saves: {nb(m.saves)}</p>}
+              {m.risk && <p className={cn("text-[13px] leading-snug", tertiary)}>Watch out: {nb(m.risk)}</p>}
+              <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+                <button type="button" className={cn(btnPrimary, "bg-[#FF453A] bento:bg-[#FF3B30]")} disabled={busy} onClick={() => letGo([m])}>Let go</button>
+                <button type="button" className={btnPlain} onClick={() => keep(m)}>Keep</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {done.length > 0 && (
+        <div className="space-y-1 pt-1">
+          <p className={cn("px-1 text-[13px] font-semibold", secondary)}>Recently let go · you can bring them back for 7 days</p>
+          <ul className="divide-y divide-[#38383A] bento:divide-[#E5E5EA]">
+            {done.map((m) => (
+              <li key={m.id} className="flex items-center gap-3 py-2">
+                <MiniMascot icon={m.icon} seed={m.slug} tone="gray" />
+                <span className="min-w-0 flex-1">
+                  <span className={cn("block text-[15px] font-medium", label)}>{m.name}</span>
+                  <span className={cn("block text-[13px]", tertiary)}>{m.into_name ? `Work moved to ${m.into_name}` : "Job retired"}</span>
+                </span>
+                <button type="button" className={btnPlain} onClick={() => undo([m.id])}>Bring back</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {scene && (
+          <FarewellScene
+            leavers={scene}
+            onDone={finish}
+            onUndo={() => { const ids = scene.map((l) => l.id); setScene(null); void undo(ids); }}
+          />
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}
+
 /* ---------------------------------------------------------------- page */
 
 type Filter = "all" | "attention" | "new" | "open";
@@ -882,6 +1084,7 @@ export default function Team() {
             <div className="space-y-4">
               <ImproverIdeas onOpenImprover={() => setOpenSlug("improver")} />
               <SuggestedHires onOpen={setOpenSlug} nameOf={(s) => (s ? bySlug.get(s)?.name ?? null : null)} />
+              <ReorgPanel onOpen={setOpenSlug} />
             </div>
           )}
 
