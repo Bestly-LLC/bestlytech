@@ -188,6 +188,9 @@ def _empty_slots(posts):
     return out
 
 
+_FORCE = {}
+
+
 def _pick(posts):
     """Format, layout, theme and topic. Explore/exploit on engagement (N>=3), never the last 2 themes/layouts."""
     scored = [r for r in posts if r.get("likes") is not None and r["dims"]]
@@ -202,7 +205,9 @@ def _pick(posts):
 
     last_fmt = "moment" if (posts and len(posts[0].get("media_urls") or []) == 3) else "single"
     fmt_best, n = best("pose", ["moment", "single"])
-    if fmt_best and random.random() > 0.3:
+    if _FORCE.get("fmt"):
+        fmt, why = _FORCE["fmt"], "forced"
+    elif fmt_best and random.random() > 0.3:
         fmt, why = fmt_best, f"format exploit (N={n})"
     else:
         fmt, why = ("single" if last_fmt == "moment" else "moment"), "format alternates"
@@ -565,4 +570,6 @@ def main(argv):
         return bm._stats(["hoku"])
     if mode == "learn":
         return bm._learn(["hoku"])
+    if "--single" in argv or "--moment" in argv:   # rehearsal aid: force a format
+        _FORCE["fmt"] = "single" if "--single" in argv else "moment"
     return _make("--dry" in argv)
