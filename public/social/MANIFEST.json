@@ -145,6 +145,13 @@
         "carousels/who-holds-the-keys/03.png",
         "carousels/who-holds-the-keys/04.png",
         "carousels/who-holds-the-keys/05.png"
+      ],
+      "copy": [
+        "You may not hold all your own keys.",
+        "Someone set it up years ago: the domain, the email admin, the website login, each made under whoever was helping that week.",
+        "Make a key list this week: registrar, email admin, web host, bank, payment processor, and whose name is on each.",
+        "Moving a key takes their help: most transfers need the current owner to approve, so do it while you are on good terms.",
+        "Keep the keys in your name: Bestly Cloud runs your files, calendar and passwords on a box you own, and the admin login is yours."
       ]
     },
     {
@@ -157,6 +164,13 @@
         "carousels/when-someone-leaves/03.png",
         "carousels/when-someone-leaves/04.png",
         "carousels/when-someone-leaves/05.png"
+      ],
+      "copy": [
+        "When someone leaves, their logins stay.",
+        "Every tool has its own admin page; turning off their email does nothing to the other apps they signed into with it.",
+        "Write a leaving checklist today: one line per tool, who removes access and how, run the day someone goes.",
+        "Shared logins can't be removed; the only fix is changing the password for everyone, everywhere it was used.",
+        "One place to switch someone off: Bestly Cloud gives each person one account for files, chat and passwords, so removing it once locks them out."
       ]
     }
   ]

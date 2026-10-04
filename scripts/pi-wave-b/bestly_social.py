@@ -213,7 +213,8 @@ def _carousel(m, dry, deadline):
     c = pool[0]
     base = (m.get("base_url") or "https://bestly.tech/social/").rstrip("/") + "/"
     urls = [s if s.startswith("http") else base + s.lstrip("/") for s in c["slides"]]
-    cap, prov = _caption(CAROUSEL_SYS, f"Hook: {c.get('hook')}\nTheme: {c.get('theme')}", deadline)
+    cap, prov = _caption(CAROUSEL_SYS, f"Hook: {c.get('hook')}\nTheme: {c.get('theme')}"
+                         + ("\nWhat the slides say, in order (stay on exactly this idea; claim nothing beyond it):\n- " + "\n- ".join(c["copy"]) if c.get("copy") else ""), deadline)
     if dry:
         code, body = _invoke("bestly-ig-poster", {"action": "dryrun", "brand": "bestly", "mediaUrls": urls, "caption": cap}, 180000, 6, 20)
         return f"dry: {c['id']} via {prov}; IG rehearsal {code} {json.dumps(body)[:200]}\n---\n{cap}"
