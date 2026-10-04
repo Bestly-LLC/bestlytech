@@ -290,10 +290,13 @@ def _make(dry):
                       "py": random.randint(0, 1100), "face": faces[i % len(faces)],
                       "slide": {"type": "text", "head": s["head"].strip(), "body": s["body"].strip(), "n": i, "of": n},
                       "copy": {"headline": s["head"].strip(), "body": s["body"].strip()}})
+    # The closing card prints centeringyou.com itself, in red, under the body; drop it from the body so it is not said twice.
+    close_body = re.sub(r"\s*(?:(?:visit|explore|find|see|learn more|more)\b[^.]*?\s+)?(?:at\s+)?centeringyou\.com\.?", "",
+                        plan["closing"]["body"].strip(), flags=re.I).strip() or plan["closing"]["body"].strip()
     specs.append({"template": template, "pat": pat, "px": random.randint(0, 1100), "py": random.randint(0, 1100),
-                  "slide": {"type": "cta", "head": plan["closing"]["head"].strip(), "body": plan["closing"]["body"].strip(), "n": n, "of": n},
+                  "slide": {"type": "cta", "head": plan["closing"]["head"].strip(), "body": close_body, "n": n, "of": n},
                   "copy": {"kicker": "Centering YOU", "headline": plan["closing"]["head"].strip(),
-                           "body": plan["closing"]["body"].strip() + " centeringyou.com"}})
+                           "body": close_body + " centeringyou.com"}})
     slides = []
     for i, sp in enumerate(specs, 1):
         out = f"/tmp/cy-{os.getpid()}-{i:02d}.jpg"
