@@ -227,6 +227,9 @@ def demand_load(page, s, e, model3):
     time.sleep(CFG["SETTLE_S"])
     if blocked_page(page):
         return None
+    for _ in range(12):                    # results load ~20 at a time as the list scrolls; load them all (max 200)
+        page.evaluate(SCROLL_JS)
+        time.sleep(1.5)
     txt = page.evaluate("document.body.innerText")
     m = re.search(r"([\d,]+)(\+?)\s+cars?\s+available", txt)
     # The search page sends its results in pages of ~20 to window.dataLayer (search_results_page events).
@@ -265,9 +268,9 @@ def check_demand(page, cal, today):
             score = round(100 * ratio)
         rows.append({"scope": scope, "score": max(0, min(100, score)), "near_count": near["count"], "far_count": far["count"],
                      "far_capped": far["capped"], "near_median_daily": near["med"], "far_median_daily": far["med"]})
-    for r in rows:
-        r.update({"window_start": ns.isoformat(), "window_end": ne.isoformat(), "src": "bestly-pi"})
-    return rows
+    keys = ("scope", "score", "booked_share", "near_count", "far_count", "far_capped", "near_median_daily", "far_median_daily")
+    # PostgREST bulk inserts need every row to carry the same keys.
+    return [{**{k: r.get(k) for k in keys}, "window_start": ns.isoformat(), "window_end": ne.isoformat(), "src": "bestly-pi"} for r in rows]
 
 
 def band(score):
@@ -394,7 +397,7 @@ def main():
 
     settings = (sb("GET", "turo_settings?select=paused,pause_reason,note_for_claude") or [{}])[0]
     paused = bool(settings.get("paused"))
-    if not DRY:
+    if not DRY and "--force" not in sys.argv:
         recent = sb("GET", "turo_runs?select=ran_at,runner&ran_at=gte." + (datetime.datetime.utcnow() - datetime.timedelta(minutes=20)).strftime("%Y-%m-%dT%H:%M:%SZ")) or []
         if recent:
             log(f"another run landed {recent[0]['ran_at']} ({recent[0]['runner']}); this one stops (run lock)")
@@ -483,10 +486,12 @@ def main():
                 mode = "applied"
             notes += f" Runner {VERSION} on bestly-pi (Pi Turo reader browser). " + " | ".join(LOG[-25:])[:3500]
             rid = record(mode, start, end, market_base, host_net, comps, ceiling, gates, plan, vmap, notes)
-            if competitors:
-                sb("POST", "turo_competitor_prices", json=competitors)
-            if demand:
-                sb("POST", "turo_demand", json=demand)
+            for table, data in (("turo_competitor_prices", competitors), ("turo_demand", demand)):
+                if data:
+                    try:
+                        sb("POST", table, json=data)
+                    except Exception as e:
+                        log(f"saving {table} failed: {e}")
             log(f"recorded run {rid} ({mode})")
 
             # Relay: 3 short lines to Scout.
