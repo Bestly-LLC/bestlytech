@@ -5,7 +5,7 @@ import {
   Lightbulb, LineChart, ListChecks, ListTodo, Mail, MailPlus, Mails, Megaphone, MessageCircle, MessageSquareShare, Mic,
   Moon, Network, NotebookPen, PenLine, PhoneCall, PlaneLanding, Projector, Repeat, ScanEye, Search, Send,
   SendHorizontal, Server, ShieldCheck, Siren, Sparkles, SprayCan, Sunrise, Trash2, UserPlus, Users, Wrench, Compass,
-  GalleryHorizontal, HandHelping, type LucideIcon,
+  GalleryHorizontal, HandHelping, Handshake, Bell, type LucideIcon,
 } from "lucide-react";
 import { ADMIN_MARK_PERIOD_MS, useStare } from "@/components/AdminMark";
 import { cn } from "@/lib/utils";
@@ -91,6 +91,8 @@ export const MASCOTS: Record<string, Spec> = {
   megaphone:            { Icon: Megaphone, x: 33, y: 33, gap: 5.6, r: 5.5, move: "pulse" },
   compass:              { Icon: Compass, x: 36, y: 52, gap: 8.4, r: 5.7, move: "tilt" },
   "hand-helping":       { Icon: HandHelping, x: 44, y: 30, gap: 5.6, r: 5.5, move: "bob" },
+  handshake:            { Icon: Handshake, x: 36, y: 24, gap: 7, r: 5, move: "wag" },
+  bell:                 { Icon: Bell, x: 36, y: 30, gap: 7, r: 5.4, move: "wag" },
   bot:                  { Icon: Bot, x: 36, y: 42, gap: 10.1, move: "bob" },
 };
 
