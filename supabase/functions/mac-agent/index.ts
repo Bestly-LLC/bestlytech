@@ -28,6 +28,10 @@ const CORS = corsWith({
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 
 const MAIL_HOST = "mail.privateemail.com";
+// iCloud mailboxes live on Apple's IMAP server. Sending them to PrivateEmail made every iCloud
+// archive move fail ("move failed", ~30 a day since Sep 30).
+const hostFor = (mailbox: string) =>
+  /@(icloud|me|mac)\.com$/i.test(mailbox) ? "imap.mail.me.com" : MAIL_HOST;
 const BATCH = 200;
 
 async function sha256Hex(s: string): Promise<string> {
@@ -82,7 +86,7 @@ Deno.serve(async (req) => {
           .eq("mailbox", mailbox)
           .order("created_at")
           .limit(BATCH);
-        out.push({ id: c.id, action: c.action, payload: { mailbox, host: MAIL_HOST, jobs: jobs ?? [] } });
+        out.push({ id: c.id, action: c.action, payload: { mailbox, host: hostFor(mailbox), jobs: jobs ?? [] } });
       } else {
         out.push({ id: c.id, action: c.action, payload: c.payload });
       }
@@ -148,7 +152,7 @@ Deno.serve(async (req) => {
       .eq("mailbox", mailbox)
       .order("created_at")
       .limit(BATCH);
-    return J({ ok: true, mailbox, host: MAIL_HOST, jobs: jobs ?? [] });
+    return J({ ok: true, mailbox, host: hostFor(mailbox), jobs: jobs ?? [] });
   }
 
   return J({ ok: false, error: `unknown op ${op}` }, 400);
