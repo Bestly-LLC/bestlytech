@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Mascot GIF sheet</title>
+<style>
+  body{margin:0;background:#fff}
+  #r{display:flex;flex-wrap:wrap;gap:8px;padding:8px;width:1040px}
+  .tile{width:96px;height:96px;border-radius:26px;background:#EBF4FF;color:#007AFF;display:grid;place-items:center}
+  .tile svg{width:68px;height:68px}
+  /* frame-stepping: freeze every animation at --t into its 3.2s cycle */
+  .freeze .bm-look,.freeze .bm-blink,.freeze .bm-move{animation-play-state:paused!important;animation-delay:calc(var(--t,0ms) * -1)!important}
+</style></head>
+<body><div id="r"></div><script type="module" src="./entry.tsx"></script></body></html>

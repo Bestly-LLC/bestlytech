@@ -1,5 +1,7 @@
 // team-hr — the Team page's people desk (docs/org-chart-opusplan.md, round 2).
-//   op welcome {slug}  write a new bot's profile (free AI, discovery theme) and email Jared a welcome card.
+//   op welcome {slug}  write a new bot's profile (free AI, discovery theme) and email Jared a welcome card with
+//                       the bot's animated mascot GIF (bestly.tech/mascots/<icon>.gif, built by scripts/mascot-gifs).
+//                       {preview: true} re-sends it marked [Preview] without touching the welcome record.
 //                       Called by the bestly_agents insert trigger and retried by team_welcome_sweep.
 //   op improve         The Improver: read the whole picture (improver_context) and save 3-6 ranked ideas.
 //                       Weekly cron + the "Ask The Improver now" button. Nothing is changed by this function.
@@ -66,10 +68,25 @@ const pacific = (d = new Date()) =>
 
 const FIELD_NAMES = ["Lantern", "Compass", "Sextant", "Ranger", "Meridian", "Tracker", "Beacon", "Atlas", "Fieldnote", "Waypoint", "Trailhead", "Spyglass"];
 
-async function welcome(slug: string) {
+const SITE = "https://bestly.tech";
+
+/** The bot's mascot GIF; falls back to the plain bot face if its GIF isn't built yet (never a broken image). */
+async function mascotUrl(icon: string | null) {
+  for (const name of [icon, "bot"]) {
+    if (!name || !/^[a-z0-9-]+$/.test(name)) continue;
+    const url = `${SITE}/mascots/${name}.gif`;
+    try {
+      const r = await fetch(url, { method: "HEAD" });
+      if (r.ok && (r.headers.get("content-type") ?? "").includes("gif")) return { url, fallback: name !== icon };
+    } catch { /* try the next one */ }
+  }
+  return null;
+}
+
+async function welcome(slug: string, preview = false) {
   const { data: ctx, error } = await db.rpc("team_welcome_get", { p_slug: slug });
   if (error || !ctx?.agent) return { ok: false, error: error?.message ?? "no such bot" };
-  if (ctx.welcome?.sent_at) return { ok: true, skipped: "already welcomed" };
+  if (ctx.welcome?.sent_at && !preview) return { ok: true, skipped: "already welcomed" };
   const a = ctx.agent;
   const training = a.status === "planned";   // hired from Suggested hires, Scout still building it
 
@@ -101,11 +118,13 @@ async function welcome(slug: string) {
     return { ok: false, error: "RESEND_API_KEY missing" };
   }
 
+  const mascot = await mascotUrl(a.icon ?? null);
   const row = (k: string, v: unknown) => v ? `<tr><td style="padding:8px 0;color:#6e6e73;font-size:13px;width:120px;vertical-align:top">${esc(k)}</td><td style="padding:8px 0;color:#1d1d1f;font-size:15px;line-height:1.45">${esc(v)}</td></tr>` : "";
   const html = `<!doctype html><html><body style="margin:0;background:#f2f2f7;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Arial,sans-serif">
   <div style="max-width:560px;margin:0 auto;padding:28px 16px">
     <p style="margin:0 0 12px;color:#6e6e73;font-size:13px;letter-spacing:.04em;text-transform:uppercase">Bestly expedition · new crew member</p>
     <div style="background:#fff;border-radius:22px;padding:28px 24px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      ${mascot ? `<img src="${mascot.url}" width="96" height="96" alt="${esc(a.name)}, the new crew member" style="display:block;width:96px;height:96px;border:0;margin:0 0 14px">` : ""}
       <p style="margin:0;color:#0a84ff;font-size:13px;font-weight:600">Suggested field name: ${esc(profile.field_name)}</p>
       <h1 style="margin:6px 0 2px;color:#1d1d1f;font-size:28px;line-height:1.15">Welcome aboard, ${esc(a.name)}</h1>
       <p style="margin:0 0 18px;color:#6e6e73;font-size:15px">${esc(a.role)}${ctx.boss?.name ? ` · reports to ${esc(ctx.boss.name)}` : ""}</p>
@@ -132,7 +151,7 @@ async function welcome(slug: string) {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: "Scout at Bestly <noreply@bestly.tech>", to: [TO],
-        subject: training ? `New hire: ${a.name} joined the expedition (in training)` : `New crew member: ${a.name} joined the expedition`, html }),
+        subject: (preview ? "[Preview] " : "") + (training ? `New hire: ${a.name} joined the expedition (in training)` : `New crew member: ${a.name} joined the expedition`), html }),
     });
     ok = r.ok;
     if (!ok) err = `resend ${r.status}: ${(await r.text()).slice(0, 200)}`;
@@ -140,9 +159,10 @@ async function welcome(slug: string) {
     err = (e as Error).message;
   }
   await db.from("email_send_log").insert({ message_id: messageId, template_name: "team-welcome", recipient_email: TO,
-    status: ok ? "sent" : "failed", error_message: ok ? null : err, metadata: { slug, provider: "resend" } });
-  await db.rpc("team_welcome_mark", { p_slug: slug, p_ok: ok, p_error: ok ? null : err, p_profile: profile });
-  return { ok, error: ok ? undefined : err, field_name: profile.field_name };
+    status: ok ? "sent" : "failed", error_message: ok ? null : err,
+    metadata: { slug, provider: "resend", preview, mascot: mascot?.url ?? null, mascot_fallback: mascot?.fallback ?? null } });
+  if (!preview) await db.rpc("team_welcome_mark", { p_slug: slug, p_ok: ok, p_error: ok ? null : err, p_profile: profile });
+  return { ok, error: ok ? undefined : err, field_name: profile.field_name, mascot: mascot?.url ?? null };
 }
 
 /* ---------------------------------------------------------------- The Improver */
@@ -252,7 +272,7 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* empty */ }
   try {
-    if (body.op === "welcome") return J(await welcome(String(body.slug ?? "")));
+    if (body.op === "welcome") return J(await welcome(String(body.slug ?? ""), body.preview === true));
     if (body.op === "improve") return J(await improve());
     if (body.op === "recruit") return J(await recruit());
     return J({ ok: false, error: "op must be welcome, improve or recruit" }, 400);
