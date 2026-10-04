@@ -351,7 +351,7 @@ def _make(brands, dry):
             try:
                 line, row = _make_one(brand, cfg, recent, bank_open, deadline, dry)
                 bank_open.append(row)
-                out.append(line + ("\n" + json.dumps(row)[:1500] if dry else ""))
+                out.append(line + ("\n" + json.dumps(row) if dry else ""))
             except Exception as e:  # noqa: BLE001  one brand failing must not stop the other
                 out.append(f"{brand}: FAILED {type(e).__name__}: {str(e)[:300]}")
                 if len(bank_open) == 0:
