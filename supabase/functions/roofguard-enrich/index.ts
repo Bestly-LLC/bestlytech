@@ -200,6 +200,7 @@ function scoreNumber(n: { area: string }, lead: Lead, base: number, context: str
   if (/(main|switchboard|general|headquarters|corporate office|phone|call us|tel)/.test(c)) s += 8;
   if (/(career|jobs|recruit|media|press|billing|patient account|tty|tdd|crisis|emergency|hotline|nurse line|investor|shareholder|ethics|openline)/.test(c)) s -= 10;
   if (/(incident id|tracking|order #|zip|isbn)/.test(c)) s -= 40;
+  if (/(shareowner|transfer agent|trust company|stock transfer|computershare|equiniti|dividend)/.test(c)) s -= 30;
   return s;
 }
 function textOf(html: string): string {
