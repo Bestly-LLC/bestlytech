@@ -95,11 +95,11 @@ export function VoiceSwitcher({ source }: { source: Source }) {
 
   const use = async (v: Voice) => {
     setBusy(v.voice_id);
-    const r = await json<{ name: string; problems: string[] }>({ action: "use", source: both ? "both" : source, voice_id: v.voice_id,
+    const r = await json<{ name: string; persona?: string; problems: string[] }>({ action: "use", source: both ? "both" : source, voice_id: v.voice_id,
       public_owner_id: v.public_owner_id ?? undefined, name: v.name });
     setBusy(null);
     if (!r.ok) { toast.error(r.error ?? "Couldn't switch the voice."); return; }
-    toast.success(`${both ? "Both Avas" : "Ava"} now sound like ${v.name}.`);
+    toast.success(both ? `Both now sound like ${v.name}.` : `${r.persona ?? "Ava"} now sounds like ${v.name}.`);
     if (r.problems?.length) toast.error(r.problems.join(" "));
     await load();
   };

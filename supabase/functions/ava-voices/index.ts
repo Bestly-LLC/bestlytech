@@ -34,6 +34,7 @@ const WANTED = ["Lulu", "Sapphire", "Chutki", "Serafina"];
 const HINT: Record<string, RegExp> = { Sapphire: /youthful/i };
 const SAY_CAP = 40;
 const VOICE_ID = /^[A-Za-z0-9]{10,40}$/;
+const OWNER_ID = /^[A-Za-z0-9]{10,100}$/;   // shared-library owner ids are 64 characters
 type Src = "ava" | "rg";
 const LABEL: Record<Src, string> = { ava: "Ava", rg: "RoofGuard Ava" };
 const URL_OF: Record<Src, string> = { ava: "https://bestly.tech/admin/ava", rg: "https://bestly.tech/admin/roofguard" };
@@ -199,11 +200,30 @@ async function say(b: Record<string, unknown>): Promise<Response> {
   return new Response(res.body, { headers: { ...CORS, "content-type": "audio/mpeg", "cache-control": "no-store", "x-says-left": String(Math.max(0, SAY_CAP - (t.data.says ?? SAY_CAP))) } });
 }
 
+/** Male voice = her male name. Ava <-> Ari, whole word, in the agent's prompt and first message only (nothing else in the live functions changes). */
+const PERSONA = { male: "Ari", female: "Ava" } as const;
+const swapName = (t: string, to: string) => t.replace(new RegExp(`\\b${to === "Ari" ? "Ava" : "Ari"}\\b`, "g"), to);
+const genderOf = (v?: Raw): "male" | "female" | null => { const g = String(v?.labels?.gender ?? v?.gender ?? "").toLowerCase(); return g === "male" ? "male" : g === "female" ? "female" : null; };
+async function agentTexts(key: string, agentId: string): Promise<{ prompt: string; first: string } | null> {
+  const r = await fetch(`${XI}/convai/agents/${agentId}`, { headers: xiH(key, false) }).catch(() => null);
+  if (!r?.ok) return null;
+  const a = await r.json().catch(() => null);
+  return { prompt: String(a?.conversation_config?.agent?.prompt?.prompt ?? ""), first: String(a?.conversation_config?.agent?.first_message ?? "") };
+}
+/** the agent patch body for a persona: only the fields that actually change */
+function nameBody(t: { prompt: string; first: string } | null, g: "male" | "female" | null) {
+  if (!t || !g) return {};
+  const to = PERSONA[g], prompt = swapName(t.prompt, to), first = swapName(t.first, to);
+  return { ...(prompt !== t.prompt ? { prompt: { prompt } } : {}), ...(first !== t.first ? { first_message: first } : {}) };
+}
+
 /** Point one Ava at a voice: agent first (fast fail), then settings, then history. */
 async function apply(key: string, src: Src, voiceId: string, name: string): Promise<string | null> {
   const cur = await currentOf(src);
   if (cur.agent_id) {
-    const pr = await fetch(`${XI}/convai/agents/${cur.agent_id}`, { method: "PATCH", headers: xiH(key), body: JSON.stringify({ conversation_config: { tts: tts(voiceId) } }) });
+    const g = genderOf((await voiceInfo(key, voiceId)).v);
+    const agent = nameBody(await agentTexts(key, cur.agent_id), g);
+    const pr = await fetch(`${XI}/convai/agents/${cur.agent_id}`, { method: "PATCH", headers: xiH(key), body: JSON.stringify({ conversation_config: { tts: tts(voiceId), ...(Object.keys(agent).length ? { agent } : {}) } }) });
     if (!pr.ok) { await pr.text().catch(() => ""); return `${LABEL[src]}: the voice platform wouldn't switch her voice.`; }
   }
   const now = new Date().toISOString();
@@ -218,7 +238,7 @@ async function use(b: Record<string, unknown>): Promise<Response> {
   const vid = String(b.voice_id ?? ""), owner = String(b.public_owner_id ?? ""), name = trimTo(b.name, 60) || "Voice";
   const which = String(b.source ?? "ava");
   const srcs: Src[] = which === "both" ? ["ava", "rg"] : which === "rg" ? ["rg"] : ["ava"];
-  if (!VOICE_ID.test(vid) || (owner && !VOICE_ID.test(owner))) return err("Pick a voice first.");
+  if (!VOICE_ID.test(vid) || (owner && !OWNER_ID.test(owner))) return err("Pick a voice first.");
   const key = await vault("elevenlabs_api_key");
   if (!key) return err("The ElevenLabs key is missing from Vault.", 412);
 
@@ -242,7 +262,7 @@ async function use(b: Record<string, unknown>): Promise<Response> {
   for (const s of srcs) { const p = await apply(key, s, useId, name); if (p) problems.push(p); }
   // the favorite keeps pointing at the id the agents now use (a shared voice gets a new id once it's added)
   if (useId !== vid) await db.from("ava_voice_favorites").update({ voice_id: useId, public_owner_id: null }).eq("voice_id", vid);
-  return problems.length === srcs.length ? err(problems.join(" "), 502) : ok({ voice_id: useId, name, applied: srcs.filter((_, i) => !problems[i]), problems });
+  return problems.length === srcs.length ? err(problems.join(" "), 502) : ok({ voice_id: useId, name, persona: PERSONA[genderOf(check.v) ?? "female"], applied: srcs.filter((_, i) => !problems[i]), problems });
 }
 
 async function health(): Promise<Response> {
@@ -252,6 +272,15 @@ async function health(): Promise<Response> {
   for (const src of ["ava", "rg"] as Src[]) {
     const cur = await currentOf(src);
     const info = await voiceInfo(key, cur.voice_id);
+    if (info.status === 200 && cur.agent_id) {                 // name must match the voice (a setup re-run can put "Ava" back on a male voice)
+      const body = nameBody(await agentTexts(key, cur.agent_id), genderOf(info.v));
+      if (Object.keys(body).length) {
+        const fx = await fetch(`${XI}/convai/agents/${cur.agent_id}`, { method: "PATCH", headers: xiH(key), body: JSON.stringify({ conversation_config: { agent: body } }) }).catch(() => null);
+        notes.push(`${LABEL[src]}: name realigned to her voice${fx?.ok ? "" : " FAILED"}`);
+        if (!fx?.ok) await db.rpc("scout_notify", { p_title: `${LABEL[src]}: her name doesn't match her voice`, p_body: "The watchdog couldn't fix it. Open the voice switcher and re-pick her voice.",
+          p_severity: "warning", p_push: true, p_url: URL_OF[src], p_dedupe: `ava-voices-name-${src}-${hour}` });
+      }
+    }
     if (!info.missing) continue;                       // fine, or couldn't tell (a network blip is never "fixed" on a guess)
     const { data: hist } = await db.from("ava_voice_history").select("voice_id, name").eq("source", src).neq("voice_id", cur.voice_id).order("used_at", { ascending: false }).limit(5);
     let back = { voice_id: LILY, name: "Lily" };
