@@ -13,6 +13,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { AvaOrb } from "@/components/admin/roofguard/AvaOrb";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Loader2, Phone, RefreshCw, Search, Zap } from "lucide-react";
 import { AvaCalls } from "@/components/admin/roofguard/AvaCalls";
 import { AvaScorecard, AvaScoreStrip } from "@/components/admin/roofguard/AvaScorecard";
@@ -517,6 +518,9 @@ export default function RoofGuard() {
 
   return (
     <div className="space-y-5">
+      <div className="flex items-center gap-4">
+      <AvaOrb size={72} label="RoofGuard Ava" />
+      <div className="min-w-0 flex-1">
       <PageHeader title="RoofGuard" description="Ava, the AI caller: who she's calling, what she's saying, and how each call ended."
         actions={tab !== "leads" ? undefined : <div className="flex gap-2">
           <button type="button" onClick={() => void kick()} disabled={kicking || left === 0}
@@ -525,6 +529,8 @@ export default function RoofGuard() {
           <button type="button" onClick={() => void load()} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-white/80 ring-1 ring-white/15 hover:bg-white/5">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Refresh</button>
         </div>} />
+      </div>
+      </div>
 
       <AvaTopBar onCalled={() => setTab("calls")} />
       <Segmented value={tab} onChange={setTab} />

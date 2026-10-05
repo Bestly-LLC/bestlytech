@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { AvaOrb } from "@/components/admin/roofguard/AvaOrb";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { CallNo, DeleteCallButton, ReplyGuard, LiveTranscript, Recording, type Line } from "@/components/admin/roofguard/AvaCalls";
 import { DialerSheet } from "@/components/admin/roofguard/AvaDialer";
@@ -101,7 +102,12 @@ export default function AvaAssistant() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Ava" description="Your personal AI assistant. Anyone can call her line and leave you a message; she can also call people for you." />
+      <div className="flex items-center gap-4">
+        <AvaOrb size={72} speaking={live.length > 0} label={live.length > 0 ? "Ava, on a call now" : "Ava"} />
+        <div className="min-w-0 flex-1">
+          <PageHeader title="Ava" description="Your personal AI assistant. Anyone can call her line and leave you a message; she can also call people for you." />
+        </div>
+      </div>
 
       {/* top bar: her number, dial, spend */}
       <div className="flex flex-wrap items-center gap-2">
@@ -147,6 +153,7 @@ export default function AvaAssistant() {
       {live.map((c) => (
         <section key={c.conversation_id} aria-label="Live call" className="rounded-3xl bg-emerald-500/[0.06] ring-1 ring-emerald-500/30">
           <header className="flex flex-wrap items-center gap-3 px-5 pt-4">
+            <AvaOrb size={36} speaking />
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
               <span className="h-2 w-2 rounded-full bg-emerald-400 motion-safe:animate-pulse" aria-hidden />Live</span>
             <span className="text-[17px] font-semibold text-white">{c.who ?? fmt(c.phone) ?? "Caller"}</span>

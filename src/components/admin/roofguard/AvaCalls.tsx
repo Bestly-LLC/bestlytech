@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { AvaOrb } from "./AvaOrb";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
@@ -310,8 +311,8 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
       {/* status strip */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/10">
         <span className="flex items-center gap-2 text-[15px] font-semibold text-white">
-          <span className={cn("h-2.5 w-2.5 rounded-full", callingOn ? "bg-emerald-400 motion-safe:animate-pulse" : "bg-white/30")} aria-hidden />
-          Ava · {callingOn == null ? "…" : callingOn ? "Calling" : "Paused"}
+          <AvaOrb size={30} speaking={!!callingOn} className={callingOn ? undefined : "opacity-60 grayscale"} />
+          Ava ·{callingOn == null ? "…" : callingOn ? "Calling" : "Paused"}
         </span>
         <span className="text-sm text-white/55"><span className="tabular-nums text-white/80">{today.calls}</span> calls today · <span className="tabular-nums text-white/80">{today.booked}</span> booked</span>
         {!callingOn && callingOn != null && (
@@ -395,6 +396,7 @@ function LiveBanner({ call }: { call: LiveCall }) {
   return (
     <section aria-label={`Live call with ${call.company}`} className="overflow-hidden rounded-3xl bg-emerald-500/[0.06] ring-1 ring-emerald-500/30">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 pt-4">
+        <AvaOrb size={36} speaking />
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
           <span className="h-2 w-2 rounded-full bg-emerald-400 motion-safe:animate-pulse" aria-hidden />Live
         </span>

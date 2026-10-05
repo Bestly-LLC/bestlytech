@@ -1,4 +1,4 @@
-import { Brush, Headphones,
+import { Brush,
   LayoutDashboard,
   Settings,
   BarChart3,
@@ -33,6 +33,7 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { openHokuAdmin, HOKU_ADMIN_URL } from "@/lib/openHokuAdmin";
+import { AvaOrbIcon } from "@/components/admin/roofguard/AvaOrb";
 
 type CountKeys =
   | "leads"
@@ -93,7 +94,7 @@ const vestaItems = [
 
 // Ava: Jared's personal AI assistant (her own line, messages, calls). Separate from RoofGuard on purpose.
 const avaItems = [
-  { title: "Ava", url: "/admin/ava", icon: Headphones },
+  { title: "Ava", url: "/admin/ava", icon: AvaOrbIcon },
 ];
 
 // RoofGuard: the AI sales caller (its own Ava, leads, phone finder). Kept separable so it can be split off.

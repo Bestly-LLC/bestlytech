@@ -12,6 +12,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, Copy, Delete, Grid3x3, Loader2, Phone } from "lucide-react";
 import { LiveTranscript, Recording, type Line } from "./AvaCalls";
+import { AvaOrb } from "./AvaOrb";
 import { LineStatus, SpendChip } from "./AvaShared";
 
 type Costs = { total: number; today: number; month: number; calls_total: number; voice: number; phone: number; ai: number; number: number;
@@ -270,6 +271,7 @@ function InCall({ call, onNew, onDone }: { call: ActiveCall; onNew: () => void; 
       <SheetTitle className="sr-only">Call with {call.who}</SheetTitle>
       <SheetDescription className="sr-only">Live transcript of Ava's call</SheetDescription>
       <div className="pt-6 text-center">
+        <AvaOrb size={112} speaking={!ended} className="mx-auto mb-2" label={ended ? "Ava, call ended" : "Ava, on the call"} />
         <div className="text-[13px] text-white/50">{call.fn === "roofguard-caller" ? "RoofGuard Ava" : "Ava"} calling</div>
         <div className="mt-1 text-[26px] font-semibold text-white">{call.who}</div>
         <div className={cn("mt-1 inline-flex items-center gap-2 text-[15px]", ended ? "text-white/60" : "text-emerald-300")}>
