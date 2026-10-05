@@ -50,6 +50,16 @@ const SERVICE_KEYS = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
 // Money stopper hard caps, set on the agent by setup (seconds): a call never runs past 8 minutes, and dead air ends it after 20.
 const MAX_CALL_SECS = 480;
+
+// A call the line provider still lists as live but that can't be: a ring that never connected stays "initiated" forever
+// (call #69, Mom, 2026-10-05: a second ring sat there and the page said "on a call, 35 minutes"), and nothing outlives
+// the max call length. Those are ghosts, so the live view skips them.
+function isLiveConv(c: { status: string; start_time_unix_secs?: number }): boolean {
+  if (!["initiated", "in-progress", "processing"].includes(c.status)) return false;
+  const age = c.start_time_unix_secs ? Date.now() / 1000 - c.start_time_unix_secs : 0;
+  if (c.status === "initiated" && age > 90) return false;
+  return age <= MAX_CALL_SECS + 120;
+}
 const SILENCE_END_SECS = 20;
 const XI = "https://api.elevenlabs.io/v1";
 const DEFAULT_VOICE = "pFZP5JQG7iQjIQuC4Bku";   // Lily: where the watchdog falls back to if the chosen voice disappears
@@ -1104,8 +1114,8 @@ async function live(onlyLead: string | null, onlyCall: string | null, convId: st
     if (s?.agent_id) {
       const lr = await fetch(`${XI}/convai/conversations?agent_id=${s.agent_id}&page_size=10`, { headers: { "xi-api-key": key } });
       const seen = new Set((rows ?? []).map((r: { conversation_id: string | null }) => r.conversation_id));
-      const list = ((await lr.json().catch(() => ({}))).conversations ?? []) as { conversation_id: string; status: string }[];
-      const fresh = list.filter((c) => ["initiated", "in-progress", "processing"].includes(c.status) && !seen.has(c.conversation_id)).slice(0, 2);
+      const list = ((await lr.json().catch(() => ({}))).conversations ?? []) as { conversation_id: string; status: string; start_time_unix_secs?: number }[];
+      const fresh = list.filter((c) => isLiveConv(c) && !seen.has(c.conversation_id)).slice(0, 2);
       for (const c of fresh) {
         const d = await (await fetch(`${XI}/convai/conversations/${c.conversation_id}`, { headers: { "xi-api-key": key } })).json().catch(() => ({}));
         const pc = d.metadata?.phone_call ?? {};

@@ -49,6 +49,16 @@ const LINE = "+18164299495";
 const JARED_CELL = "+18165007236";
 // Money stopper hard caps, set on the agent by setup (seconds): a call never runs past 10 minutes, and dead air ends it after 20.
 const MAX_CALL_SECS = 600;
+
+// A call the line provider still lists as live but that can't be: a ring that never connected stays "initiated" forever
+// (call #69, Mom, 2026-10-05: a second ring sat there and the page said "on a call, 35 minutes"), and nothing outlives
+// the max call length. Those are ghosts, so the live view skips them.
+function isLiveConv(c: { status: string; start_time_unix_secs?: number }): boolean {
+  if (!["initiated", "in-progress", "processing"].includes(c.status)) return false;
+  const age = c.start_time_unix_secs ? Date.now() / 1000 - c.start_time_unix_secs : 0;
+  if (c.status === "initiated" && age > 90) return false;
+  return age <= MAX_CALL_SECS + 120;
+}
 const SILENCE_END_SECS = 20;
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Expose-Headers": "x-says-left" };
@@ -568,8 +578,8 @@ async function live(callId: string | null, conversationId: string | null = null)
     active = r?.conversation_id ? [{ conversation_id: r.conversation_id, status: "" }] : [];
   } else {
     const lr = await fetch(`${XI}/convai/conversations?agent_id=${s.agent_id}&page_size=10`, { headers: { "xi-api-key": key } });
-    const list = ((await lr.json().catch(() => ({}))).conversations ?? []) as { conversation_id: string; status: string }[];
-    active = list.filter((c) => ["initiated", "in-progress", "processing"].includes(c.status)).slice(0, 3);
+    const list = ((await lr.json().catch(() => ({}))).conversations ?? []) as { conversation_id: string; status: string; start_time_unix_secs?: number }[];
+    active = list.filter(isLiveConv).slice(0, 3);
   }
   const calls = await Promise.all(active.map(async (c) => {
     const d = await (await fetch(`${XI}/convai/conversations/${c.conversation_id}`, { headers: { "xi-api-key": key } })).json().catch(() => ({}));
