@@ -146,6 +146,7 @@ export function BotMascot({
   icon,
   seed = "",
   asleep = false,
+  dead = false,
   watchCursor = true,
   moveOn = "hover",
   className,
@@ -156,6 +157,8 @@ export function BotMascot({
   seed?: string;
   /** paused, switched off or not built yet: eyes closed, no motion */
   asleep?: boolean;
+  /** let go (the Graveyard): X eyes, no motion */
+  dead?: boolean;
   watchCursor?: boolean;
   /** "hover": its own move plays while a parent [data-bm-host] is hovered/focused (calm at rest).
    *  "always": keeps playing (new hires, welcome-email GIFs). */
@@ -167,7 +170,7 @@ export function BotMascot({
   const ref = useRef<SVGSVGElement>(null);
   // three eye sizes only (small / medium / large), like a type scale; a single big eye keeps its own size
   const r = spec.one ? spec.r ?? 8 : EYE_SIZES.reduce((a, b) => (Math.abs(b - (spec.r ?? 6.6)) < Math.abs(a - (spec.r ?? 6.6)) ? b : a));
-  const stare = useStare(ref, watchCursor && !asleep, { x: spec.one ? 2.6 : 2.4, y: 1.8 }, spec.y / 72);
+  const stare = useStare(ref, watchCursor && !asleep && !dead, { x: spec.one ? 2.6 : 2.4, y: 1.8 }, spec.y / 72);
   const delay = useMemo(() => {
     const now = typeof performance !== "undefined" ? performance.now() : 0;
     return `-${Math.round((now + (hash(seed) % 600)) % ADMIN_MARK_PERIOD_MS)}ms`;
@@ -176,7 +179,7 @@ export function BotMascot({
   const gap = Math.max(spec.gap, r * 1.6);   // eyes never touch
   const eyes = spec.one ? [spec.x] : [spec.x - gap, spec.x + gap];
   const { Icon } = spec;
-  const move = asleep || !spec.move || spec.move === "none" ? "" : `bm-move bm-${spec.move}`;
+  const move = asleep || dead || !spec.move || spec.move === "none" ? "" : `bm-move bm-${spec.move}`;
   const look = stare ? { transform: `translate(${stare.x}px, ${stare.y}px)` } : undefined;
   const squint = stare ? { transform: "scaleY(.78)" } : undefined;
 
@@ -184,7 +187,7 @@ export function BotMascot({
     <svg
       ref={ref}
       viewBox="0 0 72 72"
-      className={cn("select-none overflow-visible", moveOn === "always" && "bm-always", stare && "bm-watching", asleep && "bm-asleep", className)}
+      className={cn("select-none overflow-visible", moveOn === "always" && "bm-always", stare && "bm-watching", (asleep || dead) && "bm-asleep", className)}
       style={{ ["--bm-delay" as string]: delay } as React.CSSProperties}
       role={label ? "img" : undefined}
       aria-label={label}
@@ -208,7 +211,15 @@ export function BotMascot({
         <g mask={`url(#${uid})`}>
           <Icon width={72} height={72} strokeWidth={1.85} absoluteStrokeWidth={false} />
         </g>
-        {asleep ? (
+        {dead ? (
+          eyes.map((x) => {
+            const d = r * 0.85;
+            return (
+              <path key={x} d={`M${x - d} ${spec.y - d}L${x + d} ${spec.y + d}M${x + d} ${spec.y - d}L${x - d} ${spec.y + d}`}
+                fill="none" stroke="currentColor" strokeWidth={Math.max(2.4, r * 0.5)} strokeLinecap="round" />
+            );
+          })
+        ) : asleep ? (
           eyes.map((x) => (
             <path key={x} d={`M${x - r} ${spec.y - 0.6}Q${x} ${spec.y + r * 1.1} ${x + r} ${spec.y - 0.6}`}
               fill="none" stroke="currentColor" strokeWidth={Math.max(2.4, r * 0.44)} strokeLinecap="round" />

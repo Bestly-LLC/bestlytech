@@ -9,7 +9,7 @@ import {
   KeyRound, Landmark, Laptop, LineChart, ListChecks, ListTodo, Lock, Mail, MailPlus, Mails, Megaphone,
   MessageCircle, MessageSquareShare, Mic, Moon, NotebookPen, PauseCircle, PenLine, PhoneCall, PlaneLanding,
   Projector, Repeat, ScanEye, Search, Send, SendHorizontal, Server, ShieldCheck, Siren, Sparkles, SprayCan,
-  Sunrise, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network, Lightbulb, Compass, Sparkle, UserPlus, Bell, Shuffle, ArrowRight,
+  Sunrise, Skull, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network, Lightbulb, Compass, Sparkle, UserPlus, Bell, Shuffle, ArrowRight,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -962,12 +962,89 @@ function Handover({ m, onOpen }: { m: Reorg; onOpen: (slug: string) => void }) {
   );
 }
 
-function MiniMascot({ icon, seed, tone = "blue" }: { icon: string | null; seed: string; tone?: "blue" | "gray" }) {
+function MiniMascot({ icon, seed, tone = "blue", dead = false }: { icon: string | null; seed: string; tone?: "blue" | "gray"; dead?: boolean }) {
   return (
     <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-[13px]",
       tone === "blue" ? "bg-[#0A84FF1f] text-[#409CFF] bento:bg-[#007AFF14] bento:text-[#007AFF]" : "bg-[#7676803d] text-[#8E8E93] bento:bg-[#7676801f]")}>
-      <BotMascot icon={icon && hasMascot(icon) ? icon : "bot"} seed={seed} className="h-8 w-8" />
+      <BotMascot icon={icon && hasMascot(icon) ? icon : "bot"} seed={seed} dead={dead} className="h-8 w-8" />
     </span>
+  );
+}
+
+/* ---------------------------------------------------------------- The Graveyard: every bot that was let go, X eyes */
+type Grave = { slug: string; name: string; role: string | null; icon: string | null; what_it_does: string | null;
+  retired_at: string | null; why: string | null; into_name: string | null; undo_id: string | null };
+
+function Graveyard() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const { data: graves = [] } = useQuery({
+    queryKey: ["team-graveyard"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("admin_graveyard" as never);
+      if (error) throw error;
+      return (data ?? []) as unknown as Grave[];
+    },
+    refetchInterval: () => (document.hidden ? false : pollInterval(120_000)),
+    placeholderData: keepPreviousData,
+  });
+  const bringBack = async (g: Grave) => {
+    if (busy) return;
+    setBusy(g.slug);
+    const { error } = g.undo_id
+      ? await supabase.rpc("admin_reorg_undo" as never, { p_id: g.undo_id } as never)
+      : await supabase.rpc("admin_agent_set" as never, { p_slug: g.slug, p_patch: { status: "active" } } as never);
+    setBusy(null);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${g.name} is back.`);
+    qc.invalidateQueries({ queryKey: ["team-graveyard"] });
+    qc.invalidateQueries({ queryKey: ["team-reorgs"] });
+    qc.invalidateQueries({ queryKey: ["org-chart"] });
+  };
+  const when = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" }) : "";
+
+  return (
+    <section id="graveyard" className={cn(card, "scroll-mt-24 p-4 sm:p-5")} aria-label="The Graveyard">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls="graveyard-list"
+        className="flex w-full items-center gap-3 text-left">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[#7676803d] text-[#8E8E93] bento:bg-[#7676801f]">
+          <Skull className="h-[22px] w-[22px]" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={cn("block text-[17px] font-semibold", label)}>The Graveyard</span>
+          <span className={cn("block text-[13px] leading-snug", secondary)}>
+            {graves.length ? `${graves.length}\u00a0${graves.length === 1 ? "bot" : "bots"} let go. Tap to ${open ? "hide" : "see them"}.` : "Nobody has been let go yet."}
+          </span>
+        </span>
+        <ChevronRight className={cn("h-5 w-5 shrink-0 transition-transform", tertiary, open && "rotate-90")} aria-hidden />
+      </button>
+      {open && (
+        graves.length === 0 ? (
+          <p id="graveyard-list" className={cn("px-1 pt-3 text-[15px]", secondary)}>Quiet out here.</p>
+        ) : (
+          <ul id="graveyard-list" className="mt-3 divide-y divide-[#38383A] bento:divide-[#E5E5EA]">
+            {graves.map((g) => (
+              <li key={g.slug} className="flex items-center gap-3 py-2.5">
+                <MiniMascot icon={g.icon} seed={g.slug} tone="gray" dead />
+                <span className="min-w-0 flex-1">
+                  <span className={cn("block text-[15px] font-medium", label)}>{g.name}{g.role ? <span className={cn("font-normal", tertiary)}> · {g.role}</span> : null}</span>
+                  <span className={cn("block text-[13px]", tertiary)} style={{ textWrap: "pretty" } as never}>
+                    {when(g.retired_at) ? `Let go ${when(g.retired_at)}. ` : ""}
+                    {g.into_name ? `Work moved to ${g.into_name}.` : "Job retired."}
+                    {g.why ? ` ${nb(g.why)}` : ""}
+                  </span>
+                </span>
+                <button type="button" className={btnPlain} disabled={busy === g.slug} onClick={() => bringBack(g)}>
+                  {busy === g.slug ? "Bringing back…" : "Bring back"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
+      )}
+    </section>
   );
 }
 
@@ -989,6 +1066,7 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
   });
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["team-reorgs"] });
+    qc.invalidateQueries({ queryKey: ["team-graveyard"] });
     qc.invalidateQueries({ queryKey: ["org-chart"] });
   };
 
@@ -1309,6 +1387,7 @@ export default function Team() {
               <ImproverIdeas onOpenImprover={() => setOpenSlug("improver")} />
               <SuggestedHires onOpen={setOpenSlug} nameOf={(s) => (s ? bySlug.get(s)?.name ?? null : null)} />
               <ReorgPanel onOpen={setOpenSlug} />
+              <Graveyard />
             </div>
           )}
 
