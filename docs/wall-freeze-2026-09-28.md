@@ -211,3 +211,17 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
 - **Still open:** at 60 fps the projector plays about 55 and drops frames in bursts. Fully (WebView compositing) uses about 120% CPU; its hardware decoder is only at 18%.
   - The next lever is Fully's native video player (`fully.playVideo`, a hardware overlay). It needs Fully's JavaScript Interface turned on in its settings, which is off today.
   - **Lesson:** never change `maxFramerate` live with `setParameters`; it stalled the encoder (12:51 PM). Republish instead.
+
+## Oct 5, 3:40 PM: the Bestly Wall TV app replaces the browser player on the projector
+
+- **The bug:** Jared saw a "pause/play" control and a spinning loading ring glitching over the middle widget. Those were the browser's own video controls in Fully, which showed whenever the player caught up after falling behind. At 60 fps, Fully needed about 120% CPU just to composite the video.
+- **Quick fix (still in `player.html` for the Fully fallback):** CSS hides every `::-webkit-media-controls*` part, plus `controlslist` and `disablepictureinpicture`. The fullscreen-on-tap was removed, because it brought the controls back and didn't help speed.
+- **Real fix:** the native app `tech.bestly.wall`. Source and README are in `tools/wall-tv/`; it's built on the Mac and installed with adb from the Pi.
+  - Result: 60 fps, 0.2% drops, delay steady at 1.5 s, about 30% CPU.
+  - It self-healed through a relay restart (Mac feed gone about 35 s) without falling back to Fully.
+- **Pi changes:**
+  - `server.py`: `GET /api/stream_src`.
+  - `watchdog.py`: app mode (`/opt/bestly/stream/APP`), a `top_app()` wrapper, and reinstall-if-missing.
+  - Backups `.bak_app_*` and `.bak_app2_*`.
+  - go2rtc RTSP was briefly opened to the LAN with a firewall, then closed again; the app doesn't use RTSP.
+- **Radio truth:** `server.py` now sets `data_cache.radio.on` only while the HomePod reports `playing`. Before, the wall showed "Dance Wave" while Music Assistant was idle. Retries and the Scout alert are unchanged.
