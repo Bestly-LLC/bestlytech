@@ -36,9 +36,9 @@ const DOT: Record<Week["result"], string> = { met: "bg-emerald-400", close: "bg-
 
 const usd = (n: number | null | undefined, d = 0) => n == null ? "–" : `$${n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d })}`;
 const day = (s: string) => new Date(s + "T12:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-// the generated types do not know these functions until the migration is applied and types regenerated
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const rpc = (name: string, args?: Record<string, unknown>) => (supabase.rpc as any)(name, args) as Promise<{ data: unknown; error: { message: string } | null }>;
+type Fn = "rg_ava_review" | "rg_econ_set" | "rg_deal_add" | "rg_deal_delete" | "rg_pip_open" | "rg_pip_close";
+type RpcCall = (n: Fn, a?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+const rpc: RpcCall = (name, args) => (supabase.rpc as unknown as RpcCall)(name, args);
 
 function Card({ title, aside, children, label }: { title: string; aside?: ReactNode; children: ReactNode; label: string }) {
   return (
@@ -73,7 +73,7 @@ export function AvaReview() {
   }, []);
   useEffect(() => { void load(); const t = setInterval(() => void load(), 120000); return () => clearInterval(t); }, [load]);
 
-  const run = async (fn: string, args: Record<string, unknown>, ok: string) => {
+  const run = async (fn: Fn, args: Record<string, unknown>, ok: string) => {
     setBusy(true);
     const { error } = await rpc(fn, args);
     setBusy(false);
