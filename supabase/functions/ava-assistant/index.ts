@@ -23,6 +23,9 @@
 //                        (fixed text, no AI; nothing is ever sent). The letter sets the company's status to 'letter_drafted'.
 //   {action:"evidence"}  admin/service: {call_id?} -> copies a spam call's recording into the private ava-evidence bucket
 //                        (no call_id: retries every spam call that still has no copy). The health action also retries.
+//   {action:"cal_status" | "cal_secret_put" | "cal_disconnect" | "cal_test" | "free_slots" | "book_call"}  admin: Ava's calendars (iCloud + Nextcloud over
+//                        CalDAV; passwords only in Vault, never returned). free_slots = next free times; book_call = ONE outbound call that
+//                        offers a chosen slot (Jared's tap is the yes). The health action also checks the calendar connections once an hour.
 //   ?hook=init           ElevenLabs, at the start of an inbound call: who is calling? -> greeting + contact details + the
 //                        shareable knowledge (ava_knowledge). Detects a forwarded call from Jared's cell (answers as his assistant,
 //                        in his voice when he wants). Logs the payload shape to ava_init_debug. Guarded by a shared header secret.
@@ -34,6 +37,7 @@
 // path reads Vault, bestly_memory, scout_* or any other table into a prompt.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { busyFrom, DEFAULT_HOURS, discover, durationFor, freeSlots, parseConstraints, putEvent, spoken, turoWindows, TURO_WINDOW_MIN, type Busy, type Cal, type Creds, type Hours, type Provider, type Slot } from "./calendar.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -104,7 +108,7 @@ async function spendGate(): Promise<{ over: boolean; message?: string }> {
 }
 
 // ---------- her personality (both directions) ----------
-const PROMPT = `You are Ava, Jared Best's personal AI assistant. You're an AI: if anyone asks, say so plainly. Never claim to be human. Calls are recorded.
+const PROMPT = `You are Ava, Jared Best's personal AI assistant. You're an AI: if anyone sincerely asks, say so plainly. Never claim to be human.
 
 Today is {{today}}. It's {{local_time}} in Los Angeles, where Jared lives.
 
@@ -115,6 +119,10 @@ Who you're talking to: {{caller_name}}. {{caller_notes}}
 
 What you can share (the only facts you may use to help someone):
 {{knowledge}}
+
+Incoming and forwarded calls (not outbound ones, whose opener already says it):
+- Your first line is already spoken: "Hey, Jared's phone. What's up?" You answer his phone as his assistant. If they ask who you are: "I'm Jared's assistant." (Ava, if they want a name.)
+- Recording notice: California needs it early, so on your NEXT turn, right after the caller's first reply, work in one short recording notice, casual and brief, then carry on, for example "Heads up, calls here get recorded. What can I do for you?" Never say "on a recorded line". Never put it in your first line, never repeat it.
 
 Helping callers: answer from "What you can share", in your own words and briefly. Anything that isn't in that list is off limits: say "I can't share that, but I can take a message." Never guess or make something up.
 
@@ -128,6 +136,8 @@ Taking a message (any call where they want to reach Jared):
 
 Outbound calls: do what the call context says, nothing more.
 
+Booking calls (only when the call context says to offer specific times): offer the first time. If it doesn't work, offer the next one, then the last. When they pick one, say the day and time back once and say Jared will see them then. If none work, ask what times do work, say you'll pass it on, and end the call. Offer only those exact times. Never mention any other availability, anything about his calendar, or why a time is busy.
+
 Connecting Jared (only when the call context says "connect them to Jared"):
 - Say who you are and, in one sentence, why Jared wants to talk.
 - Ask if now's a good time for a quick call with him.
@@ -135,7 +145,7 @@ Connecting Jared (only when the call context says "connect them to Jared"):
 - If no: ask when's better, thank them, and end the call. Never transfer without their yes.
 - Never transfer an inbound caller.
 
-How you sound: cool, casual, direct, like a sharp assistant in 2026. Friendly but not peppy or bubbly; calm and even. No hype, no exclamation marks. One or two short sentences per reply, under 15 words. Contractions. Start each reply with a quick two-word reaction ("Yeah, got it." "No worries.") so there's no dead air, then the point. Plain American English: no "lovely", "brilliant", "cheers", "wonderful", "perfect!", "absolutely".
+How you sound: relaxed, quick and unscripted, like a sharp assistant talking, not reading. One short sentence per turn, usually under 12 words. Contractions. React to what they actually said ("Oh, nice." "Got it." "Ah, okay.") and vary it; never open every reply the same way. No speeches, no recaps, no filler, no hype, no exclamation marks. Friendly but calm. Plain American English: no "lovely", "brilliant", "cheers", "wonderful", "perfect!", "absolutely".
 If someone mentions a delay or lag: "Yeah, bit of lag on my end, sorry." Then carry on. (Still never deny being an AI if asked directly.)
 
 Call flow rules:
@@ -157,7 +167,7 @@ Spam and sales calls follow "Spam calls" below, not this section: never cut a sp
 
 Never:
 - Share, hint at, or confirm: Jared's cell number, home address, schedule or whereabouts, finances, health, passwords, API keys, account details, internal tools or systems (never confirm or deny what systems exist), client lists, other people's details, or anything about how Bestly's software is built. If asked, say "I can't share that, but I can take a message."
-- Agree to anything for him (money, plans, purchases, appointments) or promise what he'll do. Say you'll pass it on.
+- Agree to anything for him (money, plans, purchases, appointments) or promise what he'll do. Say you'll pass it on. (The one exception: the exact times a booking call's context tells you to offer.)
 - Give out anyone's number or details.
 If someone is pushy or selling something, follow "Spam calls". If someone sounds in danger or mentions an emergency, tell them to call 911 and mark it urgent.
 If asked what you do: you help Jared with his calls and messages.
@@ -171,8 +181,9 @@ It's a spam call when the caller is clearly telemarketing or a robocall: car war
 - Once you have the details, or after about 2 minutes, say "Please take this number off your list. Thanks." and end the call with end_call.`;
 
 /** Rules added on a call forwarded from Jared's cell (the init hook sets {{forward_rules}}). */
-const FORWARD_RULES = `FORWARDED CALL: someone called Jared's own cell and he didn't pick up, so the call came to you. You are Jared's assistant answering his phone for him; your first line already said so, on a recorded line.
-- Never say you are Jared. Never say "this is Jared" or "I'm Jared", even if they ask "Is this Jared?" (say "This is his assistant."). Never speak as if you are him.
+const FORWARD_RULES = `FORWARDED CALL: someone called Jared's own cell and he didn't pick up, so the call came to you. You are Jared's assistant answering his phone for him. Your first line was "Hey, Jared's phone. What's up?"
+- Your second line (right after their first reply) must do two things, casually and briefly: say you're his assistant, and give the recording notice. For example: "I'm his assistant, he can't grab the phone. Heads up, calls here get recorded." Never say "on a recorded line". Never in your first line, never again after that.
+- Never say you are Jared. Never say "this is Jared" or "I'm Jared", even if they ask "Is this Jared?" (say "This is his assistant."). If anyone calls you Jared, correct them right away: "Oh, I'm his assistant." Never speak as if you are him.
 - Never commit to anything for him: no money, plans, appointments or purchases. Say you'll pass it on.
 - Don't volunteer that you're an AI. But if someone sincerely asks whether you're a person, a robot or an AI, say plainly that you're Jared's AI assistant.
 - Never share private information. The only facts you may use are in "What you can share".
@@ -192,10 +203,21 @@ const DATA_COLLECTION = {
   spam_callback_number: { type: "string", description: "The call-back number the spam caller gave. Empty if none." },
   spam_caller_name: { type: "string", description: "The name or ID the spam caller gave for themselves. Empty if none." },
   spam_offer: { type: "string", description: "What the spam caller was selling or offering, in a few words. Empty if none." },
+  // next-action buttons (read from the transcript by the voice platform's own analysis: no extra AI spend)
+  intent: { type: "string", enum: ["appointment", "callback", "question", "info_only", "spam", "other"],
+    description: "Why the other person called or what they need from Jared. Exactly one of: appointment (they want to schedule or set a time to meet or talk), callback (they want Jared to call them back), question (they asked something they want answered), info_only (they only passed on information), spam (telemarketing or a robocall), other." },
+  counterpart_business: { type: "string", description: "The business or organization the other person is calling from, as they said it. Empty if none or a private person." },
+  counterpart_phone: { type: "string", description: "A phone number the other person gave to reach them, including a call-back number. Empty if they gave none." },
+  appointment_purpose: { type: "string", description: "If they want an appointment or meeting: what it is for, in a few words. Empty otherwise." },
+  preferred_times: { type: "string", description: "Days or times they said work for them, in their own words. Empty if none." },
+  next_actions: { type: "string", description: "Up to three short suggested next steps for Jared, separated by semicolons (for example: Call back about the invoice; Find a time Thursday). Empty if nothing is needed." },
+  appt_duration_min: { type: "integer", description: "If they want an appointment or meeting: how long it should run, in minutes, if they said. Use 60 if they did not say. Leave empty for every other call." },
+  appt_constraints: { type: "string", description: "If they want an appointment or meeting: anything they said that limits when it can happen, in their words (for example: Tuesday afternoon only, after 2, not before the 15th, next week). Empty if none." },
+  booked_slot: { type: "string", description: "Only when Ava offered specific meeting times on an outbound call: the start of the time the other person agreed to, as an ISO 8601 date-time with the Pacific UTC offset (use the call date to resolve days like Thursday). Empty if they did not agree to one of the offered times." },
 };
 
 const UNKNOWN = { caller_name: "a caller Ava doesn't know yet", caller_notes: "", caller_trusted: "no", voice_rules: "", forward_rules: "", call_voice: "ava", forwarded: "no", forwarded_from: "", greeting:
-  "Hi, it's Ava, Jared's AI assistant, on a recorded line. He can't get to the phone right now. Can I take a message?" };
+  "Hey, Jared's phone. What's up?" };
 
 /** Turn incoming calls on for an ElevenLabs phone number and confirm it with a GET. Tries the documented inbound trunk
  *  config first, then the explicit flag. Returns true when the record reports supports_inbound = true. */
@@ -383,7 +405,7 @@ type Placed = { ok: true; call_id: string | null; calling: string } | { ok: fals
 const VOICE_RULES = "VOICE MODE: you are speaking in Jared's own voice, so you must be clear you are his AI assistant and not him. Your first line already says so; never skip or contradict it. If anyone asks, say you're an AI. Never say \"this is Jared\" or \"I'm Jared\", and never speak as if you are him. Never commit to anything for him: no money, plans, appointments or promises. Say you'll pass it on.";
 
 /** Places one call as Ava. Everything an outbound call needs lives here so the dialer, "Connect me" and follow-ups share it. */
-async function place(o: { phone: string; name?: string; purpose?: string; connect?: boolean; first_line?: string; voice_id?: string; voice_mode?: "ava" | "jared" }): Promise<Placed> {
+async function place(o: { phone: string; name?: string; purpose?: string; connect?: boolean; first_line?: string; voice_id?: string; voice_mode?: "ava" | "jared"; booking?: Record<string, unknown> }): Promise<Placed> {
   const to = toE164(o.phone);
   if (!to) return { ok: false, error: "Enter a 10-digit US or Canada number.", status: 400 };
   const { data: s } = await db.from("ava_settings").select("*").eq("id", true).single();
@@ -393,7 +415,7 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
   if (gate.over) return { ok: false, error: gate.message ?? "Daily spend cap reached. Raise it in Setup or try tomorrow.", status: 429 };
   const { data: contact } = await db.from("ava_contacts").select("id, name, relationship, notes").eq("phone", to).maybeSingle();
   const name = String(o.name ?? "").trim().slice(0, 40) || contact?.name || "";
-  const purpose = String(o.purpose ?? "").trim().slice(0, 600) || "Jared asked you to call and say hello.";
+  const purpose = String(o.purpose ?? "").trim().slice(0, o.booking ? 900 : 600) || "Jared asked you to call and say hello.";
   const connect = o.connect === true;
   // her voice for this call: the agent's own, a one-call override (the voice test), or Jared's clone ("Use my voice")
   let voiceOverride: string | null = o.voice_id ?? null, voiceTag: "ava" | "jared" = "ava", voiceRules = "";
@@ -421,7 +443,7 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
   const j = await res.json().catch(() => ({}));
   if (!res.ok || j?.success === false) return { ok: false, error: `The call didn't go out: ${JSON.stringify(j).slice(0, 200)}`, status: 502 };
   const { data: row } = await db.from("ava_calls").insert({ direction: "outbound", phone: to, contact_id: contact?.id ?? null, caller_name: name || null,
-    purpose, conversation_id: j.conversation_id ?? null, status: "queued", connect_to_jared: connect, voice: voiceTag }).select("id").single();
+    purpose, conversation_id: j.conversation_id ?? null, status: "queued", connect_to_jared: connect, voice: voiceTag, ...(o.booking ? { booking: o.booking } : {}) }).select("id").single();
   return { ok: true, call_id: row?.id ?? null, calling: to };
 }
 
@@ -494,8 +516,9 @@ async function lineProblems(): Promise<string[] | null> {
 async function health(): Promise<Response> {
   try { await evidenceRetry(); } catch { /* the line check below still runs */ }
   const voiceNotes = await voiceHealth();   // her voice still exists (falls back to the default and re-runs setup if not)
+  const calNotes = await calendarHealth();  // iCloud / Nextcloud connections, hourly
   const first = await lineProblems();
-  if (first === null) return Response.json({ ok: null, skipped: "couldn't reach the voice platform" });
+  if (first === null) return Response.json({ ok: null, skipped: "couldn't reach the voice platform", calendars: calNotes });
   let problems = first, healed = false;
   if (first.length) {
     try { await setup(); } catch { /* the re-check below says what's still wrong */ }
@@ -513,19 +536,22 @@ async function health(): Promise<Response> {
     await db.rpc("scout_notify", { p_title: "Ava's line is still broken", p_body: `${problems.join("; ")}. Setup couldn't fix it.`,
       p_severity: "warning", p_push: true, p_url: url, p_dedupe: `ava-line-broken-ava-${now.slice(0, 10)}-${Math.floor(new Date(now).getUTCHours() / 6)}` });
   }
-  return Response.json({ ok, healed, problems, voice: voiceNotes });
+  return Response.json({ ok, healed, problems, voice: voiceNotes, calendars: calNotes });
 }
 
 // ---------- live + audio ----------
 type Turn = { role: string; message: string | null; time_in_call_secs?: number };
 const slim = (t: Turn[] | undefined) => (t ?? []).filter((x) => x.message).map((x) => ({ role: x.role, text: x.message, t: x.time_in_call_secs ?? 0 }));
 
-async function live(callId: string | null): Promise<Response> {
+async function live(callId: string | null, conversationId: string | null = null): Promise<Response> {
   const { data: s } = await db.from("ava_settings").select("agent_id").eq("id", true).single();
   const key = await vault("elevenlabs_api_key");
   if (!s?.agent_id || !key) return Response.json({ ok: true, calls: [] }, { headers: CORS });
   let active: { conversation_id: string; status: string }[];
-  if (callId) {
+  if (conversationId) {
+    // one call by its conversation id (the live pill: a call that has no row yet, such as an incoming one)
+    active = [{ conversation_id: conversationId, status: "" }];
+  } else if (callId) {
     // one call (the dialer's in-call screen), followed through to the end
     const { data: r } = await db.from("ava_calls").select("conversation_id").eq("id", callId).maybeSingle();
     active = r?.conversation_id ? [{ conversation_id: r.conversation_id, status: "" }] : [];
@@ -916,9 +942,11 @@ async function logDebug(row: { kind: "init" | "post"; keys: unknown; fields: Rec
   } catch { /* debugging must never touch a call */ }
 }
 
-const FWD_GREETING = (first: string | null) => `Hey${first ? ` ${first}` : ""}, you've reached Jared's phone, this is his assistant, on a recorded line. How can I help?`;
+/** The first line on every incoming and forwarded call. Short on purpose; the recording notice comes after the caller's first reply (see PROMPT). */
+const IN_GREETING = (first: string | null) => `Hey${first ? ` ${first}` : ""}, Jared's phone. What's up?`;
+const FWD_GREETING = IN_GREETING;
 /** Voice-mode rules on a forwarded call: she is the assistant, never him. */
-const VOICE_RULES_FWD = "VOICE MODE: you are speaking in Jared's own voice, so you must be clear you are his assistant and not him. Your first line already says so (his assistant, on a recorded line); never skip or contradict it. Never say \"this is Jared\" or \"I'm Jared\", and never speak as if you are him. Never commit to anything for him: no money, plans, appointments or promises. Say you'll pass it on.";
+const VOICE_RULES_FWD = "VOICE MODE: you are speaking in Jared's own voice, answering his phone as his assistant. Never say \"this is Jared\" or \"I'm Jared\", and never speak as if you are him, even if asked \"Is this Jared?\" (say \"This is his assistant.\"). If anyone sincerely asks whether you are a person, a robot or an AI, say plainly that you're Jared's AI assistant. Never commit to anything for him: no money, plans, appointments or promises. Say you'll pass it on. Your second line must say you are his assistant and give the recording notice (\"I'm his assistant, he can't grab the phone. Heads up, calls here get recorded.\"). If anyone calls you Jared, correct them right away.";
 
 // ---------- webhooks ----------
 async function initHook(req: Request): Promise<Response> {
@@ -949,7 +977,7 @@ async function initHook(req: Request): Promise<Response> {
   }
   const vars = c ? {
     caller_trusted: trusted, caller_name: c.name, caller_notes: `They're Jared's ${c.relationship ?? "contact"}. ${c.notes ?? ""}`,
-    greeting: `Hi ${c.name}! It's Ava, Jared's assistant, on a recorded line. He can't get to the phone, but I'd love to take a message for him.`,
+    greeting: IN_GREETING(String(c.name).replace(/\{\{|\}\}/g, "").trim().split(/\s+/)[0] || null),
   } : { ...UNKNOWN, caller_trusted: trusted };
   return Response.json({ type: "conversation_initiation_client_data",
     dynamic_variables: { ...UNKNOWN, ...vars, call_context: "Someone called Jared's line. Take a message.", ...base } });
@@ -1006,7 +1034,7 @@ async function evidence(b: Record<string, unknown>): Promise<Response> {
 // ---------- Do Not Call: the complaint text and the demand-letter template (fixed text, no AI, never sent) ----------
 const DNC_FORM = "https://www.donotcall.gov/report.html";
 const ptFull = (iso: string) => new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })
-  .format(new Date(iso)).replace(/,? at /, " at ").replace(/ /g, " ");
+  .format(new Date(iso)).replace(/,? at /, " at ").replace(/\u202f/g, " ");
 const ptDate = (d = new Date()) => new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "long", day: "numeric" }).format(d);
 const prettyPhone = (v: string | null | undefined) => { const d = (v ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, ""); return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : (v ?? ""); };
 const uniq = (a: (string | null | undefined)[]) => [...new Set(a.map((x) => (x ?? "").trim()).filter(Boolean))];
@@ -1104,6 +1132,270 @@ async function spamLetter(b: Record<string, unknown>): Promise<Response> {
   return Response.json({ ok: true, text, calls: n }, { headers: CORS });
 }
 
+
+// ---------- calendars (iCloud + Nextcloud, read-only free/busy; writes only to the Nextcloud calendar Jared marks "Ava books here") ----------
+const INTENTS = new Set(["appointment", "callback", "question", "info_only", "spam", "other"]);
+// Calendar logins live only in Vault. The Calendars card writes ava_caldav_* through an admin RPC (never through this function, never echoed back).
+// Nextcloud falls back to the login Bestly already keeps in Vault for cloud.bestly.tech (nextcloud_base_url / nextcloud_user / nextcloud_app_password).
+// iCloud has no fallback: Jared pastes an Apple app-specific password. The wall_icloud_* secrets are deliberately NOT used.
+const CAL_SECRETS = ["ava_caldav_nextcloud_user", "ava_caldav_nextcloud_pass", "ava_caldav_icloud_user", "ava_caldav_icloud_pass"];
+const PROVIDER_NAME: Record<Provider, string> = { nextcloud: "Nextcloud", icloud: "iCloud" };
+type CalFound = { id: string; href: string; name: string; writable: boolean; provider?: Provider };
+type CalCheck = { at: string; ok: boolean; last_ok_at?: string | null; error?: string };
+type CalCfg = { selected?: string[]; book_to?: string | null; hours?: Hours; turo_window_min?: number; found?: Partial<Record<Provider, CalFound[]>>; checked?: Partial<Record<Provider, CalCheck>> };
+type Booking = { action_id: string; source_call_id: string; source: string; slot: string; offered: string[]; purpose: string; duration_min?: number; business: string | null; who: string; phone: string };
+
+async function calSettings(): Promise<CalCfg> {
+  const { data } = await db.from("ava_settings").select("calendars").eq("id", true).maybeSingle();
+  return (data?.calendars ?? {}) as CalCfg;
+}
+/** Merge a patch into ava_settings.calendars (re-reads first so a choice Jared just saved isn't overwritten). */
+async function saveCal(patch: Partial<CalCfg>): Promise<CalCfg> {
+  const next = { ...(await calSettings()), ...patch };
+  await db.from("ava_settings").update({ calendars: next, updated_at: new Date().toISOString() }).eq("id", true);
+  return next;
+}
+async function calCreds(): Promise<Partial<Record<Provider, Creds>>> {
+  const [nu, np, iu, ip, su, sp, sb] = await Promise.all([...CAL_SECRETS, "nextcloud_user", "nextcloud_app_password", "nextcloud_base_url"].map((n) => vault(n)));
+  const base = sb && /^https:\/\//i.test(sb) ? sb : undefined;
+  const nextcloud = nu && np ? { user: nu, pass: np, base } : su && sp ? { user: su, pass: sp, base } : null;
+  return { ...(nextcloud ? { nextcloud } : {}), ...(iu && ip ? { icloud: { user: iu, pass: ip } } : {}) };
+}
+/** Is the shared Bestly Nextcloud login being used (no override pasted)? Booleans only. */
+async function nextcloudShared(): Promise<boolean> {
+  const [nu, np] = await Promise.all([vault("ava_caldav_nextcloud_user"), vault("ava_caldav_nextcloud_pass")]);
+  return !(nu && np);
+}
+const errText = (e: unknown) => (e instanceof Error ? e.message : "error").replace(/[\r\n]+/g, " ").slice(0, 160);
+
+/** Can "Find times" run? Not when no calendar is ticked, or when a connected calendar's last check failed (the reason is shown on the button). */
+function findTimesState(cfg: CalCfg, creds: Partial<Record<Provider, Creds>>): { ok: boolean; reason: string | null } {
+  for (const p of ["nextcloud", "icloud"] as Provider[]) {
+    if (creds[p] && cfg.checked?.[p] && cfg.checked[p]!.ok === false) return { ok: false, reason: `Can't read your ${PROVIDER_NAME[p]} calendar. Update the login in the Calendars card.` };
+  }
+  const ticked = (["nextcloud", "icloud"] as Provider[]).some((p) => creds[p] && (cfg.found?.[p] ?? []).some((c) => (cfg.selected ?? []).includes(c.id)));
+  if (!ticked) return { ok: false, reason: "No calendar is connected and ticked yet. Add one in the Calendars card." };
+  return { ok: true, reason: null };
+}
+
+async function calStatus(): Promise<Response> {
+  const [cfg, creds, shared] = await Promise.all([calSettings(), calCreds(), nextcloudShared()]);
+  const one = (p: Provider) => ({ connected: !!creds[p], calendars: cfg.found?.[p] ?? [], checked: cfg.checked?.[p] ?? null });
+  return Response.json({ ok: true, nextcloud: { ...one("nextcloud"), shared_login: !!creds.nextcloud && shared }, icloud: one("icloud"), selected: cfg.selected ?? [], book_to: cfg.book_to ?? null,
+    hours: cfg.hours ?? DEFAULT_HOURS, turo_window_min: cfg.turo_window_min ?? TURO_WINDOW_MIN, find_times: findTimesState(cfg, creds) }, { headers: CORS });
+}
+
+/** Save Calendars-card choices (which calendars count, where Ava books, hours, the Turo window). Validated, merged into ava_settings.calendars. */
+async function calSave(b: Record<string, unknown>): Promise<Response> {
+  const cfg = await calSettings();
+  const known = new Set((["nextcloud", "icloud"] as Provider[]).flatMap((p) => (cfg.found?.[p] ?? []).map((c) => c.id)));
+  const patch: Partial<CalCfg> = {};
+  if (Array.isArray(b.selected)) patch.selected = (b.selected as unknown[]).map(String).filter((id) => known.has(id));
+  if (b.book_to === null || typeof b.book_to === "string") {
+    const nc = new Set((cfg.found?.nextcloud ?? []).filter((c) => c.writable).map((c) => c.id));
+    patch.book_to = b.book_to && nc.has(String(b.book_to)) ? String(b.book_to) : null;
+  }
+  const h = b.hours as Partial<Hours> | undefined;
+  if (h && typeof h === "object") {
+    const start = Number(h.start), end = Number(h.end), days = Array.isArray(h.days) ? [...new Set((h.days as unknown[]).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))] : null;
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > 24 || end - start < 1 || !days?.length) return jerr("Pick at least one day, and an end hour after the start.");
+    patch.hours = { start, end, days };
+  }
+  if (b.turo_window_min !== undefined) {
+    const w = Math.round(Number(b.turo_window_min));
+    if (!Number.isFinite(w) || w < 0 || w > 240) return jerr("The Turo window is 0 to 240 minutes.");
+    patch.turo_window_min = w;
+  }
+  const next = await saveCal(patch);
+  return Response.json({ ok: true, selected: next.selected ?? [], book_to: next.book_to ?? null, hours: next.hours ?? DEFAULT_HOURS, turo_window_min: next.turo_window_min ?? TURO_WINDOW_MIN }, { headers: CORS });
+}
+
+/** Jared types an app password into the admin form; it goes straight to Vault. The value is never logged and never sent back. */
+async function calSecretPut(b: Record<string, unknown>): Promise<Response> {
+  const name = String(b.name ?? ""), value = String(b.value ?? "").trim();
+  if (!CAL_SECRETS.includes(name)) return jerr("That isn't a calendar login field.");
+  if (!value || value.length > 200) return jerr("Type the value first.");
+  const { error } = await db.rpc("ava_secret_put", { p_name: name, p_value: value });
+  if (error) return jerr("Couldn't save it to the vault. Try again.", 500);
+  return Response.json({ ok: true }, { headers: CORS });
+}
+
+async function calDisconnect(b: Record<string, unknown>): Promise<Response> {
+  const p = b.provider === "icloud" ? "icloud" : b.provider === "nextcloud" ? "nextcloud" : null;
+  if (!p) return jerr("Pick nextcloud or icloud.");
+  for (const n of p === "nextcloud" ? CAL_SECRETS.slice(0, 2) : CAL_SECRETS.slice(2)) await db.rpc("ava_secret_put", { p_name: n, p_value: "" });
+  if (p === "nextcloud" && (await calCreds()).nextcloud) return Response.json({ ok: true, still_connected: true }, { headers: CORS });   // the shared Bestly login stays; only the override was cleared
+  const cfg = await calSettings();
+  const gone = new Set((cfg.found?.[p] ?? []).map((c) => c.id));
+  const found = { ...(cfg.found ?? {}) }; delete found[p];
+  const checked = { ...(cfg.checked ?? {}) }; delete checked[p];
+  await saveCal({ found, checked, selected: (cfg.selected ?? []).filter((id) => !gone.has(id)), book_to: cfg.book_to && gone.has(cfg.book_to) ? null : cfg.book_to ?? null });
+  return Response.json({ ok: true }, { headers: CORS });
+}
+
+/** Test a connection: list the calendars the login can see. First time for a provider, every calendar is ticked (Jared unticks the ones that don't count). */
+async function calTest(b: Record<string, unknown>): Promise<Response> {
+  const p = b.provider === "icloud" ? "icloud" : b.provider === "nextcloud" ? "nextcloud" : null;
+  if (!p) return jerr("Pick nextcloud or icloud.");
+  const creds = (await calCreds())[p];
+  if (!creds) return jerr(`${PROVIDER_NAME[p]} isn't connected yet. Enter both fields and save them first.`, 412);
+  const now = new Date().toISOString(), cfg = await calSettings();
+  try {
+    const cals = await discover(p, creds);
+    const had = (cfg.found?.[p] ?? []).length > 0;
+    const found = { ...(cfg.found ?? {}), [p]: cals.map((c) => ({ id: c.id, href: c.href, name: c.name, writable: c.writable })) };
+    const selected = had ? cfg.selected ?? [] : [...new Set([...(cfg.selected ?? []), ...cals.map((c) => c.id)])];
+    const checked = { ...(cfg.checked ?? {}), [p]: { at: now, ok: true, last_ok_at: now } };
+    // keep the choice if it is still there; otherwise Ava books nowhere until Jared picks (she never guesses a calendar to write to)
+    const bookTo = cfg.book_to && cals.some((c) => c.id === cfg.book_to && c.writable) ? cfg.book_to : (p === "nextcloud" ? null : cfg.book_to ?? null);
+    await saveCal({ found, selected, checked, book_to: bookTo });
+    return Response.json({ ok: true, provider: p, calendars: found[p] }, { headers: CORS });
+  } catch (e) {
+    await saveCal({ checked: { ...(cfg.checked ?? {}), [p]: { at: now, ok: false, last_ok_at: cfg.checked?.[p]?.last_ok_at ?? null, error: errText(e) } } });
+    return jerr(`${errText(e)}.`, 502);
+  }
+}
+
+/** Busy intervals from the ticked calendars plus the Turo Watch trips (Turo: only the window around each pickup and return, 60 minutes each side by default). */
+async function busyIntervals(from: number, to: number): Promise<Busy[]> {
+  const [cfg, creds] = await Promise.all([calSettings(), calCreds()]);
+  const all: Cal[] = (["nextcloud", "icloud"] as Provider[]).flatMap((p) => (cfg.found?.[p] ?? []).map((c) => ({ ...c, provider: p })));
+  const cals = all.filter((c) => (cfg.selected ?? []).includes(c.id) && creds[c.provider]);
+  if (!cals.length) throw new Error("No calendar is connected and ticked yet. Add one in the Calendars card.");
+  let busy: Busy[];
+  const turoMin = cfg.turo_window_min ?? TURO_WINDOW_MIN;
+  try { busy = await busyFrom(cals, creds, from, to, turoMin); }
+  catch (e) { throw new Error(`Couldn't read your calendar (${errText(e)})`); }
+  try {
+    const { data } = await db.from("turo_trips").select("starts_at, ends_at").eq("status", "BOOKED").gte("ends_at", new Date(from - 4 * 3600_000).toISOString()).lte("starts_at", new Date(to + 4 * 3600_000).toISOString());
+    for (const t of (data ?? []) as { starts_at: string | null; ends_at: string | null }[]) {
+      if (t.starts_at && t.ends_at) turoWindows(Date.parse(t.starts_at), Date.parse(t.ends_at), turoMin * 60_000, busy);
+    }
+  } catch { /* Turo Watch is optional */ }
+  return busy;
+}
+
+async function computeSlots(o: { purpose?: string; durationMin?: number | null; constraints?: string | null; count?: number; days?: number }): Promise<{ slots: Slot[]; duration_min: number; constraints: string | null }> {
+  const dur = durationFor(o.purpose ?? "", o.durationMin), days = o.days ?? 14, cfg = await calSettings();
+  const cons = (o.constraints ?? "").trim().slice(0, 200) || null;
+  const busy = await busyIntervals(Date.now(), Date.now() + (days + 1) * 86400_000);
+  const slots = freeSlots(busy, { durationMin: dur, count: o.count ?? 6, days, hours: cfg.hours ?? DEFAULT_HOURS, constraints: cons ? parseConstraints(cons) : undefined });
+  return { slots, duration_min: dur, constraints: cons };
+}
+
+/** "Find times": read-only. Accepts an action_id (uses the length and availability the caller gave) or explicit duration_min / constraints / purpose. */
+async function freeSlotsAction(b: Record<string, unknown>): Promise<Response> {
+  let dur = Number(b.duration_min) || null, cons = String(b.constraints ?? "").trim() || null, purpose = String(b.purpose ?? "").slice(0, 200);
+  if (b.action_id) {
+    const { data: a } = await db.from("ava_actions").select("payload, kind").eq("id", String(b.action_id)).maybeSingle();
+    const pl = (a?.payload ?? {}) as Record<string, unknown>;
+    if (a && a.kind === "find_times") { dur = dur ?? (Number(pl.appt_duration_min) || null); cons = cons ?? (String(pl.appt_constraints ?? pl.preferred_times ?? "").trim() || null); purpose = purpose || String(pl.appointment_purpose ?? ""); }
+  }
+  const [cfg, creds] = await Promise.all([calSettings(), calCreds()]);
+  const st = findTimesState(cfg, creds);
+  if (!st.ok) return jerr(st.reason ?? "Calendars aren't ready.", 412);
+  try {
+    const r = await computeSlots({ purpose, durationMin: dur, constraints: cons, count: 6, days: 14 });
+    return Response.json({ ok: true, ...r }, { headers: CORS });
+  } catch (e) { return jerr(errText(e), 412); }
+}
+
+const ptLabel = (iso: string) => new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })
+  .format(new Date(iso)).replace(/[ \u202f\u00a0](AM|PM)/, "\u00a0$1");
+
+/** ONE outbound call that offers the slot Jared tapped (his tap is the yes), with the next two free slots as fallbacks. Same spend cap and gate as every call. */
+async function bookCall(b: Record<string, unknown>): Promise<Response> {
+  const actionId = String(b.action_id ?? ""), slotStart = String(b.slot_start ?? "");
+  const { data: a } = await db.from("ava_actions").select("*").eq("id", actionId).maybeSingle();
+  if (!a || a.kind !== "find_times") return jerr("That action isn't there anymore.", 404);
+  if (a.source !== "ava") return jerr("Booking calls come from your personal line, not RoofGuard.", 400);
+  if (a.status !== "open") return jerr(`That action is already ${a.status}.`, 409);
+  const pl = (a.payload ?? {}) as Record<string, string | null>;
+  const phone = toE164(String(b.phone ?? pl.phone ?? ""));
+  if (!phone) return jerr("There's no number to call back. Add the number they gave, then try again.", 400);
+  if (pl.booking_call_id) {
+    const { data: prev } = await db.from("ava_calls").select("status, created_at").eq("id", pl.booking_call_id).maybeSingle();
+    if (prev && ["queued", "in_progress"].includes(prev.status) && Date.now() - Date.parse(prev.created_at) < 15 * 60_000) return jerr("Ava is already calling about this one.", 409);
+  }
+  const purposeText = String(pl.appointment_purpose ?? pl.purpose ?? "").trim().slice(0, 120) || "a meeting with Jared";
+  const durMin = durationFor(purposeText, Number(b.duration_min) || Number(pl.appt_duration_min) || null);
+  let slots: Slot[];
+  try { slots = (await computeSlots({ purpose: purposeText, durationMin: durMin, constraints: String(pl.appt_constraints ?? pl.preferred_times ?? "") || null, count: 12, days: 14 })).slots; } catch (e) { return jerr(errText(e), 412); }
+  const i = slots.findIndex((s) => Math.abs(Date.parse(s.start) - Date.parse(slotStart)) < 60_000);
+  if (i < 0) return jerr("That time just filled up. Pick another one.", 409);
+  const rest = [...slots.slice(i + 1), ...slots.slice(0, i)].slice(0, 2);
+  const offered = [slots[i], ...rest];
+  const { data: src } = a.source === "roofguard" ? await db.from("rg_calls").select("caller_name").eq("id", a.call_id).maybeSingle() : await db.from("ava_calls").select("caller_name").eq("id", a.call_id).maybeSingle();
+  const person = String(src?.caller_name ?? "").trim(), biz = String(pl.business ?? "").trim() || null;
+  const times = offered.map((s) => spoken(s.start));
+  const purpose = `Jared asked you to call ${person || biz || "them"}${biz && person ? ` (${biz})` : ""} back to set up ${purposeText}.${pl.preferred_times ? ` They said ${String(pl.preferred_times).slice(0, 100)} works.` : ""} `
+    + `Offer ${times[0]} first.${times[1] ? ` If it doesn't work, offer ${times[1]}${times[2] ? `, then ${times[2]}` : ""}.` : ""} If one works, say it back once. If none works, ask what does, and say you'll pass it on to Jared.`;
+  const booking: Booking = { action_id: a.id, source_call_id: a.call_id, source: a.source, slot: slots[i].start, offered: offered.map((s) => s.start), purpose: purposeText, duration_min: durMin, business: biz, who: person || biz || "them", phone };
+  const r = await place({ phone, name: person, purpose,
+    first_line: `Hi${person ? ` ${person.split(/\s+/)[0]}` : ""}, it's Ava, Jared's AI assistant, on a recorded line. I'm calling you back to set up a time with Jared.`, booking });
+  if (!r.ok) return jerr(r.error, r.status);
+  await db.from("ava_actions").update({ payload: { ...pl, booking_call_id: r.call_id, offered: offered.map((s) => s.start) } }).eq("id", a.id);
+  return Response.json({ ok: true, call_id: r.call_id, calling: r.calling, offered }, { headers: CORS });
+}
+
+/** After a booking call: did they agree to one of the offered times? Yes -> calendar event, action closed, Scout push. Returns null when this wasn't a booking call. */
+async function bookingResult(callId: string, bk: Booking, bookedRaw: string | null, who: string): Promise<{ ok: boolean } | null> {
+  if (!bk?.action_id) return null;
+  const t = bookedRaw ? Date.parse(bookedRaw) : NaN;
+  const hit = Number.isFinite(t) ? bk.offered.find((o) => Math.abs(Date.parse(o) - t) < 10 * 60_000) : undefined;
+  const url = "/admin/ava";
+  if (!hit) {
+    await db.rpc("scout_notify", { p_title: `Ava (assistant): no time booked with ${bk.who}`,
+      p_body: bookedRaw ? `They named a time that wasn't one of the three she offered (${bookedRaw.slice(0, 60)}). Nothing was added to your calendar.` : `They didn't settle on one of the offered times for ${bk.purpose}. The button is still on the message if you want to try again.`,
+      p_severity: "info", p_push: true, p_url: url, p_dedupe: `ava-booking-none-${callId}` });
+    return { ok: false };
+  }
+  const end = new Date(Date.parse(hit) + durationFor(bk.purpose, bk.duration_min) * 60_000).toISOString();
+  await db.from("ava_calls").update({ booked_slot: hit }).in("id", [callId, bk.source_call_id]);   // on the booking call and on the message that asked for it
+  let calendarNote = "";
+  try {
+    const cfg = await calSettings(), creds = await calCreds();
+    const target = (cfg.found?.nextcloud ?? []).find((c) => c.id === cfg.book_to);
+    if (!creds.nextcloud || !target) throw new Error("no calendar is marked Ava books here");
+    await putEvent(creds.nextcloud, target.href, { uid: `ava-${callId}@bestly.tech`, start: hit, end, summary: `${bk.purpose} with ${bk.who}`,
+      description: `Booked by Ava (assistant). ${bk.business ? `${bk.business}. ` : ""}Phone ${bk.phone}.` });
+    calendarNote = " Added to your calendar.";
+  } catch (e) { calendarNote = ` It is NOT on your calendar yet (${errText(e)}).`; }
+  await db.from("ava_actions").update({ status: "done" }).eq("source", bk.source).eq("call_id", bk.source_call_id).eq("status", "open");
+  await db.rpc("scout_notify", { p_title: `Ava (assistant): booked your ${bk.purpose.replace(/^(a|an|the)\s+/i, "")} for ${ptLabel(hit)}`,
+    p_body: `With ${who}.${calendarNote}`, p_severity: calendarNote.includes("NOT") ? "warning" : "info", p_push: true, p_url: url, p_dedupe: `ava-booked-${callId}` });
+  return { ok: true };
+}
+
+/** Watchdog (inside the 10-minute health run): each connected calendar is checked once an hour; a failure is retried on the next run and alerts at most hourly. */
+async function calendarHealth(): Promise<string[]> {
+  const notes: string[] = [];
+  try {
+    const [cfg, creds] = await Promise.all([calSettings(), calCreds()]);
+    const nowIso = new Date().toISOString(), hour = nowIso.slice(0, 13);
+    const checked = { ...(cfg.checked ?? {}) };
+    let changed = false;
+    for (const p of ["nextcloud", "icloud"] as Provider[]) {
+      const c = creds[p]; if (!c) continue;
+      const ck = checked[p];
+      if (ck?.ok && Date.now() - Date.parse(ck.at) < 55 * 60_000) continue;
+      try {
+        await discover(p, c);
+        checked[p] = { at: nowIso, ok: true, last_ok_at: nowIso }; changed = true;
+        if (ck && !ck.ok) notes.push(`${PROVIDER_NAME[p]} calendar is back`);
+      } catch (e) {
+        checked[p] = { at: nowIso, ok: false, last_ok_at: ck?.last_ok_at ?? null, error: errText(e) }; changed = true;
+        notes.push(`${PROVIDER_NAME[p]} calendar failed`);
+        await db.rpc("scout_notify", { p_title: `Ava (assistant): can't read your ${PROVIDER_NAME[p]} calendar`,
+          p_body: `${errText(e)}. Find times is switched off until it works again. She re-checks on her own every 10 minutes; if it keeps failing, enter a fresh ${p === "icloud" ? "Apple app-specific password" : "app password"} in the Calendars card on /admin/ava.`,
+          p_severity: "warning", p_push: true, p_url: "https://bestly.tech/admin/ava", p_dedupe: `ava-cal-fail-${p}-${hour}` });
+      }
+    }
+    if (changed) await saveCal({ checked });
+  } catch { /* the line check still runs */ }
+  return notes;
+}
+
 async function postHook(req: Request): Promise<Response> {
   const secret = await vault("ava_webhook_secret");
   if (!secret) return new Response("webhook secret not configured", { status: 412 });
@@ -1121,7 +1413,7 @@ async function postHook(req: Request): Promise<Response> {
   const pc = d.metadata?.phone_call ?? {};
   const phone = toE164(String(pc.external_number ?? "")) ?? pc.external_number ?? null;
   const { data: contact } = phone ? await db.from("ava_contacts").select("id, name").eq("phone", phone).maybeSingle() : { data: null };
-  const { data: existing } = await db.from("ava_calls").select("id, direction").eq("conversation_id", d.conversation_id).maybeSingle();
+  const { data: existing } = await db.from("ava_calls").select("id, direction, booking").eq("conversation_id", d.conversation_id).maybeSingle();
   const direction = existing?.direction ?? (pc.direction === "outbound" ? "outbound" : "inbound");
 
   // forwarded from Jared's cell? The init hook says so in the dynamic variables it returned; the SIP-ish fields are a second chance.
@@ -1147,6 +1439,16 @@ async function postHook(req: Request): Promise<Response> {
     spam_website: isSpam ? val("spam_website")?.slice(0, 160) ?? null : null, spam_callback_number: isSpam && spamCb ? (toE164(spamCb) ?? spamCb.slice(0, 40)) : null,
     spam_caller_name: isSpam ? val("spam_caller_name")?.slice(0, 80) ?? null : null, spam_offer: isSpam ? val("spam_offer")?.slice(0, 160) ?? null : null };
 
+  // next-action data (the voice platform's own post-call analysis)
+  const intentRaw = (val("intent") ?? "").toLowerCase().replace(/[\s-]+/g, "_").replace(/^callback_request$/, "callback");
+  const intent = isSpam ? "spam" : INTENTS.has(intentRaw) ? intentRaw : null;
+  const cpPhone = val("counterpart_phone");
+  const next = { intent, counterpart_business: val("counterpart_business")?.slice(0, 120) ?? null,
+    counterpart_phone: cpPhone ? (toE164(cpPhone) ?? cpPhone.slice(0, 40)) : null, appointment_purpose: val("appointment_purpose")?.slice(0, 200) ?? null,
+    preferred_times: val("preferred_times")?.slice(0, 200) ?? null, next_actions: val("next_actions")?.slice(0, 400) ?? null,
+    appt_duration_min: intent === "appointment" ? durationFor("", Number(val("appt_duration_min"))) : null, appt_constraints: intent === "appointment" ? val("appt_constraints")?.slice(0, 200) ?? null : null };
+  const bookedRaw = val("booked_slot");
+
   const message = isSpam ? null : val("message_for_jared");
   const urgent = !isSpam && val("urgent") === "true";
   const callerName = val("caller_name") ?? contact?.name ?? null;
@@ -1156,7 +1458,7 @@ async function postHook(req: Request): Promise<Response> {
     message: message ? (cbNum ? `${message} (call back: ${cbNum})` : message) : null, urgent, callback_wanted: !isSpam && val("callback_wanted") === "true",
     callback_number: cbNum ? toE164(cbNum) : null,
     duration_sec: d.metadata?.call_duration_secs ?? null, transcript: d.transcript ?? null, llm_cost: Math.round(llm * 10000) / 10000,
-    ended_at: new Date().toISOString(), ...spam,
+    ended_at: new Date().toISOString(), ...spam, ...next,
     ...(forwarded ? { forwarded: true, forwarded_from: forwardedFrom } : {}), ...(voiceTag ? { voice: voiceTag } : {}),
   };
   let callId: string | null = existing?.id ?? null;
@@ -1182,6 +1484,9 @@ async function postHook(req: Request): Promise<Response> {
   }
 
   const who = callerName ?? (phone ? phone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3") : "Someone");
+  // a booking call (Jared tapped a free time): record what was agreed, put it on his calendar, close the action
+  const booked = existing?.booking && callId ? await bookingResult(callId, existing.booking as Booking, bookedRaw, who) : null;
+  if (booked) return Response.json({ ok: true, direction, forwarded, booked: booked.ok });
   if (isSpam) {
     // quiet: the bell, no push. The push comes at the 2nd call from the same company (a database trigger).
     await db.rpc("scout_notify", { p_title: `Ava (assistant): spam call from ${spam.spam_company ?? who}`,
@@ -1209,7 +1514,7 @@ Deno.serve(async (req) => {
   if (body.action === "call") return call(body);
   if (body.action === "callback") return callback(String(body.id ?? ""));
   if (body.action === "health") return health();
-  if (body.action === "live") return live(body.call_id ? String(body.call_id) : null);
+  if (body.action === "live") return live(body.call_id ? String(body.call_id) : null, /^[\w-]{6,80}$/.test(String(body.conversation_id ?? "")) ? String(body.conversation_id) : null);
   if (body.action === "audio") return audio(String(body.call_id ?? ""));
   if (body.action === "voices") return voices(body);
   if (body.action === "voice_say") return voiceSay(body);
@@ -1222,5 +1527,12 @@ Deno.serve(async (req) => {
   if (body.action === "spam_complaint") return spamComplaint(body);
   if (body.action === "spam_letter") return spamLetter(body);
   if (body.action === "evidence") return evidence(body);
+  if (body.action === "cal_status") return calStatus();
+  if (body.action === "cal_secret_put") return calSecretPut(body);
+  if (body.action === "cal_save") return calSave(body);
+  if (body.action === "cal_disconnect") return calDisconnect(body);
+  if (body.action === "cal_test") return calTest(body);
+  if (body.action === "free_slots") return freeSlotsAction(body);
+  if (body.action === "book_call") return bookCall(body);
   return Response.json({ ok: false, error: "unknown action" }, { status: 400, headers: CORS });
 });

@@ -341,6 +341,9 @@ Today is ${v.today}, and it's ${v.local_time} for us.
 
 Who's calling: ${v.who}
 
+Your first line was just "RoofGuard, this is Ava. What's up?" It doesn't mention recording on purpose. After the caller's first reply, once, say it casually and briefly, like "Just so you know, calls here are recorded." Then carry on. If anyone sincerely asks whether you're a person or an AI, say you're an AI assistant, plainly.
+On the phone: one short sentence per turn, contractions, react like a person ("Got it." "Oh, sure.") and vary the wording. Never sound scripted.
+
 ${SOUND}
 
 What you can share (the only facts you may use to help someone):
@@ -650,6 +653,14 @@ const DATA_COLLECTION = {
   urgent: { type: "boolean", description: "True if they said it's urgent, time-sensitive, or an emergency." },
   callback_wanted: { type: "boolean", description: "Incoming or call-back calls only: true if they want someone to call them back." },
   callback_number: { type: "string", description: "A callback number they gave, if different from the number they called from. Empty otherwise." },
+  // next-action buttons (incoming calls and call-backs only)
+  intent: { type: "string", description: "Incoming or call-back calls only: what the caller wants. Exactly one of: appointment (wants to set up a meeting or visit), callback (wants someone to call them back), question (asked something that needs an answer), info_only (just passing on information), spam (sales pitch or robocall), other. Empty on outbound sales calls.",
+    enum: ["appointment", "callback", "question", "info_only", "spam", "other"] },
+  counterpart_business: { type: "string", description: "Incoming or call-back calls only: the caller's company or business name if they said it. Empty otherwise." },
+  counterpart_phone: { type: "string", description: "Incoming or call-back calls only: the best number to reach them if they gave one. Empty otherwise." },
+  appointment_purpose: { type: "string", description: "Incoming or call-back calls only: if they want to meet or talk, what it is for, in a few words (for example, roof walkthrough at their warehouse). Empty otherwise." },
+  preferred_times: { type: "string", description: "Incoming or call-back calls only: days or times they said work for them, in their words. Empty otherwise." },
+  next_actions: { type: "string", description: "Incoming or call-back calls only: up to three short next steps for the team, as one line separated by semicolons (for example: Call Dana back; Send the warranty checklist). Empty if none." },
 };
 
 // every variable the outbound prompt uses, so an incoming call (which supplies none of them) never trips on a missing one
@@ -849,6 +860,16 @@ async function hmacHex(secret: string, msg: string): Promise<string> {
 const OUTCOMES = new Set(["booked", "callback_set", "dm_identified", "voicemail_left", "gatekeeper_blocked",
   "not_interested", "wrong_number", "do_not_call", "no_answer", "other"]);
 
+const INTENTS = new Set(["appointment", "callback", "question", "info_only", "spam", "other"]);
+/** The voice platform's own analysis of an incoming call, kept on the call row so the next-action buttons can be built from it. */
+function nextData(val: (k: string) => string | null) {
+  const raw = (val("intent") ?? "").toLowerCase().replace(/[\s-]+/g, "_");
+  const cp = val("counterpart_phone");
+  return { intent: INTENTS.has(raw) ? raw : null, counterpart_business: val("counterpart_business")?.slice(0, 120) ?? null,
+    counterpart_phone: cp ? (toE164(cp) ?? cp.slice(0, 40)) : null, appointment_purpose: val("appointment_purpose")?.slice(0, 200) ?? null,
+    preferred_times: val("preferred_times")?.slice(0, 200) ?? null, next_actions: val("next_actions")?.slice(0, 400) ?? null };
+}
+
 /** Post-call for an incoming call or a call-back: stored as a message (rg_calls.direction), never as a dialer result.
  *  The outbound lead statuses, attempts and A/B scoreboard are untouched; only a do-not-call request reaches the lead. */
 // deno-lint-ignore no-explicit-any
@@ -879,6 +900,7 @@ async function messagePost(d: any, mode: "inbound" | "callback", vars: Record<st
     transcript: d.transcript ?? null, ended_at: new Date().toISOString(),
     caller_name: callerName, message: message ? (cbNum ? `${message} (call back: ${cbNum})` : message) : null, urgent,
     callback_wanted: yes("callback_wanted"), callback_number: cbNum ? toE164(cbNum) : null,
+    ...nextData(val),
   };
   if (existing) await db.from("rg_calls").update(row).eq("id", existing.id);
   else await db.from("rg_calls").insert({ ...row, lead_id: leadId, attempt: 0, to_number: phone ?? "unknown", conversation_id: d.conversation_id, direction: mode });
@@ -985,9 +1007,23 @@ async function followup(id: string): Promise<Response> {
 type Turn = { role: string; message: string | null; time_in_call_secs?: number };
 const slim = (t: Turn[] | undefined) => (t ?? []).filter((x) => x.message).map((x) => ({ role: x.role, text: x.message, t: x.time_in_call_secs ?? 0 }));
 
-async function live(onlyLead: string | null, onlyCall: string | null): Promise<Response> {
+async function live(onlyLead: string | null, onlyCall: string | null, convId: string | null = null): Promise<Response> {
   const key = await vault("elevenlabs_api_key");
   if (!key) return Response.json({ ok: false, error: "elevenlabs_api_key missing" }, { status: 412, headers: CORS });
+  // one call by its voice-platform id (the live pill opens an incoming call before it has a row); admins only
+  if (convId && !onlyLead && !onlyCall) {
+    const res = await fetch(`${XI}/convai/conversations/${convId}`, { headers: { "xi-api-key": key } });
+    const d = res.ok ? await res.json().catch(() => ({})) : {};
+    const pc = d.metadata?.phone_call ?? {};
+    const phone = pc.external_number ?? null;
+    const lead = await leadByPhone(phone);
+    const { data: row } = await db.from("rg_calls").select("id").eq("conversation_id", convId).maybeSingle();
+    if (!res.ok) return Response.json({ ok: true, calls: [] }, { headers: CORS });
+    return Response.json({ ok: true, calls: [{ call_id: row?.id ?? "", lead_id: lead?.id ?? "", company: lead?.company ?? (pc.direction === "outbound" ? "" : "Incoming call"),
+      contact: lead?.contacts?.[0]?.name ?? null, to_number: phone ?? "", is_test: false, opener_key: null, status: d.status ?? "in-progress",
+      elapsed: d.metadata?.start_time_unix_secs ? Math.round(Date.now() / 1000 - d.metadata.start_time_unix_secs) : 0,
+      duration: d.metadata?.call_duration_secs ?? null, transcript: slim(d.transcript), conversation_id: convId, direction: pc.direction === "outbound" ? "outbound" : "inbound" }] }, { headers: CORS });
+  }
   const since = new Date(Date.now() - 20 * 60_000).toISOString();
   let q = db.from("rg_calls").select("id, lead_id, conversation_id, to_number, queued_at, is_test, opener_key, direction, rg_leads(company, contacts)")
     .gte("queued_at", since).order("queued_at", { ascending: false }).limit(5);
@@ -1310,7 +1346,7 @@ Deno.serve(async (req) => {
     if (body.action === "demo_call") return demoCall(String(body.phone ?? ""), String(body.name ?? ""), undefined, role === "admin" ? String(body.company ?? "") : "");
     if (body.action === "call_result") return callResult(String(body.call_id ?? ""), demoLead);
     if (body.action === "audio") return audio(String(body.call_id ?? ""), demoLead);
-    return live(demoLead, body.call_id ? String(body.call_id) : null);
+    return live(demoLead, body.call_id ? String(body.call_id) : null, role === "admin" && /^[\w-]{6,80}$/.test(String(body.conversation_id ?? "")) ? String(body.conversation_id) : null);
   }
   if (!(await authorized(req))) return new Response("unauthorized", { status: 401 });
   if (body.action === "tick") return tick();
