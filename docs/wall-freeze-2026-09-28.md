@@ -225,3 +225,15 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - Backups `.bak_app_*` and `.bak_app2_*`.
   - go2rtc RTSP was briefly opened to the LAN with a firewall, then closed again; the app doesn't use RTSP.
 - **Radio truth:** `server.py` now sets `data_cache.radio.on` only while the HomePod reports `playing`. Before, the wall showed "Dance Wave" while Music Assistant was idle. Retries and the Scout alert are unchanged.
+
+## Oct 5, 4:05 PM: the Roads and Traffic switches are independent now
+
+- **Two bugs:**
+  - `wall.html` `geoTraffic()` also required `skyRoads`, so turning Roads off hid traffic too.
+  - `server.py` never had `skyTraffic` in `DEFAULT_STATE`, and the Pi's sync drops unknown keys. The page never saw the Traffic switch and treated it as always on. The database side was already fixed Oct 3 (the never-applied `skyRoads`/`skyTraffic`/`skyLandmarks` cleaner).
+- **Fix:** `geoTraffic` gates only on `skyTraffic` (backup `.bak_trfsep_*`), and `DEFAULT_STATE` gained `skyTraffic: True` (backup `.bak_trfkey_*`).
+- **Verified** with screenshots of the Mac copy: Roads off + Traffic on shows only the colored flow; Roads on + Traffic off shows plain gray roads. Restored both on.
+- **Mac agent:**
+  - Something had opened a Turo inbox tab inside the wall's hidden Chrome on CDP port 9333 (Turo blocked it).
+  - The agent now uses port **47333** and closes any tab that isn't the wall.
+- **Lesson:** a new wall switch needs **three** places: the DB cleaner, `server.py` `DEFAULT_STATE`, and `wall.html`.
