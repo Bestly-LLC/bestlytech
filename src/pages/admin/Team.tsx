@@ -9,7 +9,7 @@ import {
   KeyRound, Landmark, Laptop, LineChart, ListChecks, ListTodo, Lock, Mail, MailPlus, Mails, Megaphone,
   MessageCircle, MessageSquareShare, Mic, Moon, NotebookPen, PauseCircle, PenLine, PhoneCall, PlaneLanding,
   Projector, Repeat, ScanEye, Search, Send, SendHorizontal, Server, ShieldCheck, Siren, Sparkles, SprayCan,
-  Sunrise, Skull, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network, Lightbulb, Compass, Sparkle, UserPlus, Bell, Shuffle, ArrowRight,
+  Sunrise, Skull, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network, Lightbulb, Compass, Sparkle, UserPlus, Bell, Shuffle, ArrowRight, Package,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -21,7 +21,8 @@ import type { Mood } from "@/components/admin/BotMascot";
 import { askScout } from "@/components/admin/scoutBus";
 import { pollInterval } from "@/lib/polling";
 import { cn } from "@/lib/utils";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { TeamProducts, useAdminProducts, dutyWord, type DutyKey } from "@/components/admin/team/TeamProducts";
 import { Sheet, btnPlain, btnPrimary, btnTinted, card, field, label, secondary, tertiary, tint } from "./laxUi";
 
 /**
@@ -31,9 +32,9 @@ import { Sheet, btnPlain, btnPrimary, btnTinted, card, field, label, secondary, 
  * goes quiet to the Fix Ladder / Scout as team.silent.<slug>; the Pi pings team_watch_ping to watch the watcher.
  */
 
-type Health = "green" | "yellow" | "red" | "unknown" | "paused" | "planned";
+export type Health = "green" | "yellow" | "red" | "unknown" | "paused" | "planned";
 type Issue = { key: string; title: string; severity: string; fix_stage: string | null; opened_at: string; needs_jared: string | null };
-type Agent = {
+export type Agent = {
   slug: string; name: string; role: string; what_it_does: string; dept: string; reports_to: string | null;
   kind: "human" | "agent" | "job" | "open_role"; status: "active" | "paused" | "planned" | "new";
   relation: string | null; liaison_to: string | null;
@@ -54,6 +55,7 @@ type Chart = { agents: Agent[]; checked_at: string | null; now: string };
 
 const DEPTS: { key: string; title: string; blurb: string }[] = [
   { key: "scout", title: "Scout's team", blurb: "Helpers that work under your Chief of Staff." },
+  { key: "product", title: "Product", blurb: "Owns every app and site, from launch on." },
   { key: "ops", title: "Operations, Security & IT", blurb: "Keeps everything running, safe and improving." },
   { key: "studio", title: "Marketing & Content", blurb: "Posts, videos and client content." },
   { key: "turo", title: "Turo", blurb: "Guests, keys, the car and parking." },
@@ -75,14 +77,14 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   siren: Siren, brush: Brush, "mail-plus": MailPlus, search: Search, "phone-call": PhoneCall, house: House,
   "message-circle": MessageCircle, "hand-heart": HandHeart, sunrise: Sunrise, inbox: Inbox, "send-horizontal": SendHorizontal,
   mails: Mails, "trash-2": Trash2, "house-wifi": House, projector: Projector, "scan-eye": ScanEye, "list-todo": ListTodo,
-  megaphone: Megaphone, landmark: Landmark, briefcase: Briefcase, mail: Mail, "user-plus": UserPlus, sparkle: Sparkle, bell: Bell,
+  megaphone: Megaphone, landmark: Landmark, briefcase: Briefcase, mail: Mail, "user-plus": UserPlus, sparkle: Sparkle, bell: Bell, package: Package,
 };
 
 const RUNS_ON: Record<string, string> = {
   pi: "Pi", mac_mini: "Mac mini", macbook: "MacBook", cloud: "Cloud", claude: "Claude", external: "Outside service", mac: "Mac",
 };
 
-const HEALTH: Record<Health, { word: string; icon: ComponentType<{ className?: string }>; text: string; dot: string }> = {
+export const HEALTH: Record<Health, { word: string; icon: ComponentType<{ className?: string }>; text: string; dot: string }> = {
   green: { word: "Working", icon: CheckCircle2, text: tint.green, dot: "bg-[#30D158] bento:bg-[#34C759]" },
   yellow: { word: "Needs a look", icon: AlertTriangle, text: tint.orange, dot: "bg-[#FF9F0A] bento:bg-[#FF9500]" },
   red: { word: "Gone quiet", icon: XCircle, text: tint.red, dot: "bg-[#FF453A] bento:bg-[#FF3B30]" },
@@ -199,13 +201,14 @@ function useChart() {
   });
 }
 
-function AgentIcon({ a, size = "md" }: { a: Agent; size?: "md" | "lg" }) {
+export function AgentIcon({ a, size = "md" }: { a: Agent; size?: "sm" | "md" | "lg" }) {
   const m = useMood(a.slug);
-  const box = size === "lg" ? "h-14 w-14 rounded-[16px]" : "h-11 w-11 rounded-[13px]";
+  const box = size === "lg" ? "h-14 w-14 rounded-[16px]" : size === "sm" ? "h-7 w-7 rounded-[9px]" : "h-11 w-11 rounded-[13px]";
+  const glyph = size === "lg" ? "h-10 w-10" : size === "sm" ? "h-5 w-5" : "h-8 w-8";
   if (a.slug === "scout") {
     return (
       <span className={cn(box, "grid shrink-0 place-items-center bg-[#0A84FF1f] bento:bg-[#007AFF14]")}>
-        <AdminMark className={cn(size === "lg" ? "h-10 w-10" : "h-8 w-8", "text-[#fff] bento:text-[#000]")} label="Scout" />
+        <AdminMark className={cn(glyph, "text-[#fff] bento:text-[#000]")} label="Scout" />
       </span>
     );
   }
@@ -223,9 +226,9 @@ function AgentIcon({ a, size = "md" }: { a: Agent; size?: "md" | "lg" }) {
           moveOn={a.status === "new" ? "always" : "hover"}
           asleep={a.health === "planned" || a.health === "paused" || isOff(a)}
           mood={m?.mood ?? "happy"}
-          className={size === "lg" ? "h-10 w-10" : "h-8 w-8"} />
+          className={glyph} />
       ) : (
-        <Icon className={size === "lg" ? "h-7 w-7" : "h-[22px] w-[22px]"} />
+        <Icon className={size === "lg" ? "h-7 w-7" : size === "sm" ? "h-4 w-4" : "h-[22px] w-[22px]"} />
       )}
     </span>
   );
@@ -366,6 +369,15 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
   const [busy, setBusy] = useState(false);
   const open = !!a;
   const boss = a?.reports_to ? all.find((x) => x.slug === a.reports_to) : null;
+  // the products this person looks after (same query as the Products view, fetched only while a card is open)
+  const { data: prodData } = useAdminProducts({ enabled: !!a });
+  const looksAfter = useMemo(() => {
+    if (!a) return [];
+    return (prodData?.products ?? [])
+      .filter((p) => p.status !== "retired")
+      .map((p) => ({ p, duties: p.duties.filter((d) => d.required && d.agent_slug === a.slug).map((d) => d.duty as DutyKey) }))
+      .filter((x) => x.duties.length > 0);
+  }, [prodData, a]);
 
   const startEdit = () => {
     if (!a) return;
@@ -424,6 +436,21 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
           <p className={cn("text-[15px] leading-relaxed", label)} style={{ textWrap: "pretty" } as never}>{nb(a.what_it_does)}</p>
 
           {a.kind !== "human" && <AgentMood a={a} />}
+
+          {looksAfter.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="px-1 text-[13px] font-semibold uppercase tracking-[0.02em] text-[#EBEBF5b3] bento:text-[#55555A]">Looks after</h4>
+              <ul className="divide-y divide-[#38383A] rounded-[14px] bg-[#2C2C2E] bento:divide-[#C6C6C8] bento:bg-[#fff]">
+                {looksAfter.map(({ p, duties }) => (
+                  <li key={p.slug} className="flex min-h-[44px] items-center justify-between gap-3 px-4 py-2.5">
+                    <span className={cn("min-w-0 text-[15px] font-medium", label)}>{p.name}</span>
+                    <span className="text-right text-[13px] leading-snug text-[#EBEBF5b3] bento:text-[#55555A]">{duties.map(dutyWord).join(", ")}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="px-1 text-[12px] text-[#A1A1A6] bento:text-[#6C6C70]">{a.name} is the one who answers for these when something goes wrong.</p>
+            </div>
+          )}
 
           {!!a.profile?.one_on_ones?.length && (
             <div className="space-y-2">
@@ -1374,10 +1401,43 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
 
 /* ---------------------------------------------------------------- page */
 
+/** People | Products: an iOS segmented control with tab semantics; Left/Right (and Home/End) move between the two. */
+function ViewSwitch({ value, onChange }: { value: "people" | "products"; onChange: (v: "people" | "products") => void }) {
+  const opts = [{ value: "people" as const, label: "People" }, { value: "products" as const, label: "Products" }];
+  const onKey = (e: React.KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const next = e.key === "ArrowRight" ? (i + 1) % opts.length : e.key === "ArrowLeft" ? (i + opts.length - 1) % opts.length
+      : e.key === "Home" ? 0 : e.key === "End" ? opts.length - 1 : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    onChange(opts[next].value);
+    document.getElementById(`team-tab-${opts[next].value}`)?.focus();
+  };
+  return (
+    <div role="tablist" aria-label="Team view" className="inline-flex w-full rounded-[10px] bg-[#7676803d] p-[2px] sm:w-auto bento:bg-[#7676801f]">
+      {opts.map((o, i) => (
+        <button key={o.value} id={`team-tab-${o.value}`} type="button" role="tab" aria-selected={value === o.value} aria-controls="team-panel"
+          tabIndex={value === o.value ? 0 : -1} onClick={() => onChange(o.value)} onKeyDown={(e) => onKey(e, i)}
+          className={cn("min-h-[44px] flex-1 rounded-[8px] px-5 text-[13px] font-semibold transition-[background-color,transform] duration-150 motion-safe:active:scale-[0.97] sm:min-h-[36px] sm:flex-none",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#000] bento:focus-visible:ring-[#007AFF] bento:focus-visible:ring-offset-[#F3F2EE]",
+            value === o.value
+              ? "bg-[#636366] text-[#fff] shadow-[0_3px_8px_#0000001f] bento:bg-[#fff] bento:text-[#000]"
+              : "text-[#fff] bento:text-[#000]")}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 type Filter = "all" | "attention" | "new" | "open";
 
 export default function Team() {
   const { data, isLoading, error, refetch, isFetching } = useChart();
+  const qc = useQueryClient();
+  const [params, setParams] = useSearchParams();
+  const view: "people" | "products" = params.get("view") === "products" ? "products" : "people";
+  const setView = (v: "people" | "products") =>
+    setParams((prev) => { const n = new URLSearchParams(prev); if (v === "products") n.set("view", "products"); else n.delete("view"); return n; }, { replace: true });
   const { data: moodData } = useTeamMoods();
   const moods = useMemo(() => moodData?.moods ?? {}, [moodData]);
   const [moodFilter, setMoodFilter] = useState<Mood | null>(null);
@@ -1433,13 +1493,17 @@ export default function Team() {
     <div className="mx-auto max-w-[1280px] space-y-6 pb-16">
       <PageHeader
         title="Team"
-        description="Everyone who works for Bestly — you, Scout, and the bots under them. Live."
+        description={view === "products"
+          ? "Every app and site Bestly runs, and who looks after each one. Live."
+          : "Everyone who works for Bestly — you, Scout, and the bots under them. Live."}
         actions={
-          <button type="button" className={btnTinted} onClick={() => refetch()} disabled={isFetching}>
+          <button type="button" className={btnTinted} onClick={() => { refetch(); qc.invalidateQueries({ queryKey: ["admin-products"] }); }} disabled={isFetching}>
             {isFetching ? "Checking…" : "Check now"}
           </button>
         }
       />
+
+      <ViewSwitch value={view} onChange={setView} />
 
       {error && !data && (
         <div className={cn(card, "flex items-center justify-between gap-3")}>
@@ -1448,9 +1512,12 @@ export default function Team() {
         </div>
       )}
 
-      {isLoading && !data ? (
+      <div id="team-panel" role="tabpanel" aria-labelledby={`team-tab-${view}`} className="space-y-6">
+      {view === "products" ? (
+        <TeamProducts agents={agents} onOpenAgent={setOpenSlug} loadingAgents={isLoading && !data} />
+      ) : isLoading && !data ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => <div key={i} className={cn(card, "h-56 animate-pulse")} />)}
+          {Array.from({ length: 6 }).map((_, i) => <div key={i} className={cn(card, "h-56 motion-safe:animate-pulse")} />)}
         </div>
       ) : data ? (
         <>
@@ -1547,6 +1614,7 @@ export default function Team() {
           )}
         </>
       ) : null}
+      </div>
 
       <DetailSheet a={opened} all={agents} onClose={() => setOpenSlug(null)} onOpen={(slug) => setOpenSlug(slug)} />
     </div>

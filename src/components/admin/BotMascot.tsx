@@ -5,7 +5,7 @@ import {
   Lightbulb, LineChart, Mail, MailPlus, Mails, Megaphone, MessageCircle, MessageSquareShare, Mic,
   Moon, Network, NotebookPen, PenLine, PhoneCall, PlaneLanding, Repeat, ScanEye, Search, Send,
   SendHorizontal, Server, ShieldCheck, Siren, Sparkles, SprayCan, Trash2, UserPlus, Users, Wrench, Compass,
-  GalleryHorizontal, HandHelping, Handshake, Bell, PiggyBank, HeartPulse, Tv, Coffee, ClipboardList, SquareCheckBig,
+  GalleryHorizontal, HandHelping, Handshake, Bell, PiggyBank, HeartPulse, Tv, Coffee, ClipboardList, SquareCheckBig, Package,
   type LucideIcon,
 } from "lucide-react";
 import { ADMIN_MARK_PERIOD_MS, useStare } from "@/components/AdminMark";
@@ -102,6 +102,7 @@ export const MASCOTS: Record<string, Spec> = {
   "hand-helping":       { Icon: HandHelping, x: 44, y: 30, gap: 5.6, r: 5.5, move: "bob" },
   handshake:            { Icon: Handshake, x: 36, y: 24, gap: 7, r: 5, move: "wag" },
   bell:                 { Icon: Bell, x: 36, y: 30, gap: 7, r: 5.4, move: "wag" },
+  package:              { Icon: Package, x: 36, y: 44, gap: 12.5, r: 5.6, move: "hop" },   // eyes on the two lower faces of the box, either side of its centre edge
   bot:                  { Icon: Bot, x: 36, y: 42, gap: 9, r: 5.6, move: "bob" },   // sits exactly on the glyph's own eyes
 };
 
