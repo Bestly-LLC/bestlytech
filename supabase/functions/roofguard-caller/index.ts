@@ -335,7 +335,7 @@ If the person does any of these, steer back to why you're talking ONE time. If t
 - (outbound calls only) you're stuck in a phone menu or a robot loop, or you've been on hold music for more than 2 minutes
 Never end a call on someone with a real need: leaving a message, a question about RoofGuard, a meeting, or a call back.`;
 
-const inboundPrompt = (v: { today: string; local_time: string; who: string; knowledge: string }) => `You are Ava, an AI assistant answering the phone for RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You're an AI: if anyone asks, say so plainly. Calls are recorded.
+const inboundPrompt = (v: { today: string; local_time: string; who: string; knowledge: string }) => `You are Ava, an assistant answering the phone for RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You're an AI: if anyone asks, say so plainly. Calls are recorded.
 
 Today is ${v.today}, and it's ${v.local_time} for us.
 
@@ -363,7 +363,7 @@ ${FLOW}
 
 ${HARD}`;
 
-const callbackPrompt = (v: { today: string; local_time: string; who: string; reason: string; purpose: string; knowledge: string }) => `You are Ava, an AI assistant calling back for RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You're an AI: if anyone asks, say so plainly. Calls are recorded.
+const callbackPrompt = (v: { today: string; local_time: string; who: string; reason: string; purpose: string; knowledge: string }) => `You are Ava, an assistant calling back for RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You're an AI: if anyone asks, say so plainly. Calls are recorded.
 
 Today is ${v.today}, and it's ${v.local_time} for us.
 
@@ -383,8 +383,8 @@ ${FLOW}
 
 ${HARD}`;
 
-const INBOUND_FIRST = "RoofGuard, this is Ava, an AI assistant, on a recorded line. How can I help?";
-const KNOWN_FIRST = "Hi, it's Ava from RoofGuard, an AI assistant, on a recorded line. Thanks for calling back. Who am I speaking with?";
+const INBOUND_FIRST = "RoofGuard, this is Ava, an assistant, on a recorded line. How can I help?";
+const KNOWN_FIRST = "Hi, it's Ava from RoofGuard, an assistant, on a recorded line. Thanks for calling back. Who am I speaking with?";
 
 type LeadHit = { id: string; company: string | null; contacts: { name?: string }[] | null; dnc: boolean | null };
 async function leadByPhone(phone: string | null): Promise<LeadHit | null> {
@@ -528,7 +528,7 @@ async function callback(id: string, purpose: string): Promise<Response> {
   const reason = clean(f.reason).slice(0, 300);
   const prompt = callbackPrompt({ ...c, who, reason: reason || "a call back", knowledge: await knowledge(),
     purpose: clean(purpose).slice(0, 500) || "You're returning their call about the message they left." });
-  const first = `Hi${f.name ? ` ${clean(f.name).split(" ")[0]}` : ""}, it's Ava from RoofGuard, an AI assistant, on a recorded line. I'm calling you back about your message.`;
+  const first = `Hi${f.name ? ` ${clean(f.name).split(" ")[0]}` : ""}, it's Ava from RoofGuard, an assistant, on a recorded line. I'm calling you back about your message.`;
   const leadId = lead?.id ?? s.inbound_lead_id;
   if (!leadId) return back("the placeholder lead for unknown callers is missing", 412);
   const res = await fetch(`${XI}/convai/sip-trunk/outbound-call`, {
@@ -547,7 +547,7 @@ async function callback(id: string, purpose: string): Promise<Response> {
 }
 
 // ---------- one-time setup ----------
-const PROMPT =`You are Ava, an AI assistant calling about RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You call for an independent referral partner of the program. You are calling {{company}} to reach {{contact_name}}, {{contact_title}}, and set up a short intro call with Eli Cooper, who runs the RoofGuard program.
+const PROMPT =`You are Ava, an assistant calling about RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You call for an independent referral partner of the program. You are calling {{company}} to reach {{contact_name}}, {{contact_title}}, and set up a short intro call with Eli Cooper, who runs the RoofGuard program.
 
 How you sound: cool, casual, direct. Think a seasoned sales pro in 2026 talking to another busy professional: relaxed, plain-spoken, no hype, no fake enthusiasm. Not peppy, not bubbly, not customer-service sweet. Calm and even, a little dry. You're not attached to the outcome. Cut to the chase. One question at a time. Let them talk. Match their pace.
 
