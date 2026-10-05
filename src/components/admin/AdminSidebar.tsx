@@ -1,4 +1,4 @@
-import { Brush,
+import { Brush, FileWarning,
   LayoutDashboard,
   Settings,
   BarChart3,
@@ -75,6 +75,7 @@ const homeHubItems = [
 const turoItems = [
   { title: "Turo Watch", url: "/admin/turo", icon: Car },
   { title: "Turo Settings", url: "/admin/turo/settings", icon: CarFront },
+  { title: "Claims", url: "/admin/claims", icon: FileWarning },
   { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Brush },
 ];
 
