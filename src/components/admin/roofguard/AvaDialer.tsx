@@ -15,7 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Check, Copy, Delete, Grid3x3, History, Loader2, Phone, PhoneIncoming, RotateCcw } from "lucide-react";
 import { LiveTranscript, Recording, type Line } from "./AvaCalls";
 import { AvaOrb, AVA_GLOW } from "./AvaOrb";
-import { ForwardedTag, LineStatus, SpendChip, YourVoiceTag } from "./AvaShared";
+import { ForwardedTag, SpendChip, YourVoiceTag } from "./AvaShared";
+import { AvaStatusLights } from "./AvaStatusLights";
 import { SettingsButton } from "./AvaSettings";
 import { ACTIONS_EVENT, invokeError } from "./AvaActions";
 import { DIAL_EVENT, loadRecents, saveRecent, type DialMode, type DialRequest, type Recent } from "./avaDial";
@@ -32,7 +33,7 @@ const fmt = (d: string) => {
   return `(${x.slice(0, 3)}) ${x.slice(3, 6)}-${x.slice(6)}`;
 };
 
-export function AvaTopBar({ onCalled, extra, onOpenSettings }: { onCalled: () => void; extra?: ReactNode; onOpenSettings?: () => void }) {
+export function AvaTopBar({ onCalled, extra, onOpenSettings, onOpenSetup }: { onCalled: () => void; extra?: ReactNode; onOpenSettings?: () => void; onOpenSetup?: () => void }) {
   // RoofGuard Ava only: her own number and demo calls. Personal calls live on /admin/ava.
   const [num, setNum] = useState<string | null>(null);
   // "loading" until the first answer; only a real empty answer shows the no-number warning (a failed load keeps the last number)
@@ -91,11 +92,11 @@ export function AvaTopBar({ onCalled, extra, onOpenSettings }: { onCalled: () =>
             {copied ? <Check className="h-4 w-4 text-emerald-300" aria-hidden /> : <Copy className="h-4 w-4 text-white/30 group-hover:text-white/60" aria-hidden />}
           </button>
         )}
-        <LineStatus source="roofguard" />
         <button type="button" onClick={() => setDialOpen(true)}
           className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-[#FFA270] px-4 text-[15px] font-semibold text-[#1c1c1e] transition hover:bg-[#ffb48a] active:scale-[0.98]">
           <Grid3x3 className="h-4 w-4" aria-hidden />Dial
         </button>
+        {onOpenSettings && <AvaStatusLights source="roofguard" onOpenSettings={onOpenSettings} onOpenSetup={onOpenSetup} />}
         <LivePill source="roofguard" />
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">

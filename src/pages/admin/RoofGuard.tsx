@@ -543,7 +543,7 @@ export default function RoofGuard() {
       </div>
       </div>
 
-      <AvaTopBar onCalled={() => setTab("calls")} onOpenSettings={() => setSettingsOpen(true)} extra={<VoiceSwitcher source="rg" onMore={() => { setTab("setup"); setStudio((n) => n + 1); setTimeout(() => document.getElementById("voice-studio-roofguard")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120); }} />} />
+      <AvaTopBar onCalled={() => setTab("calls")} onOpenSettings={() => setSettingsOpen(true)} onOpenSetup={() => setTab("setup")} extra={<VoiceSwitcher source="rg" onMore={() => { setTab("setup"); setStudio((n) => n + 1); setTimeout(() => document.getElementById("voice-studio-roofguard")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120); }} />} />
       <Segmented value={tab} onChange={setTab} />
       <AvaSettingsSheet source="roofguard" open={settingsOpen} onOpenChange={setSettingsOpen} />
 

@@ -15,7 +15,7 @@ import { VoiceSwitcher } from "@/components/admin/roofguard/VoiceSwitcher";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { CallNo, ReplyGuard, LiveTranscript, type Line } from "@/components/admin/roofguard/AvaCalls";
 import { DialerSheet, LivePill } from "@/components/admin/roofguard/AvaDialer";
-import { FollowupsList, ForwardedTag, KnowledgeList, LineStatus, MessageSheet, MessagesList, SpendChip, YourVoiceTag, type Msg } from "@/components/admin/roofguard/AvaShared";
+import { FollowupsList, ForwardedTag, KnowledgeList, MessageSheet, MessagesList, SpendChip, YourVoiceTag, type Msg } from "@/components/admin/roofguard/AvaShared";
 import { useLiveCalls, LIVE_ENDED_EVENT } from "@/components/admin/roofguard/AvaLive";
 import { AvaCalendars } from "@/components/admin/roofguard/AvaCalendars";
 import { AvaCell } from "@/components/admin/roofguard/AvaCell";
@@ -23,11 +23,12 @@ import { AvaSpam } from "@/components/admin/roofguard/AvaSpam";
 import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
 import { CollapsibleSection } from "@/components/admin/roofguard/CollapsibleSection";
 import { AvaSettingsSheet, SettingsButton } from "@/components/admin/roofguard/AvaSettings";
+import { AvaStatusLights } from "@/components/admin/roofguard/AvaStatusLights";
 import { CoachSection } from "@/components/admin/roofguard/AvaCoach";
 import { ArchivedCalls, useArchiveReload } from "@/components/admin/roofguard/AvaArchive";
 import { onOpenCall, takePendingCall } from "@/components/admin/roofguard/coachBus";
 import { toast } from "sonner";
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, Grid3x3, Loader2, Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCw, UserRound } from "lucide-react";
+import { Check, ChevronRight, Copy, Grid3x3, Phone, PhoneIncoming, PhoneOutgoing, Plus, UserRound } from "lucide-react";
 
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
   conversation_id: string | null; status: string; summary: string | null; message: string | null; urgent: boolean; callback_wanted: boolean;
@@ -61,7 +62,6 @@ export default function AvaAssistant() {
   const [dial, setDial] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [contactOpen, setContactOpen] = useState<Partial<Contact> | null>(null);
 
   const load = useCallback(async () => {
@@ -102,11 +102,6 @@ export default function AvaAssistant() {
       .select("*").eq("id", p.callId).maybeSingle().then(({ data }) => { if (data) void markRead(data as Call); else toast.error("Couldn't find that call"); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [calls]);
-  const runSetup = async () => {
-    setBusy(true);
-    await (supabase.rpc as unknown as (f: string, a: object) => Promise<unknown>)("ava_action", { p_action: "setup" });
-    setTimeout(() => { setBusy(false); void load(); }, 30000);
-  };
   const copy = async () => { await navigator.clipboard.writeText(fmt(s?.from_number ?? "")).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1500); };
 
   const nameOf = (c: Call) => c.caller_name ?? contacts.find((k) => k.id === c.contact_id)?.name ?? (c.phone ? fmt(c.phone) : "Unknown caller");
@@ -138,6 +133,7 @@ export default function AvaAssistant() {
         <button type="button" onClick={() => setDial(true)} disabled={!ready}
           className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-[#30D158] px-4 text-[15px] font-semibold text-[#1c1c1e] transition hover:bg-[#4bdc72] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 motion-safe:active:scale-[0.98] disabled:opacity-40">
           <Grid3x3 className="h-4 w-4" aria-hidden />Dial</button>
+        <AvaStatusLights source="ava" onOpenSettings={() => setSettingsOpen(true)} />
         <LivePill source="ava" />
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <VoiceSwitcher source="ava" onMore={() => { setStudio((n) => n + 1); setTimeout(() => document.getElementById("voice-studio-ava")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }} />
@@ -151,16 +147,6 @@ export default function AvaAssistant() {
       </div>
 
       {err && <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load: {err}</div>}
-
-      {/* status */}
-      <div className={cn("flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 ring-1", ready ? "bg-emerald-500/[0.06] ring-emerald-500/25" : "bg-amber-500/[0.06] ring-amber-500/30")}>
-        {ready ? <CheckCircle2 className="h-5 w-5 text-emerald-400" aria-hidden /> : <AlertTriangle className="h-5 w-5 text-amber-300" aria-hidden />}
-        <span className="text-[15px] text-white">{ready ? "Ready to answer and to call out" : "Not set up yet"}</span>
-        {ready && <LineStatus source="ava" className="min-h-[44px]" />}
-        <button type="button" onClick={() => void runSetup()} disabled={busy}
-          className="ml-auto inline-flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm text-white/75 ring-1 ring-white/15 hover:bg-white/5 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}{ready ? "Re-run setup" : "Set up"}</button>
-      </div>
 
       <ReplyGuard source="ava" />
 

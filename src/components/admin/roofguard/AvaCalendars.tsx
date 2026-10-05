@@ -74,7 +74,7 @@ export function AvaCalendars({ className }: { className?: string }) {
 
   if (!status) {
     return (
-      <CollapsibleSection id="ava-calendars" title="Calendars" icon={<CalendarDays className="h-4 w-4 text-[#FFA270]" />} summary={error ? "Couldn't load" : "Loading…"} className={className}>
+      <CollapsibleSection id="ava-calendars" anchorId="ava-calendars" title="Calendars" icon={<CalendarDays className="h-4 w-4 text-[#FFA270]" />} summary={error ? "Couldn't load" : "Loading…"} className={className}>
         <div className="px-4 py-4">
           {error ? <p role="alert" className="text-sm text-red-300">{error} <button type="button" onClick={reload} className="min-h-[44px] underline">Retry</button></p>
             : <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-white/50" aria-label="Loading" /></div>}
@@ -118,7 +118,7 @@ export function AvaCalendars({ className }: { className?: string }) {
   );
 
   return (
-    <CollapsibleSection id="ava-calendars" title="Calendars" icon={<CalendarDays className="h-4 w-4 text-[#FFA270]" />} summary={summary} badge={badge} className={className}>
+    <CollapsibleSection id="ava-calendars" anchorId="ava-calendars" title="Calendars" icon={<CalendarDays className="h-4 w-4 text-[#FFA270]" />} summary={summary} badge={badge} className={className}>
       <div className="space-y-5 px-4 py-4">
         <p className="text-sm text-white/70">Ava reads these to find open times for you. She sees only free or busy, never what an event is. Nothing is booked until you tap a time.</p>
         {!status.find_times.ok && status.find_times.reason && <p role="status" className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-200 ring-1 ring-amber-500/25">{status.find_times.reason}</p>}

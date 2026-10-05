@@ -148,7 +148,7 @@ export function AvaCell({ className, onOpenSettings }: { className?: string; onO
   );
 
   return (
-    <CollapsibleSection id="ava-cell" title="Your cell" icon={<Smartphone className="h-4 w-4" style={{ color: AVA_GLOW }} />} summary={summary} badge={on ? <ForwardedTag /> : undefined} className={className}>
+    <CollapsibleSection id="ava-cell" anchorId="ava-cell" title="Your cell" icon={<Smartphone className="h-4 w-4" style={{ color: AVA_GLOW }} />} summary={summary} badge={on ? <ForwardedTag /> : undefined} className={className}>
       <div className="space-y-4 px-4 py-4">
         <div className="flex flex-wrap items-center gap-2 text-sm text-white/75">
           <span className="min-w-0 flex-1">{on ? "Ava answers the calls you miss on your cell." : "Ava is not answering your missed calls yet."} The switch and her voice on those calls are in Settings.</span>

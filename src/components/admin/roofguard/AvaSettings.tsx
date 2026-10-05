@@ -1,5 +1,6 @@
 /**
  * The Settings sheet, one per Ava (the gear button in each page's top bar).
+ *   Both: Voice agent (status plus "Re-run setup": pushes her latest script, voice and tools to the phone agent; replaces the banner on the page).
  *   Personal Ava: daily spend cap, morning brief (switch, time, preview), calendar hours and booking calendar, missed-call forwarding and its voice.
  *   RoofGuard Ava: daily spend cap.
  *   Both: Coach (auto-test small rules / personal rules need approval, the weekly pass).
@@ -8,9 +9,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, Loader2, Settings } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, Settings } from "lucide-react";
 import { ScrollSheet } from "./AvaSheet";
-import { SpendCapEditor, rpcArgs, type Source } from "./AvaShared";
+import { SpendCapEditor, fmtPhone, rpcArgs, type Source } from "./AvaShared";
+import { LIGHTS_REFRESH } from "./AvaStatusLights";
 import { CalendarSettingsControls } from "./AvaCalendars";
 import { CellForwardingControls, CellSwitch } from "./AvaCell";
 import { CoachSettingsGroup } from "./CoachSettings";
@@ -36,6 +38,72 @@ function Group({ title, hint, children }: { title: string; hint?: string; childr
       {hint && <p className="mt-0.5 text-xs text-white/60">{hint}</p>}
       <div className="mt-3">{children}</div>
     </section>
+  );
+}
+
+type AgentRow = { agent_id: string | null; phone_number_id: string | null; from_number: string | null; setup_log: { at?: string; m: string }[] | null };
+const SETUP_WAIT_MS = 30000;
+const clock12 = (iso: string) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(iso)).replace(/\s(AM|PM)$/i, "\u00A0$1");
+
+/**
+ * Voice agent: is she set up, and a button to push her latest script, voice and tools to the phone agent.
+ * Personal runs ava_action("setup"); RoofGuard runs rg_caller_action("setup") (the same call as Setup's "Go live" step 2, which stays as onboarding).
+ * The setup itself takes about 30 seconds, so the button stays busy that long and then reloads the result.
+ */
+function VoiceAgent({ source }: { source: Source }) {
+  const personal = source === "ava";
+  const [row, setRow] = useState<AgentRow | null | undefined>(undefined);
+  const [keysIn, setKeysIn] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    const { data } = await from(personal ? "ava_settings" : "rg_settings").select("agent_id, phone_number_id, from_number, setup_log").eq("id", true).maybeSingle();
+    setRow((data as AgentRow | null) ?? null);
+    if (!personal) {
+      const k = await rpcArgs<{ keys?: Record<string, boolean> }>("rg_call_stats");
+      if (k.data?.keys) setKeysIn(!!k.data.keys.elevenlabs_api_key && !!k.data.keys.telnyx_api_key);
+    }
+  }, [personal]);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!busy) return;
+    const t = setTimeout(() => { setBusy(false); setMsg(null); void load(); window.dispatchEvent(new Event(LIGHTS_REFRESH)); }, SETUP_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [busy, load]);
+
+  const run = async () => {
+    setBusy(true); setMsg(null);
+    const r = personal ? await rpcArgs("ava_action", { p_action: "setup" }) : await rpcArgs("rg_caller_action", { p_action: "setup" });
+    if (r.error) { setBusy(false); setMsg({ ok: false, text: `Setup didn't start. ${r.error.message}` }); return; }
+    setMsg({ ok: true, text: "Setting up. This takes about 30\u00A0seconds." });
+  };
+
+  if (row === undefined) return <Loader2 className="mx-auto h-5 w-5 animate-spin text-white/50 motion-reduce:animate-none" aria-label="Loading" />;
+  const ready = !!row?.agent_id && !!row?.phone_number_id;
+  const last = row?.setup_log?.length ? row.setup_log[row.setup_log.length - 1] : null;
+  const blocked = !personal && !keysIn;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          {ready ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" aria-hidden /> : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden />}
+          <div className="min-w-0">
+            <p className="text-[15px] font-medium text-white">{ready ? "Set up" : "Not set up yet"}</p>
+            <p className="text-xs text-white/60 [overflow-wrap:anywhere]">{ready ? (row?.from_number ? <>Calling from <span className="whitespace-nowrap tabular-nums">{fmtPhone(row.from_number)}</span></> : "Her phone agent is ready.") : "She can't answer or call until the voice agent is set up."}</p>
+          </div>
+        </div>
+        <button type="button" onClick={() => void run()} disabled={busy || blocked}
+          className={cn("inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-white/10 px-4 text-[15px] font-medium text-white hover:bg-white/15 disabled:opacity-50", ring)}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}{ready ? "Re-run setup" : "Set up"}</button>
+      </div>
+      {blocked && <p className="text-xs text-amber-200">Add the ElevenLabs and Telnyx keys in Setup first.</p>}
+      {msg && <p role={msg.ok ? "status" : "alert"} className={cn("flex items-start gap-1.5 text-sm", msg.ok ? "text-sky-200" : "text-red-300")}>
+        {!msg.ok && <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />}{msg.text}</p>}
+      {!busy && last && (
+        <p className="text-xs text-white/55 [overflow-wrap:anywhere]">Last setup{last.at ? <> <span className="whitespace-nowrap tabular-nums">{clock12(last.at)}</span></> : ""}: {last.m}</p>
+      )}
+    </div>
   );
 }
 
@@ -119,6 +187,7 @@ export function AvaSettingsSheet({ source, open, onOpenChange }: { source: Sourc
     <ScrollSheet open={open} onClose={() => onOpenChange(false)} title={<><Settings className="h-5 w-5 text-white/70" aria-hidden />{personal ? "Ava settings" : "RoofGuard Ava settings"}</>}
       description={personal ? "Things you set once. Each one saves as you change it." : "Limits for the RoofGuard line. Each one saves as you change it."}>
       <div className="pb-4">
+        <Group title="Voice agent" hint={"Pushes her latest script, voice and tools to the phone agent. About 30\u00A0seconds."}><VoiceAgent source={source} /></Group>
         <Group title="Spending" hint="Her outgoing calls stop for the day at this amount.">
           <SpendCapEditor source={source} />
         </Group>

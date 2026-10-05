@@ -7,11 +7,19 @@
  *   - Open or closed is remembered per section in localStorage (every read and write is wrapped, a blocked store just means "use the default").
  *   - The body is only rendered while open; the section component keeps its own data hooks above this, so the summary stays current when closed.
  *   - openSignal: bump the number to open it from outside (the voice switcher's "More voices" link).
+ *   - openSection(id): the status lights' "Calendars" / "Your cell" links open a section by id and scroll to it.
  * Always-open areas (Messages, All calls, live calls) do not use this on purpose.
  */
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const OPEN_EVENT = "ava:open-section";
+/** Open a CollapsibleSection by its id and scroll it into view (its anchorId must equal its id). */
+export const openSection = (id: string) => {
+  window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: id }));
+  setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }), 80);
+};
 
 const KEY = (id: string) => `bestly.ava.section.${id}`;
 const read = (id: string): boolean | null => { try { const v = window.localStorage.getItem(KEY(id)); return v === "1" ? true : v === "0" ? false : null; } catch { return null; } };
@@ -25,6 +33,11 @@ export function CollapsibleSection({ id, anchorId, title, icon, summary, badge, 
   const uid = useId();
   const bodyId = `${uid}-body`, titleId = `${uid}-title`;
   useEffect(() => { if (openSignal) { setOpen(true); write(id, true); } }, [openSignal, id]);
+  useEffect(() => {
+    const h = (e: Event) => { if ((e as CustomEvent<string>).detail === id) { setOpen(true); write(id, true); } };
+    window.addEventListener(OPEN_EVENT, h);
+    return () => window.removeEventListener(OPEN_EVENT, h);
+  }, [id]);
   const toggle = () => setOpen((o) => { write(id, !o); return !o; });
   return (
     <section id={anchorId} aria-labelledby={titleId} className={cn("rounded-3xl bg-white/[0.03] ring-1 ring-white/10", className)}>
