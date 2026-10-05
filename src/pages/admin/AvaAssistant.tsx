@@ -24,12 +24,13 @@ import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
 import { CollapsibleSection } from "@/components/admin/roofguard/CollapsibleSection";
 import { AvaSettingsSheet, SettingsButton } from "@/components/admin/roofguard/AvaSettings";
 import { AvaCoach } from "@/components/admin/roofguard/AvaCoach";
+import { ArchivedCalls, useArchiveReload } from "@/components/admin/roofguard/AvaArchive";
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, Grid3x3, Loader2, Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCw, UserRound } from "lucide-react";
 
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
   conversation_id: string | null; status: string; summary: string | null; message: string | null; urgent: boolean; callback_wanted: boolean;
   duration_sec: number | null; transcript: { role: string; message: string | null; time_in_call_secs?: number }[] | null; read_at: string | null; created_at: string;
-  deleted_at: string | null; call_no: number | null; voice?: "ava" | "jared"; forwarded?: boolean; booked_slot?: string | null };
+  deleted_at: string | null; archived_at?: string | null; call_no: number | null; voice?: "ava" | "jared"; forwarded?: boolean; booked_slot?: string | null };
 type Contact = { id: string; name: string; phone: string | null; relationship: string | null; notes: string | null };
 type Settings = { agent_id: string | null; phone_number_id: string | null; from_number: string; setup_log: { m: string }[] };
 type Costs = { total: number; month: number; minutes: number; calls: number; unread: number };
@@ -70,9 +71,10 @@ export default function AvaAssistant() {
     ]);
     const e = c.error ?? k.error ?? st.error;
     if (e) { setErr(e.message); return; }
-    setErr(null); setCalls(((c.data ?? []) as Call[]).filter((x) => !x.deleted_at)); setContacts((k.data ?? []) as Contact[]); setS(((st.data ?? [])[0] ?? null) as Settings | null); setCosts(co.data);
+    setErr(null); setCalls(((c.data ?? []) as Call[]).filter((x) => !x.deleted_at && !x.archived_at)); setContacts((k.data ?? []) as Contact[]); setS(((st.data ?? [])[0] ?? null) as Settings | null); setCosts(co.data);
   }, []);
   useEffect(() => { void load(); const t = setInterval(() => { if (!document.hidden) void load(); }, 30000); return () => clearInterval(t); }, [load]);
+  useArchiveReload("ava", load);
 
   // a live call just ended: the post-call data (message, next steps) lands a few seconds later
   useEffect(() => {
@@ -197,6 +199,8 @@ export default function AvaAssistant() {
           )}
         </section>
       </div>
+
+      <ArchivedCalls source="ava" />
 
       {/* Scorecard: the Coach reviews every call and builds her playbook (you approve each habit) */}
       <AvaCoach source="ava" admin />

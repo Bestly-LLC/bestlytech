@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CallReview } from "./AvaCoach";
+import { ArchiveCallButton, ArchivedCalls, useArchiveReload } from "./AvaArchive";
 import { supabase } from "@/integrations/supabase/client";
 import { AvaOrb } from "./AvaOrb";
 import { cn } from "@/lib/utils";
@@ -388,6 +389,7 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
   // when a live call ends, its result lands a few seconds later via the post-call webhook
   const liveCount = live.calls.length;
   const prev = useRef(liveCount);
+  useArchiveReload("roofguard", loadCols);
   useEffect(() => {
     if (liveCount < prev.current) { const t1 = setTimeout(() => void loadCols(), 4000); const t2 = setTimeout(() => void loadCols(), 15000); prev.current = liveCount; return () => { clearTimeout(t1); clearTimeout(t2); }; }
     prev.current = liveCount;
@@ -443,6 +445,8 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
       </div>
 
       <IncomingCalls rows={incoming} onOpen={(r) => void openMessage(rgIncomingToMsg(r))} />
+
+      <ArchivedCalls source="roofguard" />
 
       <KnowledgeList source="roofguard" />
 
@@ -706,6 +710,7 @@ function CallSheet({ row, nos, onClose, onDeleted }: { row: BoardRow | null; nos
                 <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Transcript</h4>
                 <LiveTranscript lines={c.transcript ?? []} inline />
               </div>
+              <ArchiveCallButton source="roofguard" callId={c.call_id} onChanged={onDeleted} />
               <DeleteCallButton rpc="rg_delete_call" callId={c.call_id} onDeleted={onDeleted} />
             </div>
           )}

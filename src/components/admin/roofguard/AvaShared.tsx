@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { CallReview } from "./AvaCoach";
+import { ArchiveCallButton } from "./AvaArchive";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { CollapsibleSection } from "./CollapsibleSection";
@@ -332,6 +333,7 @@ export function MessageSheet({ item, onClose, onDeleted }: { item: Msg | null; o
         )}
         <CallReview source={item.source === "ava" ? "ava" : "roofguard"} callId={item.id} />
         <div><h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Transcript</h4><LiveTranscript lines={item.transcript} them={item.name} inline /></div>
+        <ArchiveCallButton source={item.source === "ava" ? "ava" : "roofguard"} callId={item.id} onChanged={onDeleted} />
         <DeleteCallButton rpc={item.source === "ava" ? "ava_delete_call" : "rg_delete_call"} callId={item.id} onDeleted={onDeleted} />
       </div>
     </ScrollSheet>
