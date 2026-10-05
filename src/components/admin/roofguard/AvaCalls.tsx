@@ -17,7 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AvaOrb } from "./AvaOrb";
 import { cn } from "@/lib/utils";
 import {
-  AlarmClock, AlertTriangle, Ban, Calendar, CheckCircle2, ChevronRight, CircleDashed, Clock, FlaskConical, GraduationCap, Headphones, Loader2,
+  AlarmClock, AlertTriangle, Download, Share, Ban, Calendar, CheckCircle2, ChevronRight, CircleDashed, Clock, FlaskConical, GraduationCap, Headphones, Loader2,
   Mail, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, Play, ShieldAlert, Trash2, UserRound, Voicemail, Wrench, XCircle,
 } from "lucide-react";
 import { DirIcon, FollowupsList, KnowledgeList, MessageSheet, MessagesList, rgIncomingToMsg, type Msg, type RgIncoming } from "./AvaShared";
@@ -121,6 +121,82 @@ export function LiveTranscript({ lines, live, className, them = "Them", inline }
 }
 
 /** The call's audio, fetched through the edge function (the ElevenLabs key never reaches the browser). */
+/** The call's audio as a blob (same edge-function path the player uses); null if it isn't ready yet. */
+async function fetchRecording(callId: string, fn: string): Promise<Blob | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const base = (import.meta.env.VITE_SUPABASE_URL as string) ?? "";
+  const res = await fetch(`${base}/functions/v1/${fn}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${session?.access_token ?? ""}`,
+      apikey: (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "") as string },
+    body: JSON.stringify({ action: "audio", call_id: callId }),
+  }).catch(() => null);
+  return res?.ok ? await res.blob() : null;
+}
+
+/**
+ * Share or download one call: the transcript (.txt) and the recording (.mp3), nothing else (Jared, 2026-10-05).
+ * No summary, notes, numbers, scores or names: the transcript says only "Ava" and "Caller".
+ * Share uses the system share sheet with the two files (Messages, AirDrop, Mail...). Where a browser can't share files,
+ * it falls back to downloading them. Download saves both files.
+ */
+export function ShareCall({ callId, fn, callNo, lines, hasRecording = true }: { callId: string; fn: string; callNo?: number | null; lines: Line[]; hasRecording?: boolean }) {
+  const [busy, setBusy] = useState<"share" | "download" | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => { setNote(null); }, [callId]);
+  const name = `Call ${callNo != null ? `#${callNo}` : "recording"}`;
+  const files = async (): Promise<File[]> => {
+    const text = lines.filter((l) => l.text?.trim()).map((l) => `${l.role === "agent" ? "Ava" : "Caller"}: ${l.text.trim()}`).join("\n\n");
+    const out: File[] = [];
+    if (text) out.push(new File([text + "\n"], `${name} transcript.txt`, { type: "text/plain" }));
+    if (hasRecording) {
+      const audio = await fetchRecording(callId, fn);
+      if (audio) out.push(new File([audio], `${name}.mp3`, { type: audio.type || "audio/mpeg" }));
+    }
+    return out;
+  };
+  const save = (list: File[]) => list.forEach((f, i) => setTimeout(() => {
+    const url = URL.createObjectURL(f), a = document.createElement("a");
+    a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }, i * 500));
+  const result = (list: File[]) => {
+    const has = (ext: string) => list.some((f) => f.name.endsWith(ext));
+    if (!list.length) return "Nothing to share yet. The transcript and recording show up a minute after the call ends.";
+    if (hasRecording && !has(".mp3")) return "The recording isn't ready yet, so only the transcript went.";
+    return null;
+  };
+  const share = async () => {
+    setBusy("share"); setNote(null);
+    try {
+      const list = await files();
+      if (!list.length) { setNote(result(list)); return; }
+      const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+      if (nav.share && nav.canShare?.({ files: list })) {
+        await nav.share({ files: list }).catch((e: Error) => { if (e?.name !== "AbortError") throw e; });
+      } else { save(list); setNote("This browser can't share files, so they were downloaded instead."); return; }
+      setNote(result(list));
+    } catch { setNote("Couldn't share. Try Download."); } finally { setBusy(null); }
+  };
+  const download = async () => {
+    setBusy("download"); setNote(null);
+    try { const list = await files(); if (list.length) save(list); setNote(result(list)); }
+    catch { setNote("Couldn't download. Try again in a minute."); } finally { setBusy(null); }
+  };
+  const btn = "inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-white/[0.06] px-4 text-sm font-medium text-white ring-1 ring-white/10 transition hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 motion-safe:active:scale-[0.98] disabled:opacity-50";
+  return (
+    <div>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => void share()} disabled={!!busy} className={btn} aria-label={`Share ${name}: transcript and recording`}>
+          {busy === "share" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Share className="h-4 w-4" aria-hidden />}Share</button>
+        <button type="button" onClick={() => void download()} disabled={!!busy} className={btn} aria-label={`Download ${name}: transcript and recording`}>
+          {busy === "download" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}Download</button>
+      </div>
+      <p className="mt-1.5 text-xs text-white/55">{note ?? "Just the transcript and the recording. No notes, numbers or summary."}</p>
+    </div>
+  );
+}
+
 export function Recording({ callId, fn = "roofguard-caller" }: { callId: string; fn?: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "missing">("idle");
@@ -720,6 +796,7 @@ function CallSheet({ row, nos, focusId, onClose, onDeleted }: { row: BoardRow | 
                 {c.opener_key && <span>· opener: {c.opener_key.replace(/^dm_/, "")}</span>}
               </div>
               <Recording callId={c.call_id} />
+              <ShareCall callId={c.call_id} fn="roofguard-caller" callNo={nos.get(c.call_id)} lines={c.transcript ?? []} />
               {c.summary && <p className="text-[15px] leading-relaxed text-white/85">{c.summary}</p>}
               <div className="divide-y divide-white/5 rounded-2xl bg-white/[0.03] px-4 ring-1 ring-white/10">
                 {c.dm_name && <Fact icon={<UserRound className="h-4 w-4" />} label="Decision maker">{c.dm_name}{c.dm_title ? `, ${c.dm_title}` : ""}</Fact>}

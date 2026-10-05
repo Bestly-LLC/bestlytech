@@ -19,7 +19,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import {
   AlarmClock, AlertTriangle, CalendarCheck, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, Mic, PhoneCall, PhoneForwarded, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
 } from "lucide-react";
-import { CallNo, DeleteCallButton, LiveTranscript, Recording, type Line } from "./AvaCalls";
+import { CallNo, DeleteCallButton, LiveTranscript, Recording, ShareCall, type Line } from "./AvaCalls";
 import { ActionPills, useActions } from "./AvaActions";
 import { ScrollSheet } from "./AvaSheet";
 import { requestDial } from "./avaDial";
@@ -325,6 +325,7 @@ export function MessageSheet({ item, onClose, onDeleted }: { item: Msg | null; o
 
         {item.purpose && <p className="text-sm text-white/60"><span className="text-white/55">Why she called: </span>{item.purpose}</p>}
         {item.hasRecording && <Recording callId={item.id} fn={item.source === "ava" ? "ava-assistant" : "roofguard-caller"} />}
+        <ShareCall callId={item.id} fn={item.source === "ava" ? "ava-assistant" : "roofguard-caller"} callNo={item.call_no} lines={item.transcript} hasRecording={item.hasRecording} />
         {item.summary && <p className="text-[15px] leading-relaxed text-white/85">{item.summary}</p>}
         {!noCallAgain && (
           <button type="button" onClick={callAgain}
