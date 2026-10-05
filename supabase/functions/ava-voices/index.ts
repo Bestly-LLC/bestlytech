@@ -30,6 +30,8 @@ const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Expose-Headers": "x-says-left" };
 const LILY = "pFZP5JQG7iQjIQuC4Bku";
 const WANTED = ["Lulu", "Sapphire", "Chutki", "Serafina"];
+/** Many library voices share a name; Jared named the exact one ("Sapphire - Sweet, Youthful, and Clear"). */
+const HINT: Record<string, RegExp> = { Sapphire: /youthful/i };
 const SAY_CAP = 40;
 const VOICE_ID = /^[A-Za-z0-9]{10,40}$/;
 type Src = "ava" | "rg";
@@ -133,7 +135,9 @@ async function seed(): Promise<Response> {
     const hits = await search(key, name);
     // the exact-name match wins; female first (she is "Ava"); then the most-used
     const exact = hits.filter((h) => h.name.toLowerCase() === name.toLowerCase());
-    const pick = (exact.length ? exact : []).sort((a, b) => Number(b.gender === "female") - Number(a.gender === "female") || b.usage - a.usage)[0];
+    const hinted = HINT[name] ? exact.filter((h) => HINT[name].test(h.description ?? "")) : [];
+    if (HINT[name] && !hinted.length) { missing.push(name); continue; }   // never save the wrong one
+    const pick = (hinted.length ? hinted : exact).sort((a, b) => Number(b.gender === "female") - Number(a.gender === "female") || b.usage - a.usage)[0];
     if (!pick) { missing.push(name); continue; }
     await db.from("ava_voice_favorites").upsert({ voice_id: pick.voice_id, public_owner_id: pick.public_owner_id, name,
       accent: pick.accent, gender: pick.gender, description: pick.description, preview_url: pick.preview_url, sort: 10 + i }, { onConflict: "voice_id" });
