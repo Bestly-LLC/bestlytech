@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Loader2, Phone, RefreshCw, Search, Zap } from "lucide-react";
 import { AvaCalls } from "@/components/admin/roofguard/AvaCalls";
 import { AvaScorecard, AvaScoreStrip } from "@/components/admin/roofguard/AvaScorecard";
+import { AvaTopBar } from "@/components/admin/roofguard/AvaDialer";
 
 type Tab = "calls" | "scorecard" | "leads" | "setup";
 const TABS: { id: Tab; label: string }[] = [{ id: "calls", label: "Calls" }, { id: "scorecard", label: "Scorecard" }, { id: "leads", label: "Leads" }, { id: "setup", label: "Setup" }];
@@ -520,6 +521,7 @@ export default function RoofGuard() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Refresh</button>
         </div>} />
 
+      <AvaTopBar onCalled={() => setTab("calls")} />
       <Segmented value={tab} onChange={setTab} />
 
       {tab === "calls" && <>

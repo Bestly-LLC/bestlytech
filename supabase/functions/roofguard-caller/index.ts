@@ -421,6 +421,8 @@ async function setup(): Promise<Response> {
     },
     platform_settings: {
       data_collection: DATA_COLLECTION,
+      // lets a single call swap the script (personal calls from the admin dialer)
+      overrides: { conversation_config_override: { agent: { prompt: { prompt: true }, first_message: true } } },
       workspace_overrides: { webhooks: { post_call_webhook_id: webhookId, events: ["transcript"], send_audio: false } },
     },
   };
@@ -606,6 +608,63 @@ const toE164 = (v: string) => {
   return /^[2-9]\d{2}[2-9]\d{6}$/.test(d) ? `+1${d}` : null;
 };
 
+// ---------- personal call (admin dialer: Ava as Jared's assistant, not RoofGuard) ----------
+const PERSONAL_PROMPT = `You are Ava, Jared Best's AI assistant, calling on his behalf. You're an AI: if anyone asks, say so plainly. Never claim to be human. The call is recorded.
+
+You're calling {{contact_name}}. Why: {{purpose}}
+
+Today is {{today}}, and it's {{local_time}} where they are.
+
+How you sound: warm, relaxed, quick and confident. One or two short sentences per reply, under 20 words. Contractions. React to what they say before your next line ("Oh lovely", "Ah, got it"). Light British warmth.
+
+Rules:
+- Don't sell anything. Only mention RoofGuard if they ask what else you do: you also make business calls for Jared.
+- If they give you a message for Jared, repeat it back once and say you'll pass it on.
+- If they want to go, say a warm goodbye and end the call. Keep it under three minutes unless they're enjoying the chat.
+- Never share Jared's private details (address, finances, schedule) beyond what the reason above says.`;
+
+async function personalCall(phone: string, name: string, purpose: string, firstLine: string): Promise<Response> {
+  const bad = (error: string, status = 400) => Response.json({ ok: false, error }, { status, headers: CORS });
+  const to = toE164(phone);
+  if (!to) return bad("Enter a 10-digit US or Canada number.");
+  const { data: s } = await db.from("rg_settings").select("*").eq("id", true).single();
+  if (!s?.agent_id || !s.phone_number_id || !s.personal_lead_id) return bad("Ava isn't set up yet.", 412);
+  const key = await vault("elevenlabs_api_key");
+  if (!key) return bad("Ava isn't set up yet.", 412);
+  const { count: dnc } = await db.from("rg_dnc").select("phone", { count: "exact", head: true }).eq("phone", to);
+  if (dnc) return bad("That number asked not to be called.");
+  const who = name.trim().slice(0, 40);
+  const why = purpose.trim().slice(0, 600) || "Jared asked you to call and say hello.";
+  const first = firstLine.trim().slice(0, 300) ||
+    `Hi${who ? ` ${who.split(" ")[0]}` : ""}, it's Ava, Jared's AI assistant, on a recorded line. He asked me to give you a call.`;
+  const tz = "America/Chicago";
+  const now = new Date();
+  const res = await fetch(`${XI}/convai/sip-trunk/outbound-call`, {
+    method: "POST",
+    headers: { "xi-api-key": key, "content-type": "application/json" },
+    body: JSON.stringify({
+      agent_id: s.agent_id, agent_phone_number_id: s.phone_number_id, to_number: to,
+      conversation_initiation_client_data: {
+        conversation_config_override: { agent: { prompt: { prompt: PERSONAL_PROMPT }, first_message: first } },
+        dynamic_variables: {
+          contact_name: who || "them", purpose: why, lead_id: s.personal_lead_id, opener_key: "personal",
+          today: new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(now),
+          local_time: new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(now),
+          // the main script's variables still need values even though this call doesn't use them
+          company: "", contact_title: "", pitch_angle: "", category: "", state: "", callback_number: s.callback_number ?? "",
+          gk_opener: first, dm_opener: first, dm_hook: "", industry_plural: "", industry_hook: "", followup_note: "",
+        },
+      },
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body?.success === false) return bad(`The call didn't go out: ${JSON.stringify(body).slice(0, 200)}`, 502);
+  const { data: call } = await db.from("rg_calls").insert({ lead_id: s.personal_lead_id, attempt: 0, to_number: to,
+    conversation_id: body.conversation_id ?? null, status: "queued", opener_key: null, is_test: true,
+    notes: `${who ? who + ": " : ""}${why}`.slice(0, 300) }).select("id").single();
+  return Response.json({ ok: true, call_id: call?.id, calling: to }, { headers: CORS });
+}
+
 // finished demo call: what Ava logged (partners only see the demo facility)
 async function callResult(callId: string, onlyLead: string | null): Promise<Response> {
   const { data: c } = await db.from("rg_calls").select("id, lead_id, status, outcome, summary, duration_sec, meeting_times, callback_at, transcript")
@@ -620,9 +679,13 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   if (url.searchParams.get("hook") === "elevenlabs") return hook(req);
   const body = await req.json().catch(() => ({}));
-  if (["live", "audio", "demo_call", "call_result"].includes(body.action)) {
+  if (["live", "audio", "demo_call", "call_result", "personal_call"].includes(body.action)) {
     const role = (await authorized(req)) ? "admin" : await userRole(req);
     if (!role) return new Response("unauthorized", { status: 401, headers: CORS });
+    if (body.action === "personal_call") {
+      if (role !== "admin") return new Response("admins only", { status: 403, headers: CORS });
+      return personalCall(String(body.phone ?? ""), String(body.name ?? ""), String(body.purpose ?? ""), String(body.first_line ?? ""));
+    }
     // partners only ever see and place demo calls
     const demoLead = role === "partner"
       ? ((await db.from("rg_settings").select("demo_lead_id").eq("id", true).single()).data?.demo_lead_id ?? "none") : null;
