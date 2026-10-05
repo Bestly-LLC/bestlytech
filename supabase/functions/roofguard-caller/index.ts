@@ -132,15 +132,25 @@ async function tick(): Promise<Response> {
   if (!res.ok) return Response.json({ ok: false, status: res.status, error: body }, { status: 502 });
 
   const convIds: string[] = body.conversation_ids ?? [];
-  await db.from("rg_calls").insert(plan.map(({ lead: l, opener_key }, i) => ({ lead_id: l.lead_id, attempt: l.attempt, to_number: l.phone,
-    batch_id: body.id ?? null, conversation_id: convIds[i] || null, status: "queued", opener_key })));
+  await db.from("rg_calls").insert(plan.map(({ lead: l, opener_key, playbook_arms }, i) => ({ lead_id: l.lead_id, attempt: l.attempt, to_number: l.phone,
+    batch_id: body.id ?? null, conversation_id: convIds[i] || null, status: "queued", opener_key, playbook_arms })));
   await db.from("rg_leads").update({ call_status: "in_progress" }).in("id", go.map((l) => l.lead_id));
   return Response.json({ ok: true, dialed: go.length, batch_id: body.id ?? null });
 }
 
 
 // ---------- shared: openers + submit ----------
-type Planned = { lead: Next; opener_key: string; opener: string; hook: string; gk: string; industry: Record<string, string>; followup?: string; voice_id?: string };
+type Planned = { lead: Next; opener_key: string; opener: string; hook: string; gk: string; industry: Record<string, string>; followup?: string; voice_id?: string;
+  coach_notes: string; playbook_arms: Record<string, boolean> };
+
+/** The coach's learned playbook for one call: live rules always, each rule under test on a random half of calls
+ *  (rg_coach_notes; the arms are saved on the call so rg_playbook_decide can compare). Never fails a call. */
+async function coachNotes(): Promise<{ text: string; arms: Record<string, boolean> }> {
+  const { data, error } = await db.rpc("rg_coach_notes");
+  if (error || !data) return { text: NO_NOTES, arms: {} };
+  return { text: clean(data.text ?? "").length ? String(data.text).replace(/\{\{|\}\}/g, "") : NO_NOTES, arms: (data.arms ?? {}) as Record<string, boolean> };
+}
+const NO_NOTES = "(none yet)";
 
 async function planCalls(leads: Next[]): Promise<Planned[]> {
   // A/B: one decision-maker opener per call (balanced while exploring, then 80% best / 20% explore)
@@ -162,12 +172,13 @@ async function planCalls(leads: Next[]): Promise<Planned[]> {
     const opener = fill(scripts.get(key) ?? "");
     // the part after the introduction, for when the decision maker answered the first line themselves
     const hook = opener.replace(/^.*?on a recorded line\.\s*/i, "");
-    return { lead: l, opener_key: key, opener, hook, gk: fill(gkOpener, true), industry };
+    const notes = await coachNotes();
+    return { lead: l, opener_key: key, opener, hook, gk: fill(gkOpener, true), industry, coach_notes: notes.text, playbook_arms: notes.arms };
   }));
 }
 
 // deno-lint-ignore no-explicit-any
-function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, followup, voice_id }: Planned) {
+function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, followup, voice_id, coach_notes }: Planned) {
   // so "tomorrow" and "next Tuesday" land on the right date, in the lead's own time zone
   const tz = l.timezone || "America/Chicago";
   const now = new Date();
@@ -184,6 +195,7 @@ function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, f
       opener_key, gk_opener: gk, dm_opener: opener, dm_hook: hook,
       industry_plural: industry.industry_plural ?? "facilities teams",
       industry_hook: industry.industry_hook ?? "keeping roof leaks from turning into downtime",
+      coach_notes: coach_notes || NO_NOTES,
     },
   };
 }
@@ -246,7 +258,7 @@ async function testCall(): Promise<Response> {
   const body = await res.json().catch(() => ({}));
   if (!res.ok || body?.success === false) return Response.json({ ok: false, status: res.status, error: body }, { status: 502 });
   await db.from("rg_calls").insert({ lead_id: lead.id, attempt: 0, to_number: s.test_phone, batch_id: body.id ?? null,
-    conversation_id: body.conversation_id ?? null, status: "queued", opener_key: p.opener_key, is_test: true });
+    conversation_id: body.conversation_id ?? null, status: "queued", opener_key: p.opener_key, is_test: true, playbook_arms: p.playbook_arms });
   return Response.json({ ok: true, calling: s.test_phone, as_lead: lead.company, opener: p.opener_key, voice: body });
 }
 
@@ -631,7 +643,10 @@ Never:
 - Invent a deadline, discount, or limited offer. Honest urgency only: roofs take the most stress in storm season.
 - Promise savings or quote dollar amounts.
 
-Before ending, make sure you said out loud and confirmed: the outcome, the meeting times and email, any callback day and time, the decision maker's name and title.`;
+Before ending, make sure you said out loud and confirmed: the outcome, the meeting times and email, any callback day and time, the decision maker's name and title.
+
+Coach's notes (habits learned from your past calls; follow them, but every rule above always wins):
+{{coach_notes}}`;
 
 const VOICEMAIL = "Hi, it's Ava from RoofGuard, calling for {{contact_name}}. Quick one... we look after commercial roofs for one flat monthly cost, and most roof warranties need documented maintenance that, honestly, hardly anyone keeps up with. If a quick chat with Eli Cooper, who runs the program, sounds useful, give us a call back on {{callback_number}}. That's {{callback_number}}. Thanks so much.";
 
@@ -668,6 +683,7 @@ const PLACEHOLDERS: Record<string, string> = {
   today: "", local_time: "", followup_note: "", lead_id: "", company: "your company", contact_name: "the facilities director", contact_title: "",
   pitch_angle: "", category: "", state: "", callback_number: "", opener_key: "", gk_opener: "Hi, it's Ava from RoofGuard, on a recorded line.",
   dm_opener: "", dm_hook: "", industry_plural: "facilities teams", industry_hook: "keeping roof leaks from turning into downtime", call_direction: "outbound",
+  coach_notes: "(none yet)",
 };
 
 async function setup(): Promise<Response> {
@@ -998,7 +1014,7 @@ async function followup(id: string): Promise<Response> {
   const body = await res.json().catch(() => ({}));
   if (!res.ok || body?.success === false) return fail(`call did not go out: ${JSON.stringify(body).slice(0, 200)}`);
   const { data: call } = await db.from("rg_calls").insert({ lead_id: lead.id, attempt: f.is_test ? 0 : next.attempt, to_number: f.to_number,
-    conversation_id: body.conversation_id ?? null, status: "queued", opener_key: p.opener_key, is_test: f.is_test }).select("id").single();
+    conversation_id: body.conversation_id ?? null, status: "queued", opener_key: p.opener_key, is_test: f.is_test, playbook_arms: p.playbook_arms }).select("id").single();
   await db.from("rg_followups").update({ status: "done", result_call_id: call?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
   return Response.json({ ok: true, calling: f.to_number, followup: id });
 }
@@ -1302,7 +1318,7 @@ async function demoCall(phone: string, name: string, voiceId?: string, company =
   const body = await res.json().catch(() => ({}));
   if (!res.ok || body?.success === false) return bad("The call didn't go out. Try again in a minute.", 502);
   const { data: call } = await db.from("rg_calls").insert({ lead_id: lead.id, attempt: 0, to_number: to, conversation_id: body.conversation_id ?? null,
-    status: "queued", opener_key: p.opener_key, is_test: true }).select("id").single();
+    status: "queued", opener_key: p.opener_key, is_test: true, playbook_arms: p.playbook_arms }).select("id").single();
   return Response.json({ ok: true, call_id: call?.id, calling: to }, { headers: CORS });
 }
 const toE164 = (v: string) => {

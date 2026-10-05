@@ -92,6 +92,13 @@ const nowVars = () => {
   };
 };
 
+/** The coach's learned playbook (rules Jared approved on the Scorecard). Never fails a call. */
+async function coachNotes(): Promise<string> {
+  const { data, error } = await db.rpc("ava_coach_notes");
+  const t = error ? "" : String(data ?? "").replace(/\{\{|\}\}/g, "").trim();
+  return t || "(none yet)";
+}
+
 /** The shareable facts, as a bullet list for the prompt. The ONLY knowledge source for calls. */
 async function knowledge(): Promise<string> {
   const { data } = await db.from("ava_knowledge").select("topic, fact").in("scope", ["personal", "both"]).eq("active", true).order("topic");
@@ -178,7 +185,10 @@ It's a spam call when the caller is clearly telemarketing or a robocall: car war
 - If it's a recording that says to press a key to reach a person, press it with the keypad tone tool (use that tool for this and nothing else), then keep asking. If there's no way through, just listen and note what the recording says.
 - Never give real personal information: no address, birthdate, payment details, SSN or account numbers. Say "I'd have to check on that." Never agree to buy, sign up for or accept anything.
 - If anyone sincerely asks whether you're a person, a robot or an AI, say you're Jared's AI assistant. Never claim to be human.
-- Once you have the details, or after about 2 minutes, say "Please take this number off your list. Thanks." and end the call with end_call.`;
+- Once you have the details, or after about 2 minutes, say "Please take this number off your list. Thanks." and end the call with end_call.
+
+Coach's notes (habits learned from your past calls; follow them, but every rule above always wins):
+{{coach_notes}}`;
 
 /** Rules added on a call forwarded from Jared's cell (the init hook sets {{forward_rules}}). */
 const FORWARD_RULES = `FORWARDED CALL: someone called Jared's own cell and he didn't pick up, so the call came to you. You are Jared's assistant answering his phone for him. Your first line was "Hey, Jared's phone. What's up?"
@@ -336,7 +346,7 @@ async function setup(): Promise<Response> {
     conversation_config: {
       agent: {
         first_message: "{{greeting}}", language: "en",
-        dynamic_variables: { dynamic_variable_placeholders: { ...UNKNOWN, call_context: "Someone called Jared's line.", ...nowVars(), knowledge: await knowledge() } },
+        dynamic_variables: { dynamic_variable_placeholders: { ...UNKNOWN, call_context: "Someone called Jared's line.", ...nowVars(), knowledge: await knowledge(), coach_notes: await coachNotes() } },
         prompt: { prompt: PROMPT, llm: s?.llm ?? "gpt-4.1-mini", temperature: 0.5,
           built_in_tools: {
             end_call: { name: "end_call", params: { system_tool_type: "end_call" } },
@@ -438,7 +448,7 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
           : `An outbound call Jared asked you to make. Why: ${purpose}`,
         caller_name: name || "them", caller_notes: contact ? `(${contact.relationship ?? "contact"}) ${contact.notes ?? ""}` : "",
         caller_trusted: contact || to === (s.jared_cell ?? JARED_CELL) ? "yes" : "no",
-        knowledge: await knowledge(), ...nowVars() } } }),
+        knowledge: await knowledge(), coach_notes: await coachNotes(), ...nowVars() } } }),
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok || j?.success === false) return { ok: false, error: `The call didn't go out: ${JSON.stringify(j).slice(0, 200)}`, status: 502 };
@@ -962,7 +972,7 @@ async function initHook(req: Request): Promise<Response> {
   const fwd = caller === (st?.jared_cell ?? JARED_CELL) ? { forwarded: false, from: null, why: null } : detectForward(fields);
   await logDebug({ kind: "init", keys: { body: Object.keys(b), headers: [...req.headers.keys()] }, fields, fwd });
 
-  const base = { knowledge: await knowledge(), ...nowVars() };
+  const base = { knowledge: await knowledge(), coach_notes: await coachNotes(), ...nowVars() };
   if (fwd.forwarded) {
     // a call to Jared's cell he didn't answer. Her voice is his clone only when he turned that on and the clone is healthy.
     const useJared = st?.forward_enabled === true && st.forward_voice === "jared" && !!st.jared_voice_id && !st.jared_voice_paused_at;
