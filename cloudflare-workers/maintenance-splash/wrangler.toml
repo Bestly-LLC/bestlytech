@@ -1,3 +1,9 @@
+# IMPORTANT (2026-10-05 outage): this account is on the Workers FREE plan (100,000 requests a day, shared by every
+# Worker). When the cap is hit, a route set to "fail closed" blocks the whole site with Cloudflare error 1027.
+# bestly.tech, www.bestly.tech and cloud.bestly.tech all went down that way. Every route is now set to FAIL OPEN
+# (request_limit_fail_open = true): over the cap, traffic skips the Worker and goes straight to the origin.
+# A redeploy can recreate a route as fail-closed. After any `wrangler deploy`, re-check it in the dashboard
+# (Workers Routes > Request limit failure mode: Fail open) or with the API.
 name = "bestly-cloud-maintenance-splash"
 main = "src/index.js"
 compatibility_date = "2025-04-01"
