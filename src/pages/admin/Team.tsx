@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentType } from "react";
+import { createContext, useContext, useMemo, useState, type ComponentType } from "react";
 import { AnimatePresence } from "framer-motion";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -39,6 +39,8 @@ type Agent = {
   relation: string | null; liaison_to: string | null;
   profile: {
     field_name?: string; personality?: string; superpower?: string; quirk?: string; motto?: string; first_week?: string;
+    /** a tool the employee it reports_to uses (Rewriter is Spark's tool), not an employee of its own */
+    tool?: boolean;
     /** duties this bot took over in reorgs */
     inherited?: { reorg_id: string; from_slug: string; from_name: string; duties: string[]; at: string }[];
   } | null;
@@ -50,12 +52,12 @@ type Chart = { agents: Agent[]; checked_at: string | null; now: string };
 
 const DEPTS: { key: string; title: string; blurb: string }[] = [
   { key: "scout", title: "Scout's team", blurb: "Helpers that work under your Chief of Staff." },
-  { key: "ops", title: "Ops & Security", blurb: "Keeps everything running and fixes what breaks." },
-  { key: "studio", title: "Studio & Marketing", blurb: "Posts, videos and client content." },
+  { key: "ops", title: "Operations, Security & IT", blurb: "Keeps everything running, safe and improving." },
+  { key: "studio", title: "Marketing & Content", blurb: "Posts, videos and client content." },
   { key: "turo", title: "Turo", blurb: "Guests, keys, the car and parking." },
   { key: "sales", title: "Sales & Clients", blurb: "Finding and answering customers." },
   { key: "mail", title: "Mail Room", blurb: "Moves and tidies your email." },
-  { key: "home", title: "Home & Wall", blurb: "The Pi, the wall and the house." },
+  { key: "home", title: "Facilities", blurb: "The house, the Pi and the wall." },
   { key: "desk", title: "Your Desk", blurb: "Personal errands." },
   { key: "unassigned", title: "New hires", blurb: "Bots that showed up on their own. Tap one to give it a place." },
 ];
@@ -110,6 +112,45 @@ export function nb(s: string | null | undefined): string {
 
 /** Switched off on purpose (schedule or Pi job turned off) — shown as paused, never as "gone quiet". */
 const isOff = (a: Agent) => !a.last_at && /^Switched off|schedule entry is gone/.test(a.summary ?? "");
+
+/** a tool someone on the team uses, shown under its owner instead of as its own employee */
+const isTool = (a: Agent) => !!a.profile?.tool && !!a.reports_to;
+const ToolsContext = createContext<Map<string, Agent[]>>(new Map());
+
+function ToolChip({ t, onOpen }: { t: Agent; onOpen: (a: Agent) => void }) {
+  const m = useMood(t.slug);
+  const dot = t.health === "red" ? "bg-[#FF453A] bento:bg-[#FF3B30]" : t.health === "yellow" ? "bg-[#FF9F0A] bento:bg-[#FF9500]" : null;
+  const off = t.health === "planned" || t.health === "paused" || isOff(t);
+  return (
+    <button type="button" data-bm-host onClick={() => onOpen(t)}
+      aria-label={`${t.name}, a tool: ${t.role}. ${HEALTH[t.health]?.word ?? ""}`}
+      className={cn("inline-flex min-h-[36px] max-w-full items-center gap-1.5 rounded-full py-1 pl-1.5 pr-3 text-left transition-colors",
+        "bg-[#7676803d] hover:bg-[#7676805c] bento:bg-[#7676801f] bento:hover:bg-[#76768033]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF]", off && "opacity-60")}>
+      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#0A84FF1f] text-[#409CFF] bento:bg-[#007AFF14] bento:text-[#007AFF]">
+        <BotMascot icon={t.icon && hasMascot(t.icon) ? t.icon : "bot"} seed={t.slug} asleep={off} mood={m?.mood ?? "happy"}
+          watchCursor={false} className="h-[18px] w-[18px]" />
+      </span>
+      <span className={cn("truncate text-[13px] font-medium", label)}>{t.name}</span>
+      {dot && <span className={cn("h-2 w-2 shrink-0 rounded-full", dot)} aria-hidden />}
+    </button>
+  );
+}
+
+/** an employee's card with the tools it uses underneath */
+function Staff({ a, onOpen, lead }: { a: Agent; onOpen: (a: Agent) => void; lead?: boolean }) {
+  const tools = useContext(ToolsContext).get(a.slug) ?? [];
+  return (
+    <div>
+      <AgentCard a={a} onOpen={onOpen} lead={lead} />
+      {tools.length > 0 && (
+        <div className={cn("-mt-1 flex flex-wrap gap-1.5 pb-2 pr-2", lead ? "pl-[80px]" : "pl-[68px]")} role="group" aria-label={`${a.name}'s tools`}>
+          {tools.map((t) => <ToolChip key={t.slug} t={t} onOpen={onOpen} />)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function statusLine(a: Agent): string {
   if (a.relation === "partner") return "Partner — not on the payroll";
@@ -277,8 +318,11 @@ function nest(list: Agent[]): { a: Agent; depth: number }[] {
   return out;
 }
 
-function Department({ title, blurb, list, onOpen, bossName }: { title: string; blurb: string; list: Agent[]; onOpen: (a: Agent) => void; bossName?: string }) {
-  const rows = nest(list);
+function Department({ title, blurb, list, onOpen, bossName, grouped }: { title: string; blurb: string; list: Agent[]; onOpen: (a: Agent) => void; bossName?: string; grouped: boolean }) {
+  // tools sit under their owner's card (Staff); Scout's tools show under Scout on the top row, not repeated here
+  const people = grouped ? list.filter((a) => !isTool(a)) : list;
+  const rows = nest(people);
+  const toolCount = list.filter((t) => isTool(t) && people.some((x) => x.slug === t.reports_to)).length;
   const red = list.filter((a) => a.health === "red").length;
   const yellow = list.filter((a) => a.health === "yellow").length;
   return (
@@ -289,13 +333,16 @@ function Department({ title, blurb, list, onOpen, bossName }: { title: string; b
           <p className={cn("text-[13px] leading-snug", secondary)}>{blurb}{bossName && bossName !== "Scout" ? ` Reports to ${bossName}.` : ""}</p>
         </div>
         <span className={cn("shrink-0 whitespace-nowrap pt-1 text-[12px] font-medium", red ? tint.red : yellow ? tint.orange : tertiary)}>
-          {red ? `${red} quiet` : yellow ? `${yellow} to look at` : `${list.length} bots`}
+          {red ? `${red} quiet` : yellow ? `${yellow} to look at`
+            : `${people.length} ${people.length === 1 ? "person" : "people"}${grouped && toolCount ? ` · ${toolCount} tools` : ""}`}
         </span>
       </header>
       <ul className="mt-1">
         {rows.map(({ a, depth }) => (
           <li key={a.slug} className={cn("relative", depth > 0 && "ml-5 border-l border-[#38383A] pl-2 bento:border-[#C6C6C8]", depth > 1 && "ml-10")}>
-            <AgentCard a={a} onOpen={onOpen} lead={depth === 0 && list.length > 1} />
+            {grouped
+              ? <Staff a={a} onOpen={onOpen} lead={depth === 0 && people.length > 1} />
+              : <AgentCard a={a} onOpen={onOpen} lead={depth === 0 && people.length > 1} />}
           </li>
         ))}
       </ul>
@@ -313,6 +360,7 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Partial<Agent>>({});
+  const [tool, setTool] = useState(false);
   const [busy, setBusy] = useState(false);
   const open = !!a;
   const boss = a?.reports_to ? all.find((x) => x.slug === a.reports_to) : null;
@@ -320,6 +368,7 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
   const startEdit = () => {
     if (!a) return;
     setDraft({ name: a.name, role: a.role, what_it_does: a.what_it_does, dept: a.dept === "unassigned" ? "" : a.dept, reports_to: a.reports_to, admin_url: a.admin_url });
+    setTool(isTool(a));
     setEditing(true);
   };
   const close = () => { setEditing(false); onClose(); };
@@ -351,7 +400,7 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
         <div className="flex items-center justify-end gap-2">
           <button type="button" className={btnPlain} onClick={() => setEditing(false)}>Cancel</button>
           <button type="button" className={btnPrimary} disabled={busy || (a.status === "new" && !draft.dept)}
-            onClick={() => save({ ...draft, dept: draft.dept || a.dept }, a.status === "new" ? `${draft.name || a.name} has a place now` : "Saved")}>
+            onClick={() => save({ ...draft, dept: draft.dept || a.dept, tool: tool && !!draft.reports_to }, a.status === "new" ? `${draft.name || a.name} has a place now` : "Saved")}>
             {busy ? "Saving…" : "Save"}
           </button>
         </div>
@@ -362,7 +411,7 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
             <AgentIcon a={a} size="lg" />
             <div className="min-w-0">
               <p className={cn("text-[15px] font-medium", label)}>{a.role}</p>
-              {boss && <p className={cn("text-[13px]", secondary)}>Reports to {boss.name}</p>}
+              {boss && <p className={cn("text-[13px]", secondary)}>{isTool(a) ? `A tool ${boss.name} uses` : `Reports to ${boss.name}`}</p>}
               <p className={cn("mt-1 inline-flex items-center gap-1.5 text-[13px] font-medium", h.text)}>
                 <span className={cn("h-2 w-2 rounded-full", h.dot)} aria-hidden />
                 {a.kind === "human" ? "Founder" : a.status === "new" ? "New hire" : h.word} · <span className={secondary}>{nb(statusLine(a))}</span>
@@ -373,6 +422,35 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
           <p className={cn("text-[15px] leading-relaxed", label)} style={{ textWrap: "pretty" } as never}>{nb(a.what_it_does)}</p>
 
           {a.kind !== "human" && <AgentMood a={a} />}
+
+          {(() => {
+            const tools = all.filter((t) => isTool(t) && t.reports_to === a.slug);
+            return tools.length > 0 ? (
+              <div className="space-y-2">
+                <h4 className={cn("px-1 text-[13px] font-semibold uppercase tracking-[0.02em]", secondary)}>Tools {a.name} uses</h4>
+                <ul className="divide-y divide-[#38383A] rounded-[14px] bg-[#2C2C2E] bento:divide-[#C6C6C8] bento:bg-[#fff]">
+                  {tools.map((t) => {
+                    const th = HEALTH[t.health] ?? HEALTH.unknown;
+                    return (
+                      <li key={t.slug}>
+                        <button type="button" onClick={() => onOpen(t.slug)}
+                          className="flex min-h-[44px] w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-[#ffffff0a] bento:hover:bg-[#0000000a]">
+                          <span className="min-w-0">
+                            <span className={cn("block text-[15px] font-medium", label)}>{t.name} <span className={cn("font-normal", tertiary)}>· {t.role}</span></span>
+                            <span className={cn("block text-[13px] leading-snug", secondary)}>{nb(t.what_it_does)}</span>
+                          </span>
+                          <span className={cn("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[12px] font-medium", th.text)}>
+                            <span className={cn("h-2 w-2 rounded-full", th.dot)} aria-hidden />{th.word}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className={cn("px-1 text-[12px]", tertiary)}>If one of these goes quiet, {a.name} is the one who tells you.</p>
+              </div>
+            ) : null;
+          })()}
 
           {a.relation === "partner" && (() => {
             const helpers = all.filter((x) => x.liaison_to === a.slug);
@@ -521,6 +599,14 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
               {bosses.map((b) => <option key={b.slug} value={b.slug}>{b.name} — {b.role}</option>)}
             </select>
           </Field>
+          <label className={cn("flex min-h-[44px] items-center gap-3 rounded-[12px] bg-[#2C2C2E] px-4 py-2 bento:bg-[#fff]", !draft.reports_to && "opacity-50")}>
+            <input type="checkbox" className="h-5 w-5 accent-[#0A84FF]" checked={tool && !!draft.reports_to} disabled={!draft.reports_to}
+              onChange={(e) => setTool(e.target.checked)} />
+            <span className="min-w-0">
+              <span className={cn("block text-[15px]", label)}>It's a tool, not an employee</span>
+              <span className={cn("block text-[12px]", tertiary)}>Shows under whoever it reports to. They tell you when it breaks.</span>
+            </span>
+          </label>
           <Field name="Its admin page (optional)"><input className={field} placeholder="/admin/…" value={draft.admin_url ?? ""} onChange={(e) => setDraft({ ...draft, admin_url: e.target.value })} /></Field>
         </form>
       )}
@@ -1277,7 +1363,8 @@ export default function Team() {
   const counts = useMemo(() => {
     const bots = agents.filter((a) => a.kind !== "human");
     return {
-      team: bots.filter((a) => a.health !== "planned").length,
+      team: bots.filter((a) => a.health !== "planned" && !isTool(a)).length,
+      tools: bots.filter((a) => a.health !== "planned" && isTool(a)).length,
       working: bots.filter((a) => a.health === "green").length,
       attention: bots.filter((a) => a.health === "red" || a.health === "yellow").length,
       fresh: bots.filter((a) => a.status === "new").length,
@@ -1286,6 +1373,12 @@ export default function Team() {
     };
   }, [agents]);
 
+  // owner -> the tools it uses, in chart order
+  const toolsByOwner = useMemo(() => {
+    const m = new Map<string, Agent[]>();
+    for (const a of agents) if (isTool(a)) m.set(a.reports_to!, [...(m.get(a.reports_to!) ?? []), a]);
+    return m;
+  }, [agents]);
   const moodOf = (a: Agent): Mood | null => (moods[a.slug] ? (moods[a.slug].on_strike ? "striking" : moods[a.slug].mood) : null);
   const keep = (a: Agent) =>
     moodFilter ? moodOf(a) === moodFilter
@@ -1300,7 +1393,7 @@ export default function Team() {
   const watchStale = data?.checked_at ? Date.now() - new Date(data.checked_at).getTime() > 30 * 60_000 : false;
 
   const chips: { key: Filter; text: string; tone?: string; show: boolean }[] = [
-    { key: "all", text: `${counts.team} on the team`, show: true },
+    { key: "all", text: `${counts.team} on the team · ${counts.tools} tools`, show: true },
     { key: "attention", text: `${counts.attention} need${counts.attention === 1 ? "s" : ""} a look`, tone: counts.attention ? tint.orange : undefined, show: true },
     { key: "new", text: `${counts.fresh} new hire${counts.fresh === 1 ? "" : "s"}`, tone: tint.orange, show: counts.fresh > 0 },
     { key: "open", text: `${counts.open} open role${counts.open === 1 ? "" : "s"}`, show: counts.open > 0 },
@@ -1308,6 +1401,7 @@ export default function Team() {
 
   return (
     <MoodContext.Provider value={moods}>
+    <ToolsContext.Provider value={toolsByOwner}>
     <div className="mx-auto max-w-[1280px] space-y-6 pb-16">
       <PageHeader
         title="Team"
@@ -1382,7 +1476,7 @@ export default function Team() {
                 <div className="hidden md:block" aria-hidden />
                 <div>
                   <Connector />
-                  <div className={cn(card, "p-2 ring-[#0A84FF40] bento:ring-[#007AFF33]")}><AgentCard a={scout} onOpen={(x) => setOpenSlug(x.slug)} lead /></div>
+                  <div className={cn(card, "p-2 ring-[#0A84FF40] bento:ring-[#007AFF33]")}><Staff a={scout} onOpen={(x) => setOpenSlug(x.slug)} lead /></div>
                   <Connector />
                 </div>
               </div>
@@ -1405,7 +1499,10 @@ export default function Team() {
               if (!list.length) return null;
               const head = list.find((a) => !a.reports_to || !list.some((x) => x.slug === a.reports_to));
               const boss = head?.reports_to ? bySlug.get(head.reports_to)?.name : undefined;
-              return <Department key={d.key} title={d.title} blurb={d.blurb} list={list} bossName={boss} onOpen={(x) => setOpenSlug(x.slug)} />;
+              const grouped = filter === "all" && !moodFilter;
+              // a department of only Scout's tools (they show under Scout above) has no one of its own to show
+              if (grouped && !list.some((a) => !isTool(a))) return null;
+              return <Department key={d.key} title={d.title} blurb={d.blurb} list={list} bossName={boss} grouped={grouped} onOpen={(x) => setOpenSlug(x.slug)} />;
             })}
           </div>
 
@@ -1425,6 +1522,7 @@ export default function Team() {
 
       <DetailSheet a={opened} all={agents} onClose={() => setOpenSlug(null)} onOpen={(slug) => setOpenSlug(slug)} />
     </div>
+    </ToolsContext.Provider>
     </MoodContext.Provider>
   );
 }
