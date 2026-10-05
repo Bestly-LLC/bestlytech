@@ -14,6 +14,8 @@ import { AvaScorecard } from "@/components/admin/roofguard/AvaScorecard";
 
 type Phase = "form" | "calling" | "done";
 type Result = { status: string; outcome: string | null; summary: string | null; duration_sec: number | null; transcript: Line[] };
+type Cost = { total: number; voice: number; phone: number; ai: number };
+const usd = (n: number) => `$${n.toFixed(2)}`;
 
 const fmt = (v: string) => {
   const d = v.replace(/\D/g, "").replace(/^1(?=\d{10})/, "").slice(0, 10);
@@ -35,13 +37,14 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
   const [lines, setLines] = useState<Line[]>([]);
   const [status, setStatus] = useState("dialing");
   const [result, setResult] = useState<Result | null>(null);
+  const [cost, setCost] = useState<Cost | null | "none">(null);
   const started = useRef(0);
   const [, tick] = useState(0);
 
   const digits = phone.replace(/\D/g, "");
   const valid = digits.length === 10 || (digits.length === 11 && digits.startsWith("1"));
 
-  const reset = () => { setPhase("form"); setCallId(null); setLines([]); setResult(null); setErr(null); setStatus("dialing"); };
+  const reset = () => { setPhase("form"); setCallId(null); setLines([]); setResult(null); setCost(null); setErr(null); setStatus("dialing"); };
   useEffect(() => { if (!open && phase !== "calling") reset(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const call = async () => {
@@ -76,6 +79,21 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
     return () => { stop = true; clearInterval(t); };
   }, [phase, callId]);
 
+  // What the call cost to run: voice + phone line + AI. Final once the call is logged, so ask when it finishes.
+  useEffect(() => {
+    if (phase !== "done" || !callId) return;
+    let stop = false;
+    void (async () => {
+      for (let i = 0; i < 4 && !stop; i++) {
+        const { data } = await supabase.rpc("rg_demo_call_cost" as never, { p_call_id: callId } as never) as { data: (Cost & { ok: boolean }) | null };
+        if (data?.ok) { setCost(data); return; }
+        await new Promise((ok) => setTimeout(ok, 2500));
+      }
+      if (!stop) setCost("none");
+    })();
+    return () => { stop = true; };
+  }, [phase, callId]);
+
   const secs = Math.round((Date.now() - started.current) / 1000);
   const label = status === "in-progress" ? "On the call" : status === "done" || status === "processing" ? "Wrapping up" : "Ringing";
 
@@ -91,8 +109,9 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           <div role="tablist" aria-label="Ava" className="mt-3 inline-flex rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
             {([["score", "Scorecard"], ["demo", "Demo call"]] as const).map(([id, label]) => (
               <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}
-                className={cn("min-h-[36px] min-w-[104px] rounded-lg px-4 text-sm font-medium transition-colors",
-                  view === id ? "bg-white text-black shadow-sm" : "text-white/65 hover:text-white")}>{label}</button>
+                data-state={view === id ? "active" : "inactive"}
+                className={cn("min-h-[2.75rem] min-w-[6.5rem] rounded-lg px-4 text-sm font-medium transition-colors",
+                  view === id ? "bg-white text-black shadow-sm" : "text-white/70 hover:text-white")}>{label}</button>
             ))}
           </div>
         </div>
@@ -104,17 +123,17 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium text-white/80">Phone number</span>
                 <input value={phone} onChange={(e) => setPhone(fmt(e.target.value))} inputMode="tel" autoComplete="tel" type="tel" placeholder="(555) 123-4567"
-                  className="h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[17px] tabular-nums text-white outline-none placeholder:text-white/40 focus:border-white/30 bento:bg-[var(--bento-well)]" />
+                  className="h-[3.25rem] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[1.0625rem] tabular-nums text-white outline-none placeholder:text-white/55 focus:border-white/30 bento:bg-[var(--bento-well)]" />
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-white/80">Their first name <span className="text-white/45">(optional)</span></span>
+                <span className="mb-1.5 block text-sm font-medium text-white/80">Their first name <span className="text-white/60">(optional)</span></span>
                 <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" placeholder="e.g. Bill" maxLength={40}
-                  className="h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[17px] text-white outline-none placeholder:text-white/40 focus:border-white/30 bento:bg-[var(--bento-well)]" />
-                <span className="mt-1.5 block text-xs text-white/50">Ava asks for them by name, like a real cold call.</span>
+                  className="h-[3.25rem] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[1.0625rem] text-white outline-none placeholder:text-white/55 focus:border-white/30 bento:bg-[var(--bento-well)]" />
+                <span className="mt-1.5 block text-xs text-white/60">Ava asks for them by name, like a real cold call.</span>
               </label>
               {err && <p role="alert" className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}
               <button type="submit" disabled={!valid || busy}
-                className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 text-[17px] font-semibold text-[#052E1F] transition active:scale-[0.98] disabled:opacity-40">
+                className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 text-[1.0625rem] font-semibold text-[#052E1F] transition active:scale-[0.98] disabled:opacity-40">
                 {busy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <PhoneCall className="h-5 w-5" aria-hidden />}
                 {busy ? "Calling…" : "Have Ava call"}
               </button>
@@ -125,7 +144,7 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
                 <li>Push back: "We already have a roofer."</li>
                 <li>Agree to a meeting and watch her book it with Eli.</li>
               </ul>
-              <p className="text-xs text-white/45">Only call someone who's expecting it. The phone may show it as an unknown number; tell them to pick up.</p>
+              <p className="text-xs text-white/60">Only call someone who's expecting it. The phone may show it as an unknown number; tell them to pick up.</p>
             </form>
           )}
 
@@ -133,12 +152,12 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             <>
               <div className="flex items-center gap-3">
                 {phase === "calling" ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wider text-emerald-300">
                     <span className="h-2 w-2 rounded-full bg-emerald-400 motion-safe:animate-pulse" aria-hidden />Live
                   </span>
                 ) : <CheckCircle2 className="h-5 w-5 text-emerald-400" aria-hidden />}
-                <span className="text-[15px] font-semibold text-white">{phase === "calling" ? label : "Call finished"}</span>
-                <span className={cn("ml-auto whitespace-nowrap font-mono text-[15px] tabular-nums", phase === "calling" ? "text-white" : "text-white/50")}>
+                <span className="text-[0.9375rem] font-semibold text-white">{phase === "calling" ? label : "Call finished"}</span>
+                <span className={cn("ml-auto whitespace-nowrap font-mono text-[0.9375rem] tabular-nums", phase === "calling" ? "text-white" : "text-white/60")}>
                   {phase === "calling" ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : result?.duration_sec != null
                     ? `${Math.floor(result.duration_sec / 60)}:${String(result.duration_sec % 60).padStart(2, "0")}` : ""}
                 </span>
@@ -147,7 +166,22 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
               {phase === "done" && result && (
                 <div className="space-y-3 rounded-2xl bg-white/[0.04] p-4">
                   <StagePill stage={stageOf(result.outcome)} />
-                  {result.summary && <p className="text-[15px] leading-relaxed text-white/85">{result.summary}</p>}
+                  {result.summary && <p className="text-[0.9375rem] leading-relaxed text-white/85">{result.summary}</p>}
+                  <div className="rounded-xl bg-white/[0.05] px-3 py-2.5" aria-live="polite">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[0.9375rem] text-white/75">What this call cost</span>
+                      <span className="whitespace-nowrap text-[1.0625rem] font-semibold tabular-nums text-white">
+                        {cost && cost !== "none" ? usd(cost.total) : cost === "none" ? "Not available" : "Adding up…"}
+                      </span>
+                    </div>
+                    {cost && cost !== "none" && (
+                      <p className="mt-1 text-[0.8125rem] text-white/60">
+                        <span className="whitespace-nowrap">Voice {usd(cost.voice)}</span>{" · "}
+                        <span className="whitespace-nowrap">Phone {usd(cost.phone)}</span>{" · "}
+                        <span className="whitespace-nowrap">AI {usd(cost.ai)}</span>
+                      </p>
+                    )}
+                  </div>
                   {callId && <Recording callId={callId} />}
                 </div>
               )}
@@ -157,7 +191,7 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
 
               {phase === "done" && (
                 <button type="button" onClick={reset}
-                  className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-white/10 px-5 text-[15px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98]">
+                  className="inline-flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-2xl bg-white/10 px-5 text-[0.9375rem] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98]">
                   <RotateCcw className="h-4 w-4" aria-hidden />Call another number</button>
               )}
             </>

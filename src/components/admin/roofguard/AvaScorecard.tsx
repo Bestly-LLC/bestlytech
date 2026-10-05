@@ -61,14 +61,14 @@ function Pill({ cls, Icon, children }: { cls: string; Icon: typeof CheckCircle2;
 function Ring({ value, goal }: { value: number; goal: number }) {
   const r = 44, c = 2 * Math.PI * r, f = Math.min(1, goal ? value / goal : 0);
   return (
-    <div className="relative h-[112px] w-[112px] shrink-0" role="img" aria-label={`${value} of ${goal} meetings booked this week`}>
+    <div className="relative h-28 w-28 shrink-0" role="img" aria-label={`${value} of ${goal} meetings booked this week`}>
       <svg viewBox="0 0 112 112" className="h-full w-full -rotate-90">
         <circle cx="56" cy="56" r={r} fill="none" stroke="currentColor" strokeWidth="8" className="text-white/10" />
         <circle cx="56" cy="56" r={r} fill="none" strokeWidth="8" strokeLinecap="round" stroke="#34d399"
           strokeDasharray={`${c * f} ${c}`} className="motion-safe:transition-[stroke-dasharray] motion-safe:duration-500" />
       </svg>
       <div className="absolute inset-0 grid place-items-center text-center">
-        <div><div className="text-[30px] font-semibold leading-none tabular-nums text-white">{value}</div>
+        <div><div className="text-[1.875rem] font-semibold leading-none tabular-nums text-white">{value}</div>
           <div className="mt-1 text-xs text-white/55">of {goal}</div></div>
       </div>
     </div>
@@ -91,8 +91,8 @@ export function AvaScoreStrip({ onOpen }: { onOpen?: () => void }) {
   return (
     <button type="button" onClick={onOpen} className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-white/[0.03] px-4 py-3 text-left ring-1 ring-white/10 transition hover:bg-white/[0.05]">
       <span className="text-sm text-white/60">This week</span>
-      <span className="text-[15px] font-semibold tabular-nums text-white">{k.week.booked}<span className="text-white/45"> / {k.goal} booked</span></span>
-      <span className="text-sm text-white/60">Today <span className="tabular-nums text-white">{k.day.dials}</span><span className="text-white/45"> / {k.loa.daily_target} dials</span></span>
+      <span className="text-[0.9375rem] font-semibold tabular-nums text-white">{k.week.booked}<span className="text-white/60"> / {k.goal} booked</span></span>
+      <span className="text-sm text-white/60">Today <span className="tabular-nums text-white">{k.day.dials}</span><span className="text-white/60"> / {k.loa.daily_target} dials</span></span>
       <span className="ml-auto"><Pill cls={s.cls} Icon={s.Icon}>{s.text}</Pill></span>
     </button>
   );
@@ -130,14 +130,14 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
           <Ring value={w.booked} goal={k.goal} />
           <div className="min-w-[220px] flex-1 space-y-3">
             <div>
-              <div className="text-[13px] text-white/55">Meetings booked with Eli this week</div>
+              <div className="text-[0.8125rem] text-white/55">Meetings booked with Eli this week</div>
               <div className="mt-1 flex flex-wrap gap-2"><Pill cls={st.cls} Icon={st.Icon}>{st.text}</Pill><Pill cls={hire.cls} Icon={hire.Icon}>Hire status: {hire.text}</Pill></div>
-              <p className="mt-1.5 text-xs text-white/45">{hire.sub}.</p>
+              <p className="mt-1.5 text-xs text-white/60">{hire.sub}.</p>
             </div>
             <div>
-              <div className="mb-1.5 flex items-baseline justify-between text-[13px]">
+              <div className="mb-1.5 flex items-baseline justify-between text-[0.8125rem]">
                 <span className="text-white/70">Dials today</span>
-                <span className="tabular-nums text-white">{k.day.dials}<span className="text-white/45"> / {k.loa.daily_target}</span></span>
+                <span className="tabular-nums text-white">{k.day.dials}<span className="text-white/60"> / {k.loa.daily_target}</span></span>
               </div>
               <Bar value={k.day.dials} max={k.loa.daily_target} label="Dials today versus daily target" />
             </div>
@@ -147,13 +147,13 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
 
       {/* the math */}
       <section className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10" aria-label="The Law of Averages">
-        <h3 className="text-[15px] font-semibold text-white">The Law of Averages</h3>
-        <p className="mt-2 text-[15px] leading-relaxed text-white/80">
+        <h3 className="text-[0.9375rem] font-semibold text-white">The Law of Averages</h3>
+        <p className="mt-2 text-[0.9375rem] leading-relaxed text-white/80">
           Goal: <b className="text-white">{k.goal} meetings a week</b> ({k.goal} closes, your Amazon Business standard).
           {" "}{measured ? "Her real average" : "Starting assumption"}: <b className="text-white">1 meeting per {k.loa.dials_per_meeting} dials</b>.
           {" "}So she needs <b className="text-white">{k.loa.weekly_target} dials a week</b>, about <b className="text-white">{k.loa.daily_target} a day</b> over {k.work_days} days.
         </p>
-        <p className="mt-2 text-xs leading-relaxed text-white/50">
+        <p className="mt-2 text-xs leading-relaxed text-white/60">
           Your door-to-door LOA was about 1 close per {k.loa.door_dials_per_meeting} doors (55 doors, 30 contacts, 7 decision makers, 4.5 pitches, 2.5 accounts a week). Cold calls convert worse than walking in, so Ava starts at 1 per 50.
           {measured ? ` This number is now hers: ${k.loa.booked_all} booked from ${k.loa.dials_all} real dials.` : ` Her own number replaces it as real calls come in (${k.loa.dials_all} so far).`}
         </p>
@@ -167,32 +167,32 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
       <div className={cn("grid gap-4", !narrow && "lg:grid-cols-2")}>
         {/* funnel */}
         <section className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10" aria-label="This week's funnel">
-          <h3 className="mb-3 text-[15px] font-semibold text-white">This week, step by step</h3>
+          <h3 className="mb-3 text-[0.9375rem] font-semibold text-white">This week, step by step</h3>
           <ol className="space-y-3">
             {steps.map((s, i) => {
               const conv = i > 0 ? pct(s.n, steps[i - 1].n) : null;
               const doorConv = i > 0 ? Math.round((100 * s.door) / steps[i - 1].door) : null;
               return (
                 <li key={s.label}>
-                  <div className="mb-1 flex items-baseline gap-2 text-[13px]">
+                  <div className="mb-1 flex items-baseline gap-2 text-[0.8125rem]">
                     <span className="text-white/75">{s.label}</span>
                     <span className="ml-auto tabular-nums text-white">{s.n.toLocaleString()}</span>
-                    <span className="min-w-[112px] whitespace-nowrap text-right text-xs tabular-nums text-white/45">{i === 0 ? "" : conv == null ? "–" : `${conv}%`}{i > 0 && <span className="text-white/30"> · door {doorConv}%</span>}</span>
+                    <span className="min-w-[7rem] whitespace-nowrap text-right text-xs tabular-nums text-white/60">{i === 0 ? "" : conv == null ? "–" : `${conv}%`}{i > 0 && <span className="text-white/60"> · door {doorConv}%</span>}</span>
                   </div>
                   <Bar value={s.n} max={Math.max(steps[0].n, 1)} label={`${s.label}: ${s.n}`} tone={i === steps.length - 1 ? "#34d399" : "#7dd3fc"} />
                 </li>
               );
             })}
           </ol>
-          <p className="mt-3 text-[11px] text-white/40">Percent = share of the step above. "Door" = your Amazon Business rate at that step.</p>
+          <p className="mt-3 text-[0.75rem] text-white/55">Percent = share of the step above. "Door" = your Amazon Business rate at that step.</p>
         </section>
 
         {/* history */}
         <section className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10" aria-label="Meetings booked per week">
-          <h3 className="mb-3 text-[15px] font-semibold text-white">Booked per week</h3>
+          <h3 className="mb-3 text-[0.9375rem] font-semibold text-white">Booked per week</h3>
           <div className="relative flex h-36 items-end gap-[2px]" role="img" aria-label={`Last ${k.history.length} weeks of meetings booked, goal ${k.goal}`}>
             <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-white/30" style={{ bottom: `${(100 * k.goal) / histMax}%` }} aria-hidden>
-              <span className="absolute -top-4 right-0 text-[10px] text-white/50">goal {k.goal}</span>
+              <span className="absolute -top-4 right-0 text-[0.6875rem] text-white/60">goal {k.goal}</span>
             </div>
             {k.history.map((h) => (
               <div key={h.week} className="group relative flex h-full flex-1 items-end justify-center" title={`Week of ${new Date(h.week + "T12:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}: ${h.booked} booked, ${h.dials} dials`}>
@@ -200,7 +200,7 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
               </div>
             ))}
           </div>
-          <div className="mt-1.5 flex gap-[2px] text-[10px] text-white/40">
+          <div className="mt-1.5 flex gap-[2px] text-[0.6875rem] text-white/55">
             {k.history.map((h) => <span key={h.week} className="flex-1 text-center">{new Date(h.week + "T12:00").toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}</span>)}
           </div>
           <table className="sr-only"><caption>Meetings booked per week</caption><thead><tr><th>Week of</th><th>Dials</th><th>Booked</th></tr></thead>
@@ -211,11 +211,11 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
       <div className={cn("grid gap-4", !narrow && "lg:grid-cols-2")}>
         {/* quality */}
         <section className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10" aria-label="Call quality">
-          <h3 className="mb-3 text-[15px] font-semibold text-white">Call quality</h3>
+          <h3 className="mb-3 text-[0.9375rem] font-semibold text-white">Call quality</h3>
           <dl className="grid grid-cols-3 gap-3">
-            <div><dt className="text-xs text-white/50">Reply speed</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-white">{k.quality.reply_sec != null ? <>{k.quality.reply_sec}<span className="text-sm text-white/50">&nbsp;sec</span></> : "–"}</dd><dd className="text-[11px] text-white/40">goal: 1&nbsp;sec or less</dd></div>
-            <div><dt className="text-xs text-white/50">Avg call</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-white">{k.quality.avg_call_sec != null ? <>{Math.floor(k.quality.avg_call_sec / 60)}:{String(k.quality.avg_call_sec % 60).padStart(2, "0")}</> : "–"}</dd><dd className="text-[11px] text-white/40">answered calls</dd></div>
-            <div><dt className="text-xs text-white/50">Opt-outs</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-white">{k.quality.optout_rate != null ? <>{k.quality.optout_rate}<span className="text-sm text-white/50">%</span></> : "–"}</dd><dd className="text-[11px] text-white/40">of answered, 28&nbsp;days</dd></div>
+            <div><dt className="text-xs text-white/60">Reply speed</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-white">{k.quality.reply_sec != null ? <>{k.quality.reply_sec}<span className="text-sm text-white/60">&nbsp;sec</span></> : "–"}</dd><dd className="text-[0.75rem] text-white/55">goal: 1&nbsp;sec or less</dd></div>
+            <div><dt className="text-xs text-white/60">Avg call</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-white">{k.quality.avg_call_sec != null ? <>{Math.floor(k.quality.avg_call_sec / 60)}:{String(k.quality.avg_call_sec % 60).padStart(2, "0")}</> : "–"}</dd><dd className="text-[0.75rem] text-white/55">answered calls</dd></div>
+            <div><dt className="text-xs text-white/60">Opt-outs</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-white">{k.quality.optout_rate != null ? <>{k.quality.optout_rate}<span className="text-sm text-white/60">%</span></> : "–"}</dd><dd className="text-[0.75rem] text-white/55">of answered, 28&nbsp;days</dd></div>
           </dl>
           <div className="mt-4 grid grid-cols-3 gap-3 border-t border-white/5 pt-3 text-xs text-white/55">
             <span className="whitespace-nowrap">Voicemails <b className="tabular-nums text-white">{w.voicemails ?? 0}</b></span>
@@ -226,12 +226,12 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
 
         {/* booked meetings */}
         <section className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10" aria-label="Meetings booked">
-          <h3 className="mb-3 flex items-center gap-2 text-[15px] font-semibold text-white"><CalendarCheck className="h-4 w-4 text-emerald-300" aria-hidden />Meetings for Eli</h3>
-          {k.booked_list.length === 0 ? <p className="text-sm text-white/45">None yet. They land here the moment Ava books one.</p> : (
+          <h3 className="mb-3 flex items-center gap-2 text-[0.9375rem] font-semibold text-white"><CalendarCheck className="h-4 w-4 text-emerald-300" aria-hidden />Meetings for Eli</h3>
+          {k.booked_list.length === 0 ? <p className="text-sm text-white/60">None yet. They land here the moment Ava books one.</p> : (
             <ul className="divide-y divide-white/5">
               {k.booked_list.map((b, i) => (
                 <li key={i} className="py-2">
-                  <div className="flex items-baseline gap-2"><span className="text-[15px] font-medium text-white">{b.company}</span><span className="text-xs text-white/45">{b.state}</span></div>
+                  <div className="flex items-baseline gap-2"><span className="text-[0.9375rem] font-medium text-white">{b.company}</span><span className="text-xs text-white/60">{b.state}</span></div>
                   <div className="text-xs text-white/60">{[b.dm_name && `${b.dm_name}${b.dm_title ? `, ${b.dm_title}` : ""}`, b.meeting_times, b.meeting_email].filter(Boolean).join(" · ")}</div>
                 </li>
               ))}
@@ -245,7 +245,7 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
         <div className="min-w-[200px] flex-1 text-sm text-white/70">
           <b className="text-white tabular-nums">{k.leads_left.toLocaleString()}</b> leads left with up to {k.max_attempts} tries each.
           {runwayWeeks != null && <> At {k.loa.daily_target} dials a day that's about <b className="whitespace-nowrap text-white tabular-nums">{runwayWeeks} weeks</b> of calling.</>}
-          <div className="mt-1 text-xs text-white/45">Today's cap: <span className="tabular-nums">{k.daily_cap}</span> calls{k.pilot_limit ? ` · pilot: ${k.pilot_limit} leads` : ""}.</div>
+          <div className="mt-1 text-xs text-white/60">Today's cap: <span className="tabular-nums">{k.daily_cap}</span> calls{k.pilot_limit ? ` · pilot: ${k.pilot_limit} leads` : ""}.</div>
         </div>
         {admin && (
           <label className="flex cursor-pointer items-center gap-3 text-sm text-white/80">

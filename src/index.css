@@ -743,7 +743,10 @@ body.admin-bento { background-color: var(--bento-page); }
 .admin-bento [role="tablist"] { scrollbar-width: none; }
 .admin-bento [role="tablist"]::-webkit-scrollbar { display: none; }
 .admin-bento [role="tab"] { border-radius: 9999px; color: rgba(17, 17, 20, 0.65); }
-.admin-bento [role="tab"][data-state="active"] { background: var(--bento-ink); color: #fff; box-shadow: none; }
+.admin-bento [role="tab"][data-state="active"],
+.admin-bento [role="tab"][aria-selected="true"] { background: var(--bento-ink); color: #fff; box-shadow: none; }
+/* Plain-button tabs (aria-selected, no Radix data-state) used to get the muted ink text on the ink pill:
+   black on black. Selected now always wins. */
 
 /* Pastel tile helpers (ink text on top). */
 .admin-bento .bento-tile { border-radius: 1.75rem; color: var(--bento-ink); border: 0; box-shadow: none; }
