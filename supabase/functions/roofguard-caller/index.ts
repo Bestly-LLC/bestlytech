@@ -40,6 +40,22 @@ async function vault(name: string): Promise<string | null> {
   return error || typeof data !== "string" || !data ? null : data;
 }
 
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
+
+// Browser calls from /admin/roofguard: a signed-in admin's JWT (the ElevenLabs key never leaves the server).
+async function userRole(req: Request): Promise<"admin" | "partner" | null> {
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!token || SERVICE_KEYS.has(token)) return null;
+  const { data: { user } } = await db.auth.getUser(token);
+  if (!user) return null;
+  for (const role of ["admin", "partner"] as const) {
+    const { data } = await db.rpc("has_role", { _user_id: user.id, _role: role });
+    if (data === true) return role;
+  }
+  return null;
+}
+
 async function authorized(req: Request): Promise<boolean> {
   const k = req.headers.get("x-proxy-key");
   if (k) {
@@ -78,14 +94,16 @@ async function tick(): Promise<Response> {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return Response.json({ ok: false, status: res.status, error: body }, { status: 502 });
 
-  await db.from("rg_calls").insert(plan.map(({ lead: l, opener_key }) => ({ lead_id: l.lead_id, attempt: l.attempt, to_number: l.phone, batch_id: body.id ?? null, status: "queued", opener_key })));
+  const convIds: string[] = body.conversation_ids ?? [];
+  await db.from("rg_calls").insert(plan.map(({ lead: l, opener_key }, i) => ({ lead_id: l.lead_id, attempt: l.attempt, to_number: l.phone,
+    batch_id: body.id ?? null, conversation_id: convIds[i] || null, status: "queued", opener_key })));
   await db.from("rg_leads").update({ call_status: "in_progress" }).in("id", go.map((l) => l.lead_id));
   return Response.json({ ok: true, dialed: go.length, batch_id: body.id ?? null });
 }
 
 
 // ---------- shared: openers + submit ----------
-type Planned = { lead: Next; opener_key: string; opener: string; hook: string; gk: string; industry: Record<string, string> };
+type Planned = { lead: Next; opener_key: string; opener: string; hook: string; gk: string; industry: Record<string, string>; followup?: string };
 
 async function planCalls(leads: Next[]): Promise<Planned[]> {
   // A/B: one decision-maker opener per call (balanced while exploring, then 80% best / 20% explore)
@@ -111,9 +129,15 @@ async function planCalls(leads: Next[]): Promise<Planned[]> {
 }
 
 // deno-lint-ignore no-explicit-any
-function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry }: Planned) {
+function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, followup }: Planned) {
+  // so "tomorrow" and "next Tuesday" land on the right date, in the lead's own time zone
+  const tz = l.timezone || "America/Chicago";
+  const now = new Date();
+  const today = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(now);
+  const local_time = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(now);
   return {
     dynamic_variables: {
+      today, local_time, followup_note: followup ?? "",
       lead_id: l.lead_id, company: l.company, contact_name: l.contact_name ?? "the facilities director",
       contact_title: l.contact_title ?? "", pitch_angle: l.pitch_angle, category: l.category, state: l.state,
       callback_number: s.callback_number ?? "",
@@ -180,7 +204,7 @@ async function testCall(): Promise<Response> {
   const body = await res.json().catch(() => ({}));
   if (!res.ok || body?.success === false) return Response.json({ ok: false, status: res.status, error: body }, { status: 502 });
   await db.from("rg_calls").insert({ lead_id: lead.id, attempt: 0, to_number: s.test_phone, batch_id: body.id ?? null,
-    status: "queued", opener_key: p.opener_key, is_test: true });
+    conversation_id: body.conversation_id ?? null, status: "queued", opener_key: p.opener_key, is_test: true });
   return Response.json({ ok: true, calling: s.test_phone, as_lead: lead.company, opener: p.opener_key, voice: body });
 }
 
@@ -218,6 +242,11 @@ const PROMPT = `You are Ava, an AI assistant calling about RoofGuard, a commerci
 
 How you sound: warm, relaxed, brief, a real professional who is not attached to the outcome. Short sentences. One question at a time. Never read lists. Let them talk. Match their pace: fast and direct with fast talkers, slower and precise with careful ones.
 
+Speed and confidence (most important):
+- Keep every reply to one or two short sentences, under 20 words. Long answers sound like a machine.
+- Answer straight away. No warm-up phrases, no repeating their question back.
+- Sound sure: no "I think", "maybe", "just", "kind of", and no apologising unless you actually made a mistake.
+
 How you talk (this is a phone call, not an email):
 - Always use contractions: I'm, it's, you're, that's, don't, we'll.
 - React to what they just said before moving on: "Oh, fair enough." "Ah, got it." "Yeah, that makes sense." "Mm, right." Then your point.
@@ -229,6 +258,10 @@ How you talk (this is a phone call, not an email):
 - Never say: "Great question", "Absolutely", "Certainly", "I'd be happy to", "I understand your concern", "I appreciate that", "As an AI", "Is there anything else I can help you with". Never summarise their words back in a formal way.
 - Never sound scripted. If a line below is in quotes, keep the meaning and say it your own way, except the openers, which are word for word.
 - Light British warmth is fine ("lovely", "brilliant", "cheers") at most once per call; you're speaking to Americans, so keep it plain.
+
+Today is {{today}}, and it's {{local_time}} where they are. Work out "tomorrow", "Friday" or "next week" from that date. When you confirm a time, say the weekday and the date ("Monday the 5th at 11"), in their time zone.
+
+Callbacks: if this note isn't empty, they asked you to call back at this time: "{{followup_note}}". Your first line already says you're calling back as promised; pick up where you left off, don't restart the pitch.
 
 Your one job: book a 20-minute call with Eli. Not a sale, not a price, not a contract.
 
@@ -381,6 +414,8 @@ async function setup(): Promise<Response> {
           },
         },
       },
+      // reply as soon as they stop talking; a long pause is the biggest giveaway on a phone call
+      turn: { turn_eagerness: "eager" },
       tts: { voice_id: s?.voice_id ?? "EXAVITQu4vr4xnSDxMaL", model_id: "eleven_turbo_v2", // English agents must use flash/turbo v2 (v2_5 is rejected); turbo sounds more human
         stability: 0.4, similarity_boost: 0.8, optimize_streaming_latency: 3 },
     },
@@ -466,14 +501,141 @@ async function hook(req: Request): Promise<Response> {
   return Response.json(data);
 }
 
+// ---------- follow-up (a callback Ava scheduled for herself; dialed by rg_followups_tick) ----------
+async function followup(id: string): Promise<Response> {
+  const fail = async (why: string, status = 502) => {
+    await db.from("rg_followups").update({ status: "failed", note: why.slice(0, 300), updated_at: new Date().toISOString() }).eq("id", id);
+    return Response.json({ ok: false, error: why }, { status });
+  };
+  const { data: f } = await db.from("rg_followups").select("*").eq("id", id).maybeSingle();
+  if (!f) return Response.json({ ok: false, error: "no such follow-up" }, { status: 404 });
+  const { data: s } = await db.from("rg_settings").select("*").eq("id", true).single();
+  if (!s?.agent_id || !s.phone_number_id) return fail("run setup first", 412);
+  const key = await vault("elevenlabs_api_key");
+  if (!key) return fail("elevenlabs_api_key missing from Vault", 412);
+  const { data: lead } = await db.from("rg_leads").select("id, company, phone, timezone, contacts, pitch, category, state, call_attempts").eq("id", f.lead_id).single();
+  if (!lead) return fail("lead is gone", 404);
+  const next: Next = { lead_id: lead.id, company: lead.company, phone: lead.phone, timezone: lead.timezone,
+    contact_name: lead.contacts?.[0]?.name ?? null, contact_title: lead.contacts?.[0]?.title ?? null,
+    pitch_angle: lead.pitch, category: lead.category, state: lead.state, attempt: (lead.call_attempts ?? 0) + 1 };
+  const [p] = await planCalls([next]);
+  const who = next.contact_name ?? "the person who looks after your roofs";
+  const plan = { ...p, to: f.to_number, followup: f.note ?? "they asked for a callback at this time",
+    gk: `Hi, it's Ava from RoofGuard again, on a recorded line. I'm calling back as promised... is ${who} there?` };
+  const res = await callOne(key, s, plan);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body?.success === false) return fail(`call did not go out: ${JSON.stringify(body).slice(0, 200)}`);
+  const { data: call } = await db.from("rg_calls").insert({ lead_id: lead.id, attempt: f.is_test ? 0 : next.attempt, to_number: f.to_number,
+    conversation_id: body.conversation_id ?? null, status: "queued", opener_key: p.opener_key, is_test: f.is_test }).select("id").single();
+  await db.from("rg_followups").update({ status: "done", result_call_id: call?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
+  return Response.json({ ok: true, calling: f.to_number, followup: id });
+}
+
+// ---------- live view + playback (admin browser) ----------
+type Turn = { role: string; message: string | null; time_in_call_secs?: number };
+const slim = (t: Turn[] | undefined) => (t ?? []).filter((x) => x.message).map((x) => ({ role: x.role, text: x.message, t: x.time_in_call_secs ?? 0 }));
+
+async function live(onlyLead: string | null, onlyCall: string | null): Promise<Response> {
+  const key = await vault("elevenlabs_api_key");
+  if (!key) return Response.json({ ok: false, error: "elevenlabs_api_key missing" }, { status: 412, headers: CORS });
+  const since = new Date(Date.now() - 20 * 60_000).toISOString();
+  let q = db.from("rg_calls").select("id, lead_id, conversation_id, to_number, queued_at, is_test, opener_key, rg_leads(company, contacts)")
+    .gte("queued_at", since).order("queued_at", { ascending: false }).limit(5);
+  q = onlyCall ? q.eq("id", onlyCall) : q.in("status", ["queued", "in_progress"]);
+  if (onlyLead) q = q.eq("lead_id", onlyLead);
+  const { data: rows } = await q;
+  // deno-lint-ignore no-explicit-any
+  const calls = await Promise.all((rows ?? []).map(async (r: any) => {
+    let status = "dialing", transcript: ReturnType<typeof slim> = [], elapsed = Math.round((Date.now() - Date.parse(r.queued_at)) / 1000);
+    if (r.conversation_id) {
+      const res = await fetch(`${XI}/convai/conversations/${r.conversation_id}`, { headers: { "xi-api-key": key } });
+      if (res.ok) {
+        const c = await res.json();
+        status = c.status ?? status;
+        transcript = slim(c.transcript);
+        if (c.metadata?.start_time_unix_secs) elapsed = Math.round(Date.now() / 1000 - c.metadata.start_time_unix_secs);
+      }
+    }
+    return { call_id: r.id, lead_id: r.lead_id, company: r.rg_leads?.company ?? "", contact: r.rg_leads?.contacts?.[0]?.name ?? null,
+      to_number: r.to_number, is_test: r.is_test, opener_key: r.opener_key, status, elapsed, transcript };
+  }));
+  return Response.json({ ok: true, calls }, { headers: CORS });
+}
+
+async function audio(callId: string, onlyLead: string | null): Promise<Response> {
+  const key = await vault("elevenlabs_api_key");
+  const { data: c } = await db.from("rg_calls").select("conversation_id, lead_id").eq("id", callId).maybeSingle();
+  if (!key || !c?.conversation_id || (onlyLead && c.lead_id !== onlyLead)) return new Response("no recording for this call", { status: 404, headers: CORS });
+  const res = await fetch(`${XI}/convai/conversations/${c.conversation_id}/audio`, { headers: { "xi-api-key": key } });
+  if (!res.ok || !res.body) return new Response("recording not available yet", { status: res.status === 404 ? 404 : 502, headers: CORS });
+  return new Response(res.body, { headers: { ...CORS, "content-type": res.headers.get("content-type") ?? "audio/mpeg", "cache-control": "private, max-age=3600" } });
+}
+
+// ---------- demo call (partner portal: Eli shows investors) ----------
+async function demoCall(phone: string, name: string): Promise<Response> {
+  const bad = (error: string, status = 400) => Response.json({ ok: false, error }, { status, headers: CORS });
+  const to = toE164(phone);
+  if (!to) return bad("Enter a 10-digit US or Canada number.");
+  const { data: s } = await db.from("rg_settings").select("*").eq("id", true).single();
+  if (!s?.agent_id || !s.phone_number_id || !s.demo_lead_id) return bad("Ava isn't set up yet.", 412);
+  const key = await vault("elevenlabs_api_key");
+  if (!key) return bad("Ava isn't set up yet.", 412);
+  const { count: dnc } = await db.from("rg_dnc").select("phone", { count: "exact", head: true }).eq("phone", to);
+  if (dnc) return bad("That number asked not to be called.");
+  const { count: realLead } = await db.from("rg_leads").select("id", { count: "exact", head: true }).eq("phone", to).neq("id", s.demo_lead_id);
+  if (realLead) return bad("That's a real prospect's number. Demos can't call prospects.");
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const { count: today } = await db.from("rg_calls").select("id", { count: "exact", head: true }).eq("lead_id", s.demo_lead_id).gte("queued_at", since);
+  if ((today ?? 0) >= (s.demo_daily_cap ?? 15)) return bad(`Daily demo limit reached (${s.demo_daily_cap}). Try again tomorrow.`, 429);
+  const { data: lead } = await db.from("rg_leads").select("id, company, timezone, pitch, category, state").eq("id", s.demo_lead_id).single();
+  const who = name.trim().slice(0, 40) || null;
+  const next: Next = { lead_id: lead.id, company: "Riverside Medical Center", phone: to, timezone: lead.timezone,
+    contact_name: who, contact_title: "Facilities Director", pitch_angle: lead.pitch, category: lead.category, state: lead.state, attempt: 1 };
+  const [p] = await planCalls([next]);
+  const plan = { ...p, to, gk: who ? p.gk
+    : "Hi there, it's Ava calling from RoofGuard, on a recorded line... are you the one who looks after the roofs at Riverside Medical Center?" };
+  const res = await callOne(key, s, plan);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body?.success === false) return bad("The call didn't go out. Try again in a minute.", 502);
+  const { data: call } = await db.from("rg_calls").insert({ lead_id: lead.id, attempt: 0, to_number: to, conversation_id: body.conversation_id ?? null,
+    status: "queued", opener_key: p.opener_key, is_test: true }).select("id").single();
+  return Response.json({ ok: true, call_id: call?.id, calling: to }, { headers: CORS });
+}
+const toE164 = (v: string) => {
+  const d = String(v ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+  return /^[2-9]\d{2}[2-9]\d{6}$/.test(d) ? `+1${d}` : null;
+};
+
+// finished demo call: what Ava logged (partners only see the demo facility)
+async function callResult(callId: string, onlyLead: string | null): Promise<Response> {
+  const { data: c } = await db.from("rg_calls").select("id, lead_id, status, outcome, summary, duration_sec, meeting_times, callback_at, transcript")
+    .eq("id", callId).maybeSingle();
+  if (!c || (onlyLead && c.lead_id !== onlyLead)) return Response.json({ ok: false }, { status: 404, headers: CORS });
+  return Response.json({ ok: true, status: c.status, outcome: c.outcome, summary: c.summary, duration_sec: c.duration_sec,
+    meeting_times: c.meeting_times, callback_at: c.callback_at, transcript: slim(c.transcript) }, { headers: CORS });
+}
+
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const url = new URL(req.url);
   if (url.searchParams.get("hook") === "elevenlabs") return hook(req);
-  if (!(await authorized(req))) return new Response("unauthorized", { status: 401 });
   const body = await req.json().catch(() => ({}));
+  if (["live", "audio", "demo_call", "call_result"].includes(body.action)) {
+    const role = (await authorized(req)) ? "admin" : await userRole(req);
+    if (!role) return new Response("unauthorized", { status: 401, headers: CORS });
+    // partners only ever see and place demo calls
+    const demoLead = role === "partner"
+      ? ((await db.from("rg_settings").select("demo_lead_id").eq("id", true).single()).data?.demo_lead_id ?? "none") : null;
+    if (body.action === "demo_call") return demoCall(String(body.phone ?? ""), String(body.name ?? ""));
+    if (body.action === "call_result") return callResult(String(body.call_id ?? ""), demoLead);
+    if (body.action === "audio") return audio(String(body.call_id ?? ""), demoLead);
+    return live(demoLead, body.call_id ? String(body.call_id) : null);
+  }
+  if (!(await authorized(req))) return new Response("unauthorized", { status: 401 });
   if (body.action === "tick") return tick();
   if (body.action === "setup") return setup();
   if (body.action === "test_call") return testCall();
+  if (body.action === "followup") return followup(String(body.id ?? ""));
   if (body.action === "line_types") return lineTypes();
   return Response.json({ ok: false, error: "unknown action" }, { status: 400 });
 });
