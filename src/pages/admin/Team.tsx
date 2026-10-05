@@ -41,6 +41,8 @@ type Agent = {
     field_name?: string; personality?: string; superpower?: string; quirk?: string; motto?: string; first_week?: string;
     /** a tool the employee it reports_to uses (Rewriter is Spark's tool), not an employee of its own */
     tool?: boolean;
+    /** coaching conversations (team_one_on_one_add) */
+    one_on_ones?: { at: string; with?: string; topic: string; what_happened?: string; their_side?: string; tools_given?: string[]; commitment?: string; proof?: string }[];
     /** duties this bot took over in reorgs */
     inherited?: { reorg_id: string; from_slug: string; from_name: string; duties: string[]; at: string }[];
   } | null;
@@ -422,6 +424,32 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
           <p className={cn("text-[15px] leading-relaxed", label)} style={{ textWrap: "pretty" } as never}>{nb(a.what_it_does)}</p>
 
           {a.kind !== "human" && <AgentMood a={a} />}
+
+          {!!a.profile?.one_on_ones?.length && (
+            <div className="space-y-2">
+              <h4 className={cn("px-1 text-[13px] font-semibold uppercase tracking-[0.02em]", secondary)}>1:1s</h4>
+              {[...a.profile.one_on_ones].reverse().map((o, i) => (
+                <div key={i} className="space-y-2.5 rounded-[14px] bg-[#2C2C2E] px-4 py-3 bento:bg-[#fff]">
+                  <div>
+                    <p className={cn("text-[15px] font-semibold", label)}>{o.topic}</p>
+                    <p className={cn("text-[12px]", tertiary)}>{o.with ? `With ${o.with} · ` : ""}{when(o.at)}</p>
+                  </div>
+                  {o.what_happened && <p className={cn("text-[14px] leading-snug", secondary)}>{o.what_happened}</p>}
+                  {o.their_side && <p className={cn("text-[14px] italic leading-snug", label)}>&ldquo;{o.their_side}&rdquo;</p>}
+                  {!!o.tools_given?.length && (
+                    <div>
+                      <p className={cn("text-[12px] font-semibold uppercase tracking-[0.04em]", tertiary)}>New tools</p>
+                      <ul className={cn("mt-1 list-disc space-y-0.5 pl-5 text-[14px] leading-snug", label)}>
+                        {o.tools_given.map((t, k) => <li key={k}>{t}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {o.commitment && <p className={cn("text-[14px] font-medium leading-snug", tint.blue)}>{o.commitment}</p>}
+                  {o.proof && <p className={cn("text-[12px] leading-snug", tertiary)}>{o.proof}</p>}
+                </div>
+              ))}
+            </div>
+          )}
 
           {(() => {
             const tools = all.filter((t) => isTool(t) && t.reports_to === a.slug);
