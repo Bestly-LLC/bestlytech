@@ -1,0 +1,22 @@
+name = "bestly-site-outage-splash"
+main = "src/index.js"
+compatibility_date = "2025-04-01"
+account_id = "f25f950fd0d3b2a67f8fad8b69b14c40"
+
+# Everything on bestly.tech and www.bestly.tech goes through the Worker. Healthy responses pass
+# through untouched; only a dead or failing origin (Vercel) gets Scout's "we'll be right back" page.
+[[routes]]
+pattern = "bestly.tech/*"
+zone_name = "bestly.tech"
+
+[[routes]]
+pattern = "www.bestly.tech/*"
+zone_name = "bestly.tech"
+
+[observability]
+enabled = true
+
+[vars]
+# Public values: the publishable key already ships in the site's JS bundle.
+SUPABASE_URL = "https://rcqfqhguwpmaarseifqg.supabase.co"
+SUPABASE_KEY = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"
