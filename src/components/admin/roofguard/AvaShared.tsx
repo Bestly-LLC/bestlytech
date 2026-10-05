@@ -10,6 +10,7 @@
  *   KnowledgeList   "What Ava can share": the ONLY facts she may use with a caller (ava_knowledge)
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { CallReview } from "./AvaCoach";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { CollapsibleSection } from "./CollapsibleSection";
@@ -329,6 +330,7 @@ export function MessageSheet({ item, onClose, onDeleted }: { item: Msg | null; o
             className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-white/10 text-[15px] font-medium text-white ring-1 ring-white/15 transition hover:bg-white/15 motion-safe:active:scale-[0.98]">
             <PhoneCall className="h-4 w-4" aria-hidden />Call again</button>
         )}
+        <CallReview source={item.source === "ava" ? "ava" : "roofguard"} callId={item.id} />
         <div><h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Transcript</h4><LiveTranscript lines={item.transcript} them={item.name} inline /></div>
         <DeleteCallButton rpc={item.source === "ava" ? "ava_delete_call" : "rg_delete_call"} callId={item.id} onDeleted={onDeleted} />
       </div>

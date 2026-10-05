@@ -49,11 +49,14 @@ objections: tags for objections the other person raised, from: already_have_roof
 rule_flags: ONLY real slips of her hard rules, from: said_replacement (she said "replacement" instead of renewal), called_it_insurance, fake_social_proof (named or implied partners/clients), invented_deadline, denied_being_ai (claimed to be human when sincerely asked), income_projection. Empty if none. Never flag something she didn't say.
 went_well: one short sentence. work_on: ONE specific, actionable thing for her next call, written as an instruction to Ava (max 25 words).
 overall: 1-5 for the whole call. confidence: 1-5 (direct close, no hedging, replies under 20 words).
-Reply with JSON only: {"scores":{"opening":n,"qualify":n,"present":n,"close":n,"rehash":n},"impulse":{"indifference":n,"honest_urgency":n,"bolt_match":n,"sounds_human":n},"objections":[],"rule_flags":[],"went_well":"","work_on":"","overall":n,"confidence":n}`;
+If this was NOT a real sales attempt (an incoming prank, spam or wrong number, a test where nobody played along, dead air, or under two real exchanges), don't score it: reply {"skip":true,"reason":"<a few words>"}.
+Otherwise reply with JSON only: {"scores":{"opening":n,"qualify":n,"present":n,"close":n,"rehash":n},"impulse":{"indifference":n,"honest_urgency":n,"bolt_match":n,"sounds_human":n},"objections":[],"rule_flags":[],"went_well":"","work_on":"","overall":n,"confidence":n}`;
 
 const AVA_SYSTEM = `You are the coach for Ava, Jared's personal AI phone assistant. She answers his line, takes messages, makes calls he asks for, and handles spam callers. Score ONE call transcript. Be strict and specific. Score only what happened.
 
-Scores 1-5 each (null when it doesn't apply to this call, e.g. no message on an outbound errand):
+Scores 1-5 each. Use null (not 1) whenever a score doesn't apply to this call:
+- On a call Jared asked her to make (outbound errand): name = did she confirm who she reached; message = did she get the errand done or the answer he needed; urgency and callback are null unless they came up.
+- On an incoming call: all six apply when the caller had something to say; if they hung up first, leave name/message/urgency/callback null.
 - name: did she get the caller's name (or confirm who she reached)?
 - message: did she capture the message or the result of the errand accurately?
 - urgency: did she find out whether it's urgent?
@@ -63,7 +66,8 @@ Scores 1-5 each (null when it doesn't apply to this call, e.g. no message on an 
 rule_flags: ONLY real slips, from: shared_private_info, claimed_to_be_jared, denied_being_ai, made_commitment_for_jared. Empty if none.
 went_well: one short sentence. work_on: ONE specific, actionable thing for her next call, written as an instruction to Ava (max 25 words).
 overall: 1-5.
-Reply with JSON only: {"scores":{"name":n,"message":n,"urgency":n,"callback":n,"warm_brief":n,"privacy":n},"rule_flags":[],"went_well":"","work_on":"","overall":n}`;
+If there was no real conversation (dead air, an instant hang-up, a robocall menu with no one to talk to), don't score it: reply {"skip":true,"reason":"<a few words>"}.
+Otherwise reply with JSON only: {"scores":{"name":n,"message":n,"urgency":n,"callback":n,"warm_brief":n,"privacy":n},"rule_flags":[],"went_well":"","work_on":"","overall":n}`;
 
 const n15 = (v: unknown) => v === null || v === undefined || v === "" ? null : Math.min(5, Math.max(1, Math.round(Number(v)))) || null;
 const clip = (s: unknown, n: number) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
@@ -73,6 +77,7 @@ const OBJ = ["already_have_roofer", "send_info", "price", "busy", "not_intereste
 
 function cleanReview(source: "roofguard" | "ava", j: any) {
   if (!j || typeof j !== "object") return null;
+  if (j.skip === true) return { skip: true, went_well: clip(j.reason ?? "not a real conversation", 200) };
   const s = j.scores ?? {};
   if (source === "roofguard") {
     const flags = (Array.isArray(j.rule_flags) ? j.rule_flags : []).map(String).filter((f: string) => RG_FLAGS.includes(f));
@@ -93,10 +98,13 @@ function cleanReview(source: "roofguard" | "ava", j: any) {
   };
 }
 
+const EMPTY_ADVICE = /^(n\/?a|none|nothing|no (change|changes|improvement)s?( needed)?|-)\b/i;
 const validate = (source: "roofguard" | "ava") => (j: any) => {
+  if (j && j.skip === true) return null;
   if (!j || typeof j !== "object" || !j.scores) return "missing scores";
   if (n15(j.overall) === null) return "missing overall";
-  if (!String(j.work_on ?? "").trim()) return "missing work_on";
+  const w = String(j.work_on ?? "").trim();
+  if (!w || EMPTY_ADVICE.test(w)) return "work_on must be one concrete thing to do (or skip the call)";
   return null;
 };
 
@@ -123,7 +131,7 @@ async function reviewOne(source: "roofguard" | "ava", c: any) {
     if (!review) throw new Error("coach returned no usable review");
     const { error } = await db.rpc("coach_save", { p_source: source, p_call: c.id, p_review: review, p_provider: r.provider, p_model: r.model });
     if (error) throw new Error(error.message);
-    return { id: c.id, call_no: c.call_no, ok: true, provider: r.provider, overall: review.overall };
+    return { id: c.id, call_no: c.call_no, ok: true, provider: r.provider, overall: (review as any).overall ?? null, skipped: (review as any).skip === true };
   } catch (e) {
     const msg = e instanceof LlmUnavailable ? `free AI unavailable (${e.reason})` : (e as Error).message;
     await db.rpc("coach_save", { p_source: source, p_call: c.id, p_review: {}, p_provider: null, p_model: null, p_error: msg });

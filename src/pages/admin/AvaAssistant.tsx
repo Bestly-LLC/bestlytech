@@ -23,6 +23,7 @@ import { AvaSpam } from "@/components/admin/roofguard/AvaSpam";
 import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
 import { CollapsibleSection } from "@/components/admin/roofguard/CollapsibleSection";
 import { AvaSettingsSheet, SettingsButton } from "@/components/admin/roofguard/AvaSettings";
+import { AvaCoach } from "@/components/admin/roofguard/AvaCoach";
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, Grid3x3, Loader2, Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCw, UserRound } from "lucide-react";
 
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
@@ -196,6 +197,9 @@ export default function AvaAssistant() {
           )}
         </section>
       </div>
+
+      {/* Scorecard: the Coach reviews every call and builds her playbook (you approve each habit) */}
+      <AvaCoach source="ava" admin />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <FollowupsList source="ava" onChanged={() => void load()} />

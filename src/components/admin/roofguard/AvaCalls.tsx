@@ -10,6 +10,7 @@
  * Exports LiveTranscript, Recording and StagePill so the partner portal's demo tab reuses them.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { CallReview } from "./AvaCoach";
 import { supabase } from "@/integrations/supabase/client";
 import { AvaOrb } from "./AvaOrb";
 import { cn } from "@/lib/utils";
@@ -700,6 +701,7 @@ function CallSheet({ row, nos, onClose, onDeleted }: { row: BoardRow | null; nos
                 {c.callback_at && <Fact icon={<AlarmClock className="h-4 w-4" />} label="Call back">{whenThere(c.callback_at, row.timezone)}</Fact>}
                 {c.notes && <Fact icon={<Headphones className="h-4 w-4" />} label="Notes">{c.notes}</Fact>}
               </div>
+              <CallReview source="roofguard" callId={c.call_id} />
               <div>
                 <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Transcript</h4>
                 <LiveTranscript lines={c.transcript ?? []} inline />
