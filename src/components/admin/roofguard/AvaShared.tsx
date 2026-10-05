@@ -20,6 +20,7 @@ import { CallNo, DeleteCallButton, LiveTranscript, Recording, type Line } from "
 import { ActionPills, useActions } from "./AvaActions";
 import { ScrollSheet } from "./AvaSheet";
 import { requestDial } from "./avaDial";
+import { checkRoofguardFact } from "@/lib/roofguardRules";
 
 export type Source = "ava" | "roofguard";
 
@@ -545,7 +546,8 @@ function FollowupRow({ f, nos, act }: { f: Followup; nos: Map<string, number>; a
 const source_label = (s: Source) => (s === "ava" ? "Jared's assistant" : "RoofGuard's assistant");
 
 // ---------- What Ava can share ----------
-type Fact = { id: string; scope: "personal" | "roofguard" | "both"; topic: string; fact: string; active: boolean; updated_at: string };
+type Fact = { id: string; scope: "personal" | "roofguard" | "both"; topic: string; fact: string; active: boolean; updated_at: string;
+  status?: "live" | "pending" | "declined"; proposed_at?: string | null };
 
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
@@ -564,11 +566,15 @@ export function KnowledgeList({ source, className }: { source: Source; className
   const [err, setErr] = useState<string | null>(null);
   const [edit, setEdit] = useState<Partial<Fact> | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [pending, setPending] = useState<Fact[]>([]);
 
   const load = useCallback(async () => {
     const { data, error } = await table("ava_knowledge").select<Fact>("*").in("scope", [own, "both"]).order("topic", { ascending: true });
     if (error) { setErr(error.message); return; }
-    setErr(null); setRows(data ?? []);
+    setErr(null);
+    const all = data ?? [];
+    setPending(all.filter((r) => r.status === "pending"));                       // Eli's suggestions: not live until approved
+    setRows(all.filter((r) => r.status !== "pending" && r.status !== "declined"));
   }, [own]);
   useEffect(() => { void load(); }, [load]);
 
@@ -585,9 +591,11 @@ export function KnowledgeList({ source, className }: { source: Source; className
         <ShieldCheck className="h-4 w-4 text-emerald-300" aria-hidden />
         <h3 className="text-[15px] font-semibold text-white">What Ava can share</h3>
         <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs tabular-nums text-white/70">{live}&nbsp;on</span>
+        {pending.length > 0 && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs tabular-nums text-amber-200">{pending.length}&nbsp;waiting</span>}
         <button type="button" onClick={() => setEdit({ scope: own, active: true })} className="ml-auto inline-flex min-h-[44px] items-center gap-1 rounded-lg px-3 text-sm text-sky-300 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
           <Plus className="h-4 w-4" aria-hidden />Add</button>
       </header>
+      {source === "roofguard" && pending.length > 0 && <SuggestedByEli items={pending} onDone={() => void load()} />}
       {err && <p role="alert" className="px-4 py-3 text-sm text-red-300">Could not load: {err}</p>}
       {rows.length === 0 && !err && <p className="px-4 py-8 text-center text-sm text-white/60">Nothing yet. Ava takes a message for anything she can't answer.</p>}
       <ul className="divide-y divide-white/5">
@@ -609,6 +617,63 @@ export function KnowledgeList({ source, className }: { source: Source; className
       <p className="border-t border-white/5 px-4 py-2 text-[11px] text-white/55">Ava never shares anything outside this list.</p>
       <FactSheet f={edit} own={own} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); void load(); }} />
     </section>
+  );
+}
+
+/** Facts Eli suggested. Pending rows are inactive in the database, so Ava cannot say them until Jared approves here. */
+function SuggestedByEli({ items, onDone }: { items: Fact[]; onDone: () => void }) {
+  const [declining, setDeclining] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const act = async (f: Fact, approve: boolean) => {
+    setBusy(f.id); setErr(null);
+    const { error } = await rpcArgs("ava_knowledge_review", { p_id: f.id, p_approve: approve, p_note: approve ? null : note.trim() || null });
+    setBusy(null);
+    if (error) { setErr("Could not save that. Try again."); return; }
+    setDeclining(null); setNote(""); onDone();
+  };
+  return (
+    <div className="border-b border-white/5 bg-amber-500/[0.06] px-4 py-3" aria-label="Suggested by Eli">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-amber-200">Suggested by Eli</h4>
+      <p className="mt-0.5 text-xs text-white/60">Ava can't say these until you approve them.</p>
+      <ul className="mt-2 space-y-3">
+        {items.map((f) => {
+          const warns = checkRoofguardFact(`${f.topic}. ${f.fact}`);
+          return (
+            <li key={f.id} className="rounded-2xl bg-white/[0.04] p-3 ring-1 ring-white/10">
+              <div className="flex items-baseline gap-2">
+                <span className="min-w-0 flex-1 text-[15px] font-medium text-white">{f.topic}</span>
+                {f.proposed_at && <span className="whitespace-nowrap text-xs text-white/55">{new Date(f.proposed_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</span>}
+              </div>
+              <p className="mt-0.5 text-sm text-white/75">{f.fact}</p>
+              {warns.length > 0 && (
+                <ul className="mt-2 space-y-1 rounded-xl bg-amber-500/10 p-2.5 text-sm text-amber-100 ring-1 ring-amber-400/30">
+                  {warns.map((w) => <li key={w} className="flex gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden /><span>{w}</span></li>)}
+                </ul>
+              )}
+              {declining === f.id ? (
+                <div className="mt-3 space-y-2">
+                  <input className={inputCls} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Why not? Eli sees this (optional)" aria-label="Reason for declining" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" disabled={busy === f.id} onClick={() => { setDeclining(null); setNote(""); }} className="min-h-[44px] rounded-xl bg-white/10 text-sm font-medium text-white hover:bg-white/15">Cancel</button>
+                    <button type="button" disabled={busy === f.id} onClick={() => void act(f, false)} className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#FF453A] text-sm font-semibold text-white disabled:opacity-60">
+                      {busy === f.id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Decline</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button type="button" disabled={busy === f.id} onClick={() => { setDeclining(f.id); setNote(""); }} className="min-h-[44px] rounded-xl bg-white/10 text-sm font-medium text-white hover:bg-white/15 disabled:opacity-60">Decline</button>
+                  <button type="button" disabled={busy === f.id} onClick={() => void act(f, true)} className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#30D158] text-sm font-semibold text-black disabled:opacity-60">
+                    {busy === f.id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Approve</button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {err && <p role="alert" className="mt-2 text-sm text-red-300">{err}</p>}
+    </div>
   );
 }
 

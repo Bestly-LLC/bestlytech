@@ -101,7 +101,7 @@ async function coachNotes(): Promise<string> {
 
 /** The shareable facts, as a bullet list for the prompt. The ONLY knowledge source for calls. */
 async function knowledge(): Promise<string> {
-  const { data } = await db.from("ava_knowledge").select("topic, fact").in("scope", ["personal", "both"]).eq("active", true).order("topic");
+  const { data } = await db.from("ava_knowledge").select("topic, fact").in("scope", ["personal", "both"]).eq("active", true).eq("status", "live").order("topic");
   const list = (data ?? []).map((k: { topic: string; fact: string }) => `- ${k.topic}: ${k.fact}`.replace(/\{\{|\}\}/g, ""));
   return list.length ? list.join("\n") : "- (nothing yet: take a message for anything beyond who you are)";
 }

@@ -304,7 +304,7 @@ const clock = (tz = CENTRAL) => {
 
 /** The shareable facts, as a bullet list. The ONLY knowledge source on an incoming call. */
 async function knowledge(): Promise<string> {
-  const { data } = await db.from("ava_knowledge").select("topic, fact").in("scope", ["roofguard", "both"]).eq("active", true).order("topic");
+  const { data } = await db.from("ava_knowledge").select("topic, fact").in("scope", ["roofguard", "both"]).eq("active", true).eq("status", "live").order("topic");
   const list = (data ?? []).map((k: { topic: string; fact: string }) => clean(`- ${k.topic}: ${k.fact}`));
   return list.length ? list.join("\n") : "- (nothing yet: take a message for anything beyond what RoofGuard is)";
 }
