@@ -109,7 +109,13 @@ const validate = (source: "roofguard" | "ava") => (j: any) => {
 };
 
 // deno-lint-ignore no-explicit-any
-function callContext(source: "roofguard" | "ava", c: any): string {
+function callContext(source: "roofguard" | "ava", c: any, force = false): string {
+  const ctx = callContextBase(source, c);
+  // backfill: Jared asked for every past call to be scored, tests included. Only skip if there was truly nothing said.
+  return force ? "NOTE FROM JARED: score this call even if it was a test or short. Judge what she said. Skip only if she never got a word in.\n\n" + ctx : ctx;
+}
+// deno-lint-ignore no-explicit-any
+function callContextBase(source: "roofguard" | "ava", c: any): string {
   if (source === "roofguard") {
     return [`Call #${c.call_no ?? "?"}${c.is_test ? " (TEST call to Jared's own phone, playing a lead)" : ""}`,
       `Company: ${c.company ?? "?"} (${c.category ?? "?"})`, `Direction: ${c.direction ?? "outbound"}`,
@@ -122,9 +128,9 @@ function callContext(source: "roofguard" | "ava", c: any): string {
     `Length: ${c.duration_sec ?? "?"} sec`, "", "TRANSCRIPT:", c.transcript].filter((l) => l !== "").join("\n");
 }
 
-async function reviewOne(source: "roofguard" | "ava", c: any) {
+async function reviewOne(source: "roofguard" | "ava", c: any, force = false) {
   try {
-    const r = await llm({ task: "judge", system: source === "roofguard" ? RG_SYSTEM : AVA_SYSTEM, user: callContext(source, c),
+    const r = await llm({ task: "judge", system: source === "roofguard" ? RG_SYSTEM : AVA_SYSTEM, user: callContext(source, c, force),
       json: true, validate: validate(source), maxTokens: 700, job: "ava-coach", ref: c.id, fn: "ava-coach",
       privacy: "private", paid: "never", deadlineMs: 55_000 });
     const review = cleanReview(source, r.json);
@@ -148,6 +154,21 @@ async function review(limit = 3) {
     for (const c of (data ?? []) as any[]) {
       if (Date.now() - started > 110_000) break;   // stay inside the edge function's time
       out[source].push(await reviewOne(source, c));
+    }
+  }
+  return out;
+}
+
+// ---------- backfill: score every past call (tests too), oldest first, a few per run ----------
+async function backfill(limit = 4, includeDeleted = false, only?: "roofguard" | "ava") {
+  const started = Date.now();
+  const out: Record<string, unknown[]> = { roofguard: [], ava: [] };
+  for (const source of (only ? [only] : ["roofguard", "ava"]) as ("roofguard" | "ava")[]) {
+    const { data, error } = await db.rpc("coach_backfill_list", { p_source: source, p_limit: limit, p_include_deleted: includeDeleted });
+    if (error) { out[source].push({ error: error.message }); continue; }
+    for (const c of (data ?? []) as any[]) {
+      if (Date.now() - started > 110_000) break;
+      out[source].push(await reviewOne(source, c, true));
     }
   }
   return out;
@@ -202,6 +223,8 @@ Deno.serve(async (req) => {
     switch (body.op) {
       case "review": return J({ ok: true, ...(await review(Math.min(6, Number(body.limit) || 3))) });
       case "weekly": return J({ ok: true, ...(await weekly()) });
+      case "backfill": return J({ ok: true, ...(await backfill(Math.min(6, Number(body.limit) || 4), body.include_deleted === true,
+        body.source === "ava" || body.source === "roofguard" ? body.source : undefined)) });
       case "one": {
         const source = body.source === "ava" ? "ava" : "roofguard";
         const { data } = await db.rpc("coach_next", { p_source: source, p_limit: 50 });
@@ -209,7 +232,7 @@ Deno.serve(async (req) => {
         if (!c) return J({ ok: false, error: "that call is already reviewed or has no transcript" }, 404);
         return J({ ok: true, result: await reviewOne(source, c) });
       }
-      default: return J({ ok: false, error: "op must be review, weekly or one" }, 400);
+      default: return J({ ok: false, error: "op must be review, weekly, backfill or one" }, 400);
     }
   } catch (e) {
     return J({ ok: false, error: (e as Error).message }, 500);
