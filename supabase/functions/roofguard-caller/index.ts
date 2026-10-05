@@ -815,11 +815,12 @@ async function setup(): Promise<Response> {
       // Money stopper: hard caps no matter what the prompt does
       conversation: { max_duration_seconds: MAX_CALL_SECS },
       // reply as soon as they stop talking; a long pause is the biggest giveaway on a phone call.
-      // Speed (Jared 2026-10-04: faster even if it takes filler). speculative_turn starts thinking before they finish;
-      // if the reply still takes over a second, a short filler plays so there's never dead air.
-      turn: { turn_eagerness: "eager", speculative_turn: true, silence_end_call_timeout: SILENCE_END_SECS,
-        soft_timeout_config: { timeout_seconds: 1.0, message: "Yeah...", randomize_fillers: true, max_soft_timeouts_per_generation: 1,
-          additional_soft_timeout_messages: ["Mm, right...", "Yeah, so...", "Got it...", "Okay..."] } },
+      // Speed (Jared 2026-10-04): eager turns + speculative_turn, so she starts thinking before they finish.
+      // No soft-timeout filler (Jared 2026-10-05). ElevenLabs has no per-call turn override -- verified against the
+      // docs -- so filler is on for every call or none. Against iPhone/Google call screening the filler gets
+      // transcribed into the card a human reads ("Yeah..."), which is the most robotic artifact in the whole flow.
+      // One line to restore if calls get worse: see docs/ava-screening-opusplan.md section 2.1.
+      turn: { turn_eagerness: "eager", speculative_turn: true, silence_end_call_timeout: SILENCE_END_SECS },
       // English agents must use flash/turbo v2 (v2_5 is rejected). Flash is the fastest; stability 0.55 = calm, not peppy.
       tts: ttsConfig(s?.voice_id ?? "EXAVITQu4vr4xnSDxMaL"),
     },

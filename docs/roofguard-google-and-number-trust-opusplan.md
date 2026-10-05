@@ -62,15 +62,35 @@ Keep `meeting_times` as-is. It stays the human record and the fallback when she 
 - **Token storage:** the refresh token is a secret, so it goes in **Supabase Vault**, per the house rule. A new `partner_google` table holds only the non-secret parts: partner id, Google account email, calendar id, connected_at, last_error, and the Vault secret's name.
 - **Portal UI:** a "Connect Google Calendar" card in `/partner` — connect, show which account is linked, disconnect. One button, and it says in plain words what Ava will do with it: *"Ava will put meetings she books straight on this calendar, with a Meet link, and invite the other person."*
 
-## 1.5 Creating the event
+## 1.5 Creating the events — **two of them**
 
-On a `booked` call with a usable `meeting_start_iso`:
+Google Calendar has **one description, shared by everyone on the event**. So a single event with the prospect invited means the prospect reads Ava's call notes. "Gatekeeper said he's tight with money", "sounded sceptical about the warranty angle" — straight to the buyer. That alone decides the design.
 
-- Create the event on Eli's primary calendar with `conferenceDataVersion=1` and a `hangoutsMeet` request so Google issues the Meet link.
-- Attendees: the prospect's `meeting_email`, plus Eli. `sendUpdates=all` so the prospect gets the invite immediately — **this is the part that makes the meeting real**.
-- Title and description carry the company, the decision maker's name and title, and a short summary of the call, so Eli walks in knowing something.
-- Write `calendar_event_id` and `meet_url` back to `rg_calls` (new migration — never edit a committed one).
-- **If it fails, say so loudly.** Scout alert signed by Ava, and the meeting shows on the scorecard as "agreed, not scheduled" so it cannot quietly rot.
+**Two events, both created by Ava:**
+
+### Event A — the meeting (the prospect sees this one)
+- On Eli's calendar, `conferenceDataVersion=1` with a `hangoutsMeet` request so Google issues the Meet link.
+- Attendees: the prospect's `meeting_email` and Eli. `sendUpdates=all`, so **the invite lands in their inbox while the call is still fresh**. This is the part that makes the meeting real.
+- Title: `RoofGuard — <Company> and Eli Cooper`.
+- Description is customer-facing copy and follows the house rules: plain language for someone who has never heard of any of this, what RoofGuard is, who Eli is, how long the call takes, and how to reply if the time no longer works. **No call notes. No income projections. Never "replacement" — renewal. No invented deadlines, no insurance framing, no partners we do not have.**
+- Also carries the short link to the number page from Part 2, so a cautious prospect can check who called them.
+
+### Event B — Eli's prep (Eli only, 15 minutes before)
+- Same calendar, **no attendees**, so it is private to Eli by construction rather than by a setting someone can flip.
+- Title: `Prep: <Company>`.
+- Description is everything Ava learned and nothing she made up:
+  - Who he is meeting — name, title, direct number.
+  - **Why they said yes** — the hook that actually landed, in their words.
+  - Objections raised on the call, quoted.
+  - Anything said about the roof: age, size, leaks, last work done, who signs off.
+  - Which opener was used (feeds the A/B learning).
+  - A link to the call in the partner portal, so he can listen to two minutes before he dials.
+- A 15-minute block before the meeting is also just good practice — it stops the call being the first time he thinks about the account.
+
+### Mechanics
+- Write `calendar_event_id`, `prep_event_id` and `meet_url` back to `rg_calls` (new migration — never edit a committed one).
+- If Eli moves the meeting, the prep block does not follow it. Accept that for v1; a calendar-watch channel to keep them in sync is more machinery than the problem deserves until it actually annoys him.
+- **If either event fails to create, say so loudly.** Scout alert signed by Ava, and the scorecard shows that meeting as "agreed, not scheduled" so it cannot quietly rot into a no-show.
 
 ## 1.6 The better version, once 1.5 works
 
@@ -81,6 +101,7 @@ Read Eli's free/busy before Ava proposes times, so she offers slots he actually 
 1. **Whose Google account?** Eli's own (`eli.cooper@bdcuniversal.com`) is the obvious one, but his calendar may be managed by BDC Universal's Workspace admin, who can block third-party OAuth apps. Worth asking him before you build.
 2. **Does Eli want Ava writing to his real calendar at all**, or a separate "RoofGuard" calendar he subscribes to? Separate is safer for a first run.
 3. **Who hosts the Meet?** The event is on Eli's calendar, so the link is his. Fine unless Bill wants to join.
+4. **Does Eli want the prep block?** Some people hate a cluttered calendar. If he does, the same notes go to him as an email instead and Event B is dropped.
 
 ---
 

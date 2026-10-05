@@ -48,7 +48,7 @@
 
 The first few seconds of an outbound call are where this breaks. Options for Sonnet, in preference order:
 
-1. **Check whether ElevenLabs allows per-call turn overrides.** If `conversation_config_override` can carry `turn`, give outbound cold calls a calmer opening profile: `turn_eagerness` lowered, `speculative_turn` off, soft-timeout fillers off for the first turn.
+1. ~~**Check whether ElevenLabs allows per-call turn overrides.**~~ **Verified 2026-10-05: it does not.** The documented `conversation_config_override` surface is prompt, first message, language, voice, LLM, tools, knowledge base, text-only, stability, speed, similarity boost and ASR keywords. `turn` is not among them, so option 1 is out.
 2. **If it can't be overridden per call**, this becomes a straight trade-off against the speed Jared asked for on 2026-10-04. Recommend dropping the soft-timeout filler on the RoofGuard agent only and keeping eager turns — filler words landing in a screening transcript are worse than a pause.
 3. **Either way, the filler list must not fire during the opening.** "Yeah…" transcribed into a screening card is the single most robotic artifact in this whole flow.
 
@@ -109,7 +109,7 @@ Why a table and not prompt text: these announcements change with OS releases, an
 
 ## 4. Decisions for Jared
 
-1. **Speed vs. screeners.** You asked for faster replies even at the cost of filler. If turn settings can't be overridden per call, the filler has to go on the RoofGuard agent. Accept that trade?
+1. ~~**Speed vs. screeners.**~~ **Decided 2026-10-05: filler dropped on the RoofGuard agent.** `turn_eagerness: "eager"` and `speculative_turn: true` stay, so she is still fast; she just no longer says "Yeah..." into a screening transcript. One line to restore.
 2. **Both Avas or RoofGuard only?** Your personal line gets screened too, and the fix is the same.
 3. **How long should she wait in the decision silence?** 20 seconds is my recommendation; longer costs money on every screened call.
 
