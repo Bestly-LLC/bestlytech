@@ -248,3 +248,12 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - Undo: `air` = `[[-0.1154,0.001476],[0.9165,0.017125],[0.998913,0.269387],[0.00593,0.400064]]`, `airAspect` 1.98, `homePos` {x:0.3, y:0.35}. Apply it with `select wall_ha_patch(get_home_hub_agent_key(), '{...}'::jsonb)`.
 - **Side effect.** The box is larger on screen, and `airFit` caps the sky's logical width at 4000. Labels and planes in the sky draw about 1.3x larger.
 - **Lesson.** Map alignment on an oblique ceiling is a plane-rectification problem. Measure it from a photo with the calibration grid on; eyeballing it was off by about 18 degrees.
+
+## Oct 5, 4:45 PM: road map follows view distance, sky edge fade, sharper sky
+
+- **Roads/traffic ignored the view distance.** The redraw keys in `geoRoads` and `geoTraffic` left out the zoom (`AF.ppn`), so changing `airRadiusMi` moved the planes but not the roads. Fix: `AF.ppn` added to both keys. Verified at 8 mi and 25 mi. Backup: `.bak_roadzoom_*`.
+- **Edge fade.** `#airFade` is a fixed, screen-space overlay with z-index 5 (above the sky at 4). It is clipped to the ceiling, above the strip's top line extended across the screen from `S.corners`. Black gradients on the top (42% of the ceiling height) and both sides (11% of the width) fade the sky into the ceiling. It is hidden in mapping mode and rebuilt in `airFit`. Backup: `.bak_skyfade_*`, `.bak_skyhi_*`.
+- **Sharper sky on the Mac.** `SKYHI` (a Mac user agent) renders the sky layer up to 3600 px wide instead of 1800, and the roads/traffic canvases at 0.9 resolution instead of 0.5. The Pi copy keeps 1800 / 0.5 because of its GPU layer budget.
+- **Stream bitrate.** In `agent.mjs` the bitrate pins went up to min 12, start 16, max 24 Mbps (backup `agent.mjs.bak_br_*`). Checked afterward at 59 fps with VideoToolbox.
+- **Known.** `fitVisible` does not find a rectangle with the new `air` quad: the screen's bottom corners fall past the box's vanishing line. So `AF` covers the whole box and the 25 mi radius spans the box width, not just the visible part.
+- **Mac disk.** On Oct 5 the Mac's data volume hit 100% (115 MB free) and screenshots failed. The iCloud Drive cache (`~/Library/Caches/CloudKit/com.apple.bird`, about 25 GB) was growing by about 0.4 GB a minute. Cleared Homebrew and esphome caches, which gave about 3 GB. Jared needs to decide on iCloud Drive (turn on Optimize Mac Storage, or pause what's syncing).
