@@ -48,7 +48,7 @@ const traits = (v: Voice) => [cap(v.accent), ageText(v.age)].filter(Boolean).joi
 const mmss = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s)) % 60).padStart(2, "0")}`;
 
 // ---------- calling the edge functions ----------
-type Fn = "ava-assistant" | "roofguard-caller";
+type Fn = "ava-assistant" | "roofguard-caller" | "ava-voice-samples";
 async function invoke<T extends { ok?: boolean; error?: string }>(fn: Fn, body: Record<string, unknown>): Promise<{ data: T | null; error: string | null }> {
   const { data, error } = await supabase.functions.invoke(fn, { body });
   if (error) {
@@ -420,6 +420,12 @@ function YourVoiceCard({ info, onChanged, player }: { info: CloneInfo | null; on
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<"clone" | "preview" | "delete" | "resume" | null>(null);
   const [askDelete, setAskDelete] = useState(false);
+  const [samples, setSamples] = useState<{ sample_id: string; file_name: string; size_bytes: number }[] | null>(null);
+  const [maxSamples, setMaxSamples] = useState(25);
+  const [adds, setAdds] = useState<File[]>([]);
+  const [addBusy, setAddBusy] = useState<"add" | string | null>(null);   // "add" or the sample id being removed
+  const [askRemove, setAskRemove] = useState<string | null>(null);
+  const addRef = useRef<HTMLInputElement>(null);
   const rec = useRef<{ mr: MediaRecorder; stream: MediaStream; ctx: AudioContext; raf: number; timer: ReturnType<typeof setInterval>; started: number; chunks: Blob[]; peak: number } | null>(null);
   const takeRef = useRef<Take | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -535,6 +541,51 @@ function YourVoiceCard({ info, onChanged, player }: { info: CloneInfo | null; on
     onChanged();
   };
 
+  const hasVoice = !!info?.voice_id;
+  const loadSamples = useCallback(async () => {
+    const { data } = await invoke<{ ok: boolean; samples: { sample_id: string; file_name: string; size_bytes: number }[]; max?: number }>("ava-voice-samples", { action: "info" });
+    if (data) { setSamples(data.samples); if (data.max) setMaxSamples(data.max); }
+  }, []);
+  useEffect(() => { if (hasVoice) void loadSamples(); else setSamples(null); }, [hasVoice, info?.voice_id, loadSamples]);
+
+  const pickMany = (list: FileList | null) => {
+    if (!list?.length) return;
+    setErr(null);
+    const ok: File[] = [];
+    for (const f of Array.from(list)) {
+      const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+      if (!["m4a", "mp3", "wav"].includes(ext)) { setErr(`${f.name}: use m4a, mp3 or wav. iPhone Voice Memos are m4a.`); continue; }
+      if (f.size > MAX_UPLOAD) { setErr(`${f.name} is over 25\u00A0MB. Trim it to a few minutes.`); continue; }
+      ok.push(f);
+    }
+    setAdds((cur) => [...cur, ...ok].slice(0, 10));
+  };
+  /** upload to the private bucket, then ask the function to add them to the existing voice (it deletes the raw files) */
+  const addToVoice = async (items: { blob: Blob; ext: string }[]) => {
+    setAddBusy("add"); setErr(null);
+    const paths: string[] = [];
+    for (const it of items) {
+      const path = `clone/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${it.ext}`;
+      const up = await supabase.storage.from("ava-voice").upload(path, it.blob, { contentType: it.blob.type || "audio/mpeg", upsert: false });
+      if (up.error) { setAddBusy(null); if (paths.length) void supabase.storage.from("ava-voice").remove(paths); setErr("Couldn't upload a recording. Nothing was added. Try again."); return; }
+      paths.push(path);
+    }
+    const { data, error } = await invoke<{ ok: boolean; samples: { sample_id: string; file_name: string; size_bytes: number }[]; added: number; restored: number }>("ava-voice-samples", { action: "add", paths });
+    setAddBusy(null);
+    if (error || !data) { setErr(error ?? "Couldn't add those recordings."); void loadSamples(); return; }
+    setSamples(data.samples); setAdds([]); setTake(null);
+    toast.success(`Added ${data.added} to your voice. It now has ${data.samples.length} recordings.`);
+    onChanged();
+  };
+  const removeSample = async (id: string) => {
+    setAddBusy(id); setErr(null);
+    const { data, error } = await invoke<{ ok: boolean; samples: { sample_id: string; file_name: string; size_bytes: number }[] }>("ava-voice-samples", { action: "remove", sample_id: id });
+    setAddBusy(null); setAskRemove(null);
+    if (error || !data) { setErr(error ?? "Couldn't remove it."); return; }
+    setSamples(data.samples);
+    toast.success("Recording removed from your voice.");
+  };
+
   const noPlan = info?.can_clone === false;
   const has = !!info?.voice_id;
   const recording = phase === "recording";
@@ -582,9 +633,67 @@ function YourVoiceCard({ info, onChanged, player }: { info: CloneInfo | null; on
         </div>
       )}
 
+      {has && (
+        <div className="mt-4 rounded-2xl bg-black/20 p-3 ring-1 ring-white/10">
+          <div className="flex items-center gap-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-white/55">Add to your voice</div>
+            {samples && <span className="ml-auto whitespace-nowrap text-xs tabular-nums text-white/55">{samples.length} of {maxSamples} recordings</span>}
+          </div>
+          <p className="mt-1 text-sm text-white/65">Found more Voice Memos? Add them here. Your old recordings stay, so you never re-record or re-upload them.</p>
+          <input ref={addRef} type="file" multiple accept=".m4a,.mp3,.wav,audio/mp4,audio/x-m4a,audio/mpeg,audio/wav,audio/x-wav" className="sr-only" tabIndex={-1} aria-label="Choose Voice Memos to add"
+            onChange={(e) => { pickMany(e.target.files); e.target.value = ""; }} />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => addRef.current?.click()} disabled={addBusy !== null} className={btnQuiet}><Upload className="h-4 w-4" aria-hidden />Choose Voice Memos</button>
+            <span className="text-xs text-white/55">Pick several at once, up to 10</span>
+          </div>
+          {adds.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <ul className="divide-y divide-white/5 rounded-xl bg-white/[0.04] ring-1 ring-white/10">
+                {adds.map((f, i) => (
+                  <li key={`${f.name}-${i}`} className="flex items-center gap-2 px-3 py-1.5 text-sm text-white/85">
+                    <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                    <span className="whitespace-nowrap text-xs tabular-nums text-white/50">{(f.size / 1048576).toFixed(1)}{"\u00A0"}MB</span>
+                    <button type="button" onClick={() => setAdds((c) => c.filter((_, j) => j !== i))} disabled={addBusy !== null} aria-label={`Remove ${f.name} from the list`}
+                      className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-lg text-white/50 hover:text-white", ring)}><Trash2 className="h-4 w-4" aria-hidden /></button>
+                  </li>
+                ))}
+              </ul>
+              <button type="button" onClick={() => void addToVoice(adds.map((f) => ({ blob: f, ext: f.name.split(".").pop()!.toLowerCase() })))} disabled={addBusy !== null || noPlan}
+                className={cn(btnPrimary, "w-full")} style={primaryStyle}>
+                {addBusy === "add" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}{addBusy === "add" ? "Adding…" : `Add ${adds.length} to my voice`}</button>
+              <p className="text-xs text-white/55">The files are deleted from storage as soon as they're added.</p>
+            </div>
+          )}
+          {samples && samples.length > 0 && (
+            <details className="mt-3 group">
+              <summary className={cn("flex min-h-[44px] cursor-pointer list-none items-center gap-2 rounded-lg text-sm text-white/75 hover:text-white", ring)}>
+                <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />What your voice is built from</summary>
+              <ul className="divide-y divide-white/5 rounded-xl bg-white/[0.04] ring-1 ring-white/10">
+                {samples.map((sm) => (
+                  <li key={sm.sample_id} className="flex items-center gap-2 px-3 py-1.5 text-sm text-white/85">
+                    <span className="min-w-0 flex-1 truncate">{sm.file_name}</span>
+                    <span className="whitespace-nowrap text-xs tabular-nums text-white/50">{(sm.size_bytes / 1048576).toFixed(1)}{"\u00A0"}MB</span>
+                    {askRemove === sm.sample_id ? (
+                      <span className="flex shrink-0 items-center gap-1">
+                        <button type="button" onClick={() => setAskRemove(null)} className={cn(btnQuiet, "min-h-[44px] px-2.5")}>Keep</button>
+                        <button type="button" onClick={() => void removeSample(sm.sample_id)} disabled={addBusy !== null} autoFocus className={cn(btn, "bg-[#FF453A] px-2.5 font-semibold text-white")}>
+                          {addBusy === sm.sample_id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Remove</button>
+                      </span>
+                    ) : (
+                      <button type="button" onClick={() => setAskRemove(sm.sample_id)} disabled={addBusy !== null || samples.length <= 1} aria-label={`Remove ${sm.file_name} from your voice`}
+                        className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-lg text-white/50 hover:text-[#FF453A] disabled:opacity-30", ring)}><Trash2 className="h-4 w-4" aria-hidden /></button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+
       {/* recorder */}
       <div className="mt-4 rounded-2xl bg-black/20 p-3 ring-1 ring-white/10">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-white/55">{has ? "Record it again" : "Record your voice"}</div>
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-white/55">{has ? "Record it again (replace or add)" : "Record your voice"}</div>
         <div className="mt-2 flex items-center gap-4">
           <button type="button" onClick={() => (recording ? stop() : void start())} disabled={phase === "processing" || busy === "clone"}
             aria-label={recording ? "Stop recording" : "Start recording"}
@@ -626,6 +735,8 @@ function YourVoiceCard({ info, onChanged, player }: { info: CloneInfo | null; on
           <div className="text-sm text-white/75"><span className="font-medium text-white">{take.label}</span>{take.secs != null && <span className="tabular-nums"> · {mmss(take.secs)}</span>}</div>
           <audio controls src={take.url} className="h-11 w-full" aria-label="Your recording, to check before cloning" />
           {tooShort && <p className="text-sm text-amber-200">That's under {MIN_REC_SECS}{"\u00A0"}seconds. Record a little more so the clone sounds like you.</p>}
+          {has && <button type="button" onClick={() => void addToVoice([{ blob: take.blob, ext: take.ext }])} disabled={addBusy !== null || busy === "clone" || tooShort} className={cn(btnQuiet, "w-full")}>
+            {addBusy === "add" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Add this to my voice (keeps the old recordings)</button>}
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setTake(null)} disabled={busy === "clone"} className={btnQuiet}><RotateCcw className="h-4 w-4" aria-hidden />Start over</button>
             <button type="button" onClick={() => void makeVoice()} disabled={busy === "clone" || noPlan || tooShort} className={btnPrimary} style={primaryStyle}>
