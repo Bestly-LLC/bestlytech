@@ -5,25 +5,54 @@
 ## TL;DR
 
 - **Who texts:** RoofGuard Ava, from the RoofGuard line (816) 544-0206. Personal Ava can reuse the same parts later.
-- **Who gets a text (recommended):** only people who **said yes on the call** to "mind if I text you a quick link?" This is the safe lane for the law and for carrier approval. Voicemail-only follow-ups are a separate decision (see Decision).
+- **Who gets a text:** only people who **said yes on the call** to "mind if I text you a quick link?" Cold texting everyone else was researched and ruled out — see the next section. Voicemail-only leads get **email** instead, which is genuinely legal for B2B.
 - **The text:** under 160 characters, plain, no emoji, says it is Ava, RoofGuard's AI assistant, has a short link, and ends "Reply STOP to opt out."
 - **The link:** `bestly.tech/r/abc1234`, one per lead. It opens a one-screen plain-language RoofGuard page with a "Pick a time with Eli" button. (`/t/` is already taken by Lax guest links.)
 - **Zero AI cost:** fixed templates, A/B tested like the openers. No model writes the text in v1.
-- **Long pole:** US carriers require the number to be registered for business texting (10DLC, or a verified toll-free number). That takes days to weeks, so it starts first.
+- **Long pole:** US carriers require the number to be registered for business texting (10DLC). Registration must honestly describe the verbal opt-in, which is a routinely approved pattern. Days to weeks, so it starts first.
 - **Ships dark:** `text_enabled` is off, test mode texts only Jared's cell, then a 10-a-day cap when it goes live.
 
 ---
 
-## Decision (Jared, one question)
+## Answer on texting everyone (researched 2026-10-05)
 
-**Who gets texted?**
+**Jared asked: if it's legal in whatever state, just text them all as a follow-up. The answer is no, and the reason is not state law.** Three blockers, any one of which is fatal. Not legal advice, I am not a lawyer, and this needs an hour with TCPA defense counsel before any texting goes live.
 
-| Option | What it means | Risk |
+**1. Federal, and no business exemption.** The do-not-call rules (47 USC 227(c), 47 CFR 64.1200(c)(2) and (e)) cover **text messages to wireless numbers** and need **no autodialer at all**, so the usual "we send from a list through an API" defense does not reach them. The FCC's rules have **no business-to-business exemption** — the only B2B carve-out is the FTC's telemarketing rule, which has no private right of action, so it protects us from regulators and not from a plaintiff's lawyer. Worse for us specifically: in our own Ninth Circuit, *Chennette v. Porch.com* (50 F.4th 1217, 2022) holds that a mixed-use cell number is **presumed residential even when it is used and advertised for business**, and the burden to prove otherwise falls on us, after a full round of discovery. Damages are **$500 per text, $1,500 if willful**, with a four-year window, and most general liability policies exclude these claims.
+
+**2. Several states ban it outright, with no B2B carve-out.** Washington's CEMA (RCW 19.190.060) flatly prohibits a commercial text to a Washington number without clear affirmative consent, and each one is a per se Consumer Protection Act violation; preemption defenses there have uniformly failed. Maryland requires express written consent. Connecticut runs to $20,000 per violation. Texas added texts in September 2025 with no damages cap. Arizona covers texts to do-not-call registrants. **Oklahoma is the only state found with an explicit B2B exemption.** So "find the states where it's legal" does not produce a usable map — it produces a patchwork where the big commercial-building states are the dangerous ones.
+
+**3. The carriers block it before the law ever gets involved, and this is the one that should decide it.** A 10DLC campaign registration requires us to describe **the exact opt-in mechanism and its verbatim wording**. "We called them and they didn't answer" is not an opt-in, so an honest registration is rejected. A dishonest one is worse: it is a false statement to the Campaign Registry and a breach of Telnyx's acceptable use policy, and the first complaint cluster triggers an audit we cannot survive. **A brand suspension takes down every Bestly text message, including InventoryProof's, and a Telnyx policy termination takes the SIP trunk with it — which means Ava stops making calls at all.** Cold texting risks the entire phone system to send a one-line follow-up. Separately, cold lists draw opt-out and spam-report rates far above the filtering thresholds, so the texts get silently dropped while the API still reports success.
+
+### So the plan stays consent-first, and the people we wanted to text get email instead
+
+| Who | Channel | Why it's clean |
 |---|---|---|
-| **A. Said yes on a live call (recommended)** | Ava asks "mind if I text you the link?" and only texts on a yes | Lowest. Matches how carriers vet the campaign |
-| B. Also after voicemails | Texts people who never spoke to us | Cold texting to cell phones: higher legal risk (TCPA) and carriers may reject or filter the campaign. Needs a lawyer's OK first |
+| Said yes on a live call | **Text** | Prior express consent, recorded. The 10DLC campaign registers honestly as a verbal/IVR opt-in flow, which is a routinely approved pattern |
+| Voicemail only, or never answered | **Email** | CAN-SPAM is **opt-out** for business email: no prior consent needed. Needs truthful headers, a clear ad identification, Bestly's physical address (733 N Kings Rd #205) and a working unsubscribe honored within 10 business days. No private right of action — FTC enforcement only |
+| Everyone | Direct mail, LinkedIn, in person | No TCPA, CEMA or carrier surface at all |
 
-Not legal advice. Texts to cell phones fall under stricter rules than calls, even for businesses, so B should be checked with counsel before it is turned on.
+**Ringless voicemail is the worst option on the table, not a workaround** — the FCC held it is a "call" requiring prior express consent, and combined with the AI-voice ruling below it is a facial violation with strict liability.
+
+---
+
+## Urgent and separate: the AI voice calls are already exposed
+
+This was not the question, but it is the bigger number. **FCC 24-17 (8 February 2024) holds that an AI-generated voice is an "artificial voice" under 47 USC 227(b)(1).** That means calling a **mobile** number with an AI voice and no prior express consent is a violation **on its face — strict liability, no autodialer element to argue about, $500 to $1,500 per call.** An AI voicemail drop is the same violation. **Business landlines are outside it** (227(b)(1)(B) covers residential lines only).
+
+Our own lead data, 2026-10-05, active leads with do-not-call clear:
+
+| Line type | Leads | Already called |
+|---|---|---|
+| **unverified** | **894** | 894 |
+| voip | 134 | 134 |
+| landline | 115 | 115 |
+| mobile | 10 | 10 |
+| unknown | 8 | 8 |
+
+**894 numbers of unknown type have already been dialed by an AI voice.** The fix is cheap and additive: verify line type before the dialer picks a lead, and skip mobile until counsel clears it. That is a bigger risk reduction than anything in this texting plan, and it should go first.
+
+Also confirm the agent announces recording at the top of every call — California is a two-party consent state (Penal Code 632/632.7).
 
 ---
 
