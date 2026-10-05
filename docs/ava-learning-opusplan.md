@@ -94,6 +94,13 @@ Today: **RoofGuard Caller** is an "open role, planned" under RoofGuard Outreach.
 2. **Add personal Ava** as "Ava (Jared's assistant)", reporting to Scout.
 3. **Hire the Coach** through the normal flow: The Recruiter writes it up, The Improver vets it, you tap Hire. It reports to RoofGuard Ava. A light second job reviews personal Ava's calls, stored in `ava_*` so the RoofGuard side stays separable.
 4. Each one gets a heartbeat, so Team Watch flags it if it goes quiet. That's the watchdog.
+5. **Hire the Tech Scout** (Jared, 2026-10-04). Its job is to keep Bestly current: each week it reads what's new and suggests how to use it.
+   - **Watches:** new and cheaper voice and AI models (free and open ones first), ElevenLabs/Telnyx/Supabase release notes, trending GitHub repos and scripts, and price changes that cut cost per call.
+   - **Output:** a short Monday brief in Scout with at most 3 ideas. Each says what's new, what it would change for us (cost, speed, quality), effort (S/M/L), and a one-tap "Try it" that opens a test. A model idea runs as a 10% A/B test on Ava, using the playbook test machinery.
+   - **Example of what it should catch:** "gemini-2.5-flash-lite is deprecated; gpt-4.1-mini is the fast, reliable replacement." That's the swap we made by hand after call #8.
+   - **Runs on the Pi or Mac mini with free AI** (token rule): RSS, release feeds and the GitHub trending API, summarized locally. Paid AI only as a capped fallback.
+   - **Can't** switch production models or install anything on its own. Every change goes through "Your call".
+   - Reports to The Improver. Heartbeat on Team Watch.
 
 ---
 
