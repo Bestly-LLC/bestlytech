@@ -106,6 +106,7 @@ export async function discover(provider: Provider, c: Creds, trace: Trace = []):
   const cals = parseCalendars(p3.text, p3.url, provider);
   if (!cals.length) {
     trace.push(`3 tags: ${tags(p3.text)}`);
+    for (const r of blocks(p3.text, "response").slice(0, 16)) trace.push(`3 item: type=[${(first(r, "resourcetype") ?? "").replace(/\s+/g, " ").slice(0, 160)}] comps=[${(first(r, "supported-calendar-component-set") ?? "-").replace(/\s+/g, " ").slice(0, 80)}]`);
     // some accounts answer the home with only a listing; look at each collection on its own as a second chance
     const hrefs = blocks(p3.text, "response").map((r) => first(r, "href")).filter((h): h is string => !!h).map((h) => absolute(unxml(h), p3.url)).filter((u) => u.replace(/\/$/, "") !== p3.url.replace(/\/$/, ""));
     const out: Cal[] = [];
