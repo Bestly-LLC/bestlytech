@@ -85,8 +85,8 @@ export function AvaReview() {
   const { roi, econ, pip } = r;
   const planOpen = r.verdict === "plan_due" || r.verdict === "stop_review" || r.verdict === "coaching";
   const econFields: [string, string, string][] = [
-    ["deal_cut_pct", "Your cut per deal", `${+(econ.deal_cut_pct * 100).toFixed(2)}`],
-    ["close_rate", "Meetings that close", `${+(econ.close_rate * 100).toFixed(1)}`],
+    ["deal_cut_pct", "Your cut per deal (%)", `${+(econ.deal_cut_pct * 100).toFixed(2)}`],
+    ["close_rate", "Meetings that close (%)", `${+(econ.close_rate * 100).toFixed(1)}`],
     ["avg_roof_sqft", "Roof size (sq ft)", `${econ.avg_roof_sqft}`],
     ["rate_per_sqft", "Price per sq ft a month ($)", `${econ.rate_per_sqft}`],
   ];
