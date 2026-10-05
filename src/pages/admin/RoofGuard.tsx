@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { AvaOrb } from "@/components/admin/roofguard/AvaOrb";
+import { VoiceSwitcher } from "@/components/admin/roofguard/VoiceSwitcher";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Loader2, Phone, RefreshCw, Search, Zap } from "lucide-react";
 import { AvaCalls } from "@/components/admin/roofguard/AvaCalls";
 import { AvaScorecard, AvaScoreStrip } from "@/components/admin/roofguard/AvaScorecard";
@@ -533,6 +534,7 @@ export default function RoofGuard() {
       </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2"><VoiceSwitcher source="rg" /></div>
       <AvaTopBar onCalled={() => setTab("calls")} />
       <Segmented value={tab} onChange={setTab} />
 
