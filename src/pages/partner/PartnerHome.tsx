@@ -466,7 +466,7 @@ function HomeTab(props: {
               </span>
             </a>
             <button onClick={() => ask()}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/[0.09] px-5 text-[1rem] font-semibold text-white transition hover:bg-white/[0.14] active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/[0.09] px-5 text-[1rem] font-semibold text-white transition hover:bg-white/[0.14] active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
               <Binoculars className="h-5 w-5" /> Ask Scout
             </button>
           </div>
@@ -493,9 +493,13 @@ function HomeTab(props: {
         </div>
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      {/* Phone: one column in a sensible order. Desktop: two packed columns, so a short panel is never
+          stretched to match a tall neighbour (that was the big empty space). minmax(0,1fr) lets long
+          subjects shrink instead of widening the whole page. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-3 lg:items-start">
+        <div className="contents lg:col-span-2 lg:flex lg:flex-col lg:gap-5">
         {/* To-dos */}
-        <Panel title="Your to-dos" icon={Check} className="lg:col-span-2">
+        <Panel title="Your to-dos" icon={Check} className="order-1 lg:order-none">
           {mine.length === 0 ? <Muted>All clear. Nothing from your calls is waiting on you.</Muted> : (
             <ul className="divide-y divide-white/[0.06]">
               {mine.map((t) => {
@@ -531,54 +535,24 @@ function HomeTab(props: {
         </Panel>
 
         {/* Scout */}
-        <Panel title="Ask Scout" icon={Binoculars} tone="bg-gradient-to-br from-[#0A84FF]/15 to-transparent">
-          {(scout.thinking || scout.unread > 0) && (
-            <button onClick={() => go("scout")} className="mb-3 flex w-full items-center gap-2 rounded-xl bg-[#0A84FF]/15 px-3 py-2.5 text-left text-sm font-medium">
-              {scout.unread > 0 ? <><span className="h-2 w-2 rounded-full bg-[#0A84FF]" /> Scout answered. Tap to read.</>
-                : <><Loader2 className="h-4 w-4 animate-spin text-white/60" /> Scout is working on your question…</>}
-            </button>
-          )}
-          <form onSubmit={(e) => { e.preventDefault(); ask(q); }} className="flex gap-2">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="What did we decide about…"
-              className="h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-black/30 px-4 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:border-white/10 bento:bg-[#fff]" />
-            <button aria-label="Ask" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#0A84FF] text-[#fff] active:scale-95"><ArrowRight className="h-5 w-5" /></button>
-          </form>
-          <div className="mt-3 flex flex-col gap-1.5">
-            {SCOUT_IDEAS.slice(0, 3).map((s) => (
-              <button key={s} onClick={() => ask(s)} className="rounded-xl px-3 py-2 text-left text-sm text-white/70 transition hover:bg-white/[0.06] hover:text-white">{s}</button>
-            ))}
-          </div>
-          <p className="mt-2 px-3 text-xs text-white/60">Free. Scout runs on Bestly's own computer, so give it a minute.</p>
-        </Panel>
-
         {/* Recent calls */}
-        <Panel title="Recent calls" icon={Mic} className="lg:col-span-2" more={() => go("calls")}>
+        <Panel title="Recent calls" icon={Mic} className="order-3 lg:order-none" more={() => go("calls")}>
           {meetings === null ? <Skeleton /> : meetings.length === 0 ? <Muted>No calls yet.</Muted> : (
-            <div className="grid gap-2 sm:grid-cols-3">
-              {meetings.slice(0, 3).map((m) => (
-                <button key={m.id} onClick={() => openCall(m)}
-                  className="flex h-full flex-col rounded-2xl bg-white/[0.04] p-4 text-left transition hover:bg-white/[0.08] active:scale-[0.99] bento:bg-[#F3F2EE]">
-                  <p className="text-sm font-semibold">{meetingDate(m)}</p>
-                  <p className="mt-0.5 text-xs text-white/60">{minutes(m) ? `${minutes(m)} min` : ""}</p>
-                  {m.summary?.summary && <p className="mt-2 line-clamp-4 text-sm text-white/70">{m.summary.summary}</p>}
-                </button>
-              ))}
-            </div>
-          )}
-        </Panel>
-
-        {/* Latest emails */}
-        <Panel title="From Jared" icon={Mail} more={() => go("mail")}>
-          {mail === null ? <Skeleton /> : mail.length === 0 ? <Muted>No emails yet. They show up here within 10 minutes of Jared sending one.</Muted> : (
-            <ul className="-mx-2 space-y-0.5">
-              {mail.slice(0, 4).map((m) => (
+            <ul className="-mx-2 divide-y divide-white/[0.06]">
+              {meetings.slice(0, 4).map((m) => (
                 <li key={m.id}>
-                  <button onClick={() => openMail(m)} className="w-full rounded-xl px-2 py-2.5 text-left transition hover:bg-white/[0.05]">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <p className="truncate text-sm font-medium">{m.subject || "(no subject)"}</p>
-                      <span className="shrink-0 text-xs text-white/60">{day(m.sent_at)}</span>
-                    </div>
-                    <p className="mt-0.5 line-clamp-1 text-xs text-white/60">{m.body_text}</p>
+                  <button onClick={() => openCall(m)}
+                    className="flex min-h-[2.75rem] w-full items-start gap-3 rounded-xl px-2 py-3 text-left transition hover:bg-white/[0.05] active:scale-[0.995]">
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="text-sm font-semibold">{meetingDate(m)}</span>
+                        {minutes(m) ? <span className="whitespace-nowrap text-xs text-white/60">{minutes(m)}&nbsp;min</span> : null}
+                      </span>
+                      <span className={cn("mt-0.5 line-clamp-2 block text-sm", m.summary?.summary ? "text-white/70" : "text-white/60")}>
+                        {m.summary?.summary || "Summary on its way."}
+                      </span>
+                    </span>
+                    <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-white/50" aria-hidden />
                   </button>
                 </li>
               ))}
@@ -588,7 +562,7 @@ function HomeTab(props: {
 
         {/* Pipeline */}
         {pipe && (pipe.deals.length > 0 || pipe.leads.length > 0) && (
-          <Panel title="Cloud pipeline" icon={LayoutGrid} className="lg:col-span-2">
+          <Panel title="Cloud pipeline" icon={LayoutGrid} className="order-5 lg:order-none">
             <ul className="space-y-3">
               {pipe.deals.map((d, i) => (
                 <li key={`d${i}`}>
@@ -612,19 +586,58 @@ function HomeTab(props: {
         )}
 
         {/* Files */}
-        <Panel title="Latest files" icon={Paperclip} more={() => go("files")}>
+        <Panel title="Latest files" icon={Paperclip} className="order-6 lg:order-none" more={() => go("files")}>
           {files.length === 0 ? <Muted>Attachments Jared sends you land here.</Muted> : (
             <ul className="-mx-2 space-y-0.5">
               {files.slice(0, 4).map((a, i) => <FileRow key={i} a={a} />)}
             </ul>
           )}
         </Panel>
+        </div>
+        <div className="contents lg:col-span-1 lg:flex lg:flex-col lg:gap-5">
+        <Panel title="Ask Scout" icon={Binoculars} tone="order-2 lg:order-none bg-gradient-to-br from-[#0A84FF]/15 to-transparent">
+          {(scout.thinking || scout.unread > 0) && (
+            <button onClick={() => go("scout")} className="mb-3 flex w-full items-center gap-2 rounded-xl bg-[#0A84FF]/15 px-3 py-2.5 text-left text-sm font-medium">
+              {scout.unread > 0 ? <><span className="h-2 w-2 rounded-full bg-[#0A84FF]" /> Scout answered. Tap to read.</>
+                : <><Loader2 className="h-4 w-4 animate-spin text-white/60" /> Scout is working on your question…</>}
+            </button>
+          )}
+          <form onSubmit={(e) => { e.preventDefault(); ask(q); }} className="flex gap-2">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="What did we decide about…"
+              className="h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-black/30 px-4 text-[16px] text-white outline-none placeholder:text-white/60 focus:border-white/30 bento:border-white/10 bento:bg-[#fff]" />
+            <button aria-label="Ask" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#0A84FF] text-[#fff] active:scale-95"><ArrowRight className="h-5 w-5" /></button>
+          </form>
+          <div className="mt-3 flex flex-col gap-1.5">
+            {SCOUT_IDEAS.slice(0, 3).map((s) => (
+              <button key={s} onClick={() => ask(s)} className="rounded-xl px-3 py-2 text-left text-sm text-white/70 transition hover:bg-white/[0.06] hover:text-white">{s}</button>
+            ))}
+          </div>
+          <p className="mt-2 px-3 text-xs text-white/60">Free. Scout runs on Bestly's own computer, so give it a minute.</p>
+        </Panel>
+
+        {/* Latest emails */}
+        <Panel title="From Jared" icon={Mail} className="order-4 lg:order-none" more={() => go("mail")}>
+          {mail === null ? <Skeleton /> : mail.length === 0 ? <Muted>No emails yet. They show up here within 10 minutes of Jared sending one.</Muted> : (
+            <ul className="-mx-2 space-y-0.5">
+              {mail.slice(0, 4).map((m) => (
+                <li key={m.id}>
+                  <button onClick={() => openMail(m)} className="flex min-h-[2.75rem] w-full flex-col rounded-xl px-2 py-2.5 text-left transition hover:bg-white/[0.05]">
+                    <p className="line-clamp-2 text-sm font-medium">{m.subject || "(no subject)"}</p>
+                    <p className="mt-0.5 line-clamp-1 text-xs text-white/60"><span className="whitespace-nowrap">{day(m.sent_at)}</span>{m.body_text ? ` · ${m.body_text}` : ""}</p>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        </div>
       </div>
 
       {/* Shortcuts */}
       <section>
         <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-white/60">Shortcuts</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Tile href={callUrl} art="call" label="Our call" sub="Jump into the room" tone="from-emerald-400 to-green-600 text-green-700" />
           {SHORTCUTS.map((s) => (
             <Tile key={s.id} art={s.id} label={s.label} sub={s.sub} tone={s.tone}
@@ -633,7 +646,7 @@ function HomeTab(props: {
               badge={s.id === "studio" ? studioUnread : s.id === "talk" ? talkUnread : 0} />
           ))}
           <button onClick={onConnect}
-            className="group relative flex aspect-[5/4] flex-col justify-between overflow-hidden rounded-[1.4rem] bg-gradient-to-br from-orange-400 to-amber-600 p-4 text-left text-orange-700 shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 active:scale-[0.98]">
+            className="group relative flex aspect-[5/4] sm:aspect-[8/5] lg:aspect-[2/1] flex-col justify-between overflow-hidden rounded-[1.4rem] bg-gradient-to-br from-orange-400 to-amber-600 p-4 text-left text-orange-700 shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 active:scale-[0.98]">
             <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15" />
             <span className="relative transition group-hover:scale-105">{ART.claude}</span>
             <span className="relative">
@@ -652,7 +665,7 @@ function Tile({ href, onClick, art, label, sub, tone, badge = 0 }: { href?: stri
   const props = onClick ? { type: "button", onClick } : { href, target: "_blank", rel: "noreferrer" };
   return (
     <Box {...props}
-      className={cn("group relative flex aspect-[5/4] w-full flex-col justify-between overflow-hidden rounded-[1.4rem] bg-gradient-to-br p-4 text-left shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-14px_rgba(0,0,0,0.7)] active:scale-[0.98]", tone)}>
+      className={cn("group relative flex aspect-[5/4] sm:aspect-[8/5] lg:aspect-[2/1] w-full flex-col justify-between overflow-hidden rounded-[1.4rem] bg-gradient-to-br p-4 text-left shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-14px_rgba(0,0,0,0.7)] active:scale-[0.98]", tone)}>
       <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15" />
       {badge > 0 && <span className="absolute right-3 top-3 min-w-[22px] rounded-full bg-red-500 px-1.5 text-center text-xs font-bold leading-[22px] text-[#fff] shadow">{badge}</span>}
       <span className="relative transition group-hover:scale-105">{ART[art]}</span>
