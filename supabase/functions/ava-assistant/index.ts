@@ -14,6 +14,11 @@
 //   {action:"health"}    watchdog (every 10 min, no AI): Telnyx routes the number to the inbound connection, ElevenLabs has
 //                        incoming calls on and the right agent, the init webhook is set. Any problem -> run setup, re-check,
 //                        record in ava_line_health and push Scout (fixed / still broken).
+//   {action:"voices"}    admin: current voice + "In your library" + "Discover" (shared library), filters from the picker.
+//   {action:"voice_say"} admin: {voice_id, text} -> mp3 of her saying it (40 a Pacific day).
+//   {action:"voice_test_call"}  admin: {voice_id} -> ONE call to Jared's own cell in that voice (per-call override).
+//   {action:"voice_use"} admin: {voice_id, public_owner_id?, name} -> add to the account if needed, save, re-run setup.
+//   {action:"voice_clone" | "voice_preview" | "voice_delete" | "voice_resume"}  Jared's own voice (docs/ava-voice-clone-opusplan.md).
 //   ?hook=init           ElevenLabs, at the start of an inbound call: who is calling? -> greeting + contact details + the
 //                        shareable knowledge (ava_knowledge). Guarded by a shared header secret from Vault.
 //   ?hook=post           ElevenLabs post-call webhook (HMAC-signed) -> ava_calls row + Scout push with the message.
@@ -37,7 +42,11 @@ const JARED_CELL = "+18165007236";
 const MAX_CALL_SECS = 600;
 const SILENCE_END_SECS = 20;
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Expose-Headers": "x-says-left" };
+const DEFAULT_VOICE = "pFZP5JQG7iQjIQuC4Bku";   // Lily
+const SAY_CAP = 40;                              // "Hear her say..." plays per Pacific day
+/** The agent's voice settings. English agents must use flash/turbo v2 (v2_5 is rejected); flash is the fastest. */
+const ttsConfig = (voice_id: string) => ({ voice_id, model_id: "eleven_flash_v2", stability: 0.55, similarity_boost: 0.8, optimize_streaming_latency: 4, speed: 1.05 });
 
 async function vault(name: string): Promise<string | null> {
   const { data, error } = await db.rpc("ava_secret", { p_name: name });
@@ -96,6 +105,7 @@ Today is {{today}}. It's {{local_time}} in Los Angeles, where Jared lives.
 
 This call: {{call_context}}
 Who you're talking to: {{caller_name}}. {{caller_notes}}
+{{voice_rules}}
 
 What you can share (the only facts you may use to help someone):
 {{knowledge}}
@@ -150,7 +160,7 @@ const DATA_COLLECTION = {
   callback_number: { type: "string", description: "A callback number they gave, if different from the number they called from. Empty otherwise." },
 };
 
-const UNKNOWN = { caller_name: "a caller Ava doesn't know yet", caller_notes: "", caller_trusted: "no", greeting:
+const UNKNOWN = { caller_name: "a caller Ava doesn't know yet", caller_notes: "", caller_trusted: "no", voice_rules: "", greeting:
   "Hi, it's Ava, Jared's AI assistant, on a recorded line. He can't get to the phone right now. Can I take a message?" };
 
 /** Turn incoming calls on for an ElevenLabs phone number and confirm it with a GET. Tries the documented inbound trunk
@@ -286,11 +296,12 @@ async function setup(): Promise<Response> {
       turn: { turn_eagerness: "eager", speculative_turn: true, silence_end_call_timeout: SILENCE_END_SECS,
         soft_timeout_config: { timeout_seconds: 1.0, message: "Yeah...", randomize_fillers: true, max_soft_timeouts_per_generation: 1,
           additional_soft_timeout_messages: ["Mm, right...", "Yeah, so...", "Got it...", "Okay..."] } },
-      tts: { voice_id: s?.voice_id ?? "pFZP5JQG7iQjIQuC4Bku", model_id: "eleven_flash_v2", stability: 0.55, similarity_boost: 0.8, optimize_streaming_latency: 4, speed: 1.05 },
+      tts: ttsConfig(s?.voice_id ?? DEFAULT_VOICE),
     },
     platform_settings: {
       data_collection: DATA_COLLECTION,
-      overrides: { enable_conversation_initiation_client_data_from_webhook: true },
+      // a single call may swap the voice (the voice test call, and "Use my voice" calls); nothing else is overridable
+      overrides: { conversation_config_override: { tts: { voice_id: true } }, enable_conversation_initiation_client_data_from_webhook: true },
       workspace_overrides: {
         webhooks: { post_call_webhook_id: webhookId, events: ["transcript"], send_audio: false },
         conversation_initiation_client_data_webhook: { url: `${SELF}?hook=init`, request_headers: { "x-ava-init": initSecret } },
@@ -332,8 +343,11 @@ async function setup(): Promise<Response> {
 // ---------- outbound ----------
 type Placed = { ok: true; call_id: string | null; calling: string } | { ok: false; error: string; status: number };
 
+/** Prompt rules for a call in Jared's cloned voice (docs/ava-voice-clone-opusplan.md). The opener already discloses. */
+const VOICE_RULES = "VOICE MODE: you are speaking in Jared's own voice, so you must be clear you are his AI assistant and not him. Your first line already says so; never skip or contradict it. If anyone asks, say you're an AI. Never say \"this is Jared\" or \"I'm Jared\", and never speak as if you are him. Never commit to anything for him: no money, plans, appointments or promises. Say you'll pass it on.";
+
 /** Places one call as Ava. Everything an outbound call needs lives here so the dialer, "Connect me" and follow-ups share it. */
-async function place(o: { phone: string; name?: string; purpose?: string; connect?: boolean; first_line?: string }): Promise<Placed> {
+async function place(o: { phone: string; name?: string; purpose?: string; connect?: boolean; first_line?: string; voice_id?: string; voice_mode?: "ava" | "jared" }): Promise<Placed> {
   const to = toE164(o.phone);
   if (!to) return { ok: false, error: "Enter a 10-digit US or Canada number.", status: 400 };
   const { data: s } = await db.from("ava_settings").select("*").eq("id", true).single();
@@ -345,13 +359,23 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
   const name = String(o.name ?? "").trim().slice(0, 40) || contact?.name || "";
   const purpose = String(o.purpose ?? "").trim().slice(0, 600) || "Jared asked you to call and say hello.";
   const connect = o.connect === true;
-  const greeting = String(o.first_line ?? "").trim().slice(0, 300) ||
-    `Hi${name ? ` ${name.split(" ")[0]}` : ""}, it's Ava, Jared's AI assistant, on a recorded line. ${connect ? "Jared would love a quick word with you." : "He asked me to give you a call."}`;
+  // her voice for this call: the agent's own, a one-call override (the voice test), or Jared's clone ("Use my voice")
+  let voiceOverride: string | null = o.voice_id ?? null, voiceTag: "ava" | "jared" = "ava", voiceRules = "";
+  if (o.voice_mode === "jared") {
+    if (!s.jared_voice_id) return { ok: false, error: "Record your voice first. It's in Ava's voice, further down this page.", status: 412 };
+    if (s.jared_voice_paused_at) return { ok: false, error: "Voice mode is off after a guard alert. Turn it back on in Ava's voice section.", status: 409 };
+    voiceOverride = s.jared_voice_id; voiceTag = "jared"; voiceRules = VOICE_RULES;
+  }
+  const first = name ? ` ${name.split(" ")[0]}` : "";
+  const greeting = voiceTag === "jared"
+    ? `Hey${first}, it's Jared's AI assistant, using his voice.`   // disclosure first, always
+    : String(o.first_line ?? "").trim().slice(0, 300) ||
+      `Hi${first}, it's Ava, Jared's AI assistant, on a recorded line. ${connect ? "Jared would love a quick word with you." : "He asked me to give you a call."}`;
   const res = await fetch(`${XI}/convai/sip-trunk/outbound-call`, {
     method: "POST", headers: { "xi-api-key": key, "content-type": "application/json" },
     body: JSON.stringify({ agent_id: s.agent_id, agent_phone_number_id: s.phone_number_id, to_number: to,
-      conversation_initiation_client_data: { dynamic_variables: {
-        greeting, call_context: connect
+      conversation_initiation_client_data: { ...(voiceOverride ? { conversation_config_override: { tts: { voice_id: voiceOverride } } } : {}), dynamic_variables: {
+        greeting, voice_rules: voiceRules, call_context: connect
           ? `An outbound call to connect them to Jared. Why he wants to talk: ${purpose}. Check they're free, then connect them to Jared.`
           : `An outbound call Jared asked you to make. Why: ${purpose}`,
         caller_name: name || "them", caller_notes: contact ? `(${contact.relationship ?? "contact"}) ${contact.notes ?? ""}` : "",
@@ -361,13 +385,13 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
   const j = await res.json().catch(() => ({}));
   if (!res.ok || j?.success === false) return { ok: false, error: `The call didn't go out: ${JSON.stringify(j).slice(0, 200)}`, status: 502 };
   const { data: row } = await db.from("ava_calls").insert({ direction: "outbound", phone: to, contact_id: contact?.id ?? null, caller_name: name || null,
-    purpose, conversation_id: j.conversation_id ?? null, status: "queued", connect_to_jared: connect }).select("id").single();
+    purpose, conversation_id: j.conversation_id ?? null, status: "queued", connect_to_jared: connect, voice: voiceTag }).select("id").single();
   return { ok: true, call_id: row?.id ?? null, calling: to };
 }
 
 async function call(body: Record<string, unknown>): Promise<Response> {
   const r = await place({ phone: String(body.phone ?? ""), name: String(body.name ?? ""), purpose: String(body.purpose ?? ""),
-    connect: body.connect === true, first_line: String(body.first_line ?? "") });
+    connect: body.connect === true, first_line: String(body.first_line ?? ""), voice_mode: body.voice === "jared" ? "jared" : "ava" });
   return r.ok ? Response.json({ ok: true, call_id: r.call_id, calling: r.calling }, { headers: CORS })
     : Response.json({ ok: false, error: r.error }, { status: r.status, headers: CORS });
 }
@@ -429,6 +453,7 @@ async function lineProblems(): Promise<string[] | null> {
 }
 
 async function health(): Promise<Response> {
+  const voiceNotes = await voiceHealth();   // her voice still exists (falls back to the default and re-runs setup if not)
   const first = await lineProblems();
   if (first === null) return Response.json({ ok: null, skipped: "couldn't reach the voice platform" });
   let problems = first, healed = false;
@@ -448,7 +473,7 @@ async function health(): Promise<Response> {
     await db.rpc("scout_notify", { p_title: "Ava's line is still broken", p_body: `${problems.join("; ")}. Setup couldn't fix it.`,
       p_severity: "warning", p_push: true, p_url: url, p_dedupe: `ava-line-broken-ava-${now.slice(0, 10)}-${Math.floor(new Date(now).getUTCHours() / 6)}` });
   }
-  return Response.json({ ok, healed, problems });
+  return Response.json({ ok, healed, problems, voice: voiceNotes });
 }
 
 // ---------- live + audio ----------
@@ -473,10 +498,10 @@ async function live(callId: string | null): Promise<Response> {
     const d = await (await fetch(`${XI}/convai/conversations/${c.conversation_id}`, { headers: { "xi-api-key": key } })).json().catch(() => ({}));
     const pc = d.metadata?.phone_call ?? {};
     const phone = pc.external_number ?? null;
-    const { data: row } = await db.from("ava_calls").select("id, caller_name, direction").eq("conversation_id", c.conversation_id).maybeSingle();
+    const { data: row } = await db.from("ava_calls").select("id, caller_name, direction, voice").eq("conversation_id", c.conversation_id).maybeSingle();
     const { data: contact } = phone ? await db.from("ava_contacts").select("name").eq("phone", phone).maybeSingle() : { data: null };
     return { conversation_id: c.conversation_id, call_id: row?.id ?? null, status: d.status ?? c.status,
-      direction: row?.direction ?? pc.direction ?? "inbound", phone, who: contact?.name ?? row?.caller_name ?? null,
+      direction: row?.direction ?? pc.direction ?? "inbound", voice: row?.voice ?? "ava", phone, who: contact?.name ?? row?.caller_name ?? null,
       elapsed: d.metadata?.start_time_unix_secs ? Math.round(Date.now() / 1000 - d.metadata.start_time_unix_secs) : 0,
       duration: d.metadata?.call_duration_secs ?? null, transcript: slim(d.transcript) };
   }));
@@ -490,6 +515,297 @@ async function audio(callId: string): Promise<Response> {
   const res = await fetch(`${XI}/convai/conversations/${c.conversation_id}/audio`, { headers: { "xi-api-key": key } });
   if (!res.ok || !res.body) return new Response("recording not available yet", { status: res.status === 404 ? 404 : 502, headers: CORS });
   return new Response(res.body, { headers: { ...CORS, "content-type": res.headers.get("content-type") ?? "audio/mpeg", "cache-control": "private, max-age=3600" } });
+}
+
+// ---------- voices: the picker (Ava's own voice) and Jared's clone ----------
+const SAMPLE_JARED = "Hey, it's Jared's AI assistant, using his voice. He's tied up right now, can I take a message?";
+const VOICE_ID = /^[A-Za-z0-9]{10,40}$/;
+const jerr = (error: string, status = 400, extra: Record<string, unknown> = {}) => Response.json({ ok: false, error, ...extra }, { status, headers: CORS });
+const xiKey = () => vault("elevenlabs_api_key");
+const xiHeaders = (key: string, json = true): Record<string, string> => json ? { "xi-api-key": key, "content-type": "application/json" } : { "xi-api-key": key };
+// deno-lint-ignore no-explicit-any
+type RawVoice = Record<string, any>;
+const trimTo = (v: unknown, n: number) => { const t = String(v ?? "").replace(/\s+/g, " ").trim(); return t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t; };
+
+function slimVoice(v: RawVoice) {
+  const l = (v.labels ?? {}) as Record<string, string>;
+  const full = String(v.name ?? "");
+  const [head, ...rest] = full.split(/\s+[-–—]\s+/);
+  return {
+    voice_id: String(v.voice_id ?? ""), public_owner_id: v.public_owner_id ? String(v.public_owner_id) : undefined,
+    name: (head ?? "").trim() || full, accent: String(v.accent ?? l.accent ?? ""), age: String(v.age ?? l.age ?? ""), gender: String(v.gender ?? l.gender ?? ""),
+    description: trimTo(v.description || rest.join(" - ") || v.descriptive || l.descriptive, 120),
+    preview_url: (v.preview_url as string | undefined) ?? null, in_library: v.is_added_by_user === true,
+  };
+}
+
+/** One voice in this account. missing = the platform says it doesn't exist; status 0 = couldn't reach it. */
+async function voiceInfo(id: string): Promise<{ status: number; missing: boolean; v?: RawVoice }> {
+  try {
+    const key = await xiKey();
+    if (!key) return { status: 0, missing: false };
+    const r = await fetch(`${XI}/voices/${id}`, { headers: xiHeaders(key, false) });
+    if (r.ok) return { status: 200, missing: false, v: await r.json() };
+    const t = await r.text().catch(() => "");
+    return { status: r.status, missing: r.status === 404 || /voice_not_found|voice.{0,20}not found/i.test(t) };
+  } catch { return { status: 0, missing: false }; }
+}
+
+async function saysLeft(): Promise<number> {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+  const { data } = await db.from("ava_voice_usage").select("says").eq("source", "ava").eq("day", day).maybeSingle();
+  return Math.max(0, SAY_CAP - (data?.says ?? 0));
+}
+
+/** null = couldn't tell (treated as "try it"). */
+async function canClone(key: string): Promise<boolean | null> {
+  try {
+    const r = await fetch(`${XI}/user/subscription`, { headers: xiHeaders(key, false) });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => ({}));
+    return typeof j.can_use_instant_voice_cloning === "boolean" ? j.can_use_instant_voice_cloning : null;
+  } catch { return null; }
+}
+
+async function voices(b: Record<string, unknown>): Promise<Response> {
+  const key = await xiKey();
+  if (!key) return jerr("The ElevenLabs key is missing from Vault.", 412);
+  const { data: s } = await db.from("ava_settings").select("voice_id, jared_voice_id, jared_voice_paused_at, jared_voice_paused_why").eq("id", true).single();
+  const scope = ["library", "discover", "clone", "all"].includes(String(b.scope)) ? String(b.scope) : "all";
+  const gender = ["female", "male", "any"].includes(String(b.gender)) ? String(b.gender) : "female";
+  const accent = ["any", "british", "australian", "american"].includes(String(b.accent)) ? String(b.accent) : "any";
+  const age = ["any", "young", "middle_aged"].includes(String(b.age)) ? String(b.age) : "any";
+  const page = Math.max(0, Math.min(50, Math.floor(Number(b.page) || 0)));
+  const keep = (v: ReturnType<typeof slimVoice>) => (gender === "any" || !v.gender || v.gender === gender) && (accent === "any" || v.accent === accent) && (age === "any" || v.age === age);
+
+  const current = async () => {
+    const id = s?.voice_id ?? DEFAULT_VOICE, i = await voiceInfo(id);
+    return i.v ? { ...slimVoice(i.v), voice_id: id, missing: false } : { voice_id: id, name: i.missing ? "Missing" : "Unknown", accent: "", age: "", description: "", preview_url: null, missing: i.missing };
+  };
+  const library = async () => {
+    const out: ReturnType<typeof slimVoice>[] = [];
+    let token = "";
+    for (let i = 0; i < 3; i++) {
+      const r = await fetch(`${XI.replace("/v1", "/v2")}/voices?page_size=100${token ? `&next_page_token=${encodeURIComponent(token)}` : ""}`, { headers: xiHeaders(key, false) });
+      if (!r.ok) throw new Error(`library ${r.status}`);
+      const j = await r.json();
+      for (const v of (j.voices ?? []) as RawVoice[]) {
+        // a cloned voice is never an agent's default (it has no disclosure opener); it lives in the "Your voice" card
+        if (v.category === "cloned" || v.voice_id === s?.jared_voice_id) continue;
+        out.push(slimVoice(v));
+      }
+      if (!j.has_more || !j.next_page_token) break;
+      token = j.next_page_token;
+    }
+    return out.filter(keep);
+  };
+  const discover = async () => {
+    const q = new URLSearchParams({ page_size: "24", use_cases: "conversational", language: "en", page: String(page) });
+    if (gender !== "any") q.set("gender", gender);
+    if (accent !== "any") q.set("accent", accent);
+    if (age !== "any") q.set("age", age);
+    const r = await fetch(`${XI}/shared-voices?${q}`, { headers: xiHeaders(key, false) });
+    if (!r.ok) throw new Error(`discover ${r.status}`);
+    const j = await r.json();
+    return { items: ((j.voices ?? []) as RawVoice[]).map(slimVoice), has_more: j.has_more === true };
+  };
+  const clone = async () => ({ can_clone: await canClone(key), voice_id: s?.jared_voice_id ?? null, paused_at: s?.jared_voice_paused_at ?? null, paused_why: s?.jared_voice_paused_why ?? null });
+
+  try {
+    const [cur, lib, dis, cl, left] = await Promise.all([
+      current(), scope === "library" || scope === "all" ? library() : null, scope === "discover" || scope === "all" ? discover() : null,
+      scope === "clone" || scope === "all" ? clone() : null, saysLeft()]);
+    return Response.json({ ok: true, current: cur, library: lib, discover: dis?.items ?? null, has_more: dis?.has_more ?? false, says_left: left, say_cap: SAY_CAP, clone: cl }, { headers: CORS });
+  } catch (e) {
+    return jerr(`Couldn't load voices right now (${e instanceof Error ? e.message : "error"}). Try again.`, 502);
+  }
+}
+
+/** One sample play: counts against the daily cap, streams an mp3 back (Flash v2, the same model the agent speaks with). */
+async function say(voice: string, text: string): Promise<Response> {
+  const key = await xiKey();
+  if (!key) return jerr("The ElevenLabs key is missing from Vault.", 412);
+  const t = await db.rpc("ava_voice_say_take", { p_source: "ava", p_cap: SAY_CAP });
+  if (t.error || !t.data) return jerr("Couldn't check today's sample limit. Try again.", 500);
+  if (t.data.ok !== true) return jerr(`That's all ${SAY_CAP} samples for today. They reset at midnight Pacific.`, 429, { says_left: 0 });
+  const res = await fetch(`${XI}/text-to-speech/${voice}?output_format=mp3_44100_64`, { method: "POST", headers: xiHeaders(key), body: JSON.stringify({ text, model_id: "eleven_flash_v2" }) });
+  if (!res.ok || !res.body) {
+    // a failed sample doesn't count
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+    await db.from("ava_voice_usage").update({ says: Math.max(0, (t.data.says ?? 1) - 1) }).eq("source", "ava").eq("day", day);
+    await res.text().catch(() => "");
+    return jerr(res.status === 404 || res.status === 400 ? "That voice isn't in your account anymore. Reload the list." : "The voice platform couldn't make that sample. Try again.", res.status === 404 ? 404 : 502);
+  }
+  return new Response(res.body, { headers: { ...CORS, "content-type": "audio/mpeg", "cache-control": "no-store", "x-says-left": String(Math.max(0, SAY_CAP - (t.data.says ?? SAY_CAP))) } });
+}
+
+function voiceSay(b: Record<string, unknown>): Promise<Response> | Response {
+  const voice = String(b.voice_id ?? ""), text = String(b.text ?? "").replace(/\s+/g, " ").trim();
+  if (!VOICE_ID.test(voice)) return jerr("Pick a voice first.");
+  if (!text) return jerr("Type something for her to say.");
+  if (text.length > 200) return jerr("Keep it to 200 characters.");
+  return say(voice, text);
+}
+
+/** ONE test call to Jared's own cell with a per-call voice. Same spend cap and gate as every other outgoing call. */
+async function voiceTestCall(b: Record<string, unknown>): Promise<Response> {
+  const voice = String(b.voice_id ?? "");
+  if (!VOICE_ID.test(voice)) return jerr("Pick a voice first.");
+  const info = await voiceInfo(voice);
+  if (info.status !== 200) return jerr(info.missing ? "That voice isn't in your account yet. Use it first, or pick one from your library." : "Couldn't check that voice. Try again.", info.missing ? 404 : 502);
+  if (info.v?.category === "cloned") return jerr("That's a cloned voice. Test it with the Use my voice switch in the dialer.", 409);
+  const { data: s } = await db.from("ava_settings").select("jared_cell").eq("id", true).single();
+  const since = new Date(Date.now() - 90_000).toISOString();
+  const { count } = await db.from("ava_calls").select("id", { count: "exact", head: true }).like("purpose", "Voice test%").gte("created_at", since);
+  if ((count ?? 0) > 0) return jerr("A test call just went out. Give it a minute.", 429);
+  const r = await place({ phone: s?.jared_cell ?? JARED_CELL, name: "Jared", voice_id: voice,
+    first_line: "Hey Jared, it's Ava, your AI assistant, on a recorded line. I'm testing a new voice. How do I sound?",
+    purpose: "Voice test. This is a test call to Jared himself with a new voice. Say your first line, ask how the voice sounds, listen to his answer, thank him, say goodbye and end the call. Keep it under a minute." });
+  return r.ok ? Response.json({ ok: true, call_id: r.call_id, calling: r.calling }, { headers: CORS }) : jerr(r.error, r.status);
+}
+
+/** "Use for Ava": add a shared voice to the account if needed, point the agent at it, save, re-run setup. */
+async function voiceUse(b: Record<string, unknown>): Promise<Response> {
+  const vid = String(b.voice_id ?? ""), owner = String(b.public_owner_id ?? ""), name = trimTo(b.name, 60) || "Voice";
+  if (!VOICE_ID.test(vid) || (owner && !VOICE_ID.test(owner))) return jerr("Pick a voice first.");
+  const key = await xiKey();
+  if (!key) return jerr("The ElevenLabs key is missing from Vault.", 412);
+  const { data: s } = await db.from("ava_settings").select("voice_id, agent_id").eq("id", true).single();
+
+  let useId = vid;
+  if (owner && b.in_library !== true) {
+    const r = await fetch(`${XI}/voices/add/${owner}/${vid}`, { method: "POST", headers: xiHeaders(key), body: JSON.stringify({ new_name: `Ava – ${name}` }) });
+    const t = await r.text().catch(() => "");
+    if (r.ok) { try { useId = JSON.parse(t).voice_id ?? vid; } catch { /* keep vid */ } }
+    else if (!(r.status === 400 && /already/i.test(t))) {
+      if (/voice_limit|limit.{0,30}(reached|exceeded)|maximum.{0,20}voices/i.test(t)) return jerr("Your voice library is full. Remove a voice you don't use in ElevenLabs, then try again.", 409);
+      if (r.status === 401 || r.status === 402 || r.status === 403) return jerr("Your ElevenLabs plan won't let this voice be added.", 402);
+      return jerr("Couldn't add that voice to your library. Try again, or pick another.", 502);
+    }
+  }
+  const check = await voiceInfo(useId);
+  if (check.status !== 200) return jerr("That voice isn't in your account. Reload the list and try again.", 404);
+  if (check.v?.category === "cloned") return jerr("A cloned voice can't be her default voice. Use the Use my voice switch in the dialer.", 409);
+
+  // point the agent at it first (fast fail), then save, then re-run setup so everything matches
+  if (s?.agent_id) {
+    const pr = await fetch(`${XI}/convai/agents/${s.agent_id}`, { method: "PATCH", headers: xiHeaders(key), body: JSON.stringify({ conversation_config: { tts: ttsConfig(useId) } }) });
+    if (!pr.ok) { await pr.text().catch(() => ""); return jerr("The voice platform wouldn't switch her voice. Try again.", 502); }
+  }
+  await db.from("ava_settings").update({ voice_id: useId, updated_at: new Date().toISOString() }).eq("id", true);
+  let setupOk = false;
+  try { setupOk = (await setup()).ok; } catch { /* the watchdog re-runs setup if something is off */ }
+  return Response.json({ ok: true, voice_id: useId, name, setup_ok: setupOk }, { headers: CORS });
+}
+
+// ---------- Jared's own voice ----------
+const MIME: Record<string, string> = { wav: "audio/wav", mp3: "audio/mpeg", m4a: "audio/mp4", mp4: "audio/mp4", webm: "audio/webm", ogg: "audio/ogg" };
+const CLONE_PATH = /^clone\/[A-Za-z0-9._-]{1,120}\.(wav|mp3|m4a|mp4|webm|ogg)$/i;
+
+async function purgeRaw(olderThanMs = 0): Promise<void> {
+  try {
+    const { data } = await db.storage.from("ava-voice").list("clone", { limit: 100 });
+    const old = (data ?? []).filter((o) => o.name && (olderThanMs === 0 || Date.now() - Date.parse(o.created_at ?? "") > olderThanMs));
+    if (old.length) await db.storage.from("ava-voice").remove(old.map((o) => `clone/${o.name}`));
+  } catch { /* best effort */ }
+}
+
+async function voiceClone(b: Record<string, unknown>): Promise<Response> {
+  const path = String(b.path ?? "");
+  if (!CLONE_PATH.test(path)) return jerr("Record or upload your voice first.");
+  const key = await xiKey();
+  if (!key) return jerr("The ElevenLabs key is missing from Vault.", 412);
+  if ((await canClone(key)) === false) return jerr("Your voice plan doesn't include cloning yet.", 402, { code: "no_plan" });
+  const dl = await db.storage.from("ava-voice").download(path);
+  if (dl.error || !dl.data) return jerr("Couldn't read the recording. Upload it again.", 404);
+  if (dl.data.size > 25 * 1024 * 1024) { await db.storage.from("ava-voice").remove([path]); return jerr("That file is over 25 MB. Record a shorter one.", 413); }
+  if (dl.data.size < 20_000) return jerr("That recording is too short. Read the script for about 3 minutes.", 422);
+
+  const ext = path.split(".").pop()!.toLowerCase();
+  const form = new FormData();
+  form.append("name", "Jared (Ava assistant)");
+  form.append("description", "Jared's own voice for his AI assistant. Always disclosed as AI.");
+  form.append("remove_background_noise", "true");
+  form.append("files", new File([dl.data], `jared.${ext}`, { type: MIME[ext] ?? dl.data.type ?? "audio/mpeg" }));
+  const r = await fetch(`${XI}/voices/add`, { method: "POST", headers: xiHeaders(key, false), body: form });
+  const t = await r.text().catch(() => "");
+  let j: RawVoice = {}; try { j = JSON.parse(t); } catch { /* not json */ }
+  if (!r.ok || !j.voice_id) {
+    if (r.status === 402 || /can_not_use_instant_voice_cloning|subscription/i.test(t)) return jerr("Your voice plan doesn't include cloning yet.", 402, { code: "no_plan" });
+    if (/voice_limit|limit.{0,30}(reached|exceeded)/i.test(t)) return jerr("Your voice library is full. Remove a voice you don't use in ElevenLabs, then try again.", 409);
+    if (/too short|not enough|minimum/i.test(t)) return jerr("That recording is too short. Read the script for about 3 minutes.", 422);
+    return jerr("The voice platform couldn't make a clone from that recording. Try a quieter room.", 502);
+  }
+  const { data: prev } = await db.from("ava_settings").select("jared_voice_id").eq("id", true).single();
+  await db.from("ava_settings").update({ jared_voice_id: j.voice_id, updated_at: new Date().toISOString() }).eq("id", true);
+  // the raw recording is gone the moment the clone exists
+  await db.storage.from("ava-voice").remove([path]);
+  await purgeRaw();
+  if (prev?.jared_voice_id && prev.jared_voice_id !== j.voice_id) await fetch(`${XI}/voices/${prev.jared_voice_id}`, { method: "DELETE", headers: xiHeaders(key, false) }).then((x) => x.text()).catch(() => {});
+  return Response.json({ ok: true, voice_id: j.voice_id }, { headers: CORS });
+}
+
+async function voicePreview(b: Record<string, unknown>): Promise<Response> {
+  const { data: s } = await db.from("ava_settings").select("jared_voice_id").eq("id", true).single();
+  if (!s?.jared_voice_id) return jerr("Record your voice first.", 412);
+  const text = String(b.text ?? "").replace(/\s+/g, " ").trim().slice(0, 200) || SAMPLE_JARED;
+  return say(s.jared_voice_id, text);
+}
+
+async function voiceDelete(): Promise<Response> {
+  const key = await xiKey();
+  if (!key) return jerr("The ElevenLabs key is missing from Vault.", 412);
+  const { data: s } = await db.from("ava_settings").select("jared_voice_id").eq("id", true).single();
+  if (s?.jared_voice_id) {
+    const r = await fetch(`${XI}/voices/${s.jared_voice_id}`, { method: "DELETE", headers: xiHeaders(key, false) });
+    await r.text().catch(() => "");
+    if (!r.ok && r.status !== 404) return jerr("Couldn't remove it from the voice platform. Try again.", 502);
+  }
+  await db.from("ava_settings").update({ jared_voice_id: null, jared_voice_for_contacts: false, jared_voice_paused_at: null, jared_voice_paused_why: null, updated_at: new Date().toISOString() }).eq("id", true);
+  await purgeRaw();
+  return Response.json({ ok: true }, { headers: CORS });
+}
+
+async function voiceResume(): Promise<Response> {
+  await db.from("ava_settings").update({ jared_voice_paused_at: null, jared_voice_paused_why: null, updated_at: new Date().toISOString() }).eq("id", true);
+  return Response.json({ ok: true }, { headers: CORS });
+}
+
+/** Watchdog part: her voice (and Jared's clone) must still exist. Missing voice = back to the default (Lily), setup re-run, Scout told. */
+async function voiceHealth(): Promise<string[]> {
+  const notes: string[] = [];
+  try {
+    if (!(await xiKey())) return notes;
+    const { data: s } = await db.from("ava_settings").select("voice_id, jared_voice_id").eq("id", true).single();
+    if (!s) return notes;
+    const now = new Date().toISOString(), url = "https://bestly.tech/admin/ava", hour = now.slice(0, 13);
+    const cur = await voiceInfo(s.voice_id ?? DEFAULT_VOICE);
+    if (cur.missing) {
+      if (s.voice_id && s.voice_id !== DEFAULT_VOICE) {
+        await db.from("ava_settings").update({ voice_id: DEFAULT_VOICE, updated_at: now }).eq("id", true);
+        let ok = false; try { ok = (await setup()).ok; } catch { /* below */ }
+        notes.push("Her voice was missing; back on the default voice");
+        await db.rpc("scout_notify", { p_title: "Ava (assistant): her voice went missing, switched back to Lily",
+          p_body: `The voice she was using no longer exists in the account. She's on Lily again and setup ${ok ? "re-ran fine" : "couldn't finish (the line check will retry)"}. Pick a new one at /admin/ava.`,
+          p_severity: "warning", p_push: true, p_url: url, p_dedupe: `ava-voice-missing-ava-${hour}` });
+      } else {
+        notes.push("The default voice is missing from the account");
+        await db.rpc("scout_notify", { p_title: "Ava (assistant): her default voice is missing", p_body: "Lily isn't in the account, so she has no working voice. Pick one at /admin/ava.",
+          p_severity: "high", p_push: true, p_url: url, p_dedupe: `ava-voice-missing-ava-${hour}` });
+      }
+    }
+    if (s.jared_voice_id) {
+      const j = await voiceInfo(s.jared_voice_id);
+      if (j.missing) {
+        await db.from("ava_settings").update({ jared_voice_id: null, jared_voice_for_contacts: false, updated_at: now }).eq("id", true);
+        notes.push("Jared's cloned voice was missing; voice mode is off");
+        await db.rpc("scout_notify", { p_title: "Ava (assistant): your cloned voice is gone", p_body: "It no longer exists in the voice account, so Use my voice is off. Record it again at /admin/ava.",
+          p_severity: "warning", p_push: true, p_url: url, p_dedupe: `ava-jaredvoice-missing-${hour}` });
+      }
+    }
+    await purgeRaw(24 * 3600_000);   // a recording that never got cloned doesn't sit around
+  } catch { /* the line check still runs */ }
+  return notes;
 }
 
 // ---------- webhooks ----------
@@ -569,5 +885,13 @@ Deno.serve(async (req) => {
   if (body.action === "health") return health();
   if (body.action === "live") return live(body.call_id ? String(body.call_id) : null);
   if (body.action === "audio") return audio(String(body.call_id ?? ""));
+  if (body.action === "voices") return voices(body);
+  if (body.action === "voice_say") return voiceSay(body);
+  if (body.action === "voice_test_call") return voiceTestCall(body);
+  if (body.action === "voice_use") return voiceUse(body);
+  if (body.action === "voice_clone") return voiceClone(body);
+  if (body.action === "voice_preview") return voicePreview(body);
+  if (body.action === "voice_delete") return voiceDelete();
+  if (body.action === "voice_resume") return voiceResume();
   return Response.json({ ok: false, error: "unknown action" }, { status: 400, headers: CORS });
 });
