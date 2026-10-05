@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Loader2, PhoneCall, RotateCcw } from "lucide-react";
 import { LiveTranscript, Recording, StagePill, type Line } from "@/components/admin/roofguard/AvaCalls";
+import { AvaScorecard } from "@/components/admin/roofguard/AvaScorecard";
 
 type Phase = "form" | "calling" | "done";
 type Result = { status: string; outcome: string | null; summary: string | null; duration_sec: number | null; transcript: Line[] };
@@ -26,6 +27,7 @@ const stageOf = (o: string | null) => ({ booked: "booked", callback_set: "callba
 export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
+  const [view, setView] = useState<"score" | "demo">("score");
   const [phase, setPhase] = useState<Phase>("form");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,14 +83,23 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto border-white/10 bg-[#0b0d12] p-0 text-white sm:max-w-xl bento:bg-[#F3F2EE]">
         <div className="border-b border-white/[0.06] px-5 pb-4 pt-[max(1.25rem,env(safe-area-inset-top))]">
-          <SheetTitle className="text-lg font-semibold text-white">Ava demo call</SheetTitle>
+          <SheetTitle className="text-lg font-semibold text-white">Ava</SheetTitle>
           <SheetDescription className="mt-1 text-sm text-white/60">
-            Type a number and Ava calls it in a few seconds. Whoever answers plays the facilities director at Riverside Medical Center, a made-up hospital.
+            {view === "score" ? "How she's doing against the goal: 6 meetings booked with you every week."
+              : "Type a number and Ava calls it in a few seconds. Whoever answers plays the facilities director at Riverside Medical Center, a made-up hospital."}
           </SheetDescription>
+          <div role="tablist" aria-label="Ava" className="mt-3 inline-flex rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
+            {([["score", "Scorecard"], ["demo", "Demo call"]] as const).map(([id, label]) => (
+              <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}
+                className={cn("min-h-[36px] min-w-[104px] rounded-lg px-4 text-sm font-medium transition-colors",
+                  view === id ? "bg-white text-black shadow-sm" : "text-white/65 hover:text-white")}>{label}</button>
+            ))}
+          </div>
         </div>
 
         <div className="flex-1 space-y-5 px-5 py-5">
-          {phase === "form" && (
+          {view === "score" && <AvaScorecard narrow />}
+          {view === "demo" && phase === "form" && (
             <form onSubmit={(e) => { e.preventDefault(); if (valid && !busy) void call(); }} className="space-y-4">
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium text-white/80">Phone number</span>
@@ -118,7 +129,7 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             </form>
           )}
 
-          {phase !== "form" && (
+          {view === "demo" && phase !== "form" && (
             <>
               <div className="flex items-center gap-3">
                 {phase === "calling" ? (

@@ -118,3 +118,17 @@ The stage is derived in SQL from `rg_leads.call_status` plus the latest `rg_call
 - **Branded caller ID / CNAM** so the number shows "RoofGuard", not "Spam Likely".
 - **Local presence:** 5 to 10 numbers matched to lead area codes.
 - **Accept the batch-calling terms in ElevenLabs** once volume needs batches; single calls cover the pilot.
+
+## Scorecard: is Ava earning her keep? (added 2026-10-04)
+
+Jared's standard from Amazon Business door-to-door: **6 closes a week**. For Ava a close = a meeting booked with Eli.
+
+**Law of Averages** (Thrive LA packet, weekly target zones): 55 doors, 30 contacts, 7 decision makers, 4.5 presentations, 2.5 accounts = about 1 close per 22 doors (4.5%). On the phone: dials, answered, decision maker, pitch, booked. Cold calls convert worse than walking in, so she starts at **1 meeting per 50 dials (2%)**:
+
+- 6 a week ÷ 2% = **300 dials a week = 60 a day** (5 days)
+- If she matched the door rate (4.5%) it would be 27 a day
+- Her real rate replaces the 2% as calls come in (the assumption counts as 100 dials until she has volume)
+
+**Hire status** (last 2 full weeks with 20+ dials): Retained = averaging 6+, Watch = 4 to 5, Probation = under 4, Ramping = fewer than 2 live weeks.
+
+**Built:** `rg_ava_kpis()` (admin + partner), `/admin/roofguard#scorecard`, a one-line strip on the Calls tab, the Scorecard view in Eli's Ava sheet, a Friday 4:50 PM PT Scout push (`roofguard-weekly-review`), and optional auto-pace (`roofguard-pace`, 6:05 AM PT weekdays) that sets her daily cap to the target after the pilot.

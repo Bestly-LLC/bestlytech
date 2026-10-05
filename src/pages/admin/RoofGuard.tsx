@@ -15,9 +15,10 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Loader2, Phone, RefreshCw, Search, Zap } from "lucide-react";
 import { AvaCalls } from "@/components/admin/roofguard/AvaCalls";
+import { AvaScorecard, AvaScoreStrip } from "@/components/admin/roofguard/AvaScorecard";
 
-type Tab = "calls" | "leads" | "setup";
-const TABS: { id: Tab; label: string }[] = [{ id: "calls", label: "Calls" }, { id: "leads", label: "Leads" }, { id: "setup", label: "Setup" }];
+type Tab = "calls" | "scorecard" | "leads" | "setup";
+const TABS: { id: Tab; label: string }[] = [{ id: "calls", label: "Calls" }, { id: "scorecard", label: "Scorecard" }, { id: "leads", label: "Leads" }, { id: "setup", label: "Setup" }];
 const hashTab = (): Tab => { const h = window.location.hash.slice(1); return (TABS.some((t) => t.id === h) ? h : "calls") as Tab; };
 
 /** iOS-style segmented control */
@@ -26,7 +27,7 @@ function Segmented({ value, onChange }: { value: Tab; onChange: (t: Tab) => void
     <div role="tablist" aria-label="RoofGuard sections" className="inline-flex rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
       {TABS.map((t) => (
         <button key={t.id} type="button" role="tab" aria-selected={value === t.id} onClick={() => onChange(t.id)}
-          className={cn("min-h-[36px] min-w-[84px] rounded-lg px-4 text-sm font-medium transition-colors",
+          className={cn("min-h-[36px] min-w-[72px] rounded-lg px-3 text-sm font-medium transition-colors sm:min-w-[84px] sm:px-4",
             value === t.id ? "bg-white text-black shadow-sm" : "text-white/65 hover:text-white")}>{t.label}</button>
       ))}
     </div>
@@ -521,7 +522,11 @@ export default function RoofGuard() {
 
       <Segmented value={tab} onChange={setTab} />
 
-      {tab === "calls" && <AvaCalls callingOn={callingOn} onOpenSetup={() => setTab("setup")} />}
+      {tab === "calls" && <>
+        <AvaScoreStrip onOpen={() => setTab("scorecard")} />
+        <AvaCalls callingOn={callingOn} onOpenSetup={() => setTab("setup")} />
+      </>}
+      {tab === "scorecard" && <AvaScorecard admin />}
       {tab === "setup" && <CallingCard />}
 
       {tab === "leads" && <>

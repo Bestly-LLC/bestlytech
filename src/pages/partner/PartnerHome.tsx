@@ -69,7 +69,7 @@ const SHORTCUTS = [
   { id: "ops", opens: "board" as const, label: "Ops board", sub: "What's moving", tone: "from-amber-400 to-orange-500 text-orange-600" },
   { id: "files", opens: "cloud" as const, label: "Cloud files", sub: "Your folders", tone: "from-emerald-400 to-teal-600 text-teal-600" },
   { id: "calendar", opens: "calendar" as const, label: "Calendar", sub: "What's booked", tone: "from-rose-400 to-pink-600 text-pink-600" },
-  { id: "ava", opens: "ava" as const, label: "Ava demo", sub: "She calls any phone", tone: "from-teal-400 to-cyan-600 text-cyan-700" },
+  { id: "ava", opens: "ava" as const, label: "Ava", sub: "Scorecard + demo call", tone: "from-teal-400 to-cyan-600 text-cyan-700" },
 ];
 
 // Projects (Vesta invites, links) live in ./PartnerProjects: sidebar folder + mobile header button.
