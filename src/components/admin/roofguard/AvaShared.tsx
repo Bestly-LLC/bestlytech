@@ -93,6 +93,93 @@ export function LineStatus({ source, className }: { source: Source; className?: 
   );
 }
 
+// ---------- daily spend (money stopper) ----------
+// ava_spend / ava_set_spend_cap are admin RPCs (Pacific day, same cost math as "Spent so far"). Over the cap, outgoing calls
+// refuse; incoming calls are always answered. The chip and the editor share one refresh event so saving updates the chip.
+export type Spend = { source: Source; today: number; cap: number; over: boolean };
+const SPEND_EVENT = "ava-spend-changed";
+const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+export function useSpend(source: Source) {
+  const [row, setRow] = useState<Spend | null>(null);
+  const load = useCallback(async () => {
+    const { data } = await rpcArgs<Spend>("ava_spend", { p_source: source });
+    if (data) setRow(data);
+  }, [source]);
+  usePoll(load, 60000);
+  useEffect(() => {
+    const h = () => void load();
+    window.addEventListener(SPEND_EVENT, h);
+    return () => window.removeEventListener(SPEND_EVENT, h);
+  }, [load]);
+  return row;
+}
+
+/** "Today $3.20 of $20.00". Turns amber near the cap and says "cap reached" over it (icon plus words, never color alone). */
+export function SpendChip({ source, className }: { source: Source; className?: string }) {
+  const row = useSpend(source);
+  const over = !!row?.over;
+  const near = !!row && !over && row.cap > 0 && row.today / row.cap >= 0.8;
+  const tone = over ? "bg-amber-500/10 ring-amber-500/35" : near ? "bg-amber-500/[0.06] ring-amber-500/25" : "bg-white/[0.04] ring-white/10";
+  return (
+    <div role="status" className={cn("inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl px-3.5 ring-1", tone, className)}
+      title="Outgoing calls pause when today's spend reaches the cap (Pacific time). Incoming calls are always answered.">
+      <span className="flex items-center gap-1 text-[11px] text-white/50">
+        {(over || near) && <AlertTriangle className="h-3 w-3 text-amber-300" aria-hidden />}
+        {over ? "Daily cap reached" : "Today"}
+      </span>
+      <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-white">
+        {row ? <>{money(row.today)}<span className="font-normal text-white/50">{" of "}{money(row.cap)}</span></> : "…"}
+      </span>
+    </div>
+  );
+}
+
+/** Editable daily cap. Whole-dollar steps are not required; 0.01 to 1,000. */
+export function SpendCapEditor({ source, className }: { source: Source; className?: string }) {
+  const row = useSpend(source);
+  const [val, setVal] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => { if (row && !dirty) setVal(row.cap.toFixed(2)); }, [row, dirty]);
+  const n = Number(val);
+  const valid = val.trim() !== "" && Number.isFinite(n) && n >= 0.01 && n <= 1000;
+  const save = async () => {
+    if (!valid) return;
+    setBusy(true); setMsg(null);
+    const { error } = await rpcArgs<Spend>("ava_set_spend_cap", { p_source: source, p_cap: Math.round(n * 100) / 100 });
+    setBusy(false);
+    if (error) { setMsg({ ok: false, text: error.message }); return; }
+    setDirty(false); setMsg({ ok: true, text: "Saved" });
+    window.dispatchEvent(new Event(SPEND_EVENT));
+    setTimeout(() => setMsg(null), 2500);
+  };
+  const id = `spend-cap-${source}`;
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <label htmlFor={id} className="block text-[13px] font-medium text-white">Daily spend cap</label>
+      <div className="flex items-center gap-2">
+        <div className="relative w-36">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[15px] text-white/50" aria-hidden>$</span>
+          <input id={id} inputMode="decimal" autoComplete="off" value={val} aria-invalid={dirty && !valid}
+            onChange={(e) => { setVal(e.target.value.replace(/[^0-9.]/g, "")); setDirty(true); setMsg(null); }}
+            onKeyDown={(e) => { if (e.key === "Enter") void save(); }}
+            className={cn(inputCls, "pl-7 tabular-nums")} />
+        </div>
+        <button type="button" onClick={() => void save()} disabled={busy || !dirty || !valid}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-500 px-4 text-[15px] font-semibold text-[#052E1F] transition hover:bg-emerald-400 active:scale-[0.98] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Save</button>
+        {msg?.ok && <span role="status" className="inline-flex items-center gap-1 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4" aria-hidden />{msg.text}</span>}
+      </div>
+      <p className={cn("text-xs", msg && !msg.ok ? "text-red-300" : dirty && !valid ? "text-amber-200" : "text-white/50")} role={msg && !msg.ok ? "alert" : undefined}>
+        {msg && !msg.ok ? msg.text : dirty && !valid ? "Enter an amount from $0.01 to $1,000."
+          : "Outgoing calls stop for the day at this amount (Pacific time). Incoming calls are always answered."}
+      </p>
+    </div>
+  );
+}
+
 // ---------- messages ----------
 export type Msg = {
   id: string; source: Source; call_no: number | null; direction: "inbound" | "outbound" | "callback"; name: string; phone: string | null;

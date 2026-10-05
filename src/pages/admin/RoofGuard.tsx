@@ -17,6 +17,7 @@ import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Lo
 import { AvaCalls } from "@/components/admin/roofguard/AvaCalls";
 import { AvaScorecard, AvaScoreStrip } from "@/components/admin/roofguard/AvaScorecard";
 import { AvaTopBar } from "@/components/admin/roofguard/AvaDialer";
+import { SpendCapEditor } from "@/components/admin/roofguard/AvaShared";
 
 type Tab = "calls" | "scorecard" | "leads" | "setup";
 const TABS: { id: Tab; label: string }[] = [{ id: "calls", label: "Calls" }, { id: "scorecard", label: "Scorecard" }, { id: "leads", label: "Leads" }, { id: "setup", label: "Setup" }];
@@ -398,6 +399,10 @@ function CallingCard() {
         <Stat n={c.booked} label="meetings booked" tone={c.booked > 0 ? "good" : undefined} />
         <Stat n={c.callbacks_due} label="callbacks set" />
         <Stat n={c.dnc} label="do-not-call" />
+      </div>
+
+      <div className="mt-4 max-w-md rounded-2xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/10">
+        <SpendCapEditor source="roofguard" />
       </div>
 
       {c.openers?.length > 0 && <OpenerTest openers={c.openers} />}

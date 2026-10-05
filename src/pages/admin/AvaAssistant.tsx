@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { CallNo, DeleteCallButton, ReplyGuard, LiveTranscript, Recording, type Line } from "@/components/admin/roofguard/AvaCalls";
 import { DialerSheet } from "@/components/admin/roofguard/AvaDialer";
-import { FollowupsList, KnowledgeList, LineStatus, MessagesList, type Msg } from "@/components/admin/roofguard/AvaShared";
+import { FollowupsList, KnowledgeList, LineStatus, MessagesList, SpendCapEditor, SpendChip, type Msg } from "@/components/admin/roofguard/AvaShared";
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, Grid3x3, Loader2, Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCw, UserRound } from "lucide-react";
 
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
@@ -115,9 +115,12 @@ export default function AvaAssistant() {
         <button type="button" onClick={() => setDial(true)} disabled={!ready}
           className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-emerald-500 px-4 text-[15px] font-semibold text-[#052E1F] transition hover:bg-emerald-400 active:scale-[0.98] disabled:opacity-40">
           <Grid3x3 className="h-4 w-4" aria-hidden />Dial</button>
-        <div className="ml-auto inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl bg-white/[0.04] px-3.5 ring-1 ring-white/10" title="ElevenLabs $0.08 a minute + AI model + Telnyx minutes + $1/mo number">
-          <span className="text-[11px] text-white/50">Spent so far</span>
-          <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-white">{usd(costs?.total)}</span>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <SpendChip source="ava" />
+          <div className="inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl bg-white/[0.04] px-3.5 ring-1 ring-white/10" title="ElevenLabs $0.08 a minute + AI model + Telnyx minutes + $1/mo number">
+            <span className="text-[11px] text-white/50">Spent so far</span>
+            <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-white">{usd(costs?.total)}</span>
+          </div>
         </div>
       </div>
 
@@ -132,6 +135,11 @@ export default function AvaAssistant() {
           className="ml-auto inline-flex min-h-[36px] items-center gap-2 rounded-lg px-3 text-sm text-white/75 ring-1 ring-white/15 hover:bg-white/5 disabled:opacity-50">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}{ready ? "Re-run setup" : "Set up"}</button>
       </div>
+
+      {/* money stopper: the daily cap on outgoing calls */}
+      <section aria-label="Spending" className="rounded-2xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/10">
+        <SpendCapEditor source="ava" />
+      </section>
 
       <ReplyGuard source="ava" />
 

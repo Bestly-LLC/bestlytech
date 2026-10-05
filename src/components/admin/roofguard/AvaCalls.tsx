@@ -180,9 +180,12 @@ export function DeleteCallButton({ rpc, callId, onDeleted }: { rpc: "rg_delete_c
  * Reply guard: what the watchdog caught on finished calls (ava_reply_incidents, written by a database trigger).
  * Same card on both pages; `source` picks which Ava. Code leaks self-heal (model switch); the rest feed her reviews.
  */
-type Incident = { id: string; call_no: number | null; kind: "code_leak" | "no_hangup" | "repeat"; leak?: boolean; excerpt: string | null; healed: string | null; created_at: string };
+type Incident = { id: string; call_no: number | null; kind: "code_leak" | "no_hangup" | "repeat"; subkind?: string | null; leak?: boolean; excerpt: string | null; healed: string | null; created_at: string };
 const KIND_TEXT: Record<Incident["kind"], string> = { code_leak: "Spoke code out loud", no_hangup: "Didn't hang up after goodbye", repeat: "Repeated herself" };
-const incidentText = (r: Incident) => (r.leak ? "Shared something sensitive" : KIND_TEXT[r.kind]);
+// Money stopper: a long call that gained nothing rides on kind "repeat" (the kind CHECK can't change) with subkind "long_call";
+// its excerpt is the plain "4:12 · $0.41", so the row reads "Long call, nothing gained · 4:12 · $0.41".
+const isLongCall = (r: Incident) => r.subkind === "long_call";
+const incidentText = (r: Incident) => (r.leak ? "Shared something sensitive" : isLongCall(r) ? "Long call, nothing gained" : KIND_TEXT[r.kind]);
 export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
   const [rows, setRows] = useState<Incident[]>([]);
   const tbl = () => supabase.from("ava_reply_incidents" as never) as unknown as {
@@ -190,7 +193,7 @@ export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
     update: (p: object) => { in: (c: string, v: string[]) => Promise<{ error: unknown }> };
   };
   const load = useCallback(async () => {
-    const { data } = await tbl().select("id, call_no, kind, leak, excerpt, healed, created_at").eq("source", source).is("reviewed_at", null).order("created_at", { ascending: false }).limit(6);
+    const { data } = await tbl().select("id, call_no, kind, subkind, leak, excerpt, healed, created_at").eq("source", source).is("reviewed_at", null).order("created_at", { ascending: false }).limit(6);
     setRows(data ?? []);
   }, [source]);
   useEffect(() => { void load(); const t = setInterval(() => { if (!document.hidden) void load(); }, 60000); return () => clearInterval(t); }, [load]);
@@ -207,8 +210,9 @@ export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
         {rows.map((r) => (
           <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 text-sm">
             <CallNo n={r.call_no} /><span className="text-white">{incidentText(r)}</span>
-            {r.healed && <span className={r.leak ? "text-amber-200/90" : "text-emerald-300/90"}>· {r.leak ? "Handled" : "Fixed"}: {r.healed}</span>}
-            {r.excerpt && <span className="w-full truncate pl-1 text-xs text-white/45">"{r.excerpt.replace(/\s+/g, " ")}"</span>}
+            {isLongCall(r) && r.excerpt && <span className="tabular-nums text-white/70">· {r.excerpt}</span>}
+            {r.healed && <span className={r.leak ? "text-amber-200/90" : isLongCall(r) ? "text-white/50" : "text-emerald-300/90"}>· {r.leak ? "Handled" : isLongCall(r) ? "Noted" : "Fixed"}: {r.healed}</span>}
+            {r.excerpt && !isLongCall(r) && <span className="w-full truncate pl-1 text-xs text-white/45">"{r.excerpt.replace(/\s+/g, " ")}"</span>}
           </li>
         ))}
       </ul>

@@ -44,6 +44,9 @@ const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}")
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SERVICE_KEYS = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""].filter(Boolean));
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
+// Money stopper hard caps, set on the agent by setup (seconds): a call never runs past 8 minutes, and dead air ends it after 20.
+const MAX_CALL_SECS = 480;
+const SILENCE_END_SECS = 20;
 const XI = "https://api.elevenlabs.io/v1";
 const SELF = `${Deno.env.get("SUPABASE_URL")}/functions/v1/roofguard-caller`;
 
@@ -84,10 +87,21 @@ async function authorized(req: Request): Promise<boolean> {
   return [bearer, apikey].some((t) => t && SERVICE_KEYS.has(t));
 }
 
+// ---------- daily spend cap ----------
+/** Daily spend cap (Pacific day). Outgoing calls stop when it's hit; incoming calls are always answered. Fails open if the
+ *  check itself breaks, so a database blip can't silence her. Scout is pushed once a day from inside ava_spend_gate. */
+async function spendGate(): Promise<{ over: boolean; message?: string }> {
+  const { data, error } = await db.rpc("ava_spend_gate", { p_source: "roofguard" });
+  if (error || !data) return { over: false };
+  return { over: data.over === true, message: data.message };
+}
+
 // ---------- dialer ----------
 async function tick(): Promise<Response> {
   const { data: s } = await db.from("rg_settings").select("*").eq("id", true).single();
   if (!s?.calling_enabled) return Response.json({ ok: true, skipped: "calling is off" });
+  const cap = await spendGate();
+  if (cap.over) return Response.json({ ok: true, skipped: cap.message });
   if (!s.agent_id || !s.phone_number_id) return Response.json({ ok: false, skipped: "agent_id / phone_number_id not set (run setup)" }, { status: 412 });
   if (!s.callback_number) return Response.json({ ok: false, skipped: "callback_number not set (voicemails must give a number to call back)" }, { status: 412 });
   const key = await vault("elevenlabs_api_key");
@@ -205,6 +219,8 @@ async function submit(key: string, s: any, calls: (Planned & { to: string })[], 
 async function testCall(): Promise<Response> {
   const { data: s } = await db.from("rg_settings").select("*").eq("id", true).single();
   if (!s?.test_phone) return Response.json({ ok: false, skipped: "test_phone not set" }, { status: 412 });
+  const cap = await spendGate();
+  if (cap.over) return Response.json({ ok: false, skipped: cap.message }, { status: 429 });
   if (!s.agent_id || !s.phone_number_id) return Response.json({ ok: false, skipped: "run setup first" }, { status: 412 });
   const key = await vault("elevenlabs_api_key");
   if (!key) return Response.json({ ok: false, skipped: "elevenlabs_api_key missing from Vault" }, { status: 412 });
@@ -299,6 +315,16 @@ Never:
 - Say or promise that Eli will call, or that anyone will call at a particular time. Say: "I'll get this to the team and someone will follow up."
 - Transfer the call to anyone. You can't. Take a message instead.`;
 
+// Money stopper. No exceptions on this line (Jared tests it on purpose, so a test gets the same treatment as anyone).
+const STOPPER = `Money stopper (every minute of a call costs real money):
+If the person does any of these, steer back to why you're talking ONE time. If they carry on, say one short line like "I'll let you go. Take care." and end the call right away with end_call:
+- they're just testing or playing with the AI, trolling, flirting, being abusive, or talking gibberish
+- they ask you to do unrelated things: chat, jokes, poems, trivia, games
+- they keep asking whether you're an AI with no other purpose, after you already answered honestly once
+- it sounds like a kid prank
+- (outbound calls only) you're stuck in a phone menu or a robot loop, or you've been on hold music for more than 2 minutes
+Never end a call on someone with a real need: leaving a message, a question about RoofGuard, a meeting, or a call back.`;
+
 const inboundPrompt = (v: { today: string; local_time: string; who: string; knowledge: string }) => `You are Ava, an AI assistant answering the phone for RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You're an AI: if anyone asks, say so plainly. Calls are recorded.
 
 Today is ${v.today}, and it's ${v.local_time} for us.
@@ -321,6 +347,8 @@ Taking a message (anyone who wants to reach someone, or has a question you can't
 
 If they're selling something or it's spam, politely end the call. If someone sounds in danger, tell them to call 911 and mark it urgent.
 
+${STOPPER}
+
 ${FLOW}
 
 ${HARD}`;
@@ -338,6 +366,8 @@ What you can share (the only facts you may use to help someone):
 ${v.knowledge}
 
 Your job: say you're returning their call, check you have their message right, and ask if there's anything to add. Help only from "What you can share"; anything else: "I can't share that, but I can take a message." Never promise Eli will call; say: "I'll get this to the team and someone will follow up." If they want the free 20-minute call with Eli Cooper, get two times and an email (spell it back) and say the team will confirm. Then a warm goodbye, and end the call.
+
+${STOPPER}
 
 ${FLOW}
 
@@ -479,6 +509,8 @@ async function callback(id: string, purpose: string): Promise<Response> {
   const { data: s } = await db.from("rg_settings").select("*").eq("id", true).single();
   const key = await vault("elevenlabs_api_key");
   if (!s?.agent_id || !s.phone_number_id || !key) return back("run setup first", 412);
+  const cap = await spendGate();
+  if (cap.over) return back(cap.message ?? "Daily spend cap reached.", 429);
 
   const c = clock();
   const who = clean(f.name) || (lead?.contacts?.[0]?.name ? clean(lead.contacts[0].name) : "") || "the caller";
@@ -566,6 +598,8 @@ Call flow rules (from real calls, don't break these):
 - Once they say yes to your opener ("sure", "go ahead", "what's up"), never ask it again. Go straight to the point.
 - If they say something odd, flirty or rude, ignore it, stay cool, and steer back to the roof in one line.
 - If they mention roof damage, leaks or a storm, that's exactly why a quick call with Eli is worth it. Say so in one line and offer it.
+
+${STOPPER}
 
 Always:
 - If asked whether you are a person, a robot, or AI, say you are an AI assistant calling about RoofGuard. Never claim to be human.
@@ -737,10 +771,12 @@ async function setup(): Promise<Response> {
           },
         },
       },
+      // Money stopper: hard caps no matter what the prompt does
+      conversation: { max_duration_seconds: MAX_CALL_SECS },
       // reply as soon as they stop talking; a long pause is the biggest giveaway on a phone call.
       // Speed (Jared 2026-10-04: faster even if it takes filler). speculative_turn starts thinking before they finish;
       // if the reply still takes over a second, a short filler plays so there's never dead air.
-      turn: { turn_eagerness: "eager", speculative_turn: true,
+      turn: { turn_eagerness: "eager", speculative_turn: true, silence_end_call_timeout: SILENCE_END_SECS,
         soft_timeout_config: { timeout_seconds: 1.0, message: "Yeah...", randomize_fillers: true, max_soft_timeouts_per_generation: 1,
           additional_soft_timeout_messages: ["Mm, right...", "Yeah, so...", "Got it...", "Okay..."] } },
       // English agents must use flash/turbo v2 (v2_5 is rejected). Flash is the fastest; stability 0.55 = calm, not peppy.
@@ -912,6 +948,8 @@ async function followup(id: string): Promise<Response> {
   if (!s?.agent_id || !s.phone_number_id) return fail("run setup first", 412);
   const key = await vault("elevenlabs_api_key");
   if (!key) return fail("elevenlabs_api_key missing from Vault", 412);
+  const cap = await spendGate();
+  if (cap.over) return fail(cap.message ?? "Daily spend cap reached.", 429);
   const { data: lead } = await db.from("rg_leads").select("id, company, phone, timezone, contacts, pitch, category, state, call_attempts").eq("id", f.lead_id).single();
   if (!lead) return fail("lead is gone", 404);
   const next: Next = { lead_id: lead.id, company: lead.company, phone: lead.phone, timezone: lead.timezone,
@@ -1004,6 +1042,8 @@ async function demoCall(phone: string, name: string): Promise<Response> {
   if (!s?.agent_id || !s.phone_number_id || !s.demo_lead_id) return bad("Ava isn't set up yet.", 412);
   const key = await vault("elevenlabs_api_key");
   if (!key) return bad("Ava isn't set up yet.", 412);
+  const cap = await spendGate();
+  if (cap.over) return bad(cap.message ?? "Daily spend cap reached. Raise it in Setup or try tomorrow.", 429);
   const { count: dnc } = await db.from("rg_dnc").select("phone", { count: "exact", head: true }).eq("phone", to);
   if (dnc) return bad("That number asked not to be called.");
   const { count: realLead } = await db.from("rg_leads").select("id", { count: "exact", head: true }).eq("phone", to).neq("id", s.demo_lead_id);

@@ -32,6 +32,10 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { pers
 const XI = "https://api.elevenlabs.io/v1";
 const SELF = `${Deno.env.get("SUPABASE_URL")}/functions/v1/ava-assistant`;
 const LINE = "+18164299495";
+const JARED_CELL = "+18165007236";
+// Money stopper hard caps, set on the agent by setup (seconds): a call never runs past 10 minutes, and dead air ends it after 20.
+const MAX_CALL_SECS = 600;
+const SILENCE_END_SECS = 20;
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 
@@ -77,6 +81,14 @@ async function knowledge(): Promise<string> {
   return list.length ? list.join("\n") : "- (nothing yet: take a message for anything beyond who you are)";
 }
 
+/** Daily spend cap (Pacific day). Outgoing calls stop when it's hit; incoming calls are always answered. Fails open if the
+ *  check itself breaks, so a database blip can't silence her. Also pushes Scout once a day (inside ava_spend_gate). */
+async function spendGate(): Promise<{ over: boolean; message?: string }> {
+  const { data, error } = await db.rpc("ava_spend_gate", { p_source: "ava" });
+  if (error || !data) return { over: false };
+  return { over: data.over === true, message: data.message };
+}
+
 // ---------- her personality (both directions) ----------
 const PROMPT = `You are Ava, Jared Best's personal AI assistant. You're an AI: if anyone asks, say so plainly. Never claim to be human. Calls are recorded.
 
@@ -113,6 +125,16 @@ Call flow rules:
 - "Hold on", "one sec", "let me get them" means wait. Say "Sure." and wait quietly. Never hang up while on hold.
 - Don't repeat a line you already said. If they didn't hear, say it shorter in new words.
 
+Money stopper (every minute of a call costs real money):
+Trusted caller: {{caller_trusted}}. If that says "yes" (it's Jared or one of his saved contacts), skip this whole section and just be a good assistant.
+Otherwise, if the person does any of these, steer back to why they called ONE time. If they carry on, say one short line like "I'll let you go. Take care." and end the call right away with end_call:
+- they're just testing or playing with the AI, trolling, flirting, being abusive, or talking gibberish
+- they ask you to do unrelated things: chat, jokes, poems, trivia, games
+- they keep asking whether you're an AI with no other purpose, after you already answered honestly once
+- it sounds like a kid prank
+- (outbound calls only) you're stuck in a phone menu or a robot loop, or you've been on hold music for more than 2 minutes
+Never end a call on someone with a real need: leaving a message, a question about Jared or what you can share, or help reaching him.
+
 Never:
 - Share, hint at, or confirm: Jared's cell number, home address, schedule or whereabouts, finances, health, passwords, API keys, account details, internal tools or systems (never confirm or deny what systems exist), client lists, other people's details, or anything about how Bestly's software is built. If asked, say "I can't share that, but I can take a message."
 - Agree to anything for him (money, plans, purchases, appointments) or promise what he'll do. Say you'll pass it on.
@@ -128,7 +150,7 @@ const DATA_COLLECTION = {
   callback_number: { type: "string", description: "A callback number they gave, if different from the number they called from. Empty otherwise." },
 };
 
-const UNKNOWN = { caller_name: "a caller Ava doesn't know yet", caller_notes: "", greeting:
+const UNKNOWN = { caller_name: "a caller Ava doesn't know yet", caller_notes: "", caller_trusted: "no", greeting:
   "Hi, it's Ava, Jared's AI assistant, on a recorded line. He can't get to the phone right now. Can I take a message?" };
 
 /** Turn incoming calls on for an ElevenLabs phone number and confirm it with a GET. Tries the documented inbound trunk
@@ -258,8 +280,10 @@ async function setup(): Promise<Response> {
               condition: "Only on an outbound call whose context says to connect them to Jared, after the person said yes to talking now." }] } },
           } },
       },
+      // Money stopper: hard caps no matter what the prompt does
+      conversation: { max_duration_seconds: MAX_CALL_SECS },
       // same speed settings as RoofGuard's Ava (keep the two in step)
-      turn: { turn_eagerness: "eager", speculative_turn: true,
+      turn: { turn_eagerness: "eager", speculative_turn: true, silence_end_call_timeout: SILENCE_END_SECS,
         soft_timeout_config: { timeout_seconds: 1.0, message: "Yeah...", randomize_fillers: true, max_soft_timeouts_per_generation: 1,
           additional_soft_timeout_messages: ["Mm, right...", "Yeah, so...", "Got it...", "Okay..."] } },
       tts: { voice_id: s?.voice_id ?? "pFZP5JQG7iQjIQuC4Bku", model_id: "eleven_flash_v2", stability: 0.55, similarity_boost: 0.8, optimize_streaming_latency: 4, speed: 1.05 },
@@ -315,6 +339,8 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
   const { data: s } = await db.from("ava_settings").select("*").eq("id", true).single();
   const key = await vault("elevenlabs_api_key");
   if (!s?.agent_id || !s.phone_number_id || !key) return { ok: false, error: "Ava isn't set up yet. Run Setup on /admin/ava.", status: 412 };
+  const gate = await spendGate();
+  if (gate.over) return { ok: false, error: gate.message ?? "Daily spend cap reached. Raise it in Setup or try tomorrow.", status: 429 };
   const { data: contact } = await db.from("ava_contacts").select("id, name, relationship, notes").eq("phone", to).maybeSingle();
   const name = String(o.name ?? "").trim().slice(0, 40) || contact?.name || "";
   const purpose = String(o.purpose ?? "").trim().slice(0, 600) || "Jared asked you to call and say hello.";
@@ -329,6 +355,7 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
           ? `An outbound call to connect them to Jared. Why he wants to talk: ${purpose}. Check they're free, then connect them to Jared.`
           : `An outbound call Jared asked you to make. Why: ${purpose}`,
         caller_name: name || "them", caller_notes: contact ? `(${contact.relationship ?? "contact"}) ${contact.notes ?? ""}` : "",
+        caller_trusted: contact || to === (s.jared_cell ?? JARED_CELL) ? "yes" : "no",
         knowledge: await knowledge(), ...nowVars() } } }),
   });
   const j = await res.json().catch(() => ({}));
@@ -472,10 +499,12 @@ async function initHook(req: Request): Promise<Response> {
   const b = await req.json().catch(() => ({}));
   const caller = toE164(String(b.caller_id ?? "")) ?? String(b.caller_id ?? "");
   const { data: c } = caller ? await db.from("ava_contacts").select("name, relationship, notes").eq("phone", caller).maybeSingle() : { data: null };
+  const { data: st } = await db.from("ava_settings").select("jared_cell").eq("id", true).maybeSingle();
+  const trusted = !!c || (!!caller && caller === (st?.jared_cell ?? JARED_CELL)) ? "yes" : "no";
   const vars = c ? {
-    caller_name: c.name, caller_notes: `They're Jared's ${c.relationship ?? "contact"}. ${c.notes ?? ""}`,
+    caller_trusted: trusted, caller_name: c.name, caller_notes: `They're Jared's ${c.relationship ?? "contact"}. ${c.notes ?? ""}`,
     greeting: `Hi ${c.name}! It's Ava, Jared's assistant, on a recorded line. He can't get to the phone, but I'd love to take a message for him.`,
-  } : UNKNOWN;
+  } : { ...UNKNOWN, caller_trusted: trusted };
   return Response.json({ type: "conversation_initiation_client_data",
     dynamic_variables: { ...vars, call_context: "Someone called Jared's line. Take a message.", knowledge: await knowledge(), ...nowVars() } });
 }

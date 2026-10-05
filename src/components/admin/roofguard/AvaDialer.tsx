@@ -12,7 +12,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, Copy, Delete, Grid3x3, Loader2, Phone } from "lucide-react";
 import { LiveTranscript, Recording, type Line } from "./AvaCalls";
-import { LineStatus } from "./AvaShared";
+import { LineStatus, SpendChip } from "./AvaShared";
 
 type Costs = { total: number; today: number; month: number; calls_total: number; voice: number; phone: number; ai: number; number: number;
   minutes: number; calls: number; per_meeting: number | null; rates: { voice_per_min: number; phone_per_min: number; number_monthly: number } };
@@ -71,8 +71,10 @@ export function AvaTopBar({ onCalled }: { onCalled: () => void }) {
           <Grid3x3 className="h-4 w-4" aria-hidden />Demo call
         </button>
 
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        <SpendChip source="roofguard" />
         {!costs && (
-          <span className="ml-auto inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl bg-white/[0.04] px-3.5 text-right ring-1 ring-white/10">
+          <span className="inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl bg-white/[0.04] px-3.5 text-right ring-1 ring-white/10">
             <span className="text-[11px] text-white/50">Spent so far</span>
             <span className="text-[15px] font-semibold tabular-nums text-white/60">–</span>
           </span>
@@ -81,7 +83,7 @@ export function AvaTopBar({ onCalled }: { onCalled: () => void }) {
           <Popover>
             <PopoverTrigger asChild>
               <button type="button" aria-label={`Spent so far ${usd(costs.total)}, see breakdown`}
-                className="ml-auto inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl bg-white/[0.04] px-3.5 text-right ring-1 ring-white/10 transition hover:bg-white/[0.07]">
+                className="inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl bg-white/[0.04] px-3.5 text-right ring-1 ring-white/10 transition hover:bg-white/[0.07]">
                 <span className="text-[11px] text-white/50">Spent so far</span>
                 <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-white">{usd(costs.total)}</span>
               </button>
@@ -103,6 +105,7 @@ export function AvaTopBar({ onCalled }: { onCalled: () => void }) {
             </PopoverContent>
           </Popover>
         )}
+        </div>
       </div>
       <DialerSheet kinds={["demo"]} open={dialOpen} onOpenChange={setDialOpen} onCalled={() => { onCalled(); setTimeout(() => void load(), 90000); }} />
     </>
