@@ -1230,7 +1230,8 @@ async function voiceHealth(): Promise<string[]> {
 }
 
 // ---------- demo call (partner portal: Eli shows investors) ----------
-async function demoCall(phone: string, name: string, voiceId?: string): Promise<Response> {
+// Admin dialer + partner demo. A company typed by an admin replaces the practice facility (Jared, 2026-10-04: "the dialer needs to not say demo").
+async function demoCall(phone: string, name: string, voiceId?: string, company = ""): Promise<Response> {
   const bad = (error: string, status = 400) => Response.json({ ok: false, error }, { status, headers: CORS });
   const to = toE164(phone);
   if (!to) return bad("Enter a 10-digit US or Canada number.");
@@ -1246,14 +1247,18 @@ async function demoCall(phone: string, name: string, voiceId?: string): Promise<
   if (realLead) return bad("That's a real prospect's number. Demos can't call prospects.");
   const since = new Date(Date.now() - 24 * 3600_000).toISOString();
   const { count: today } = await db.from("rg_calls").select("id", { count: "exact", head: true }).eq("lead_id", s.demo_lead_id).gte("queued_at", since);
-  if ((today ?? 0) >= (s.demo_daily_cap ?? 15)) return bad(`Daily demo limit reached (${s.demo_daily_cap}). Try again tomorrow.`, 429);
+  if ((today ?? 0) >= (s.demo_daily_cap ?? 15)) return bad(`Daily test-call limit reached (${s.demo_daily_cap}). Try again tomorrow.`, 429);
   const { data: lead } = await db.from("rg_leads").select("id, company, timezone, pitch, category, state").eq("id", s.demo_lead_id).single();
   const who = name.trim().slice(0, 40) || null;
-  const next: Next = { lead_id: lead.id, company: "Riverside Medical Center", phone: to, timezone: lead.timezone,
-    contact_name: who, contact_title: "Facilities Director", pitch_angle: lead.pitch, category: lead.category, state: lead.state, attempt: 1 };
+  const custom = company.trim().replace(/\s+/g, " ").slice(0, 60);
+  const companyName = custom || "Riverside Medical Center";
+  const next: Next = { lead_id: lead.id, company: companyName, phone: to, timezone: lead.timezone,
+    contact_name: who, contact_title: custom ? "Facilities Manager" : "Facilities Director",
+    pitch_angle: custom ? "the roofs over your buildings, where one small leak can turn into water damage and downtime" : lead.pitch,
+    category: custom ? "commercial" : lead.category, state: lead.state, attempt: 1 };
   const [p] = await planCalls([next]);
   const plan = { ...p, to, ...(voiceId ? { voice_id: voiceId } : {}), gk: who ? p.gk
-    : "Hey, it's Ava from RoofGuard, on a recorded line... I'm looking for whoever's in charge of keeping the roof maintained at Riverside Medical Center. Is that you?" };
+    : `Hey, it's Ava from RoofGuard, on a recorded line... I'm looking for whoever's in charge of keeping the roof maintained at ${companyName}. Is that you?` };
   const res = await callOne(key, s, plan);
   const body = await res.json().catch(() => ({}));
   if (!res.ok || body?.success === false) return bad("The call didn't go out. Try again in a minute.", 502);
@@ -1298,7 +1303,8 @@ Deno.serve(async (req) => {
     // partners only ever see and place demo calls
     const demoLead = role === "partner"
       ? ((await db.from("rg_settings").select("demo_lead_id").eq("id", true).single()).data?.demo_lead_id ?? "none") : null;
-    if (body.action === "demo_call") return demoCall(String(body.phone ?? ""), String(body.name ?? ""));
+    // only admins may name a company; partners always get the practice facility
+    if (body.action === "demo_call") return demoCall(String(body.phone ?? ""), String(body.name ?? ""), undefined, role === "admin" ? String(body.company ?? "") : "");
     if (body.action === "call_result") return callResult(String(body.call_id ?? ""), demoLead);
     if (body.action === "audio") return audio(String(body.call_id ?? ""), demoLead);
     return live(demoLead, body.call_id ? String(body.call_id) : null);
