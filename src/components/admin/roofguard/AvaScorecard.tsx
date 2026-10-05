@@ -20,7 +20,8 @@ export type Kpis = {
   week_start: string; today: string; days_left: number; week: Funnel; day: Funnel;
   history: (Funnel & { week: string })[];
   quality: { reply_sec: number | null; avg_call_sec: number | null; optout_rate: number | null; calls_measured: number };
-  booked_list: { company: string; dm_name: string | null; dm_title: string | null; meeting_times: string | null; meeting_email: string | null; booked_at: string; state: string }[];
+  booked_list: { company: string; dm_name: string | null; dm_title: string | null; meeting_times: string | null; meeting_email: string | null; booked_at: string; state: string;
+    call_id: string; lead_id: string; cal_event_id: string | null; cal_meet_url: string | null; cal_start_at: string | null; timezone: string | null }[];
   loa: { rate: number; dials_per_meeting: number; dials_all: number; booked_all: number; prior_rate: number; daily_target: number; weekly_target: number;
     rest_of_week_dials: number; rest_per_day: number | null; door_rate: number; door_dials_per_meeting: number };
   status: "hit" | "on_track" | "behind" | "at_risk" | "off"; projected: number;
@@ -233,7 +234,8 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
             <ul className="divide-y divide-white/5">
               {k.booked_list.map((b, i) => (
                 <li key={i} className="py-2">
-                  <div className="flex items-baseline gap-2"><span className="text-[0.9375rem] font-medium text-white">{b.company}</span><span className="text-xs text-white/60">{b.state}</span></div>
+                  <div className="flex items-baseline gap-2"><span className="text-[0.9375rem] font-medium text-white">{b.company}</span><span className="text-xs text-white/60">{b.state}</span>
+                    {admin && <span className={cn("ml-auto whitespace-nowrap text-xs", b.cal_event_id ? "text-emerald-300" : "text-white/60")}>{b.cal_event_id ? "On Eli's calendar" : "Not on his calendar yet"}</span>}</div>
                   <div className="text-xs text-white/60">{[b.dm_name && `${b.dm_name}${b.dm_title ? `, ${b.dm_title}` : ""}`, b.meeting_times, b.meeting_email].filter(Boolean).join(" · ")}</div>
                 </li>
               ))}

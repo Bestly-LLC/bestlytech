@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { CheckCircle2, Loader2, PhoneCall, RotateCcw } from "lucide-react";
 import { LiveTranscript, Recording, StagePill, type Line } from "@/components/admin/roofguard/AvaCalls";
 import { AvaScorecard } from "@/components/admin/roofguard/AvaScorecard";
+import { AvaMeetings } from "./PartnerMeetings";
 
 type Phase = "form" | "calling" | "done";
 type Result = { status: string; outcome: string | null; summary: string | null; duration_sec: number | null; transcript: Line[] };
@@ -29,7 +30,7 @@ const stageOf = (o: string | null) => ({ booked: "booked", callback_set: "callba
 export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
-  const [view, setView] = useState<"score" | "demo">("score");
+  const [view, setView] = useState<"score" | "meetings" | "demo">("score");
   const [phase, setPhase] = useState<Phase>("form");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -104,13 +105,14 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           <SheetTitle className="text-lg font-semibold text-white">Ava</SheetTitle>
           <SheetDescription className="mt-1 text-sm text-white/60">
             {view === "score" ? "How she's doing against the goal: 6 meetings booked with you every week."
+              : view === "meetings" ? "The meetings Ava booked for you. Put them on your Google Calendar with a Meet link."
               : "Type a number and Ava calls it in a few seconds. Whoever answers plays the facilities director at Riverside Medical Center, a made-up hospital."}
           </SheetDescription>
           <div role="tablist" aria-label="Ava" className="mt-3 inline-flex rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
-            {([["score", "Scorecard"], ["demo", "Demo call"]] as const).map(([id, label]) => (
+            {([["score", "Scorecard"], ["meetings", "Meetings"], ["demo", "Demo call"]] as const).map(([id, label]) => (
               <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}
                 data-state={view === id ? "active" : "inactive"}
-                className={cn("min-h-[2.75rem] min-w-[6.5rem] rounded-lg px-4 text-sm font-medium transition-colors",
+                className={cn("min-h-[2.75rem] min-w-[5.5rem] rounded-lg px-4 text-sm font-medium transition-colors",
                   view === id ? "bg-white text-black shadow-sm" : "text-white/70 hover:text-white")}>{label}</button>
             ))}
           </div>
@@ -118,6 +120,7 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
 
         <div className="flex-1 space-y-5 px-5 py-5">
           {view === "score" && <AvaScorecard narrow />}
+          {view === "meetings" && <AvaMeetings />}
           {view === "demo" && phase === "form" && (
             <form onSubmit={(e) => { e.preventDefault(); if (valid && !busy) void call(); }} className="space-y-4">
               <label className="block">
