@@ -1003,7 +1003,7 @@ function Graveyard() {
     queryFn: async () => {
       const { data, error } = await supabase.rpc("admin_graveyard" as never);
       if (error) throw error;
-      return (data ?? []) as unknown as Grave[];
+      return ((data ?? []) as unknown as Grave[]).slice().sort((x, y) => (x.retired_at ?? "").localeCompare(y.retired_at ?? ""));
     },
     refetchInterval: () => (document.hidden ? false : pollInterval(120_000)),
     placeholderData: keepPreviousData,
@@ -1157,7 +1157,6 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
   };
 
   const open = moves.filter((m) => m.status === "proposed");
-  const done = moves.filter((m) => m.status === "done");
 
   return (
     <section id="reorg" className={cn(card, "scroll-mt-24 space-y-3 p-4 sm:p-5")} aria-label="Reorg">
@@ -1234,29 +1233,6 @@ function ReorgPanel({ onOpen }: { onOpen: (slug: string) => void }) {
             </li>
           ))}
         </ul>
-      )}
-
-      {done.length > 0 && (
-        <div className="space-y-1 pt-1">
-          <p className={cn("px-1 text-[13px] font-semibold", secondary)}>Recently let go · you can bring them back for 7 days</p>
-          <ul className="divide-y divide-[#38383A] bento:divide-[#E5E5EA]">
-            {done.map((m) => (
-              <li key={m.id} className="flex items-center gap-3 py-2">
-                <MiniMascot icon={m.icon} seed={m.slug} tone="gray" />
-                <span className="min-w-0 flex-1">
-                  <span className={cn("block text-[15px] font-medium", label)}>{m.name}</span>
-                  <span className={cn("block text-[13px]", tertiary)}>
-                    {(() => {
-                      const to = [...new Set((m.handover?.duties ?? []).map((d) => d.to_name).filter(Boolean))] as string[];
-                      return to.length ? `Work moved to ${to.join(", ")}` : m.into_name ? `Work moved to ${m.into_name}` : "Job retired";
-                    })()}
-                  </span>
-                </span>
-                <button type="button" className={btnPlain} onClick={() => undo([m.id])}>Bring back</button>
-              </li>
-            ))}
-          </ul>
-        </div>
       )}
 
       <AnimatePresence>
