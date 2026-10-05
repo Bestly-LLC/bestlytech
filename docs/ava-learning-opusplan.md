@@ -75,6 +75,24 @@ After call #8 (RoofGuard Ava said "tool_code print(default_api.end_call(…))" o
 - **The Coach treats every incident as a mandatory "work on" item** and turns repeat offenders into a fixed call-flow rule (not a test). Rules added this way so far: never speak tool names; hang up right after goodbye; wait quietly when put on hold; don't re-ask the opener after a yes; don't repeat a line.
 - Model chain today: `gpt-4.1-mini` → `claude-haiku-4-5` → `gemini-3.5-flash` (gemini-2.5-flash-lite is deprecated and caused the leak).
 
+### Sound Check (built 2026-10-05, live now)
+
+Third watcher, next to the Reply guard (what she says) and Line Check (is the line up): **how a call sounds.** Plain SQL on the finished transcript, no AI, no cost (`ava_call_quality_scan` / `ava_call_quality_log`, triggers on `rg_calls` and `ava_calls`).
+
+| Flag | What it catches |
+|---|---|
+| `slow_reply` | 2+ replies took over 3 s to start, or any over 6 s |
+| `chopped` | cut off in 3+ turns after the opener (and 35%+ of them) |
+| `off_chain_model` | the call ran on a model that isn't in `llm_fallbacks` |
+| `caller_complaint` | the caller said she was breaking up, robotic, choppy, echoing |
+
+- One row per call in `ava_call_quality` with the **voice it ran on**; the `ava_voice_quality` view compares voices by score and reply gap. That is the data for scorecard-based voice suggestions.
+- A flagged call tells Scout (push only for a caller complaint). A daily 7 AM summary says how each Ava sounded in the last 24 hours and is the card's heartbeat.
+- Team card: **Sound Check**, a tool of RoofGuard Ava. The opener is left out of every measure (a voicemail greeting talking over it is not a sound problem).
+- `ava-call-quality` edge function is the read-only microscope: `{action:"agent"}` shows the live voice, turn, model and audio settings; `{action:"call"}` shows ElevenLabs' record of one call.
+- **Not measurable from here:** the audio itself on the phone leg (Telnyx to the carrier). The watcher sees our side (speech start, cut-offs, model) and what the caller says; for the line, use the Telnyx call-quality report on the call time.
+- Known platform limit: ElevenLabs keeps up to 5 fillers ("Yeah... Mm, right...") per reply on this agent whatever we send (accepts the PATCH, keeps 5).
+
 ---
 
 ## Where it shows up
