@@ -24,9 +24,11 @@ import { AvaTopBar } from "@/components/admin/roofguard/AvaDialer";
 import { AvaSettingsSheet } from "@/components/admin/roofguard/AvaSettings";
 import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
 
-type Tab = "calls" | "scorecard" | "coach" | "leads" | "setup";
-const TABS: { id: Tab; label: string }[] = [{ id: "calls", label: "Calls" }, { id: "scorecard", label: "Scorecard" }, { id: "coach", label: "Coach" }, { id: "leads", label: "Leads" }, { id: "setup", label: "Setup" }];
-const hashTab = (): Tab => { const h = window.location.hash.slice(1); return (TABS.some((t) => t.id === h) ? h : "calls") as Tab; };
+type Tab = "calls" | "scorecard" | "leads" | "setup";
+const TABS: { id: Tab; label: string }[] = [{ id: "calls", label: "Calls" }, { id: "scorecard", label: "Scorecard" }, { id: "leads", label: "Leads" }, { id: "setup", label: "Setup" }];
+// "coach" was its own tab until 2026-10-05; it now lives at the bottom of Scorecard, so old #coach links still land on it.
+const hashTab = (): Tab => { const h = window.location.hash.slice(1); if (h === "coach") return "scorecard"; return (TABS.some((t) => t.id === h) ? h : "calls") as Tab; };
+const toCoach = () => setTimeout(() => document.getElementById("coach")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
 
 /** iOS-style segmented control */
 function Segmented({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }) {
@@ -468,10 +470,10 @@ export default function RoofGuard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const setTab = (t: Tab) => { setTabState(t); history.replaceState(null, "", `#${t}`); };
   const [callingOn, setCallingOn] = useState<boolean | null>(null);
-  // the Coach asks for its tab (Reply guard "See the rule", Scorecard "Manage rules") or for a call's sheet (reviews feed, "See calls")
+  // the Coach asks to be shown (Reply guard "See the rule", Scorecard "Manage rules") or for a call's sheet (reviews feed, "See calls")
   useEffect(() => {
     const go = (t: Tab) => { setTabState(t); history.replaceState(null, "", `#${t}`); };
-    const a = onOpenCoach("roofguard", () => go("coach"));
+    const a = onOpenCoach("roofguard", () => { go("scorecard"); toCoach(); });
     const b = onOpenCall("roofguard", () => go("calls"));
     return () => { a(); b(); };
   }, []);
@@ -549,8 +551,7 @@ export default function RoofGuard() {
         <AvaScoreStrip onOpen={() => setTab("scorecard")} />
         <AvaCalls callingOn={callingOn} onOpenSetup={() => setTab("setup")} />
       </>}
-      {tab === "scorecard" && <AvaScorecard admin />}
-      {tab === "coach" && <CoachSection source="roofguard" anchorId="coach" />}
+      {tab === "scorecard" && <div className="space-y-4"><AvaScorecard admin /><CoachSection source="roofguard" anchorId="coach" /></div>}
       {tab === "setup" && <div className="space-y-5"><CallingCard /><VoicePicker source="roofguard" openSignal={studio} /></div>}
 
       {tab === "leads" && <>
