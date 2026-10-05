@@ -198,6 +198,7 @@ Deno.serve(async (req) => {
     });
     // ntfy with priority 5 — operator should see this immediately
     await pushNtfy({
+    from: "Scout",
       title: `Signing declined: ${deal.company_name}`,
       body: `${deal.primary_contact_name ?? "Client"} declined the signing request.`,
       tags: "no_entry",
@@ -260,6 +261,7 @@ Deno.serve(async (req) => {
 
   // ntfy push
   await pushNtfy({
+    from: "Scout",
     title: `${label} signed: ${deal.company_name}`,
     body: `${deal.primary_contact_name ?? "Client"} just signed the ${label}.${
       kind === "acceptance" ? " Stage 7 complete — Mark live unlocked." : ""

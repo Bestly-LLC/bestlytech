@@ -162,6 +162,7 @@ Deno.serve(async (req) => {
       const m = composeMessage({ confirmedDown, newlyDown, currentDownLabels, systems });
       pushBody = m.body;
       pushSent = (await pushNtfy({
+    from: "System Monitor",
         title: m.title,
         body: m.body,
         priority: 5,

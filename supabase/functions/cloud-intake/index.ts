@@ -157,6 +157,7 @@ Deno.serve(async (req) => {
     });
 
     void pushNtfy({
+    from: "Scout",
       title: `Intake submitted: ${row.company_name}`,
       body: `${row.primary_contact_name ?? "Client"} just finished the technical intake.`,
       tags: "package",

@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
   if (newlyDown.length > 0) {
     const title = `External outage - ${newlyDown.length} service${newlyDown.length === 1 ? "" : "s"} down`;
     const body = newlyDown.map((d) => `- ${d.service}: ${d.reason}`).join("\n");
-    pushSent = (await pushNtfy({ title, body, priority: 5, tags: "warning,globe_with_meridians", click: CLICK_URL })).ok;
+    pushSent = (await pushNtfy({ from: "System Monitor", title, body, priority: 5, tags: "warning,globe_with_meridians", click: CLICK_URL })).ok;
   }
 
   return new Response(

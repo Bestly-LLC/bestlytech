@@ -236,6 +236,7 @@ Deno.serve(async (req) => {
       .single();
 
     void pushNtfy({
+    from: "Scout",
       title: `Brief submitted: ${lead?.company_name ?? "(unknown)"} (${lead?.user_count_band ?? "?"} users)`,
       body: `${lead?.contact_name ?? "Client"} just finished the pre-call brief.`,
       tags: "memo",

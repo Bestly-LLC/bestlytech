@@ -55,6 +55,7 @@ Deno.serve(async (req) => {
   if (error || !row) { console.error("shield-report insert error", error); return bad("could not save", 500); }
 
   void pushNtfy({
+    from: "Security Auditor",
     title: `Shield review: ${row.reported_domain ?? "(unknown)"}${resolvedOrg ? ` (${resolvedOrg})` : ""}`,
     body: `${url}${reason ? `\n— ${reason.slice(0, 200)}` : ""}`,
     tags: "shield",

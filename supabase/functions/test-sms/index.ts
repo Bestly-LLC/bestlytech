@@ -23,6 +23,7 @@ Deno.serve(async (req) => {
   const body = `[BESTLY-TEST ${ts} UTC] Manual ntfy test from new Supabase project (rcqfqhguwpmaarseifqg). If you see this, the new alert path works. Old SMS path retired.`;
 
   const res = await pushNtfy({
+    from: "System Monitor",
     title,
     body,
     topic,

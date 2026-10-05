@@ -41,6 +41,8 @@ export type NtfyMessage = {
   priority?: string | number;
   /** URL the notification opens when tapped. */
   click?: string;
+  /** The AI employee responsible for this alert; the push is signed with their name ("Scout: New cloud lead ..."). */
+  from?: string;
   /** Defaults to the shared operator topic (NTFY_TOPIC secret honored). */
   topic?: string;
 };
@@ -55,7 +57,7 @@ export type NtfyResult = {
 
 /** Send an operator alert. Never throws; logs and returns ok:false on failure. */
 export async function pushNtfy(msg: NtfyMessage): Promise<NtfyResult> {
-  const headers: Record<string, string> = { Title: asciiHeader(msg.title) };
+  const headers: Record<string, string> = { Title: asciiHeader(msg.from ? `${msg.from}: ${msg.title}` : msg.title) };
   if (msg.tags) headers["Tags"] = Array.isArray(msg.tags) ? msg.tags.join(",") : msg.tags;
   if (msg.priority !== undefined) headers["Priority"] = String(msg.priority);
   if (msg.click) headers["Click"] = msg.click;

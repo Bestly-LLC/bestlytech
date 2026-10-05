@@ -300,6 +300,7 @@ Deno.serve(async (req) => {
 
   // Operator ntfy push
   await pushNtfy({
+    from: "Scout",
     title: `${kind.toUpperCase()} sent to ${deal.primary_contact_name}: ${deal.company_name}`,
     body: result.sign_url,
     tags: "envelope_with_arrow",

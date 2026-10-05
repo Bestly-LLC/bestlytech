@@ -59,6 +59,7 @@ async function pushLeadNtfy(lead: LeadInput, leadId: string) {
   ].filter(Boolean);
 
   await pushNtfy({
+    from: "Scout",
     title: `New cloud lead: ${lead.company_name} (${lead.user_count_band} users)`,
     body: lines.join("\n"),
     tags: ["bell", "office"],

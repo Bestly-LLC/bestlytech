@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
   if (insErr || !inserted) { console.error("shield-request insert error", insErr); return bad("could not save", 500); }
 
   void pushNtfy({
+    from: "Security Auditor",
     title: `Allowlist request: ${deal.company_name}`,
     body: `${url}${reason ? ` — ${reason.slice(0, 100)}` : ""}`,
     tags: "shield",

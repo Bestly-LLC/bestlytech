@@ -179,6 +179,7 @@ serve(async (req) => {
           const paidAmount = `$${((session.amount_total ?? 0) / 100).toFixed(2)}`;
           const sendNtfy = async (title: string, message: string, priority: string) => {
             await pushNtfy({
+    from: "Scout",
               title,
               body: message,
               tags: "money-bag",
