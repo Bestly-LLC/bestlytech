@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, CheckCircle2, ChevronRight, Hourglass, Loader2, ShieldAlert, Sparkles } from "lucide-react";
 import { onCoachChanged, openCall } from "./coachBus";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { FLAG, OBJECTION, Score, STEPS, barTone, fmt, plural, ring, rpc, when12, type FeedRow, type Source } from "./coachShared";
 
 function StepBars({ source, scores }: { source: Source; scores: Record<string, number | null> | null }) {
@@ -90,13 +91,19 @@ export function CoachReviews({ source, pending, onReviewed }: { source: Source; 
   };
 
   const shown = (rows ?? []).slice(0, limit);
+  const latest = rows?.[0];
+  // closed: "Latest: Call #52 · 7.5 · 2:14 PM" so the newest review is visible without opening it
+  const summary = err ? "Couldn't load the reviews" : !rows ? "Loading…" : !latest ? "No reviews yet"
+    : <>Latest: Call&nbsp;#{latest.call_no ?? "?"}{latest.overall != null ? <> · score <span className="tabular-nums">{fmt(latest.overall)}</span></> : null}{latest.at ? <> · {when12(latest.at)}</> : null} · <span className="tabular-nums">{rows.length}</span>&nbsp;total</>;
+  const pill = (
+    <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold", pending > 0 ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-300")}>
+      {pending > 0 ? <Hourglass className="h-3.5 w-3.5" aria-hidden /> : <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}{pending > 0 ? <><span className="tabular-nums">{pending}</span>&nbsp;pending</> : "Up to date"}
+    </span>
+  );
   return (
-    <section aria-label="Reviews" className="rounded-2xl bg-white/[0.03] ring-1 ring-white/10">
+    <CollapsibleSection id={`${source}-coach-reviews`} title="Latest reviews" summary={summary} badge={pill} className="rounded-2xl" bodyClassName="pb-1">
       <header className="flex flex-wrap items-center gap-2 px-4 pt-3">
-        <h4 className="text-[15px] font-semibold text-white">Reviews</h4>
-        <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold", pending > 0 ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-300")}>
-          {pending > 0 ? <Hourglass className="h-3.5 w-3.5" aria-hidden /> : <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}Pending reviews:&nbsp;<span className="tabular-nums">{pending}</span>
-        </span>
+        <span className="text-sm text-white/75">Pending reviews:&nbsp;<span className="tabular-nums">{pending}</span></span>
         {pending > 0 && (
           <button type="button" onClick={() => void reviewNow()} disabled={running}
             className={cn("ml-auto inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-white/[0.09] px-3.5 text-[14px] font-medium text-white hover:bg-white/[0.14] disabled:opacity-60", ring)}>
@@ -121,6 +128,6 @@ export function CoachReviews({ source, pending, onReviewed }: { source: Source; 
             </div>
           )}
         </>}
-    </section>
+    </CollapsibleSection>
   );
 }

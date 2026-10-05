@@ -18,7 +18,7 @@ import { VoiceSwitcher } from "@/components/admin/roofguard/VoiceSwitcher";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Loader2, Phone, RefreshCw, Search, Zap } from "lucide-react";
 import { AvaCalls } from "@/components/admin/roofguard/AvaCalls";
 import { AvaScorecard, AvaScoreStrip } from "@/components/admin/roofguard/AvaScorecard";
-import { AvaCoach } from "@/components/admin/roofguard/AvaCoach";
+import { CoachSection } from "@/components/admin/roofguard/AvaCoach";
 import { onOpenCall, onOpenCoach } from "@/components/admin/roofguard/coachBus";
 import { AvaTopBar } from "@/components/admin/roofguard/AvaDialer";
 import { AvaSettingsSheet } from "@/components/admin/roofguard/AvaSettings";
@@ -550,7 +550,7 @@ export default function RoofGuard() {
         <AvaCalls callingOn={callingOn} onOpenSetup={() => setTab("setup")} />
       </>}
       {tab === "scorecard" && <AvaScorecard admin />}
-      {tab === "coach" && <AvaCoach source="roofguard" admin />}
+      {tab === "coach" && <CoachSection source="roofguard" anchorId="coach" />}
       {tab === "setup" && <div className="space-y-5"><CallingCard /><VoicePicker source="roofguard" openSignal={studio} /></div>}
 
       {tab === "leads" && <>

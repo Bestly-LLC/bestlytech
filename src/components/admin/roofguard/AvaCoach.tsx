@@ -210,16 +210,16 @@ export function AvaCoach({ source, admin = false, variant = "full" }: { source: 
   );
 }
 
-/** /admin/ava: the Coach as a section that is open by default. */
-export function CoachSection({ source = "ava" }: { source?: Source }) {
+/** Both pages: the Coach as a collapsible section, open by default (/admin/ava below All calls; /admin/roofguard on its Coach tab). */
+export function CoachSection({ source = "ava", anchorId = "scorecard" }: { source?: Source; anchorId?: string }) {
   const data = useCoachData(source, true);
   const [signal, setSignal] = useState(0);
-  useEffect(() => onOpenCoach(source, () => { setSignal((n) => n + 1); setTimeout(() => document.getElementById("scorecard")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80); }), [source]);
+  useEffect(() => onOpenCoach(source, () => { setSignal((n) => n + 1); setTimeout(() => document.getElementById(anchorId)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80); }), [source]);
   const { c, m } = data;
   const waiting = (m?.playbook ?? []).filter((p) => p.status === "proposed").length;
   const behind = m?.watch.behind;
   return (
-    <CollapsibleSection id={`${source}-coach`} anchorId="scorecard" defaultOpen openSignal={signal}
+    <CollapsibleSection id={`${source}-coach`} anchorId={anchorId} defaultOpen openSignal={signal}
       title="Coach" icon={<span className="grid h-8 w-8 place-items-center rounded-lg" style={{ background: `${APRICOT}26`, color: APRICOT }}><GraduationCap className="h-4 w-4" /></span>}
       summary={m && c ? <>{plural(m.reviewed_7d, "call")} reviewed this week · {waiting > 0 ? `${plural(waiting, "rule")} waiting for you` : "no rules waiting"} · {behind ? `behind by ${plural(m.watch.waiting, "call")}` : m.ai_ok ? "free AI OK" : "free AI limited"}</> : "Reviews every call and keeps her playbook"}
       badge={waiting > 0 ? <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-300"><Hourglass className="h-3.5 w-3.5" aria-hidden /><span className="tabular-nums">{waiting}</span>&nbsp;waiting</span>
