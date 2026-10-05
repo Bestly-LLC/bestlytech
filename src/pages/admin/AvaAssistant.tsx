@@ -23,8 +23,10 @@ import { AvaSpam } from "@/components/admin/roofguard/AvaSpam";
 import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
 import { CollapsibleSection } from "@/components/admin/roofguard/CollapsibleSection";
 import { AvaSettingsSheet, SettingsButton } from "@/components/admin/roofguard/AvaSettings";
-import { AvaCoach } from "@/components/admin/roofguard/AvaCoach";
+import { CoachSection } from "@/components/admin/roofguard/AvaCoach";
 import { ArchivedCalls, useArchiveReload } from "@/components/admin/roofguard/AvaArchive";
+import { onOpenCall, takePendingCall } from "@/components/admin/roofguard/coachBus";
+import { toast } from "sonner";
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, Grid3x3, Loader2, Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCw, UserRound } from "lucide-react";
 
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
@@ -90,6 +92,16 @@ export default function AvaAssistant() {
       setCalls((cs) => cs.map((x) => (x.id === c.id ? { ...x, read_at: new Date().toISOString() } : x)));
     }
   };
+  // the Coach (reviews feed, "See calls" on a rule) asks for a call's sheet
+  useEffect(() => onOpenCall("ava", () => {
+    const p = takePendingCall("ava");
+    if (!p) return;
+    const known = calls.find((x) => x.id === p.callId);
+    if (known) { void markRead(known); return; }
+    void (supabase.from("ava_calls" as never) as unknown as { select: (c: string) => { eq: (c: string, v: string) => { maybeSingle: () => PromiseLike<{ data: unknown }> } } })
+      .select("*").eq("id", p.callId).maybeSingle().then(({ data }) => { if (data) void markRead(data as Call); else toast.error("Couldn't find that call"); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [calls]);
   const runSetup = async () => {
     setBusy(true);
     await (supabase.rpc as unknown as (f: string, a: object) => Promise<unknown>)("ava_action", { p_action: "setup" });
@@ -202,8 +214,8 @@ export default function AvaAssistant() {
 
       <ArchivedCalls source="ava" />
 
-      {/* Scorecard: the Coach reviews every call and builds her playbook (you approve each habit) */}
-      <AvaCoach source="ava" admin />
+      {/* Coach: reviews every call, keeps her playbook (rules you can approve, edit, pause or delete) */}
+      <CoachSection source="ava" />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <FollowupsList source="ava" onChanged={() => void load()} />

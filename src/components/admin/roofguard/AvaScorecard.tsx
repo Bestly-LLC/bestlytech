@@ -265,8 +265,8 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
 
       {admin && <AvaReview />}
 
-      {/* the Coach lives in the Scorecard: reviews, what she's working on, her playbook and its tests */}
-      <AvaCoach source="roofguard" admin={admin} />
+      {/* the Coach in brief (what she's working on, step scores); the full Coach, with the rules manager, is its own tab. Eli sees it read-only. */}
+      <AvaCoach source="roofguard" admin={admin} variant={admin ? "summary" : "full"} />
     </div>
   );
 }

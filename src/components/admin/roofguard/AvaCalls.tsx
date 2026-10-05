@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CallReview } from "./AvaCoach";
 import { ArchiveCallButton, ArchivedCalls, useArchiveReload } from "./AvaArchive";
+import { coachChanged, onCoachChanged, onOpenCall, openCoach, takePendingCall } from "./coachBus";
 import { supabase } from "@/integrations/supabase/client";
 import { AvaOrb } from "./AvaOrb";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ import {
 import { DirIcon, FollowupsList, KnowledgeList, MessageSheet, MessagesList, rgIncomingToMsg, type Msg, type RgIncoming } from "./AvaShared";
 import { askScout } from "../scoutBus";
 import { ScrollSheet } from "./AvaSheet";
+import { toast } from "sonner";
 
 // ---------- types ----------
 export type Line = { role: string; text: string; t: number };
@@ -222,13 +224,13 @@ export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
   const [rows, setRows] = useState<Incident[]>([]);
   const [busy, setBusy] = useState<string | null>(null);               // `${id}:${action}`
   const [note, setNote] = useState<Record<string, { ok: boolean; text: string }>>({});
-  const [showRule, setShowRule] = useState<string | null>(null);
   const [undoAsk, setUndoAsk] = useState<string | null>(null);
   const load = useCallback(async () => {
     const { data } = await rpcArgs<Incident[]>("admin_reply_incidents", { p_source: source });
     if (data) setRows(data);
   }, [source]);
   useEffect(() => { void load(); const t = setInterval(() => { if (!document.hidden) void load(); }, 60000); return () => clearInterval(t); }, [load]);
+  useEffect(() => onCoachChanged(source, () => void load()), [source, load]);   // a rule changed in the Coach: the states here follow
   if (!rows.length) return null;
 
   const say = (id: string, ok: boolean, text: string) => setNote((n) => ({ ...n, [id]: { ok, text } }));
@@ -237,10 +239,10 @@ export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
     if (action === "teach") {
       const { data, error } = await rpcArgs<{ ok: boolean; error?: string; status?: string }>("admin_incident_teach", { p_id: r.id });
       if (error || !data?.ok) say(r.id, false, error?.message ?? data?.error ?? "The Coach couldn't take that one.");
-      else say(r.id, true, data.status === "proposed" && source === "ava" ? "The Coach wrote a rule. Read it and approve it below." : "The Coach has it.");
+      else { say(r.id, true, data.status === "proposed" && source === "ava" ? "The Coach wrote a rule. Read it and approve it in the Coach section." : "The Coach has it."); coachChanged(source); }
     } else if (action === "approve" || action === "decline") {
       const { error } = await rpcArgs("admin_playbook_set", { p_source: source, p_id: r.playbook_id, p_action: action });
-      if (error) say(r.id, false, error.message); else say(r.id, true, action === "approve" ? "Rule approved." : "Rule declined.");
+      if (error) say(r.id, false, error.message); else { say(r.id, true, action === "approve" ? "Rule approved." : "Rule declined."); coachChanged(source); }
     } else if (action === "scout") {
       const about = `Reply guard, ${source === "ava" ? "personal Ava" : "RoofGuard Ava"}, call ${r.call_no != null ? "#" + r.call_no : "(unnumbered)"}: ${incidentText(r)}.` +
         `${r.excerpt ? ` What she said: "${r.excerpt.replace(/\s+/g, " ").slice(0, 300)}".` : ""}${r.healed ? ` The guard already did: ${r.healed}.` : ""}`;
@@ -280,7 +282,6 @@ export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
                 {r.action_state === "scout_has_it" && r.scout_task_ref && <span className="font-normal text-white/60">· {r.scout_task_ref}</span>}</p>
               {r.healed && <p className="mt-0.5 text-xs text-white/60">{r.healed}</p>}
               {r.excerpt && !isLongCall(r) && <p className="mt-0.5 line-clamp-2 text-xs text-white/55">"{r.excerpt.replace(/\s+/g, " ")}"</p>}
-              {showRule === r.id && rule && <p className="mt-2 rounded-xl bg-white/[0.05] p-3 text-sm text-white/85 ring-1 ring-white/10">{rule}</p>}
               <div className="mt-1.5 flex flex-wrap items-center gap-x-1 gap-y-0">
                 {r.action_state === "needs_you" && (
                   <>
@@ -290,8 +291,8 @@ export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
                     <button type="button" disabled={busy !== null} onClick={() => void run(r, "ignore")} className={cn(gbtn, "text-white/70 hover:bg-white/5")}>Ignore</button>
                   </>
                 )}
-                {(r.action_state === "coach_testing" || r.action_state === "coach_learned") && rule && (
-                  <button type="button" aria-expanded={showRule === r.id} onClick={() => setShowRule(showRule === r.id ? null : r.id)} className={cn(gbtn, "text-sky-300 hover:bg-white/5")}>{showRule === r.id ? "Hide the rule" : "See the rule"}</button>
+                {(r.action_state === "coach_testing" || r.action_state === "coach_learned") && rule && r.playbook_id && (
+                  <button type="button" onClick={() => openCoach(source, r.playbook_id)} aria-label={`See the rule in the Coach: ${rule.slice(0, 80)}`} className={cn(gbtn, "text-sky-300 hover:bg-white/5")}>See the rule</button>
                 )}
                 {r.action_state === "coach_testing" && r.playbook?.status === "proposed" && source === "ava" && (
                   <>
@@ -375,6 +376,9 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
   const [open, setOpen] = useState<BoardRow | null>(null);
   const [incoming, setIncoming] = useState<RgIncoming[]>([]);
   const [openMsg, setOpenMsg] = useState<Msg | null>(null);
+  const [focusCall, setFocusCall] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [askTick, setAskTick] = useState(0);
   const nos = useRgCallNos(board);
 
   const loadCols = useCallback(async () => {
@@ -382,7 +386,7 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
       rpcArgs<Followup[]>("rg_followups_list"), rpcArgs<RgIncoming[]>("rg_inbound_calls", { p_limit: 100 })]);
     const e = q.error ?? b.error ?? f.error ?? i.error;
     if (e) { setErr(e.message); return; }
-    setErr(null); setQueue(q.data ?? []); setBoard(b.data ?? []); setFollowups(f.data ?? []); setIncoming(i.data ?? []);
+    setErr(null); setQueue(q.data ?? []); setBoard(b.data ?? []); setFollowups(f.data ?? []); setIncoming(i.data ?? []); setLoaded(true);
   }, []);
   useEvery(loadCols, 30000);
 
@@ -403,6 +407,20 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
       setIncoming((rs) => rs.map((r) => (r.id === m.id ? { ...r, read_at: new Date().toISOString() } : r)));
     }
   };
+
+  // the Coach (reviews feed, "See calls" on a rule) asks for a call's sheet: a board row for outbound calls, the message sheet for incoming ones
+  useEffect(() => onOpenCall("roofguard", () => setAskTick((n) => n + 1)), []);
+  useEffect(() => {
+    if (!loaded) return;
+    const p = takePendingCall("roofguard");
+    if (!p) return;
+    const inc = incoming.find((r) => r.id === p.callId);
+    if (inc) { void openMessage(rgIncomingToMsg(inc)); return; }
+    const row = board.find((r) => r.call_id === p.callId) ?? (p.leadId ? board.find((r) => r.lead_id === p.leadId) : undefined);
+    if (row) { setFocusCall(p.callId); setOpen(row); return; }
+    toast.message("That call isn't in the lists on this tab. Look for it under Called.");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, askTick, board, incoming]);
 
   const today = useMemo(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
@@ -451,7 +469,7 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
       <KnowledgeList source="roofguard" />
 
       <MessageSheet item={openMsg} onClose={() => setOpenMsg(null)} onDeleted={() => { setOpenMsg(null); void loadCols(); }} />
-      <CallSheet row={open} nos={nos} onClose={() => setOpen(null)} onDeleted={() => { setOpen(null); void loadCols(); }} />
+      <CallSheet row={open} nos={nos} focusId={focusCall} onClose={() => { setOpen(null); setFocusCall(null); }} onDeleted={() => { setOpen(null); void loadCols(); }} />
     </div>
   );
 }
@@ -662,14 +680,19 @@ function Fact({ icon, label, children }: { icon: ReactNode; label: string; child
   );
 }
 
-function CallSheet({ row, nos, onClose, onDeleted }: { row: BoardRow | null; nos: Map<string, number>; onClose: () => void; onDeleted: () => void }) {
+function CallSheet({ row, nos, focusId, onClose, onDeleted }: { row: BoardRow | null; nos: Map<string, number>; focusId?: string | null; onClose: () => void; onDeleted: () => void }) {
   const [calls, setCalls] = useState<LeadCall[] | null>(null);
   const [pick, setPick] = useState(0);
   useEffect(() => {
     setCalls(null); setPick(0);
     if (!row) return;
-    void rpcArgs<LeadCall[]>("rg_lead_calls", { p_lead: row.lead_id }).then(({ data }) =>
-      setCalls((data ?? []).filter((c) => c.is_test === row.is_test)));
+    void rpcArgs<LeadCall[]>("rg_lead_calls", { p_lead: row.lead_id }).then(({ data }) => {
+      const list = (data ?? []).filter((c) => c.is_test === row.is_test);
+      setCalls(list);
+      const i = focusId ? list.findIndex((c) => c.call_id === focusId) : -1;
+      if (i > 0) setPick(i);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row]);
   const c = calls?.[pick];
   if (!row) return null;

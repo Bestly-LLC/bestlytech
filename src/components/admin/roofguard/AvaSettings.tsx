@@ -2,6 +2,7 @@
  * The Settings sheet, one per Ava (the gear button in each page's top bar).
  *   Personal Ava: daily spend cap, morning brief (switch, time, preview), calendar hours and booking calendar, missed-call forwarding and its voice.
  *   RoofGuard Ava: daily spend cap.
+ *   Both: Coach (auto-test small rules / personal rules need approval, the weekly pass).
  * Set-and-forget controls live here so the page itself shows only what changes day to day. Every control saves on its own and says so.
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
@@ -12,6 +13,7 @@ import { ScrollSheet } from "./AvaSheet";
 import { SpendCapEditor, rpcArgs, type Source } from "./AvaShared";
 import { CalendarSettingsControls } from "./AvaCalendars";
 import { CellForwardingControls, CellSwitch } from "./AvaCell";
+import { CoachSettingsGroup } from "./CoachSettings";
 
 const ring = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60";
 const field = "min-h-[44px] w-full appearance-none rounded-xl bg-white/[0.06] px-3 text-[15px] text-white ring-1 ring-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60";
@@ -120,6 +122,7 @@ export function AvaSettingsSheet({ source, open, onOpenChange }: { source: Sourc
         <Group title="Spending" hint="Her outgoing calls stop for the day at this amount.">
           <SpendCapEditor source={source} />
         </Group>
+        <Group title="Coach" hint={personal ? "How the Coach builds her playbook." : "How the Coach tests new moves on her calls."}><CoachSettingsGroup source={source} /></Group>
         {personal && (
           <>
             <Group title="Morning brief"><MorningBrief /></Group>

@@ -18,12 +18,14 @@ import { VoiceSwitcher } from "@/components/admin/roofguard/VoiceSwitcher";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Loader2, Phone, RefreshCw, Search, Zap } from "lucide-react";
 import { AvaCalls } from "@/components/admin/roofguard/AvaCalls";
 import { AvaScorecard, AvaScoreStrip } from "@/components/admin/roofguard/AvaScorecard";
+import { AvaCoach } from "@/components/admin/roofguard/AvaCoach";
+import { onOpenCall, onOpenCoach } from "@/components/admin/roofguard/coachBus";
 import { AvaTopBar } from "@/components/admin/roofguard/AvaDialer";
 import { AvaSettingsSheet } from "@/components/admin/roofguard/AvaSettings";
 import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
 
-type Tab = "calls" | "scorecard" | "leads" | "setup";
-const TABS: { id: Tab; label: string }[] = [{ id: "calls", label: "Calls" }, { id: "scorecard", label: "Scorecard" }, { id: "leads", label: "Leads" }, { id: "setup", label: "Setup" }];
+type Tab = "calls" | "scorecard" | "coach" | "leads" | "setup";
+const TABS: { id: Tab; label: string }[] = [{ id: "calls", label: "Calls" }, { id: "scorecard", label: "Scorecard" }, { id: "coach", label: "Coach" }, { id: "leads", label: "Leads" }, { id: "setup", label: "Setup" }];
 const hashTab = (): Tab => { const h = window.location.hash.slice(1); return (TABS.some((t) => t.id === h) ? h : "calls") as Tab; };
 
 /** iOS-style segmented control */
@@ -466,6 +468,13 @@ export default function RoofGuard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const setTab = (t: Tab) => { setTabState(t); history.replaceState(null, "", `#${t}`); };
   const [callingOn, setCallingOn] = useState<boolean | null>(null);
+  // the Coach asks for its tab (Reply guard "See the rule", Scorecard "Manage rules") or for a call's sheet (reviews feed, "See calls")
+  useEffect(() => {
+    const go = (t: Tab) => { setTabState(t); history.replaceState(null, "", `#${t}`); };
+    const a = onOpenCoach("roofguard", () => go("coach"));
+    const b = onOpenCall("roofguard", () => go("calls"));
+    return () => { a(); b(); };
+  }, []);
   useEffect(() => {
     void rpc("rg_call_stats").then(({ data }) => setCallingOn(!!(data as CallStats | null)?.settings?.calling_enabled));
   }, [tab]);
@@ -541,6 +550,7 @@ export default function RoofGuard() {
         <AvaCalls callingOn={callingOn} onOpenSetup={() => setTab("setup")} />
       </>}
       {tab === "scorecard" && <AvaScorecard admin />}
+      {tab === "coach" && <AvaCoach source="roofguard" admin />}
       {tab === "setup" && <div className="space-y-5"><CallingCard /><VoicePicker source="roofguard" openSignal={studio} /></div>}
 
       {tab === "leads" && <>
