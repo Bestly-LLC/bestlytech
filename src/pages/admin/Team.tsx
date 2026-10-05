@@ -16,6 +16,8 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { AdminMark } from "@/components/AdminMark";
 import { BotMascot, hasMascot } from "@/components/admin/BotMascot";
 import { FarewellScene, type Leaver } from "@/components/admin/FarewellScene";
+import { CrewMood, MoodChip, MoodContext, MoodPanel, StrikeBanner, useMood, useTeamMoods } from "@/components/admin/TeamMoods";
+import type { Mood } from "@/components/admin/BotMascot";
 import { askScout } from "@/components/admin/scoutBus";
 import { pollInterval } from "@/lib/polling";
 import { cn } from "@/lib/utils";
@@ -155,6 +157,7 @@ function useChart() {
 }
 
 function AgentIcon({ a, size = "md" }: { a: Agent; size?: "md" | "lg" }) {
+  const m = useMood(a.slug);
   const box = size === "lg" ? "h-14 w-14 rounded-[16px]" : "h-11 w-11 rounded-[13px]";
   if (a.slug === "scout") {
     return (
@@ -176,6 +179,7 @@ function AgentIcon({ a, size = "md" }: { a: Agent; size?: "md" | "lg" }) {
         <BotMascot icon={a.icon && hasMascot(a.icon) ? a.icon : "bot"} seed={a.slug}
           moveOn={a.status === "new" ? "always" : "hover"}
           asleep={a.health === "planned" || a.health === "paused" || isOff(a)}
+          mood={m?.mood ?? "happy"}
           className={size === "lg" ? "h-10 w-10" : "h-8 w-8"} />
       ) : (
         <Icon className={size === "lg" ? "h-7 w-7" : "h-[22px] w-[22px]"} />
@@ -197,7 +201,11 @@ function HealthTag({ a }: { a: Agent }) {
 }
 
 /** One person/bot. `lead` = a department head or top-row card (bigger). */
+const UNHAPPY: Mood[] = ["sick", "overworked", "stressed", "striking"];
+
 function AgentCard({ a, onOpen, lead }: { a: Agent; onOpen: (a: Agent) => void; lead?: boolean }) {
+  const m = useMood(a.slug);
+  const gripe = m && UNHAPPY.includes(m.mood) ? m.complaint : null;
   return (
     <button
       type="button"
@@ -209,7 +217,7 @@ function AgentCard({ a, onOpen, lead }: { a: Agent; onOpen: (a: Agent) => void; 
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF]",
         a.health === "planned" && "opacity-75",
       )}
-      aria-label={`${a.name}, ${a.role}. ${HEALTH[a.health]?.word ?? ""}. ${statusLine(a)}`}
+      aria-label={`${a.name}, ${a.role}. ${HEALTH[a.health]?.word ?? ""}. ${statusLine(a)}${gripe ? `. Says: ${gripe}` : ""}`}
     >
       <AgentIcon a={a} size={lead ? "lg" : "md"} />
       <span className="min-w-0 flex-1">
@@ -221,8 +229,12 @@ function AgentCard({ a, onOpen, lead }: { a: Agent; onOpen: (a: Agent) => void; 
         <span className={cn("mt-0.5 line-clamp-2 text-[13px] leading-snug", secondary)} style={{ textWrap: "pretty" } as never}>
           {nb(a.what_it_does)}
         </span>
+        {gripe && (
+          <span className={cn("mt-1 line-clamp-2 text-[12px] italic leading-snug", secondary)}>&ldquo;{nb(gripe)}&rdquo;</span>
+        )}
         <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
           <HealthTag a={a} />
+          <MoodChip m={m} />
           <span className={cn("whitespace-nowrap text-[12px]", tertiary)}>{nb(statusLine(a))}</span>
           {a.runs_on && a.kind !== "human" && (
             <span className={cn("rounded-full bg-[#7676803d] px-2 py-0.5 text-[11px] font-medium bento:bg-[#7676801f]", secondary)}>
@@ -359,6 +371,8 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
           </div>
 
           <p className={cn("text-[15px] leading-relaxed", label)} style={{ textWrap: "pretty" } as never}>{nb(a.what_it_does)}</p>
+
+          {a.kind !== "human" && <AgentMood a={a} />}
 
           {a.relation === "partner" && (() => {
             const helpers = all.filter((x) => x.liaison_to === a.slug);
@@ -512,6 +526,11 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
       )}
     </Sheet>
   );
+}
+
+function AgentMood({ a }: { a: Agent }) {
+  const m = useMood(a.slug);
+  return <MoodPanel m={m} name={a.name} />;
 }
 
 function gapWords(m: number): string {
@@ -1269,6 +1288,9 @@ type Filter = "all" | "attention" | "new" | "open";
 
 export default function Team() {
   const { data, isLoading, error, refetch, isFetching } = useChart();
+  const { data: moodData } = useTeamMoods();
+  const moods = useMemo(() => moodData?.moods ?? {}, [moodData]);
+  const [moodFilter, setMoodFilter] = useState<Mood | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [openSlug, setOpenSlug] = useState<string | null>(null);
 
@@ -1288,8 +1310,10 @@ export default function Team() {
     };
   }, [agents]);
 
+  const moodOf = (a: Agent): Mood | null => (moods[a.slug] ? (moods[a.slug].on_strike ? "striking" : moods[a.slug].mood) : null);
   const keep = (a: Agent) =>
-    filter === "all" ? true
+    moodFilter ? moodOf(a) === moodFilter
+    : filter === "all" ? true
       : filter === "attention" ? a.health === "red" || a.health === "yellow"
       : filter === "new" ? a.status === "new"
       : a.health === "planned";
@@ -1307,6 +1331,7 @@ export default function Team() {
   ];
 
   return (
+    <MoodContext.Provider value={moods}>
     <div className="mx-auto max-w-[1280px] space-y-6 pb-16">
       <PageHeader
         title="Team"
@@ -1334,8 +1359,8 @@ export default function Team() {
           {/* summary: each phrase is a filter */}
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter the team">
             {chips.filter((c) => c.show).map((c) => (
-              <button key={c.key} type="button" onClick={() => setFilter(filter === c.key && c.key !== "all" ? "all" : c.key)}
-                aria-pressed={filter === c.key}
+              <button key={c.key} type="button" onClick={() => { setMoodFilter(null); setFilter(filter === c.key && c.key !== "all" ? "all" : c.key); }}
+                aria-pressed={!moodFilter && filter === c.key}
                 className={cn("min-h-[36px] rounded-full px-3.5 text-[13px] font-semibold transition-colors",
                   filter === c.key ? "bg-[#636366] text-[#fff] bento:bg-[#000] bento:text-[#fff]" : "bg-[#7676803d] bento:bg-[#7676801f]",
                   filter !== c.key && (c.tone ?? label))}>
@@ -1347,8 +1372,14 @@ export default function Team() {
             </span>
           </div>
 
+          <CrewMood moods={moods} active={moodFilter} onPick={(m) => { setMoodFilter(m); if (m) setFilter("all"); }} />
+
+          {/* unions on strike (and ones that went back to work in the last 2 hours) */}
+          <StrikeBanner strikes={moodData?.strikes ?? []}
+            members={(slugs) => slugs.map((s) => ({ slug: s, name: bySlug.get(s)?.name ?? s, icon: bySlug.get(s)?.icon ?? null }))} />
+
           {/* top of the chart */}
-          {filter === "all" && jared && scout && (
+          {filter === "all" && !moodFilter && jared && scout && (
             <div className="mx-auto max-w-5xl">
               {/* Jared in the middle; partners (Eli) beside him on a dashed line, not above or below: they don't report either way */}
               <div className="grid gap-3 md:grid-cols-3 md:items-center">
@@ -1382,7 +1413,7 @@ export default function Team() {
             </div>
           )}
 
-          {filter === "all" && (
+          {filter === "all" && !moodFilter && (
             <div className="space-y-4">
               <ImproverIdeas onOpenImprover={() => setOpenSlug("improver")} />
               <SuggestedHires onOpen={setOpenSlug} nameOf={(s) => (s ? bySlug.get(s)?.name ?? null : null)} />
@@ -1402,13 +1433,13 @@ export default function Team() {
             })}
           </div>
 
-          {filter !== "all" && !agents.some((a) => a.kind !== "human" && a.dept !== "top" && keep(a)) && (
+          {(filter !== "all" || moodFilter) && !agents.some((a) => a.kind !== "human" && a.dept !== "top" && keep(a)) && (
             <div className={cn(card, "text-center")}>
               <p className={cn("text-[15px]", label)}>Nothing here right now.</p>
             </div>
           )}
 
-          {counts.unknown > 0 && filter === "all" && (
+          {counts.unknown > 0 && filter === "all" && !moodFilter && (
             <p className={cn("px-1 text-[13px]", secondary)}>
               {counts.unknown}&nbsp;bots haven't checked in yet. Most run on a schedule and will show up after their next run.
             </p>
@@ -1418,5 +1449,6 @@ export default function Team() {
 
       <DetailSheet a={opened} all={agents} onClose={() => setOpenSlug(null)} onOpen={(slug) => setOpenSlug(slug)} />
     </div>
+    </MoodContext.Provider>
   );
 }

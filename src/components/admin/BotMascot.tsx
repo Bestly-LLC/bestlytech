@@ -26,6 +26,9 @@ import { cn } from "@/lib/utils";
  * stroke 1.85 there = Scout's 5.5. The eyes punch a small hole in the lines so they never collide with them.
  */
 
+/** Tamagotchi moods from real signals (team_mood_state, see 20261004200000_team_moods_strikes.sql). */
+export type Mood = "happy" | "stressed" | "overworked" | "sick" | "bored" | "unknown" | "asleep" | "striking";
+
 type Move = "bob" | "tilt" | "pulse" | "wag" | "flash" | "hop" | "sway" | "none";
 type Spec = {
   Icon: LucideIcon;
@@ -121,7 +124,15 @@ const CSS = `
 .bm-flash{--bm-anim:bm-flash}@keyframes bm-flash{0%,12%,24%,100%{opacity:1;filter:none}6%,18%{opacity:.55;filter:drop-shadow(0 0 4px currentColor)}}
 .bm-watching .bm-look,.bm-watching .bm-blink{animation:none;transition:transform .18s cubic-bezier(.2,.8,.2,1)}
 .bm-asleep .bm-move{animation:none!important}
-@media (prefers-reduced-motion:reduce){.bm-look,.bm-blink,.bm-move{animation:none!important}.bm-watching .bm-look{transition:none}}
+.bm-sweat{transform-box:fill-box;transform-origin:top center;animation:bm-sweat 2.4s cubic-bezier(.5,0,.75,0) infinite}
+@keyframes bm-sweat{0%,55%{transform:translateY(0) scale(1);opacity:1}90%{transform:translateY(6px) scale(.9);opacity:0}91%{transform:translateY(-1px) scale(.6);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
+.bm-queasy{transform-box:view-box;transform-origin:36px 60px;animation:bm-queasy 4.8s ease-in-out infinite}
+@keyframes bm-queasy{0%,100%{transform:rotate(-2.5deg)}50%{transform:rotate(2.5deg)}}
+.bm-shake{transform-box:view-box;transform-origin:36px 36px;animation:bm-shake 1.6s ease-in-out infinite}
+@keyframes bm-shake{0%,60%,100%{transform:translateX(0)}65%{transform:translateX(-1.2px)}72%{transform:translateX(1.2px)}79%{transform:translateX(-.8px)}86%{transform:translateX(.6px)}}
+.bm-stomp{transform-box:view-box;transform-origin:36px 66px;animation:bm-stomp 1.6s cubic-bezier(.34,1.56,.64,1) infinite}
+@keyframes bm-stomp{0%,100%{transform:translateY(0)}20%{transform:translateY(-3px)}40%{transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce){.bm-look,.bm-blink,.bm-move,.bm-sweat,.bm-queasy,.bm-shake,.bm-stomp{animation:none!important}.bm-watching .bm-look{transition:none}}
 `;
 if (typeof document !== "undefined" && !document.getElementById("bm-css")) {
   const el = document.createElement("style");
@@ -147,6 +158,7 @@ export function BotMascot({
   seed = "",
   asleep = false,
   dead = false,
+  mood = "happy",
   watchCursor = true,
   moveOn = "hover",
   className,
@@ -159,6 +171,8 @@ export function BotMascot({
   asleep?: boolean;
   /** let go (the Graveyard): X eyes, no motion */
   dead?: boolean;
+  /** how it's doing: changes the eyes, adds a sweat drop or brows, and a mood motion that replaces its own move */
+  mood?: Mood;
   watchCursor?: boolean;
   /** "hover": its own move plays while a parent [data-bm-host] is hovered/focused (calm at rest).
    *  "always": keeps playing (new hires, welcome-email GIFs). */
@@ -167,10 +181,12 @@ export function BotMascot({
   label?: string;
 }) {
   const spec = (icon && MASCOTS[icon]) || MASCOTS.bot;
+  if (mood === "asleep") asleep = true;
+  const plainEyes = !dead && !asleep && (mood === "happy" || mood === "unknown" || mood === "stressed" || mood === "striking");
   const ref = useRef<SVGSVGElement>(null);
   // three eye sizes only (small / medium / large), like a type scale; a single big eye keeps its own size
   const r = spec.one ? spec.r ?? 8 : EYE_SIZES.reduce((a, b) => (Math.abs(b - (spec.r ?? 6.6)) < Math.abs(a - (spec.r ?? 6.6)) ? b : a));
-  const stare = useStare(ref, watchCursor && !asleep && !dead, { x: spec.one ? 2.6 : 2.4, y: 1.8 }, spec.y / 72);
+  const stare = useStare(ref, watchCursor && plainEyes, { x: spec.one ? 2.6 : 2.4, y: 1.8 }, spec.y / 72);
   const delay = useMemo(() => {
     const now = typeof performance !== "undefined" ? performance.now() : 0;
     return `-${Math.round((now + (hash(seed) % 600)) % ADMIN_MARK_PERIOD_MS)}ms`;
@@ -179,7 +195,23 @@ export function BotMascot({
   const gap = Math.max(spec.gap, r * 1.6);   // eyes never touch
   const eyes = spec.one ? [spec.x] : [spec.x - gap, spec.x + gap];
   const { Icon } = spec;
-  const move = asleep || dead || !spec.move || spec.move === "none" ? "" : `bm-move bm-${spec.move}`;
+  // a mood motion replaces the bot's own move: sick sways queasily, overworked trembles, strikers stomp
+  const moodMove = dead || asleep ? "" : mood === "sick" ? "bm-queasy" : mood === "overworked" ? "bm-shake" : mood === "striking" ? "bm-stomp" : "";
+  const move = moodMove || (asleep || dead || mood === "bored" || !spec.move || spec.move === "none" ? "" : `bm-move bm-${spec.move}`);
+  const sw = Math.max(2.4, r * 0.44);
+  const top = spec.y - r;
+  // sweat drop sits above the outer eye, clear of the line drawing's mask
+  const dropX = (spec.one ? spec.x + r * 1.3 : spec.x + gap + r * 1.15);
+  const dy = top - 3;   // drop: tip at dy - 8, bowl bottom at dy + 2.4
+  const dropD = `M${dropX} ${dy - 8}C${dropX + 3.8} ${dy - 2.6} ${dropX + 4.6} ${dy + 0.8} ${dropX} ${dy + 2.4}C${dropX - 4.6} ${dy + 0.8} ${dropX - 3.8} ${dy - 2.6} ${dropX} ${dy - 8}Z`;
+  const sweat = !dead && !asleep && (mood === "stressed" || mood === "overworked");
+  // angry brows, slanting down toward the middle
+  const brows = !dead && !asleep && mood === "striking"
+    ? eyes.map((x, i) => {
+        const dir = spec.one ? 0 : i === 0 ? 1 : -1;
+        return `M${x - r * 1.1} ${top - 3.2 - dir * 1.6}L${x + r * 1.1} ${top - 3.2 + dir * 1.6}`;
+      })
+    : [];
   const look = stare ? { transform: `translate(${stare.x}px, ${stare.y}px)` } : undefined;
   const squint = stare ? { transform: "scaleY(.78)" } : undefined;
 
@@ -198,6 +230,8 @@ export function BotMascot({
         <mask id={uid} maskUnits="userSpaceOnUse" x="-8" y="-8" width="88" height="88">
           <rect x="-8" y="-8" width="88" height="88" fill="#fff" />
           {eyes.map((x) => <circle key={x} cx={x} cy={spec.y} r={r + 2} fill="#000" />)}
+          {brows.map((d) => <path key={d} d={d} fill="none" stroke="#000" strokeWidth={sw * 0.85 + 4} strokeLinecap="round" />)}
+          {sweat && <path d={dropD} fill="#000" stroke="#000" strokeWidth={4} strokeLinejoin="round" />}
         </mask>
         {/* catchlight: a small highlight knocked out of each pupil, upper left (moves and blinks with the eye) */}
         {eyes.map((x, i) => (
@@ -219,6 +253,28 @@ export function BotMascot({
                 fill="none" stroke="currentColor" strokeWidth={Math.max(2.4, r * 0.5)} strokeLinecap="round" />
             );
           })
+        ) : !asleep && mood === "bored" ? (
+          // flat-line eyes: nothing to do
+          eyes.map((x) => (
+            <path key={x} d={`M${x - r} ${spec.y}L${x + r} ${spec.y}`} fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" />
+          ))
+        ) : !asleep && mood === "overworked" ? (
+          // squeezed > < eyes: straining
+          eyes.map((x, i) => {
+            const d = r * 0.9, dir = spec.one ? 1 : i === 0 ? 1 : -1;
+            return (
+              <path key={x} d={`M${x - d * dir} ${spec.y - d * 0.8}L${x + d * dir * 0.7} ${spec.y}L${x - d * dir} ${spec.y + d * 0.8}`}
+                fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+            );
+          })
+        ) : !asleep && mood === "sick" ? (
+          // heavy lids: the lower half of each eye under a flat lid
+          eyes.map((x) => (
+            <g key={x}>
+              <path d={`M${x - r} ${spec.y + 0.4}A${r} ${r} 0 0 0 ${x + r} ${spec.y + 0.4}Z`} fill="currentColor" />
+              <path d={`M${x - r - 1} ${spec.y - 0.6}L${x + r + 1} ${spec.y - 0.6}`} fill="none" stroke="currentColor" strokeWidth={sw * 0.8} strokeLinecap="round" />
+            </g>
+          ))
         ) : asleep ? (
           eyes.map((x) => (
             <path key={x} d={`M${x - r} ${spec.y - 0.6}Q${x} ${spec.y + r * 1.1} ${x + r} ${spec.y - 0.6}`}
@@ -233,7 +289,11 @@ export function BotMascot({
             ))}
           </g>
         )}
+        {brows.map((d) => <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth={sw * 0.85} strokeLinecap="round" />)}
       </g>
+      {sweat && (
+        <path className="bm-sweat" d={dropD} fill="#64D2FF" stroke="none" />
+      )}
     </svg>
   );
 }
