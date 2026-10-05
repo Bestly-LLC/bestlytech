@@ -36,7 +36,8 @@ export function AvaTopBar({ onCalled, extra }: { onCalled: () => void; extra?: R
   const [dialOpen, setDialOpen] = useState(false);
 
   const load = useCallback(async () => {
-    const rpc = supabase.rpc as unknown as (f: string) => Promise<{ data: unknown; error: unknown }>;
+    // bind: calling supabase.rpc detached loses `this` ("undefined is not an object (evaluating 'this.rest')")
+    const rpc = supabase.rpc.bind(supabase) as unknown as (f: string) => Promise<{ data: unknown; error: unknown }>;
     const [st, c] = await Promise.all([rpc("rg_call_stats"), rpc("rg_costs")]);
     if (st.error || !st.data) { setNumState((s) => (s === "ok" ? "ok" : "error")); }
     else {

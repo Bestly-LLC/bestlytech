@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
+import { OutageScreen } from '@/components/OutageScreen';
 
 // ── Stale-chunk self-heal (shared with main.tsx) ────────────────────────────
 // After a deploy, tabs holding the old index.html request chunk hashes that
@@ -79,6 +80,10 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
           </div>
         );
+      }
+      // /admin and the partner portal get Scout's "we'll be right back" page with the last known reason.
+      if (typeof window !== 'undefined' && /^\/(admin|partner)(\/|$)/.test(window.location.pathname)) {
+        return <OutageScreen error={this.state.error} onRetry={this.handleReload} />;
       }
       return (
         <div className="min-h-screen flex items-center justify-center bg-background p-6">

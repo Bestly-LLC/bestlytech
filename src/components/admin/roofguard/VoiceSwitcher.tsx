@@ -70,7 +70,7 @@ export function VoiceSwitcher({ source, onMore }: { source: Source; onMore?: () 
   useEffect(() => { if (open) void load(); }, [open, load]);   // the full picker can change her voice too; always show the live one
   useEffect(() => {
     if (source !== "ava") return;
-    const from = supabase.from as unknown as (t: string) => { select: (c: string) => { maybeSingle: () => Promise<{ data: { jared_voice_id: string | null; jared_voice_paused_at: string | null } | null }> } };
+    const from = supabase.from.bind(supabase) as unknown as (t: string) => { select: (c: string) => { maybeSingle: () => Promise<{ data: { jared_voice_id: string | null; jared_voice_paused_at: string | null } | null }> } };
     void from("ava_settings").select("jared_voice_id, jared_voice_paused_at").maybeSingle()
       .then(({ data }) => setClone(data?.jared_voice_id ? { id: data.jared_voice_id, paused: !!data.jared_voice_paused_at } : null));
   }, [source, open]);
