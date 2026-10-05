@@ -100,6 +100,10 @@ project_id = "keowunrxpxlbgebujbao"
 [functions.partner-admin]
   verify_jwt = false
 
+# Google redirects the browser to /callback with no JWT; JSON actions check the JWT themselves, /callback checks a signed state.
+[functions.partner-google]
+  verify_jwt = false
+
 [functions.tesla-invoice]
     verify_jwt = false
 
