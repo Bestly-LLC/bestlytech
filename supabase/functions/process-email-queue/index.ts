@@ -35,13 +35,24 @@ interface SendResult {
   error?: string;
 }
 
+// --- Sender identity ---
+const FALLBACK_FROM = "Cookie Yeti <noreply@bestly.tech>";
+const VERIFIED_DOMAIN = "bestly.tech";
+/** The domain of a "Name <a@b.com>" or bare "a@b.com" sender, lowercased. "" if it doesn't parse. */
+const senderDomain = (v: string) => (v.match(/@([A-Za-z0-9.-]+)>?\s*$/)?.[1] ?? "").toLowerCase();
+
 // --- Resend Email Sender ---
 async function sendWithResend(
   msg: QueueMessage["message"],
   resendApiKey: string
 ): Promise<SendResult> {
-  // bestly.tech domain verified in Resend on 2026-05-05
-  const from = "Cookie Yeti <noreply@bestly.tech>";
+  // bestly.tech domain verified in Resend on 2026-05-05.
+  // Until 2026-10-05 this was hard-coded, so every Bestly email went out signed "Cookie Yeti".
+  // The sender now comes from the queue payload (a template can set its own), and Cookie Yeti
+  // stays the fallback for anything enqueued without one.
+  // Guard: only ever send from the verified domain, so a bad queue row can't make us send as
+  // someone else's domain.
+  const from = msg.from && senderDomain(msg.from) === VERIFIED_DOMAIN ? msg.from : FALLBACK_FROM;
 
   try {
     const response = await fetch("https://api.resend.com/emails", {

@@ -305,7 +305,9 @@ Deno.serve(async (req) => {
     payload: {
       message_id: messageId,
       to: effectiveRecipient,
-      from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
+      // A template can sign itself (Ava's RoofGuard email does); everything else stays the default.
+      from: template.from ?? `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
+      replyTo: template.replyTo,
       sender_domain: SENDER_DOMAIN,
       subject: resolvedSubject,
       html,
