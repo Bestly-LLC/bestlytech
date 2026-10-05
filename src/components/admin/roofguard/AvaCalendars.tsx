@@ -15,6 +15,7 @@ import { AlertTriangle, CalendarDays, Check, CheckCircle2, ExternalLink, Loader2
 import { invokeError } from "./AvaActions";
 import { calChanged, useCalStatus, type CalHours, type CalProvider, type CalProviderStatus } from "./avaCal";
 import { agoText } from "./AvaShared";
+import { CollapsibleSection } from "./CollapsibleSection";
 
 const rpc = () => supabase.rpc.bind(supabase) as unknown as (f: string, a: object) => Promise<{ error: { message: string } | null }>;
 const hour12 = (h: number) => (h === 0 || h === 24 ? "12:00\u00a0AM" : h === 12 ? "12:00\u00a0PM" : h > 12 ? `${h - 12}:00\u00a0PM` : `${h}:00\u00a0AM`);
@@ -49,8 +50,6 @@ export function AvaCalendars({ className }: { className?: string }) {
   const [icUser, setIcUser] = useState(""); const [icPass, setIcPass] = useState("");
   const [ncUser, setNcUser] = useState(""); const [ncPass, setNcPass] = useState("");
   const [ncOverride, setNcOverride] = useState(false);
-  const [hours, setHours] = useState<CalHours | null>(null);
-  const [turo, setTuro] = useState<number | null>(null);
 
   const call = async (key: string, body: Record<string, unknown>, ok: string) => {
     setBusy(key); setMsg(null);
@@ -75,23 +74,20 @@ export function AvaCalendars({ className }: { className?: string }) {
 
   if (!status) {
     return (
-      <section aria-label="Calendars" className={cn("rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10", className)}>
-        <h3 className="flex items-center gap-2 text-[15px] font-semibold text-white"><CalendarDays className="h-4 w-4 text-[#FFA270]" aria-hidden />Calendars</h3>
-        {error ? <p role="alert" className="mt-2 text-sm text-red-300">{error} <button type="button" onClick={reload} className="underline">Retry</button></p>
-          : <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-white/50" aria-label="Loading" /></div>}
-      </section>
+      <CollapsibleSection id="ava-calendars" title="Calendars" icon={<CalendarDays className="h-4 w-4 text-[#FFA270]" />} summary={error ? "Couldn't load" : "Loading…"} className={className}>
+        <div className="px-4 py-4">
+          {error ? <p role="alert" className="text-sm text-red-300">{error} <button type="button" onClick={reload} className="min-h-[44px] underline">Retry</button></p>
+            : <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-white/50" aria-label="Loading" /></div>}
+        </div>
+      </CollapsibleSection>
     );
   }
 
   const selected = new Set(status.selected);
-  const h = hours ?? status.hours;
   const toggleCal = async (id: string, on: boolean) => {
     const next = on ? [...selected, id] : [...selected].filter((x) => x !== id);
     await call("sel", { action: "cal_save", selected: next }, "Saved.");
   };
-  const setBookTo = (id: string | null) => void call("book", { action: "cal_save", book_to: id }, id ? "Ava will add booked meetings to that calendar." : "Ava won't add anything to a calendar.");
-  const hoursChanged = !!hours && JSON.stringify(hours) !== JSON.stringify(status.hours);
-  const turoVal = turo ?? status.turo_window_min;
 
   const Calendars = ({ p, provider }: { p: CalProviderStatus; provider: CalProvider }) => (
     p.calendars.length === 0 ? null : (
@@ -99,11 +95,7 @@ export function AvaCalendars({ className }: { className?: string }) {
         {p.calendars.map((c) => (
           <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-4 pr-1">
             <span className="min-w-0 flex-1 py-2 text-[15px] text-white">{c.name}</span>
-            {provider === "nextcloud" && c.writable && selected.has(c.id) && (
-              status.book_to === c.id
-                ? <button type="button" onClick={() => setBookTo(null)} disabled={busy !== null} className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-2 text-[13px] font-semibold text-[#FFA270]"><Check className="h-4 w-4" aria-hidden />Ava books here</button>
-                : <button type="button" onClick={() => setBookTo(c.id)} disabled={busy !== null} className="min-h-[44px] rounded-lg px-2 text-[13px] text-white/60 hover:text-white">Book here</button>
-            )}
+            {status.book_to === c.id && <span className="inline-flex min-h-[44px] items-center gap-1 px-2 text-[13px] font-semibold text-[#FFA270]"><Check className="h-4 w-4" aria-hidden />Ava books here</span>}
             <Switch on={selected.has(c.id)} onChange={(v) => void toggleCal(c.id, v)} label={`Use ${c.name} to find free times`} disabled={busy !== null} />
           </li>
         ))}
@@ -111,14 +103,22 @@ export function AvaCalendars({ className }: { className?: string }) {
     )
   );
 
+  const ticked = [...status.nextcloud.calendars, ...status.icloud.calendars].filter((c) => selected.has(c.id)).map((c) => c.name);
+  const summary = (
+    <>
+      {ticked.length ? `${ticked.slice(0, 2).join(", ")}${ticked.length > 2 ? ` +${ticked.length - 2}` : ""}` : "No calendars ticked"}
+      {" · "}
+      <span className={cn("inline-flex items-center gap-1 whitespace-nowrap", status.find_times.ok ? "text-emerald-300" : "text-amber-300")}>
+        {status.find_times.ok ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : <AlertTriangle className="h-3 w-3" aria-hidden />}{status.find_times.ok ? "OK" : "Needs attention"}</span>
+    </>
+  );
+  const badge = (
+    <span className={cn("hidden items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline-flex", status.find_times.ok ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300")}>
+      {status.find_times.ok ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : <AlertTriangle className="h-3 w-3" aria-hidden />}{status.find_times.ok ? "Find times is on" : "Find times is off"}</span>
+  );
+
   return (
-    <section aria-label="Calendars" className={cn("rounded-3xl bg-white/[0.03] ring-1 ring-white/10", className)}>
-      <header className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
-        <CalendarDays className="h-4 w-4 text-[#FFA270]" aria-hidden />
-        <h3 className="text-[15px] font-semibold text-white">Calendars</h3>
-        <span className={cn("ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium", status.find_times.ok ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300")}>
-          {status.find_times.ok ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : <AlertTriangle className="h-3 w-3" aria-hidden />}{status.find_times.ok ? "Find times is on" : "Find times is off"}</span>
-      </header>
+    <CollapsibleSection id="ava-calendars" title="Calendars" icon={<CalendarDays className="h-4 w-4 text-[#FFA270]" />} summary={summary} badge={badge} className={className}>
       <div className="space-y-5 px-4 py-4">
         <p className="text-sm text-white/70">Ava reads these to find open times for you. She sees only free or busy, never what an event is. Nothing is booked until you tap a time.</p>
         {!status.find_times.ok && status.find_times.reason && <p role="status" className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-200 ring-1 ring-amber-500/25">{status.find_times.reason}</p>}
@@ -178,36 +178,75 @@ export function AvaCalendars({ className }: { className?: string }) {
           <Calendars p={status.icloud} provider="icloud" />
         </div>
 
-        {/* hours + Turo */}
-        <div className="space-y-3 border-t border-white/5 pt-4">
-          <h4 className="text-[15px] font-semibold text-white">When she can offer times</h4>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Days">
-            {DAYS.map((d, i) => {
-              const on = h.days.includes(i);
-              return <button key={d} type="button" aria-pressed={on} onClick={() => setHours({ ...h, days: on ? h.days.filter((x) => x !== i) : [...h.days, i].sort() })}
-                className={cn("min-h-[44px] min-w-[48px] rounded-xl px-3 text-sm font-medium transition", on ? "bg-[#FFA270] text-[#1c1c1e]" : "bg-white/[0.07] text-white/70 ring-1 ring-white/10")}>{d}</button>;
-            })}
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block"><span className="mb-1 block text-xs text-white/60">From</span>
-              <select value={h.start} onChange={(e) => setHours({ ...h, start: Number(e.target.value), end: Math.max(h.end, Number(e.target.value) + 1) })} className={cn(input, "appearance-none")}>
-                {Array.from({ length: 24 }, (_, i) => <option key={i} value={i} className="bg-[#1c1c1e]">{hour12(i)}</option>)}</select></label>
-            <label className="block"><span className="mb-1 block text-xs text-white/60">Until</span>
-              <select value={h.end} onChange={(e) => setHours({ ...h, end: Number(e.target.value) })} className={cn(input, "appearance-none")}>
-                {Array.from({ length: 24 }, (_, i) => i + 1).filter((i) => i > h.start).map((i) => <option key={i} value={i} className="bg-[#1c1c1e]">{hour12(i)}</option>)}</select></label>
-          </div>
-          <p className="text-xs text-white/55">Pacific time. Times are never offered sooner than an hour and a half from now.</p>
-          <label className="block"><span className="mb-1 block text-xs text-white/60">Turo trips block this long around each pickup and each return</span>
-            <select value={turoVal} onChange={(e) => setTuro(Number(e.target.value))} className={cn(input, "appearance-none")}>
-              {[0, 30, 60, 90, 120].map((m) => <option key={m} value={m} className="bg-[#1c1c1e]">{m === 0 ? "Don't block Turo trips" : `${m} minutes before and after`}</option>)}</select></label>
-          <p className="text-xs text-white/55">The days in between stay free. Ava gets the pickup and return times from Turo Watch and from any calendar event with "Turo" in it.</p>
-          <button type="button" disabled={busy !== null || (!hoursChanged && turoVal === status.turo_window_min) || h.days.length === 0}
-            onClick={() => void call("hours", { action: "cal_save", hours: h, turo_window_min: turoVal }, "Saved.").then((ok) => { if (ok) { setHours(null); setTuro(null); } })}
-            className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>{busy === "hours" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Save hours</button>
-        </div>
-
         {msg && <p role={msg.t === "err" ? "alert" : "status"} className={cn("text-sm", msg.t === "err" ? "text-red-300" : "text-emerald-300")}>{msg.m}</p>}
       </div>
-    </section>
+    </CollapsibleSection>
+  );
+}
+
+/**
+ * The set-and-forget calendar choices, shown in Settings (not on the Calendars card): which days and hours Ava may offer, how long a Turo
+ * trip blocks around pickup and return, and which Nextcloud calendar she writes booked meetings to.
+ */
+export function CalendarSettingsControls() {
+  const { status, error, reload } = useCalStatus();
+  const [hours, setHours] = useState<CalHours | null>(null);
+  const [turo, setTuro] = useState<number | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ t: "ok" | "err"; m: string } | null>(null);
+  if (!status) return error ? <p role="alert" className="text-sm text-red-300">{error} <button type="button" onClick={reload} className="min-h-[44px] underline">Retry</button></p>
+    : <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-white/50" aria-label="Loading calendar settings" /></div>;
+  const h = hours ?? status.hours;
+  const turoVal = turo ?? status.turo_window_min;
+  const hoursChanged = !!hours && JSON.stringify(hours) !== JSON.stringify(status.hours);
+  const selected = new Set(status.selected);
+  const writable = status.nextcloud.calendars.filter((c) => c.writable && selected.has(c.id));
+  const save = async (key: string, body: Record<string, unknown>, ok: string) => {
+    setBusy(key); setMsg(null);
+    const { data, error: e } = await supabase.functions.invoke("ava-assistant", { body });
+    setBusy(null);
+    if (e || !data?.ok) { setMsg({ t: "err", m: await invokeError(e, data, "That didn't work. Try again in a minute.") }); calChanged(); return false; }
+    setMsg({ t: "ok", m: ok }); calChanged(); return true;
+  };
+  return (
+    <div className="space-y-4">
+      <div>
+        <label htmlFor="ava-book-to" className="mb-1 block text-[13px] font-medium text-white">Ava books here</label>
+        <select id="ava-book-to" value={status.book_to ?? ""} disabled={busy !== null}
+          onChange={(e) => void save("book", { action: "cal_save", book_to: e.target.value || null }, e.target.value ? "Ava will add booked meetings to that calendar." : "Ava won't add anything to a calendar.")}
+          className={cn(input, "appearance-none")}>
+          <option value="" className="bg-[#1c1c1e]">Nowhere (she only offers times)</option>
+          {writable.map((c) => <option key={c.id} value={c.id} className="bg-[#1c1c1e]">{c.name}</option>)}
+        </select>
+        <p className="mt-1 text-xs text-white/55">{writable.length ? "Only Nextcloud calendars you turned on can take a booking." : "Turn on a Nextcloud calendar in the Calendars section to pick one."}</p>
+      </div>
+      <fieldset className="space-y-3">
+        <legend className="mb-1 text-[13px] font-medium text-white">When she can offer times</legend>
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Days">
+          {DAYS.map((d, i) => {
+            const on = h.days.includes(i);
+            return <button key={d} type="button" aria-pressed={on} onClick={() => setHours({ ...h, days: on ? h.days.filter((x) => x !== i) : [...h.days, i].sort() })}
+              className={cn("min-h-[44px] min-w-[48px] rounded-xl px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60", on ? "bg-[#FFA270] text-[#1c1c1e]" : "bg-white/[0.07] text-white/70 ring-1 ring-white/10")}>{d}</button>;
+          })}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block"><span className="mb-1 block text-xs text-white/60">From</span>
+            <select value={h.start} onChange={(e) => setHours({ ...h, start: Number(e.target.value), end: Math.max(h.end, Number(e.target.value) + 1) })} className={cn(input, "appearance-none")}>
+              {Array.from({ length: 24 }, (_, i) => <option key={i} value={i} className="bg-[#1c1c1e]">{hour12(i)}</option>)}</select></label>
+          <label className="block"><span className="mb-1 block text-xs text-white/60">Until</span>
+            <select value={h.end} onChange={(e) => setHours({ ...h, end: Number(e.target.value) })} className={cn(input, "appearance-none")}>
+              {Array.from({ length: 24 }, (_, i) => i + 1).filter((i) => i > h.start).map((i) => <option key={i} value={i} className="bg-[#1c1c1e]">{hour12(i)}</option>)}</select></label>
+        </div>
+        <p className="text-xs text-white/55">Pacific time. Times are never offered sooner than an hour and a half from now.</p>
+        <label className="block"><span className="mb-1 block text-xs text-white/60">Turo trips block this long around each pickup and each return</span>
+          <select value={turoVal} onChange={(e) => setTuro(Number(e.target.value))} className={cn(input, "appearance-none")}>
+            {[0, 30, 60, 90, 120].map((m) => <option key={m} value={m} className="bg-[#1c1c1e]">{m === 0 ? "Don't block Turo trips" : `${m}\u00a0minutes before and after`}</option>)}</select></label>
+        <p className="text-xs text-white/55">The days in between stay free. Ava gets pickup and return times from Turo Watch, from any calendar named Turo, and from any event with "Turo" in it.</p>
+        <button type="button" disabled={busy !== null || (!hoursChanged && turoVal === status.turo_window_min) || h.days.length === 0}
+          onClick={() => void save("hours", { action: "cal_save", hours: h, turo_window_min: turoVal }, "Saved.").then((ok) => { if (ok) { setHours(null); setTuro(null); } })}
+          className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>{busy === "hours" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Save hours</button>
+      </fieldset>
+      {msg && <p role={msg.t === "err" ? "alert" : "status"} className={cn("text-sm", msg.t === "err" ? "text-red-300" : "text-emerald-300")}>{msg.m}</p>}
+    </div>
   );
 }

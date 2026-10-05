@@ -16,6 +16,7 @@ import { Check, Copy, Delete, Grid3x3, History, Loader2, Phone, PhoneIncoming, R
 import { LiveTranscript, Recording, type Line } from "./AvaCalls";
 import { AvaOrb, AVA_GLOW } from "./AvaOrb";
 import { ForwardedTag, LineStatus, SpendChip, YourVoiceTag } from "./AvaShared";
+import { SettingsButton } from "./AvaSettings";
 import { ACTIONS_EVENT, invokeError } from "./AvaActions";
 import { DIAL_EVENT, loadRecents, saveRecent, type DialMode, type DialRequest, type Recent } from "./avaDial";
 import { useLiveCalls, type LiveItem, type LiveSource } from "./AvaLive";
@@ -31,7 +32,7 @@ const fmt = (d: string) => {
   return `(${x.slice(0, 3)}) ${x.slice(3, 6)}-${x.slice(6)}`;
 };
 
-export function AvaTopBar({ onCalled, extra }: { onCalled: () => void; extra?: ReactNode }) {
+export function AvaTopBar({ onCalled, extra, onOpenSettings }: { onCalled: () => void; extra?: ReactNode; onOpenSettings?: () => void }) {
   // RoofGuard Ava only: her own number and demo calls. Personal calls live on /admin/ava.
   const [num, setNum] = useState<string | null>(null);
   // "loading" until the first answer; only a real empty answer shows the no-number warning (a failed load keeps the last number)
@@ -100,6 +101,7 @@ export function AvaTopBar({ onCalled, extra }: { onCalled: () => void; extra?: R
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
         {extra}
         <SpendChip source="roofguard" />
+        {onOpenSettings && <SettingsButton onClick={onOpenSettings} />}
         {!costs && (
           <span className="inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl bg-white/[0.04] px-3.5 text-right ring-1 ring-white/10">
             <span className="text-[11px] text-white/50">Spent so far</span>

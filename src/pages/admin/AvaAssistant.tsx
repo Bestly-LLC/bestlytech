@@ -15,12 +15,14 @@ import { VoiceSwitcher } from "@/components/admin/roofguard/VoiceSwitcher";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { CallNo, ReplyGuard, LiveTranscript, type Line } from "@/components/admin/roofguard/AvaCalls";
 import { DialerSheet, LivePill } from "@/components/admin/roofguard/AvaDialer";
-import { FollowupsList, ForwardedTag, KnowledgeList, LineStatus, MessageSheet, MessagesList, SpendCapEditor, SpendChip, YourVoiceTag, type Msg } from "@/components/admin/roofguard/AvaShared";
+import { FollowupsList, ForwardedTag, KnowledgeList, LineStatus, MessageSheet, MessagesList, SpendChip, YourVoiceTag, type Msg } from "@/components/admin/roofguard/AvaShared";
 import { useLiveCalls, LIVE_ENDED_EVENT } from "@/components/admin/roofguard/AvaLive";
 import { AvaCalendars } from "@/components/admin/roofguard/AvaCalendars";
 import { AvaCell } from "@/components/admin/roofguard/AvaCell";
 import { AvaSpam } from "@/components/admin/roofguard/AvaSpam";
 import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
+import { CollapsibleSection } from "@/components/admin/roofguard/CollapsibleSection";
+import { AvaSettingsSheet, SettingsButton } from "@/components/admin/roofguard/AvaSettings";
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, Grid3x3, Loader2, Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCw, UserRound } from "lucide-react";
 
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
@@ -53,6 +55,7 @@ export default function AvaAssistant() {
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState<Call | null>(null);
   const [dial, setDial] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [contactOpen, setContactOpen] = useState<Partial<Contact> | null>(null);
@@ -111,19 +114,20 @@ export default function AvaAssistant() {
       {/* top bar: her number, dial, spend */}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => void copy()} aria-label={`Ava's number ${fmt(s?.from_number ?? null)}, copy`}
-          className="group inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white/[0.04] px-3.5 ring-1 ring-white/10 transition hover:bg-white/[0.07]">
+          className="group inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white/[0.04] px-3.5 ring-1 ring-white/10 transition hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
           <span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500/15 text-emerald-300"><Phone className="h-3.5 w-3.5" aria-hidden /></span>
           <span className="text-left leading-tight"><span className="block text-[11px] text-white/50">Ava's line</span>
             <span className="block whitespace-nowrap text-[15px] font-semibold tabular-nums text-white">{fmt(s?.from_number ?? null) || "…"}</span></span>
           {copied ? <Check className="h-4 w-4 text-emerald-300" aria-hidden /> : <Copy className="h-4 w-4 text-white/30 group-hover:text-white/60" aria-hidden />}
         </button>
         <button type="button" onClick={() => setDial(true)} disabled={!ready}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-[#FFA270] px-4 text-[15px] font-semibold text-[#1c1c1e] transition hover:bg-[#ffb48a] active:scale-[0.98] disabled:opacity-40">
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-[#30D158] px-4 text-[15px] font-semibold text-[#1c1c1e] transition hover:bg-[#4bdc72] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 motion-safe:active:scale-[0.98] disabled:opacity-40">
           <Grid3x3 className="h-4 w-4" aria-hidden />Dial</button>
         <LivePill source="ava" />
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <VoiceSwitcher source="ava" onMore={() => { setStudio((n) => n + 1); setTimeout(() => document.getElementById("voice-studio-ava")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }} />
           <SpendChip source="ava" />
+          <SettingsButton onClick={() => setSettingsOpen(true)} />
           <div className="inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl bg-white/[0.04] px-3.5 ring-1 ring-white/10" title="ElevenLabs $0.08 a minute + AI model + Telnyx minutes + $1/mo number">
             <span className="text-[11px] text-white/50">Spent so far</span>
             <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-white">{usd(costs?.total)}</span>
@@ -139,14 +143,9 @@ export default function AvaAssistant() {
         <span className="text-[15px] text-white">{ready ? "Ready to answer and to call out" : "Not set up yet"}</span>
         {ready && <LineStatus source="ava" className="min-h-[44px]" />}
         <button type="button" onClick={() => void runSetup()} disabled={busy}
-          className="ml-auto inline-flex min-h-[36px] items-center gap-2 rounded-lg px-3 text-sm text-white/75 ring-1 ring-white/15 hover:bg-white/5 disabled:opacity-50">
+          className="ml-auto inline-flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm text-white/75 ring-1 ring-white/15 hover:bg-white/5 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}{ready ? "Re-run setup" : "Set up"}</button>
       </div>
-
-      {/* money stopper: the daily cap on outgoing calls */}
-      <section aria-label="Spending" className="rounded-2xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/10">
-        <SpendCapEditor source="ava" />
-      </section>
 
       <ReplyGuard source="ava" />
 
@@ -179,7 +178,7 @@ export default function AvaAssistant() {
             <ul className="divide-y divide-white/5">
               {calls.map((c) => (
                 <li key={c.id}>
-                  <button type="button" onClick={() => void markRead(c)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-white/[0.04]">
+                  <button type="button" onClick={() => void markRead(c)} className="flex min-h-[44px] w-full items-start gap-3 px-4 py-3 text-left hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
                     {c.direction === "inbound" ? <PhoneIncoming className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" aria-label="Incoming" /> : <PhoneOutgoing className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" aria-label="Outgoing" />}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2"><CallNo n={c.call_no} /><span className="text-[15px] font-medium text-white">{nameOf(c)}</span>
@@ -200,38 +199,41 @@ export default function AvaAssistant() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <FollowupsList source="ava" onChanged={() => void load()} />
-        <KnowledgeList source="ava" />
+        <KnowledgeList source="ava" collapsible />
       </div>
 
       {/* your cell: missed calls forwarded to Ava; spam calls and Do Not Call evidence */}
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <AvaCalendars />
-        <AvaCell />
+        <AvaCell onOpenSettings={() => setSettingsOpen(true)} />
         <AvaSpam />
       </div>
 
-      {/* her voice: pick one, hear your own line in it, record your own */}
+      {/* one Voice section: how Ava sounds, and My voice (record, bank, clone) */}
       <VoicePicker source="ava" openSignal={studio} />
 
       {/* contacts */}
-      <section aria-label="People Ava knows" className="rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/10">
-        <div className="mb-2 flex items-center gap-2">
-          <UserRound className="h-4 w-4 text-white/60" aria-hidden /><h3 className="text-[15px] font-semibold text-white">People Ava knows</h3>
-          <button type="button" onClick={() => setContactOpen({})} className="ml-auto inline-flex min-h-[36px] items-center gap-1 rounded-lg px-3 text-sm text-sky-300 hover:bg-white/5"><Plus className="h-4 w-4" aria-hidden />Add</button>
+      <CollapsibleSection id="ava-people" title="People Ava knows" icon={<UserRound className="h-4 w-4 text-white/60" />}
+        summary={contacts.length ? <><span className="tabular-nums">{contacts.length}</span>&nbsp;{contacts.length === 1 ? "person" : "people"} she greets by name</> : "Nobody saved yet"}>
+        <div className="p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <p className="text-xs text-white/60">When one of these numbers calls, Ava greets them by name.</p>
+            <button type="button" onClick={() => setContactOpen({})} className="ml-auto inline-flex min-h-[44px] items-center gap-1 rounded-lg px-3 text-sm text-sky-300 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"><Plus className="h-4 w-4" aria-hidden />Add</button>
+          </div>
+          <ul className="flex flex-wrap gap-2">
+            {contacts.map((k) => (
+              <li key={k.id}><button type="button" onClick={() => setContactOpen(k)} className="min-h-[44px] rounded-xl bg-white/[0.05] px-3 py-2 text-left ring-1 ring-white/10 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+                <span className="block text-sm font-medium text-white">{k.name}{k.relationship ? <span className="font-normal text-white/60"> · {k.relationship}</span> : null}</span>
+                <span className="block text-xs tabular-nums text-white/60">{fmt(k.phone)}</span></button></li>
+            ))}
+          </ul>
         </div>
-        <p className="mb-2 text-xs text-white/45">When one of these numbers calls, Ava greets them by name.</p>
-        <ul className="flex flex-wrap gap-2">
-          {contacts.map((k) => (
-            <li key={k.id}><button type="button" onClick={() => setContactOpen(k)} className="rounded-xl bg-white/[0.05] px-3 py-2 text-left ring-1 ring-white/10 hover:bg-white/[0.08]">
-              <span className="block text-sm font-medium text-white">{k.name}{k.relationship ? <span className="font-normal text-white/50"> · {k.relationship}</span> : null}</span>
-              <span className="block text-xs tabular-nums text-white/50">{fmt(k.phone)}</span></button></li>
-          ))}
-        </ul>
-      </section>
+      </CollapsibleSection>
 
       <MessageSheet item={open ? toMsg(open) : null} onClose={() => setOpen(null)}
         onDeleted={() => { const id = open?.id; setOpen(null); setCalls((cs) => cs.filter((x) => x.id !== id)); void load(); }} />
       <ContactSheet c={contactOpen} onClose={() => setContactOpen(null)} onSaved={() => { setContactOpen(null); void load(); }} />
+      <AvaSettingsSheet source="ava" open={settingsOpen} onOpenChange={setSettingsOpen} />
       <DialerSheet kinds={["personal"]} open={dial} onOpenChange={setDial} onCalled={() => { setTimeout(() => void load(), 3000); }} />
     </div>
   );

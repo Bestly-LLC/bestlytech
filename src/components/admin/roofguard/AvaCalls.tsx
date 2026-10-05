@@ -14,10 +14,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { AvaOrb } from "./AvaOrb";
 import { cn } from "@/lib/utils";
 import {
-  AlarmClock, Ban, Calendar, CheckCircle2, ChevronRight, CircleDashed, Clock, FlaskConical, Headphones, Loader2,
-  Mail, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, Play, ShieldAlert, Trash2, UserRound, Voicemail, XCircle,
+  AlarmClock, AlertTriangle, Ban, Calendar, CheckCircle2, ChevronRight, CircleDashed, Clock, FlaskConical, GraduationCap, Headphones, Loader2,
+  Mail, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, Play, ShieldAlert, Trash2, UserRound, Voicemail, Wrench, XCircle,
 } from "lucide-react";
 import { DirIcon, FollowupsList, KnowledgeList, MessageSheet, MessagesList, rgIncomingToMsg, type Msg, type RgIncoming } from "./AvaShared";
+import { askScout } from "../scoutBus";
 import { ScrollSheet } from "./AvaSheet";
 
 // ---------- types ----------
@@ -185,10 +186,18 @@ export function DeleteCallButton({ rpc, callId, onDeleted }: { rpc: "rg_delete_c
 }
 
 /**
- * Reply guard: what the watchdog caught on finished calls (ava_reply_incidents, written by a database trigger).
- * Same card on both pages; `source` picks which Ava. Code leaks self-heal (model switch); the rest feed her reviews.
+ * Reply guard: what the watchdog caught on finished calls (ava_reply_incidents, written by a database trigger), as an action list.
+ * Every row has one plain status and the buttons that fit it:
+ *   Fixed automatically   Undo fix, Mark reviewed         (the guard already switched her model)
+ *   Coach is testing it   See the rule, Mark reviewed     (a rule from this call is proposed or in its test; personal rules also get Approve / Decline)
+ *   Coach learned it      See the rule, Mark reviewed
+ *   Needs you             Teach the Coach, Ask Scout to fix, Ignore
+ *   Scout has it          Mark done
+ * Same card on both pages; `source` picks which Ava. Reads and writes go through admin_reply_incidents / admin_incident_*; the Coach itself is untouched.
  */
-type Incident = { id: string; call_no: number | null; kind: "code_leak" | "no_hangup" | "repeat"; subkind?: string | null; leak?: boolean; excerpt: string | null; healed: string | null; created_at: string };
+type Incident = { id: string; call_no: number | null; kind: "code_leak" | "no_hangup" | "repeat"; subkind?: string | null; leak?: boolean; excerpt: string | null; healed: string | null; created_at: string;
+  action_state: "auto_fixed" | "coach_testing" | "coach_learned" | "needs_you" | "scout_has_it" | "ignored"; playbook_id: string | null; scout_task_ref: string | null;
+  playbook: { rule: string; status: string } | null; teachable: boolean };
 const KIND_TEXT: Record<Incident["kind"], string> = { code_leak: "Spoke code out loud", no_hangup: "Didn't hang up after goodbye", repeat: "Repeated herself" };
 // Money stopper: a long call that gained nothing rides on kind "repeat" (the kind CHECK can't change) with subkind "long_call";
 // its excerpt is the plain "4:12 · $0.41", so the row reads "Long call, nothing gained · 4:12 · $0.41".
@@ -196,37 +205,120 @@ const isLongCall = (r: Incident) => r.subkind === "long_call";
 // Voice clone guard: in a call in Jared's voice she skipped saying she's an AI, or said she was him (also kind "repeat", subkind "impersonation").
 const isImpersonation = (r: Incident) => r.subkind === "impersonation";
 const incidentText = (r: Incident) => (r.leak ? "Shared something sensitive" : isImpersonation(r) ? "Your voice: broke the AI-disclosure rules" : isLongCall(r) ? "Long call, nothing gained" : KIND_TEXT[r.kind]);
+
+const STATE: Record<Incident["action_state"], { label: string; Icon: typeof CheckCircle2; tone: string }> = {
+  auto_fixed: { label: "Fixed automatically", Icon: CheckCircle2, tone: "text-emerald-300" },
+  coach_testing: { label: "Coach is testing a fix", Icon: FlaskConical, tone: "text-sky-300" },
+  coach_learned: { label: "Coach learned it", Icon: GraduationCap, tone: "text-emerald-300" },
+  needs_you: { label: "Needs you", Icon: AlertTriangle, tone: "text-amber-300" },
+  scout_has_it: { label: "Scout has it", Icon: Wrench, tone: "text-sky-300" },
+  ignored: { label: "Ignored", Icon: XCircle, tone: "text-white/60" },
+};
+const gbtn = "inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-50 motion-reduce:transition-none";
+
 export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
   const [rows, setRows] = useState<Incident[]>([]);
-  const tbl = () => supabase.from("ava_reply_incidents" as never) as unknown as {
-    select: (c: string) => { eq: (c: string, v: string) => { is: (c: string, v: null) => { order: (c: string, o: { ascending: boolean }) => { limit: (n: number) => Promise<{ data: Incident[] | null }> } } } };
-    update: (p: object) => { in: (c: string, v: string[]) => Promise<{ error: unknown }> };
-  };
+  const [busy, setBusy] = useState<string | null>(null);               // `${id}:${action}`
+  const [note, setNote] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const [showRule, setShowRule] = useState<string | null>(null);
+  const [undoAsk, setUndoAsk] = useState<string | null>(null);
   const load = useCallback(async () => {
-    const { data } = await tbl().select("id, call_no, kind, subkind, leak, excerpt, healed, created_at").eq("source", source).is("reviewed_at", null).order("created_at", { ascending: false }).limit(6);
-    setRows(data ?? []);
+    const { data } = await rpcArgs<Incident[]>("admin_reply_incidents", { p_source: source });
+    if (data) setRows(data);
   }, [source]);
   useEffect(() => { void load(); const t = setInterval(() => { if (!document.hidden) void load(); }, 60000); return () => clearInterval(t); }, [load]);
   if (!rows.length) return null;
-  const done = async () => { await tbl().update({ reviewed_at: new Date().toISOString() }).in("id", rows.map((r) => r.id)); setRows([]); };
+
+  const say = (id: string, ok: boolean, text: string) => setNote((n) => ({ ...n, [id]: { ok, text } }));
+  const run = async (r: Incident, action: "teach" | "reviewed" | "ignore" | "scout" | "undo_fix" | "approve" | "decline") => {
+    setBusy(`${r.id}:${action}`); setNote((n) => { const { [r.id]: _gone, ...rest } = n; return rest; });
+    if (action === "teach") {
+      const { data, error } = await rpcArgs<{ ok: boolean; error?: string; status?: string }>("admin_incident_teach", { p_id: r.id });
+      if (error || !data?.ok) say(r.id, false, error?.message ?? data?.error ?? "The Coach couldn't take that one.");
+      else say(r.id, true, data.status === "proposed" && source === "ava" ? "The Coach wrote a rule. Read it and approve it below." : "The Coach has it.");
+    } else if (action === "approve" || action === "decline") {
+      const { error } = await rpcArgs("admin_playbook_set", { p_source: source, p_id: r.playbook_id, p_action: action });
+      if (error) say(r.id, false, error.message); else say(r.id, true, action === "approve" ? "Rule approved." : "Rule declined.");
+    } else if (action === "scout") {
+      const about = `Reply guard, ${source === "ava" ? "personal Ava" : "RoofGuard Ava"}, call ${r.call_no != null ? "#" + r.call_no : "(unnumbered)"}: ${incidentText(r)}.` +
+        `${r.excerpt ? ` What she said: "${r.excerpt.replace(/\s+/g, " ").slice(0, 300)}".` : ""}${r.healed ? ` The guard already did: ${r.healed}.` : ""}`;
+      askScout("Fix this Reply guard issue so it doesn't happen again.", { about });
+      const { error } = await rpcArgs("admin_incident_set", { p_id: r.id, p_action: "scout", p_ref: `asked ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}` });
+      if (error) say(r.id, false, error.message);
+    } else {
+      const { data, error } = await rpcArgs<{ ok: boolean; error?: string }>("admin_incident_set", { p_id: r.id, p_action: action });
+      if (error || data?.ok === false) say(r.id, false, error?.message ?? data?.error ?? "That didn't work.");
+      else if (action === "undo_fix") { setUndoAsk(null); say(r.id, true, "Switched back. She will use the old model on the next call."); }
+    }
+    setBusy(null); await load();
+  };
+
+  const needs = rows.filter((r) => r.action_state === "needs_you").length;
   return (
-    <section aria-label="Reply guard" className="rounded-2xl bg-amber-500/[0.07] px-4 py-3 ring-1 ring-amber-500/30">
-      <div className="flex items-center gap-2">
-        <ShieldAlert className="h-4 w-4 text-amber-300" aria-hidden />
-        <h3 className="text-[15px] font-semibold text-white">Reply guard caught {rows.length === 1 ? "an issue" : `${rows.length} issues`}</h3>
-        <button type="button" onClick={() => void done()} className="ml-auto inline-flex min-h-[36px] items-center rounded-lg px-3 text-sm text-amber-200 hover:bg-white/5">Mark reviewed</button>
+    <section aria-label="Reply guard" className={cn("rounded-2xl px-4 py-3 ring-1", needs ? "bg-amber-500/[0.07] ring-amber-500/30" : "bg-white/[0.03] ring-white/10")}>
+      <div className="flex flex-wrap items-center gap-2">
+        <ShieldAlert className={cn("h-4 w-4", needs ? "text-amber-300" : "text-white/60")} aria-hidden />
+        <h3 className="text-[15px] font-semibold text-white">Reply guard</h3>
+        <span className="text-sm text-white/65">{rows.length === 1 ? "1 issue" : `${rows.length} issues`}{needs ? `, ${needs} need${needs === 1 ? "s" : ""} you` : ", none need you"}</span>
       </div>
-      <ul className="mt-1 space-y-1.5">
-        {rows.map((r) => (
-          <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 text-sm">
-            <CallNo n={r.call_no} /><span className="text-white">{incidentText(r)}</span>
-            {isLongCall(r) && r.excerpt && <span className="tabular-nums text-white/70">· {r.excerpt}</span>}
-            {r.healed && <span className={r.leak || isImpersonation(r) ? "text-amber-200/90" : isLongCall(r) ? "text-white/50" : "text-emerald-300/90"}>· {r.leak || isImpersonation(r) ? "Handled" : isLongCall(r) ? "Noted" : "Fixed"}: {r.healed}</span>}
-            {r.excerpt && !isLongCall(r) && <span className="w-full truncate pl-1 text-xs text-white/45">"{r.excerpt.replace(/\s+/g, " ")}"</span>}
-          </li>
-        ))}
+      <ul className="mt-2 divide-y divide-white/10">
+        {rows.map((r) => {
+          const st = STATE[r.action_state]; const n = note[r.id];
+          const b = (a: string) => busy === `${r.id}:${a}`;
+          const rule = r.playbook?.rule;
+          const canUndo = r.action_state === "auto_fixed" && /switched \S+ /.test(r.healed ?? "");
+          return (
+            <li key={r.id} className="py-3 first:pt-1">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                <CallNo n={r.call_no} /><span className="font-medium text-white">{incidentText(r)}</span>
+                {isLongCall(r) && r.excerpt && <span className="tabular-nums text-white/70">· {r.excerpt}</span>}
+              </div>
+              <p className={cn("mt-1 inline-flex items-center gap-1.5 text-sm font-medium", st.tone)}><st.Icon className="h-4 w-4" aria-hidden />{st.label}
+                {r.action_state === "coach_testing" && r.playbook?.status === "proposed" && <span className="font-normal text-white/60">· waiting for a go-ahead</span>}
+                {r.action_state === "scout_has_it" && r.scout_task_ref && <span className="font-normal text-white/60">· {r.scout_task_ref}</span>}</p>
+              {r.healed && <p className="mt-0.5 text-xs text-white/60">{r.healed}</p>}
+              {r.excerpt && !isLongCall(r) && <p className="mt-0.5 line-clamp-2 text-xs text-white/55">"{r.excerpt.replace(/\s+/g, " ")}"</p>}
+              {showRule === r.id && rule && <p className="mt-2 rounded-xl bg-white/[0.05] p-3 text-sm text-white/85 ring-1 ring-white/10">{rule}</p>}
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-1 gap-y-0">
+                {r.action_state === "needs_you" && (
+                  <>
+                    <button type="button" disabled={!r.teachable || busy !== null} onClick={() => void run(r, "teach")} className={cn(gbtn, "bg-white/10 text-white hover:bg-white/15")}
+                      title={r.teachable ? undefined : "The Coach may not change the AI-disclosure rules"}>{b("teach") && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Teach the Coach</button>
+                    <button type="button" disabled={busy !== null} onClick={() => void run(r, "scout")} className={cn(gbtn, "bg-white/10 text-white hover:bg-white/15")}>{b("scout") && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Ask Scout to fix</button>
+                    <button type="button" disabled={busy !== null} onClick={() => void run(r, "ignore")} className={cn(gbtn, "text-white/70 hover:bg-white/5")}>Ignore</button>
+                  </>
+                )}
+                {(r.action_state === "coach_testing" || r.action_state === "coach_learned") && rule && (
+                  <button type="button" aria-expanded={showRule === r.id} onClick={() => setShowRule(showRule === r.id ? null : r.id)} className={cn(gbtn, "text-sky-300 hover:bg-white/5")}>{showRule === r.id ? "Hide the rule" : "See the rule"}</button>
+                )}
+                {r.action_state === "coach_testing" && r.playbook?.status === "proposed" && source === "ava" && (
+                  <>
+                    <button type="button" disabled={busy !== null} onClick={() => void run(r, "approve")} className={cn(gbtn, "bg-white/10 text-white hover:bg-white/15")}>{b("approve") && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Approve rule</button>
+                    <button type="button" disabled={busy !== null} onClick={() => void run(r, "decline")} className={cn(gbtn, "text-white/70 hover:bg-white/5")}>Decline</button>
+                  </>
+                )}
+                {canUndo && undoAsk !== r.id && <button type="button" disabled={busy !== null} onClick={() => setUndoAsk(r.id)} className={cn(gbtn, "text-sky-300 hover:bg-white/5")}>Undo fix</button>}
+                {(r.action_state === "auto_fixed" || r.action_state === "coach_testing" || r.action_state === "coach_learned") && (
+                  <button type="button" disabled={busy !== null} onClick={() => void run(r, "reviewed")} className={cn(gbtn, "text-white/70 hover:bg-white/5")}>{b("reviewed") && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Mark reviewed</button>
+                )}
+                {r.action_state === "scout_has_it" && (
+                  <button type="button" disabled={busy !== null} onClick={() => void run(r, "reviewed")} className={cn(gbtn, "bg-white/10 text-white hover:bg-white/15")}>{b("reviewed") && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Mark done</button>
+                )}
+              </div>
+              {undoAsk === r.id && (
+                <div role="alertdialog" aria-label="Undo this fix?" className="mt-2 rounded-xl bg-white/[0.05] p-3 ring-1 ring-white/10">
+                  <p className="text-sm text-white">Put her old model back? The guard may switch it again if the problem returns.</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setUndoAsk(null)} className={cn(gbtn, "justify-center bg-white/10 text-white hover:bg-white/15")}>Keep the fix</button>
+                    <button type="button" disabled={busy !== null} onClick={() => void run(r, "undo_fix")} className={cn(gbtn, "justify-center bg-white font-semibold text-black hover:bg-white/90")}>{b("undo_fix") && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Undo fix</button>
+                  </div>
+                </div>
+              )}
+              {n && <p role={n.ok ? "status" : "alert"} className={cn("mt-1 text-sm", n.ok ? "text-emerald-300" : "text-red-300")}>{n.text}</p>}
+            </li>
+          );
+        })}
       </ul>
-      <p className="mt-1.5 text-[11px] text-white/40">Each one goes into Ava's next self-review so it doesn't happen again.</p>
     </section>
   );
 }

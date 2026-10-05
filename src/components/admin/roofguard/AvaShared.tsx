@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
   AlarmClock, AlertTriangle, CalendarCheck, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, Mic, PhoneCall, PhoneForwarded, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
@@ -560,7 +561,7 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
   );
 }
 
-export function KnowledgeList({ source, className }: { source: Source; className?: string }) {
+export function KnowledgeList({ source, className, collapsible }: { source: Source; className?: string; collapsible?: boolean }) {
   const own = source === "ava" ? "personal" : "roofguard";
   const [rows, setRows] = useState<Fact[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -585,16 +586,12 @@ export function KnowledgeList({ source, className }: { source: Source; className
   };
   const live = rows.filter((r) => r.active).length;
   const shown = expanded ? rows : rows.slice(0, 4);
-  return (
-    <section aria-label="What Ava can share" className={cn("rounded-3xl bg-white/[0.03] ring-1 ring-white/10", className)}>
-      <header className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
-        <ShieldCheck className="h-4 w-4 text-emerald-300" aria-hidden />
-        <h3 className="text-[15px] font-semibold text-white">What Ava can share</h3>
-        <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs tabular-nums text-white/70">{live}&nbsp;on</span>
-        {pending.length > 0 && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs tabular-nums text-amber-200">{pending.length}&nbsp;waiting</span>}
-        <button type="button" onClick={() => setEdit({ scope: own, active: true })} className="ml-auto inline-flex min-h-[44px] items-center gap-1 rounded-lg px-3 text-sm text-sky-300 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
-          <Plus className="h-4 w-4" aria-hidden />Add</button>
-      </header>
+  const addBtn = (
+    <button type="button" onClick={() => setEdit({ scope: own, active: true })} className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-3 text-sm text-sky-300 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+      <Plus className="h-4 w-4" aria-hidden />Add</button>
+  );
+  const list = (
+    <>
       {source === "roofguard" && pending.length > 0 && <SuggestedByEli items={pending} onDone={() => void load()} />}
       {err && <p role="alert" className="px-4 py-3 text-sm text-red-300">Could not load: {err}</p>}
       {rows.length === 0 && !err && <p className="px-4 py-8 text-center text-sm text-white/60">Nothing yet. Ava takes a message for anything she can't answer.</p>}
@@ -616,6 +613,28 @@ export function KnowledgeList({ source, className }: { source: Source; className
       )}
       <p className="border-t border-white/5 px-4 py-2 text-[11px] text-white/55">Ava never shares anything outside this list.</p>
       <FactSheet f={edit} own={own} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); void load(); }} />
+    </>
+  );
+  if (collapsible) {
+    return (
+      <CollapsibleSection id={`ava-knowledge-${source}`} title="What Ava can share" icon={<ShieldCheck className="h-4 w-4 text-emerald-300" />} className={className}
+        badge={pending.length > 0 ? <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs tabular-nums text-amber-200">{pending.length}&nbsp;waiting</span> : undefined}
+        summary={err ? "Couldn't load" : <><span className="tabular-nums">{live}</span>&nbsp;of&nbsp;<span className="tabular-nums">{rows.length}</span> facts on</>}>
+        <div className="flex justify-end px-2 pt-1">{addBtn}</div>
+        {list}
+      </CollapsibleSection>
+    );
+  }
+  return (
+    <section aria-label="What Ava can share" className={cn("rounded-3xl bg-white/[0.03] ring-1 ring-white/10", className)}>
+      <header className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
+        <ShieldCheck className="h-4 w-4 text-emerald-300" aria-hidden />
+        <h3 className="text-[15px] font-semibold text-white">What Ava can share</h3>
+        <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs tabular-nums text-white/70">{live}&nbsp;on</span>
+        {pending.length > 0 && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs tabular-nums text-amber-200">{pending.length}&nbsp;waiting</span>}
+        <span className="ml-auto">{addBtn}</span>
+      </header>
+      {list}
     </section>
   );
 }

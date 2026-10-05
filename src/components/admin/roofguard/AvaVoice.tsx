@@ -18,6 +18,7 @@ import { AlertTriangle, AudioWaveform, Check, ChevronDown, Loader2, Mic, Pause, 
 import { AvaOrb, AVA_GLOW } from "./AvaOrb";
 import { InCallSheet, type ActiveCall } from "./AvaDialer";
 import type { Source } from "./AvaShared";
+import { CollapsibleSection } from "./CollapsibleSection";
 
 // ---------- types and config ----------
 type Voice = { voice_id: string; public_owner_id?: string; name: string; accent: string; age: string; description: string;
@@ -103,10 +104,10 @@ function useOnePlayer() {
 }
 
 // ---------- the picker ----------
-export function VoicePicker({ source, defaultOpen, openSignal }: { source: Source; defaultOpen?: boolean; openSignal?: number }) {
+function VoiceBody({ source, onChanged }: { source: Source; onChanged: () => void }) {
   const cfg = CFG[source];
-  const [open, setOpen] = useState(defaultOpen ?? source === "roofguard");
-  useEffect(() => { if (openSignal) setOpen(true); }, [openSignal]);   // the quick switcher's "More voices" link
+  const open = true;                                                   // this body only mounts while its section is open
+  const [seg, setSeg] = useState<"ava" | "mine">("ava");
   const [tab, setTab] = useState<"library" | "discover">("library");
   const [accent, setAccent] = useState<(typeof ACCENTS)[number][0]>("any");
   const [gender, setGender] = useState<(typeof GENDERS)[number][0]>("female");
@@ -189,24 +190,29 @@ export function VoicePicker({ source, defaultOpen, openSignal }: { source: Sourc
     setConfirm(null);
     toast.success(`${cfg.name} now sounds like ${v.name}.`);
     if (!data.setup_ok) toast.message("Saved. The line check will finish the setup in a few minutes.");
-    void fetchList(tab, 0, false);
+    void fetchList(tab, 0, false); onChanged();
   };
 
   const filtersChanged = tab === "discover" ? "Discover" : "your library";
+  const hasClone = source === "ava";
   return (
-    <section id={`voice-studio-${source}`} aria-label={`${cfg.name}'s voice`} className="rounded-3xl bg-white/[0.03] ring-1 ring-white/10">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
-        className={cn("flex min-h-[56px] w-full items-center gap-3 rounded-3xl px-4 py-3 text-left", ring)}>
-        <AvaOrb size={32} />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-semibold text-white">Ava's voice</span>
-          <span className="block text-xs text-white/60">{source === "ava" ? "Pick how she sounds, hear your own line, or record your voice." : "Pick how RoofGuard Ava sounds on calls."}</span>
-        </span>
-        <ChevronDown className={cn("h-5 w-5 shrink-0 text-white/55 transition-transform", open && "rotate-180")} aria-hidden />
-      </button>
-
-      {open && (
-        <div className="space-y-4 border-t border-white/5 px-4 pb-4 pt-4">
+    <>
+      {hasClone && (
+        <div className="px-4 pt-4">
+          <div role="tablist" aria-label="Which voice" className="grid grid-cols-2 rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
+            {([["ava", "Ava's voice"], ["mine", "My voice"]] as const).map(([id, label]) => (
+              <button key={id} type="button" role="tab" id={`voice-seg-${id}`} aria-selected={seg === id} aria-controls={seg === id ? `voice-panel-${id}` : undefined} onClick={() => setSeg(id)}
+                className={cn("min-h-[44px] rounded-lg text-sm font-medium transition-colors motion-reduce:transition-none", ring, seg === id ? "bg-white text-black shadow-sm" : "text-white/70 hover:text-white")}>{label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      {hasClone && seg === "mine" ? (
+        <div role="tabpanel" id="voice-panel-mine" aria-labelledby="voice-seg-mine" className="space-y-4 px-4 pb-4 pt-4">
+          <YourVoiceCard info={clone} onChanged={() => { void loadClone(); onChanged(); }} player={player} />
+        </div>
+      ) : (
+        <div role={hasClone ? "tabpanel" : undefined} id={hasClone ? "voice-panel-ava" : undefined} aria-labelledby={hasClone ? "voice-seg-ava" : undefined} className="space-y-4 px-4 pb-4 pt-4">
           {/* the voice she has now */}
           {current && (
             <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-white/[0.04] p-3 ring-1 ring-white/10">
@@ -295,11 +301,29 @@ export function VoicePicker({ source, defaultOpen, openSignal }: { source: Sourc
             )}
           </div>
 
-          {source === "ava" && <YourVoiceCard info={clone} onChanged={() => void loadClone()} player={player} />}
         </div>
       )}
       <InCallSheet call={active} onClose={() => setActive(null)} />
-    </section>
+    </>
+  );
+}
+
+/** The single Voice section: how Ava sounds (library, discover, hear your line, ring your cell) and, on personal Ava, My voice (record, bank, clone). */
+export function VoicePicker({ source, openSignal }: { source: Source; defaultOpen?: boolean; openSignal?: number }) {
+  const [sum, setSum] = useState<{ name: string; mine: string } | null>(null);
+  const refresh = useCallback(async () => {
+    if (source !== "ava") return;
+    const { data } = await invoke<VoicesRes>("ava-assistant", { action: "voices", scope: "clone" });
+    if (data) setSum({ name: data.current?.name ?? "Lily", mine: data.clone?.voice_id ? (data.clone.paused_at ? "paused" : "ready") : "not recorded" });
+  }, [source]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  const summary = source === "ava"
+    ? (sum ? <>Ava sounds like {sum.name} · My voice: {sum.mine}</> : "Pick how she sounds, record your voice")
+    : "Pick how RoofGuard Ava sounds on calls";
+  return (
+    <CollapsibleSection id={`ava-voice-${source}`} anchorId={`voice-studio-${source}`} title="Voice" icon={<AvaOrb size={28} />} summary={summary} openSignal={openSignal}>
+      <VoiceBody source={source} onChanged={() => void refresh()} />
+    </CollapsibleSection>
   );
 }
 

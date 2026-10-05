@@ -19,7 +19,7 @@ import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Lo
 import { AvaCalls } from "@/components/admin/roofguard/AvaCalls";
 import { AvaScorecard, AvaScoreStrip } from "@/components/admin/roofguard/AvaScorecard";
 import { AvaTopBar } from "@/components/admin/roofguard/AvaDialer";
-import { SpendCapEditor } from "@/components/admin/roofguard/AvaShared";
+import { AvaSettingsSheet } from "@/components/admin/roofguard/AvaSettings";
 import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
 
 type Tab = "calls" | "scorecard" | "leads" | "setup";
@@ -404,10 +404,6 @@ function CallingCard() {
         <Stat n={c.dnc} label="do-not-call" />
       </div>
 
-      <div className="mt-4 max-w-md rounded-2xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/10">
-        <SpendCapEditor source="roofguard" />
-      </div>
-
       {c.openers?.length > 0 && <OpenerTest openers={c.openers} />}
 
       {!s.calling_enabled && (
@@ -467,6 +463,7 @@ export default function RoofGuard() {
   const [shown, setShown] = useState(PAGE);
   const [tab, setTabState] = useState<Tab>(hashTab);
   const [studio, setStudio] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const setTab = (t: Tab) => { setTabState(t); history.replaceState(null, "", `#${t}`); };
   const [callingOn, setCallingOn] = useState<boolean | null>(null);
   useEffect(() => {
@@ -535,8 +532,9 @@ export default function RoofGuard() {
       </div>
       </div>
 
-      <AvaTopBar onCalled={() => setTab("calls")} extra={<VoiceSwitcher source="rg" onMore={() => { setTab("setup"); setStudio((n) => n + 1); setTimeout(() => document.getElementById("voice-studio-roofguard")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120); }} />} />
+      <AvaTopBar onCalled={() => setTab("calls")} onOpenSettings={() => setSettingsOpen(true)} extra={<VoiceSwitcher source="rg" onMore={() => { setTab("setup"); setStudio((n) => n + 1); setTimeout(() => document.getElementById("voice-studio-roofguard")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120); }} />} />
       <Segmented value={tab} onChange={setTab} />
+      <AvaSettingsSheet source="roofguard" open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       {tab === "calls" && <>
         <AvaScoreStrip onOpen={() => setTab("scorecard")} />

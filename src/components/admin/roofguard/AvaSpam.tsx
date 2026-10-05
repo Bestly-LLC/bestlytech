@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { ScrollSheet } from "./AvaSheet";
 import { CallNo, LiveTranscript, Recording, type Line } from "./AvaCalls";
 import { ForwardedTag, fmtPhone } from "./AvaShared";
@@ -97,13 +98,9 @@ export function AvaSpam({ className }: { className?: string }) {
   const current = rows.find((r) => r.id === open) ?? null;
 
   return (
-    <section aria-label="Spam and Do Not Call" className={cn("rounded-3xl bg-white/[0.03] ring-1 ring-white/10", className)}>
-      <header className="flex flex-wrap items-center gap-2 border-b border-white/5 px-4 py-3">
-        <Ban className="h-4 w-4 text-rose-300" aria-hidden />
-        <h3 className="text-[15px] font-semibold text-white">Spam &amp; Do Not Call</h3>
-        {claims > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-300"><Scale className="h-3 w-3" aria-hidden /><span className="tabular-nums">{claims}</span>&nbsp;possible {claims === 1 ? "claim" : "claims"}</span>}
-        <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-xs tabular-nums text-white/70">{rows.length}</span>
-      </header>
+    <CollapsibleSection id="ava-spam" title="Spam &amp; Do Not Call" icon={<Ban className="h-4 w-4 text-rose-300" />} className={className}
+      summary={err ? "Couldn't load" : !loaded ? "Loading…" : <><span className="tabular-nums">{rows.length}</span>&nbsp;{rows.length === 1 ? "company" : "companies"}{claims > 0 ? <> · <span className="inline-flex items-center gap-1 whitespace-nowrap text-amber-300"><Scale className="h-3 w-3" aria-hidden /><span className="tabular-nums">{claims}</span>&nbsp;possible {claims === 1 ? "claim" : "claims"}</span></> : null}</>}
+      badge={claims > 0 ? <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-300"><Scale className="h-3 w-3" aria-hidden /><span className="tabular-nums">{claims}</span></span> : undefined}>
       {err && <p role="alert" className="px-4 py-3 text-sm text-red-300">Could not load: {err}</p>}
       {loaded && rows.length === 0 && !err && (
         <p className="px-4 py-8 text-center text-sm text-white/60">No spam calls yet. When a telemarketer calls, Ava plays along for up to two minutes, learns who's behind it, and keeps the recording here. At two calls from one company you may have a Do Not Call claim.</p>
@@ -134,7 +131,7 @@ export function AvaSpam({ className }: { className?: string }) {
       )}
       <p className="border-t border-white/5 px-4 py-2 text-[11px] text-white/55">Counts are calls in the last 12 months. Ava never files or sends anything for you.</p>
       <CompanySheet company={current} onClose={() => setOpen(null)} onChanged={() => void load()} />
-    </section>
+    </CollapsibleSection>
   );
 }
 
