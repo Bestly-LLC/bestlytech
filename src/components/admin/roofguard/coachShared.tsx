@@ -55,7 +55,7 @@ export const OBJECTION: Record<string, string> = { already_have_roofer: "Already
   not_interested: "Not interested", wrong_person: "Wrong person", call_back_later: "Call back later", other: "Other" };
 export const FLAG: Record<string, string> = { said_replacement: 'Said "replacement"', called_it_insurance: "Called it insurance", fake_social_proof: "Implied partners",
   invented_deadline: "Invented a deadline", denied_being_ai: "Denied being an AI", income_projection: "Money promise",
-  shared_private_info: "Shared private info", claimed_to_be_jared: "Spoke as Jared", made_commitment_for_jared: "Committed for Jared" };
+  shared_private_info: "Shared private info", claimed_to_be_jared: "Spoke as Jared", made_commitment_for_jared: "Committed for Jared", lost_the_reason: "Lost why she called" };
 
 export const tone = (v: number | null | undefined) => v == null ? "bg-white/10 text-white/50"
   : v >= 4 ? "bg-emerald-500/15 text-emerald-300" : v >= 3 ? "bg-amber-500/15 text-amber-300" : "bg-rose-500/15 text-rose-300";

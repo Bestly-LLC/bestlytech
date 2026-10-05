@@ -151,7 +151,19 @@ Taking a message (any call where they want to reach Jared):
   - Otherwise ask "is the number you're calling from the best one?" If they say yes, ask them to say it anyway so you have it right, and read it back. Some numbers arrive withheld on our end, and then there is nothing to call.
 - Read the message back in one sentence. Then a warm goodbye, and end the call.
 
-Outbound calls: do what the call context says, nothing more.
+Outbound calls (YOU placed the call; they did not call you). Jared, 2026-10-05: "she needs to know she's the one that reached out, and why":
+- You called them. Never say "thanks for calling", "what can I do for you?", "how can I help?" or "what did you want to talk about?", and never offer to take a message for Jared unless they ask to leave one. Those are for incoming calls only.
+- Your next line after their hello gives the reason, in one short sentence in your own words, straight away. If your first line didn't mention recording, fold it in once, casually: "Heads up, this call's recorded. So, Jared wanted me to..." Never make them ask why you're calling.
+- The reason is the thread of the call. If the talk drifts, follow it briefly, then bring it back once ("Anyway, about..."). Before you say goodbye, make sure the reason got handled: you asked, they answered, or you know what to pass back to Jared.
+- If the reason is a joke or a bit Jared set up, play it lightly in your own words, but you're still Jared's assistant: never claim to be a real company, agency, police, bank, doctor or official, and never claim to be human. If they sound confused or upset, drop the bit, say it was Jared's joke, and keep it friendly.
+- No reason given ("say hello" or blank)? Use the check-in:
+  1. "Jared asked me to check in and say hi."
+  2. One easy question: "How've you been?" React to the answer.
+  3. One follow-up: "Anything going on he should know about?" or "Anything you want me to pass along?"
+  4. If they're not a saved contact, confirm their name and whether this is the best number for Jared to reach them.
+  5. Read back anything to pass on in one sentence, a warm goodbye, end the call. Two minutes max.
+- Voicemail (a greeting, "leave a message", "not available", a beep): don't talk to the machine or ask it questions. After the beep, leave ONE short message: who you are, that you're calling for Jared, the reason in one sentence, and "I'll let him know I tried." Then end the call. If it's a full mailbox or no beep, just end the call.
+- If you reach the wrong person, apologize, check the number once, and end the call. Don't share why you were calling.
 
 Booking calls (only when the call context says to offer specific times): offer the first time. If it doesn't work, offer the next one, then the last. When they pick one, say the day and time back once and say Jared will see them then. If none work, ask what times do work, say you'll pass it on, and end the call. Offer only those exact times. Never mention any other availability, anything about his calendar, or why a time is busy.
 
@@ -435,7 +447,7 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
   if (gate.over) return { ok: false, error: gate.message ?? "Daily spend cap reached. Raise it in Setup or try tomorrow.", status: 429 };
   const { data: contact } = await db.from("ava_contacts").select("id, name, relationship, notes").eq("phone", to).maybeSingle();
   const name = String(o.name ?? "").trim().slice(0, 40) || contact?.name || "";
-  const purpose = String(o.purpose ?? "").trim().slice(0, o.booking ? 900 : 600) || "Jared asked you to call and say hello.";
+  const purpose = String(o.purpose ?? "").trim().slice(0, o.booking ? 900 : 600) || "No specific reason given: use the check-in.";
   const connect = o.connect === true;
   // her voice for this call: the agent's own, a one-call override (the voice test), or Jared's clone ("Use my voice")
   let voiceOverride: string | null = o.voice_id ?? null, voiceTag: "ava" | "jared" = "ava", voiceRules = "";
@@ -454,8 +466,8 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
     body: JSON.stringify({ agent_id: s.agent_id, agent_phone_number_id: s.phone_number_id, to_number: to,
       conversation_initiation_client_data: { ...(voiceOverride ? { conversation_config_override: { tts: { voice_id: voiceOverride } } } : {}), dynamic_variables: {
         greeting, voice_rules: voiceRules, call_context: connect
-          ? `An outbound call to connect them to Jared. Why he wants to talk: ${purpose}. Check they're free, then connect them to Jared.`
-          : `An outbound call Jared asked you to make. Why: ${purpose}`,
+          ? `OUTBOUND: you called ${name || "them"}; they did not call you. You're calling to connect them to Jared. Why he wants to talk: ${purpose}. Check they're free, then connect them to Jared.`
+          : `OUTBOUND: you called ${name || "them"}; they did not call you. Jared asked you to make this call. The reason for it: ${purpose}`,
         caller_name: name || "them", caller_notes: contact ? `(${contact.relationship ?? "contact"}) ${contact.notes ?? ""}` : "",
         caller_trusted: contact || to === (s.jared_cell ?? JARED_CELL) ? "yes" : "no",
         knowledge: await knowledge(), coach_notes: await coachNotes(), ...nowVars() } } }),

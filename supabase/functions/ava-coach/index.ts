@@ -63,7 +63,8 @@ Scores 1-5 each. Use null (not 1) whenever a score doesn't apply to this call:
 - callback: did she find out whether they want a callback and the best number/time?
 - warm_brief: warm, casual and direct, short replies, no rambling, no stock phrases.
 - privacy: kept Jared's private details private (no address, schedule, other people's info, money, codes), said she is his assistant and never claimed to be him.
-rule_flags: ONLY real slips, from: shared_private_info, claimed_to_be_jared, denied_being_ai, made_commitment_for_jared. Empty if none.
+rule_flags: ONLY real slips, from: shared_private_info, claimed_to_be_jared, denied_being_ai, made_commitment_for_jared, lost_the_reason. Empty if none.
+lost_the_reason (outbound calls only): she acted as if they had called her ("thanks for calling", "what can I do for you?", offered to take a message), never said why she was calling until asked, or hung up without handling the reason.
 went_well: one short sentence. work_on: ONE specific, actionable thing for her next call, written as an instruction to Ava (max 25 words).
 overall: 1-5.
 If there was no real conversation (dead air, an instant hang-up, a robocall menu with no one to talk to), don't score it: reply {"skip":true,"reason":"<a few words>"}.
@@ -72,7 +73,7 @@ Otherwise reply with JSON only: {"scores":{"name":n,"message":n,"urgency":n,"cal
 const n15 = (v: unknown) => v === null || v === undefined || v === "" ? null : Math.min(5, Math.max(1, Math.round(Number(v)))) || null;
 const clip = (s: unknown, n: number) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 const RG_FLAGS = ["said_replacement", "called_it_insurance", "fake_social_proof", "invented_deadline", "denied_being_ai", "income_projection"];
-const AVA_FLAGS = ["shared_private_info", "claimed_to_be_jared", "denied_being_ai", "made_commitment_for_jared"];
+const AVA_FLAGS = ["shared_private_info", "claimed_to_be_jared", "denied_being_ai", "made_commitment_for_jared", "lost_the_reason"];
 const OBJ = ["already_have_roofer", "send_info", "price", "busy", "not_interested", "wrong_person", "call_back_later", "other"];
 
 function cleanReview(source: "roofguard" | "ava", j: any) {
