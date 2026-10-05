@@ -18,5 +18,5 @@ The in-app version for /admin crashes is `src/components/OutageScreen.tsx`.
     cd cloudflare-workers/site-outage-splash
     npx wrangler deploy
 
-Roll back: `npx wrangler rollback`, or delete the two routes in the Cloudflare dashboard (Workers Routes).
-Note: every request to the site now runs through the Worker (free plan: 100k requests/day; use a paid plan if traffic nears that).
+Deploying only uploads the Worker; it adds no route. **Edge Guard** (Mac mini, `docs/edge-guard.md`) attaches the routes for `bestly.tech/*` and `www.bestly.tech/*` only while the site is down, and detaches them when it is healthy. Free plan: an always-on route burns the 100,000 requests/day cap and caused the 2026-10-05 error 1027 outage, so never add a permanent route.
+Roll back: `npx wrangler rollback`.

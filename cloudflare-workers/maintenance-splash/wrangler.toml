@@ -1,20 +1,20 @@
 # IMPORTANT (2026-10-05 outage): this account is on the Workers FREE plan (100,000 requests a day, shared by every
-# Worker). When the cap is hit, a route set to "fail closed" blocks the whole site with Cloudflare error 1027.
-# bestly.tech, www.bestly.tech and cloud.bestly.tech all went down that way. Every route is now set to FAIL OPEN
-# (request_limit_fail_open = true): over the cap, traffic skips the Worker and goes straight to the origin.
-# A redeploy can recreate a route as fail-closed. After any `wrangler deploy`, re-check it in the dashboard
-# (Workers Routes > Request limit failure mode: Fail open) or with the API.
+# Worker). With a route always on, every request counted; the cap was hit and a fail-closed route blocked the whole
+# site with Cloudflare error 1027. bestly.tech, www.bestly.tech and cloud.bestly.tech all went down that way.
+#
+# So this Worker has NO [[routes]] here, on purpose. EDGE GUARD (Mac mini, docs/edge-guard.md) attaches the route
+# only while the site is down (fail open), and removes it when the site is healthy again.
+# `wrangler deploy` must NOT re-add permanent routes. Do not add a [[routes]] block back. If a deploy ever leaves
+# a route on, Edge Guard detaches it within about 3 minutes.
 name = "bestly-cloud-maintenance-splash"
 main = "src/index.js"
 compatibility_date = "2025-04-01"
 account_id = "f25f950fd0d3b2a67f8fad8b69b14c40"
 
-# Catch every request to cloud.bestly.tech. The Worker passes 2xx/3xx/4xx through
-# unchanged and only intercepts when origin returns 5xx, serving the splash page
-# instead of Cloudflare's raw "Bad Gateway" page.
-[[routes]]
-pattern = "cloud.bestly.tech/*"
-zone_name = "bestly.tech"
+# Routes: none (see the note at the top). Edge Guard creates this one during an outage:
+#   cloud.bestly.tech/*  in zone bestly.tech, request_limit_fail_open = true.
+# The Worker passes 2xx/3xx/4xx through unchanged and only intercepts when origin returns 5xx, serving the splash
+# page instead of Cloudflare's raw "Bad Gateway" page.
 
 [observability]
 enabled = true

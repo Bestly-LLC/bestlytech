@@ -28,7 +28,7 @@ wrangler whoami     # confirm: J5j96xpt58@privaterelay.appleid.com's Account
 wrangler deploy
 ```
 
-The first deploy will register the route `cloud.bestly.tech/*`. From then on, every request to the zone goes through the Worker first.
+Deploying only uploads the Worker. It does NOT add a route (free plan: an always-on route burns the 100,000 requests/day cap and took the sites down with error 1027 on 2026-10-05). **Edge Guard** attaches `cloud.bestly.tech/*` only while the site is down and detaches it afterwards: see `docs/edge-guard.md`.
 
 ## Verify
 

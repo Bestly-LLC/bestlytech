@@ -456,7 +456,8 @@ def run():
                             "body": "Something (probably a redeploy) left the 'we'll be right back' route on. "
                                     "I took it off so it stops using the free plan's Worker quota.",
                             "severity": "info", "push": False, "dedupe": f"edge.{dk}stray.{name}.{mine[0]['id']}"})
-            summary_bits.append(f"{name} ok" + (" (splash still on)" if mine else ""))
+            still_on = [r for r in routes if r.get("script") == g["script"]]
+            summary_bits.append(f"{name} ok" + (" (splash still on)" if still_on else ""))
         else:
             gs["oks"] = 0
             down_by_quota = bad and all(r["kind"] == "quota" for r in bad)
