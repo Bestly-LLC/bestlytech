@@ -1,4 +1,4 @@
-import { Brush,
+import { Brush, Headphones,
   LayoutDashboard,
   Settings,
   BarChart3,
@@ -91,7 +91,12 @@ const vestaItems = [
   { title: "Vesta", url: "/admin/vesta", icon: Flower2 },
 ];
 
-// RoofGuard AI caller (leads, phone finder; dialer comes in Phase 2).
+// Ava: Jared's personal AI assistant (her own line, messages, calls). Separate from RoofGuard on purpose.
+const avaItems = [
+  { title: "Ava", url: "/admin/ava", icon: Headphones },
+];
+
+// RoofGuard: the AI sales caller (its own Ava, leads, phone finder). Kept separable so it can be split off.
 const roofguardItems = [
   { title: "RoofGuard", url: "/admin/roofguard", icon: PhoneCall },
 ];
@@ -100,11 +105,12 @@ const roofguardItems = [
 const hokuItems = [
   { title: "HOKU admin", url: HOKU_ADMIN_URL, icon: ShoppingBag, sso: true },
 ];
-const ALL_NAV_URLS = [...workItems, ...vestaItems, ...roofguardItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
+const ALL_NAV_URLS = [...workItems, ...avaItems, ...vestaItems, ...roofguardItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
 
 
 export const ADMIN_NAV_SECTIONS = [
   { label: "Work", items: workItems },
+  { label: "Ava", items: avaItems },
   { label: "HOKU", items: hokuItems },
   { label: "Vesta", items: vestaItems },
   { label: "RoofGuard", items: roofguardItems },

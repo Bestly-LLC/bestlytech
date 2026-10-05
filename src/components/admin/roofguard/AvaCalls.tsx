@@ -107,7 +107,7 @@ export function LiveTranscript({ lines, live, className, them = "Them" }: { line
 }
 
 /** The call's audio, fetched through the edge function (the ElevenLabs key never reaches the browser). */
-export function Recording({ callId }: { callId: string }) {
+export function Recording({ callId, fn = "roofguard-caller" }: { callId: string; fn?: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "missing">("idle");
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
@@ -116,7 +116,7 @@ export function Recording({ callId }: { callId: string }) {
     setState("loading");
     const { data: { session } } = await supabase.auth.getSession();
     const base = (import.meta.env.VITE_SUPABASE_URL as string) ?? "";
-    const res = await fetch(`${base}/functions/v1/roofguard-caller`, {
+    const res = await fetch(`${base}/functions/v1/${fn}`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${session?.access_token ?? ""}`,
         apikey: (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "") as string },

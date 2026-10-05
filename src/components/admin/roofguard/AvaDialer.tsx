@@ -24,6 +24,7 @@ const fmt = (d: string) => {
 };
 
 export function AvaTopBar({ onCalled }: { onCalled: () => void }) {
+  // RoofGuard Ava only: her own number and demo calls. Personal calls live on /admin/ava.
   const [num, setNum] = useState<string | null>(null);
   const [costs, setCosts] = useState<Costs | null>(null);
   const [copied, setCopied] = useState(false);
@@ -46,12 +47,17 @@ export function AvaTopBar({ onCalled }: { onCalled: () => void }) {
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
+        {!num && (
+          <span className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-amber-500/10 px-3.5 text-sm text-amber-200 ring-1 ring-amber-500/30">
+            <Phone className="h-4 w-4" aria-hidden />RoofGuard needs its own number before calling
+          </span>
+        )}
         {num && (
-          <button type="button" onClick={() => void copy()} aria-label={`Ava's number ${fmt(num)}, copy`}
+          <button type="button" onClick={() => void copy()} aria-label={`RoofGuard Ava's number ${fmt(num)}, copy`}
             className="group inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white/[0.04] px-3.5 ring-1 ring-white/10 transition hover:bg-white/[0.07]">
             <span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500/15 text-emerald-300"><Phone className="h-3.5 w-3.5" aria-hidden /></span>
             <span className="text-left leading-tight">
-              <span className="block text-[11px] text-white/50">Ava's number</span>
+              <span className="block text-[11px] text-white/50">RoofGuard line</span>
               <span className="block whitespace-nowrap text-[15px] font-semibold tabular-nums text-white">{fmt(num)}</span>
             </span>
             {copied ? <Check className="h-4 w-4 text-emerald-300" aria-hidden /> : <Copy className="h-4 w-4 text-white/30 group-hover:text-white/60" aria-hidden />}
@@ -59,9 +65,15 @@ export function AvaTopBar({ onCalled }: { onCalled: () => void }) {
         )}
         <button type="button" onClick={() => setDialOpen(true)}
           className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-emerald-500 px-4 text-[15px] font-semibold text-[#052E1F] transition hover:bg-emerald-400 active:scale-[0.98]">
-          <Grid3x3 className="h-4 w-4" aria-hidden />Dial
+          <Grid3x3 className="h-4 w-4" aria-hidden />Demo call
         </button>
 
+        {!costs && (
+          <span className="ml-auto inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl bg-white/[0.04] px-3.5 text-right ring-1 ring-white/10">
+            <span className="text-[11px] text-white/50">Spent so far</span>
+            <span className="text-[15px] font-semibold tabular-nums text-white/60">–</span>
+          </span>
+        )}
         {costs && (
           <Popover>
             <PopoverTrigger asChild>
@@ -89,18 +101,19 @@ export function AvaTopBar({ onCalled }: { onCalled: () => void }) {
           </Popover>
         )}
       </div>
-      <DialerSheet open={dialOpen} onOpenChange={setDialOpen} onCalled={() => { setDialOpen(false); onCalled(); setTimeout(() => void load(), 90000); }} />
+      <DialerSheet kinds={["demo"]} open={dialOpen} onOpenChange={setDialOpen} onCalled={() => { setDialOpen(false); onCalled(); setTimeout(() => void load(), 90000); }} />
     </>
   );
 }
 
 const KEYS: [string, string][] = [["1", ""], ["2", "ABC"], ["3", "DEF"], ["4", "GHI"], ["5", "JKL"], ["6", "MNO"], ["7", "PQRS"], ["8", "TUV"], ["9", "WXYZ"], ["", ""], ["0", "+"], ["del", ""]];
 
-export function DialerSheet({ open, onOpenChange, onCalled }: { open: boolean; onOpenChange: (o: boolean) => void; onCalled: () => void }) {
+export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal", "demo"] }: { open: boolean; onOpenChange: (o: boolean) => void; onCalled: () => void; kinds?: ("personal" | "demo")[] }) {
   const [digits, setDigits] = useState("");
-  const [mode, setMode] = useState<"personal" | "demo">("personal");
+  const [mode, setMode] = useState<"personal" | "demo">(kinds[0]);
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState("");
+  const [connect, setConnect] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const clean = digits.replace(/\D/g, "").replace(/^1(?=\d{10})/, "");
@@ -121,15 +134,17 @@ export function DialerSheet({ open, onOpenChange, onCalled }: { open: boolean; o
 
   const call = async () => {
     setBusy(true); setErr(null);
-    const body = mode === "personal" ? { action: "personal_call", phone: clean, name, purpose } : { action: "demo_call", phone: clean, name };
-    const { data, error } = await supabase.functions.invoke("roofguard-caller", { body });
+    // personal calls belong to personal Ava (ava-assistant); demos to RoofGuard Ava (roofguard-caller)
+    const { data, error } = mode === "personal"
+      ? await supabase.functions.invoke("ava-assistant", { body: { action: "call", phone: clean, name, purpose, connect } })
+      : await supabase.functions.invoke("roofguard-caller", { body: { action: "demo_call", phone: clean, name } });
     setBusy(false);
     if (error || !data?.ok) {
       let msg = data?.error as string | undefined;
       if (!msg && error && "context" in error) msg = await (error as { context: Response }).context.json().then((j) => j.error).catch(() => undefined);
       setErr(msg ?? "The call didn't go out. Try again in a minute."); return;
     }
-    setDigits(""); setName(""); setPurpose("");
+    setDigits(""); setName(""); setPurpose(""); setConnect(false);
     onCalled();
   };
 
@@ -139,12 +154,12 @@ export function DialerSheet({ open, onOpenChange, onCalled }: { open: boolean; o
         <SheetTitle className="text-white">Dial with Ava</SheetTitle>
         <SheetDescription className="text-white/55">Type or paste a number. Ava calls from her own line and you can watch it live on the Calls tab.</SheetDescription>
 
-        <div role="tablist" aria-label="Kind of call" className="mt-4 grid grid-cols-2 rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
+        {kinds.length > 1 && <div role="tablist" aria-label="Kind of call" className="mt-4 grid grid-cols-2 rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
           {([["personal", "Personal"], ["demo", "RoofGuard demo"]] as const).map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => setMode(id)}
               className={cn("min-h-[36px] rounded-lg text-sm font-medium transition-colors", mode === id ? "bg-white text-black shadow-sm" : "text-white/65 hover:text-white")}>{label}</button>
           ))}
-        </div>
+        </div>}
 
         <input value={fmt(digits)} onChange={(e) => setDigits(e.target.value.replace(/\D/g, "").slice(0, 11))} inputMode="tel" type="tel" aria-label="Phone number"
           placeholder="Enter number" className="mt-5 w-full bg-transparent text-center text-[32px] font-light tabular-nums tracking-wide text-white outline-none placeholder:text-white/25" />
@@ -175,6 +190,18 @@ export function DialerSheet({ open, onOpenChange, onCalled }: { open: boolean; o
                 placeholder="e.g. Introduce yourself as my new assistant and say hi. Or: confirm Thursday's 2 PM meeting."
                 className="w-full rounded-xl bg-white/[0.05] px-3 py-2 text-[15px] text-white outline-none ring-1 ring-white/10 placeholder:text-white/35 focus:ring-white/25" />
               <span className="mt-1 block text-[11px] text-white/40">She introduces herself as "Ava, Jared's AI assistant, on a recorded line" and says she's an AI if asked.</span>
+            </label>
+          ) : null}
+          {mode === "personal" ? (
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-white/[0.04] px-3 py-2.5 ring-1 ring-white/10">
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-white">Connect me</span>
+                <span className="block text-[11px] text-white/50">Ava checks they're free, then transfers the call to your cell (816)&nbsp;500-7236.</span>
+              </span>
+              <button type="button" role="switch" aria-checked={connect} aria-label="Connect me" onClick={() => setConnect((c) => !c)}
+                className={cn("relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors", connect ? "bg-[#30D158]" : "bg-white/20")}>
+                <span className={cn("absolute left-0 top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow transition-transform", connect ? "translate-x-[22px]" : "translate-x-[2px]")} />
+              </button>
             </label>
           ) : (
             <p className="text-xs text-white/50">She runs the real cold-call script, with whoever answers playing the facilities director at Riverside Medical Center (made up). It never calls a real prospect.</p>

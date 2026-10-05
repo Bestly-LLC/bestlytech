@@ -108,6 +108,7 @@ const StreetSweeping = lazyPage(() => import("./pages/admin/StreetSweeping"));
 const Emergency = lazyPage(() => import("./pages/admin/Emergency"));
 const Vesta = lazyPage(() => import("./pages/admin/Vesta"));
 const RoofGuard = lazyPage(() => import("./pages/admin/RoofGuard"));
+const AvaAssistant = lazyPage(() => import("./pages/admin/AvaAssistant"));
 const Wall = lazyPage(() => import("./pages/admin/Wall"));
 const Sky = lazyPage(() => import("./pages/admin/Sky"));
 const Security = lazyPage(() => import("./pages/admin/Security"));
@@ -249,6 +250,7 @@ const App = () => {
                   <Route path="emergency" element={<Emergency />} />
                   <Route path="vesta" element={<Vesta />} />
                   <Route path="roofguard" element={<RoofGuard />} />
+                  <Route path="ava" element={<AvaAssistant />} />
                   <Route path="wall" element={<Wall />} />
                   <Route path="sky" element={<Sky />} />
                   <Route path="security" element={<Security />} />
