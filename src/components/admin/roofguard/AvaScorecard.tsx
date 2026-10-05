@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { AvaReview } from "./AvaReview";
 import { AlertTriangle, CheckCircle2, Gauge, PauseCircle, Sprout, TrendingUp, Trophy, CalendarCheck } from "lucide-react";
 
 type Funnel = { dials: number; connects: number; dms: number; pitches: number; booked: number; voicemails?: number; callbacks?: number; not_interested?: number; dnc?: number };
@@ -256,6 +257,8 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
           </label>
         )}
       </section>
+
+      {admin && <AvaReview />}
     </div>
   );
 }
