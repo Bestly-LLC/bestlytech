@@ -61,6 +61,20 @@ every Monday ───┴─► Coach looks across the week:
 - **Your say:** small wording changes test themselves automatically. Anything bigger (a new angle, a new opener) shows up as "Your call" for one tap first. You get a weekly line in Scout: "Ava tried 2 new things this week; 1 won (+4% kept talking), 1 rolled back."
 - **Confidence:** tracked as a number (hedges per call, replies under 20 words, how direct her close is). It should climb week over week.
 
+### Reply guard (built 2026-10-04, live now)
+
+After call #8 (RoofGuard Ava said "tool_code print(default_api.end_call(…))" out loud), every finished call on both Avas is scanned by a database trigger (`ava_reply_scan` / `ava_reply_guard`):
+
+| Kind | What it catches | What happens |
+|---|---|---|
+| `code_leak` | she speaks code, a tool name, or a `{{variable}}` | Scout push (high) + **self-heal**: switch to the next model in `llm_fallbacks` that hasn't leaked in 7 days, re-run setup |
+| `no_hangup` | she says goodbye but the line stays open 10+ sec | Scout alert, logged |
+| `repeat` | the same line twice in one call | logged |
+
+- Incidents live in `ava_reply_incidents` (with call number). The **Reply guard** card on /admin/ava and /admin/roofguard shows unreviewed ones.
+- **The Coach treats every incident as a mandatory "work on" item** and turns repeat offenders into a fixed call-flow rule (not a test). Rules added this way so far: never speak tool names; hang up right after goodbye; wait quietly when put on hold; don't re-ask the opener after a yes; don't repeat a line.
+- Model chain today: `gpt-4.1-mini` → `claude-haiku-4-5` → `gemini-3.5-flash` (gemini-2.5-flash-lite is deprecated and caused the leak).
+
 ---
 
 ## Where it shows up

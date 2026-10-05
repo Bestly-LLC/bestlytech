@@ -81,11 +81,18 @@ Outbound calls: do what the call context says, nothing more.
 Connecting Jared (only when the call context says "connect them to Jared"):
 - Say who you are and, in one sentence, why Jared wants to talk.
 - Ask if now's a good time for a quick call with him.
-- If yes: "Brilliant, connecting you to Jared now, one moment." Then use the transfer tool to connect the call.
+- If yes: "Cool, connecting you to Jared now, one sec." Then use the transfer tool to connect the call.
 - If no: ask when's better, thank them, and end the call. Never transfer without their yes.
 - Never transfer an inbound caller.
 
-How you sound: warm, relaxed, quick and confident. One or two short sentences per reply, under 20 words. Contractions. React to what they say before your next line ("Oh lovely", "Ah, got it"). Light British warmth.
+How you sound: cool, casual, direct, like a sharp assistant in 2026. Friendly but not peppy or bubbly; calm and even. No hype, no exclamation marks. One or two short sentences per reply, under 15 words. Contractions. Start each reply with a quick two-word reaction ("Yeah, got it." "No worries.") so there's no dead air, then the point. Plain American English: no "lovely", "brilliant", "cheers", "wonderful", "perfect!", "absolutely".
+If someone mentions a delay or lag: "Yeah, bit of lag on my end, sorry." Then carry on. (Still never deny being an AI if asked directly.)
+
+Call flow rules:
+- Everything you say is spoken out loud. Never say code, tool names, function names, brackets, or words like "tool_code", "end_call" or "transfer". Use tools silently; never describe them.
+- When you say goodbye, hang up right then with end_call. Don't keep talking after a goodbye.
+- "Hold on", "one sec", "let me get them" means wait. Say "Sure." and wait quietly. Never hang up while on hold.
+- Don't repeat a line you already said. If they didn't hear, say it shorter in new words.
 
 Never:
 - Share Jared's address, schedule, whereabouts, finances, health, or anything private.
@@ -206,7 +213,7 @@ async function setup(): Promise<Response> {
       agent: {
         first_message: "{{greeting}}", language: "en",
         dynamic_variables: { dynamic_variable_placeholders: { ...UNKNOWN, call_context: "Someone called Jared's line.", ...nowVars() } },
-        prompt: { prompt: PROMPT, llm: s?.llm ?? "gemini-2.5-flash-lite", temperature: 0.5,
+        prompt: { prompt: PROMPT, llm: s?.llm ?? "gpt-4.1-mini", temperature: 0.5,
           built_in_tools: {
             end_call: { name: "end_call", params: { system_tool_type: "end_call" } },
             // "Connect me": can only ever dial Jared's own cell
@@ -215,8 +222,11 @@ async function setup(): Promise<Response> {
               condition: "Only on an outbound call whose context says to connect them to Jared, after the person said yes to talking now." }] } },
           } },
       },
-      turn: { turn_eagerness: "eager" },
-      tts: { voice_id: s?.voice_id ?? "pFZP5JQG7iQjIQuC4Bku", model_id: "eleven_turbo_v2", stability: 0.4, similarity_boost: 0.8, optimize_streaming_latency: 3 },
+      // same speed settings as RoofGuard's Ava (keep the two in step)
+      turn: { turn_eagerness: "eager", speculative_turn: true,
+        soft_timeout_config: { timeout_seconds: 1.0, message: "Yeah...", randomize_fillers: true, max_soft_timeouts_per_generation: 1,
+          additional_soft_timeout_messages: ["Mm, right...", "Yeah, so...", "Got it...", "Okay..."] } },
+      tts: { voice_id: s?.voice_id ?? "pFZP5JQG7iQjIQuC4Bku", model_id: "eleven_flash_v2", stability: 0.55, similarity_boost: 0.8, optimize_streaming_latency: 4, speed: 1.05 },
     },
     platform_settings: {
       data_collection: DATA_COLLECTION,
@@ -291,13 +301,20 @@ async function call(body: Record<string, unknown>): Promise<Response> {
 type Turn = { role: string; message: string | null; time_in_call_secs?: number };
 const slim = (t: Turn[] | undefined) => (t ?? []).filter((x) => x.message).map((x) => ({ role: x.role, text: x.message, t: x.time_in_call_secs ?? 0 }));
 
-async function live(): Promise<Response> {
+async function live(callId: string | null): Promise<Response> {
   const { data: s } = await db.from("ava_settings").select("agent_id").eq("id", true).single();
   const key = await vault("elevenlabs_api_key");
   if (!s?.agent_id || !key) return Response.json({ ok: true, calls: [] }, { headers: CORS });
-  const lr = await fetch(`${XI}/convai/conversations?agent_id=${s.agent_id}&page_size=10`, { headers: { "xi-api-key": key } });
-  const list = ((await lr.json().catch(() => ({}))).conversations ?? []) as { conversation_id: string; status: string }[];
-  const active = list.filter((c) => ["initiated", "in-progress", "processing"].includes(c.status)).slice(0, 3);
+  let active: { conversation_id: string; status: string }[];
+  if (callId) {
+    // one call (the dialer's in-call screen), followed through to the end
+    const { data: r } = await db.from("ava_calls").select("conversation_id").eq("id", callId).maybeSingle();
+    active = r?.conversation_id ? [{ conversation_id: r.conversation_id, status: "" }] : [];
+  } else {
+    const lr = await fetch(`${XI}/convai/conversations?agent_id=${s.agent_id}&page_size=10`, { headers: { "xi-api-key": key } });
+    const list = ((await lr.json().catch(() => ({}))).conversations ?? []) as { conversation_id: string; status: string }[];
+    active = list.filter((c) => ["initiated", "in-progress", "processing"].includes(c.status)).slice(0, 3);
+  }
   const calls = await Promise.all(active.map(async (c) => {
     const d = await (await fetch(`${XI}/convai/conversations/${c.conversation_id}`, { headers: { "xi-api-key": key } })).json().catch(() => ({}));
     const pc = d.metadata?.phone_call ?? {};
@@ -306,7 +323,8 @@ async function live(): Promise<Response> {
     const { data: contact } = phone ? await db.from("ava_contacts").select("name").eq("phone", phone).maybeSingle() : { data: null };
     return { conversation_id: c.conversation_id, call_id: row?.id ?? null, status: d.status ?? c.status,
       direction: row?.direction ?? pc.direction ?? "inbound", phone, who: contact?.name ?? row?.caller_name ?? null,
-      elapsed: d.metadata?.start_time_unix_secs ? Math.round(Date.now() / 1000 - d.metadata.start_time_unix_secs) : 0, transcript: slim(d.transcript) };
+      elapsed: d.metadata?.start_time_unix_secs ? Math.round(Date.now() / 1000 - d.metadata.start_time_unix_secs) : 0,
+      duration: d.metadata?.call_duration_secs ?? null, transcript: slim(d.transcript) };
   }));
   return Response.json({ ok: true, calls }, { headers: CORS });
 }
@@ -390,7 +408,7 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.action === "setup") return setup();
   if (body.action === "call") return call(body);
-  if (body.action === "live") return live();
+  if (body.action === "live") return live(body.call_id ? String(body.call_id) : null);
   if (body.action === "audio") return audio(String(body.call_id ?? ""));
   return Response.json({ ok: false, error: "unknown action" }, { status: 400, headers: CORS });
 });

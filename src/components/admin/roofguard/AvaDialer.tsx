@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, Copy, Delete, Grid3x3, Loader2, Phone } from "lucide-react";
+import { LiveTranscript, Recording, type Line } from "./AvaCalls";
 
 type Costs = { total: number; today: number; month: number; calls_total: number; voice: number; phone: number; ai: number; number: number;
   minutes: number; calls: number; per_meeting: number | null; rates: { voice_per_min: number; phone_per_min: number; number_monthly: number } };
@@ -101,7 +102,7 @@ export function AvaTopBar({ onCalled }: { onCalled: () => void }) {
           </Popover>
         )}
       </div>
-      <DialerSheet kinds={["demo"]} open={dialOpen} onOpenChange={setDialOpen} onCalled={() => { setDialOpen(false); onCalled(); setTimeout(() => void load(), 90000); }} />
+      <DialerSheet kinds={["demo"]} open={dialOpen} onOpenChange={setDialOpen} onCalled={() => { onCalled(); setTimeout(() => void load(), 90000); }} />
     </>
   );
 }
@@ -132,18 +133,23 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  const [active, setActive] = useState<ActiveCall | null>(null);
+  useEffect(() => { if (!open) setActive(null); }, [open]);
+
   const call = async () => {
     setBusy(true); setErr(null);
     // personal calls belong to personal Ava (ava-assistant); demos to RoofGuard Ava (roofguard-caller)
+    const fn = mode === "personal" ? "ava-assistant" : "roofguard-caller";
     const { data, error } = mode === "personal"
-      ? await supabase.functions.invoke("ava-assistant", { body: { action: "call", phone: clean, name, purpose, connect } })
-      : await supabase.functions.invoke("roofguard-caller", { body: { action: "demo_call", phone: clean, name } });
+      ? await supabase.functions.invoke(fn, { body: { action: "call", phone: clean, name, purpose, connect } })
+      : await supabase.functions.invoke(fn, { body: { action: "demo_call", phone: clean, name } });
     setBusy(false);
     if (error || !data?.ok) {
       let msg = data?.error as string | undefined;
       if (!msg && error && "context" in error) msg = await (error as { context: Response }).context.json().then((j) => j.error).catch(() => undefined);
       setErr(msg ?? "The call didn't go out. Try again in a minute."); return;
     }
+    if (data.call_id) setActive({ id: data.call_id, fn, who: name.trim() || fmt(clean) });
     setDigits(""); setName(""); setPurpose(""); setConnect(false);
     onCalled();
   };
@@ -151,8 +157,9 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="admin-shell flex w-full flex-col overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-md">
+        {active ? <InCall call={active} onNew={() => setActive(null)} onDone={() => onOpenChange(false)} /> : <>
         <SheetTitle className="text-white">Dial with Ava</SheetTitle>
-        <SheetDescription className="text-white/55">Type or paste a number. Ava calls from her own line and you can watch it live on the Calls tab.</SheetDescription>
+        <SheetDescription className="text-white/55">Type or paste a number. Ava calls from her own line and the live transcript shows right here.</SheetDescription>
 
         {kinds.length > 1 && <div role="tablist" aria-label="Kind of call" className="mt-4 grid grid-cols-2 rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
           {([["personal", "Personal"], ["demo", "RoofGuard demo"]] as const).map(([id, label]) => (
@@ -214,7 +221,66 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
           {busy ? <Loader2 className="h-7 w-7 animate-spin" /> : <Phone className="h-7 w-7 fill-current" />}
         </button>
         <p className="mt-2 text-center text-[11px] text-white/40">Only call people who'd expect it. Ava's number may show as unknown.</p>
+        </>}
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ---------- in-call screen (same for personal Ava and RoofGuard) ----------
+type ActiveCall = { id: string; fn: "ava-assistant" | "roofguard-caller"; who: string };
+type LiveState = { status: string; elapsed: number; duration: number | null; transcript: Line[] };
+const DONE = new Set(["done", "failed"]);
+const clock = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
+
+function InCall({ call, onNew, onDone }: { call: ActiveCall; onNew: () => void; onDone: () => void }) {
+  const [st, setSt] = useState<LiveState | null>(null);
+  const [miss, setMiss] = useState(0);
+  const [base, setBase] = useState({ at: Date.now(), elapsed: 0 });
+  const [, force] = useState(0);
+  const ended = !!st && DONE.has(st.status);
+
+  // poll every 1.5 sec until the call ends, then once more for the final transcript
+  useEffect(() => {
+    let stop = false, timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      const { data } = await supabase.functions.invoke(call.fn, { body: { action: "live", call_id: call.id } });
+      if (stop) return;
+      const c = (data?.calls ?? [])[0] as LiveState | undefined;
+      if (c) { setSt(c); setBase({ at: Date.now(), elapsed: c.elapsed }); setMiss(0); } else setMiss((m) => m + 1);
+      if (!c || !DONE.has(c.status)) timer = setTimeout(tick, 1500);
+    };
+    void tick();
+    return () => { stop = true; clearTimeout(timer); };
+  }, [call]);
+  useEffect(() => { if (ended) return; const t = setInterval(() => force((n) => n + 1), 1000); return () => clearInterval(t); }, [ended]);
+
+  const secs = ended ? (st?.duration ?? st?.elapsed ?? 0) : base.elapsed + Math.round((Date.now() - base.at) / 1000);
+  const label = !st ? (miss > 20 ? "Can't reach the call right now" : "Dialing…")
+    : ended ? (st.status === "failed" ? "Call failed" : "Call ended")
+    : st.status === "in-progress" || st.status === "processing" ? "On the call" : "Ringing…";
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <SheetTitle className="sr-only">Call with {call.who}</SheetTitle>
+      <SheetDescription className="sr-only">Live transcript of Ava's call</SheetDescription>
+      <div className="pt-6 text-center">
+        <div className="text-[13px] text-white/50">{call.fn === "roofguard-caller" ? "RoofGuard Ava" : "Ava"} calling</div>
+        <div className="mt-1 text-[26px] font-semibold text-white">{call.who}</div>
+        <div className={cn("mt-1 inline-flex items-center gap-2 text-[15px]", ended ? "text-white/60" : "text-emerald-300")}>
+          {!ended && <span className="h-2 w-2 rounded-full bg-emerald-400 motion-safe:animate-pulse" aria-hidden />}
+          <span>{label}</span><span className="font-mono tabular-nums text-white">{clock(secs)}</span>
+        </div>
+      </div>
+      <div className="mt-5 flex-1">
+        <LiveTranscript lines={st?.transcript ?? []} live={!ended} them={call.who} className="max-h-[52vh] rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/10" />
+      </div>
+      {ended && <div className="mt-4"><Recording callId={call.id} fn={call.fn} /></div>}
+      <div className="mt-4 grid grid-cols-2 gap-2 pb-2">
+        <button type="button" onClick={onNew} className="min-h-[44px] rounded-xl bg-white/10 text-[15px] font-medium text-white hover:bg-white/15">New call</button>
+        <button type="button" onClick={onDone} className="min-h-[44px] rounded-xl bg-white text-[15px] font-semibold text-black">Done</button>
+      </div>
+      {!ended && <p className="text-center text-[11px] text-white/40">You can close this. The call keeps going and shows on the page.</p>}
+    </div>
   );
 }

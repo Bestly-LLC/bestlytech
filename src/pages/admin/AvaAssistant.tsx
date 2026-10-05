@@ -10,14 +10,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { DeleteCallButton, LiveTranscript, Recording, type Line } from "@/components/admin/roofguard/AvaCalls";
+import { CallNo, DeleteCallButton, ReplyGuard, LiveTranscript, Recording, type Line } from "@/components/admin/roofguard/AvaCalls";
 import { DialerSheet } from "@/components/admin/roofguard/AvaDialer";
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, Grid3x3, Inbox, Loader2, Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCw, UserRound } from "lucide-react";
 
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
   conversation_id: string | null; status: string; summary: string | null; message: string | null; urgent: boolean; callback_wanted: boolean;
   duration_sec: number | null; transcript: { role: string; message: string | null; time_in_call_secs?: number }[] | null; read_at: string | null; created_at: string;
-  deleted_at: string | null };
+  deleted_at: string | null; call_no: number | null };
 type Contact = { id: string; name: string; phone: string | null; relationship: string | null; notes: string | null };
 type Settings = { agent_id: string | null; phone_number_id: string | null; from_number: string; setup_log: { m: string }[] };
 type Costs = { total: number; month: number; minutes: number; calls: number; unread: number };
@@ -128,6 +128,8 @@ export default function AvaAssistant() {
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}{ready ? "Re-run setup" : "Set up"}</button>
       </div>
 
+      <ReplyGuard source="ava" />
+
       {/* live */}
       {live.map((c) => (
         <section key={c.conversation_id} aria-label="Live call" className="rounded-3xl bg-emerald-500/[0.06] ring-1 ring-emerald-500/30">
@@ -156,7 +158,7 @@ export default function AvaAssistant() {
                   <button type="button" onClick={() => void markRead(c)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-white/[0.04]">
                     <span className={cn("mt-2 h-2 w-2 shrink-0 rounded-full", c.read_at ? "bg-transparent" : "bg-[#0A84FF]")} aria-label={c.read_at ? undefined : "Unread"} />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2"><span className="text-[15px] font-medium text-white">{nameOf(c)}</span>
+                      <div className="flex items-center gap-2"><CallNo n={c.call_no} /><span className="text-[15px] font-medium text-white">{nameOf(c)}</span>
                         {c.urgent && <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] text-rose-300">Urgent</span>}
                         {c.callback_wanted && <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-300">Wants a call back</span>}
                         <span className="ml-auto shrink-0 text-xs text-white/40">{when(c.created_at)}</span></div>
@@ -180,7 +182,7 @@ export default function AvaAssistant() {
                   <button type="button" onClick={() => void markRead(c)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-white/[0.04]">
                     {c.direction === "inbound" ? <PhoneIncoming className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" aria-label="Incoming" /> : <PhoneOutgoing className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" aria-label="Outgoing" />}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2"><span className="text-[15px] font-medium text-white">{nameOf(c)}</span>
+                      <div className="flex items-center gap-2"><CallNo n={c.call_no} /><span className="text-[15px] font-medium text-white">{nameOf(c)}</span>
                         <span className="text-xs tabular-nums text-white/40">{mmss(c.duration_sec)}</span>
                         <span className="ml-auto shrink-0 text-xs text-white/40">{when(c.created_at)}</span></div>
                       {c.summary && <p className="mt-0.5 line-clamp-2 text-xs text-white/55">{c.summary}</p>}
@@ -213,7 +215,7 @@ export default function AvaAssistant() {
       <CallSheet call={open} name={open ? nameOf(open) : ""} onClose={() => setOpen(null)}
         onDeleted={() => { const id = open?.id; setOpen(null); setCalls((cs) => cs.filter((x) => x.id !== id)); void load(); }} />
       <ContactSheet c={contactOpen} onClose={() => setContactOpen(null)} onSaved={() => { setContactOpen(null); void load(); }} />
-      <DialerSheet kinds={["personal"]} open={dial} onOpenChange={setDial} onCalled={() => { setDial(false); setTimeout(() => void load(), 3000); }} />
+      <DialerSheet kinds={["personal"]} open={dial} onOpenChange={setDial} onCalled={() => { setTimeout(() => void load(), 3000); }} />
     </div>
   );
 }
@@ -224,7 +226,7 @@ function CallSheet({ call, name, onClose, onDeleted }: { call: Call | null; name
       <SheetContent side="right" className="admin-shell w-full overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-xl">
         {call && <>
           <SheetHeader className="text-left">
-            <SheetTitle className="text-white">{name}</SheetTitle>
+            <SheetTitle className="flex items-center gap-2 text-white"><CallNo n={call.call_no} className="text-[13px]" />{name}</SheetTitle>
             <SheetDescription className="text-white/50">{call.direction === "inbound" ? "Called Ava" : "Ava called"} · {when(call.created_at)} · {fmt(call.phone)}{call.duration_sec != null ? ` · ${mmss(call.duration_sec)}` : ""}</SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-4">

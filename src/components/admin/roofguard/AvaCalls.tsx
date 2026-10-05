@@ -175,6 +175,62 @@ export function DeleteCallButton({ rpc, callId, onDeleted }: { rpc: "rg_delete_c
   );
 }
 
+/**
+ * Reply guard: what the watchdog caught on finished calls (ava_reply_incidents, written by a database trigger).
+ * Same card on both pages; `source` picks which Ava. Code leaks self-heal (model switch); the rest feed her reviews.
+ */
+type Incident = { id: string; call_no: number | null; kind: "code_leak" | "no_hangup" | "repeat"; excerpt: string | null; healed: string | null; created_at: string };
+const KIND_TEXT: Record<Incident["kind"], string> = { code_leak: "Spoke code out loud", no_hangup: "Didn't hang up after goodbye", repeat: "Repeated herself" };
+export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
+  const [rows, setRows] = useState<Incident[]>([]);
+  const tbl = () => supabase.from("ava_reply_incidents" as never) as unknown as {
+    select: (c: string) => { eq: (c: string, v: string) => { is: (c: string, v: null) => { order: (c: string, o: { ascending: boolean }) => { limit: (n: number) => Promise<{ data: Incident[] | null }> } } } };
+    update: (p: object) => { in: (c: string, v: string[]) => Promise<{ error: unknown }> };
+  };
+  const load = useCallback(async () => {
+    const { data } = await tbl().select("id, call_no, kind, excerpt, healed, created_at").eq("source", source).is("reviewed_at", null).order("created_at", { ascending: false }).limit(6);
+    setRows(data ?? []);
+  }, [source]);
+  useEffect(() => { void load(); const t = setInterval(() => { if (!document.hidden) void load(); }, 60000); return () => clearInterval(t); }, [load]);
+  if (!rows.length) return null;
+  const done = async () => { await tbl().update({ reviewed_at: new Date().toISOString() }).in("id", rows.map((r) => r.id)); setRows([]); };
+  return (
+    <section aria-label="Reply guard" className="rounded-2xl bg-amber-500/[0.07] px-4 py-3 ring-1 ring-amber-500/30">
+      <div className="flex items-center gap-2">
+        <ShieldAlert className="h-4 w-4 text-amber-300" aria-hidden />
+        <h3 className="text-[15px] font-semibold text-white">Reply guard caught {rows.length === 1 ? "an issue" : `${rows.length} issues`}</h3>
+        <button type="button" onClick={() => void done()} className="ml-auto inline-flex min-h-[36px] items-center rounded-lg px-3 text-sm text-amber-200 hover:bg-white/5">Mark reviewed</button>
+      </div>
+      <ul className="mt-1 space-y-1.5">
+        {rows.map((r) => (
+          <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+            <CallNo n={r.call_no} /><span className="text-white">{KIND_TEXT[r.kind]}</span>
+            {r.healed && <span className="text-emerald-300/90">· Fixed: {r.healed}</span>}
+            {r.excerpt && <span className="w-full truncate pl-1 text-xs text-white/45">"{r.excerpt.replace(/\s+/g, " ")}"</span>}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1.5 text-[11px] text-white/40">Each one goes into Ava's next self-review so it doesn't happen again.</p>
+    </section>
+  );
+}
+
+/** "#12": every call's number, shared across RoofGuard and personal Ava, so feedback can name one call. */
+export function CallNo({ n, className }: { n: number | null | undefined; className?: string }) {
+  if (n == null) return null;
+  return <span className={cn("shrink-0 rounded-md bg-white/[0.08] px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-white/70", className)} aria-label={`Call ${n}`}>#{n}</span>;
+}
+
+/** call id → call number for RoofGuard calls (the board functions predate numbering) */
+function useRgCallNos(tick: unknown) {
+  const [m, setM] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    void (supabase.from("rg_calls" as never) as unknown as { select: (c: string) => Promise<{ data: { id: string; call_no: number | null }[] | null }> })
+      .select("id, call_no").then(({ data }) => setM(new Map((data ?? []).filter((r) => r.call_no != null).map((r) => [r.id, r.call_no as number]))));
+  }, [tick]);
+  return m;
+}
+
 function useEvery(fn: () => void, ms: number) {
   useEffect(() => {
     fn();
@@ -207,6 +263,7 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
   const [followups, setFollowups] = useState<Followup[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState<BoardRow | null>(null);
+  const nos = useRgCallNos(board);
 
   const loadCols = useCallback(async () => {
     const [q, b, f] = await Promise.all([rpcArgs<QueueRow[]>("rg_call_queue", { p_limit: 150 }), rpcArgs<BoardRow[]>("rg_call_board", { p_limit: 200 }),
@@ -251,14 +308,16 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
 
       {live.calls.map((c) => <LiveBanner key={c.call_id} call={c} />)}
 
+      <ReplyGuard source="roofguard" />
+
       {followups.some((f) => f.status === "scheduled" || f.status === "dialing") && <Followups rows={followups} />}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <QueueColumn rows={queue} />
-        <CalledColumn rows={board} onOpen={setOpen} />
+        <CalledColumn rows={board} onOpen={setOpen} nos={nos} />
       </div>
 
-      <CallSheet row={open} onClose={() => setOpen(null)} onDeleted={() => { setOpen(null); void loadCols(); }} />
+      <CallSheet row={open} nos={nos} onClose={() => setOpen(null)} onDeleted={() => { setOpen(null); void loadCols(); }} />
     </div>
   );
 }
@@ -375,7 +434,7 @@ const FILTERS: { id: "all" | "booked" | "callback" | "voicemail" | "closed"; lab
   { id: "closed", label: "Closed", match: (s) => ["not_interested", "dnc", "bad_number", "exhausted"].includes(s) },
 ];
 
-function CalledColumn({ rows, onOpen }: { rows: BoardRow[]; onOpen: (r: BoardRow) => void }) {
+function CalledColumn({ rows, onOpen, nos }: { rows: BoardRow[]; onOpen: (r: BoardRow) => void; nos: Map<string, number> }) {
   const [f, setF] = useState<(typeof FILTERS)[number]["id"]>("all");
   const [tests, setTests] = useState(true);
   const shown = rows.filter((r) => (tests || !r.is_test) && FILTERS.find((x) => x.id === f)!.match(r.stage));
@@ -397,6 +456,7 @@ function CalledColumn({ rows, onOpen }: { rows: BoardRow[]; onOpen: (r: BoardRow
             <button type="button" onClick={() => onOpen(r)} className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-white/[0.04] focus-visible:bg-white/[0.06] focus-visible:outline-none">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
+                  <CallNo n={nos.get(r.call_id)} />
                   <span className="truncate text-[15px] font-medium text-white">{r.company.replace(" (demo)", "")}</span>
                   <StagePill stage={r.stage} />
                   {r.is_test && <span className="inline-flex items-center gap-1 text-[11px] text-violet-300"><FlaskConical className="h-3 w-3" aria-hidden />Test</span>}
@@ -432,7 +492,7 @@ function Fact({ icon, label, children }: { icon: ReactNode; label: string; child
   );
 }
 
-function CallSheet({ row, onClose, onDeleted }: { row: BoardRow | null; onClose: () => void; onDeleted: () => void }) {
+function CallSheet({ row, nos, onClose, onDeleted }: { row: BoardRow | null; nos: Map<string, number>; onClose: () => void; onDeleted: () => void }) {
   const [calls, setCalls] = useState<LeadCall[] | null>(null);
   const [pick, setPick] = useState(0);
   useEffect(() => {
@@ -456,7 +516,7 @@ function CallSheet({ row, onClose, onDeleted }: { row: BoardRow | null; onClose:
               {calls.map((x, i) => (
                 <button key={x.call_id} type="button" role="tab" aria-selected={pick === i} onClick={() => setPick(i)}
                   className={cn("min-h-[36px] shrink-0 rounded-full px-3 text-xs", pick === i ? "bg-white text-black" : "bg-white/[0.06] text-white/70")}>
-                  {i === 0 ? "Latest" : ago(x.ended_at)}</button>
+                  {nos.get(x.call_id) != null ? `#${nos.get(x.call_id)} · ` : ""}{i === 0 ? "Latest" : ago(x.ended_at)}</button>
               ))}
             </div>
           )}
@@ -465,7 +525,7 @@ function CallSheet({ row, onClose, onDeleted }: { row: BoardRow | null; onClose:
           {c && (
             <div className="mt-4 space-y-5">
               <div className="flex flex-wrap items-center gap-2 text-xs text-white/50">
-                <StagePill stage={outcomeStage(c.outcome)} /><span>{whenThere(c.ended_at, row.timezone)}</span>
+                <CallNo n={nos.get(c.call_id)} /><StagePill stage={outcomeStage(c.outcome)} /><span>{whenThere(c.ended_at, row.timezone)}</span>
                 {c.duration_sec != null && <span className="tabular-nums">· {mmss(c.duration_sec)}</span>}
                 {c.opener_key && <span>· opener: {c.opener_key.replace(/^dm_/, "")}</span>}
               </div>
