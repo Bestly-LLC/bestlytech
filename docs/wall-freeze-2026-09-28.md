@@ -237,3 +237,14 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - Something had opened a Turo inbox tab inside the wall's hidden Chrome on CDP port 9333 (Turo blocked it).
   - The agent now uses port **47333** and closes any tab that isn't the wall.
 - **Lesson:** a new wall switch needs **three** places: the DB cleaner, `server.py` `DEFAULT_STATE`, and `wall.html`.
+
+## Oct 5, 4:30 PM: the sky map lines up with Kings Rd (measured, not eyeballed)
+
+- **Problem.** The streets ran about 20 degrees off the balcony door. The first fix (a shear on Oct 3) only fixed one axis.
+- **How it was measured.** Turned on `calGrid`, took one photo of the ceiling and the door, and marked the 26 ceiling grid dots. Fit a homography from the projector image to the photo. Took the wall direction from the wall/ceiling line, the curtain rod and the door glass. Took the horizon height from the heights of those three lines (ceiling, rod, door top), assuming a 1x iPhone lens. Then rectified the ceiling plane.
+- **What it found.** The old sky box was a skewed shape on the ceiling: its top edge ran about 20 degrees off the wall and its sides were 55 degrees apart. Kings Rd runs along the box's x axis (`airBearing` 90 puts north on the left), so the streets followed that tilt.
+- **Fix.** A new `air` quad that is a true rectangle on the ceiling. Its bottom edge is on the wall line and its sides are perpendicular to the wall. It covers about 94% of the ceiling the projector reaches. Corners are limited to -0.5..1.5 by `wall_clean_patch`, so the far left end of the wall line is outside the box. `airAspect` is 1.71. `homePos` moved so the home pin stays on the same spot of the ceiling.
+  - New values: `air` = `[[-0.499884,0.186466],[1.294368,-0.181155],[1.00209,0.27064],[0.112732,0.393815]]`, `airAspect` 1.71, `homePos` {x:0.505, y:0.177}.
+  - Undo: `air` = `[[-0.1154,0.001476],[0.9165,0.017125],[0.998913,0.269387],[0.00593,0.400064]]`, `airAspect` 1.98, `homePos` {x:0.3, y:0.35}. Apply it with `select wall_ha_patch(get_home_hub_agent_key(), '{...}'::jsonb)`.
+- **Side effect.** The box is larger on screen, and `airFit` caps the sky's logical width at 4000. Labels and planes in the sky draw about 1.3x larger.
+- **Lesson.** Map alignment on an oblique ceiling is a plane-rectification problem. Measure it from a photo with the calibration grid on; eyeballing it was off by about 18 degrees.
