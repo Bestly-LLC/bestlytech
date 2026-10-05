@@ -149,12 +149,14 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
       <section className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10" aria-label="The Law of Averages">
         <h3 className="text-[0.9375rem] font-semibold text-white">The Law of Averages</h3>
         <p className="mt-2 text-[0.9375rem] leading-relaxed text-white/80">
-          Goal: <b className="text-white">{k.goal} meetings a week</b> ({k.goal} closes, your Amazon Business standard).
+          Goal: <b className="text-white">{k.goal} meetings a week</b>{admin ? <> ({k.goal} closes, your Amazon Business standard)</> : null}.
           {" "}{measured ? "Her real average" : "Starting assumption"}: <b className="text-white">1 meeting per {k.loa.dials_per_meeting} dials</b>.
           {" "}So she needs <b className="text-white">{k.loa.weekly_target} dials a week</b>, about <b className="text-white">{k.loa.daily_target} a day</b> over {k.work_days} days.
         </p>
         <p className="mt-2 text-xs leading-relaxed text-white/60">
-          Your door-to-door LOA was about 1 close per {k.loa.door_dials_per_meeting} doors (55 doors, 30 contacts, 7 decision makers, 4.5 pitches, 2.5 accounts a week). Cold calls convert worse than walking in, so Ava starts at 1 per 50.
+          {admin
+            ? `Your door-to-door LOA was about 1 close per ${k.loa.door_dials_per_meeting} doors (55 doors, 30 contacts, 7 decision makers, 4.5 pitches, 2.5 accounts a week). Cold calls convert worse than walking in, so Ava starts at 1 per 50.`
+            : "Cold calls convert worse than walking in, so Ava starts at 1 meeting per 50 dials."}
           {measured ? ` This number is now hers: ${k.loa.booked_all} booked from ${k.loa.dials_all} real dials.` : ` Her own number replaces it as real calls come in (${k.loa.dials_all} so far).`}
         </p>
         {k.status !== "hit" && k.days_left > 0 && k.loa.rest_per_day != null && (
@@ -177,14 +179,14 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
                   <div className="mb-1 flex items-baseline gap-2 text-[0.8125rem]">
                     <span className="text-white/75">{s.label}</span>
                     <span className="ml-auto tabular-nums text-white">{s.n.toLocaleString()}</span>
-                    <span className="min-w-[7rem] whitespace-nowrap text-right text-xs tabular-nums text-white/60">{i === 0 ? "" : conv == null ? "–" : `${conv}%`}{i > 0 && <span className="text-white/60"> · door {doorConv}%</span>}</span>
+                    <span className="min-w-[7rem] whitespace-nowrap text-right text-xs tabular-nums text-white/60">{i === 0 ? "" : conv == null ? "–" : `${conv}%`}{admin && i > 0 && <span className="text-white/60"> · door {doorConv}%</span>}</span>
                   </div>
                   <Bar value={s.n} max={Math.max(steps[0].n, 1)} label={`${s.label}: ${s.n}`} tone={i === steps.length - 1 ? "#34d399" : "#7dd3fc"} />
                 </li>
               );
             })}
           </ol>
-          <p className="mt-3 text-[0.75rem] text-white/55">Percent = share of the step above. "Door" = your Amazon Business rate at that step.</p>
+          <p className="mt-3 text-[0.75rem] text-white/55">Percent = share of the step above.{admin ? ' "Door" = your Amazon Business rate at that step.' : ""}</p>
         </section>
 
         {/* history */}
