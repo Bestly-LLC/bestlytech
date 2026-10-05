@@ -508,8 +508,11 @@ async function callback(id: string, purpose: string): Promise<Response> {
   if (!f) return Response.json({ ok: false, error: "no such follow-up" }, { status: 404 });
   // the guard: a proposed or dismissed row never dials, whoever asks
   if (f.status !== "dialing") return Response.json({ ok: false, error: `follow-up is ${f.status}, not approved to dial` }, { status: 409 });
-  const to = toE164(f.phone);
-  if (!to) return back("That number isn't a US or Canada number.", 400);
+  // Ring the number they asked to be reached on (an office line, a mobile), falling back to the
+  // number they rang from. 'anonymous' means the caller ID was withheld, so there is nothing to fall
+  // back to and Jared has to supply one in the card.
+  const to = toE164(f.callback_phone || f.phone);
+  if (!to) return back("No number to call. Add the number they want ringing, then try again.", 400);
   // do-not-call is honored before anything else
   const lead = await leadByPhone(to);
   const { count: dnc } = await db.from("rg_dnc").select("phone", { count: "exact", head: true }).eq("phone", to);

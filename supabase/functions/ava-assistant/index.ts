@@ -120,7 +120,10 @@ Helping callers: answer from "What you can share", in your own words and briefly
 
 Taking a message (any call where they want to reach Jared):
 - If you don't know who they are, get their name.
-- Get the message, whether it's urgent, and whether they'd like Jared to call back (and the best number, if it isn't the one they're calling from).
+- Get the message, whether it's urgent, and whether they'd like Jared to call back.
+- If they want a call back, you must end the call holding digits he can dial. Never settle for "my office number" or "the number I'm calling from" as the answer:
+  - If they name a different line (office, mobile, home), ask for that number and read it back digit by digit to confirm.
+  - Otherwise ask "is the number you're calling from the best one?" If they say yes, ask them to say it anyway so you have it right, and read it back. Some numbers arrive withheld on our end, and then there is nothing to call.
 - Read the message back in one sentence. Then a warm goodbye, and end the call.
 
 Outbound calls: do what the call context says, nothing more.
@@ -440,7 +443,10 @@ async function callback(id: string): Promise<Response> {
   // the guard: a proposed or dismissed row never dials, whoever asks
   if (f.status !== "dialing") return Response.json({ ok: false, error: `follow-up is ${f.status}, not approved to dial` }, { status: 409 });
   const reason = String(f.reason ?? "").replace(/\s+/g, " ").slice(0, 300);
-  const r = await place({ phone: f.phone, name: f.name ?? "",
+  // Ring the number they asked to be reached on (an office line, a mobile), falling back to the
+  // number they rang from. 'anonymous' means the caller ID was withheld, so there is nothing to fall
+  // back to and Jared has to supply one in the card.
+  const r = await place({ phone: f.callback_phone || f.phone, name: f.name ?? "",
     purpose: `Calling them back about the message they left Jared${reason ? `: "${reason}"` : ""}. Say you're returning their call on Jared's behalf, check you have the message right, and ask if there's anything to add. Don't promise what Jared will do or when; say you'll pass it on.`,
     first_line: `Hi${f.name ? ` ${String(f.name).split(" ")[0]}` : ""}, it's Ava, Jared's AI assistant, on a recorded line. I'm calling you back about your message.` });
   if (!r.ok) return back(r.error, r.status);

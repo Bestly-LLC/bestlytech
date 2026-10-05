@@ -294,8 +294,21 @@ export const rgIncomingToMsg = (r: RgIncoming): Msg => {
 };
 
 // ---------- follow-ups ----------
-type Followup = { id: string; source: Source; call_id: string | null; phone: string; name: string | null; reason: string | null; due_at: string | null;
+type Followup = { id: string; source: Source; call_id: string | null; phone: string; callback_phone: string | null; name: string | null; reason: string | null; due_at: string | null;
   status: "proposed" | "approved" | "dialing" | "done" | "dismissed"; result_call_id: string | null; note: string | null; created_at: string };
+
+/** A withheld caller ID is stored as 'anonymous' - a word, not a number, so there is nothing to dial. */
+const WITHHELD = "anonymous";
+/** The number this follow-up will actually ring: the one they asked for, else the one they rang from. */
+const dialTo = (f: Followup) => (f.callback_phone || "").trim() || (f.phone && f.phone !== WITHHELD ? f.phone : "");
+const tenDigits = (v: string) => { const d = v.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, ""); return d.length === 10 ? d : ""; };
+/** (555) 123-4567 as you type. */
+const typePhone = (v: string) => {
+  const d = v.replace(/\D/g, "").replace(/^1(?=\d{10})/, "").slice(0, 10);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+};
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const toLocalInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -319,7 +332,13 @@ export function FollowupsList({ source, onChanged, className }: { source: Source
   }, [source]);
   usePoll(load, 20000);
 
-  const act = async (id: string, action: "call_now" | "approve" | "dismiss" | "cancel", at?: string) => {
+  const act = async (id: string, action: "call_now" | "approve" | "dismiss" | "cancel", at?: string, phone?: string) => {
+    // Save the number first: the table's trigger normalises it to +1XXXXXXXXXX and refuses a bad one,
+    // so the dialer never sees something it can't call.
+    if (phone) {
+      const { error: pe } = await table("ava_followups").update({ callback_phone: phone }).eq("id", id);
+      if (pe) return pe.message;
+    }
     const { error } = await rpcArgs("ava_followup_act", { p_id: id, p_action: action, ...(at ? { p_at: at } : {}) });
     if (error) return error.message;
     await load(); onChanged?.();
@@ -348,18 +367,32 @@ export function FollowupsList({ source, onChanged, className }: { source: Source
   );
 }
 
-function FollowupRow({ f, nos, act }: { f: Followup; nos: Map<string, number>; act: (id: string, a: "call_now" | "approve" | "dismiss" | "cancel", at?: string) => Promise<string | null> }) {
+function FollowupRow({ f, nos, act }: { f: Followup; nos: Map<string, number>; act: (id: string, a: "call_now" | "approve" | "dismiss" | "cancel", at?: string, phone?: string) => Promise<string | null> }) {
   const [mode, setMode] = useState<null | "now" | "later" | "dismiss">(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [at, setAt] = useState("");
-  const who = f.name?.trim() || fmtPhone(f.phone);
+  const to = dialTo(f);
+  // No number to call: they rang with the caller ID withheld, or asked for a different line and
+  // never gave the digits. Jared types it here instead of hitting a dead end.
+  const [newPhone, setNewPhone] = useState("");
+  const [editPhone, setEditPhone] = useState(false);
+  const askPhone = !to || editPhone;
+  const canDial = !!to || !!tenDigits(newPhone);
+  const who = f.name?.trim() || (to ? fmtPhone(to) : "Caller");
   const run = async (a: "call_now" | "approve" | "dismiss" | "cancel", when?: string) => {
     setBusy(true); setErr(null);
-    const e = await act(f.id, a, when);
+    const e = await act(f.id, a, when, tenDigits(newPhone) ? newPhone : undefined);
     setBusy(false);
-    if (e) setErr(e); else setMode(null);
+    if (e) setErr(e); else { setMode(null); setEditPhone(false); setNewPhone(""); }
   };
+  const PhoneField = () => (
+    <label className="mt-2 block">
+      <span className="mb-1 block text-xs text-white/70">{to ? "Call a different number instead" : "Number to call"}</span>
+      <input type="tel" inputMode="tel" autoComplete="tel" value={newPhone} onChange={(e) => setNewPhone(typePhone(e.target.value))}
+        placeholder="(555) 123-4567" aria-label="Number to call" className={cn(inputCls, "tabular-nums")} />
+    </label>
+  );
   const preset = (kind: "hour" | "tomorrow") => {
     const d = new Date();
     if (kind === "hour") d.setHours(d.getHours() + 1, 0, 0, 0);
@@ -376,7 +409,9 @@ function FollowupRow({ f, nos, act }: { f: Followup; nos: Map<string, number>; a
     <li className="px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="text-[15px] font-medium text-white">{who}</span>
-        {f.name && <span className="whitespace-nowrap text-xs tabular-nums text-white/60">{fmtPhone(f.phone)}</span>}
+        {to
+          ? <span className="whitespace-nowrap text-xs tabular-nums text-white/60">{fmtPhone(to)}{f.callback_phone ? " (asked for)" : ""}</span>
+          : <span className="whitespace-nowrap text-xs text-white/60">number withheld</span>}
         <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium", pill.c)}>
           <pill.I className="h-3 w-3" aria-hidden />{pill.t}</span>
         {f.status === "done" && f.result_call_id && <CallNo n={nos.get(f.result_call_id)} />}
@@ -402,11 +437,18 @@ function FollowupRow({ f, nos, act }: { f: Followup; nos: Map<string, number>; a
       {mode === "now" && (
         <div role="alertdialog" aria-label={`Call ${who} now?`} className="mt-2 rounded-2xl bg-emerald-500/[0.07] p-3 ring-1 ring-emerald-500/25">
           <p className="text-[15px] font-semibold text-white">Call {who} now?</p>
-          <p className="mt-0.5 text-sm text-white/60">Ava calls {fmtPhone(f.phone)} from her own line as {source_label(f.source)}, and says she's an AI on a recorded line.</p>
+          <p className="mt-0.5 text-sm text-white/60">
+            {to
+              ? <>Ava calls <span className="whitespace-nowrap tabular-nums">{fmtPhone(tenDigits(newPhone) ? newPhone : to)}</span> from her own line as {source_label(f.source)}, and says she&rsquo;s an AI on a recorded line.</>
+              : <>They called with their number withheld, so there&rsquo;s nothing to dial. Add the number they asked you to ring.</>}
+          </p>
+          {askPhone ? <PhoneField /> : (
+            <button type="button" onClick={() => setEditPhone(true)} className="mt-1.5 text-xs text-white/60 underline underline-offset-2 hover:text-white">Call a different number</button>
+          )}
           {err && <p role="alert" className="mt-2 text-sm text-red-300">{err}</p>}
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setMode(null)} disabled={busy} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>Not now</button>
-            <button type="button" onClick={() => void run("call_now")} disabled={busy} autoFocus className={cn(btn, "bg-[#30D158] font-semibold text-[#052E1F] hover:bg-[#4be071]")}>
+            <button type="button" onClick={() => void run("call_now")} disabled={busy || !canDial} autoFocus className={cn(btn, "bg-[#30D158] font-semibold text-[#052E1F] hover:bg-[#4be071]")}>
               {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Call</button>
           </div>
         </div>
@@ -414,6 +456,7 @@ function FollowupRow({ f, nos, act }: { f: Followup; nos: Map<string, number>; a
       {mode === "later" && (
         <div role="group" aria-label={`Schedule a call to ${who}`} className="mt-2 rounded-2xl bg-white/[0.04] p-3 ring-1 ring-white/10">
           <p className="text-[15px] font-semibold text-white">Approve a time</p>
+          {!to && <PhoneField />}
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" onClick={() => preset("hour")} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>In an hour</button>
             <button type="button" onClick={() => preset("tomorrow")} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>Tomorrow, 9:00&nbsp;AM</button>
@@ -424,7 +467,7 @@ function FollowupRow({ f, nos, act }: { f: Followup; nos: Map<string, number>; a
           {err && <p role="alert" className="mt-2 text-sm text-red-300">{err}</p>}
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setMode(null)} disabled={busy} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>Cancel</button>
-            <button type="button" onClick={() => at && void run("approve", new Date(at).toISOString())} disabled={busy || !at} className={cn(btn, "bg-white font-semibold text-black hover:bg-white/90")}>
+            <button type="button" onClick={() => at && void run("approve", new Date(at).toISOString())} disabled={busy || !at || !canDial} className={cn(btn, "bg-white font-semibold text-black hover:bg-white/90")}>
               {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Approve</button>
           </div>
         </div>
