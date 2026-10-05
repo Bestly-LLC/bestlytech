@@ -5,8 +5,11 @@ Why this shape (2026-10-03, docs/pi-move-opusplan-2026-10-03.md):
   - Turo blocks Playwright-launched browsers and the old turo-watch profile ("You've been blocked").
     A plain Chromium with its own profile is not blocked, so run.sh starts plain Chromium in cage
     (headless Wayland) and this script only talks to it over the DevTools port on 127.0.0.1:9334.
-  - Read only: /api/v2/feeds/upcoming-trips (-> turo-ingest, same as the Mac sync) and
+  - Reads /api/v2/feeds/upcoming-trips (-> turo-ingest, same as the Mac sync) and
     /api/v2/feeds/conversation (-> turo_inbox_put; new guest messages pop on the wall).
+  - 1.1.0 (2026-10-05): sends ONLY the Claims Closer messages Jared approved at /admin/claims
+    (claims_send_claim -> POST /api/v2/message/send in the Turo thread -> confirm in the feed -> claims_send_done).
+    Approving pokes this reader, so a message goes out within ~15 s. Nothing else is ever sent from here.
   - Every 2 minutes, or within ~15 s when the iPhone Turo shortcut pings (turo_reader_note returns poke).
   - Signed out: the tab goes to Turo's sign-in page and a LAN-only noVNC view starts on :6080 so Jared can
     sign in once from any browser at home; it stops by itself once signed in.
@@ -17,7 +20,7 @@ import asyncio, json, os, subprocess, sys, time, urllib.request, urllib.error
 
 import websockets
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
 PUB = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"
 CDP = "http://127.0.0.1:9334"
@@ -96,6 +99,44 @@ return {trips, conv};
 """
 
 
+SEND_JS = """
+const fd = new FormData(); fd.append('message', %s); fd.append('reservationId', %s);
+const r = await fetch('/api/v2/message/send', {method:'POST', body: fd, credentials:'include'});
+const t = await r.text();
+if (r.status === 401 || r.status === 403) throw new Error('Turo is signed out on the Pi (' + r.status + ')');
+if (!r.ok) throw new Error('send ' + r.status + ': ' + t.slice(0, 160));
+return r.status;
+"""
+
+VERIFY_JS = """
+for (let page = 1; page <= 3; page++) {
+  const j = await (await fetch('/api/v2/feeds/conversation?appMode=HOST&itemsPerPage=20&page=' + page, {credentials:'include'})).json();
+  for (const c of (j.list || [])) if (c.reservation && c.reservation.id === %s) return JSON.stringify(c.mostRecentMessage || {}).includes(%s);
+  if (!j.list || j.list.length < 20) break;
+}
+return false;
+"""
+
+
+async def send_claims(tab):
+    """Claims Closer: send what Jared approved. Each send is claimed first, so it can never go out twice."""
+    jobs = rpc("claims_send_claim", {"p_token": TOKEN}) or []
+    for j in jobs:
+        try:
+            await tab.js(SEND_JS % (json.dumps(j["body"]), json.dumps(str(j["reservation_id"]))))
+            await asyncio.sleep(2)
+            ok = False
+            if j.get("snippet"):
+                try: ok = bool(await tab.js(VERIFY_JS % (int(j["reservation_id"]), json.dumps(j["snippet"]))))
+                except Exception as e: log(f"verify {j['id']}: {e}")
+            rpc("claims_send_done", {"p_token": TOKEN, "p_id": j["id"], "p_ok": True, "p_verified": ok})
+            log(f"claims: sent to {j['reservation_id']} (verified={ok})")
+        except Exception as e:
+            log(f"claims: send {j['id']} failed: {e}")
+            try: rpc("claims_send_done", {"p_token": TOKEN, "p_id": j["id"], "p_ok": False, "p_error": str(e)[:300]})
+            except Exception: pass
+
+
 class NoVNC:
     """LAN-only sign-in view (noVNC -> wayvnc on 127.0.0.1:5911). Only runs while Turo is signed out."""
     def __init__(self):
@@ -166,6 +207,10 @@ async def main():
                     rpc("turo_reader_note", {"p_token": TOKEN, "p_signed_in": True, "p_error": None,
                                              "p_trips": isinstance(trips, list), "p_inbox": isinstance(conv, list), "p_version": VERSION})
                     log(f"read: {len(trips or [])} trip items -> {res}; {len(conv or [])} conversations -> {inbox}{' (ping)' if poke else ''}")
+                    try:
+                        await send_claims(tab)
+                    except Exception as e:
+                        log(f"claims: {e}")
             fails = 0
         except Exception as e:
             fails += 1
