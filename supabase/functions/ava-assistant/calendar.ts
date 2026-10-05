@@ -61,7 +61,7 @@ function parseCalendars(xml: string, base: string, provider: Provider): Cal[] {
     const rt = first(r, "resourcetype") ?? "";
     if (!hasEl(rt, "calendar") || /<[\w:-]*(schedule-inbox|schedule-outbox|deleted-calendar)/i.test(rt)) continue;
     const comps = first(r, "supported-calendar-component-set");
-    if (comps && !/name="VEVENT"/i.test(comps)) continue;                 // reminders / task lists
+    if (comps && !/name\s*=\s*["']VEVENT["']/i.test(comps)) continue;                 // reminders / task lists
     const url = absolute(unxml(href), base);
     const name = unxml(first(r, "displayname") ?? "").trim() || decodeURIComponent(url.split("/").filter(Boolean).pop() ?? "Calendar");
     const priv = first(r, "current-user-privilege-set");
@@ -106,7 +106,6 @@ export async function discover(provider: Provider, c: Creds, trace: Trace = []):
   const cals = parseCalendars(p3.text, p3.url, provider);
   if (!cals.length) {
     trace.push(`3 tags: ${tags(p3.text)}`);
-    for (const r of blocks(p3.text, "response").slice(0, 16)) trace.push(`3 item: type=[${(first(r, "resourcetype") ?? "").replace(/\s+/g, " ").slice(0, 160)}] comps=[${(first(r, "supported-calendar-component-set") ?? "-").replace(/\s+/g, " ").slice(0, 80)}]`);
     // some accounts answer the home with only a listing; look at each collection on its own as a second chance
     const hrefs = blocks(p3.text, "response").map((r) => first(r, "href")).filter((h): h is string => !!h).map((h) => absolute(unxml(h), p3.url)).filter((u) => u.replace(/\/$/, "") !== p3.url.replace(/\/$/, ""));
     const out: Cal[] = [];
