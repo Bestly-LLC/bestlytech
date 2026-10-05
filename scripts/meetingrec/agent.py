@@ -14,7 +14,7 @@ Standard library only: it runs on the system python3.
 import base64, glob, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.7.0"
+VERSION = "1.8.0"   # 1.8: voice bank (Jared's Pro voice clone from his own mic track, voicebank.py)
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -41,6 +41,7 @@ RAW = "https://raw.githubusercontent.com/Bestly-LLC/bestlytech/main/scripts/meet
 SYNC = {"notetaker/notetaker.js": f"{HOME}/notetaker/notetaker.js",
         "notetaker/tester.js": f"{HOME}/notetaker/tester.js",
         "talk_tracks.py": f"{HOME}/talk_tracks.py",
+        "voicebank.py": f"{HOME}/voicebank.py",
         "agent.py": f"{HOME}/agent.py"}
 BAD = f"{HOME}/.bad-versions"
 heal = {"next_sync": 0, "next_version_check": 0, "selftest": None, "last": None, "verify_after_update": False}
@@ -326,7 +327,11 @@ def rollback():
         with open(BAD, "a") as f:
             f.write(h + "\n")
         log("rolled back", rel, "blocked", h)
+    back_agent = any(rel == "agent.py" for rel, _ in heal.get("updated", []))
     heal["updated"] = []
+    if back_agent:            # the old agent.py is back on disk; run it
+        time.sleep(3)
+        os._exit(0)
 
 
 selftest_lock = threading.Lock()
@@ -500,6 +505,41 @@ def upkeep_checks():
             log("upkeep failed", f.__name__, e)
 
 
+voicebank_job = {"running": False, "fails": 0}
+
+
+def run_voicebank():
+    """Hourly while idle: bank Jared's clean speech from new meetings into his Pro voice clone (voicebank.py), then tick
+    the ava-voicebank edge function. Low priority, and voicebank.py stops between meetings if a recording starts.
+    Problems go to the monitor as recorder.voicebank (two failures in a row, so one network blip doesn't page him)."""
+    vb = f"{HOME}/voicebank.py"
+    if not os.path.exists(vb):
+        return
+    py = f"{HOME}/.venv-diar/bin/python"
+    py = py if os.path.exists(py) else "python3"
+    voicebank_job["running"] = True
+    try:
+        r = subprocess.run(["nice", "-n", "15", py, vb], capture_output=True, text=True, timeout=3000, cwd=HOME)
+        tail = (r.stdout + r.stderr)[-1500:]
+        if r.returncode == 0:
+            if voicebank_job["fails"] >= 2:
+                health("voicebank", "resolved", "Voice bank is working again", tail, healed=True)
+            voicebank_job["fails"] = 0
+        else:
+            voicebank_job["fails"] += 1
+            log("voicebank failed", tail[-300:])
+            if voicebank_job["fails"] == 2:
+                health("voicebank", "problem", "Ava's voice bank failed twice in a row",
+                       "voicebank.py on the Mac mini (Jared's Pro voice clone from his meetings) exited with an error twice.\n" + tail)
+    except subprocess.TimeoutExpired:
+        voicebank_job["fails"] += 1
+        log("voicebank timed out")
+    except Exception as e:  # noqa: BLE001
+        log("voicebank run failed", e)
+    finally:
+        voicebank_job["running"] = False
+
+
 def heal_tick():
     """Idle-time upkeep: code sync, Talk version watch, daily self-test."""
     if recording_pid() or busy["stage"] or (heal["selftest"] or {}).get("status") == "running":
@@ -510,6 +550,12 @@ def heal_tick():
         heal["next_sync"] = now + 600
         if sync_code():
             reason = "code updated from the repo"
+            # a new agent.py only takes effect in a new process: exit while idle and launchd (KeepAlive) starts the new
+            # one, which runs the self-test on boot (.agent-updated) and still rolls back if it fails
+            if any(rel == "agent.py" for rel, _ in heal.get("updated", [])):
+                open(f"{HOME}/.agent-updated", "w").write(json.dumps(heal["updated"]))
+                log("agent.py updated; restarting into the new version")
+                os._exit(0)
     if not reason and now >= heal["next_version_check"]:
         heal["next_version_check"] = now + 3600
         try:
@@ -521,6 +567,9 @@ def heal_tick():
                     reason = f"Talk updated {old} -> {v}"
         except Exception as e:  # noqa: BLE001
             log("version check failed", e)
+    if now >= heal.get("next_voicebank", 120) and not voicebank_job["running"]:
+        heal["next_voicebank"] = now + 3600
+        threading.Thread(target=run_voicebank, daemon=True).start()
     if now >= heal.get("next_upkeep", 0):
         heal["next_upkeep"] = now + 3600
         threading.Thread(target=upkeep_checks, daemon=True).start()
@@ -832,6 +881,13 @@ def watch_backend(ok):
 def main():
     log("agent", VERSION, "up")
     orphan_job()
+    if os.path.exists(f"{HOME}/.agent-updated"):
+        try:
+            heal["updated"] = [tuple(x) for x in json.loads(read(f"{HOME}/.agent-updated") or "[]")]
+        except ValueError:
+            heal["updated"] = []
+        os.remove(f"{HOME}/.agent-updated")
+        threading.Thread(target=run_selftest, args=(f"agent updated to {VERSION}",), daemon=True).start()
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     last_sweep = 0
     while True:

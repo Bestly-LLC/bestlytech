@@ -778,12 +778,20 @@ async function voiceClone(b: Record<string, unknown>): Promise<Response> {
     if (/too short|not enough|minimum/i.test(t)) return jerr("That recording is too short. Read the script for about 3 minutes.", 422);
     return jerr("The voice platform couldn't make a clone from that recording. Try a quieter room.", 502);
   }
-  const { data: prev } = await db.from("ava_settings").select("jared_voice_id").eq("id", true).single();
-  await db.from("ava_settings").update({ jared_voice_id: j.voice_id, updated_at: new Date().toISOString() }).eq("id", true);
+  const { data: prev } = await db.from("ava_settings").select("jared_voice_id, jared_pvc_voice_id, jared_ivc_voice_id, pvc_state").eq("id", true).single();
+  // The Pro clone (ava-voicebank, trained from his meetings) is never replaced or deleted by a quick re-record:
+  // while it's live, a new quick clone becomes the backup; otherwise it becomes the voice, as before.
+  const proLive = !!prev?.jared_pvc_voice_id && prev.jared_voice_id === prev.jared_pvc_voice_id;
+  const old = proLive ? prev?.jared_ivc_voice_id : prev?.jared_voice_id;
+  await db.from("ava_settings").update({
+    ...(proLive ? { jared_ivc_voice_id: j.voice_id } : { jared_voice_id: j.voice_id, jared_ivc_voice_id: null }),
+    ...(prev?.pvc_state === "paused" ? { pvc_state: "collecting" } : {}),
+    updated_at: new Date().toISOString(),
+  }).eq("id", true);
   // the raw recording is gone the moment the clone exists
   await db.storage.from("ava-voice").remove([path]);
   await purgeRaw();
-  if (prev?.jared_voice_id && prev.jared_voice_id !== j.voice_id) await fetch(`${XI}/voices/${prev.jared_voice_id}`, { method: "DELETE", headers: xiHeaders(key, false) }).then((x) => x.text()).catch(() => {});
+  if (old && old !== j.voice_id && old !== prev?.jared_pvc_voice_id) await fetch(`${XI}/voices/${old}`, { method: "DELETE", headers: xiHeaders(key, false) }).then((x) => x.text()).catch(() => {});
   return Response.json({ ok: true, voice_id: j.voice_id }, { headers: CORS });
 }
 
@@ -797,13 +805,18 @@ async function voicePreview(b: Record<string, unknown>): Promise<Response> {
 async function voiceDelete(): Promise<Response> {
   const key = await xiKey();
   if (!key) return jerr("The ElevenLabs key is missing from Vault.", 412);
-  const { data: s } = await db.from("ava_settings").select("jared_voice_id").eq("id", true).single();
-  if (s?.jared_voice_id) {
-    const r = await fetch(`${XI}/voices/${s.jared_voice_id}`, { method: "DELETE", headers: xiHeaders(key, false) });
+  const { data: s } = await db.from("ava_settings").select("jared_voice_id, jared_pvc_voice_id, jared_ivc_voice_id").eq("id", true).single();
+  // "Delete my voice" removes every copy: the voice in use, the Pro clone and the quick-clone backup
+  for (const id of new Set([s?.jared_voice_id, s?.jared_pvc_voice_id, s?.jared_ivc_voice_id].filter(Boolean) as string[])) {
+    const r = await fetch(`${XI}/voices/${id}`, { method: "DELETE", headers: xiHeaders(key, false) });
     await r.text().catch(() => "");
     if (!r.ok && r.status !== 404) return jerr("Couldn't remove it from the voice platform. Try again.", 502);
   }
-  await db.from("ava_settings").update({ jared_voice_id: null, jared_voice_for_contacts: false, jared_voice_paused_at: null, jared_voice_paused_why: null, updated_at: new Date().toISOString() }).eq("id", true);
+  await db.from("ava_voice_bank").delete().neq("meeting", "");
+  // paused: the Mac stops banking his meetings until he records a voice again
+  await db.from("ava_settings").update({ jared_voice_id: null, jared_pvc_voice_id: null, jared_ivc_voice_id: null, pvc_state: "paused", pvc_trained_seconds: 0,
+    pvc_last_train_at: null, pvc_live_at: null, pvc_note: "Deleted. Record your voice again to restart.",
+    jared_voice_for_contacts: false, jared_voice_paused_at: null, jared_voice_paused_why: null, updated_at: new Date().toISOString() }).eq("id", true);
   await purgeRaw();
   return Response.json({ ok: true }, { headers: CORS });
 }
@@ -818,7 +831,9 @@ async function voiceHealth(): Promise<string[]> {
   const notes: string[] = [];
   try {
     if (!(await xiKey())) return notes;
-    const { data: s } = await db.from("ava_settings").select("voice_id, jared_voice_id").eq("id", true).single();
+    const { data: s } = await db.from("ava_settings").select("voice_id, jared_voice_id, jared_ivc_voice_id").eq("id", true).single();
+    // tells ava-voicebank this build protects the Pro clone (re-record keeps it, delete removes it), so it may switch over
+    await db.from("ava_settings").update({ pvc_guard_at: new Date().toISOString() }).eq("id", true);
     if (!s) return notes;
     const now = new Date().toISOString(), url = "https://bestly.tech/admin/ava", hour = now.slice(0, 13);
     const cur = await voiceInfo(s.voice_id ?? DEFAULT_VOICE);
@@ -838,7 +853,12 @@ async function voiceHealth(): Promise<string[]> {
     }
     if (s.jared_voice_id) {
       const j = await voiceInfo(s.jared_voice_id);
-      if (j.missing) {
+      // the Pro clone went missing but the quick clone is kept as backup: fall back to it
+      const backup = j.missing && s.jared_ivc_voice_id && s.jared_ivc_voice_id !== s.jared_voice_id && !(await voiceInfo(s.jared_ivc_voice_id)).missing;
+      if (backup) {
+        await db.from("ava_settings").update({ jared_voice_id: s.jared_ivc_voice_id, updated_at: now }).eq("id", true);
+        notes.push("Jared's Pro voice was missing; back on his quick clone");
+      } else if (j.missing) {
         await db.from("ava_settings").update({ jared_voice_id: null, jared_voice_for_contacts: false, updated_at: now }).eq("id", true);
         notes.push("Jared's cloned voice was missing; voice mode is off");
         await db.rpc("scout_notify", { p_title: "Ava (assistant): your cloned voice is gone", p_body: "It no longer exists in the voice account, so Use my voice is off. Record it again at /admin/ava.",

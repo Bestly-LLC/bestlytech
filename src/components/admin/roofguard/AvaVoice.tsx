@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { AlertTriangle, Check, ChevronDown, Loader2, Mic, Pause, PhoneCall, Play, RotateCcw, Square, Trash2, Upload, Volume2 } from "lucide-react";
+import { AlertTriangle, AudioWaveform, Check, ChevronDown, Loader2, Mic, Pause, PhoneCall, Play, RotateCcw, Square, Trash2, Upload, Volume2 } from "lucide-react";
 import { AvaOrb, AVA_GLOW } from "./AvaOrb";
 import { InCallSheet, type ActiveCall } from "./AvaDialer";
 import type { Source } from "./AvaShared";
@@ -411,6 +411,58 @@ async function toWav(blob: Blob): Promise<Blob> {
   } finally { void ctx.close(); }
 }
 
+/** The Voice Coach (ava-voicebank): his Pro clone, learned from his own mic in his meetings. Read-only status line. */
+type BankStatus = { state: string; note: string | null; banked: number; trained: number; live_at: string | null };
+const PVC_LABEL: Record<string, string> = {
+  collecting: "Learning", needs_verify: "Needs your voice check", training: "Training", live: "Live", no_plan: "Needs a plan upgrade", paused: "Off",
+};
+function VoiceBankStatus() {
+  const [b, setB] = useState<BankStatus | null>(null);
+  useEffect(() => {
+    let on = true;
+    const from = supabase.from.bind(supabase) as unknown as (t: string) => { select: (c: string) => Promise<{ data: Record<string, unknown>[] | null }> & { maybeSingle: () => Promise<{ data: Record<string, unknown> | null }> } };
+    void (async () => {
+      const [{ data: s }, { data: rows }] = await Promise.all([
+        from("ava_settings").select("pvc_state, pvc_note, pvc_trained_seconds, pvc_live_at").maybeSingle(),
+        from("ava_voice_bank").select("seconds"),
+      ]);
+      if (!on || !s) return;
+      setB({ state: String(s.pvc_state ?? "collecting"), note: (s.pvc_note as string) ?? null, trained: Number(s.pvc_trained_seconds ?? 0),
+        live_at: (s.pvc_live_at as string) ?? null, banked: (rows ?? []).reduce((a, r) => a + Number(r.seconds ?? 0), 0) });
+    })();
+    return () => { on = false; };
+  }, []);
+  if (!b || b.state === "paused") return null;
+  const mins = Math.round(b.banked / 60), goal = 30;
+  const pct = Math.min(100, Math.round((b.banked / (goal * 60)) * 100));
+  const warn = b.state === "needs_verify" || b.state === "no_plan";
+  return (
+    <div className="mt-3 rounded-2xl bg-black/20 p-3 ring-1 ring-white/10">
+      <div className="flex items-center gap-2">
+        <AudioWaveform className="h-4 w-4" style={{ color: AVA_GLOW }} aria-hidden />
+        <div className="text-[13px] font-semibold text-white">Learning from your meetings</div>
+        <span className={cn("ml-auto whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium",
+          warn ? "bg-amber-500/15 text-amber-200" : b.state === "live" ? "bg-white/10 text-white/85" : "bg-white/10 text-white/70")}>
+          {PVC_LABEL[b.state] ?? b.state}</span>
+      </div>
+      <p className="mt-1 text-sm text-white/65">Only your own mic, only while the other person is quiet. Your Pro voice gets better as you record more calls.</p>
+      {b.state === "collecting" && (
+        <div className="mt-2">
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Voice banked toward first training">
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: AVA_GLOW }} />
+          </div>
+          <p className="mt-1 text-xs tabular-nums text-white/55"><span className="whitespace-nowrap">{`${mins}\u00A0min`}</span> of <span className="whitespace-nowrap">{`${goal}\u00A0min`}</span> to start training</p>
+        </div>
+      )}
+      {b.note && <p className="mt-2 text-xs text-white/55">{b.note}</p>}
+      {b.state === "needs_verify" && (
+        <a href="https://elevenlabs.io/app/voice-lab" target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/15">
+          Do the 30-second voice check</a>
+      )}
+    </div>
+  );
+}
+
 function YourVoiceCard({ info, onChanged, player }: { info: CloneInfo | null; onChanged: () => void; player: ReturnType<typeof useOnePlayer> }) {
   const [phase, setPhase] = useState<"idle" | "recording" | "processing">("idle");
   const [secs, setSecs] = useState(0);
@@ -614,6 +666,8 @@ function YourVoiceCard({ info, onChanged, player }: { info: CloneInfo | null; on
         </div>
       )}
 
+      <VoiceBankStatus />
+
       {has && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => void preview()} disabled={busy === "preview"} className={btnQuiet} aria-label={player.playing === "c" ? "Pause preview of your voice" : "Preview your voice"}>
@@ -624,7 +678,7 @@ function YourVoiceCard({ info, onChanged, player }: { info: CloneInfo | null; on
       {askDelete && (
         <div role="alertdialog" aria-label="Delete your voice?" className="mt-3 rounded-2xl bg-[#FF453A]/[0.08] p-3 ring-1 ring-[#FF453A]/30">
           <p className="text-[15px] font-semibold text-white">Delete your voice?</p>
-          <p className="mt-0.5 text-sm text-white/65">It's removed from the voice platform and Use my voice turns off. You can record it again any time.</p>
+          <p className="mt-0.5 text-sm text-white/65">It's removed from the voice platform, including the Pro voice learned from your meetings, and Use my voice turns off. You can record it again any time.</p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setAskDelete(false)} disabled={busy === "delete"} className={btnQuiet}>Keep it</button>
             <button type="button" onClick={() => void remove()} disabled={busy === "delete"} autoFocus className={cn(btn, "bg-[#FF453A] font-semibold text-white hover:bg-[#ff5a50]")}>

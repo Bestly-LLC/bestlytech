@@ -27,3 +27,9 @@ Copies of what runs in `~/MeetingRec` on the Mac mini. The live files are there,
   with Jared's mic. `stop.sh` uses it when the notetaker was in the call and falls back to
   `name_speakers.py` otherwise (Zoom, phone, one-to-one Talk rooms).
 - `notetaker/tester.js` — a fake guest (Chrome fake mic, optional audio file) for testing.
+- `voicebank.py` — Ava's voice bank (2026-10-05). Hourly while idle, the agent runs it: from each meeting's
+  `-mic.m4a` (Jared only) it keeps stretches where he talks and the far end (`-system.m4a`) is silent, drops clipped
+  and Bluetooth-narrowband audio, takes the best 20 minutes, and hands them to the `ava-voicebank` edge function,
+  which feeds his Pro voice clone in ElevenLabs, trains it, and switches Ava's "Use my voice" over once it speaks.
+  Eli's voice never leaves the Mac. Log: `~/MeetingRec/voicebank.log`. Failures: monitor key `recorder.voicebank`.
+- Since 1.8 the agent restarts itself (launchd KeepAlive) when the repo has a new `agent.py`, then self-tests.
