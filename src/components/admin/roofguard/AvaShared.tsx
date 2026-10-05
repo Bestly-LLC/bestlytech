@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
-  AlarmClock, AlertTriangle, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, Mic, PhoneCall, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
+  AlarmClock, AlertTriangle, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, Mic, PhoneCall, PhoneForwarded, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
 } from "lucide-react";
 import { CallNo, DeleteCallButton, LiveTranscript, Recording, type Line } from "./AvaCalls";
 
@@ -26,6 +26,15 @@ export function YourVoiceTag({ className }: { className?: string }) {
     <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium", className)}
       style={{ background: "rgba(255,162,112,0.16)", color: "#FFA270" }}>
       <Mic className="h-3 w-3" aria-hidden />Your voice
+    </span>
+  );
+}
+
+/** Small label on calls that came through Jared's own cell after he didn't pick up (ava_calls.forwarded). Icon plus words, sky blue. */
+export function ForwardedTag({ className }: { className?: string }) {
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-300", className)}>
+      <PhoneForwarded className="h-3 w-3" aria-hidden />Forwarded
     </span>
   );
 }
@@ -194,7 +203,7 @@ export function SpendCapEditor({ source, className }: { source: Source; classNam
 export type Msg = {
   id: string; source: Source; call_no: number | null; direction: "inbound" | "outbound" | "callback"; name: string; phone: string | null;
   message: string | null; urgent: boolean; callback_wanted: boolean; read_at: string | null; at: string; summary: string | null;
-  duration_sec: number | null; transcript: Line[]; purpose?: string | null; hasRecording: boolean; company?: string | null;
+  duration_sec: number | null; transcript: Line[]; purpose?: string | null; hasRecording: boolean; company?: string | null; forwarded?: boolean;
 };
 
 /** The list itself. The page owns what opening a message does (mark read, show the sheet), so it can reuse its own sheet. */
@@ -220,7 +229,8 @@ export function MessagesList({ items, source, onOpen, className }: { items: Msg[
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <CallNo n={m.call_no} />
                     <span className="text-[15px] font-medium text-white">{m.name}</span>
-                    {m.urgent && <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] text-rose-300"><AlertTriangle className="h-3 w-3" aria-hidden />Urgent</span>}
+                    {m.forwarded && <ForwardedTag />}
+                    {m.urgent &&<span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] text-rose-300"><AlertTriangle className="h-3 w-3" aria-hidden />Urgent</span>}
                     {m.callback_wanted && <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-300"><PhoneCall className="h-3 w-3" aria-hidden />Wants a call back</span>}
                     <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-white/55">{whenShort(m.at)}</span>
                   </div>
@@ -242,7 +252,7 @@ export function MessageSheet({ item, onClose, onDeleted }: { item: Msg | null; o
       <SheetContent side="right" className="admin-shell w-full overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-xl">
         {item && <>
           <SheetHeader className="text-left">
-            <SheetTitle className="flex flex-wrap items-center gap-2 text-white"><CallNo n={item.call_no} className="text-[13px]" />{item.name}</SheetTitle>
+            <SheetTitle className="flex flex-wrap items-center gap-2 text-white"><CallNo n={item.call_no} className="text-[13px]" />{item.name}{item.forwarded && <ForwardedTag />}</SheetTitle>
             <SheetDescription className="text-white/50">
               {item.direction === "inbound" ? "Called in" : item.direction === "callback" ? "Ava called back" : "Ava called"} · {whenShort(item.at)}
               {item.phone ? ` · ${fmtPhone(item.phone)}` : ""}{item.duration_sec != null ? ` · ${mmss(item.duration_sec)}` : ""}

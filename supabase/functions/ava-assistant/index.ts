@@ -19,9 +19,14 @@
 //   {action:"voice_test_call"}  admin: {voice_id} -> ONE call to Jared's own cell in that voice (per-call override).
 //   {action:"voice_use"} admin: {voice_id, public_owner_id?, name} -> add to the account if needed, save, re-run setup.
 //   {action:"voice_clone" | "voice_preview" | "voice_delete" | "voice_resume"}  Jared's own voice (docs/ava-voice-clone-opusplan.md).
+//   {action:"spam_complaint" | "spam_letter"}  admin: {company_id} -> pre-filled Do Not Call complaint text / demand-letter TEMPLATE
+//                        (fixed text, no AI; nothing is ever sent). The letter sets the company's status to 'letter_drafted'.
+//   {action:"evidence"}  admin/service: {call_id?} -> copies a spam call's recording into the private ava-evidence bucket
+//                        (no call_id: retries every spam call that still has no copy). The health action also retries.
 //   ?hook=init           ElevenLabs, at the start of an inbound call: who is calling? -> greeting + contact details + the
-//                        shareable knowledge (ava_knowledge). Guarded by a shared header secret from Vault.
-//   ?hook=post           ElevenLabs post-call webhook (HMAC-signed) -> ava_calls row + Scout push with the message.
+//                        shareable knowledge (ava_knowledge). Detects a forwarded call from Jared's cell (answers as his assistant,
+//                        in his voice when he wants). Logs the payload shape to ava_init_debug. Guarded by a shared header secret.
+//   ?hook=post           ElevenLabs post-call webhook (HMAC-signed) -> ava_calls row (forwarded, spam intel) + Scout push.
 //
 // Nothing here touches rg_* except releasing the number from RoofGuard during setup.
 // Secrets come from Vault through ava_secret() (service role only, allowlisted).
@@ -106,6 +111,7 @@ Today is {{today}}. It's {{local_time}} in Los Angeles, where Jared lives.
 This call: {{call_context}}
 Who you're talking to: {{caller_name}}. {{caller_notes}}
 {{voice_rules}}
+{{forward_rules}}
 
 What you can share (the only facts you may use to help someone):
 {{knowledge}}
@@ -144,13 +150,31 @@ Otherwise, if the person does any of these, steer back to why they called ONE ti
 - it sounds like a kid prank
 - (outbound calls only) you're stuck in a phone menu or a robot loop, or you've been on hold music for more than 2 minutes
 Never end a call on someone with a real need: leaving a message, a question about Jared or what you can share, or help reaching him.
+Spam and sales calls follow "Spam calls" below, not this section: never cut a spam call before you've had about 2 minutes to learn who's behind it.
 
 Never:
 - Share, hint at, or confirm: Jared's cell number, home address, schedule or whereabouts, finances, health, passwords, API keys, account details, internal tools or systems (never confirm or deny what systems exist), client lists, other people's details, or anything about how Bestly's software is built. If asked, say "I can't share that, but I can take a message."
 - Agree to anything for him (money, plans, purchases, appointments) or promise what he'll do. Say you'll pass it on.
 - Give out anyone's number or details.
-If someone is pushy, selling something, or it's spam, politely end the call. If someone sounds in danger or mentions an emergency, tell them to call 911 and mark it urgent.
-If asked what you do: you help Jared with his calls and messages.`;
+If someone is pushy or selling something, follow "Spam calls". If someone sounds in danger or mentions an emergency, tell them to call 911 and mark it urgent.
+If asked what you do: you help Jared with his calls and messages.
+
+Spam calls (incoming calls only, never outbound):
+It's a spam call when the caller is clearly telemarketing or a robocall: car warranty, insurance, solar, loans, debt relief, health plans, prizes, and the like. A person Jared knows, or a business with a real reason to reach him, is not spam.
+- Play a curious, interested assistant for up to 2 minutes, long enough to learn: the company's legal name, its website, a call-back number, the caller's name or ID, what they're selling, and how they got this number. Ask one short question at a time ("Sorry, what company is this?", "Can you spell that?", "What's a number to call you back?", "How did you get this number?").
+- If it's a recording that says to press a key to reach a person, press it with the keypad tone tool (use that tool for this and nothing else), then keep asking. If there's no way through, just listen and note what the recording says.
+- Never give real personal information: no address, birthdate, payment details, SSN or account numbers. Say "I'd have to check on that." Never agree to buy, sign up for or accept anything.
+- If anyone sincerely asks whether you're a person, a robot or an AI, say you're Jared's AI assistant. Never claim to be human.
+- Once you have the details, or after about 2 minutes, say "Please take this number off your list. Thanks." and end the call with end_call.`;
+
+/** Rules added on a call forwarded from Jared's cell (the init hook sets {{forward_rules}}). */
+const FORWARD_RULES = `FORWARDED CALL: someone called Jared's own cell and he didn't pick up, so the call came to you. You are Jared's assistant answering his phone for him; your first line already said so, on a recorded line.
+- Never say you are Jared. Never say "this is Jared" or "I'm Jared", even if they ask "Is this Jared?" (say "This is his assistant."). Never speak as if you are him.
+- Never commit to anything for him: no money, plans, appointments or purchases. Say you'll pass it on.
+- Don't volunteer that you're an AI. But if someone sincerely asks whether you're a person, a robot or an AI, say plainly that you're Jared's AI assistant.
+- Never share private information. The only facts you may use are in "What you can share".
+- Take a message and, if they want a call back, get the best number: the usual message flow.
+- NEVER use the transfer tool on this call, and never offer to connect, patch through or transfer them to Jared. His cell forwards straight back to you, so it would loop. If they ask for him, say you'll pass on a message and he'll call them back.`;
 
 const DATA_COLLECTION = {
   caller_name: { type: "string", description: "The other person's name as they gave it. Empty if unknown." },
@@ -158,9 +182,16 @@ const DATA_COLLECTION = {
   urgent: { type: "boolean", description: "True if they said it's urgent, time-sensitive, or an emergency." },
   callback_wanted: { type: "boolean", description: "True if they want Jared to call them back." },
   callback_number: { type: "string", description: "A callback number they gave, if different from the number they called from. Empty otherwise." },
+  is_spam: { type: "boolean", description: "True if the caller was clearly telemarketing or a robocall selling something (car warranty, insurance, solar, loans, debt relief, health plans, prizes). False for a real person or a business with a real reason to call." },
+  robocall: { type: "boolean", description: "True if the caller was a prerecorded or automated message, not a live person." },
+  spam_company: { type: "string", description: "The legal name of the company behind a spam call, as stated. Empty if none was given." },
+  spam_website: { type: "string", description: "The website the spam caller gave. Empty if none." },
+  spam_callback_number: { type: "string", description: "The call-back number the spam caller gave. Empty if none." },
+  spam_caller_name: { type: "string", description: "The name or ID the spam caller gave for themselves. Empty if none." },
+  spam_offer: { type: "string", description: "What the spam caller was selling or offering, in a few words. Empty if none." },
 };
 
-const UNKNOWN = { caller_name: "a caller Ava doesn't know yet", caller_notes: "", caller_trusted: "no", voice_rules: "", greeting:
+const UNKNOWN = { caller_name: "a caller Ava doesn't know yet", caller_notes: "", caller_trusted: "no", voice_rules: "", forward_rules: "", call_voice: "ava", forwarded: "no", forwarded_from: "", greeting:
   "Hi, it's Ava, Jared's AI assistant, on a recorded line. He can't get to the phone right now. Can I take a message?" };
 
 /** Turn incoming calls on for an ElevenLabs phone number and confirm it with a GET. Tries the documented inbound trunk
@@ -284,10 +315,12 @@ async function setup(): Promise<Response> {
         prompt: { prompt: PROMPT, llm: s?.llm ?? "gpt-4.1-mini", temperature: 0.5,
           built_in_tools: {
             end_call: { name: "end_call", params: { system_tool_type: "end_call" } },
+            // keypad tones: only for a spam robocall that says "press 1 to speak to someone" (the prompt limits it to that)
+            play_keypad_touch_tone: { name: "play_keypad_touch_tone", params: { system_tool_type: "play_keypad_touch_tone" } },
             // "Connect me": can only ever dial Jared's own cell
             transfer_to_number: { name: "transfer_to_number", params: { system_tool_type: "transfer_to_number", transfers: [{
               phone_number: s?.jared_cell ?? "+18165007236", transfer_type: "sip_refer",
-              condition: "Only on an outbound call whose context says to connect them to Jared, after the person said yes to talking now." }] } },
+              condition: "Only on an outbound call whose context says to connect them to Jared, after the person said yes to talking now. NEVER on an incoming or forwarded call: Jared's cell forwards back to this line, so it would loop." }] } },
           } },
       },
       // Money stopper: hard caps no matter what the prompt does
@@ -300,8 +333,8 @@ async function setup(): Promise<Response> {
     },
     platform_settings: {
       data_collection: DATA_COLLECTION,
-      // a single call may swap the voice (the voice test call, and "Use my voice" calls); nothing else is overridable
-      overrides: { conversation_config_override: { tts: { voice_id: true } }, enable_conversation_initiation_client_data_from_webhook: true },
+      // a single call may swap the voice (voice test, "Use my voice", forwarded calls) and the first line (forwarded calls); nothing else is overridable
+      overrides: { conversation_config_override: { agent: { first_message: true }, tts: { voice_id: true } }, enable_conversation_initiation_client_data_from_webhook: true },
       workspace_overrides: {
         webhooks: { post_call_webhook_id: webhookId, events: ["transcript"], send_audio: false },
         conversation_initiation_client_data_webhook: { url: `${SELF}?hook=init`, request_headers: { "x-ava-init": initSecret } },
@@ -453,6 +486,7 @@ async function lineProblems(): Promise<string[] | null> {
 }
 
 async function health(): Promise<Response> {
+  try { await evidenceRetry(); } catch { /* the line check below still runs */ }
   const voiceNotes = await voiceHealth();   // her voice still exists (falls back to the default and re-runs setup if not)
   const first = await lineProblems();
   if (first === null) return Response.json({ ok: null, skipped: "couldn't reach the voice platform" });
@@ -498,10 +532,12 @@ async function live(callId: string | null): Promise<Response> {
     const d = await (await fetch(`${XI}/convai/conversations/${c.conversation_id}`, { headers: { "xi-api-key": key } })).json().catch(() => ({}));
     const pc = d.metadata?.phone_call ?? {};
     const phone = pc.external_number ?? null;
-    const { data: row } = await db.from("ava_calls").select("id, caller_name, direction, voice").eq("conversation_id", c.conversation_id).maybeSingle();
+    const { data: row } = await db.from("ava_calls").select("id, caller_name, direction, voice, forwarded").eq("conversation_id", c.conversation_id).maybeSingle();
+    const dyn = (d.conversation_initiation_client_data?.dynamic_variables ?? {}) as Record<string, unknown>;   // set by the init hook before the row exists
     const { data: contact } = phone ? await db.from("ava_contacts").select("name").eq("phone", phone).maybeSingle() : { data: null };
     return { conversation_id: c.conversation_id, call_id: row?.id ?? null, status: d.status ?? c.status,
-      direction: row?.direction ?? pc.direction ?? "inbound", voice: row?.voice ?? "ava", phone, who: contact?.name ?? row?.caller_name ?? null,
+      direction: row?.direction ?? pc.direction ?? "inbound", voice: row?.voice ?? (dyn.call_voice === "jared" ? "jared" : "ava"),
+      forwarded: row?.forwarded === true || dyn.forwarded === "yes", phone, who: contact?.name ?? row?.caller_name ?? null,
       elapsed: d.metadata?.start_time_unix_secs ? Math.round(Date.now() / 1000 - d.metadata.start_time_unix_secs) : 0,
       duration: d.metadata?.call_duration_secs ?? null, transcript: slim(d.transcript) };
   }));
@@ -808,6 +844,56 @@ async function voiceHealth(): Promise<string[]> {
   return notes;
 }
 
+// ---------- forwarded-call detection ----------
+// Jared dials *71 8164299495 on Verizon; calls he doesn't answer on his cell forward to her line. Whether the diversion
+// reaches us (a Diversion / History-Info header, or a called number that isn't her line) is only knowable from a real forwarded
+// call: ElevenLabs documents caller_id, called_number and call id for the init webhook, and exposes custom X- headers as
+// sip_* variables, but says nothing about Diversion. So every init and post-call payload shape is logged to ava_init_debug
+// (keys and non-secret values, last 50) and the rule below reads whatever is there. No match = a normal inbound call.
+const CELL10 = JARED_CELL.slice(-10), LINE10 = LINE.slice(-10);
+const SECRETISH = /secret|token|passw|api[_-]?key|authori[sz]|signature|cookie|credential|bearer/i;
+
+function flatten(o: unknown, prefix = "", out: Record<string, string> = {}, depth = 0): Record<string, string> {
+  if (o == null || depth > 5 || Object.keys(out).length >= 150) return out;
+  if (Array.isArray(o)) { o.slice(0, 10).forEach((v, i) => flatten(v, `${prefix}[${i}]`, out, depth + 1)); return out; }
+  if (typeof o === "object") {
+    for (const [k, v] of Object.entries(o as Record<string, unknown>)) if (!SECRETISH.test(k)) flatten(v, prefix ? `${prefix}.${k}` : k, out, depth + 1);
+    return out;
+  }
+  out[prefix] = String(o).replace(/\s+/g, " ").slice(0, 160);
+  return out;
+}
+/** The 10-digit number inside a value like "+18165007236", "(816) 500-7236" or "<sip:+18165007236@host>;reason=no-answer". */
+const last10 = (v: string) => { const m = v.match(/\+?\d[\d\s().-]{8,}\d/); const d = (m?.[0] ?? v).replace(/\D/g, ""); return d.length >= 10 ? d.slice(-10) : ""; };
+
+type Fwd = { forwarded: boolean; from: string | null; why: string | null };
+/** A field that names Jared's cell AND looks like a diversion (by its name or its value), or a called number that isn't her line. */
+function detectForward(fields: Record<string, string>): Fwd {
+  const DIV_PATH = /divers|history[_ .-]?info|redirect|forward|rdnis|orig(inal)?[_ .-]?(called|dest|number|to|cld)|p[_-]?called|referred|retarget/i;
+  const DIV_VALUE = /reason\s*=\s*(unconditional|no-?answer|busy|unavailable|deflection|follow-?me|out-of-service|time-of-day|do-not-disturb|unknown|cfnr|cfb|cfu)|;\s*counter\s*=|cause\s*=\s*(486|480|408|404|302)/i;
+  const CALLED_PATH = /(^|[._\[])(system__called_number|called_number|called|to_number|to|dnis|agent_number)$/i;
+  let calledDiff: Fwd | null = null;
+  for (const [path, v] of Object.entries(fields)) {
+    if ((DIV_PATH.test(path) || DIV_VALUE.test(v)) && v.replace(/\D/g, "").includes(CELL10)) return { forwarded: true, from: JARED_CELL, why: `${path} names the cell` };
+    if (!calledDiff && CALLED_PATH.test(path)) {
+      const n = last10(v);
+      if (n && n !== LINE10) calledDiff = { forwarded: true, from: n === CELL10 ? JARED_CELL : `+1${n}`, why: `${path} is not her line` };
+    }
+  }
+  return calledDiff ?? { forwarded: false, from: null, why: null };
+}
+
+async function logDebug(row: { kind: "init" | "post"; keys: unknown; fields: Record<string, string>; fwd: Fwd; note?: string }) {
+  try {
+    await db.from("ava_init_debug").insert({ kind: row.kind, keys: row.keys, fields: row.fields, forwarded: row.fwd.forwarded, forwarded_from: row.fwd.from,
+      note: [row.fwd.why, row.note].filter(Boolean).join(" | ") || null });
+  } catch { /* debugging must never touch a call */ }
+}
+
+const FWD_GREETING = (first: string | null) => `Hey${first ? ` ${first}` : ""}, you've reached Jared's phone, this is his assistant, on a recorded line. How can I help?`;
+/** Voice-mode rules on a forwarded call: she is the assistant, never him. */
+const VOICE_RULES_FWD = "VOICE MODE: you are speaking in Jared's own voice, so you must be clear you are his assistant and not him. Your first line already says so (his assistant, on a recorded line); never skip or contradict it. Never say \"this is Jared\" or \"I'm Jared\", and never speak as if you are him. Never commit to anything for him: no money, plans, appointments or promises. Say you'll pass it on.";
+
 // ---------- webhooks ----------
 async function initHook(req: Request): Promise<Response> {
   const secret = await vault("ava_init_secret");
@@ -815,14 +901,181 @@ async function initHook(req: Request): Promise<Response> {
   const b = await req.json().catch(() => ({}));
   const caller = toE164(String(b.caller_id ?? "")) ?? String(b.caller_id ?? "");
   const { data: c } = caller ? await db.from("ava_contacts").select("name, relationship, notes").eq("phone", caller).maybeSingle() : { data: null };
-  const { data: st } = await db.from("ava_settings").select("jared_cell").eq("id", true).maybeSingle();
+  const { data: st } = await db.from("ava_settings").select("jared_cell, forward_enabled, forward_voice, jared_voice_id, jared_voice_paused_at").eq("id", true).maybeSingle();
   const trusted = !!c || (!!caller && caller === (st?.jared_cell ?? JARED_CELL)) ? "yes" : "no";
+
+  const fields = flatten(b);
+  const fwd = caller === (st?.jared_cell ?? JARED_CELL) ? { forwarded: false, from: null, why: null } : detectForward(fields);
+  await logDebug({ kind: "init", keys: { body: Object.keys(b), headers: [...req.headers.keys()] }, fields, fwd });
+
+  const base = { knowledge: await knowledge(), ...nowVars() };
+  if (fwd.forwarded) {
+    // a call to Jared's cell he didn't answer. Her voice is his clone only when he turned that on and the clone is healthy.
+    const useJared = st?.forward_enabled === true && st.forward_voice === "jared" && !!st.jared_voice_id && !st.jared_voice_paused_at;
+    const first = c?.name ? String(c.name).replace(/\{\{|\}\}/g, "").trim().split(/\s+/)[0] || null : null;
+    const greeting = FWD_GREETING(first);
+    return Response.json({ type: "conversation_initiation_client_data",
+      conversation_config_override: { agent: { first_message: greeting }, ...(useJared ? { tts: { voice_id: st!.jared_voice_id } } : {}) },
+      dynamic_variables: { ...UNKNOWN, ...(c ? { caller_name: c.name, caller_notes: `They're Jared's ${c.relationship ?? "contact"}. ${c.notes ?? ""}` } : {}),
+        caller_trusted: trusted, greeting, forward_rules: FORWARD_RULES, voice_rules: useJared ? VOICE_RULES_FWD : "",
+        call_voice: useJared ? "jared" : "ava", forwarded: "yes", forwarded_from: fwd.from ?? JARED_CELL,
+        call_context: "A call to Jared's own cell that he didn't answer, forwarded to you. You are his assistant taking the call. Take a message.", ...base } });
+  }
   const vars = c ? {
     caller_trusted: trusted, caller_name: c.name, caller_notes: `They're Jared's ${c.relationship ?? "contact"}. ${c.notes ?? ""}`,
     greeting: `Hi ${c.name}! It's Ava, Jared's assistant, on a recorded line. He can't get to the phone, but I'd love to take a message for him.`,
   } : { ...UNKNOWN, caller_trusted: trusted };
   return Response.json({ type: "conversation_initiation_client_data",
-    dynamic_variables: { ...vars, call_context: "Someone called Jared's line. Take a message.", knowledge: await knowledge(), ...nowVars() } });
+    dynamic_variables: { ...UNKNOWN, ...vars, call_context: "Someone called Jared's line. Take a message.", ...base } });
+}
+
+// ---------- evidence: the private, permanent copy of a spam call's recording ----------
+const EVIDENCE_TRIES = 36;   // the watchdog (every 10 minutes) keeps trying for about 6 hours
+async function saveEvidence(callId: string): Promise<{ ok: boolean; error?: string }> {
+  const { data: c } = await db.from("ava_calls").select("id, call_no, conversation_id, evidence_path, evidence_tries").eq("id", callId).maybeSingle();
+  if (!c?.conversation_id) return { ok: false, error: "no recording for this call" };
+  if (c.evidence_path) return { ok: true };
+  const fail = async (why: string) => {
+    const tries = (c.evidence_tries ?? 0) + 1;
+    await db.from("ava_calls").update({ evidence_tries: tries, evidence_error: why.slice(0, 200) }).eq("id", c.id);
+    if (tries === EVIDENCE_TRIES) {
+      await db.rpc("scout_notify", { p_title: `Ava (assistant): couldn't save the recording of call #${c.call_no ?? "?"}`,
+        p_body: `The spam call's recording never copied into your evidence folder (${why}). Download it from ElevenLabs before it expires.`,
+        p_severity: "warning", p_push: true, p_url: "https://bestly.tech/admin/ava", p_dedupe: `ava-evidence-fail-${c.id}` });
+    }
+    return { ok: false, error: why };
+  };
+  const key = await vault("elevenlabs_api_key");
+  if (!key) return fail("ElevenLabs key missing");
+  try {
+    const res = await fetch(`${XI}/convai/conversations/${c.conversation_id}/audio`, { headers: { "xi-api-key": key } });
+    if (!res.ok) { await res.text().catch(() => ""); return fail(`recording not ready (${res.status})`); }
+    const type = res.headers.get("content-type") ?? "audio/mpeg";
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf.byteLength < 2000) return fail("recording was empty");
+    const path = `${new Date().getUTCFullYear()}/${c.conversation_id}.${/wav/i.test(type) ? "wav" : /ogg/i.test(type) ? "ogg" : "mp3"}`;
+    const up = await db.storage.from("ava-evidence").upload(path, buf, { contentType: type, upsert: true });
+    if (up.error) return fail(`storage: ${up.error.message}`);
+    await db.from("ava_calls").update({ evidence_path: path, evidence_at: new Date().toISOString(), evidence_error: null }).eq("id", c.id);
+    return { ok: true };
+  } catch (e) { return fail(e instanceof Error ? e.message : "error"); }
+}
+
+/** Every spam call that still has no copy (watchdog, every 10 minutes, no AI). */
+async function evidenceRetry(): Promise<number> {
+  const { data } = await db.from("ava_calls").select("id").eq("is_spam", true).is("evidence_path", null).not("conversation_id", "is", null)
+    .lt("evidence_tries", EVIDENCE_TRIES).gt("created_at", new Date(Date.now() - 14 * 86400_000).toISOString()).order("created_at", { ascending: true }).limit(5);
+  let n = 0;
+  for (const r of data ?? []) if ((await saveEvidence(r.id)).ok) n++;
+  return n;
+}
+
+async function evidence(b: Record<string, unknown>): Promise<Response> {
+  const id = String(b.call_id ?? "");
+  if (!id) return Response.json({ ok: true, saved: await evidenceRetry() }, { headers: CORS });
+  const r = await saveEvidence(id);
+  return Response.json(r, { status: r.ok ? 200 : 502, headers: CORS });
+}
+
+// ---------- Do Not Call: the complaint text and the demand-letter template (fixed text, no AI, never sent) ----------
+const DNC_FORM = "https://www.donotcall.gov/report.html";
+const ptFull = (iso: string) => new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })
+  .format(new Date(iso)).replace(/,? at /, " at ").replace(/ /g, " ");
+const ptDate = (d = new Date()) => new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "long", day: "numeric" }).format(d);
+const prettyPhone = (v: string | null | undefined) => { const d = (v ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, ""); return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : (v ?? ""); };
+const uniq = (a: (string | null | undefined)[]) => [...new Set(a.map((x) => (x ?? "").trim()).filter(Boolean))];
+const dollars = (n: number) => `$${n.toLocaleString("en-US")}`;
+
+type SpamCall = { id: string; call_no: number | null; created_at: string; phone: string | null; forwarded: boolean; robocall: boolean; spam_offer: string | null;
+  spam_caller_name: string | null; spam_callback_number: string | null; spam_website: string | null };
+type SpamCo = { id: string; name: string | null; website: string | null; callback_numbers: string[]; caller_ids: string[]; calls_12mo: number; status: string };
+
+async function spamCompany(id: string): Promise<{ co: SpamCo; calls: SpamCall[] } | null> {
+  const { data: co } = await db.from("ava_spam_companies").select("id, name, website, callback_numbers, caller_ids, calls_12mo, status").eq("id", id).maybeSingle();
+  if (!co) return null;
+  const { data: calls } = await db.from("ava_calls").select("id, call_no, created_at, phone, forwarded, robocall, spam_offer, spam_caller_name, spam_callback_number, spam_website")
+    .eq("spam_company_id", id).eq("is_spam", true).order("created_at", { ascending: true });
+  return { co: co as SpamCo, calls: (calls ?? []) as SpamCall[] };
+}
+
+/** Only calls that came through Jared's cell are on the registered number. */
+const NO_CELL_CALLS = "None of this company's calls are marked Forwarded, so none are on your registered number. Open each call and tap \"Came through my cell\" for the ones that did.";
+
+function callLine(c: SpamCall, i: number) {
+  return `${i + 1}. ${ptFull(c.created_at)}. Caller ID: ${prettyPhone(c.phone) || "unknown"}. Prerecorded message: ${c.robocall ? "yes" : "no"}.${c.spam_offer ? ` Offered: ${c.spam_offer}.` : ""}`;
+}
+
+async function spamComplaint(b: Record<string, unknown>): Promise<Response> {
+  const d = await spamCompany(String(b.company_id ?? ""));
+  if (!d) return jerr("That company isn't there anymore.", 404);
+  const calls = d.calls.filter((c) => c.forwarded);
+  if (!calls.length) return jerr(NO_CELL_CALLS, 409);
+  const name = d.co.name ?? "(company name not given)";
+  const text = [
+    "DO NOT CALL COMPLAINT. Draft to paste into donotcall.gov/report.html. Jared submits it himself.",
+    "",
+    `Number that was called: ${prettyPhone(JARED_CELL)} (registered on the National Do Not Call Registry)`,
+    `Company that called: ${name}`,
+    d.co.website ? `Website: ${d.co.website}` : null,
+    uniq([...d.co.callback_numbers.map(prettyPhone), ...calls.map((c) => prettyPhone(c.spam_callback_number))]).length
+      ? `Call-back number(s) they gave: ${uniq([...d.co.callback_numbers.map(prettyPhone), ...calls.map((c) => prettyPhone(c.spam_callback_number))]).join(", ")}` : null,
+    uniq(calls.map((c) => c.phone ? prettyPhone(c.phone) : null)).length ? `Caller ID(s) shown: ${uniq(calls.map((c) => prettyPhone(c.phone))).join(", ")}` : null,
+    uniq(calls.map((c) => c.spam_caller_name)).length ? `Caller name(s) they gave: ${uniq(calls.map((c) => c.spam_caller_name)).join(", ")}` : null,
+    uniq(calls.map((c) => c.spam_offer)).length ? `What they were selling: ${uniq(calls.map((c) => c.spam_offer)).join("; ")}` : null,
+    "",
+    `Calls (${calls.length}), times in Pacific:`,
+    ...calls.map(callLine),
+    "",
+    "Before you file: confirm you have no business relationship with this company and never gave them permission to call.",
+  ].filter((x) => x !== null).join("\n");
+  return Response.json({ ok: true, text, form_url: DNC_FORM, calls: calls.length }, { headers: CORS });
+}
+
+async function spamLetter(b: Record<string, unknown>): Promise<Response> {
+  const d = await spamCompany(String(b.company_id ?? ""));
+  if (!d) return jerr("That company isn't there anymore.", 404);
+  const calls = d.calls.filter((c) => c.forwarded);
+  if (!calls.length) return jerr(NO_CELL_CALLS, 409);
+  const name = d.co.name ?? "(company name not given)";
+  const n = calls.length;
+  const nums = uniq([...d.co.callback_numbers.map(prettyPhone), ...calls.map((c) => prettyPhone(c.spam_callback_number))]);
+  const text = [
+    "Draft. Not legal advice. Review before sending.",
+    "",
+    "[Your name]",
+    "[Your mailing address]",
+    ptDate(),
+    "",
+    `To: ${name}, Legal / Compliance Department`,
+    d.co.website ? `Website: ${d.co.website}` : null,
+    nums.length ? `Call-back number(s) they gave: ${nums.join(", ")}` : null,
+    "",
+    `Re: Telemarketing calls to ${prettyPhone(JARED_CELL)}, a number on the National Do Not Call Registry`,
+    "",
+    "To whom it may concern:",
+    "",
+    `My telephone number, ${prettyPhone(JARED_CELL)}, is on the National Do Not Call Registry [registered since: DATE, from donotcall.gov > Verify a Registration]. Your company, or someone calling on your behalf, called that number ${n === 1 ? "once" : `${n} times`}:`,
+    "",
+    ...calls.map(callLine),
+    "",
+    "I have no business relationship with your company and I did not give it permission to call me.",
+    "",
+    `Under the Telephone Consumer Protection Act, 47 U.S.C. § 227(c)(5), a person who receives more than one telephone call in a 12-month period from or on behalf of the same entity in violation of the Do Not Call rules (47 C.F.R. § 64.1200(c)(2)) may recover up to $500 for each violation, and a court may increase that to up to three times as much ($1,500 per call) if the violation was willful or knowing. For the ${n === 1 ? "call" : `${n} calls`} above, that is up to ${dollars(500 * n)}, or up to ${dollars(1500 * n)} if willful.`,
+    "",
+    "I request that you:",
+    `1. Stop calling this number and add it to your internal do-not-call list now (47 C.F.R. § 64.1200(d)(3)).`,
+    "2. Send me a copy of your written Do Not Call policy, which you must provide on request (47 C.F.R. § 64.1200(d)(1)).",
+    "3. Tell me, in writing, where you got my number and when.",
+    `4. Resolve this with me directly. I am willing to settle for ${dollars(500 * n)} if I hear from you within 14 days.`,
+    "",
+    "If I do not hear from you, I reserve all of my rights, including complaints to the FTC and FCC and the claims described above.",
+    "",
+    "Sincerely,",
+    "[Your name]",
+    "[Your email or mailing address]",
+  ].filter((x) => x !== null).join("\n");
+  await db.from("ava_spam_companies").update({ status: "letter_drafted", updated_at: new Date().toISOString() }).eq("id", d.co.id).in("status", ["tracking", "threshold"]);
+  return Response.json({ ok: true, text, calls: n }, { headers: CORS });
 }
 
 async function postHook(req: Request): Promise<Response> {
@@ -842,34 +1095,81 @@ async function postHook(req: Request): Promise<Response> {
   const pc = d.metadata?.phone_call ?? {};
   const phone = toE164(String(pc.external_number ?? "")) ?? pc.external_number ?? null;
   const { data: contact } = phone ? await db.from("ava_contacts").select("id, name").eq("phone", phone).maybeSingle() : { data: null };
+  const { data: existing } = await db.from("ava_calls").select("id, direction").eq("conversation_id", d.conversation_id).maybeSingle();
+  const direction = existing?.direction ?? (pc.direction === "outbound" ? "outbound" : "inbound");
+
+  // forwarded from Jared's cell? The init hook says so in the dynamic variables it returned; the SIP-ish fields are a second chance.
+  const dyn = (d.conversation_initiation_client_data?.dynamic_variables ?? {}) as Record<string, unknown>;
+  const sipFields = flatten({ phone_call: pc, dyn: Object.fromEntries(Object.entries(dyn).filter(([k]) => /^(system__|sip_)/.test(k))) });
+  const det: Fwd = direction === "inbound" && phone !== JARED_CELL ? detectForward(sipFields) : { forwarded: false, from: null, why: null };
+  const forwarded = direction === "inbound" && (String(dyn.forwarded ?? "") === "yes" || det.forwarded);
+  const forwardedFrom = forwarded ? (String(dyn.forwarded_from ?? "") || det.from || JARED_CELL) : null;
+  const voiceTag: "jared" | null = forwarded && String(dyn.call_voice ?? "") === "jared" ? "jared" : null;
+  if (direction === "inbound") {
+    await logDebug({ kind: "post", keys: { data: Object.keys(d), metadata: Object.keys(d.metadata ?? {}), phone_call: Object.keys(pc), dynamic_variables: Object.keys(dyn) },
+      fields: sipFields, fwd: { forwarded, from: forwardedFrom, why: det.why }, note: `conversation ${String(d.conversation_id ?? "").slice(0, 40)}` });
+  }
+
   // deno-lint-ignore no-explicit-any
   const llm = (d.transcript ?? []).reduce((sum: number, turn: any) => sum + Object.values(turn?.llm_usage?.model_usage ?? {}).reduce((a: number, u: any) =>
     a + (u?.input?.price ?? 0) + (u?.output_total?.price ?? 0) + (u?.input_cache_read?.price ?? 0) + (u?.input_cache_write?.price ?? 0), 0), 0);
-  const message = val("message_for_jared");
-  const urgent = val("urgent") === "true";
+
+  // spam intel: a saved contact is never spam, and a spam call leaves no message or call-back to chase
+  const isSpam = direction === "inbound" && !contact && val("is_spam") === "true";
+  const spamCb = val("spam_callback_number");
+  const spam = { is_spam: isSpam, robocall: isSpam && val("robocall") === "true", spam_company: isSpam ? val("spam_company")?.slice(0, 120) ?? null : null,
+    spam_website: isSpam ? val("spam_website")?.slice(0, 160) ?? null : null, spam_callback_number: isSpam && spamCb ? (toE164(spamCb) ?? spamCb.slice(0, 40)) : null,
+    spam_caller_name: isSpam ? val("spam_caller_name")?.slice(0, 80) ?? null : null, spam_offer: isSpam ? val("spam_offer")?.slice(0, 160) ?? null : null };
+
+  const message = isSpam ? null : val("message_for_jared");
+  const urgent = !isSpam && val("urgent") === "true";
   const callerName = val("caller_name") ?? contact?.name ?? null;
-  const cbNum = val("callback_number");
+  const cbNum = isSpam ? null : val("callback_number");
   const row = {
     phone, contact_id: contact?.id ?? null, caller_name: callerName, status: "completed", summary: d.analysis?.transcript_summary ?? null,
-    message: message ? (cbNum ? `${message} (call back: ${cbNum})` : message) : null, urgent, callback_wanted: val("callback_wanted") === "true",
+    message: message ? (cbNum ? `${message} (call back: ${cbNum})` : message) : null, urgent, callback_wanted: !isSpam && val("callback_wanted") === "true",
     callback_number: cbNum ? toE164(cbNum) : null,
     duration_sec: d.metadata?.call_duration_secs ?? null, transcript: d.transcript ?? null, llm_cost: Math.round(llm * 10000) / 10000,
-    ended_at: new Date().toISOString(),
+    ended_at: new Date().toISOString(), ...spam,
+    ...(forwarded ? { forwarded: true, forwarded_from: forwardedFrom } : {}), ...(voiceTag ? { voice: voiceTag } : {}),
   };
-  const { data: existing } = await db.from("ava_calls").select("id, direction").eq("conversation_id", d.conversation_id).maybeSingle();
-  const direction = existing?.direction ?? (pc.direction === "outbound" ? "outbound" : "inbound");
+  let callId: string | null = existing?.id ?? null;
   if (existing) await db.from("ava_calls").update(row).eq("id", existing.id);
-  else await db.from("ava_calls").insert({ ...row, direction, conversation_id: d.conversation_id });
+  else {
+    const ins = await db.from("ava_calls").insert({ ...row, direction, conversation_id: d.conversation_id }).select("id").single();
+    callId = ins.data?.id ?? null;
+  }
+
+  // the permanent copy of a spam call's recording: after the response (the audio is usually ready within seconds); the watchdog retries
+  if (isSpam && callId) {
+    const keep = (async () => { await new Promise((r) => setTimeout(r, 20_000)); await saveEvidence(callId!); })().catch(() => {});
+    // deno-lint-ignore no-explicit-any
+    const rt = (globalThis as any).EdgeRuntime; if (rt?.waitUntil) rt.waitUntil(keep); else await keep;
+  }
+
+  // the transfer tool must never run on a forwarded call (his cell would forward right back)
+  // deno-lint-ignore no-explicit-any
+  if (forwarded && (d.transcript ?? []).some((x: any) => (x?.tool_calls ?? []).some((tc: any) => /transfer/i.test(String(tc?.tool_name ?? tc?.name ?? ""))))) {
+    await db.rpc("scout_notify", { p_title: "Ava (assistant): she tried to transfer a forwarded call",
+      p_body: "She used the connect tool on a call forwarded from your cell, which can loop. Check the call on /admin/ava.", p_severity: "warning", p_push: true,
+      p_url: "https://bestly.tech/admin/ava", p_dedupe: `ava-fwd-transfer-${d.conversation_id}` });
+  }
 
   const who = callerName ?? (phone ? phone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3") : "Someone");
-  if (message || direction === "inbound") {
-    await db.rpc("scout_notify", { p_title: `${urgent ? "Urgent: " : ""}Message from ${who}`, p_body: message ?? row.summary ?? "Called Ava, no message left.",
+  if (isSpam) {
+    // quiet: the bell, no push. The push comes at the 2nd call from the same company (a database trigger).
+    await db.rpc("scout_notify", { p_title: `Ava (assistant): spam call from ${spam.spam_company ?? who}`,
+      p_body: [spam.spam_offer, forwarded ? "Came through your cell." : null].filter(Boolean).join(" ") || (row.summary ?? ""), p_severity: "info", p_push: false,
+      p_url: "/admin/ava", p_dedupe: `ava-spam-${d.conversation_id}` });
+  } else if (message || direction === "inbound") {
+    await db.rpc("scout_notify", { p_title: `Ava (assistant): ${urgent ? "Urgent: " : ""}Message from ${who}`,
+      p_body: message ?? row.summary ?? (forwarded ? "Missed call on your cell, no message left." : "Called Ava, no message left."),
       p_severity: urgent ? "warning" : "info", p_push: true, p_url: "/admin/ava", p_dedupe: `ava-msg-${d.conversation_id}` });
   } else {
-    await db.rpc("scout_notify", { p_title: `Ava's call with ${who} finished`, p_body: row.summary ?? "", p_severity: "info", p_push: true,
+    await db.rpc("scout_notify", { p_title: `Ava (assistant): call with ${who} finished`, p_body: row.summary ?? "", p_severity: "info", p_push: true,
       p_url: "/admin/ava", p_dedupe: `ava-out-${d.conversation_id}` });
   }
-  return Response.json({ ok: true, direction, message: !!message });
+  return Response.json({ ok: true, direction, forwarded, message: !!message, spam: isSpam });
 }
 
 Deno.serve(async (req) => {
@@ -893,5 +1193,8 @@ Deno.serve(async (req) => {
   if (body.action === "voice_preview") return voicePreview(body);
   if (body.action === "voice_delete") return voiceDelete();
   if (body.action === "voice_resume") return voiceResume();
+  if (body.action === "spam_complaint") return spamComplaint(body);
+  if (body.action === "spam_letter") return spamLetter(body);
+  if (body.action === "evidence") return evidence(body);
   return Response.json({ ok: false, error: "unknown action" }, { status: 400, headers: CORS });
 });
