@@ -1,6 +1,6 @@
 /**
  * Partner portal → Ava demo. Eli types a phone number and Ava calls it, so investors (or Bill, who owns RoofGuard)
- * hear her live. Edge fn roofguard-caller {action:"demo_call"} plays a fictional facility (Riverside Medical Center),
+ * hear her live. Edge fn roofguard-caller {action:"demo_call"} runs a practice call (the company Eli types, or the sample Riverside Medical Center),
  * never a real prospect, capped per day. The sheet then shows the conversation as it happens, Ava's summary, and
  * the recording.
  */
@@ -31,6 +31,7 @@ const stageOf = (o: string | null) => ({ booked: "booked", callback_set: "callba
 export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
+  const [company, setCompany] = useState("");
   const [view, setView] = useState<"score" | "meetings" | "demo" | "says">("score");
   const [phase, setPhase] = useState<Phase>("form");
   const [err, setErr] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
 
   const call = async () => {
     setBusy(true); setErr(null);
-    const { data, error } = await supabase.functions.invoke("roofguard-caller", { body: { action: "demo_call", phone, name } });
+    const { data, error } = await supabase.functions.invoke("roofguard-caller", { body: { action: "demo_call", phone, name, company: company.trim() } });
     setBusy(false);
     if (error || !data?.ok) {
       let msg = data?.error as string | undefined;
@@ -108,7 +109,7 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             {view === "score" ? "How she's doing against the goal: 6 meetings booked with you every week."
               : view === "meetings" ? "The meetings Ava booked for you. Put them on your Google Calendar with a Meet link."
               : view === "says" ? "Everything Ava is allowed to say on a RoofGuard call. For anything else, she takes a message."
-              : "Type a number and Ava calls it in a few seconds. Whoever answers plays the facilities director at Riverside Medical Center, a made-up hospital."}
+              : "Type a number and Ava calls it in a few seconds. Whoever answers plays the person who looks after the roofs at their company (or a sample hospital), and Ava runs a real RoofGuard call with them."}
           </SheetDescription>
           <div role="tablist" aria-label="Ava" className="mt-3 flex max-w-full overflow-x-auto rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:inline-flex">
             {([["score", "Scorecard"], ["meetings", "Meetings"], ["demo", "Demo call"], ["says", "What Ava says"]] as const).map(([id, label]) => (
@@ -137,6 +138,12 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
                   className="h-[3.25rem] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[1.0625rem] text-white outline-none placeholder:text-white/55 focus:border-white/30 bento:bg-[var(--bento-well)]" />
                 <span className="mt-1.5 block text-xs text-white/60">Ava asks for them by name, like a real cold call.</span>
               </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium text-white/80">Their company <span className="text-white/60">(optional)</span></span>
+                <input value={company} onChange={(e) => setCompany(e.target.value)} autoComplete="off" placeholder="e.g. Sunset Plaza Properties" maxLength={60}
+                  className="h-[3.25rem] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[1.0625rem] text-white outline-none placeholder:text-white/55 focus:border-white/30 bento:bg-[var(--bento-well)]" />
+                <span className="mt-1.5 block text-xs text-white/60">Ava calls about their buildings. Leave it empty for a sample hospital.</span>
+              </label>
               {err && <p role="alert" className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}
               <button type="submit" disabled={!valid || busy}
                 className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 text-[1.0625rem] font-semibold text-[#052E1F] transition active:scale-[0.98] disabled:opacity-40">
@@ -144,10 +151,11 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
                 {busy ? "Calling…" : "Have Ava call"}
               </button>
               <ul className="space-y-1.5 rounded-2xl bg-white/[0.04] p-4 text-sm text-white/65">
-                <li className="font-medium text-white/85">Things to try</li>
+                <li className="font-medium text-white/85">It's a practice call</li>
+                <li>They play the person who looks after the roofs. Ava asks real questions and keeps the conversation going.</li>
                 <li>Play the receptionist first: "Who's calling?"</li>
-                <li>Ask "Are you a real person?" (she'll say she's an AI)</li>
                 <li>Push back: "We already have a roofer."</li>
+                <li>Step out of the role and ask how she works. She answers, then picks back up.</li>
                 <li>Agree to a meeting and watch her book it with Eli.</li>
               </ul>
               <p className="text-xs text-white/60">Only call someone who's expecting it. The phone may show it as an unknown number; tell them to pick up.</p>

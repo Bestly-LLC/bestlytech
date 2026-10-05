@@ -141,7 +141,7 @@ async function tick(): Promise<Response> {
 
 // ---------- shared: openers + submit ----------
 type Planned = { lead: Next; opener_key: string; opener: string; hook: string; gk: string; industry: Record<string, string>; followup?: string; voice_id?: string;
-  coach_notes: string; playbook_arms: Record<string, boolean> };
+  coach_notes: string; playbook_arms: Record<string, boolean>; demo?: boolean };
 
 /** The coach's learned playbook for one call: live rules always, each rule under test on a random half of calls
  *  (rg_coach_notes; the arms are saved on the call so rg_playbook_decide can compare). Never fails a call. */
@@ -178,25 +178,29 @@ async function planCalls(leads: Next[]): Promise<Planned[]> {
 }
 
 // deno-lint-ignore no-explicit-any
-function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, followup, voice_id, coach_notes }: Planned) {
+function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, followup, voice_id, coach_notes, demo }: Planned) {
   // so "tomorrow" and "next Tuesday" land on the right date, in the lead's own time zone
   const tz = l.timezone || "America/Chicago";
   const now = new Date();
   const today = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(now);
   const local_time = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(now);
+  const vars: Record<string, string> = {
+    today, local_time, followup_note: followup ?? "",
+    lead_id: l.lead_id, company: l.company, contact_name: l.contact_name ?? "the facilities director",
+    contact_title: l.contact_title ?? "", pitch_angle: l.pitch_angle, category: l.category, state: l.state,
+    callback_number: s.callback_number ?? "",
+    opener_key, gk_opener: gk, dm_opener: opener, dm_hook: hook,
+    industry_plural: industry.industry_plural ?? "facilities teams",
+    industry_hook: industry.industry_hook ?? "keeping roof leaks from turning into downtime",
+    coach_notes: coach_notes || NO_NOTES,
+  };
+  // one call in a different voice (the picker's test call); the agent has to allow it (setup turns that on)
+  const tts = voice_id ? { tts: { voice_id } } : {};
+  // a partner demo (Eli showing someone Ava): the practice-call prompt, with the variables filled in here
+  const agent = demo ? { agent: { prompt: { prompt: demoPrompt(vars) } } } : {};
   return {
-    // one call in a different voice (the picker's test call); the agent has to allow it (setup turns that on)
-    ...(voice_id ? { conversation_config_override: { tts: { voice_id } } } : {}),
-    dynamic_variables: {
-      today, local_time, followup_note: followup ?? "",
-      lead_id: l.lead_id, company: l.company, contact_name: l.contact_name ?? "the facilities director",
-      contact_title: l.contact_title ?? "", pitch_angle: l.pitch_angle, category: l.category, state: l.state,
-      callback_number: s.callback_number ?? "",
-      opener_key, gk_opener: gk, dm_opener: opener, dm_hook: hook,
-      industry_plural: industry.industry_plural ?? "facilities teams",
-      industry_hook: industry.industry_hook ?? "keeping roof leaks from turning into downtime",
-      coach_notes: coach_notes || NO_NOTES,
-    },
+    ...(voice_id || demo ? { conversation_config_override: { ...tts, ...agent } } : {}),
+    dynamic_variables: vars,
   };
 }
 
@@ -647,6 +651,29 @@ Before ending, make sure you said out loud and confirmed: the outcome, the meeti
 
 Coach's notes (habits learned from your past calls; follow them, but every rule above always wins):
 {{coach_notes}}`;
+
+// ---------- partner demo: a practice RoofGuard call (Jared, 2026-10-05) ----------
+// Eli calls whoever he wants to show (an investor, Bill) and they play the building manager. Same call, same hard rules,
+// but she leans into the back-and-forth: asks real questions, answers theirs, and never hangs up on them for "testing" her.
+const DEMO_RULES = `PRACTICE CALL (this overrides the money stopper and the two-no's rule below):
+This is a live demo. Eli Cooper, who runs RoofGuard, set up this call so the person you're talking to can hear how you work. They know you're an AI and they're playing the person who looks after the roofs at {{company}}. Treat it as a real RoofGuard call from start to finish, and make it a real conversation.
+- Run the whole call: your opener, find the roof person if they play a receptionist, then qualify, one angle, the ask, objections, and the read-back.
+- Ask questions and actually use the answers. Pick two or three, one at a time, never as a list: how many buildings they look after, roughly how old the roofs are, when someone last went up there, any leaks or stains after the last storm, who handles repairs today, what's the most annoying part of it. React to what they say ("Oh, that's a lot of roof." "Yeah, that's the usual story.") and tie your angle to it.
+- Let them steer. If they ask about RoofGuard, answer in a sentence or two from the facts you have, then come back to the conversation. If they push back, handle it like a real objection; don't fold and don't argue.
+- If they step out of the role to ask about you (how you work, whether you're AI, what you can do), answer honestly in a sentence or two: you're an AI assistant that calls for the RoofGuard program, books intro calls with Eli, and gets better from every call. Then offer to pick back up: "Want to keep going? So, the roofs..."
+- Testing you is the point here. Never hang up because they're testing you, joking, or asking about AI. Stay patient and keep it fun but professional.
+- If they agree to a meeting, take it like a real one: two times and an email, spelled back.
+- End only when they say goodbye, ask to stop, or you've done the read-back and they have nothing else. Then say a short goodbye and use end_call.
+- All your hard rules still apply word for word: honest that you're an AI, never "replacement", never insurance, no other clients, no invented deadlines, no dollar amounts.`;
+
+const DEMO_STOPPER = `Stay efficient (a demo still costs money): keep each reply short. If the line goes silent for a long stretch or it's clearly a phone menu or voicemail, say a short goodbye and end the call.`;
+
+/** The real outbound prompt with the practice-call rules on top, the money stopper swapped out, and every {{var}} filled in. */
+function demoPrompt(vars: Record<string, string>): string {
+  const body = PROMPT.replace(STOPPER, DEMO_STOPPER)
+    .replace("- After two clear no's from the decision maker, thank them and end the call.", "- On this practice call, keep handling objections instead of ending after two no's; end only when they say goodbye or ask to stop.");
+  return `${DEMO_RULES}\n\n${body}`.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? "");
+}
 
 const VOICEMAIL = "Hi, it's Ava from RoofGuard, calling for {{contact_name}}. Quick one... we look after commercial roofs for one flat monthly cost, and most roof warranties need documented maintenance that, honestly, hardly anyone keeps up with. If a quick chat with Eli Cooper, who runs the program, sounds useful, give us a call back on {{callback_number}}. That's {{callback_number}}. Thanks so much.";
 
@@ -1287,7 +1314,7 @@ async function voiceHealth(): Promise<string[]> {
 
 // ---------- demo call (partner portal: Eli shows investors) ----------
 // Admin dialer + partner demo. A company typed by an admin replaces the practice facility (Jared, 2026-10-04: "the dialer needs to not say demo").
-async function demoCall(phone: string, name: string, voiceId?: string, company = ""): Promise<Response> {
+async function demoCall(phone: string, name: string, voiceId?: string, company = "", demo = false): Promise<Response> {
   const bad = (error: string, status = 400) => Response.json({ ok: false, error }, { status, headers: CORS });
   const to = toE164(phone);
   if (!to) return bad("Enter a 10-digit US or Canada number.");
@@ -1313,7 +1340,7 @@ async function demoCall(phone: string, name: string, voiceId?: string, company =
     pitch_angle: custom ? "the roofs over your buildings, where one small leak can turn into water damage and downtime" : lead.pitch,
     category: custom ? "commercial" : lead.category, state: lead.state, attempt: 1 };
   const [p] = await planCalls([next]);
-  const plan = { ...p, to, ...(voiceId ? { voice_id: voiceId } : {}), gk: who ? p.gk
+  const plan = { ...p, to, demo, ...(voiceId ? { voice_id: voiceId } : {}), gk: who ? p.gk
     : `Hey, it's Ava from RoofGuard, on a recorded line... I'm looking for whoever's in charge of keeping the roof maintained at ${companyName}. Is that you?` };
   const res = await callOne(key, s, plan);
   const body = await res.json().catch(() => ({}));
@@ -1359,8 +1386,10 @@ Deno.serve(async (req) => {
     // partners only ever see and place demo calls
     const demoLead = role === "partner"
       ? ((await db.from("rg_settings").select("demo_lead_id").eq("id", true).single()).data?.demo_lead_id ?? "none") : null;
-    // only admins may name a company; partners always get the practice facility
-    if (body.action === "demo_call") return demoCall(String(body.phone ?? ""), String(body.name ?? ""), undefined, role === "admin" ? String(body.company ?? "") : "");
+    // partners (Eli's demo) get the practice call: back-and-forth, questions, no hanging up on testers. They can name a company too.
+    // The admin dialer stays a realistic cold call; an admin can opt into the practice call with practice:true.
+    if (body.action === "demo_call") return demoCall(String(body.phone ?? ""), String(body.name ?? ""), undefined, String(body.company ?? ""),
+      role === "partner" || body.practice === true);
     if (body.action === "call_result") return callResult(String(body.call_id ?? ""), demoLead);
     if (body.action === "audio") return audio(String(body.call_id ?? ""), demoLead);
     return live(demoLead, body.call_id ? String(body.call_id) : null, role === "admin" && /^[\w-]{6,80}$/.test(String(body.conversation_id ?? "")) ? String(body.conversation_id) : null);
