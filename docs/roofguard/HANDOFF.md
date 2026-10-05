@@ -19,7 +19,13 @@ Kept separate on purpose (Jared, 2026-10-04) so RoofGuard's owners can buy this 
 ## Shared today, split at handoff
 
 - **ElevenLabs and Telnyx accounts** are Jared's. A buyer opens their own, pastes their keys into Setup, and re-runs it. The agent, trunk and number get rebuilt in their accounts. Call history stays in `rg_calls`.
-- **Phone number:** RoofGuard needs its own (the old one, (816) 429-9495, became personal Ava's line on 2026-10-04 before any prospect was called). Buy it in the buyer's Telnyx account, or port it there.
+- **Phone number:** RoofGuard's line is **(816) 544-0206** (bought 2026-10-04 in Jared's Telnyx account; port it to the buyer's). (816) 429-9495 is personal Ava's and stays with Bestly.
+- **Test calls** (Gerry, Eli, Mom, Jared on 2026-10-04) were moved to personal Ava's `ava_calls`; the originals are kept in `rg_calls` with `moved_to_ava_at` set and hidden everywhere.
+- **Deleted calls** are soft deletes (`deleted_at`): hidden from lists and the scorecard, still counted in spend.
+
+## UI rule
+
+Personal Ava (`/admin/ava`) and RoofGuard Ava (`/admin/roofguard`) should look and work the same; RoofGuard just adds RoofGuard-only pieces (queue, stages, scorecard). Shared pieces live in `src/components/admin/roofguard/AvaCalls.tsx` (`LiveTranscript`, `Recording`, `DeleteCallButton`) and `AvaDialer.tsx` (`DialerSheet`). A change to one page's call UI goes to both.
 - **Platform plumbing** (`invoke_edge_function`, `bestly_raise`, `scout_notify`, `has_role`) is Bestly's. A standalone copy needs small stand-ins.
 
 ## Steps for a split

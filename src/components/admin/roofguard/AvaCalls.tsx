@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   AlarmClock, Ban, Calendar, CheckCircle2, ChevronRight, CircleDashed, Clock, FlaskConical, Headphones, Loader2,
-  Mail, PhoneCall, PhoneMissed, PhoneOff, Play, ShieldAlert, UserRound, Voicemail, XCircle,
+  Mail, PhoneCall, PhoneMissed, PhoneOff, Play, ShieldAlert, Trash2, UserRound, Voicemail, XCircle,
 } from "lucide-react";
 
 // ---------- types ----------
@@ -137,6 +137,44 @@ export function Recording({ callId, fn = "roofguard-caller" }: { callId: string;
 }
 
 // ---------- data ----------
+/**
+ * Delete a call, shared by RoofGuard and personal Ava so both sheets behave the same.
+ * iOS pattern: a red "Delete Call" row, then an inline confirm (no browser dialog).
+ * Soft delete in the database (rg_delete_call / ava_delete_call): gone from lists and the scorecard, spend still counts it.
+ */
+export function DeleteCallButton({ rpc, callId, onDeleted }: { rpc: "rg_delete_call" | "ava_delete_call"; callId: string; onDeleted: () => void }) {
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { setAsk(false); setErr(null); }, [callId]);
+  const go = async () => {
+    setBusy(true); setErr(null);
+    const { error } = await rpcArgs<null>(rpc, { p_id: callId });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    onDeleted();
+  };
+  if (!ask) return (
+    <button type="button" onClick={() => setAsk(true)}
+      className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.03] text-[15px] font-medium text-[#FF453A] ring-1 ring-white/10 transition hover:bg-[#FF453A]/10">
+      <Trash2 className="h-4 w-4" aria-hidden />Delete Call</button>
+  );
+  return (
+    <div role="alertdialog" aria-label="Delete this call?" className="rounded-2xl bg-[#FF453A]/[0.08] p-4 ring-1 ring-[#FF453A]/30">
+      <p className="text-[15px] font-semibold text-white">Delete this call?</p>
+      <p className="mt-0.5 text-sm text-white/60">It leaves your call list and scorecard. What it cost still counts in spend.</p>
+      {err && <p role="alert" className="mt-2 text-sm text-red-300">{err}</p>}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => setAsk(false)} disabled={busy}
+          className="min-h-[44px] rounded-xl bg-white/10 text-[15px] font-medium text-white hover:bg-white/15">Cancel</button>
+        <button type="button" onClick={() => void go()} disabled={busy} autoFocus
+          className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#FF453A] text-[15px] font-semibold text-white hover:bg-[#ff5a50] disabled:opacity-60">
+          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Delete</button>
+      </div>
+    </div>
+  );
+}
+
 function useEvery(fn: () => void, ms: number) {
   useEffect(() => {
     fn();
@@ -220,7 +258,7 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
         <CalledColumn rows={board} onOpen={setOpen} />
       </div>
 
-      <CallSheet row={open} onClose={() => setOpen(null)} />
+      <CallSheet row={open} onClose={() => setOpen(null)} onDeleted={() => { setOpen(null); void loadCols(); }} />
     </div>
   );
 }
@@ -394,7 +432,7 @@ function Fact({ icon, label, children }: { icon: ReactNode; label: string; child
   );
 }
 
-function CallSheet({ row, onClose }: { row: BoardRow | null; onClose: () => void }) {
+function CallSheet({ row, onClose, onDeleted }: { row: BoardRow | null; onClose: () => void; onDeleted: () => void }) {
   const [calls, setCalls] = useState<LeadCall[] | null>(null);
   const [pick, setPick] = useState(0);
   useEffect(() => {
@@ -444,6 +482,7 @@ function CallSheet({ row, onClose }: { row: BoardRow | null; onClose: () => void
                 <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">Transcript</h4>
                 <LiveTranscript lines={c.transcript ?? []} />
               </div>
+              <DeleteCallButton rpc="rg_delete_call" callId={c.call_id} onDeleted={onDeleted} />
             </div>
           )}
           {calls && calls.length === 0 && <p className="mt-8 text-sm text-white/50">No details for this call yet.</p>}

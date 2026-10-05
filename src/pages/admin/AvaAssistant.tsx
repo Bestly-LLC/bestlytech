@@ -10,13 +10,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { LiveTranscript, Recording, type Line } from "@/components/admin/roofguard/AvaCalls";
+import { DeleteCallButton, LiveTranscript, Recording, type Line } from "@/components/admin/roofguard/AvaCalls";
 import { DialerSheet } from "@/components/admin/roofguard/AvaDialer";
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, Grid3x3, Inbox, Loader2, Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCw, UserRound } from "lucide-react";
 
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
   conversation_id: string | null; status: string; summary: string | null; message: string | null; urgent: boolean; callback_wanted: boolean;
-  duration_sec: number | null; transcript: { role: string; message: string | null; time_in_call_secs?: number }[] | null; read_at: string | null; created_at: string };
+  duration_sec: number | null; transcript: { role: string; message: string | null; time_in_call_secs?: number }[] | null; read_at: string | null; created_at: string;
+  deleted_at: string | null };
 type Contact = { id: string; name: string; phone: string | null; relationship: string | null; notes: string | null };
 type Settings = { agent_id: string | null; phone_number_id: string | null; from_number: string; setup_log: { m: string }[] };
 type Costs = { total: number; month: number; minutes: number; calls: number; unread: number };
@@ -56,7 +57,7 @@ export default function AvaAssistant() {
     ]);
     const e = c.error ?? k.error ?? st.error;
     if (e) { setErr(e.message); return; }
-    setErr(null); setCalls((c.data ?? []) as Call[]); setContacts((k.data ?? []) as Contact[]); setS(((st.data ?? [])[0] ?? null) as Settings | null); setCosts(co.data);
+    setErr(null); setCalls(((c.data ?? []) as Call[]).filter((x) => !x.deleted_at)); setContacts((k.data ?? []) as Contact[]); setS(((st.data ?? [])[0] ?? null) as Settings | null); setCosts(co.data);
   }, []);
   useEffect(() => { void load(); const t = setInterval(() => { if (!document.hidden) void load(); }, 30000); return () => clearInterval(t); }, [load]);
 
@@ -209,14 +210,15 @@ export default function AvaAssistant() {
         </ul>
       </section>
 
-      <CallSheet call={open} name={open ? nameOf(open) : ""} onClose={() => setOpen(null)} />
+      <CallSheet call={open} name={open ? nameOf(open) : ""} onClose={() => setOpen(null)}
+        onDeleted={() => { const id = open?.id; setOpen(null); setCalls((cs) => cs.filter((x) => x.id !== id)); void load(); }} />
       <ContactSheet c={contactOpen} onClose={() => setContactOpen(null)} onSaved={() => { setContactOpen(null); void load(); }} />
       <DialerSheet kinds={["personal"]} open={dial} onOpenChange={setDial} onCalled={() => { setDial(false); setTimeout(() => void load(), 3000); }} />
     </div>
   );
 }
 
-function CallSheet({ call, name, onClose }: { call: Call | null; name: string; onClose: () => void }) {
+function CallSheet({ call, name, onClose, onDeleted }: { call: Call | null; name: string; onClose: () => void; onDeleted: () => void }) {
   return (
     <Sheet open={!!call} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent side="right" className="admin-shell w-full overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-xl">
@@ -231,6 +233,7 @@ function CallSheet({ call, name, onClose }: { call: Call | null; name: string; o
             {call.conversation_id && <Recording callId={call.id} fn="ava-assistant" />}
             {call.summary && <p className="text-[15px] leading-relaxed text-white/85">{call.summary}</p>}
             <div><h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">Transcript</h4><LiveTranscript lines={slim(call.transcript)} them={name} /></div>
+            <DeleteCallButton rpc="ava_delete_call" callId={call.id} onDeleted={onDeleted} />
           </div>
         </>}
       </SheetContent>
