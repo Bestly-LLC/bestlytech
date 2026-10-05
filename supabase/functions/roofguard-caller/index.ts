@@ -141,7 +141,7 @@ async function tick(): Promise<Response> {
 
 // ---------- shared: openers + submit ----------
 type Planned = { lead: Next; opener_key: string; opener: string; hook: string; gk: string; industry: Record<string, string>; followup?: string; voice_id?: string;
-  coach_notes: string; playbook_arms: Record<string, boolean>; demo?: boolean };
+  coach_notes: string; playbook_arms: Record<string, boolean>; demo?: boolean; facts?: string };
 
 /** The coach's learned playbook for one call: live rules always, each rule under test on a random half of calls
  *  (rg_coach_notes; the arms are saved on the call so rg_playbook_decide can compare). Never fails a call. */
@@ -159,6 +159,7 @@ async function planCalls(leads: Next[]): Promise<Planned[]> {
   const scripts = new Map((openerRows ?? []).map((o: { key: string; script: string }) => [o.key, o.script]));
   // role first, name as the check (Jared 2026-10-04, Amazon playbook: ask for the person who does the job)
   const gkOpener = scripts.get("gk_role_first") ?? scripts.get("gk_name_first") ?? "Hi, it's Ava from RoofGuard, on a recorded line. Is {{contact_name}} in today?";
+  const facts = await knowledge();   // the approved RoofGuard facts ("What Ava can share"), same list the inbound line uses
   return Promise.all(leads.map(async (l, i) => {
     const key = (openerKeys as string[] | null)?.[i] ?? "dm_permission";
     const { data: iv } = await db.rpc("rg_lead_opener_vars", { p_lead: l.lead_id });
@@ -173,12 +174,12 @@ async function planCalls(leads: Next[]): Promise<Planned[]> {
     // the part after the introduction, for when the decision maker answered the first line themselves
     const hook = opener.replace(/^.*?on a recorded line\.\s*/i, "");
     const notes = await coachNotes();
-    return { lead: l, opener_key: key, opener, hook, gk: fill(gkOpener, true), industry, coach_notes: notes.text, playbook_arms: notes.arms };
+    return { lead: l, opener_key: key, opener, hook, gk: fill(gkOpener, true), industry, coach_notes: notes.text, playbook_arms: notes.arms, facts };
   }));
 }
 
 // deno-lint-ignore no-explicit-any
-function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, followup, voice_id, coach_notes, demo }: Planned) {
+function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, followup, voice_id, coach_notes, demo, facts }: Planned) {
   // so "tomorrow" and "next Tuesday" land on the right date, in the lead's own time zone
   const tz = l.timezone || "America/Chicago";
   const now = new Date();
@@ -193,6 +194,7 @@ function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, f
     industry_plural: industry.industry_plural ?? "facilities teams",
     industry_hook: industry.industry_hook ?? "keeping roof leaks from turning into downtime",
     coach_notes: coach_notes || NO_NOTES,
+    rg_facts: facts || "- (only what's above)",
   };
   // one call in a different voice (the picker's test call); the agent has to allow it (setup turns that on)
   const tts = voice_id ? { tts: { voice_id } } : {};
@@ -636,7 +638,7 @@ ${STOPPER}
 
 Always:
 - If asked whether you are a person, a robot, or AI, say you are an AI assistant calling about RoofGuard. Never claim to be human.
-- Use only these facts. If you don't know, say Eli can answer that on the call.
+- Use only these facts and the ones in "What you can share" below. If you don't know, say Eli can answer that on the call.
 - If anyone asks not to be called: "Of course, I'll take you off our list. Sorry to bother you." Then end the call.
 - After two clear no's from the decision maker, thank them and end the call. A dodge or "not me" is not a no; use the find-the-roof-person skill first.
 
@@ -646,6 +648,9 @@ Never:
 - Mention or hint at other clients, partners, or companies that use it.
 - Invent a deadline, discount, or limited offer. Honest urgency only: roofs take the most stress in storm season.
 - Promise savings or quote dollar amounts.
+
+What you can share about RoofGuard (approved facts; one short sentence at a time, only when it helps, and every rule above still wins):
+{{rg_facts}}
 
 Before ending, make sure you said out loud and confirmed: the outcome, the meeting times and email, any callback day and time, the decision maker's name and title.
 
@@ -710,7 +715,7 @@ const PLACEHOLDERS: Record<string, string> = {
   today: "", local_time: "", followup_note: "", lead_id: "", company: "your company", contact_name: "the facilities director", contact_title: "",
   pitch_angle: "", category: "", state: "", callback_number: "", opener_key: "", gk_opener: "Hi, it's Ava from RoofGuard, on a recorded line.",
   dm_opener: "", dm_hook: "", industry_plural: "facilities teams", industry_hook: "keeping roof leaks from turning into downtime", call_direction: "outbound",
-  coach_notes: "(none yet)",
+  coach_notes: "(none yet)", rg_facts: "",
 };
 
 async function setup(): Promise<Response> {
