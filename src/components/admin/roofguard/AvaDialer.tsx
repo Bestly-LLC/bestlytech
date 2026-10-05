@@ -5,7 +5,7 @@
  *   RoofGuard demo the cold-call script against the fictional Riverside Medical Center ({action:"demo_call"})
  * Either way the call shows up live on the Calls tab within seconds.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -26,7 +26,7 @@ const fmt = (d: string) => {
   return `(${x.slice(0, 3)}) ${x.slice(3, 6)}-${x.slice(6)}`;
 };
 
-export function AvaTopBar({ onCalled }: { onCalled: () => void }) {
+export function AvaTopBar({ onCalled, extra }: { onCalled: () => void; extra?: ReactNode }) {
   // RoofGuard Ava only: her own number and demo calls. Personal calls live on /admin/ava.
   const [num, setNum] = useState<string | null>(null);
   // "loading" until the first answer; only a real empty answer shows the no-number warning (a failed load keeps the last number)
@@ -90,6 +90,7 @@ export function AvaTopBar({ onCalled }: { onCalled: () => void }) {
         </button>
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        {extra}
         <SpendChip source="roofguard" />
         {!costs && (
           <span className="inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl bg-white/[0.04] px-3.5 text-right ring-1 ring-white/10">

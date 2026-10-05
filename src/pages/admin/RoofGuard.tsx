@@ -466,6 +466,7 @@ export default function RoofGuard() {
   const [state, setState] = useState("all");
   const [shown, setShown] = useState(PAGE);
   const [tab, setTabState] = useState<Tab>(hashTab);
+  const [studio, setStudio] = useState(0);
   const setTab = (t: Tab) => { setTabState(t); history.replaceState(null, "", `#${t}`); };
   const [callingOn, setCallingOn] = useState<boolean | null>(null);
   useEffect(() => {
@@ -534,8 +535,7 @@ export default function RoofGuard() {
       </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2"><VoiceSwitcher source="rg" /></div>
-      <AvaTopBar onCalled={() => setTab("calls")} />
+      <AvaTopBar onCalled={() => setTab("calls")} extra={<VoiceSwitcher source="rg" onMore={() => { setTab("setup"); setStudio((n) => n + 1); setTimeout(() => document.getElementById("voice-studio-roofguard")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120); }} />} />
       <Segmented value={tab} onChange={setTab} />
 
       {tab === "calls" && <>
@@ -543,7 +543,7 @@ export default function RoofGuard() {
         <AvaCalls callingOn={callingOn} onOpenSetup={() => setTab("setup")} />
       </>}
       {tab === "scorecard" && <AvaScorecard admin />}
-      {tab === "setup" && <div className="space-y-5"><CallingCard /><VoicePicker source="roofguard" /></div>}
+      {tab === "setup" && <div className="space-y-5"><CallingCard /><VoicePicker source="roofguard" openSignal={studio} /></div>}
 
       {tab === "leads" && <>
       {err && <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load: {err}</div>}

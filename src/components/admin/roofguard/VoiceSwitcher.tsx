@@ -36,7 +36,7 @@ async function json<T>(body: Record<string, unknown>): Promise<T & { ok: boolean
   return (await res.json().catch(() => ({ ok: false, error: "Unexpected reply. Try again." }))) as T & { ok: boolean; error?: string };
 }
 
-export function VoiceSwitcher({ source }: { source: Source }) {
+export function VoiceSwitcher({ source, onMore }: { source: Source; onMore?: () => void }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<Listing | null>(null);
   const [busy, setBusy] = useState<string | null>(null);   // voice_id being switched
@@ -47,6 +47,7 @@ export function VoiceSwitcher({ source }: { source: Source }) {
   const [q, setQ] = useState("");
   const [found, setFound] = useState<Voice[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [clone, setClone] = useState<{ id: string; paused: boolean } | null>(null);
   const [sugg, setSugg] = useState<Voice[] | null>(null);
   const [basedOn, setBasedOn] = useState<string[]>([]);
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -66,6 +67,13 @@ export function VoiceSwitcher({ source }: { source: Source }) {
     }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (open) void load(); }, [open, load]);   // the full picker can change her voice too; always show the live one
+  useEffect(() => {
+    if (source !== "ava") return;
+    const from = supabase.from as unknown as (t: string) => { select: (c: string) => { maybeSingle: () => Promise<{ data: { jared_voice_id: string | null; jared_voice_paused_at: string | null } | null }> } };
+    void from("ava_settings").select("jared_voice_id, jared_voice_paused_at").maybeSingle()
+      .then(({ data }) => setClone(data?.jared_voice_id ? { id: data.jared_voice_id, paused: !!data.jared_voice_paused_at } : null));
+  }, [source, open]);
   useEffect(() => {
     if (!open || !data || sugg !== null) return;
     void json<{ voices: Voice[]; based_on: string[] }>({ action: "suggest" }).then((r) => { if (r.ok) { setSugg(r.voices); setBasedOn(r.based_on); } else setSugg([]); });
@@ -129,7 +137,7 @@ export function VoiceSwitcher({ source }: { source: Source }) {
   const recents = (mine?.recent ?? []).map((r) => ({ ...r }) as Voice);
   const favIds = new Set((data?.favorites ?? []).map((f) => f.voice_id));
 
-  const row = (v: Voice, opts: { removable?: boolean; saveable?: boolean } = {}) => {
+  const row = (v: Voice, opts: { removable?: boolean; saveable?: boolean; noUse?: boolean } = {}) => {
     const isCur = v.voice_id === curId;
     return (
       <li key={v.voice_id} className="flex items-center gap-2 rounded-2xl bg-white/[0.04] p-2.5 ring-1 ring-white/10">
@@ -151,7 +159,7 @@ export function VoiceSwitcher({ source }: { source: Source }) {
           <button type="button" onClick={() => void removeFav(v)} aria-label={`Remove ${v.name} from favorites`}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-white/40 hover:text-red-300"><Trash2 className="h-4 w-4" aria-hidden /></button>
         )}
-        {isCur ? (
+        {opts.noUse ? null : isCur ? (
           <span className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap px-3 text-sm font-medium text-emerald-300"><Check className="h-4 w-4" aria-hidden />In use</span>
         ) : (
           <button type="button" onClick={() => void use(v)} disabled={busy !== null}
@@ -164,10 +172,10 @@ export function VoiceSwitcher({ source }: { source: Source }) {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} aria-label={`Ava's voice: ${curName}. Change voice`}
+      <button type="button" onClick={() => setOpen(true)} aria-label={`Voice: ${curName}. Change voice`}
         className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white/[0.04] px-3.5 ring-1 ring-white/10 transition hover:bg-white/[0.07]">
         <span className="grid h-7 w-7 place-items-center rounded-full bg-violet-500/15 text-violet-300"><Mic className="h-3.5 w-3.5" aria-hidden /></span>
-        <span className="text-left leading-tight"><span className="block text-[11px] text-white/50">Ava's voice</span>
+        <span className="text-left leading-tight"><span className="block text-[11px] text-white/50">Voice</span>
           <span className="block whitespace-nowrap text-[15px] font-semibold text-white">{data ? curName : "…"}</span></span>
       </button>
 
@@ -193,6 +201,15 @@ export function VoiceSwitcher({ source }: { source: Source }) {
 
             {data && (
               <>
+                {clone && (
+                  <section aria-label="Your voice">
+                    <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-white/40">Your voice</h3>
+                    <ul className="space-y-2">
+                      {row({ voice_id: clone.id, name: "Your voice (clone)", description: clone.paused ? "Paused" : "Dialer only" }, { noUse: true })}
+                    </ul>
+                    <p className="mt-2 text-xs leading-relaxed text-white/50">Your clone can't be her everyday voice. On a call it must say it's an AI, so you turn it on per call: Dial, then Use my voice.</p>
+                  </section>
+                )}
                 <section aria-label="Favorites">
                   <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-white/40">Favorites</h3>
                   <ul className="space-y-2">{data.favorites.map((v) => row(v, { removable: true }))}</ul>
@@ -220,6 +237,11 @@ export function VoiceSwitcher({ source }: { source: Source }) {
                     <li className="py-3 text-sm text-white/50">No matches.</li>}</ul>}
                 </section>
               </>
+            )}
+            {onMore && (
+              <button type="button" onClick={() => { setOpen(false); stop(); onMore(); }}
+                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl text-sm font-medium text-sky-300 ring-1 ring-white/10 hover:bg-white/5">
+                More voices, call-to-your-cell test, record your clone</button>
             )}
           </div>
         </SheetContent>

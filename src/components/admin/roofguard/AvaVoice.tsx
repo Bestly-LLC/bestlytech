@@ -103,9 +103,10 @@ function useOnePlayer() {
 }
 
 // ---------- the picker ----------
-export function VoicePicker({ source, defaultOpen }: { source: Source; defaultOpen?: boolean }) {
+export function VoicePicker({ source, defaultOpen, openSignal }: { source: Source; defaultOpen?: boolean; openSignal?: number }) {
   const cfg = CFG[source];
   const [open, setOpen] = useState(defaultOpen ?? source === "roofguard");
+  useEffect(() => { if (openSignal) setOpen(true); }, [openSignal]);   // the quick switcher's "More voices" link
   const [tab, setTab] = useState<"library" | "discover">("library");
   const [accent, setAccent] = useState<(typeof ACCENTS)[number][0]>("any");
   const [gender, setGender] = useState<(typeof GENDERS)[number][0]>("female");
@@ -193,7 +194,7 @@ export function VoicePicker({ source, defaultOpen }: { source: Source; defaultOp
 
   const filtersChanged = tab === "discover" ? "Discover" : "your library";
   return (
-    <section aria-label={`${cfg.name}'s voice`} className="rounded-3xl bg-white/[0.03] ring-1 ring-white/10">
+    <section id={`voice-studio-${source}`} aria-label={`${cfg.name}'s voice`} className="rounded-3xl bg-white/[0.03] ring-1 ring-white/10">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
         className={cn("flex min-h-[56px] w-full items-center gap-3 rounded-3xl px-4 py-3 text-left", ring)}>
         <AvaOrb size={32} />
