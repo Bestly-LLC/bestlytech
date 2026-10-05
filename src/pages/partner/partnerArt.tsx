@@ -71,6 +71,14 @@ export const ART: Record<string, ReactNode> = {
       <path d="M14 39h18" stroke="currentColor" strokeWidth="3" strokeOpacity=".35" />
     </Svg>
   ),
+  // Ava: a phone handset with sound waves, the AI caller demo
+  ava: (
+    <Svg>
+      <path d="M16 10c3-1 6 0 7 3l3 8c1 2 0 5-2 6l-3 2c2 6 7 11 13 13l2-3c1-2 4-3 6-2l8 3c3 1 4 4 3 7l-1 4c-1 3-4 5-7 4C26 52 12 38 9 17c-1-3 1-6 4-7z" fill={W} />
+      <path d="M40 10c7 1 13 7 14 14" stroke="currentColor" strokeWidth="3.4" />
+      <path d="M39 18c3 1 6 4 7 7" stroke="currentColor" strokeWidth="3.4" strokeOpacity=".55" />
+    </Svg>
+  ),
   // Connect my Claude: a plug meeting a socket, with a spark
   claude: (
     <Svg>

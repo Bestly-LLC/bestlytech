@@ -38,6 +38,7 @@ import { BoardSheet, CalendarSheet, CloudSheet, TalkSheet, useTalkUnread } from 
 import { BellButton, BellSheet, ConnectClaude, useNextMeeting, usePartnerNotifs, whenLabel, type NextEvent } from "./PartnerExtras";
 import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState } from "./PartnerScout";
 import { ProjectSheet, ProjectsButton, ProjectsNav } from "./PartnerProjects";
+import { AvaDemoSheet } from "./PartnerAva";
 
 /* ───────── types + helpers ───────── */
 
@@ -68,11 +69,12 @@ const SHORTCUTS = [
   { id: "ops", opens: "board" as const, label: "Ops board", sub: "What's moving", tone: "from-amber-400 to-orange-500 text-orange-600" },
   { id: "files", opens: "cloud" as const, label: "Cloud files", sub: "Your folders", tone: "from-emerald-400 to-teal-600 text-teal-600" },
   { id: "calendar", opens: "calendar" as const, label: "Calendar", sub: "What's booked", tone: "from-rose-400 to-pink-600 text-pink-600" },
+  { id: "ava", opens: "ava" as const, label: "Ava demo", sub: "She calls any phone", tone: "from-teal-400 to-cyan-600 text-cyan-700" },
 ];
 
 // Projects (Vesta invites, links) live in ./PartnerProjects: sidebar folder + mobile header button.
 
-export type CloudView = "talk" | "board" | "cloud" | "calendar" | null;
+export type CloudView = "talk" | "board" | "cloud" | "calendar" | "ava" | null;
 
 const STAGE: Record<number, string> = { 3: "Discovery", 4: "SOW + deposit", 5: "Tech intake", 6: "Provisioning", 7: "Install", 8: "Live" };
 const card = "rounded-[1.5rem] border border-white/[0.07] bg-white/[0.035] bento:border-transparent bento:bg-[#fff] bento:shadow-[0_1px_2px_rgba(17,17,20,0.04)]";
@@ -382,6 +384,7 @@ export function PartnerHome({ session }: { session: Session }) {
 
       <DocPreview file={preview} onClose={() => setPreview(null)} />
       <TalkSheet open={cloud === "talk"} onOpenChange={(o) => !o && setCloud(null)} />
+      <AvaDemoSheet open={cloud === "ava"} onOpenChange={(o) => !o && setCloud(null)} />
       <BoardSheet open={cloud === "board"} onOpenChange={(o) => !o && setCloud(null)} />
       <CloudSheet open={cloud === "cloud"} onOpenChange={(o) => !o && setCloud(null)} />
       <CalendarSheet open={cloud === "calendar"} onOpenChange={(o) => !o && setCloud(null)} />

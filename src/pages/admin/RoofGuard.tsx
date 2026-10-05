@@ -14,6 +14,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Loader2, Phone, RefreshCw, Search, Zap } from "lucide-react";
+import { AvaCalls } from "@/components/admin/roofguard/AvaCalls";
+
+type Tab = "calls" | "leads" | "setup";
+const TABS: { id: Tab; label: string }[] = [{ id: "calls", label: "Calls" }, { id: "leads", label: "Leads" }, { id: "setup", label: "Setup" }];
+const hashTab = (): Tab => { const h = window.location.hash.slice(1); return (TABS.some((t) => t.id === h) ? h : "calls") as Tab; };
+
+/** iOS-style segmented control */
+function Segmented({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }) {
+  return (
+    <div role="tablist" aria-label="RoofGuard sections" className="inline-flex rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
+      {TABS.map((t) => (
+        <button key={t.id} type="button" role="tab" aria-selected={value === t.id} onClick={() => onChange(t.id)}
+          className={cn("min-h-[36px] min-w-[84px] rounded-lg px-4 text-sm font-medium transition-colors",
+            value === t.id ? "bg-white text-black shadow-sm" : "text-white/65 hover:text-white")}>{t.label}</button>
+      ))}
+    </div>
+  );
+}
 
 type Contact = { name: string; title: string; linkedin: string };
 type Cand = { e164: string; display: string; source: string; url: string; score: number; hits?: number; context: string };
@@ -437,6 +455,12 @@ export default function RoofGuard() {
   const [status, setStatus] = useState<"all" | Lead["enrich_status"]>("all");
   const [state, setState] = useState("all");
   const [shown, setShown] = useState(PAGE);
+  const [tab, setTabState] = useState<Tab>(hashTab);
+  const setTab = (t: Tab) => { setTabState(t); history.replaceState(null, "", `#${t}`); };
+  const [callingOn, setCallingOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    void rpc("rg_call_stats").then(({ data }) => setCallingOn(!!(data as CallStats | null)?.settings?.calling_enabled));
+  }, [tab]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -486,8 +510,8 @@ export default function RoofGuard() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="RoofGuard" description="AI caller, Phase 1: your 1,161 leads, the pitch angle for each, and the phone finder."
-        actions={<div className="flex gap-2">
+      <PageHeader title="RoofGuard" description="Ava, the AI caller: who she's calling, what she's saying, and how each call ended."
+        actions={tab !== "leads" ? undefined : <div className="flex gap-2">
           <button type="button" onClick={() => void kick()} disabled={kicking || left === 0}
             className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm text-white ring-1 ring-white/15 hover:bg-white/15 disabled:opacity-40">
             {kicking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Find now</button>
@@ -495,6 +519,12 @@ export default function RoofGuard() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Refresh</button>
         </div>} />
 
+      <Segmented value={tab} onChange={setTab} />
+
+      {tab === "calls" && <AvaCalls callingOn={callingOn} onOpenSetup={() => setTab("setup")} />}
+      {tab === "setup" && <CallingCard />}
+
+      {tab === "leads" && <>
       {err && <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load: {err}</div>}
 
       {stats && (
@@ -525,8 +555,6 @@ export default function RoofGuard() {
         </div>
       )}
 
-      <CallingCard />
-
       <div className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <div className="relative min-w-[200px] flex-1">
@@ -556,6 +584,7 @@ export default function RoofGuard() {
           </button>
         )}
       </div>
+      </>}
     </div>
   );
 }
