@@ -37,7 +37,7 @@
 // path reads Vault, bestly_memory, scout_* or any other table into a prompt.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { busyFrom, DEFAULT_HOURS, discover, durationFor, freeSlots, parseConstraints, putEvent, spoken, turoWindows, TURO_WINDOW_MIN, type Busy, type Cal, type Creds, type Hours, type Provider, type Slot } from "./calendar.ts";
+import { busyFrom, DEFAULT_HOURS, discover, eventsIn, ptParts, zonedToUtc, durationFor, freeSlots, parseConstraints, putEvent, spoken, turoWindows, TURO_WINDOW_MIN, type Busy, type Cal, type Creds, type Hours, type Provider, type Slot } from "./calendar.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -527,6 +527,7 @@ async function health(): Promise<Response> {
   try { await evidenceRetry(); } catch { /* the line check below still runs */ }
   const voiceNotes = await voiceHealth();   // her voice still exists (falls back to the default and re-runs setup if not)
   const calNotes = await calendarHealth();  // iCloud / Nextcloud connections, hourly
+  try { await db.rpc("ava_brief_watch"); } catch { /* the brief watchdog must never break the line check */ }
   const first = await lineProblems();
   if (first === null) return Response.json({ ok: null, skipped: "couldn't reach the voice platform", calendars: calNotes });
   let problems = first, healed = false;
@@ -1312,6 +1313,48 @@ async function freeSlotsAction(b: Record<string, unknown>): Promise<Response> {
   } catch (e) { return jerr(errText(e), 412); }
 }
 
+/**
+ * "today": the calendar part of the morning brief. Reads the ticked calendars for one Pacific day (day_offset 0 today, 1 tomorrow) and writes
+ * the events into ava_brief_cache (the SQL job composes the text from it). Only counts come back here; titles stay on the server.
+ * A Turo trip shows only at its pickup and its return, never as an all-day block. Same calendar code as Find times.
+ */
+async function todayAction(b: Record<string, unknown>): Promise<Response> {
+  const offset = Math.min(Math.max(Math.round(Number(b.day_offset) || 0), 0), 7);
+  const p = ptParts(Date.now());
+  const from = zonedToUtc(p.y, p.mo, p.d + offset, 0, 0), to = zonedToUtc(p.y, p.mo, p.d + offset + 1, 0, 0);
+  const dayStr = (() => { const q = ptParts(from + 12 * 3600_000); return `${q.y}-${String(q.mo).padStart(2, "0")}-${String(q.d).padStart(2, "0")}`; })();
+  const [cfg, creds] = await Promise.all([calSettings(), calCreds()]);
+  const all: Cal[] = (["nextcloud", "icloud"] as Provider[]).flatMap((pv) => (cfg.found?.[pv] ?? []).map((c) => ({ ...c, provider: pv })));
+  const cals = all.filter((c) => (cfg.selected ?? []).includes(c.id) && creds[c.provider]);
+  const save = async (events: unknown[], ok: boolean, error: string | null) => {
+    await db.from("ava_brief_cache").upsert({ day: dayStr, events, ok, error, fetched_at: new Date().toISOString() }, { onConflict: "day" });
+  };
+  if (!cals.length) { await save([], true, null); return Response.json({ ok: true, day: dayStr, calendars: 0, count: 0 }, { headers: CORS }); }
+  try {
+    const evs = await eventsIn(cals, creds, from, to);
+    const out: { t: string; title: string; kind: string }[] = [];
+    for (const ev of evs) {
+      if (ev.free) continue;
+      const title = (ev.summary || "Busy").replace(/\s+/g, " ").trim().slice(0, 80);
+      if (ev.turo) {
+        // pickup and return only, and only when they fall on this day
+        if (ev.start >= from && ev.start < to) out.push({ t: new Date(ev.start).toISOString(), title: "", kind: "pickup" });
+        if (ev.end > ev.start && ev.end >= from && ev.end < to) out.push({ t: new Date(ev.end).toISOString(), title: "", kind: "return" });
+        continue;
+      }
+      if (ev.allDay) continue;                                       // birthdays, holidays
+      if (ev.end <= from || ev.start >= to) continue;
+      out.push({ t: new Date(Math.max(ev.start, from)).toISOString(), title, kind: "event" });
+    }
+    out.sort((x, y) => x.t.localeCompare(y.t));
+    await save(out, true, null);
+    return Response.json({ ok: true, day: dayStr, calendars: cals.length, count: out.length }, { headers: CORS });
+  } catch (e) {
+    await save([], false, errText(e).slice(0, 200));
+    return Response.json({ ok: false, error: `Couldn't read your calendar (${errText(e)}).`, day: dayStr }, { status: 502, headers: CORS });
+  }
+}
+
 const ptLabel = (iso: string) => new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })
   .format(new Date(iso)).replace(/[ \u202f\u00a0](AM|PM)/, "\u00a0$1");
 
@@ -1554,6 +1597,7 @@ Deno.serve(async (req) => {
   if (body.action === "cal_disconnect") return calDisconnect(body);
   if (body.action === "cal_test") return calTest(body);
   if (body.action === "free_slots") return freeSlotsAction(body);
+  if (body.action === "today") return todayAction(body);
   if (body.action === "book_call") return bookCall(body);
   return Response.json({ ok: false, error: "unknown action" }, { status: 400, headers: CORS });
 });

@@ -143,7 +143,7 @@ export function ptParts(ms: number) {
 }
 
 // ---------- reading events ----------
-type Ev = { start: number; end: number; allDay: boolean; summary: string; description: string; free: boolean };
+export type Ev = { start: number; end: number; allDay: boolean; summary: string; description: string; free: boolean };
 
 function unfold(ics: string) { return ics.replace(/\r?\n[ \t]/g, ""); }
 function icsTime(line: string): { ms: number; allDay: boolean } | null {
@@ -184,21 +184,28 @@ export function parseEvents(icsText: string): Ev[] {
 
 const queryXml = (from: number, to: number) => `<?xml version="1.0" encoding="utf-8"?><c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-data><c:expand start="${icsUtc(from)}" end="${icsUtc(to)}"/></c:calendar-data></d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range start="${icsUtc(from)}" end="${icsUtc(to)}"/></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>`;
 
-/** Busy intervals from the chosen calendars. Turo events block only around pickup and return. Throws if a calendar can't be read. */
-export async function busyFrom(cals: Cal[], creds: Partial<Record<Provider, Creds>>, from: number, to: number, turoWindowMin = TURO_WINDOW_MIN): Promise<Busy[]> {
-  const half = turoWindowMin * 60_000;
-  const busy: Busy[] = [];
+export type CalEvent = Ev & { turo: boolean };
+
+/** Every event on the chosen calendars in a window, flagged when it is a Turo trip. Throws if a calendar can't be read. */
+export async function eventsIn(cals: Cal[], creds: Partial<Record<Provider, Creds>>, from: number, to: number): Promise<CalEvent[]> {
   const results = await Promise.all(cals.map(async (cal) => {
     const c = creds[cal.provider]; if (!c) throw new Error(`${cal.provider} isn't connected`);
     const r = await dav(cal.href, "REPORT", c, queryXml(from, to), { depth: "1" });
     if (r.status >= 400) throw new Error(`${cal.provider} calendar answered ${r.status}`);
     // a calendar NAMED Turo holds only Turo trips, so every event on it gets the Turo rule even if the title doesn't say so
     const turoCal = /turo/i.test(cal.name);
-    return blocks(r.text, "calendar-data").flatMap((b) => parseEvents(unxml(b.replace(/^<[^>]*>|<\/[^>]*>$/g, ""))).map((ev) => ({ ...ev, turoCal })));
+    return blocks(r.text, "calendar-data").flatMap((b) => parseEvents(unxml(b.replace(/^<[^>]*>|<\/[^>]*>$/g, ""))).map((ev) => ({ ...ev, turo: turoCal || /turo/i.test(`${ev.summary} ${ev.description}`) })));
   }));
-  for (const ev of results.flat()) {
+  return results.flat();
+}
+
+/** Busy intervals from the chosen calendars. Turo events block only around pickup and return. Throws if a calendar can't be read. */
+export async function busyFrom(cals: Cal[], creds: Partial<Record<Provider, Creds>>, from: number, to: number, turoWindowMin = TURO_WINDOW_MIN): Promise<Busy[]> {
+  const half = turoWindowMin * 60_000;
+  const busy: Busy[] = [];
+  for (const ev of await eventsIn(cals, creds, from, to)) {
     if (ev.allDay || ev.free) continue;                                       // birthdays, holidays, "free" blocks
-    if (ev.turoCal || /turo/i.test(`${ev.summary} ${ev.description}`)) { turoWindows(ev.start, ev.end, half, busy); continue; }
+    if (ev.turo) { turoWindows(ev.start, ev.end, half, busy); continue; }
     busy.push({ start: ev.start, end: Math.max(ev.end, ev.start + 15 * 60_000) });
   }
   return busy;
