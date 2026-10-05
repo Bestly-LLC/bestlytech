@@ -121,7 +121,7 @@ async function list(): Promise<Response> {
     out[src] = { current: { voice_id: cur.voice_id, name: known }, recent, ready: !!cur.agent_id };
   }
   const have = new Set((favs ?? []).map((f) => f.name.toLowerCase()));
-  return ok({ favorites: favs ?? [], ...out, says_left: await saysLeft(), say_cap: SAY_CAP, needs_seed: WANTED.some((n) => !have.has(n.toLowerCase())) });
+  return ok({ favorites: favs ?? [], ...out, says_left: await saysLeft(), say_cap: SAY_CAP, needs_seed: WANTED.some((n) => !have.has(n.toLowerCase()) || (HINT[n] && !HINT[n].test((favs ?? []).find((f) => f.name.toLowerCase() === n.toLowerCase())?.description ?? ""))) });
 }
 
 async function seed(): Promise<Response> {
@@ -130,8 +130,12 @@ async function seed(): Promise<Response> {
   const found: string[] = [], missing: string[] = [];
   for (let i = 0; i < WANTED.length; i++) {
     const name = WANTED[i];
-    const { data: have } = await db.from("ava_voice_favorites").select("voice_id").ilike("name", name).maybeSingle();
-    if (have) { found.push(name); continue; }
+    const { data: have } = await db.from("ava_voice_favorites").select("voice_id, description").ilike("name", name).maybeSingle();
+    if (have && HINT[name] && !HINT[name].test(have.description ?? "")) {
+      // an earlier seed saved the wrong same-named voice (Jared OK'd replacing it); drop it unless an Ava is using it
+      const [a, r] = await Promise.all([currentOf("ava"), currentOf("rg")]);
+      if (a.voice_id !== have.voice_id && r.voice_id !== have.voice_id) await db.from("ava_voice_favorites").delete().eq("voice_id", have.voice_id);
+    } else if (have) { found.push(name); continue; }
     const hits = await search(key, name);
     // the exact-name match wins; female first (she is "Ava"); then the most-used
     const exact = hits.filter((h) => h.name.toLowerCase() === name.toLowerCase());
@@ -144,6 +148,33 @@ async function seed(): Promise<Response> {
     found.push(name);
   }
   return ok({ found, missing });
+}
+
+/** Suggestions with no typing: what your saved voices have in common (gender, accent, tone words), searched in the library, minus what you already have. */
+const TONE = ["warm", "friendly", "conversational", "casual", "youthful", "clear", "natural", "confident", "smooth", "bright", "calm", "relaxed", "upbeat", "sweet", "professional", "crisp"];
+async function suggest(): Promise<Response> {
+  const key = await vault("elevenlabs_api_key");
+  if (!key) return err("The ElevenLabs key is missing from Vault.", 412);
+  const { data: favs } = await db.from("ava_voice_favorites").select("voice_id, name, accent, gender, description").neq("voice_id", LILY);
+  const rows = favs ?? [];
+  if (!rows.length) return ok({ voices: [], based_on: [] });
+  const tally = (xs: string[]) => { const m = new Map<string, number>(); for (const x of xs.filter(Boolean)) m.set(x.toLowerCase(), (m.get(x.toLowerCase()) ?? 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]); };
+  const gender = tally(rows.map((r) => r.gender ?? ""))[0] ?? "female";
+  const accents = tally(rows.map((r) => r.accent ?? "")).slice(0, 2);
+  const words = tally(rows.flatMap((r) => TONE.filter((w) => (r.description ?? "").toLowerCase().includes(w)))).slice(0, 3);
+  const queries = [...words.map((w) => `${gender} ${w}`), ...accents.map((a) => `${a} ${gender}`)].slice(0, 5);
+  if (!queries.length) queries.push(`${gender} conversational`);
+  const have = new Set([...(await Promise.all([currentOf("ava"), currentOf("rg")])).map((c) => c.voice_id), ...rows.map((r) => r.voice_id), LILY]);
+  const names = new Set(rows.map((r) => r.name.toLowerCase()));
+  const pool = new Map<string, ReturnType<typeof slim> & { score: number }>();
+  for (const batch of await Promise.all(queries.map((q) => search(key, q)))) for (const v of batch) {
+    if (!v.voice_id || have.has(v.voice_id) || names.has(v.name.toLowerCase()) || (v.gender && v.gender !== gender)) continue;
+    const d = `${v.description} ${v.accent}`.toLowerCase();
+    const score = words.filter((w) => d.includes(w)).length * 3 + accents.filter((a) => d.includes(a)).length * 2 + (pool.get(v.voice_id)?.score ?? 0) / 2;
+    pool.set(v.voice_id, { ...v, score: Math.max(score, pool.get(v.voice_id)?.score ?? 0) + 1 });
+  }
+  const voices = [...pool.values()].sort((a, b) => b.score - a.score || b.usage - a.usage).slice(0, 6);
+  return ok({ voices, based_on: [gender, ...accents, ...words] });
 }
 
 async function say(b: Record<string, unknown>): Promise<Response> {
@@ -261,6 +292,7 @@ Deno.serve(async (req) => {
         const { error } = await db.from("ava_voice_favorites").delete().eq("voice_id", String(b.voice_id ?? ""));
         return error ? err("Couldn't remove that voice.", 500) : ok({});
       }
+      case "suggest": return await suggest();
       case "say": return await say(b);
       case "use": return await use(b);
       case "health": return await health();

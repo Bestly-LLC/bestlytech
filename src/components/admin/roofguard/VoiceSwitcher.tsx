@@ -47,6 +47,8 @@ export function VoiceSwitcher({ source }: { source: Source }) {
   const [q, setQ] = useState("");
   const [found, setFound] = useState<Voice[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [sugg, setSugg] = useState<Voice[] | null>(null);
+  const [basedOn, setBasedOn] = useState<string[]>([]);
   const audio = useRef<HTMLAudioElement | null>(null);
   const urlRef = useRef<string | null>(null);
 
@@ -64,6 +66,10 @@ export function VoiceSwitcher({ source }: { source: Source }) {
     }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!open || !data || sugg !== null) return;
+    void json<{ voices: Voice[]; based_on: string[] }>({ action: "suggest" }).then((r) => { if (r.ok) { setSugg(r.voices); setBasedOn(r.based_on); } else setSugg([]); });
+  }, [open, data, sugg]);
   useEffect(() => () => { audio.current?.pause(); if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
 
   const stop = () => { audio.current?.pause(); setPlaying(null); };
@@ -200,12 +206,16 @@ export function VoiceSwitcher({ source }: { source: Source }) {
                 <section aria-label="Find a voice">
                   <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-white/40">Find a voice</h3>
                   <form onSubmit={(e) => { e.preventDefault(); if (q.trim().length > 1) void search(); }} className="flex gap-2">
-                    <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, e.g. Matilda" aria-label="Search voices"
+                    <input value={q} onChange={(e) => { setQ(e.target.value); if (!e.target.value.trim()) setFound(null); }} placeholder="Name, e.g. Matilda" aria-label="Search voices"
                       className="min-h-[44px] min-w-0 flex-1 rounded-xl bg-white/[0.06] px-3 text-[15px] text-white ring-1 ring-white/10 placeholder:text-white/30 focus:outline-none focus:ring-white/30" />
                     <button type="submit" disabled={searching || q.trim().length < 2} aria-label="Search"
                       className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/10 ring-1 ring-white/15 hover:bg-white/15 disabled:opacity-40">
                       {searching ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Search className="h-4 w-4" aria-hidden />}</button>
                   </form>
+                  {!found && sugg === null && <div className="py-3 text-sm text-white/50"><Loader2 className="inline h-4 w-4 animate-spin" aria-hidden /> Finding voices like your favorites…</div>}
+                  {!found && sugg && sugg.length > 0 && <>
+                    <p className="mb-2 text-xs text-white/40">Suggested from your favorites{basedOn.length ? `: ${basedOn.join(", ")}` : ""}</p>
+                    <ul className="space-y-2">{sugg.map((v) => row(v, { saveable: true }))}</ul></>}
                   {found && <ul className={cn("mt-2 space-y-2")}>{found.length ? found.map((v) => row(v, { saveable: true })) :
                     <li className="py-3 text-sm text-white/50">No matches.</li>}</ul>}
                 </section>
