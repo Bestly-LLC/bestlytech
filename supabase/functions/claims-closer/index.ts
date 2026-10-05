@@ -7,6 +7,7 @@
 //              (paid: never), pushes it to Jared for one-tap approve/edit at /admin/claims.
 //   op daily   9 AM Los Angeles: deadline check (estimate due, 20-day escalation cutoff, unpaid invoices) + tick.
 //   op run     admin button: same as tick.
+//   op preview {reservation, kind, extra?} write a draft, save and send nothing (testing).
 //
 // Hard rules (the reason this exists without a human in the loop for drafting):
 //   - Nothing reaches a guest without Jared's yes. This function only writes claim_drafts rows (status pending).
@@ -266,6 +267,15 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const op = String(body.op ?? "tick");
   const daily = op === "daily";
+  // op preview {reservation, kind}: write a draft but save and send nothing (testing the voice and the guards).
+  if (op === "preview") {
+    const { data: c } = await db.from("claim_cases").select("*").eq("reservation_id", Number(body.reservation)).maybeSingle();
+    if (!c) return J({ error: "no case" }, 404);
+    const [{ data: trip }, { data: inbox }] = await Promise.all([
+      db.from("turo_trips").select("*").eq("reservation_id", c.reservation_id).maybeSingle(),
+      db.from("turo_inbox").select("message_id, sent_at, role, author, body").eq("reservation_id", c.reservation_id).order("sent_at", { ascending: true }).limit(60)]);
+    return J({ ok: true, draft: await draft(String(body.kind ?? "follow_up"), c, trip, (inbox ?? []) as Msg[], String(body.extra ?? "")) });
+  }
   try {
     let q = db.from("claim_cases").select("*").not("status", "in", "(paid,closed)");
     const { data: cases, error } = await q;
