@@ -23,10 +23,23 @@ export const DEFAULT_HOURS: Hours = { days: [1, 2, 3, 4, 5], start: 9, end: 18 }
 const nextcloudRoot = (c: Creds) => (c.base && /^https:\/\//i.test(c.base) ? `${c.base.replace(/\/+$/, "").replace(/\/remote\.php\/dav$/i, "")}/remote.php/dav` : NEXTCLOUD_BASE);
 const authHeader = (c: Creds) => `Basic ${btoa(`${c.user}:${c.pass}`)}`;
 
-async function dav(url: string, method: string, c: Creds, body?: string, headers: Record<string, string> = {}): Promise<{ status: number; text: string }> {
-  const res = await fetch(url, { method, headers: { authorization: authHeader(c), "content-type": "application/xml; charset=utf-8", ...headers }, body, redirect: "follow" });
-  const text = await res.text().catch(() => "");
-  return { status: res.status, text };
+async function dav(url: string, method: string, c: Creds, body?: string, headers: Record<string, string> = {}): Promise<{ status: number; text: string; url: string }> {
+  // Redirects are followed by hand: fetch() drops the Authorization header when a redirect changes the host (iCloud sends you to a
+  // per-account pXX-caldav.icloud.com), and 301/302 can turn a PROPFIND into a GET. Same method, same body, same login on every hop,
+  // but only to the same site, so the password never goes anywhere else.
+  let cur = url;
+  for (let hop = 0; hop < 6; hop++) {
+    const res = await fetch(cur, { method, headers: { authorization: authHeader(c), "content-type": "application/xml; charset=utf-8", ...headers }, body, redirect: "manual" });
+    const loc = res.headers.get("location");
+    if ([301, 302, 303, 307, 308].includes(res.status) && loc) {
+      await res.text().catch(() => "");
+      const next = absolute(loc, cur);
+      if (new URL(next).hostname.split(".").slice(-2).join(".") !== new URL(cur).hostname.split(".").slice(-2).join(".")) throw new Error("the calendar server redirected somewhere unexpected");
+      cur = next; continue;
+    }
+    return { status: res.status, text: await res.text().catch(() => ""), url: cur };
+  }
+  throw new Error("the calendar server redirected too many times");
 }
 
 // ---------- tiny XML helpers (CalDAV answers are regular; a full parser isn't worth it) ----------
@@ -57,8 +70,16 @@ function parseCalendars(xml: string, base: string, provider: Provider): Cal[] {
   return out;
 }
 
-/** The calendars this login can see. Throws a short plain message on failure (never includes the password). */
-export async function discover(provider: Provider, c: Creds): Promise<Cal[]> {
+/** What a discovery step looked like, with nothing private in it (no login, no account number): used to see why a provider lists no calendars. */
+export type Trace = string[];
+const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^p\d+-/, "pNN-"); } catch { return "?"; } };
+const tags = (xml: string) => [...new Set((xml.match(/<(?:[\w-]+:)?[\w-]+/g) ?? []).map((t) => t.replace(/^<(?:[\w-]+:)?/, "")))].slice(0, 30).join(",");
+
+const PRINCIPAL_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
+const HOME_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-home-set/></d:prop></d:propfind>`;
+
+/** The calendars this login can see. Throws a short plain message on failure (never includes the password). `trace` collects safe step notes. */
+export async function discover(provider: Provider, c: Creds, trace: Trace = []): Promise<Cal[]> {
   if (provider === "nextcloud") {
     const home = `${nextcloudRoot(c)}/calendars/${encodeURIComponent(c.user)}/`;
     const r = await dav(home, "PROPFIND", c, CAL_PROPS, { depth: "1" });
@@ -66,22 +87,36 @@ export async function discover(provider: Provider, c: Creds): Promise<Cal[]> {
     if (r.status >= 400) throw new Error(`Nextcloud answered ${r.status}`);
     return parseCalendars(r.text, home, provider);
   }
-  // iCloud: principal -> calendar home (a per-account host) -> calendars
-  const p1 = await dav(`${ICLOUD_BASE}/`, "PROPFIND", c,
-    `<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`, { depth: "0" });
+  // iCloud: principal -> calendar home (a per-account host, followed by hand) -> every collection that is a VEVENT calendar
+  const p1 = await dav(`${ICLOUD_BASE}/`, "PROPFIND", c, PRINCIPAL_XML, { depth: "0" });
+  trace.push(`1 principal: ${p1.status} at ${hostOf(p1.url)}`);
   if (p1.status === 401 || p1.status === 403) throw new Error("iCloud refused the login (check the Apple ID and app-specific password)");
   if (p1.status >= 400) throw new Error(`iCloud answered ${p1.status}`);
   const principal = first(first(p1.text, "current-user-principal") ?? "", "href");
-  if (!principal) throw new Error("iCloud didn't say where the calendars are");
-  const principalUrl = absolute(unxml(principal), ICLOUD_BASE);
-  const p2 = await dav(principalUrl, "PROPFIND", c,
-    `<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-home-set/></d:prop></d:propfind>`, { depth: "0" });
+  if (!principal) { trace.push(`1 tags: ${tags(p1.text)}`); throw new Error("iCloud didn't say where the calendars are"); }
+  const principalUrl = absolute(unxml(principal), p1.url);
+  const p2 = await dav(principalUrl, "PROPFIND", c, HOME_XML, { depth: "0" });
+  trace.push(`2 home-set: ${p2.status} at ${hostOf(p2.url)}`);
   const homeHref = first(first(p2.text, "calendar-home-set") ?? "", "href");
-  if (p2.status >= 400 || !homeHref) throw new Error("iCloud didn't list the calendar home");
-  const home = absolute(unxml(homeHref), principalUrl);
+  if (p2.status >= 400 || !homeHref) { trace.push(`2 tags: ${tags(p2.text)}`); throw new Error("iCloud didn't list the calendar home"); }
+  const home = absolute(unxml(homeHref), p2.url);
   const p3 = await dav(home, "PROPFIND", c, CAL_PROPS, { depth: "1" });
+  trace.push(`3 calendars: ${p3.status} at ${hostOf(p3.url)}, ${blocks(p3.text, "response").length} resources, ${p3.text.length} bytes`);
   if (p3.status >= 400) throw new Error(`iCloud answered ${p3.status}`);
-  return parseCalendars(p3.text, home, provider);
+  const cals = parseCalendars(p3.text, p3.url, provider);
+  if (!cals.length) {
+    trace.push(`3 tags: ${tags(p3.text)}`);
+    // some accounts answer the home with only a listing; look at each collection on its own as a second chance
+    const hrefs = blocks(p3.text, "response").map((r) => first(r, "href")).filter((h): h is string => !!h).map((h) => absolute(unxml(h), p3.url)).filter((u) => u.replace(/\/$/, "") !== p3.url.replace(/\/$/, ""));
+    const out: Cal[] = [];
+    for (const u of hrefs.slice(0, 40)) {
+      const one = await dav(u, "PROPFIND", c, CAL_PROPS, { depth: "0" }).catch(() => null);
+      if (one && one.status < 400) out.push(...parseCalendars(one.text, u, provider));
+    }
+    trace.push(`3b individual look: ${out.length} calendars from ${Math.min(hrefs.length, 40)} resources`);
+    return out;
+  }
+  return cals;
 }
 
 // ---------- time helpers (Pacific) ----------
@@ -157,11 +192,13 @@ export async function busyFrom(cals: Cal[], creds: Partial<Record<Provider, Cred
     const c = creds[cal.provider]; if (!c) throw new Error(`${cal.provider} isn't connected`);
     const r = await dav(cal.href, "REPORT", c, queryXml(from, to), { depth: "1" });
     if (r.status >= 400) throw new Error(`${cal.provider} calendar answered ${r.status}`);
-    return blocks(r.text, "calendar-data").flatMap((b) => parseEvents(unxml(b.replace(/^<[^>]*>|<\/[^>]*>$/g, ""))));
+    // a calendar NAMED Turo holds only Turo trips, so every event on it gets the Turo rule even if the title doesn't say so
+    const turoCal = /turo/i.test(cal.name);
+    return blocks(r.text, "calendar-data").flatMap((b) => parseEvents(unxml(b.replace(/^<[^>]*>|<\/[^>]*>$/g, ""))).map((ev) => ({ ...ev, turoCal })));
   }));
   for (const ev of results.flat()) {
     if (ev.allDay || ev.free) continue;                                       // birthdays, holidays, "free" blocks
-    if (/turo/i.test(`${ev.summary} ${ev.description}`)) { turoWindows(ev.start, ev.end, half, busy); continue; }
+    if (ev.turoCal || /turo/i.test(`${ev.summary} ${ev.description}`)) { turoWindows(ev.start, ev.end, half, busy); continue; }
     busy.push({ start: ev.start, end: Math.max(ev.end, ev.start + 15 * 60_000) });
   }
   return busy;

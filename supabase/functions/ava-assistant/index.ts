@@ -1250,19 +1250,21 @@ async function calTest(b: Record<string, unknown>): Promise<Response> {
   const creds = (await calCreds())[p];
   if (!creds) return jerr(`${PROVIDER_NAME[p]} isn't connected yet. Enter both fields and save them first.`, 412);
   const now = new Date().toISOString(), cfg = await calSettings();
+  const trace: string[] = [];
   try {
-    const cals = await discover(p, creds);
+    const cals = await discover(p, creds, trace);
     const had = (cfg.found?.[p] ?? []).length > 0;
     const found = { ...(cfg.found ?? {}), [p]: cals.map((c) => ({ id: c.id, href: c.href, name: c.name, writable: c.writable })) };
     const selected = had ? cfg.selected ?? [] : [...new Set([...(cfg.selected ?? []), ...cals.map((c) => c.id)])];
-    const checked = { ...(cfg.checked ?? {}), [p]: { at: now, ok: true, last_ok_at: now } };
+    // signed in but nothing to read is a problem, not a success: Find times has nothing to look at
+    const checked = { ...(cfg.checked ?? {}), [p]: cals.length ? { at: now, ok: true, last_ok_at: now } : { at: now, ok: false, last_ok_at: cfg.checked?.[p]?.last_ok_at ?? null, error: `signed in to ${PROVIDER_NAME[p]} but no calendars are visible` } };
     // keep the choice if it is still there; otherwise Ava books nowhere until Jared picks (she never guesses a calendar to write to)
     const bookTo = cfg.book_to && cals.some((c) => c.id === cfg.book_to && c.writable) ? cfg.book_to : (p === "nextcloud" ? null : cfg.book_to ?? null);
     await saveCal({ found, selected, checked, book_to: bookTo });
-    return Response.json({ ok: true, provider: p, calendars: found[p] }, { headers: CORS });
+    return Response.json({ ok: true, provider: p, calendars: found[p], ...(cals.length ? {} : { warning: "Signed in, but no calendars are visible.", trace }) }, { headers: CORS });
   } catch (e) {
     await saveCal({ checked: { ...(cfg.checked ?? {}), [p]: { at: now, ok: false, last_ok_at: cfg.checked?.[p]?.last_ok_at ?? null, error: errText(e) } } });
-    return jerr(`${errText(e)}.`, 502);
+    return Response.json({ ok: false, error: `${errText(e)}.`, trace }, { status: 502, headers: CORS });
   }
 }
 
@@ -1390,7 +1392,16 @@ async function calendarHealth(): Promise<string[]> {
       const ck = checked[p];
       if (ck?.ok && Date.now() - Date.parse(ck.at) < 55 * 60_000) continue;
       try {
-        await discover(p, c);
+        const seen = await discover(p, c);
+        if (!seen.length) {
+          // signing in works but nothing is visible: Find times would have nothing to look at, so this counts as down
+          checked[p] = { at: nowIso, ok: false, last_ok_at: ck?.last_ok_at ?? null, error: `signed in to ${PROVIDER_NAME[p]} but no calendars are visible` }; changed = true;
+          notes.push(`${PROVIDER_NAME[p]} calendar lists nothing`);
+          await db.rpc("scout_notify", { p_title: `Ava (assistant): I can sign in to ${PROVIDER_NAME[p]} but can't see your calendars`,
+            p_body: `The login works, but ${PROVIDER_NAME[p]} lists no calendars, so Find times has nothing to check. She re-tries every 10 minutes. If it stays like this, open the Calendars card on /admin/ava and test the connection.`,
+            p_severity: "warning", p_push: true, p_url: "https://bestly.tech/admin/ava", p_dedupe: `ava-cal-empty-${p}-${hour}` });
+          continue;
+        }
         checked[p] = { at: nowIso, ok: true, last_ok_at: nowIso }; changed = true;
         if (ck && !ck.ok) notes.push(`${PROVIDER_NAME[p]} calendar is back`);
       } catch (e) {
