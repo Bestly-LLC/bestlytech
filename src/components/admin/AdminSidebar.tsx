@@ -123,7 +123,8 @@ export const ADMIN_NAV_SECTIONS = [
 const COUNT_MIN_INTERVAL_MS = 15_000;
 const COUNT_POLL_MS = 60_000;
 
-/* Section order: dragged by the grip next to each section label, remembered in this browser. */
+/* Section order: dragged by the grip next to each section label. Saved to Supabase (admin_nav_prefs) so every browser
+   and device shows the same order; localStorage is only a fast first paint. */
 const ORDER_KEY = "bestly-admin-nav-order";
 function readOrder(): string[] {
   try { const v = JSON.parse(localStorage.getItem(ORDER_KEY) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
@@ -155,6 +156,10 @@ export function AdminSidebar() {
   const sections = orderedSections(order);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [dragging, setDragging] = useState<string | null>(null);
+  const draggingRef = useRef(false);
+  const orderRef = useRef<string[]>(order);
+  const userIdRef = useRef<string | null>(null);
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lastFetchRef = useRef(0);
   const inFlightRef = useRef(false);
 
@@ -227,6 +232,58 @@ export function AdminSidebar() {
     };
   }, [loadCounts]);
 
+  // Keep the section order in sync across browsers: load it from Supabase, take live changes from other browsers,
+  // and re-check when this tab comes back into focus (realtime can drop on sleeping laptops and phones).
+  useEffect(() => {
+    orderRef.current = order;
+  }, [order]);
+
+  useEffect(() => {
+    let alive = true;
+    const applyRemote = (remote: unknown) => {
+      if (!alive || !Array.isArray(remote)) return;
+      if (draggingRef.current || pushTimerRef.current) return; // a local change is in flight: ours wins
+      const next = remote.filter((x): x is string => typeof x === "string");
+      if (JSON.stringify(next) === JSON.stringify(orderRef.current)) return;
+      setOrder(next);
+      try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+    };
+    const pull = async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        const uid = u?.user?.id;
+        if (!uid || !alive) return;
+        userIdRef.current = uid;
+        const { data, error } = await supabase.from("admin_nav_prefs" as never).select("section_order").eq("user_id", uid).maybeSingle();
+        if (error || !alive) return;
+        const row = data as { section_order?: unknown } | null;
+        if (row) applyRemote(row.section_order);
+        else {
+          // First run: carry this browser's existing order up so it becomes everyone's.
+          const local = readOrder();
+          if (local.length) await supabase.from("admin_nav_prefs" as never).upsert({ user_id: uid, section_order: local } as never);
+        }
+      } catch { /* offline: keep what we have */ }
+    };
+    pull();
+    const channel = supabase
+      .channel("admin-nav-prefs")
+      .on("postgres_changes", { event: "*", schema: "public", table: "admin_nav_prefs" }, (payload) => {
+        applyRemote((payload.new as { section_order?: unknown } | null)?.section_order);
+      })
+      .subscribe();
+    const onFocus = () => pull();
+    const onVisible = () => { if (!document.hidden) pull(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      alive = false;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const closeMobile = () => {
     if (isMobile) setOpenMobile(false);
   };
@@ -258,6 +315,16 @@ export function AdminSidebar() {
   const saveOrder = (next: string[]) => {
     setOrder(next);
     try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+    // Save to Supabase shortly after the last move (a drag swaps many times; one write when it settles).
+    clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = setTimeout(async () => {
+      pushTimerRef.current = undefined;
+      try {
+        const uid = userIdRef.current ?? (await supabase.auth.getUser()).data.user?.id;
+        if (!uid) return;
+        userIdRef.current = uid;
+        await supabase.from("admin_nav_prefs" as never).upsert({ user_id: uid, section_order: next, updated_at: new Date().toISOString() } as never); } catch { /* retried on the next move */ }
+    }, 500);
   };
   const move = (label: string, delta: number) => {
     const labels = sections.map((s) => s.label);
@@ -271,6 +338,7 @@ export function AdminSidebar() {
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     setDragging(label);
+    draggingRef.current = true;
     const onMove = (ev: PointerEvent) => {
       const labels = orderedSections(readOrderFrom()).map((s) => s.label);
       const from = labels.indexOf(label);
@@ -291,6 +359,7 @@ export function AdminSidebar() {
     let latest: string[] | null = null;
     const readOrderFrom = () => latest ?? readOrder();
     const onUp = () => {
+      draggingRef.current = false;
       setDragging(null);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
