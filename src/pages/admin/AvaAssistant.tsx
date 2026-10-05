@@ -12,10 +12,12 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { AvaOrb } from "@/components/admin/roofguard/AvaOrb";
 import { VoiceSwitcher } from "@/components/admin/roofguard/VoiceSwitcher";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { CallNo, DeleteCallButton, ReplyGuard, LiveTranscript, Recording, type Line } from "@/components/admin/roofguard/AvaCalls";
-import { DialerSheet } from "@/components/admin/roofguard/AvaDialer";
-import { FollowupsList, ForwardedTag, KnowledgeList, LineStatus, MessagesList, SpendCapEditor, SpendChip, YourVoiceTag, type Msg } from "@/components/admin/roofguard/AvaShared";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { CallNo, ReplyGuard, LiveTranscript, type Line } from "@/components/admin/roofguard/AvaCalls";
+import { DialerSheet, LivePill } from "@/components/admin/roofguard/AvaDialer";
+import { FollowupsList, ForwardedTag, KnowledgeList, LineStatus, MessageSheet, MessagesList, SpendCapEditor, SpendChip, YourVoiceTag, type Msg } from "@/components/admin/roofguard/AvaShared";
+import { useLiveCalls, LIVE_ENDED_EVENT } from "@/components/admin/roofguard/AvaLive";
+import { AvaCalendars } from "@/components/admin/roofguard/AvaCalendars";
 import { AvaCell } from "@/components/admin/roofguard/AvaCell";
 import { AvaSpam } from "@/components/admin/roofguard/AvaSpam";
 import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
@@ -24,11 +26,10 @@ import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, Grid3x3, Loader
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
   conversation_id: string | null; status: string; summary: string | null; message: string | null; urgent: boolean; callback_wanted: boolean;
   duration_sec: number | null; transcript: { role: string; message: string | null; time_in_call_secs?: number }[] | null; read_at: string | null; created_at: string;
-  deleted_at: string | null; call_no: number | null; voice?: "ava" | "jared"; forwarded?: boolean };
+  deleted_at: string | null; call_no: number | null; voice?: "ava" | "jared"; forwarded?: boolean; booked_slot?: string | null };
 type Contact = { id: string; name: string; phone: string | null; relationship: string | null; notes: string | null };
 type Settings = { agent_id: string | null; phone_number_id: string | null; from_number: string; setup_log: { m: string }[] };
 type Costs = { total: number; month: number; minutes: number; calls: number; unread: number };
-type LiveCall = { conversation_id: string; call_id: string | null; status: string; direction: string; phone: string | null; who: string | null; elapsed: number; transcript: Line[]; voice?: "ava" | "jared"; forwarded?: boolean };
 
 const tbl = (t: string) => supabase.from(t as never) as unknown as {
   select: (c: string) => { order: (c: string, o: { ascending: boolean }) => { limit: (n: number) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } & Promise<{ data: unknown[] | null; error: { message: string } | null }>;
@@ -48,7 +49,7 @@ export default function AvaAssistant() {
   const [s, setS] = useState<Settings | null>(null);
   const [costs, setCosts] = useState<Costs | null>(null);
   const [studio, setStudio] = useState(0);
-  const [live, setLive] = useState<LiveCall[]>([]);
+  const { calls: live } = useLiveCalls("ava");
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState<Call | null>(null);
   const [dial, setDial] = useState(false);
@@ -69,20 +70,11 @@ export default function AvaAssistant() {
   }, []);
   useEffect(() => { void load(); const t = setInterval(() => { if (!document.hidden) void load(); }, 30000); return () => clearInterval(t); }, [load]);
 
-  // live calls (either direction): every 2 sec while one is going, else every 10
+  // a live call just ended: the post-call data (message, next steps) lands a few seconds later
   useEffect(() => {
-    let stop = false;
-    const tick = async () => {
-      if (stop) return;
-      if (!document.hidden) {
-        const { data } = await supabase.functions.invoke("ava-assistant", { body: { action: "live" } });
-        const next = (data?.calls ?? []) as LiveCall[];
-        setLive((prev) => { if (prev.length > next.length) setTimeout(() => void load(), 5000); return next; });
-        setTimeout(tick, next.length ? 2000 : 10000);
-      } else setTimeout(tick, 10000);
-    };
-    void tick();
-    return () => { stop = true; };
+    const h = (e: Event) => { if ((e as CustomEvent<string>).detail === "ava") setTimeout(() => void load(), 5000); };
+    window.addEventListener(LIVE_ENDED_EVENT, h);
+    return () => window.removeEventListener(LIVE_ENDED_EVENT, h);
   }, [load]);
 
   const markRead = async (c: Call) => {
@@ -100,10 +92,11 @@ export default function AvaAssistant() {
   const copy = async () => { await navigator.clipboard.writeText(fmt(s?.from_number ?? "")).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1500); };
 
   const nameOf = (c: Call) => c.caller_name ?? contacts.find((k) => k.id === c.contact_id)?.name ?? (c.phone ? fmt(c.phone) : "Unknown caller");
-  const messages: Msg[] = calls.filter((c) => c.message).map((c) => ({
+  const toMsg = (c: Call): Msg => ({
     id: c.id, source: "ava", call_no: c.call_no, direction: c.direction, name: nameOf(c), phone: c.phone, message: c.message, urgent: c.urgent,
     callback_wanted: c.callback_wanted, read_at: c.read_at, at: c.created_at, summary: c.summary, duration_sec: c.duration_sec, transcript: slim(c.transcript),
-    purpose: c.purpose, hasRecording: !!c.conversation_id, forwarded: c.forwarded === true }));
+    purpose: c.purpose, hasRecording: !!c.conversation_id, forwarded: c.forwarded === true, voice: c.voice, booked: c.booked_slot ?? null });
+  const messages: Msg[] = calls.filter((c) => c.message).map(toMsg);
   const ready = !!s?.agent_id && !!s?.phone_number_id;
 
   return (
@@ -125,8 +118,9 @@ export default function AvaAssistant() {
           {copied ? <Check className="h-4 w-4 text-emerald-300" aria-hidden /> : <Copy className="h-4 w-4 text-white/30 group-hover:text-white/60" aria-hidden />}
         </button>
         <button type="button" onClick={() => setDial(true)} disabled={!ready}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-emerald-500 px-4 text-[15px] font-semibold text-[#052E1F] transition hover:bg-emerald-400 active:scale-[0.98] disabled:opacity-40">
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-[#FFA270] px-4 text-[15px] font-semibold text-[#1c1c1e] transition hover:bg-[#ffb48a] active:scale-[0.98] disabled:opacity-40">
           <Grid3x3 className="h-4 w-4" aria-hidden />Dial</button>
+        <LivePill source="ava" />
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <VoiceSwitcher source="ava" onMore={() => { setStudio((n) => n + 1); setTimeout(() => document.getElementById("voice-studio-ava")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }} />
           <SpendChip source="ava" />
@@ -158,18 +152,18 @@ export default function AvaAssistant() {
 
       {/* live */}
       {live.map((c) => (
-        <section key={c.conversation_id} aria-label="Live call" className="rounded-3xl bg-emerald-500/[0.06] ring-1 ring-emerald-500/30">
+        <section key={c.key} aria-label="Live call" className="rounded-3xl bg-emerald-500/[0.06] ring-1 ring-emerald-500/30">
           <header className="flex flex-wrap items-center gap-3 px-5 pt-4">
             <AvaOrb size={36} speaking />
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
               <span className="h-2 w-2 rounded-full bg-emerald-400 motion-safe:animate-pulse" aria-hidden />Live</span>
-            <span className="text-[17px] font-semibold text-white">{c.who ?? fmt(c.phone) ?? "Caller"}</span>
+            <span className="text-[17px] font-semibold text-white">{c.who || fmt(c.phone) || "Caller"}</span>
             <span className="text-sm text-white/55">{c.direction === "outbound" ? "Ava calling" : "Calling Ava"}</span>
             {c.forwarded && <ForwardedTag />}
             {c.voice === "jared" && <YourVoiceTag />}
             <span className="ml-auto font-mono text-[15px] tabular-nums text-white">{mmss(c.elapsed)}</span>
           </header>
-          <LiveTranscript lines={c.transcript} live them={c.who ?? "Them"} className="max-h-[320px] px-5 pb-5 pt-3" />
+          <LiveTranscript lines={c.transcript} live them={c.who || "Them"} className="max-h-[320px] min-h-0 px-5 pb-5 pt-3" />
         </section>
       ))}
 
@@ -211,6 +205,7 @@ export default function AvaAssistant() {
 
       {/* your cell: missed calls forwarded to Ava; spam calls and Do Not Call evidence */}
       <div className="grid items-start gap-4 lg:grid-cols-2">
+        <AvaCalendars />
         <AvaCell />
         <AvaSpam />
       </div>
@@ -234,34 +229,11 @@ export default function AvaAssistant() {
         </ul>
       </section>
 
-      <CallSheet call={open} name={open ? nameOf(open) : ""} onClose={() => setOpen(null)}
+      <MessageSheet item={open ? toMsg(open) : null} onClose={() => setOpen(null)}
         onDeleted={() => { const id = open?.id; setOpen(null); setCalls((cs) => cs.filter((x) => x.id !== id)); void load(); }} />
       <ContactSheet c={contactOpen} onClose={() => setContactOpen(null)} onSaved={() => { setContactOpen(null); void load(); }} />
       <DialerSheet kinds={["personal"]} open={dial} onOpenChange={setDial} onCalled={() => { setTimeout(() => void load(), 3000); }} />
     </div>
-  );
-}
-
-function CallSheet({ call, name, onClose, onDeleted }: { call: Call | null; name: string; onClose: () => void; onDeleted: () => void }) {
-  return (
-    <Sheet open={!!call} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="right" className="admin-shell w-full overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-xl">
-        {call && <>
-          <SheetHeader className="text-left">
-            <SheetTitle className="flex flex-wrap items-center gap-2 text-white"><CallNo n={call.call_no} className="text-[13px]" />{name}{call.forwarded && <ForwardedTag className="font-normal" />}{call.voice === "jared" && <YourVoiceTag className="font-normal" />}</SheetTitle>
-            <SheetDescription className="text-white/50">{call.direction === "inbound" ? (call.forwarded ? "Called your cell, forwarded to Ava" : "Called Ava") : "Ava called"} · {when(call.created_at)} · {fmt(call.phone)}{call.duration_sec != null ? ` · ${mmss(call.duration_sec)}` : ""}</SheetDescription>
-          </SheetHeader>
-          <div className="mt-4 space-y-4">
-            {call.message && <div className="rounded-2xl bg-sky-500/10 p-4 ring-1 ring-sky-500/25"><div className="text-[11px] font-semibold uppercase tracking-wider text-sky-300">Message for you</div><p className="mt-1 text-[15px] text-white">{call.message}</p></div>}
-            {call.purpose && <p className="text-sm text-white/60"><span className="text-white/40">Why she called: </span>{call.purpose}</p>}
-            {call.conversation_id && <Recording callId={call.id} fn="ava-assistant" />}
-            {call.summary && <p className="text-[15px] leading-relaxed text-white/85">{call.summary}</p>}
-            <div><h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">Transcript</h4><LiveTranscript lines={slim(call.transcript)} them={name} /></div>
-            <DeleteCallButton rpc="ava_delete_call" callId={call.id} onDeleted={onDeleted} />
-          </div>
-        </>}
-      </SheetContent>
-    </Sheet>
   );
 }
 

@@ -13,12 +13,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { supabase } from "@/integrations/supabase/client";
 import { AvaOrb } from "./AvaOrb";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   AlarmClock, Ban, Calendar, CheckCircle2, ChevronRight, CircleDashed, Clock, FlaskConical, Headphones, Loader2,
   Mail, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, Play, ShieldAlert, Trash2, UserRound, Voicemail, XCircle,
 } from "lucide-react";
 import { DirIcon, FollowupsList, KnowledgeList, MessageSheet, MessagesList, rgIncomingToMsg, type Msg, type RgIncoming } from "./AvaShared";
+import { ScrollSheet } from "./AvaSheet";
 
 // ---------- types ----------
 export type Line = { role: string; text: string; t: number };
@@ -83,14 +83,21 @@ const outcomeStage = (o: string | null): Stage => ({ booked: "booked", callback_
   wrong_number: "bad_number", no_answer: "no_answer" } as Record<string, Stage>)[o ?? ""] ?? "other";
 
 // ---------- shared pieces ----------
-/** Who said what, newest at the bottom; stays pinned while new lines arrive unless the reader scrolls up. */
-export function LiveTranscript({ lines, live, className, them = "Them" }: { lines: Line[]; live?: boolean; className?: string; them?: string }) {
+/** Who said what, newest at the bottom; stays pinned while new lines arrive unless the reader scrolls up.
+ *  `inline`: no scroller of its own (inside a sheet whose body already scrolls, a second scroller would swallow touch drags).
+ *  Otherwise it scrolls at the height its className gives it, and only blocks scroll chaining while it truly overflows. */
+export function LiveTranscript({ lines, live, className, them = "Them", inline }: { lines: Line[]; live?: boolean; className?: string; them?: string; inline?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
-  useEffect(() => { const el = box.current; if (el && pinned.current) el.scrollTop = el.scrollHeight; }, [lines.length, lines[lines.length - 1]?.text]);
+  const last = lines[lines.length - 1]?.text;
+  useEffect(() => {
+    const el = box.current; if (!el || inline) return;
+    el.dataset.scrollable = el.scrollHeight > el.clientHeight + 1 ? "true" : "false";
+    if (pinned.current) el.scrollTop = el.scrollHeight;
+  }, [lines.length, last, inline]);
   return (
-    <div ref={box} onScroll={(e) => { const el = e.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }}
-      className={cn("space-y-2 overflow-y-auto overscroll-contain", className)} aria-live={live ? "polite" : undefined}>
+    <div ref={box} onScroll={inline ? undefined : (e) => { const el = e.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }}
+      className={cn("space-y-2", !inline && "overflow-y-auto data-[scrollable=true]:overscroll-contain", className)} aria-live={live ? "polite" : undefined}>
       {lines.length === 0 && <p className="text-sm text-white/45">{live ? "Ringing…" : "No transcript."}</p>}
       {lines.map((l, i) => {
         const ava = l.role === "agent";
@@ -568,17 +575,14 @@ function CallSheet({ row, nos, onClose, onDeleted }: { row: BoardRow | null; nos
       setCalls((data ?? []).filter((c) => c.is_test === row.is_test)));
   }, [row]);
   const c = calls?.[pick];
+  if (!row) return null;
   return (
-    <Sheet open={!!row} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="right" className="admin-shell w-full overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-xl">
-        {row && <>
-          <SheetHeader className="text-left">
-            <SheetTitle className="flex flex-wrap items-center gap-2 text-white">{row.company.replace(" (demo)", "")}<StagePill stage={row.stage} /></SheetTitle>
-            <SheetDescription className="text-white/50">{row.state} · {fmtPhone(row.to_number)}{row.is_test ? " · test call" : ""}</SheetDescription>
-          </SheetHeader>
-
+    <ScrollSheet open onClose={onClose}
+      title={<>{row.company.replace(" (demo)", "")}<StagePill stage={row.stage} /></>}
+      description={<>{row.state} · {fmtPhone(row.to_number)}{row.is_test ? " · test call" : ""}</>}>
+      <div className="pt-1">
           {calls && calls.length > 1 && (
-            <div className="mt-4 flex gap-1.5 overflow-x-auto" role="tablist" aria-label="Calls to this lead">
+            <div className="flex gap-1.5 overflow-x-auto" role="tablist" aria-label="Calls to this lead">
               {calls.map((x, i) => (
                 <button key={x.call_id} type="button" role="tab" aria-selected={pick === i} onClick={() => setPick(i)}
                   className={cn("min-h-[36px] shrink-0 rounded-full px-3 text-xs", pick === i ? "bg-white text-black" : "bg-white/[0.06] text-white/70")}>
@@ -605,15 +609,14 @@ function CallSheet({ row, nos, onClose, onDeleted }: { row: BoardRow | null; nos
                 {c.notes && <Fact icon={<Headphones className="h-4 w-4" />} label="Notes">{c.notes}</Fact>}
               </div>
               <div>
-                <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">Transcript</h4>
-                <LiveTranscript lines={c.transcript ?? []} />
+                <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Transcript</h4>
+                <LiveTranscript lines={c.transcript ?? []} inline />
               </div>
               <DeleteCallButton rpc="rg_delete_call" callId={c.call_id} onDeleted={onDeleted} />
             </div>
           )}
-          {calls && calls.length === 0 && <p className="mt-8 text-sm text-white/50">No details for this call yet.</p>}
-        </>}
-      </SheetContent>
-    </Sheet>
+          {calls && calls.length === 0 && <p className="mt-8 text-sm text-white/60">No details for this call yet.</p>}
+      </div>
+    </ScrollSheet>
   );
 }

@@ -12,11 +12,14 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
-  AlarmClock, AlertTriangle, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, Mic, PhoneCall, PhoneForwarded, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
+  AlarmClock, AlertTriangle, CalendarCheck, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, Mic, PhoneCall, PhoneForwarded, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
 } from "lucide-react";
 import { CallNo, DeleteCallButton, LiveTranscript, Recording, type Line } from "./AvaCalls";
+import { ActionPills, useActions } from "./AvaActions";
+import { ScrollSheet } from "./AvaSheet";
+import { requestDial } from "./avaDial";
 
 export type Source = "ava" | "roofguard";
 
@@ -204,11 +207,13 @@ export type Msg = {
   id: string; source: Source; call_no: number | null; direction: "inbound" | "outbound" | "callback"; name: string; phone: string | null;
   message: string | null; urgent: boolean; callback_wanted: boolean; read_at: string | null; at: string; summary: string | null;
   duration_sec: number | null; transcript: Line[]; purpose?: string | null; hasRecording: boolean; company?: string | null; forwarded?: boolean;
+  voice?: "ava" | "jared"; booked?: string | null;
 };
 
 /** The list itself. The page owns what opening a message does (mark read, show the sheet), so it can reuse its own sheet. */
 export function MessagesList({ items, source, onOpen, className }: { items: Msg[]; source: Source; onOpen: (m: Msg) => void; className?: string }) {
   const unread = items.filter((m) => !m.read_at).length;
+  const { byCall } = useActions(source);
   return (
     <section aria-label="Messages" className={cn("rounded-3xl bg-white/[0.03] ring-1 ring-white/10", className)}>
       <header className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
@@ -235,8 +240,10 @@ export function MessagesList({ items, source, onOpen, className }: { items: Msg[
                     <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-white/55">{whenShort(m.at)}</span>
                   </div>
                   <p className="mt-0.5 text-sm text-white/75">{m.message}</p>
+                  {m.booked && <p className="mt-1 flex items-center gap-1.5 text-[13px] font-medium text-[#FFA270]"><CalendarCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />Booked: {whenPT(m.booked)}</p>}
                 </div>
               </button>
+              <ActionPills source={source} callId={m.id} actions={byCall.get(m.id)} className="pb-3 pl-9 pr-4" />
             </li>
           ))}
         </ul>
@@ -245,38 +252,85 @@ export function MessagesList({ items, source, onOpen, className }: { items: Msg[
   );
 }
 
-/** The call behind a message. Same sheet for both Avas; `item.source` picks the recording function and the delete. */
+/** What the post-call analysis collected beyond the message (intent, business, times, next steps), read straight from the call row. */
+type Extras = { next_actions: string | null; appointment_purpose: string | null; preferred_times: string | null; counterpart_business: string | null;
+  counterpart_phone: string | null; intent: string | null; booked_slot?: string | null; outcome?: string | null };
+const EXTRA_COLS: Record<Source, string> = {
+  ava: "next_actions, appointment_purpose, preferred_times, counterpart_business, counterpart_phone, intent, booked_slot",
+  roofguard: "next_actions, appointment_purpose, preferred_times, counterpart_business, counterpart_phone, intent, outcome",
+};
+function useExtras(source: Source, id: string | null) {
+  const [x, setX] = useState<Extras | null>(null);
+  useEffect(() => {
+    setX(null);
+    if (!id) return;
+    let stop = false;
+    void table(source === "ava" ? "ava_calls" : "rg_calls").select<Extras>(EXTRA_COLS[source]).eq("id", id).maybeSingle().then(({ data }) => { if (!stop) setX(data ?? null); });
+    return () => { stop = true; };
+  }, [source, id]);
+  return x;
+}
+const INTENT_TEXT: Record<string, string> = { appointment: "Wants to set up a time", callback: "Wants a call back", question: "Has a question", info_only: "Passing on information", spam: "Sales or spam", other: "Other" };
+const looksLikeNumber = (s: string) => /^[\d(+]/.test(s.trim());
+
+/** The call behind a message. Same sheet for both Avas; `item.source` picks the recording function and the delete.
+ *  One scroll surface (ScrollSheet): the header stays put and the body scrolls, transcript included. */
 export function MessageSheet({ item, onClose, onDeleted }: { item: Msg | null; onClose: () => void; onDeleted: () => void }) {
+  const source = item?.source ?? "ava";
+  const x = useExtras(source, item?.id ?? null);
+  const { byCall } = useActions(source);
+  if (!item) return null;
+  const steps = (x?.next_actions ?? "").split(/;\s*/).map((t) => t.trim()).filter(Boolean).slice(0, 3);
+  const noCallAgain = !item.phone || x?.outcome === "do_not_call";
+  const callAgain = () => {
+    const said = (item.message ?? "").trim();
+    requestDial({ mode: "personal", phone: item.phone ?? "", name: looksLikeNumber(item.name) ? "" : item.name,
+      purpose: (item.purpose?.trim() || (said ? `Follow up on their message: ${said}` : "")).slice(0, 600) });
+  };
   return (
-    <Sheet open={!!item} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="right" className="admin-shell w-full overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-xl">
-        {item && <>
-          <SheetHeader className="text-left">
-            <SheetTitle className="flex flex-wrap items-center gap-2 text-white"><CallNo n={item.call_no} className="text-[13px]" />{item.name}{item.forwarded && <ForwardedTag />}</SheetTitle>
-            <SheetDescription className="text-white/50">
-              {item.direction === "inbound" ? "Called in" : item.direction === "callback" ? "Ava called back" : "Ava called"} · {whenShort(item.at)}
-              {item.phone ? ` · ${fmtPhone(item.phone)}` : ""}{item.duration_sec != null ? ` · ${mmss(item.duration_sec)}` : ""}
-            </SheetDescription>
-          </SheetHeader>
-          <div className="mt-4 space-y-4">
-            {item.message && (
-              <div className="rounded-2xl bg-sky-500/10 p-4 ring-1 ring-sky-500/25">
-                <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-sky-300">
-                  Message{item.urgent && <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 normal-case tracking-normal text-rose-300"><AlertTriangle className="h-3 w-3" aria-hidden />Urgent</span>}
-                  {item.callback_wanted && <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 normal-case tracking-normal text-sky-300"><PhoneCall className="h-3 w-3" aria-hidden />Wants a call back</span>}
-                </div>
-                <p className="mt-1 text-[15px] text-white">{item.message}</p>
-              </div>
-            )}
-            {item.purpose && <p className="text-sm text-white/60"><span className="text-white/55">Why she called: </span>{item.purpose}</p>}
-            {item.hasRecording && <Recording callId={item.id} fn={item.source === "ava" ? "ava-assistant" : "roofguard-caller"} />}
-            {item.summary && <p className="text-[15px] leading-relaxed text-white/85">{item.summary}</p>}
-            <div><h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Transcript</h4><LiveTranscript lines={item.transcript} them={item.name} /></div>
-            <DeleteCallButton rpc={item.source === "ava" ? "ava_delete_call" : "rg_delete_call"} callId={item.id} onDeleted={onDeleted} />
+    <ScrollSheet open onClose={onClose}
+      title={<><CallNo n={item.call_no} className="text-[13px]" />{item.name}{item.forwarded && <ForwardedTag className="font-normal" />}{item.voice === "jared" && <YourVoiceTag className="font-normal" />}</>}
+      description={<>
+        {item.direction === "inbound" ? (item.forwarded ? "Called your cell, forwarded to Ava" : "Called in") : item.direction === "callback" ? "Ava called back" : "Ava called"} · {whenShort(item.at)}
+        {item.phone ? ` · ${fmtPhone(item.phone)}` : ""}{item.duration_sec != null ? ` · ${mmss(item.duration_sec)}` : ""}</>}>
+      <div className="space-y-4 pt-1">
+        {item.message && (
+          <div className="rounded-2xl bg-sky-500/10 p-4 ring-1 ring-sky-500/25">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-sky-300">
+              {source === "ava" ? "Message for you" : "Message"}{item.urgent && <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 normal-case tracking-normal text-rose-300"><AlertTriangle className="h-3 w-3" aria-hidden />Urgent</span>}
+              {item.callback_wanted && <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 normal-case tracking-normal text-sky-300"><PhoneCall className="h-3 w-3" aria-hidden />Wants a call back</span>}
+            </div>
+            <p className="mt-1 text-[15px] text-white">{item.message}</p>
           </div>
-        </>}
-      </SheetContent>
-    </Sheet>
+        )}
+
+        <ActionPills source={source} callId={item.id} actions={byCall.get(item.id)} />
+        {x?.booked_slot && (
+          <p className="flex items-center gap-2 text-[15px] text-white"><CalendarCheck className="h-4 w-4 text-[#FFA270]" aria-hidden />Booked: {whenPT(x.booked_slot)}</p>
+        )}
+        {(steps.length > 0 || x?.intent || x?.counterpart_business || x?.preferred_times) && (
+          <div className="rounded-2xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/10">
+            {x?.intent && <p className="text-sm text-white/85">{INTENT_TEXT[x.intent] ?? x.intent}{x.counterpart_business ? ` · ${x.counterpart_business}` : ""}</p>}
+            {x?.preferred_times && <p className="mt-0.5 text-sm text-white/60">Times they mentioned: {x.preferred_times}</p>}
+            {steps.length > 0 && <>
+              <h4 className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Next steps</h4>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-white/80">{steps.map((t) => <li key={t}>{t}</li>)}</ul>
+            </>}
+          </div>
+        )}
+
+        {item.purpose && <p className="text-sm text-white/60"><span className="text-white/55">Why she called: </span>{item.purpose}</p>}
+        {item.hasRecording && <Recording callId={item.id} fn={item.source === "ava" ? "ava-assistant" : "roofguard-caller"} />}
+        {item.summary && <p className="text-[15px] leading-relaxed text-white/85">{item.summary}</p>}
+        {!noCallAgain && (
+          <button type="button" onClick={callAgain}
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-white/10 text-[15px] font-medium text-white ring-1 ring-white/15 transition hover:bg-white/15 motion-safe:active:scale-[0.98]">
+            <PhoneCall className="h-4 w-4" aria-hidden />Call again</button>
+        )}
+        <div><h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Transcript</h4><LiveTranscript lines={item.transcript} them={item.name} inline /></div>
+        <DeleteCallButton rpc={item.source === "ava" ? "ava_delete_call" : "rg_delete_call"} callId={item.id} onDeleted={onDeleted} />
+      </div>
+    </ScrollSheet>
   );
 }
 

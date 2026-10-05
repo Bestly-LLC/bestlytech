@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ScrollSheet } from "./AvaSheet";
 import { CallNo, LiveTranscript, Recording, type Line } from "./AvaCalls";
 import { ForwardedTag, fmtPhone } from "./AvaShared";
 import {
@@ -141,11 +141,13 @@ export function AvaSpam({ className }: { className?: string }) {
 // ---------- one company ----------
 function CompanySheet({ company, onClose, onChanged }: { company: Company | null; onClose: () => void; onChanged: () => void }) {
   return (
-    <Sheet open={!!company} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="right" className="admin-shell w-full overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-xl">
-        {company && <CompanyBody key={company.id} co={company} onChanged={onChanged} />}
-      </SheetContent>
-    </Sheet>
+    company ? (
+      <ScrollSheet open onClose={onClose}
+        title={<>{company.name ?? "Company not given"}{company.calls_12mo >= 2 && <ThresholdBadge />}</>}
+        description={<><span className="tabular-nums">{company.calls_12mo}</span>&nbsp;{company.calls_12mo === 1 ? "call" : "calls"} in 12 months · first {ptDay(company.first_seen)} · last {ptDay(company.last_seen)}</>}>
+        <CompanyBody key={company.id} co={company} onChanged={onChanged} />
+      </ScrollSheet>
+    ) : null
   );
 }
 
@@ -216,14 +218,7 @@ function CompanyBody({ co, onChanged }: { co: Company; onChanged: () => void }) 
 
   return (
     <>
-      <SheetHeader className="text-left">
-        <SheetTitle className="flex flex-wrap items-center gap-2 text-white">{co.name ?? "Company not given"}{co.calls_12mo >= 2 && <ThresholdBadge />}</SheetTitle>
-        <SheetDescription className="text-white/55">
-          <span className="tabular-nums">{co.calls_12mo}</span>&nbsp;{co.calls_12mo === 1 ? "call" : "calls"} in 12 months · first {ptDay(co.first_seen)} · last {ptDay(co.last_seen)}
-        </SheetDescription>
-      </SheetHeader>
-
-      <div className="mt-4 space-y-5">
+      <div className="space-y-5 pt-1">
         <div className="flex flex-wrap items-center gap-2"><StatusPill status={co.status} /></div>
 
         {/* captured details */}
@@ -382,7 +377,7 @@ function EvidenceCall({ c, n, onChanged }: { c: SpamCall; n: number; onChanged: 
           <ChevronDown className={cn("h-4 w-4 transition-transform motion-reduce:transition-none", showText && "rotate-180")} aria-hidden />Transcript</button>
       </div>
       {err && <p role="alert" className="mt-2 text-sm text-red-300">{err}</p>}
-      {showText && <LiveTranscript lines={slim(c.transcript)} them="Caller" className="mt-2 max-h-[320px]" />}
+      {showText && <LiveTranscript lines={slim(c.transcript)} them="Caller" inline className="mt-2" />}
     </li>
   );
 }
@@ -416,14 +411,9 @@ function LetterSheet({ letter, onClose, onCopied }: { letter: { text: string; co
   useEffect(() => { setFailed(false); }, [letter?.text]);
   const copy = async () => { if (!letter) return; if (await copyText(letter.text)) onCopied(); else setFailed(true); };
   return (
-    <Sheet open={!!letter} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="right" className="admin-shell w-full overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-xl">
-        <SheetHeader className="text-left">
-          <SheetTitle className="text-white">Demand letter draft</SheetTitle>
-          <SheetDescription className="text-white/55">Filled in from the calls on file. Fill in the brackets, read every line, and send it yourself.</SheetDescription>
-        </SheetHeader>
-        {letter && (
-          <div className="mt-4 space-y-3">
+    letter ? (
+      <ScrollSheet open onClose={onClose} title="Demand letter draft" description="Filled in from the calls on file. Fill in the brackets, read every line, and send it yourself.">
+          <div className="space-y-3 pt-1">
             <p className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-sm font-medium text-amber-200 ring-1 ring-amber-500/30">
               <FileText className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />Draft. Not legal advice. Review before sending.</p>
             <textarea readOnly rows={22} value={letter.text} onFocus={(e) => e.currentTarget.select()} aria-label="Letter text"
@@ -433,8 +423,7 @@ function LetterSheet({ letter, onClose, onCopied }: { letter: { text: string; co
             {failed && <p role="alert" className="text-sm text-red-300">Couldn't copy automatically. Select the text and copy it.</p>}
             <p className="text-[11px] text-white/50">Ava never sends this. The company's status is now Letter drafted.</p>
           </div>
-        )}
-      </SheetContent>
-    </Sheet>
+      </ScrollSheet>
+    ) : null
   );
 }
