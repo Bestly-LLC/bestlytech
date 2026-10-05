@@ -101,6 +101,13 @@ The stage is derived in SQL from `rg_leads.call_status` plus the latest `rg_call
 
 ---
 
+## Added the same evening (all shipped)
+
+- **Playback.** Every call sheet has "Play recording" (edge `audio` action streams ElevenLabs' audio; key stays server-side).
+- **Ava's follow-ups** (`rg_followups`, cron `roofguard-followups` every 5 min). A callback request schedules itself, Scout pings Jared 15 min ahead, test callbacks dial on time, and the watchdog fails and raises anything stuck. Real-lead callbacks ride the dialer queue (`next_call_at`); the task closes when that call goes out. First one: Eli, Mon Oct 5, 11:00 AM PT.
+- **Partner demo calls.** On the Home screen of Eli's portal: an "Ava demo" tile. He types a number, Ava calls as a fictional hospital (Riverside Medical Center). Never a real prospect's number, 15 a day, live transcript, summary and recording. Demo calls never schedule callbacks.
+- **Faster, more human Ava.** Lily voice on turbo v2, gemini-2.5-flash-lite, eager turn-taking, replies under 20 words, contractions and short reactions, banned stock-assistant phrases. Measured before: 1.0 to 1.7 sec from silence to speech.
+
 ## Before the 20-call pilot (Jared)
 
 1. **Callback number** for voicemails: Eli's (816) 588-3683, or the RoofGuard line.
