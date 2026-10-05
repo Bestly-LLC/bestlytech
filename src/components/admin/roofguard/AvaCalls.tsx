@@ -15,8 +15,9 @@ import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   AlarmClock, Ban, Calendar, CheckCircle2, ChevronRight, CircleDashed, Clock, FlaskConical, Headphones, Loader2,
-  Mail, PhoneCall, PhoneMissed, PhoneOff, Play, ShieldAlert, Trash2, UserRound, Voicemail, XCircle,
+  Mail, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, Play, ShieldAlert, Trash2, UserRound, Voicemail, XCircle,
 } from "lucide-react";
+import { DirIcon, FollowupsList, KnowledgeList, MessageSheet, MessagesList, rgIncomingToMsg, type Msg, type RgIncoming } from "./AvaShared";
 
 // ---------- types ----------
 export type Line = { role: string; text: string; t: number };
@@ -28,7 +29,7 @@ type BoardRow = { call_id: string; lead_id: string; company: string; state: stri
   dm_name: string | null; dm_title: string | null; opener_key: string | null; duration_sec: number | null; ended_at: string;
   attempt: number; calls: number; is_test: boolean; to_number: string; has_transcript: boolean };
 export type LiveCall = { call_id: string; lead_id: string; company: string; contact: string | null; to_number: string; is_test: boolean;
-  status: string; elapsed: number; transcript: Line[] };
+  status: string; elapsed: number; transcript: Line[]; conversation_id?: string | null; direction?: "outbound" | "inbound" | "callback" };
 type Followup = { id: string; lead_id: string; company: string; contact_name: string | null; to_number: string; due_at: string; timezone: string;
   is_test: boolean; status: string; note: string | null };
 type LeadCall = { call_id: string; outcome: string | null; summary: string | null; notes: string | null; meeting_times: string | null;
@@ -179,8 +180,9 @@ export function DeleteCallButton({ rpc, callId, onDeleted }: { rpc: "rg_delete_c
  * Reply guard: what the watchdog caught on finished calls (ava_reply_incidents, written by a database trigger).
  * Same card on both pages; `source` picks which Ava. Code leaks self-heal (model switch); the rest feed her reviews.
  */
-type Incident = { id: string; call_no: number | null; kind: "code_leak" | "no_hangup" | "repeat"; excerpt: string | null; healed: string | null; created_at: string };
+type Incident = { id: string; call_no: number | null; kind: "code_leak" | "no_hangup" | "repeat"; leak?: boolean; excerpt: string | null; healed: string | null; created_at: string };
 const KIND_TEXT: Record<Incident["kind"], string> = { code_leak: "Spoke code out loud", no_hangup: "Didn't hang up after goodbye", repeat: "Repeated herself" };
+const incidentText = (r: Incident) => (r.leak ? "Shared something sensitive" : KIND_TEXT[r.kind]);
 export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
   const [rows, setRows] = useState<Incident[]>([]);
   const tbl = () => supabase.from("ava_reply_incidents" as never) as unknown as {
@@ -188,7 +190,7 @@ export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
     update: (p: object) => { in: (c: string, v: string[]) => Promise<{ error: unknown }> };
   };
   const load = useCallback(async () => {
-    const { data } = await tbl().select("id, call_no, kind, excerpt, healed, created_at").eq("source", source).is("reviewed_at", null).order("created_at", { ascending: false }).limit(6);
+    const { data } = await tbl().select("id, call_no, kind, leak, excerpt, healed, created_at").eq("source", source).is("reviewed_at", null).order("created_at", { ascending: false }).limit(6);
     setRows(data ?? []);
   }, [source]);
   useEffect(() => { void load(); const t = setInterval(() => { if (!document.hidden) void load(); }, 60000); return () => clearInterval(t); }, [load]);
@@ -204,8 +206,8 @@ export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
       <ul className="mt-1 space-y-1.5">
         {rows.map((r) => (
           <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 text-sm">
-            <CallNo n={r.call_no} /><span className="text-white">{KIND_TEXT[r.kind]}</span>
-            {r.healed && <span className="text-emerald-300/90">· Fixed: {r.healed}</span>}
+            <CallNo n={r.call_no} /><span className="text-white">{incidentText(r)}</span>
+            {r.healed && <span className={r.leak ? "text-amber-200/90" : "text-emerald-300/90"}>· {r.leak ? "Handled" : "Fixed"}: {r.healed}</span>}
             {r.excerpt && <span className="w-full truncate pl-1 text-xs text-white/45">"{r.excerpt.replace(/\s+/g, " ")}"</span>}
           </li>
         ))}
@@ -263,14 +265,16 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
   const [followups, setFollowups] = useState<Followup[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState<BoardRow | null>(null);
+  const [incoming, setIncoming] = useState<RgIncoming[]>([]);
+  const [openMsg, setOpenMsg] = useState<Msg | null>(null);
   const nos = useRgCallNos(board);
 
   const loadCols = useCallback(async () => {
-    const [q, b, f] = await Promise.all([rpcArgs<QueueRow[]>("rg_call_queue", { p_limit: 150 }), rpcArgs<BoardRow[]>("rg_call_board", { p_limit: 200 }),
-      rpcArgs<Followup[]>("rg_followups_list")]);
-    const e = q.error ?? b.error ?? f.error;
+    const [q, b, f, i] = await Promise.all([rpcArgs<QueueRow[]>("rg_call_queue", { p_limit: 150 }), rpcArgs<BoardRow[]>("rg_call_board", { p_limit: 200 }),
+      rpcArgs<Followup[]>("rg_followups_list"), rpcArgs<RgIncoming[]>("rg_inbound_calls", { p_limit: 100 })]);
+    const e = q.error ?? b.error ?? f.error ?? i.error;
     if (e) { setErr(e.message); return; }
-    setErr(null); setQueue(q.data ?? []); setBoard(b.data ?? []); setFollowups(f.data ?? []);
+    setErr(null); setQueue(q.data ?? []); setBoard(b.data ?? []); setFollowups(f.data ?? []); setIncoming(i.data ?? []);
   }, []);
   useEvery(loadCols, 30000);
 
@@ -281,6 +285,15 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
     if (liveCount < prev.current) { const t1 = setTimeout(() => void loadCols(), 4000); const t2 = setTimeout(() => void loadCols(), 15000); prev.current = liveCount; return () => { clearTimeout(t1); clearTimeout(t2); }; }
     prev.current = liveCount;
   }, [liveCount, loadCols]);
+
+  const messages = useMemo(() => incoming.filter((r) => r.message).map(rgIncomingToMsg), [incoming]);
+  const openMessage = async (m: Msg) => {
+    setOpenMsg(m);
+    if (!m.read_at) {
+      await rpcArgs("rg_mark_read", { p_id: m.id });
+      setIncoming((rs) => rs.map((r) => (r.id === m.id ? { ...r, read_at: new Date().toISOString() } : r)));
+    }
+  };
 
   const today = useMemo(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
@@ -306,9 +319,14 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
       {err && <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load calls: {err}</div>}
       {live.down && <div className="rounded-2xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200 ring-1 ring-amber-500/30">Live view unavailable right now. Finished calls still show below.</div>}
 
-      {live.calls.map((c) => <LiveBanner key={c.call_id} call={c} />)}
+      {live.calls.map((c) => <LiveBanner key={c.call_id || c.conversation_id || c.to_number} call={c} />)}
 
       <ReplyGuard source="roofguard" />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <MessagesList items={messages} source="roofguard" onOpen={(m) => void openMessage(m)} />
+        <FollowupsList source="roofguard" onChanged={() => void loadCols()} />
+      </div>
 
       {followups.some((f) => f.status === "scheduled" || f.status === "dialing") && <Followups rows={followups} />}
 
@@ -317,8 +335,46 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
         <CalledColumn rows={board} onOpen={setOpen} nos={nos} />
       </div>
 
+      <IncomingCalls rows={incoming} onOpen={(r) => void openMessage(rgIncomingToMsg(r))} />
+
+      <KnowledgeList source="roofguard" />
+
+      <MessageSheet item={openMsg} onClose={() => setOpenMsg(null)} onDeleted={() => { setOpenMsg(null); void loadCols(); }} />
       <CallSheet row={open} nos={nos} onClose={() => setOpen(null)} onDeleted={() => { setOpen(null); void loadCols(); }} />
     </div>
+  );
+}
+
+// ---------- incoming calls (answered by Ava on the RoofGuard line, and her call-backs) ----------
+function IncomingCalls({ rows, onOpen }: { rows: RgIncoming[]; onOpen: (r: RgIncoming) => void }) {
+  return (
+    <section aria-label="Incoming calls" className="rounded-3xl bg-white/[0.03] ring-1 ring-white/10">
+      <header className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
+        <PhoneIncoming className="h-4 w-4 text-sky-300" aria-hidden />
+        <h3 className="text-[15px] font-semibold text-white">Incoming calls</h3>
+        <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs tabular-nums text-white/70">{rows.length}</span>
+      </header>
+      {rows.length === 0 ? <p className="px-4 py-8 text-center text-sm text-white/45">No one has called the RoofGuard line yet.</p> : (
+        <ul className="divide-y divide-white/5">
+          {rows.slice(0, 15).map((r) => {
+            const m = rgIncomingToMsg(r);
+            return (
+              <li key={r.id}>
+                <button type="button" onClick={() => onOpen(r)} className="flex min-h-[44px] w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-white/[0.04] focus-visible:bg-white/[0.06] focus-visible:outline-none">
+                  <DirIcon direction={r.direction} />
+                  <CallNo n={r.call_no} />
+                  <span className="min-w-0 flex-1 truncate text-[15px] text-white">{m.name}
+                    <span className="ml-2 text-xs text-white/45">{r.direction === "callback" ? "Ava called back" : "Called in"}</span></span>
+                  {r.duration_sec != null && <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-white/45">{mmss(r.duration_sec)}</span>}
+                  <span className="shrink-0 whitespace-nowrap text-xs text-white/40">{ago(r.at)}</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-white/25" aria-hidden />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -330,13 +386,15 @@ function LiveBanner({ call }: { call: LiveCall }) {
   useEffect(() => setBase({ at: Date.now(), elapsed: call.elapsed }), [call.elapsed]);
   useEffect(() => { const t = setInterval(() => force((n) => n + 1), 1000); return () => clearInterval(t); }, []);
   const secs = base.elapsed + Math.round((Date.now() - base.at) / 1000);
-  const label = call.status === "in-progress" || call.status === "processing" ? "On the call" : call.status === "done" ? "Wrapping up" : "Ringing";
+  const incoming = call.direction === "inbound";
+  const label = call.status === "in-progress" || call.status === "processing" ? "On the call" : call.status === "done" ? "Wrapping up" : incoming ? "Answering" : "Ringing";
   return (
     <section aria-label={`Live call with ${call.company}`} className="overflow-hidden rounded-3xl bg-emerald-500/[0.06] ring-1 ring-emerald-500/30">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 pt-4">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
           <span className="h-2 w-2 rounded-full bg-emerald-400 motion-safe:animate-pulse" aria-hidden />Live
         </span>
+        {incoming && <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-300"><PhoneIncoming className="h-3 w-3" aria-hidden />Incoming</span>}
         <span className="min-w-0 truncate text-[17px] font-semibold text-white">{call.company}</span>
         {call.contact && <span className="text-sm text-white/60">{call.contact}</span>}
         {call.is_test && <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[11px] text-violet-300"><FlaskConical className="h-3 w-3" aria-hidden />Test</span>}
@@ -354,8 +412,8 @@ function LiveBanner({ call }: { call: LiveCall }) {
 function Followups({ rows }: { rows: Followup[] }) {
   const up = rows.filter((f) => f.status === "scheduled" || f.status === "dialing");
   return (
-    <section aria-label="Ava's follow-ups" className="rounded-3xl bg-sky-500/[0.05] p-4 ring-1 ring-sky-500/25">
-      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-sky-200"><AlarmClock className="h-4 w-4" aria-hidden />Ava's follow-ups</h3>
+    <section aria-label="Scheduled by Ava" className="rounded-3xl bg-sky-500/[0.05] p-4 ring-1 ring-sky-500/25">
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-sky-200"><AlarmClock className="h-4 w-4" aria-hidden />Scheduled by Ava</h3>
       <ul className="divide-y divide-white/5">
         {up.map((f) => (
           <li key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">

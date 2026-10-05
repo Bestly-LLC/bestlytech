@@ -1,0 +1,485 @@
+/**
+ * Shared pieces for the two Avas (personal on /admin/ava, RoofGuard on /admin/roofguard). Each takes a `source`
+ * ("ava" | "roofguard") so one component serves both pages and a buyer of RoofGuard copies only the roofguard rows.
+ * See docs/ava-inbound-opusplan.md, phase 3.
+ *
+ *   LineStatus      chip: "Answering calls" or "Not answering, fixing…", from the watchdog (ava_line_health)
+ *   MessagesList    who called and left a message: unread dot, urgent / wants-a-call-back tags, tap for the call
+ *   MessageSheet    the call behind a message: message, recording, summary, transcript, delete
+ *   FollowupsList   calls Ava suggests making. Nothing is dialed until you tap (ava_followup_act)
+ *   KnowledgeList   "What Ava can share": the ONLY facts she may use with a caller (ava_knowledge)
+ */
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  AlarmClock, AlertTriangle, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, PhoneCall, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
+} from "lucide-react";
+import { CallNo, DeleteCallButton, LiveTranscript, Recording, type Line } from "./AvaCalls";
+
+export type Source = "ava" | "roofguard";
+
+// ---------- loose table / rpc access (these tables are newer than the generated types) ----------
+type Err = { message: string } | null;
+interface Q<T> extends PromiseLike<{ data: T[] | null; error: Err }> {
+  eq(c: string, v: unknown): Q<T>; neq(c: string, v: unknown): Q<T>; in(c: string, v: unknown[]): Q<T>;
+  order(c: string, o: { ascending: boolean }): Q<T>; limit(n: number): Q<T>; maybeSingle(): PromiseLike<{ data: T | null; error: Err }>;
+}
+interface W extends PromiseLike<{ error: Err }> { eq(c: string, v: unknown): W }
+const table = (t: string) => supabase.from(t as never) as unknown as {
+  select<T>(c: string): Q<T>; insert(p: object): PromiseLike<{ error: Err }>; update(p: object): W; delete(): W;
+};
+export const rpcArgs = <T,>(fn: string, args?: Record<string, unknown>) =>
+  (supabase.rpc as unknown as (f: string, a?: Record<string, unknown>) => Promise<{ data: T | null; error: Err }>)(fn, args);
+
+// ---------- formatting (a number never splits from its unit: nbsp; times are 12-hour) ----------
+export const fmtPhone = (e164: string | null | undefined) => {
+  const d = (e164 ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+  return d.length === 10 ? `(${d.slice(0, 3)})\u00A0${d.slice(3, 6)}-${d.slice(6)}` : e164 ?? "";
+};
+const mmss = (s: number | null | undefined) => s == null ? "" : `${Math.floor(Math.max(0, s) / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
+const clock12 = (iso: string, o: Intl.DateTimeFormatOptions = {}) =>
+  new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...o })
+    .format(new Date(iso)).replace(/\s(AM|PM)/, "\u00A0$1");
+export const whenShort = (iso: string) => clock12(iso);
+const whenPT = (iso: string) => clock12(iso, { timeZone: "America/Los_Angeles", timeZoneName: "short" });
+export const agoText = (iso: string) => {
+  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}\u00A0min ago`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `${h}\u00A0hr ago` : new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+};
+const inputCls = "h-11 w-full rounded-xl bg-white/[0.05] px-3 text-[15px] text-white outline-none ring-1 ring-white/10 placeholder:text-white/50 focus:ring-white/25";
+
+function usePoll(fn: () => void, ms: number) {
+  useEffect(() => {
+    fn();
+    const t = setInterval(() => { if (!document.hidden) fn(); }, ms);
+    return () => clearInterval(t);
+  }, [fn, ms]);
+}
+
+// ---------- LineStatus ----------
+export type LineHealth = { ok: boolean; problems: string[] | null; healed: boolean; checked_at: string; last_ok_at: string | null };
+export function useLineHealth(source: Source) {
+  const [row, setRow] = useState<LineHealth | null | undefined>(undefined);
+  const load = useCallback(async () => {
+    const { data } = await table("ava_line_health").select<LineHealth>("ok, problems, healed, checked_at, last_ok_at").eq("source", source).maybeSingle();
+    setRow(data ?? null);
+  }, [source]);
+  usePoll(load, 60000);
+  return row;
+}
+
+/** Green "Answering calls" or amber "Not answering, fixing…". Icon plus words, never color alone. */
+export function LineStatus({ source, className }: { source: Source; className?: string }) {
+  const row = useLineHealth(source);
+  const stale = !!row && Date.now() - Date.parse(row.checked_at) > 35 * 60000;   // the watchdog runs every 10 minutes
+  let tone = "bg-white/[0.05] text-white/60 ring-white/10", Icon = Loader2, text = "Checking the line…", spin = true;
+  if (row && row.ok && !stale) { tone = "bg-emerald-500/10 text-emerald-300 ring-emerald-500/25"; Icon = CheckCircle2; text = "Answering calls"; spin = false; }
+  else if (row && row.ok && stale) { tone = "bg-amber-500/10 text-amber-200 ring-amber-500/30"; Icon = AlertTriangle; text = "Line check is overdue"; spin = false; }
+  else if (row && !row.ok) { tone = "bg-amber-500/10 text-amber-200 ring-amber-500/30"; Icon = AlertTriangle; text = "Not answering, fixing…"; spin = false; }
+  const detail = row && !row.ok ? (row.problems ?? []).join("; ") : row ? `Last checked ${agoText(row.checked_at)}` : "";
+  return (
+    <span role="status" title={detail} className={cn("inline-flex min-h-[44px] items-center gap-2 rounded-2xl px-3.5 ring-1", tone, className)}>
+      <Icon className={cn("h-4 w-4 shrink-0", spin && "animate-spin")} aria-hidden />
+      <span className="leading-tight">
+        <span className="block whitespace-nowrap text-[15px] font-semibold">{text}</span>
+        {row && !row.ok && row.problems?.[0] && <span className="block max-w-[260px] truncate text-[11px] opacity-80">{row.problems[0]}</span>}
+      </span>
+    </span>
+  );
+}
+
+// ---------- messages ----------
+export type Msg = {
+  id: string; source: Source; call_no: number | null; direction: "inbound" | "outbound" | "callback"; name: string; phone: string | null;
+  message: string | null; urgent: boolean; callback_wanted: boolean; read_at: string | null; at: string; summary: string | null;
+  duration_sec: number | null; transcript: Line[]; purpose?: string | null; hasRecording: boolean; company?: string | null;
+};
+
+/** The list itself. The page owns what opening a message does (mark read, show the sheet), so it can reuse its own sheet. */
+export function MessagesList({ items, source, onOpen, className }: { items: Msg[]; source: Source; onOpen: (m: Msg) => void; className?: string }) {
+  const unread = items.filter((m) => !m.read_at).length;
+  return (
+    <section aria-label="Messages" className={cn("rounded-3xl bg-white/[0.03] ring-1 ring-white/10", className)}>
+      <header className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
+        <Inbox className="h-4 w-4 text-sky-300" aria-hidden />
+        <h3 className="text-[15px] font-semibold text-white">{source === "ava" ? "Messages for you" : "Messages for the team"}</h3>
+        {unread > 0 && <span className="ml-auto rounded-full bg-[#0A84FF] px-2 py-0.5 text-xs font-semibold text-white">{unread}&nbsp;new</span>}
+      </header>
+      {items.length === 0 ? (
+        <p className="px-4 py-8 text-center text-sm text-white/60">
+          No messages yet. When someone calls {source === "ava" ? "Ava's line" : "the RoofGuard line"} and leaves one, it lands here and on your phone.</p>
+      ) : (
+        <ul className="divide-y divide-white/5">
+          {items.map((m) => (
+            <li key={m.id}>
+              <button type="button" onClick={() => onOpen(m)} className="flex min-h-[44px] w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-white/[0.04] active:bg-white/[0.07] focus-visible:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/50">
+                <span className={cn("mt-2 h-2 w-2 shrink-0 rounded-full", m.read_at ? "bg-transparent" : "bg-[#0A84FF]")} role={m.read_at ? undefined : "img"} aria-label={m.read_at ? undefined : "Unread"} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <CallNo n={m.call_no} />
+                    <span className="text-[15px] font-medium text-white">{m.name}</span>
+                    {m.urgent && <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] text-rose-300"><AlertTriangle className="h-3 w-3" aria-hidden />Urgent</span>}
+                    {m.callback_wanted && <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-300"><PhoneCall className="h-3 w-3" aria-hidden />Wants a call back</span>}
+                    <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-white/55">{whenShort(m.at)}</span>
+                  </div>
+                  <p className="mt-0.5 text-sm text-white/75">{m.message}</p>
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** The call behind a message. Same sheet for both Avas; `item.source` picks the recording function and the delete. */
+export function MessageSheet({ item, onClose, onDeleted }: { item: Msg | null; onClose: () => void; onDeleted: () => void }) {
+  return (
+    <Sheet open={!!item} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="admin-shell w-full overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-xl">
+        {item && <>
+          <SheetHeader className="text-left">
+            <SheetTitle className="flex flex-wrap items-center gap-2 text-white"><CallNo n={item.call_no} className="text-[13px]" />{item.name}</SheetTitle>
+            <SheetDescription className="text-white/50">
+              {item.direction === "inbound" ? "Called in" : item.direction === "callback" ? "Ava called back" : "Ava called"} · {whenShort(item.at)}
+              {item.phone ? ` · ${fmtPhone(item.phone)}` : ""}{item.duration_sec != null ? ` · ${mmss(item.duration_sec)}` : ""}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            {item.message && (
+              <div className="rounded-2xl bg-sky-500/10 p-4 ring-1 ring-sky-500/25">
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-sky-300">
+                  Message{item.urgent && <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 normal-case tracking-normal text-rose-300"><AlertTriangle className="h-3 w-3" aria-hidden />Urgent</span>}
+                  {item.callback_wanted && <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 normal-case tracking-normal text-sky-300"><PhoneCall className="h-3 w-3" aria-hidden />Wants a call back</span>}
+                </div>
+                <p className="mt-1 text-[15px] text-white">{item.message}</p>
+              </div>
+            )}
+            {item.purpose && <p className="text-sm text-white/60"><span className="text-white/55">Why she called: </span>{item.purpose}</p>}
+            {item.hasRecording && <Recording callId={item.id} fn={item.source === "ava" ? "ava-assistant" : "roofguard-caller"} />}
+            {item.summary && <p className="text-[15px] leading-relaxed text-white/85">{item.summary}</p>}
+            <div><h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Transcript</h4><LiveTranscript lines={item.transcript} them={item.name} /></div>
+            <DeleteCallButton rpc={item.source === "ava" ? "ava_delete_call" : "rg_delete_call"} callId={item.id} onDeleted={onDeleted} />
+          </div>
+        </>}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ---------- RoofGuard's incoming calls and call-backs (rg_inbound_calls) ----------
+export type RgIncoming = { id: string; call_no: number | null; direction: "inbound" | "callback"; lead_id: string; company: string | null; phone: string | null;
+  caller_name: string | null; message: string | null; urgent: boolean; callback_wanted: boolean; callback_number: string | null; read_at: string | null;
+  summary: string | null; duration_sec: number | null; status: string; at: string; transcript: Line[] };
+
+/** Placeholder lead for callers we don't know shows as "Incoming caller": never show that as a company name. */
+export const rgIncomingToMsg = (r: RgIncoming): Msg => {
+  const company = r.company && !/^inbound caller/i.test(r.company) ? r.company : null;
+  return { id: r.id, source: "roofguard", call_no: r.call_no, direction: r.direction, name: r.caller_name ?? company ?? (r.phone ? fmtPhone(r.phone) : "Unknown caller"),
+    phone: r.phone, message: r.message, urgent: r.urgent, callback_wanted: r.callback_wanted, read_at: r.read_at, at: r.at, summary: r.summary,
+    duration_sec: r.duration_sec, transcript: r.transcript ?? [], hasRecording: true, company };
+};
+
+// ---------- follow-ups ----------
+type Followup = { id: string; source: Source; call_id: string | null; phone: string; name: string | null; reason: string | null; due_at: string | null;
+  status: "proposed" | "approved" | "dialing" | "done" | "dismissed"; result_call_id: string | null; note: string | null; created_at: string };
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const toLocalInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+export function FollowupsList({ source, onChanged, className }: { source: Source; onChanged?: () => void; className?: string }) {
+  const [rows, setRows] = useState<Followup[]>([]);
+  const [nos, setNos] = useState<Map<string, number>>(new Map());
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const { data, error } = await table("ava_followups").select<Followup>("*").eq("source", source).neq("status", "dismissed").order("created_at", { ascending: false }).limit(30);
+    if (error) { setErr(error.message); return; }
+    setErr(null);
+    const list = data ?? [];
+    setRows(list);
+    const ids = list.map((f) => f.result_call_id).filter((x): x is string => !!x);
+    if (ids.length) {
+      const { data: calls } = await table(source === "ava" ? "ava_calls" : "rg_calls").select<{ id: string; call_no: number | null }>("id, call_no").in("id", ids);
+      setNos(new Map((calls ?? []).filter((c) => c.call_no != null).map((c) => [c.id, c.call_no as number])));
+    }
+  }, [source]);
+  usePoll(load, 20000);
+
+  const act = async (id: string, action: "call_now" | "approve" | "dismiss" | "cancel", at?: string) => {
+    const { error } = await rpcArgs("ava_followup_act", { p_id: id, p_action: action, ...(at ? { p_at: at } : {}) });
+    if (error) return error.message;
+    await load(); onChanged?.();
+    return null;
+  };
+
+  const open = rows.filter((f) => f.status !== "done");
+  const done = rows.filter((f) => f.status === "done").slice(0, 3);
+  return (
+    <section aria-label="Follow-ups" className={cn("rounded-3xl bg-white/[0.03] ring-1 ring-white/10", className)}>
+      <header className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
+        <CalendarClock className="h-4 w-4 text-amber-300" aria-hidden />
+        <h3 className="text-[15px] font-semibold text-white">Follow-ups</h3>
+        {open.length > 0 && <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-xs tabular-nums text-white/70">{open.length}</span>}
+      </header>
+      {err && <p role="alert" className="px-4 py-3 text-sm text-red-300">Could not load follow-ups: {err}</p>}
+      {rows.length === 0 && !err && (
+        <p className="px-4 py-8 text-center text-sm text-white/60">No follow-ups. When a caller asks for a call back, Ava suggests one here. Nothing is dialed until you approve it.</p>
+      )}
+      <ul className="divide-y divide-white/5">
+        {open.map((f) => <FollowupRow key={f.id} f={f} nos={nos} act={act} />)}
+        {done.map((f) => <FollowupRow key={f.id} f={f} nos={nos} act={act} />)}
+      </ul>
+      {rows.length > 0 && <p className="border-t border-white/5 px-4 py-2 text-[11px] text-white/55">Ava only calls after you tap. Suggested calls wait here until you do.</p>}
+    </section>
+  );
+}
+
+function FollowupRow({ f, nos, act }: { f: Followup; nos: Map<string, number>; act: (id: string, a: "call_now" | "approve" | "dismiss" | "cancel", at?: string) => Promise<string | null> }) {
+  const [mode, setMode] = useState<null | "now" | "later" | "dismiss">(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [at, setAt] = useState("");
+  const who = f.name?.trim() || fmtPhone(f.phone);
+  const run = async (a: "call_now" | "approve" | "dismiss" | "cancel", when?: string) => {
+    setBusy(true); setErr(null);
+    const e = await act(f.id, a, when);
+    setBusy(false);
+    if (e) setErr(e); else setMode(null);
+  };
+  const preset = (kind: "hour" | "tomorrow") => {
+    const d = new Date();
+    if (kind === "hour") d.setHours(d.getHours() + 1, 0, 0, 0);
+    else { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
+    setAt(toLocalInput(d));
+  };
+  const btn = "inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl px-4 text-[15px] font-medium transition motion-safe:active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60";
+
+  const pill = f.status === "proposed" ? { t: "Waiting for you", I: Lightbulb, c: "bg-amber-500/15 text-amber-300" }
+    : f.status === "approved" ? { t: "Scheduled", I: AlarmClock, c: "bg-sky-500/15 text-sky-300" }
+    : f.status === "dialing" ? { t: "Calling now", I: PhoneOutgoing, c: "bg-emerald-500/15 text-emerald-300" }
+    : { t: "Called back", I: CheckCircle2, c: "bg-white/10 text-white/70" };
+  return (
+    <li className="px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-[15px] font-medium text-white">{who}</span>
+        {f.name && <span className="whitespace-nowrap text-xs tabular-nums text-white/60">{fmtPhone(f.phone)}</span>}
+        <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium", pill.c)}>
+          <pill.I className="h-3 w-3" aria-hidden />{pill.t}</span>
+        {f.status === "done" && f.result_call_id && <CallNo n={nos.get(f.result_call_id)} />}
+        <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-white/55">
+          {f.status === "approved" && f.due_at ? whenPT(f.due_at) : agoText(f.created_at)}</span>
+      </div>
+      {f.reason && <p className="mt-0.5 line-clamp-2 text-sm text-white/65">{f.reason}</p>}
+      {f.note && <p className="mt-0.5 text-xs text-amber-200/80">{f.note}</p>}
+
+      {f.status === "proposed" && mode === null && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" onClick={() => setMode("now")} className={cn(btn, "bg-emerald-500 font-semibold text-[#052E1F] hover:bg-emerald-400")}>
+            <PhoneCall className="h-4 w-4" aria-hidden />Call back now</button>
+          <button type="button" onClick={() => { preset("hour"); setMode("later"); }} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>Approve for…</button>
+          <button type="button" onClick={() => setMode("dismiss")} className={cn(btn, "text-white/60 hover:bg-white/5")}>Dismiss</button>
+        </div>
+      )}
+      {f.status === "approved" && mode === null && (
+        <div className="mt-2"><button type="button" onClick={() => void run("cancel")} disabled={busy} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>
+          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Cancel</button></div>
+      )}
+
+      {mode === "now" && (
+        <div role="alertdialog" aria-label={`Call ${who} now?`} className="mt-2 rounded-2xl bg-emerald-500/[0.07] p-3 ring-1 ring-emerald-500/25">
+          <p className="text-[15px] font-semibold text-white">Call {who} now?</p>
+          <p className="mt-0.5 text-sm text-white/60">Ava calls {fmtPhone(f.phone)} from her own line as {source_label(f.source)}, and says she's an AI on a recorded line.</p>
+          {err && <p role="alert" className="mt-2 text-sm text-red-300">{err}</p>}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setMode(null)} disabled={busy} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>Not now</button>
+            <button type="button" onClick={() => void run("call_now")} disabled={busy} autoFocus className={cn(btn, "bg-[#30D158] font-semibold text-[#052E1F] hover:bg-[#4be071]")}>
+              {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Call</button>
+          </div>
+        </div>
+      )}
+      {mode === "later" && (
+        <div role="group" aria-label={`Schedule a call to ${who}`} className="mt-2 rounded-2xl bg-white/[0.04] p-3 ring-1 ring-white/10">
+          <p className="text-[15px] font-semibold text-white">Approve a time</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={() => preset("hour")} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>In an hour</button>
+            <button type="button" onClick={() => preset("tomorrow")} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>Tomorrow, 9:00&nbsp;AM</button>
+          </div>
+          <label className="mt-2 block"><span className="mb-1 block text-xs text-white/60">Or pick one</span>
+            <input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} className={inputCls} /></label>
+          <p className="mt-1 text-[11px] text-white/55">Ava calls at that time. You get a Scout reminder 15&nbsp;minutes before.</p>
+          {err && <p role="alert" className="mt-2 text-sm text-red-300">{err}</p>}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setMode(null)} disabled={busy} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>Cancel</button>
+            <button type="button" onClick={() => at && void run("approve", new Date(at).toISOString())} disabled={busy || !at} className={cn(btn, "bg-white font-semibold text-black hover:bg-white/90")}>
+              {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Approve</button>
+          </div>
+        </div>
+      )}
+      {mode === "dismiss" && (
+        <div role="alertdialog" aria-label={`Dismiss the follow-up for ${who}?`} className="mt-2 rounded-2xl bg-white/[0.04] p-3 ring-1 ring-white/10">
+          <p className="text-[15px] font-semibold text-white">Dismiss this follow-up?</p>
+          <p className="mt-0.5 text-sm text-white/60">Ava won't call. The message stays in your list.</p>
+          {err && <p role="alert" className="mt-2 text-sm text-red-300">{err}</p>}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setMode(null)} disabled={busy} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>Keep</button>
+            <button type="button" onClick={() => void run("dismiss")} disabled={busy} autoFocus className={cn(btn, "bg-white/15 font-semibold text-white hover:bg-white/20")}>
+              {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Dismiss</button>
+          </div>
+        </div>
+      )}
+      {mode === null && err && <p role="alert" className="mt-2 text-sm text-red-300">{err}</p>}
+    </li>
+  );
+}
+const source_label = (s: Source) => (s === "ava" ? "Jared's assistant" : "RoofGuard's assistant");
+
+// ---------- What Ava can share ----------
+type Fact = { id: string; scope: "personal" | "roofguard" | "both"; topic: string; fact: string; active: boolean; updated_at: string };
+
+function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)}
+      className="grid min-h-[44px] min-w-[56px] shrink-0 place-items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+      <span className={cn("relative block h-[31px] w-[51px] rounded-full transition-colors", on ? "bg-[#30D158]" : "bg-white/20")}>
+        <span className={cn("absolute left-0 top-[2px] block h-[27px] w-[27px] rounded-full bg-white shadow transition-transform", on ? "translate-x-[22px]" : "translate-x-[2px]")} />
+      </span>
+    </button>
+  );
+}
+
+export function KnowledgeList({ source, className }: { source: Source; className?: string }) {
+  const own = source === "ava" ? "personal" : "roofguard";
+  const [rows, setRows] = useState<Fact[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [edit, setEdit] = useState<Partial<Fact> | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  const load = useCallback(async () => {
+    const { data, error } = await table("ava_knowledge").select<Fact>("*").in("scope", [own, "both"]).order("topic", { ascending: true });
+    if (error) { setErr(error.message); return; }
+    setErr(null); setRows(data ?? []);
+  }, [own]);
+  useEffect(() => { void load(); }, [load]);
+
+  const flip = async (f: Fact, active: boolean) => {
+    setRows((rs) => rs.map((r) => (r.id === f.id ? { ...r, active } : r)));
+    const { error } = await table("ava_knowledge").update({ active }).eq("id", f.id);
+    if (error) { setErr(error.message); void load(); }
+  };
+  const live = rows.filter((r) => r.active).length;
+  const shown = expanded ? rows : rows.slice(0, 4);
+  return (
+    <section aria-label="What Ava can share" className={cn("rounded-3xl bg-white/[0.03] ring-1 ring-white/10", className)}>
+      <header className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
+        <ShieldCheck className="h-4 w-4 text-emerald-300" aria-hidden />
+        <h3 className="text-[15px] font-semibold text-white">What Ava can share</h3>
+        <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs tabular-nums text-white/70">{live}&nbsp;on</span>
+        <button type="button" onClick={() => setEdit({ scope: own, active: true })} className="ml-auto inline-flex min-h-[44px] items-center gap-1 rounded-lg px-3 text-sm text-sky-300 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+          <Plus className="h-4 w-4" aria-hidden />Add</button>
+      </header>
+      {err && <p role="alert" className="px-4 py-3 text-sm text-red-300">Could not load: {err}</p>}
+      {rows.length === 0 && !err && <p className="px-4 py-8 text-center text-sm text-white/60">Nothing yet. Ava takes a message for anything she can't answer.</p>}
+      <ul className="divide-y divide-white/5">
+        {shown.map((f) => (
+          <li key={f.id} className="flex items-start gap-2 pl-4 pr-2">
+            <button type="button" onClick={() => setEdit(f)} className={cn("min-h-[44px] min-w-0 flex-1 py-3 text-left", !f.active && "opacity-50")}>
+              <span className="flex items-center gap-2"><span className="text-[15px] font-medium text-white">{f.topic}</span>
+                {f.scope === "both" && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/60">Both Avas</span>}</span>
+              <span className="mt-0.5 line-clamp-2 block text-sm text-white/60">{f.fact}</span>
+            </button>
+            <Toggle on={f.active} onChange={(v) => void flip(f, v)} label={`${f.topic}: ${f.active ? "on" : "off"}`} />
+          </li>
+        ))}
+      </ul>
+      {rows.length > 4 && (
+        <button type="button" onClick={() => setExpanded((e) => !e)} className="min-h-[44px] w-full border-t border-white/5 text-sm text-white/60 hover:bg-white/5">
+          {expanded ? "Show fewer" : `Show all ${rows.length}`}</button>
+      )}
+      <p className="border-t border-white/5 px-4 py-2 text-[11px] text-white/55">Ava never shares anything outside this list.</p>
+      <FactSheet f={edit} own={own} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); void load(); }} />
+    </section>
+  );
+}
+
+function FactSheet({ f, own, onClose, onSaved }: { f: Partial<Fact> | null; own: "personal" | "roofguard"; onClose: () => void; onSaved: () => void }) {
+  const [v, setV] = useState<Partial<Fact>>({});
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState(false);
+  useEffect(() => { setV(f ?? {}); setErr(null); setAsk(false); }, [f]);
+  const save = async () => {
+    const topic = (v.topic ?? "").trim(), fact = (v.fact ?? "").trim();
+    if (!topic) { setErr("Add a topic."); return; }
+    if (!fact) { setErr("Add what Ava can say."); return; }
+    setBusy(true);
+    const row = { topic, fact, scope: v.scope ?? own, active: v.active ?? true };
+    const { error } = v.id ? await table("ava_knowledge").update(row).eq("id", v.id) : await table("ava_knowledge").insert(row);
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    onSaved();
+  };
+  const remove = async () => {
+    setBusy(true);
+    const { error } = await table("ava_knowledge").delete().eq("id", v.id);
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    onSaved();
+  };
+  return (
+    <Sheet open={!!f} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="admin-shell w-full overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-md">
+        <SheetTitle className="text-white">{v.id ? "Edit fact" : "New fact"}</SheetTitle>
+        <SheetDescription className="text-white/50">Anything here can be said out loud to any caller. No passwords, keys, addresses or private details.</SheetDescription>
+        <div className="mt-4 space-y-3">
+          <label className="block"><span className="mb-1 block text-xs text-white/60">Topic</span>
+            <input className={inputCls} value={v.topic ?? ""} maxLength={60} onChange={(e) => setV({ ...v, topic: e.target.value })} placeholder="e.g. Pricing" /></label>
+          <label className="block"><span className="mb-1 block text-xs text-white/60">What Ava can say</span>
+            <textarea rows={4} className={cn(inputCls, "h-auto py-2")} value={v.fact ?? ""} maxLength={600} onChange={(e) => setV({ ...v, fact: e.target.value })}
+              placeholder="One or two plain sentences" /></label>
+          <div>
+            <span className="mb-1 block text-xs text-white/60">Who can use it</span>
+            <div role="radiogroup" aria-label="Who can use it" className="grid grid-cols-2 rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
+              {([[own, own === "personal" ? "This Ava" : "RoofGuard Ava"], ["both", "Both Avas"]] as const).map(([id, label]) => (
+                <button key={id} type="button" role="radio" aria-checked={(v.scope ?? own) === id} onClick={() => setV({ ...v, scope: id })}
+                  className={cn("min-h-[44px] rounded-lg text-sm font-medium transition-colors", (v.scope ?? own) === id ? "bg-white text-black shadow-sm" : "text-white/65 hover:text-white")}>{label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center rounded-xl bg-white/[0.04] pl-3 ring-1 ring-white/10">
+            <span className="min-w-0 flex-1 text-sm text-white">On<span className="block text-[11px] text-white/50">Off keeps it saved but Ava won't use it.</span></span>
+            <Toggle on={v.active ?? true} onChange={(a) => setV({ ...v, active: a })} label="On" />
+          </div>
+          {err && <p role="alert" className="text-sm text-red-300">{err}</p>}
+          <button type="button" onClick={() => void save()} disabled={busy} className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-black motion-safe:active:scale-[0.98] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+            {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Save</button>
+          {v.id && !ask && <button type="button" onClick={() => setAsk(true)} className="inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl bg-white/[0.03] text-[15px] font-medium text-[#FF453A] ring-1 ring-white/10 hover:bg-[#FF453A]/10">Delete Fact</button>}
+          {v.id && ask && (
+            <div role="alertdialog" aria-label="Delete this fact?" className="rounded-2xl bg-[#FF453A]/[0.08] p-4 ring-1 ring-[#FF453A]/30">
+              <p className="text-[15px] font-semibold text-white">Delete this fact?</p>
+              <p className="mt-0.5 text-sm text-white/60">Ava stops using it right away. Turn it off instead to keep it saved.</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setAsk(false)} disabled={busy} className="min-h-[44px] rounded-xl bg-white/10 text-[15px] font-medium text-white hover:bg-white/15">Cancel</button>
+                <button type="button" onClick={() => void remove()} disabled={busy} autoFocus className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#FF453A] text-[15px] font-semibold text-white hover:bg-[#ff5a50] disabled:opacity-60">
+                  {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Delete</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/** Small direction badge used where incoming and outgoing calls share a list. */
+export function DirIcon({ direction, className }: { direction: "inbound" | "outbound" | "callback"; className?: string }): ReactNode {
+  return direction === "inbound"
+    ? <PhoneIncoming className={cn("h-4 w-4 shrink-0 text-sky-300", className)} aria-label="Incoming" />
+    : <PhoneOutgoing className={cn("h-4 w-4 shrink-0 text-emerald-300", className)} aria-label={direction === "callback" ? "Call back" : "Outgoing"} />;
+}

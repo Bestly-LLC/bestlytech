@@ -12,7 +12,8 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { CallNo, DeleteCallButton, ReplyGuard, LiveTranscript, Recording, type Line } from "@/components/admin/roofguard/AvaCalls";
 import { DialerSheet } from "@/components/admin/roofguard/AvaDialer";
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, Grid3x3, Inbox, Loader2, Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCw, UserRound } from "lucide-react";
+import { FollowupsList, KnowledgeList, LineStatus, MessagesList, type Msg } from "@/components/admin/roofguard/AvaShared";
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, Grid3x3, Loader2, Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCw, UserRound } from "lucide-react";
 
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
   conversation_id: string | null; status: string; summary: string | null; message: string | null; urgent: boolean; callback_wanted: boolean;
@@ -91,9 +92,12 @@ export default function AvaAssistant() {
   };
   const copy = async () => { await navigator.clipboard.writeText(fmt(s?.from_number ?? "")).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1500); };
 
-  const messages = calls.filter((c) => c.message);
-  const ready = !!s?.agent_id && !!s?.phone_number_id;
   const nameOf = (c: Call) => c.caller_name ?? contacts.find((k) => k.id === c.contact_id)?.name ?? (c.phone ? fmt(c.phone) : "Unknown caller");
+  const messages: Msg[] = calls.filter((c) => c.message).map((c) => ({
+    id: c.id, source: "ava", call_no: c.call_no, direction: c.direction, name: nameOf(c), phone: c.phone, message: c.message, urgent: c.urgent,
+    callback_wanted: c.callback_wanted, read_at: c.read_at, at: c.created_at, summary: c.summary, duration_sec: c.duration_sec, transcript: slim(c.transcript),
+    purpose: c.purpose, hasRecording: !!c.conversation_id }));
+  const ready = !!s?.agent_id && !!s?.phone_number_id;
 
   return (
     <div className="space-y-5">
@@ -122,7 +126,8 @@ export default function AvaAssistant() {
       {/* status */}
       <div className={cn("flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 ring-1", ready ? "bg-emerald-500/[0.06] ring-emerald-500/25" : "bg-amber-500/[0.06] ring-amber-500/30")}>
         {ready ? <CheckCircle2 className="h-5 w-5 text-emerald-400" aria-hidden /> : <AlertTriangle className="h-5 w-5 text-amber-300" aria-hidden />}
-        <span className="text-[15px] text-white">{ready ? "Answering her line and ready to call out" : "Not set up yet"}</span>
+        <span className="text-[15px] text-white">{ready ? "Ready to answer and to call out" : "Not set up yet"}</span>
+        {ready && <LineStatus source="ava" className="min-h-[44px]" />}
         <button type="button" onClick={() => void runSetup()} disabled={busy}
           className="ml-auto inline-flex min-h-[36px] items-center gap-2 rounded-lg px-3 text-sm text-white/75 ring-1 ring-white/15 hover:bg-white/5 disabled:opacity-50">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}{ready ? "Re-run setup" : "Set up"}</button>
@@ -146,30 +151,7 @@ export default function AvaAssistant() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* messages */}
-        <section aria-label="Messages" className="rounded-3xl bg-white/[0.03] ring-1 ring-white/10">
-          <header className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
-            <Inbox className="h-4 w-4 text-sky-300" aria-hidden /><h3 className="text-[15px] font-semibold text-white">Messages for you</h3>
-            {(costs?.unread ?? 0) > 0 && <span className="ml-auto rounded-full bg-[#0A84FF] px-2 py-0.5 text-xs font-semibold text-white">{costs?.unread} new</span>}
-          </header>
-          {messages.length === 0 ? <p className="px-4 py-8 text-center text-sm text-white/45">No messages yet. When someone calls Ava's line, it lands here and on your phone.</p> : (
-            <ul className="divide-y divide-white/5">
-              {messages.map((c) => (
-                <li key={c.id}>
-                  <button type="button" onClick={() => void markRead(c)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-white/[0.04]">
-                    <span className={cn("mt-2 h-2 w-2 shrink-0 rounded-full", c.read_at ? "bg-transparent" : "bg-[#0A84FF]")} aria-label={c.read_at ? undefined : "Unread"} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2"><CallNo n={c.call_no} /><span className="text-[15px] font-medium text-white">{nameOf(c)}</span>
-                        {c.urgent && <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] text-rose-300">Urgent</span>}
-                        {c.callback_wanted && <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-300">Wants a call back</span>}
-                        <span className="ml-auto shrink-0 text-xs text-white/40">{when(c.created_at)}</span></div>
-                      <p className="mt-0.5 text-sm text-white/75">{c.message}</p>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <MessagesList items={messages} source="ava" onOpen={(m) => { const c = calls.find((x) => x.id === m.id); if (c) void markRead(c); }} />
 
         {/* all calls */}
         <section aria-label="All calls" className="rounded-3xl bg-white/[0.03] ring-1 ring-white/10">
@@ -194,6 +176,11 @@ export default function AvaAssistant() {
             </ul>
           )}
         </section>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <FollowupsList source="ava" onChanged={() => void load()} />
+        <KnowledgeList source="ava" />
       </div>
 
       {/* contacts */}

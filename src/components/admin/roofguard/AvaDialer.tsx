@@ -12,6 +12,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, Copy, Delete, Grid3x3, Loader2, Phone } from "lucide-react";
 import { LiveTranscript, Recording, type Line } from "./AvaCalls";
+import { LineStatus } from "./AvaShared";
 
 type Costs = { total: number; today: number; month: number; calls_total: number; voice: number; phone: number; ai: number; number: number;
   minutes: number; calls: number; per_meeting: number | null; rates: { voice_per_min: number; phone_per_min: number; number_monthly: number } };
@@ -64,6 +65,7 @@ export function AvaTopBar({ onCalled }: { onCalled: () => void }) {
             {copied ? <Check className="h-4 w-4 text-emerald-300" aria-hidden /> : <Copy className="h-4 w-4 text-white/30 group-hover:text-white/60" aria-hidden />}
           </button>
         )}
+        <LineStatus source="roofguard" />
         <button type="button" onClick={() => setDialOpen(true)}
           className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-emerald-500 px-4 text-[15px] font-semibold text-[#052E1F] transition hover:bg-emerald-400 active:scale-[0.98]">
           <Grid3x3 className="h-4 w-4" aria-hidden />Demo call

@@ -9,12 +9,19 @@
 //   {action:"call"}      admin (JWT): {phone, name, purpose, first_line} -> one outbound call.
 //   {action:"live"}      admin (JWT): calls in progress right now (either direction) with the transcript so far.
 //   {action:"audio"}     admin (JWT): {call_id} -> the recording.
-//   ?hook=init           ElevenLabs, at the start of an inbound call: who is calling? -> greeting + contact details.
-//                        Guarded by a shared header secret from Vault.
+//   {action:"callback"}  admin/service: {id} -> places the follow-up call Jared approved (ava_followups row in status
+//                        'dialing'; nothing here dials a 'proposed' row). Outcome goes back on the follow-up.
+//   {action:"health"}    watchdog (every 10 min, no AI): Telnyx routes the number to the inbound connection, ElevenLabs has
+//                        incoming calls on and the right agent, the init webhook is set. Any problem -> run setup, re-check,
+//                        record in ava_line_health and push Scout (fixed / still broken).
+//   ?hook=init           ElevenLabs, at the start of an inbound call: who is calling? -> greeting + contact details + the
+//                        shareable knowledge (ava_knowledge). Guarded by a shared header secret from Vault.
 //   ?hook=post           ElevenLabs post-call webhook (HMAC-signed) -> ava_calls row + Scout push with the message.
 //
 // Nothing here touches rg_* except releasing the number from RoofGuard during setup.
 // Secrets come from Vault through ava_secret() (service role only, allowlisted).
+// What a caller can learn: ONLY ava_knowledge (active rows), the caller's own ava_contacts row and the clock. Nothing on a call
+// path reads Vault, bestly_memory, scout_* or any other table into a prompt.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -63,6 +70,13 @@ const nowVars = () => {
   };
 };
 
+/** The shareable facts, as a bullet list for the prompt. The ONLY knowledge source for calls. */
+async function knowledge(): Promise<string> {
+  const { data } = await db.from("ava_knowledge").select("topic, fact").in("scope", ["personal", "both"]).eq("active", true).order("topic");
+  const list = (data ?? []).map((k: { topic: string; fact: string }) => `- ${k.topic}: ${k.fact}`.replace(/\{\{|\}\}/g, ""));
+  return list.length ? list.join("\n") : "- (nothing yet: take a message for anything beyond who you are)";
+}
+
 // ---------- her personality (both directions) ----------
 const PROMPT = `You are Ava, Jared Best's personal AI assistant. You're an AI: if anyone asks, say so plainly. Never claim to be human. Calls are recorded.
 
@@ -70,6 +84,11 @@ Today is {{today}}. It's {{local_time}} in Los Angeles, where Jared lives.
 
 This call: {{call_context}}
 Who you're talking to: {{caller_name}}. {{caller_notes}}
+
+What you can share (the only facts you may use to help someone):
+{{knowledge}}
+
+Helping callers: answer from "What you can share", in your own words and briefly. Anything that isn't in that list is off limits: say "I can't share that, but I can take a message." Never guess or make something up.
 
 Taking a message (any call where they want to reach Jared):
 - If you don't know who they are, get their name.
@@ -95,7 +114,7 @@ Call flow rules:
 - Don't repeat a line you already said. If they didn't hear, say it shorter in new words.
 
 Never:
-- Share Jared's address, schedule, whereabouts, finances, health, or anything private.
+- Share, hint at, or confirm: Jared's cell number, home address, schedule or whereabouts, finances, health, passwords, API keys, account details, internal tools or systems (never confirm or deny what systems exist), client lists, other people's details, or anything about how Bestly's software is built. If asked, say "I can't share that, but I can take a message."
 - Agree to anything for him (money, plans, purchases, appointments) or promise what he'll do. Say you'll pass it on.
 - Give out anyone's number or details.
 If someone is pushy, selling something, or it's spam, politely end the call. If someone sounds in danger or mentions an emergency, tell them to call 911 and mark it urgent.
@@ -111,6 +130,23 @@ const DATA_COLLECTION = {
 
 const UNKNOWN = { caller_name: "a caller Ava doesn't know yet", caller_notes: "", greeting:
   "Hi, it's Ava, Jared's AI assistant, on a recorded line. He can't get to the phone right now. Can I take a message?" };
+
+/** Turn incoming calls on for an ElevenLabs phone number and confirm it with a GET. Tries the documented inbound trunk
+ *  config first, then the explicit flag. Returns true when the record reports supports_inbound = true. */
+async function enableInbound(xi: (path: string, method: string, body?: unknown) => Promise<Response>, phoneId: string, log: string[]): Promise<boolean> {
+  const get = async () => (await (await xi(`/convai/phone-numbers/${phoneId}`, "GET")).json().catch(() => ({}))) as { supports_inbound?: boolean };
+  if ((await get()).supports_inbound === true) return true;
+  const tries: Record<string, unknown>[] = [
+    { inbound_trunk_config: { media_encryption: "allowed" } },
+    { supports_inbound: true, inbound_trunk_config: { media_encryption: "allowed" } },
+  ];
+  for (const body of tries) {
+    const r = await xi(`/convai/phone-numbers/${phoneId}`, "PATCH", body);
+    if (!r.ok) log.push(`Note: turning on incoming calls returned ${r.status}: ${(await r.text()).slice(0, 240)}`);
+    if ((await get()).supports_inbound === true) { log.push("Incoming calls switched on for her number."); return true; }
+  }
+  return false;
+}
 
 // ---------- setup ----------
 async function setup(): Promise<Response> {
@@ -212,7 +248,7 @@ async function setup(): Promise<Response> {
     conversation_config: {
       agent: {
         first_message: "{{greeting}}", language: "en",
-        dynamic_variables: { dynamic_variable_placeholders: { ...UNKNOWN, call_context: "Someone called Jared's line.", ...nowVars() } },
+        dynamic_variables: { dynamic_variable_placeholders: { ...UNKNOWN, call_context: "Someone called Jared's line.", ...nowVars(), knowledge: await knowledge() } },
         prompt: { prompt: PROMPT, llm: s?.llm ?? "gpt-4.1-mini", temperature: 0.5,
           built_in_tools: {
             end_call: { name: "end_call", params: { system_tool_type: "end_call" } },
@@ -261,6 +297,8 @@ async function setup(): Promise<Response> {
   } else {
     const up = await xi(`/convai/phone-numbers/${phoneId}`, "PATCH", { agent_id: agentId, outbound_trunk_config: trunk });
     if (!up.ok) log.push(`Note: number update returned ${up.status}: ${(await up.text()).slice(0, 200)}`);
+    // incoming calls: the number record must have inbound switched on (a fresh import sets it; an older record may not)
+    if (!(await enableInbound(xi, phoneId, log))) { log.push("Incoming calls are still off on her number in ElevenLabs."); return done(false, { agent_id: agentId, phone_number_id: phoneId }); }
   }
   await save({ phone_number_id: phoneId, from_number: LINE });
   log.push("Ava answers (816) 429-9495 and can call out from it.");
@@ -268,19 +306,21 @@ async function setup(): Promise<Response> {
 }
 
 // ---------- outbound ----------
-async function call(body: Record<string, unknown>): Promise<Response> {
-  const bad = (error: string, status = 400) => Response.json({ ok: false, error }, { status, headers: CORS });
-  const to = toE164(String(body.phone ?? ""));
-  if (!to) return bad("Enter a 10-digit US or Canada number.");
+type Placed = { ok: true; call_id: string | null; calling: string } | { ok: false; error: string; status: number };
+
+/** Places one call as Ava. Everything an outbound call needs lives here so the dialer, "Connect me" and follow-ups share it. */
+async function place(o: { phone: string; name?: string; purpose?: string; connect?: boolean; first_line?: string }): Promise<Placed> {
+  const to = toE164(o.phone);
+  if (!to) return { ok: false, error: "Enter a 10-digit US or Canada number.", status: 400 };
   const { data: s } = await db.from("ava_settings").select("*").eq("id", true).single();
   const key = await vault("elevenlabs_api_key");
-  if (!s?.agent_id || !s.phone_number_id || !key) return bad("Ava isn't set up yet. Run Setup on /admin/ava.", 412);
+  if (!s?.agent_id || !s.phone_number_id || !key) return { ok: false, error: "Ava isn't set up yet. Run Setup on /admin/ava.", status: 412 };
   const { data: contact } = await db.from("ava_contacts").select("id, name, relationship, notes").eq("phone", to).maybeSingle();
-  const name = String(body.name ?? "").trim().slice(0, 40) || contact?.name || "";
-  const purpose = String(body.purpose ?? "").trim().slice(0, 600) || "Jared asked you to call and say hello.";
-  const connect = body.connect === true;
-  const greeting = String(body.first_line ?? "").trim().slice(0, 300) ||
-    `Hi${name ? ` ${name.split(" ")[0]}` : ""}, it's Ava, Jared's AI assistant, on a recorded line. ${body.connect === true ? "Jared would love a quick word with you." : "He asked me to give you a call."}`;
+  const name = String(o.name ?? "").trim().slice(0, 40) || contact?.name || "";
+  const purpose = String(o.purpose ?? "").trim().slice(0, 600) || "Jared asked you to call and say hello.";
+  const connect = o.connect === true;
+  const greeting = String(o.first_line ?? "").trim().slice(0, 300) ||
+    `Hi${name ? ` ${name.split(" ")[0]}` : ""}, it's Ava, Jared's AI assistant, on a recorded line. ${connect ? "Jared would love a quick word with you." : "He asked me to give you a call."}`;
   const res = await fetch(`${XI}/convai/sip-trunk/outbound-call`, {
     method: "POST", headers: { "xi-api-key": key, "content-type": "application/json" },
     body: JSON.stringify({ agent_id: s.agent_id, agent_phone_number_id: s.phone_number_id, to_number: to,
@@ -288,13 +328,100 @@ async function call(body: Record<string, unknown>): Promise<Response> {
         greeting, call_context: connect
           ? `An outbound call to connect them to Jared. Why he wants to talk: ${purpose}. Check they're free, then connect them to Jared.`
           : `An outbound call Jared asked you to make. Why: ${purpose}`,
-        caller_name: name || "them", caller_notes: contact ? `(${contact.relationship ?? "contact"}) ${contact.notes ?? ""}` : "", ...nowVars() } } }),
+        caller_name: name || "them", caller_notes: contact ? `(${contact.relationship ?? "contact"}) ${contact.notes ?? ""}` : "",
+        knowledge: await knowledge(), ...nowVars() } } }),
   });
   const j = await res.json().catch(() => ({}));
-  if (!res.ok || j?.success === false) return bad(`The call didn't go out: ${JSON.stringify(j).slice(0, 200)}`, 502);
+  if (!res.ok || j?.success === false) return { ok: false, error: `The call didn't go out: ${JSON.stringify(j).slice(0, 200)}`, status: 502 };
   const { data: row } = await db.from("ava_calls").insert({ direction: "outbound", phone: to, contact_id: contact?.id ?? null, caller_name: name || null,
     purpose, conversation_id: j.conversation_id ?? null, status: "queued", connect_to_jared: connect }).select("id").single();
-  return Response.json({ ok: true, call_id: row?.id, calling: to }, { headers: CORS });
+  return { ok: true, call_id: row?.id ?? null, calling: to };
+}
+
+async function call(body: Record<string, unknown>): Promise<Response> {
+  const r = await place({ phone: String(body.phone ?? ""), name: String(body.name ?? ""), purpose: String(body.purpose ?? ""),
+    connect: body.connect === true, first_line: String(body.first_line ?? "") });
+  return r.ok ? Response.json({ ok: true, call_id: r.call_id, calling: r.calling }, { headers: CORS })
+    : Response.json({ ok: false, error: r.error }, { status: r.status, headers: CORS });
+}
+
+// ---------- follow-up call (only ever a row Jared approved: status 'dialing') ----------
+async function callback(id: string): Promise<Response> {
+  const back = async (why: string, status = 502) => {
+    await db.from("ava_followups").update({ status: "proposed", due_at: null, note: why.slice(0, 300), updated_at: new Date().toISOString() }).eq("id", id).eq("status", "dialing");
+    return Response.json({ ok: false, error: why }, { status });
+  };
+  const { data: f } = await db.from("ava_followups").select("*").eq("id", id).eq("source", "ava").maybeSingle();
+  if (!f) return Response.json({ ok: false, error: "no such follow-up" }, { status: 404 });
+  // the guard: a proposed or dismissed row never dials, whoever asks
+  if (f.status !== "dialing") return Response.json({ ok: false, error: `follow-up is ${f.status}, not approved to dial` }, { status: 409 });
+  const reason = String(f.reason ?? "").replace(/\s+/g, " ").slice(0, 300);
+  const r = await place({ phone: f.phone, name: f.name ?? "",
+    purpose: `Calling them back about the message they left Jared${reason ? `: "${reason}"` : ""}. Say you're returning their call on Jared's behalf, check you have the message right, and ask if there's anything to add. Don't promise what Jared will do or when; say you'll pass it on.`,
+    first_line: `Hi${f.name ? ` ${String(f.name).split(" ")[0]}` : ""}, it's Ava, Jared's AI assistant, on a recorded line. I'm calling you back about your message.` });
+  if (!r.ok) return back(r.error, r.status);
+  await db.from("ava_followups").update({ status: "done", result_call_id: r.call_id, updated_at: new Date().toISOString() }).eq("id", id);
+  return Response.json({ ok: true, calling: r.calling, followup: id });
+}
+
+// ---------- line health (watchdog: plain checks, no AI) ----------
+/** What's wrong with her line right now. null = couldn't tell (a network blip), so nothing is "fixed" on a guess. */
+async function lineProblems(): Promise<string[] | null> {
+  const key = await vault("elevenlabs_api_key"), tk = await vault("telnyx_api_key");
+  if (!key || !tk) return ["ElevenLabs or Telnyx key missing from Vault"];
+  const { data: s } = await db.from("ava_settings").select("*").eq("id", true).single();
+  if (!s?.agent_id || !s.phone_number_id || !s.telnyx_in_connection_id) return ["Not set up (agent, number or inbound connection missing)"];
+  const problems: string[] = [];
+  try {
+    const nr = await fetch(`https://api.telnyx.com/v2/phone_numbers?filter[phone_number]=${encodeURIComponent(LINE)}`, { headers: { authorization: `Bearer ${tk}` } });
+    if (nr.status >= 500) return null;
+    const num = ((await nr.json().catch(() => ({}))).data ?? [])[0] as { connection_id?: string } | undefined;
+    if (!num) problems.push("Her number isn't on the Telnyx account");
+    else if (num.connection_id !== s.telnyx_in_connection_id) problems.push("Telnyx isn't routing her number to the inbound connection");
+
+    const pr = await fetch(`${XI}/convai/phone-numbers/${s.phone_number_id}`, { headers: { "xi-api-key": key } });
+    if (pr.status >= 500) return null;
+    if (!pr.ok) problems.push(`ElevenLabs can't find her number (${pr.status})`);
+    else {
+      const p = await pr.json().catch(() => ({})) as { supports_inbound?: boolean; assigned_agent?: { agent_id?: string } };
+      if (p.supports_inbound !== true) problems.push("Incoming calls are off for her number in ElevenLabs");
+      if (p.assigned_agent?.agent_id !== s.agent_id) problems.push("Her number points at the wrong agent");
+    }
+
+    const ar = await fetch(`${XI}/convai/agents/${s.agent_id}`, { headers: { "xi-api-key": key } });
+    if (ar.status >= 500) return null;
+    if (!ar.ok) problems.push(`ElevenLabs can't find her agent (${ar.status})`);
+    else {
+      const a = await ar.json().catch(() => ({})) as { platform_settings?: { overrides?: { enable_conversation_initiation_client_data_from_webhook?: boolean };
+        workspace_overrides?: { conversation_initiation_client_data_webhook?: { url?: string } } } };
+      const hook = a.platform_settings?.workspace_overrides?.conversation_initiation_client_data_webhook?.url ?? "";
+      if (!hook.includes("hook=init") || a.platform_settings?.overrides?.enable_conversation_initiation_client_data_from_webhook !== true) problems.push("Her caller lookup (init webhook) isn't set");
+    }
+  } catch { return null; }
+  return problems;
+}
+
+async function health(): Promise<Response> {
+  const first = await lineProblems();
+  if (first === null) return Response.json({ ok: null, skipped: "couldn't reach the voice platform" });
+  let problems = first, healed = false;
+  if (first.length) {
+    try { await setup(); } catch { /* the re-check below says what's still wrong */ }
+    problems = (await lineProblems()) ?? first;
+    healed = problems.length === 0;
+  }
+  const ok = problems.length === 0, now = new Date().toISOString();
+  const { data: prev } = await db.from("ava_line_health").select("last_ok_at").eq("source", "ava").maybeSingle();
+  await db.from("ava_line_health").upsert({ source: "ava", ok, problems, healed, checked_at: now, last_ok_at: ok ? now : prev?.last_ok_at ?? null }, { onConflict: "source" });
+  const url = "https://bestly.tech/admin/ava";
+  if (first.length && healed) {
+    await db.rpc("scout_notify", { p_title: "Ava's line wasn't answering, fixed", p_body: `${first.join("; ")}. Setup re-ran and the line checks out now.`,
+      p_severity: "info", p_push: true, p_url: url, p_dedupe: `ava-line-fixed-ava-${now.slice(0, 13)}` });
+  } else if (!ok) {
+    await db.rpc("scout_notify", { p_title: "Ava's line is still broken", p_body: `${problems.join("; ")}. Setup couldn't fix it.`,
+      p_severity: "warning", p_push: true, p_url: url, p_dedupe: `ava-line-broken-ava-${now.slice(0, 10)}-${Math.floor(new Date(now).getUTCHours() / 6)}` });
+  }
+  return Response.json({ ok, healed, problems });
 }
 
 // ---------- live + audio ----------
@@ -350,7 +477,7 @@ async function initHook(req: Request): Promise<Response> {
     greeting: `Hi ${c.name}! It's Ava, Jared's assistant, on a recorded line. He can't get to the phone, but I'd love to take a message for him.`,
   } : UNKNOWN;
   return Response.json({ type: "conversation_initiation_client_data",
-    dynamic_variables: { ...vars, call_context: "Someone called Jared's line. Take a message.", ...nowVars() } });
+    dynamic_variables: { ...vars, call_context: "Someone called Jared's line. Take a message.", knowledge: await knowledge(), ...nowVars() } });
 }
 
 async function postHook(req: Request): Promise<Response> {
@@ -380,6 +507,7 @@ async function postHook(req: Request): Promise<Response> {
   const row = {
     phone, contact_id: contact?.id ?? null, caller_name: callerName, status: "completed", summary: d.analysis?.transcript_summary ?? null,
     message: message ? (cbNum ? `${message} (call back: ${cbNum})` : message) : null, urgent, callback_wanted: val("callback_wanted") === "true",
+    callback_number: cbNum ? toE164(cbNum) : null,
     duration_sec: d.metadata?.call_duration_secs ?? null, transcript: d.transcript ?? null, llm_cost: Math.round(llm * 10000) / 10000,
     ended_at: new Date().toISOString(),
   };
@@ -408,6 +536,8 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.action === "setup") return setup();
   if (body.action === "call") return call(body);
+  if (body.action === "callback") return callback(String(body.id ?? ""));
+  if (body.action === "health") return health();
   if (body.action === "live") return live(body.call_id ? String(body.call_id) : null);
   if (body.action === "audio") return audio(String(body.call_id ?? ""));
   return Response.json({ ok: false, error: "unknown action" }, { status: 400, headers: CORS });
