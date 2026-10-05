@@ -16,7 +16,9 @@ type Draft = { id: string; kind: string; body: string; reason: string | null; st
 type Ev = { id: number; at: string; kind: string; title: string | null; detail: Record<string, unknown> | null };
 type Case = { id: string; reservation_id: number; guest_first: string | null; guest_last: string | null; status: string; path: string; opened_at: string;
   estimate_due_at: string | null; escalate_by: string | null; estimate_amount: number | null; guest_max: number | null; facts: string | null;
-  insurer: Record<string, string>; invoices: { amount: number | null; due_text: string | null; paid: boolean }[]; trip_end: string | null };
+  insurer: Record<string, string>; invoices: { amount: number | null; due_text: string | null; paid: boolean }[]; trip_end: string | null;
+  turo_claim_no: string | null; car: string | null; host_responsibility: number | null; recovered_amount: number | null; outcome: string | null;
+  history: boolean; closed_at: string | null };
 type Row = { case: Case; drafts: Draft[]; events: Ev[] };
 type Data = { sender: { claims_enabled: boolean; links_enabled: boolean; seen_at: string | null; last_error: string | null } | null;
   beat: { at: string; ok: boolean; summary: string | null } | null; cases: Row[] };
@@ -24,6 +26,7 @@ type Data = { sender: { claims_enabled: boolean; links_enabled: boolean; seen_at
 const rpc = <T,>(fn: string, args?: object) => supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: T | null; error: { message: string } | null }>;
 const when = (iso?: string | null) => iso ? new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "—";
 const usd = (n?: number | null) => n == null ? "—" : `$${Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+const day = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", year: "numeric" }) : "—";
 const KIND: Record<string, string> = { reply: "Reply", follow_up: "Follow-up", insurance_ask: "Insurance ask", estimate: "Estimate", escalation: "Escalation note", other: "Message" };
 const STATUS: Record<string, string> = { open: "Open", waiting_guest: "Waiting on guest", insurance: "Through insurance", invoiced: "Invoiced", paid: "Paid", escalated: "Escalated to Turo", closed: "Closed" };
 
@@ -83,7 +86,7 @@ function CaseCard({ row, reload }: { row: Row; reload: () => void }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className={cn("text-[17px] font-semibold", label)}>{[c.guest_first, c.guest_last].filter(Boolean).join(" ") || "Guest"}</p>
-          <p className={cn("text-[13px]", secondary)}>Reservation {c.reservation_id} · <span className="whitespace-nowrap">{STATUS[c.status] ?? c.status}</span></p>
+          <p className={cn("text-[13px]", secondary)}>{c.turo_claim_no ? <>Turo claim <span className="whitespace-nowrap">{c.turo_claim_no}</span> · </> : null}Reservation {c.reservation_id} · <span className="whitespace-nowrap">{STATUS[c.status] ?? c.status}</span></p>
         </div>
         {daysLeft !== null && !["paid", "closed", "escalated"].includes(c.status) && (
           <span className={cn("shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-medium",
@@ -96,6 +99,7 @@ function CaseCard({ row, reload }: { row: Row; reload: () => void }) {
         <div><dt className={tertiary}>Escalate to Turo by</dt><dd className={cn("whitespace-nowrap", label)}>{when(c.escalate_by)}</dd></div>
         <div><dt className={tertiary}>Estimate</dt><dd className={cn("whitespace-nowrap", label)}>{usd(c.estimate_amount)}</dd></div>
         <div><dt className={tertiary}>Guest plan max</dt><dd className={cn("whitespace-nowrap", label)}>{usd(c.guest_max)}</dd></div>
+        {c.host_responsibility != null && <div className="col-span-2"><dt className={tertiary}>Your damage responsibility if Turo takes over</dt><dd className={cn("whitespace-nowrap", label)}>{usd(c.host_responsibility)}</dd></div>}
         {c.invoices?.map((i, k) => (
           <div key={k} className="col-span-2"><dt className={tertiary}>Turo invoice</dt>
             <dd className={label}><span className="whitespace-nowrap">{usd(i.amount)}</span> · {i.paid ? "paid" : <>due <span className="whitespace-nowrap">{i.due_text ?? "—"}</span></>}</dd></div>
@@ -147,6 +151,28 @@ function CaseCard({ row, reload }: { row: Row; reload: () => void }) {
   );
 }
 
+function HistoryCard({ c }: { c: Case }) {
+  const won = c.status === "paid";
+  return (
+    <details className="group border-b border-white/[0.06] py-3 last:border-0 bento:border-neutral-100">
+      <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className={cn("text-[15px] font-medium", label)}>{[c.guest_first, c.guest_last].filter(Boolean).join(" ") || "Guest"}</p>
+          <p className={cn("text-[13px]", secondary)}><span className="whitespace-nowrap">{day(c.opened_at)}</span> · {c.car ?? "—"}{c.turo_claim_no ? <> · claim <span className="whitespace-nowrap">{c.turo_claim_no}</span></> : null}</p>
+        </div>
+        <span className={cn("shrink-0 whitespace-nowrap text-[15px] font-semibold", won ? "text-[#30D158] bento:text-[#248A3D]" : tertiary)}>
+          {won ? (c.recovered_amount != null ? usd(c.recovered_amount) : "Settled") : "Not pursued"}
+        </span>
+      </summary>
+      <div className={cn("mt-2 space-y-1.5 text-[13px]", secondary)}>
+        {c.outcome && <p>{c.outcome}</p>}
+        {c.facts && <p>{c.facts}</p>}
+        <p className={tertiary}>Reservation {c.reservation_id}{c.host_responsibility != null ? <> · your damage responsibility <span className="whitespace-nowrap">{usd(c.host_responsibility)}</span></> : null}</p>
+      </div>
+    </details>
+  );
+}
+
 export default function ClaimsCloser() {
   const [data, setData] = useState<Data | null>(null);
   const load = useCallback(async () => {
@@ -161,7 +187,10 @@ export default function ClaimsCloser() {
     if (error) toast.error(error.message); else { toast.success(on ? "Claim messages can go out" : "Claim messages paused"); void load(); }
   };
   const open = data?.cases.filter((r) => !["paid", "closed"].includes(r.case.status)) ?? [];
-  const done = data?.cases.filter((r) => ["paid", "closed"].includes(r.case.status)) ?? [];
+  const byDate = (a: Row, b: Row) => Date.parse(b.case.opened_at) - Date.parse(a.case.opened_at);
+  const won = (data?.cases.filter((r) => r.case.status === "paid") ?? []).sort(byDate);
+  const dropped = (data?.cases.filter((r) => r.case.status === "closed") ?? []).sort(byDate);
+  const wonTotal = won.reduce((n, r) => n + Number(r.case.recovered_amount ?? 0), 0);
   return (
     <div className="mx-auto max-w-2xl space-y-4 px-4 pb-16 sm:px-0">
       <PageHeader title="Claims" description="Claims Closer watches each Turo damage claim, drafts every message to the guest, and waits for your OK before anything is sent." />
@@ -177,9 +206,20 @@ export default function ClaimsCloser() {
           </div>
           {!open.length && <p className={cn("px-1 text-[15px]", secondary)}>No open claims. A case opens on its own when Turo emails that a claim started.</p>}
           {open.map((r) => <CaseCard key={r.case.id} row={r} reload={load} />)}
-          {done.length > 0 && (
-            <details className="px-1"><summary className={cn("cursor-pointer text-[15px]", secondary)}>Closed ({done.length})</summary>
-              <div className="mt-3 space-y-4">{done.map((r) => <CaseCard key={r.case.id} row={r} reload={load} />)}</div></details>
+          {won.length > 0 && (
+            <section className={card}>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className={cn("text-[17px] font-semibold", label)}>Won</p>
+                <p className={cn("text-[13px]", secondary)}><span className="whitespace-nowrap">{usd(wonTotal)}</span> recovered{won.some((r) => r.case.recovered_amount == null) ? " + total-loss settlement" : ""}</p>
+              </div>
+              <div className="mt-1">{won.map((r) => <HistoryCard key={r.case.id} c={r.case} />)}</div>
+            </section>
+          )}
+          {dropped.length > 0 && (
+            <details className={card}>
+              <summary className={cn("cursor-pointer text-[15px] font-medium", label)}>Not followed through ({dropped.length})</summary>
+              <div className="mt-1">{dropped.map((r) => <HistoryCard key={r.case.id} c={r.case} />)}</div>
+            </details>
           )}
         </>
       )}
