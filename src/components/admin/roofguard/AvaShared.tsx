@@ -14,11 +14,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
-  AlarmClock, AlertTriangle, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, PhoneCall, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
+  AlarmClock, AlertTriangle, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, Mic, PhoneCall, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
 } from "lucide-react";
 import { CallNo, DeleteCallButton, LiveTranscript, Recording, type Line } from "./AvaCalls";
 
 export type Source = "ava" | "roofguard";
+
+/** Small label on calls Ava made in Jared's cloned voice (ava_calls.voice = 'jared'). Icon plus words, apricot like the Orb's glow. */
+export function YourVoiceTag({ className }: { className?: string }) {
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium", className)}
+      style={{ background: "rgba(255,162,112,0.16)", color: "#FFA270" }}>
+      <Mic className="h-3 w-3" aria-hidden />Your voice
+    </span>
+  );
+}
 
 // ---------- loose table / rpc access (these tables are newer than the generated types) ----------
 type Err = { message: string } | null;

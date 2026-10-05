@@ -19,6 +19,7 @@ import { AvaCalls } from "@/components/admin/roofguard/AvaCalls";
 import { AvaScorecard, AvaScoreStrip } from "@/components/admin/roofguard/AvaScorecard";
 import { AvaTopBar } from "@/components/admin/roofguard/AvaDialer";
 import { SpendCapEditor } from "@/components/admin/roofguard/AvaShared";
+import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
 
 type Tab = "calls" | "scorecard" | "leads" | "setup";
 const TABS: { id: Tab; label: string }[] = [{ id: "calls", label: "Calls" }, { id: "scorecard", label: "Scorecard" }, { id: "leads", label: "Leads" }, { id: "setup", label: "Setup" }];
@@ -540,7 +541,7 @@ export default function RoofGuard() {
         <AvaCalls callingOn={callingOn} onOpenSetup={() => setTab("setup")} />
       </>}
       {tab === "scorecard" && <AvaScorecard admin />}
-      {tab === "setup" && <CallingCard />}
+      {tab === "setup" && <div className="space-y-5"><CallingCard /><VoicePicker source="roofguard" /></div>}
 
       {tab === "leads" && <>
       {err && <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load: {err}</div>}

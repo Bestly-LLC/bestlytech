@@ -12,8 +12,8 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, Copy, Delete, Grid3x3, Loader2, Phone } from "lucide-react";
 import { LiveTranscript, Recording, type Line } from "./AvaCalls";
-import { AvaOrb } from "./AvaOrb";
-import { LineStatus, SpendChip } from "./AvaShared";
+import { AvaOrb, AVA_GLOW } from "./AvaOrb";
+import { LineStatus, SpendChip, YourVoiceTag } from "./AvaShared";
 
 type Costs = { total: number; today: number; month: number; calls_total: number; voice: number; phone: number; ai: number; number: number;
   minutes: number; calls: number; per_meeting: number | null; rates: { voice_per_min: number; phone_per_min: number; number_monthly: number } };
@@ -121,7 +121,10 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState("");
   const [connect, setConnect] = useState(false);
+  const [useVoice, setUseVoice] = useState(false);
+  const [voiceInfo, setVoiceInfo] = useState<{ id: string | null; paused: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const hasPersonal = kinds.includes("personal");
   const [err, setErr] = useState<string | null>(null);
   const clean = digits.replace(/\D/g, "").replace(/^1(?=\d{10})/, "");
   const valid = clean.length === 10;
@@ -142,12 +145,28 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
   const [active, setActive] = useState<ActiveCall | null>(null);
   useEffect(() => { if (!open) setActive(null); }, [open]);
 
+  // "Use my voice" is only offered once a cloned voice exists, and stays off after the impersonation guard paused it
+  useEffect(() => {
+    if (!open || !hasPersonal) return;
+    let stop = false;
+    void (async () => {
+      const q = supabase.from("ava_settings" as never) as unknown as { select: (c: string) => { limit: (n: number) => Promise<{ data: { jared_voice_id: string | null; jared_voice_paused_at: string | null }[] | null }> } };
+      const { data } = await q.select("jared_voice_id, jared_voice_paused_at").limit(1);
+      if (stop) return;
+      const r = data?.[0];
+      setVoiceInfo({ id: r?.jared_voice_id ?? null, paused: !!r?.jared_voice_paused_at });
+    })();
+    return () => { stop = true; };
+  }, [open, hasPersonal]);
+  const voiceReady = !!voiceInfo?.id && !voiceInfo.paused;
+  const voiceOn = useVoice && voiceReady;
+
   const call = async () => {
     setBusy(true); setErr(null);
     // personal calls belong to personal Ava (ava-assistant); demos to RoofGuard Ava (roofguard-caller)
     const fn = mode === "personal" ? "ava-assistant" : "roofguard-caller";
     const { data, error } = mode === "personal"
-      ? await supabase.functions.invoke(fn, { body: { action: "call", phone: clean, name, purpose, connect } })
+      ? await supabase.functions.invoke(fn, { body: { action: "call", phone: clean, name, purpose, connect, ...(voiceOn ? { voice: "jared" } : {}) } })
       : await supabase.functions.invoke(fn, { body: { action: "demo_call", phone: clean, name } });
     setBusy(false);
     if (error || !data?.ok) {
@@ -155,8 +174,8 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
       if (!msg && error && "context" in error) msg = await (error as { context: Response }).context.json().then((j) => j.error).catch(() => undefined);
       setErr(msg ?? "The call didn't go out. Try again in a minute."); return;
     }
-    if (data.call_id) setActive({ id: data.call_id, fn, who: name.trim() || fmt(clean) });
-    setDigits(""); setName(""); setPurpose(""); setConnect(false);
+    if (data.call_id) setActive({ id: data.call_id, fn, who: name.trim() || fmt(clean), voice: voiceOn ? "jared" : "ava" });
+    setDigits(""); setName(""); setPurpose(""); setConnect(false); setUseVoice(false);
     onCalled();
   };
 
@@ -202,8 +221,29 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
               <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} maxLength={600} rows={3}
                 placeholder="e.g. Introduce yourself as my new assistant and say hi. Or: confirm Thursday's 2 PM meeting."
                 className="w-full rounded-xl bg-white/[0.05] px-3 py-2 text-[15px] text-white outline-none ring-1 ring-white/10 placeholder:text-white/35 focus:ring-white/25" />
-              <span className="mt-1 block text-[11px] text-white/40">She introduces herself as "Ava, Jared's AI assistant, on a recorded line" and says she's an AI if asked.</span>
+              <span className="mt-1 block text-[11px] text-white/40">{voiceOn
+                ? <>She opens with "Hey, it's Jared's AI assistant, using his voice." and says she's an AI if asked.</>
+                : <>She introduces herself as "Ava, Jared's AI assistant, on a recorded line" and says she's an AI if asked.</>}</span>
             </label>
+          ) : null}
+          {mode === "personal" ? (
+            <div className="flex items-center gap-3 rounded-xl bg-white/[0.04] px-3 py-2.5 ring-1 ring-white/10">
+              <span className="min-w-0 flex-1">
+                <span id="use-my-voice-label" className={cn("block text-sm font-medium", voiceReady ? "text-white" : "text-white/55")}>Use my voice</span>
+                <span id="use-my-voice-help" className="block text-[11px] text-white/50">
+                  She'll say she's your AI assistant.
+                  {voiceInfo && !voiceInfo.id && <> Record your voice first, in Ava's voice further down this page.</>}
+                  {voiceInfo?.id && voiceInfo.paused && <> Voice mode is off after a guard alert. Turn it back on in Ava's voice.</>}
+                </span>
+              </span>
+              <button type="button" role="switch" aria-checked={voiceOn} aria-labelledby="use-my-voice-label" aria-describedby="use-my-voice-help"
+                disabled={!voiceReady} onClick={() => setUseVoice((v) => !v)}
+                className="grid min-h-[44px] min-w-[56px] shrink-0 place-items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:cursor-not-allowed disabled:opacity-40">
+                <span className={cn("relative block h-[31px] w-[51px] rounded-full transition-colors", voiceOn ? "" : "bg-white/20")} style={voiceOn ? { background: AVA_GLOW } : undefined}>
+                  <span className={cn("absolute left-0 top-[2px] block h-[27px] w-[27px] rounded-full bg-white shadow transition-transform", voiceOn ? "translate-x-[22px]" : "translate-x-[2px]")} />
+                </span>
+              </button>
+            </div>
           ) : null}
           {mode === "personal" ? (
             <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-white/[0.04] px-3 py-2.5 ring-1 ring-white/10">
@@ -234,12 +274,12 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
 }
 
 // ---------- in-call screen (same for personal Ava and RoofGuard) ----------
-type ActiveCall = { id: string; fn: "ava-assistant" | "roofguard-caller"; who: string };
+export type ActiveCall = { id: string; fn: "ava-assistant" | "roofguard-caller"; who: string; voice?: "ava" | "jared"; kind?: string };
 type LiveState = { status: string; elapsed: number; duration: number | null; transcript: Line[] };
 const DONE = new Set(["done", "failed"]);
 const clock = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
 
-function InCall({ call, onNew, onDone }: { call: ActiveCall; onNew: () => void; onDone: () => void }) {
+function InCall({ call, onNew, onDone }: { call: ActiveCall; onNew?: () => void; onDone: () => void }) {
   const [st, setSt] = useState<LiveState | null>(null);
   const [miss, setMiss] = useState(0);
   const [base, setBase] = useState({ at: Date.now(), elapsed: 0 });
@@ -272,8 +312,9 @@ function InCall({ call, onNew, onDone }: { call: ActiveCall; onNew: () => void; 
       <SheetDescription className="sr-only">Live transcript of Ava's call</SheetDescription>
       <div className="pt-6 text-center">
         <AvaOrb size={112} speaking={!ended} className="mx-auto mb-2" label={ended ? "Ava, call ended" : "Ava, on the call"} />
-        <div className="text-[13px] text-white/50">{call.fn === "roofguard-caller" ? "RoofGuard Ava" : "Ava"} calling</div>
+        <div className="text-[13px] text-white/50">{call.fn === "roofguard-caller" ? "RoofGuard Ava" : "Ava"} calling{call.kind ? ` · ${call.kind}` : ""}</div>
         <div className="mt-1 text-[26px] font-semibold text-white">{call.who}</div>
+        {call.voice === "jared" && <div className="mt-1"><YourVoiceTag /></div>}
         <div className={cn("mt-1 inline-flex items-center gap-2 text-[15px]", ended ? "text-white/60" : "text-emerald-300")}>
           {!ended && <span className="h-2 w-2 rounded-full bg-emerald-400 motion-safe:animate-pulse" aria-hidden />}
           <span>{label}</span><span className="font-mono tabular-nums text-white">{clock(secs)}</span>
@@ -283,11 +324,22 @@ function InCall({ call, onNew, onDone }: { call: ActiveCall; onNew: () => void; 
         <LiveTranscript lines={st?.transcript ?? []} live={!ended} them={call.who} className="max-h-[52vh] rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/10" />
       </div>
       {ended && <div className="mt-4"><Recording callId={call.id} fn={call.fn} /></div>}
-      <div className="mt-4 grid grid-cols-2 gap-2 pb-2">
-        <button type="button" onClick={onNew} className="min-h-[44px] rounded-xl bg-white/10 text-[15px] font-medium text-white hover:bg-white/15">New call</button>
+      <div className={cn("mt-4 grid gap-2 pb-2", onNew ? "grid-cols-2" : "grid-cols-1")}>
+        {onNew && <button type="button" onClick={onNew} className="min-h-[44px] rounded-xl bg-white/10 text-[15px] font-medium text-white hover:bg-white/15">New call</button>}
         <button type="button" onClick={onDone} className="min-h-[44px] rounded-xl bg-white text-[15px] font-semibold text-black">Done</button>
       </div>
       {!ended && <p className="text-center text-[11px] text-white/40">You can close this. The call keeps going and shows on the page.</p>}
     </div>
+  );
+}
+
+/** The in-call screen on its own, for calls started somewhere other than the dialer (the voice picker's "Call me with this voice"). */
+export function InCallSheet({ call, onClose }: { call: ActiveCall | null; onClose: () => void }) {
+  return (
+    <Sheet open={!!call} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="admin-shell flex w-full flex-col overflow-y-auto border-white/10 bg-[#0b0b0d] text-white sm:max-w-md">
+        {call && <InCall call={call} onDone={onClose} />}
+      </SheetContent>
+    </Sheet>
   );
 }

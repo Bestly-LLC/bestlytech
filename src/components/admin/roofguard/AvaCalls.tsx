@@ -186,7 +186,9 @@ const KIND_TEXT: Record<Incident["kind"], string> = { code_leak: "Spoke code out
 // Money stopper: a long call that gained nothing rides on kind "repeat" (the kind CHECK can't change) with subkind "long_call";
 // its excerpt is the plain "4:12 · $0.41", so the row reads "Long call, nothing gained · 4:12 · $0.41".
 const isLongCall = (r: Incident) => r.subkind === "long_call";
-const incidentText = (r: Incident) => (r.leak ? "Shared something sensitive" : isLongCall(r) ? "Long call, nothing gained" : KIND_TEXT[r.kind]);
+// Voice clone guard: in a call in Jared's voice she skipped saying she's an AI, or said she was him (also kind "repeat", subkind "impersonation").
+const isImpersonation = (r: Incident) => r.subkind === "impersonation";
+const incidentText = (r: Incident) => (r.leak ? "Shared something sensitive" : isImpersonation(r) ? "Your voice: broke the AI-disclosure rules" : isLongCall(r) ? "Long call, nothing gained" : KIND_TEXT[r.kind]);
 export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
   const [rows, setRows] = useState<Incident[]>([]);
   const tbl = () => supabase.from("ava_reply_incidents" as never) as unknown as {
@@ -212,7 +214,7 @@ export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
           <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 text-sm">
             <CallNo n={r.call_no} /><span className="text-white">{incidentText(r)}</span>
             {isLongCall(r) && r.excerpt && <span className="tabular-nums text-white/70">· {r.excerpt}</span>}
-            {r.healed && <span className={r.leak ? "text-amber-200/90" : isLongCall(r) ? "text-white/50" : "text-emerald-300/90"}>· {r.leak ? "Handled" : isLongCall(r) ? "Noted" : "Fixed"}: {r.healed}</span>}
+            {r.healed && <span className={r.leak || isImpersonation(r) ? "text-amber-200/90" : isLongCall(r) ? "text-white/50" : "text-emerald-300/90"}>· {r.leak || isImpersonation(r) ? "Handled" : isLongCall(r) ? "Noted" : "Fixed"}: {r.healed}</span>}
             {r.excerpt && !isLongCall(r) && <span className="w-full truncate pl-1 text-xs text-white/45">"{r.excerpt.replace(/\s+/g, " ")}"</span>}
           </li>
         ))}
