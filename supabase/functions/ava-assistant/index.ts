@@ -111,9 +111,17 @@ async function coachNotes(): Promise<string> {
 
 /** The shareable facts, as a bullet list for the prompt. The ONLY knowledge source for calls. */
 async function knowledge(): Promise<string> {
-  const { data } = await db.from("ava_knowledge").select("topic, fact").in("scope", ["personal", "both"]).eq("active", true).eq("status", "live").order("topic");
+  const { data } = await db.from("ava_knowledge").select("topic, fact").in("scope", ["personal", "both"]).eq("active", true).eq("status", "live").not("topic", "ilike", "Story:%").order("topic");
   const list = (data ?? []).map((k: { topic: string; fact: string }) => `- ${k.topic}: ${k.fact}`.replace(/\{\{|\}\}/g, ""));
   return list.length ? list.join("\n") : "- (nothing yet: take a message for anything beyond who you are)";
+}
+
+/** Recent stories about Jared that he approved (ava_knowledge rows whose topic starts "Story:", live + active, newest edit first).
+ *  Told only on outbound calls to his saved contacts, so a stranger never hears one. Empty means she tells none. */
+async function stories(): Promise<string> {
+  const { data } = await db.from("ava_knowledge").select("topic, fact").in("scope", ["personal", "both"]).eq("active", true).eq("status", "live")
+    .ilike("topic", "Story:%").order("updated_at", { ascending: false }).limit(5);
+  return (data ?? []).map((k: { topic: string; fact: string }) => `- ${k.topic.replace(/^Story:\s*/i, "")}: ${k.fact}`.replace(/\{\{|\}\}/g, "")).join("\n");
 }
 
 /** Daily spend cap (Pacific day). Outgoing calls stop when it's hit; incoming calls are always answered. Fails open if the
@@ -162,6 +170,9 @@ Outbound calls (YOU placed the call; they did not call you). Jared, 2026-10-05: 
   3. One follow-up: "Anything going on he should know about?" or "Anything you want me to pass along?"
   4. If they're not a saved contact, confirm their name and whether this is the best number for Jared to reach them.
   5. Read back anything to pass on in one sentence, a warm goodbye, end the call. Two minutes max.
+- A story about Jared: when the list of stories below isn't empty and you're talking to someone Jared knows, you may tell ONE of them, in your own words, in two or three short sentences, after the reason is handled or in the check-in right after "How've you been?" ("Oh, Jared had a funny one this week..."). Tell it as something that happened to him, then ask if they've got anything like that going on. Only tell what's written there: never add details, never make one up, never tell it to a voicemail, and drop it if they're busy or rushed. Don't repeat one you've already told on this call. If it's empty, skip this. The "Never" list still wins over any story.
+Stories about Jared you may tell (approved by him; empty means none):
+{{jared_stories}}
 - Voicemail (a greeting, "leave a message", "not available", a beep): don't talk to the machine or ask it questions. After the beep, leave ONE short message: who you are, that you're calling for Jared, the reason in one sentence, and "I'll let him know I tried." Then end the call. If it's a full mailbox or no beep, just end the call.
 - If you reach the wrong person, apologize, check the number once, and end the call. Don't share why you were calling.
 
@@ -248,7 +259,7 @@ const DATA_COLLECTION = {
   booked_slot: { type: "string", description: "Only when Ava offered specific meeting times on an outbound call: the start of the time the other person agreed to, as an ISO 8601 date-time with the Pacific UTC offset (use the call date to resolve days like Thursday). Empty if they did not agree to one of the offered times." },
 };
 
-const UNKNOWN = { caller_name: "a caller Ava doesn't know yet", caller_notes: "", caller_trusted: "no", voice_rules: "", forward_rules: "", call_voice: "ava", forwarded: "no", forwarded_from: "", greeting:
+const UNKNOWN = { jared_stories: "", caller_name: "a caller Ava doesn't know yet", caller_notes: "", caller_trusted: "no", voice_rules: "", forward_rules: "", call_voice: "ava", forwarded: "no", forwarded_from: "", greeting:
   "Hey, Jared's phone. What's up?" };
 
 /** Turn incoming calls on for an ElevenLabs phone number and confirm it with a GET. Tries the documented inbound trunk
@@ -470,7 +481,7 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
           : `OUTBOUND: you called ${name || "them"}; they did not call you. Jared asked you to make this call. The reason for it: ${purpose}`,
         caller_name: name || "them", caller_notes: contact ? `(${contact.relationship ?? "contact"}) ${contact.notes ?? ""}` : "",
         caller_trusted: contact || to === (s.jared_cell ?? JARED_CELL) ? "yes" : "no",
-        knowledge: await knowledge(), coach_notes: await coachNotes(), ...nowVars() } } }),
+        knowledge: await knowledge(), jared_stories: contact ? await stories() : "", coach_notes: await coachNotes(), ...nowVars() } } }),
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok || j?.success === false) return { ok: false, error: `The call didn't go out: ${JSON.stringify(j).slice(0, 200)}`, status: 502 };
