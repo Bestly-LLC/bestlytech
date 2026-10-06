@@ -42,18 +42,15 @@ const NS = "(?:[\\w-]+:)?";
 const blocks = (xml: string, tag: string) => xml.match(new RegExp(`<${NS}${tag}[\\s>][\\s\\S]*?</${NS}${tag}>`, "gi")) ?? [];
 const first = (xml: string, tag: string) => new RegExp(`<${NS}${tag}[^>]*>([\\s\\S]*?)</${NS}${tag}>`, "i").exec(xml)?.[1]?.trim() ?? null;
 const hasEl = (xml: string, tag: string) => new RegExp(`<${NS}${tag}[\\s/>]`, "i").test(xml);
-const unxml = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+const unxml = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+  .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^p\d+-/, "pNN-"); } catch { return "?"; } };
 const tagList = (xml: string) => [...new Set((xml.match(/<(?:[\w-]+:)?[\w-]+/g) ?? []).map((t) => t.replace(/^<(?:[\w-]+:)?/, "")))].slice(0, 24).join(",");
 
 /** Property names in a vCard, no values: used to see why a card yielded no phone number. */
 const props = (card: string) => [...new Set(unfold(card).split("\n").map((l) => l.slice(0, Math.max(l.indexOf(":"), 0)).toUpperCase().replace(/^ITEM\d+\./, "").split(";")[0]).filter(Boolean))].slice(0, 20).join(",");
-
-/** Shape of each TEL on a card: how many digits, and whether it starts with +. No number is ever logged. */
-const telShapes = (card: string) => unfold(card).split("\n")
-  .filter((l) => /^(?:item\d+\.)?TEL[;:]/i.test(l))
-  .map((l) => l.replace(/\d/g, "#"))
-  .slice(0, 6).join(" ") || "none";
 
 const PRINCIPAL_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
 const HOME_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:cd="urn:ietf:params:xml:ns:carddav"><d:prop><cd:addressbook-home-set/></d:prop></d:propfind>`;
@@ -87,7 +84,7 @@ export async function addressBooks(c: Creds, trace: string[] = []): Promise<stri
 }
 
 /** vCard lines, unfolded (a line starting with a space or tab continues the one before it). */
-const unfold = (card: string) => card.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, "");
+const unfold = (card: string) => card.replace(/\r\n?/g, "\n").replace(/\n[ \t]/g, "");
 
 /** +1XXXXXXXXXX for a real US or Canada number, else null. Extensions, short codes and foreign numbers are skipped:
  *  Ava can only dial North America, and a half-number in here would just be a contact she can never match. */
@@ -143,7 +140,7 @@ export async function fetchPeople(c: Creds, trace: string[] = []): Promise<{ peo
       if (!data) continue;
       withData++;
       const card = unxml(data);
-      if (withData === 1) trace.push(`4 card props: ${props(card)}`, `4 card tels: ${telShapes(card)}`, `4 card chars: ${card.length}, lines: ${unfold(card).split("\n").length}`);
+      if (withData === 1) trace.push(`4 first card props: ${props(card)}`);
       for (const p of parseCard(card)) if (!byPhone.has(p.phone)) byPhone.set(p.phone, p);
     }
     if (!withData) trace.push(`4 no address-data in the answer; elements: ${tagList(r.text)}`);
