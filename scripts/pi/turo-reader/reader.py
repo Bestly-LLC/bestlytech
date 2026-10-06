@@ -46,8 +46,11 @@ def post(url, body, headers=None, timeout=30):
     h = {"Content-Type": "application/json", "apikey": PUB}
     h.update(headers or {})
     req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST", headers=h)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode() or "null")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode() or "null")
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"HTTP {e.code} {url.rsplit('/', 1)[-1]}: {e.read().decode()[:220]}")
 
 
 def rpc(fn, args, timeout=20):
