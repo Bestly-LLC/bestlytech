@@ -9,7 +9,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.view.SurfaceView;
+import android.view.TextureView;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -56,7 +56,7 @@ public class MainActivity extends Activity {
 
     final Handler ui = new Handler(Looper.getMainLooper());
     final ExecutorService net = Executors.newSingleThreadExecutor();
-    SurfaceView surface;
+    TextureView surface;   // Oct 5: TextureView = graphics plane, same as the old web app (no video-plane noise reduction or scaler blur)
     ExoPlayer player;
     String src = "wallmac";
     long startedAt, lastFrameAt, lastGoodAt, firstFrameAt;
@@ -72,7 +72,7 @@ public class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON | WindowManager.LayoutParams.FLAG_FULLSCREEN);
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
-        surface = new SurfaceView(this);
+        surface = new TextureView(this);
         root.addView(surface, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
         hideSystemUi();
@@ -144,7 +144,7 @@ public class MainActivity extends Activity {
                 .setBufferDurationsMs(1000, 3000, 250, 500)    // small cushion: live wall, not a movie
                 .build();
         player = new ExoPlayer.Builder(this).setLoadControl(lc).build();
-        player.setVideoSurfaceView(surface);
+        player.setVideoTextureView(surface);
         player.addListener(new Player.Listener() {
             @Override public void onPlayerError(PlaybackException e) {
                 err = (e.getErrorCodeName() + " " + (e.getMessage() == null ? "" : e.getMessage()));

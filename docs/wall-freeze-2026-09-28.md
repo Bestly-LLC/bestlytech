@@ -306,3 +306,19 @@ Plan: `docs/wall-sky-hd-opusplan.md`.
   - The weekday row is closer to the dates and the key has more room above it.
   - Weekday letters are 13 px with no tracking.
 - **Checked.** A new frame grab shows solid, continuous roads, and the stream holds 60 fps.
+
+## Oct 5, 8:05 PM: "still soft compared to the web app": sharper path end to end
+
+- **What was measured.**
+  - The stream was only about 5 Mbps. Chrome's bandwidth estimate ignored the SDP `x-google-min-bitrate`, and VideoToolbox QP was about 17.
+  - The 2x supersample (set at 6:15 PM) blurred text, because downscaling loses pixel snapping.
+  - The TV app played video on a SurfaceView, which is the projector's video plane. That's a different path from the old web app, which drew on the graphics plane, and the video plane gets the SoC's video processing.
+- **Fixes.**
+  - `agent.mjs` (backups `agent.mjs.bak_q_*`, `agent.mjs.bak_vt`):
+    - Back to `deviceScaleFactor: 1`.
+    - `contentHint 'detail'`.
+    - `maxBitrate` 40 Mbps.
+    - Chrome flag `--force-fieldtrials=WebRTC-Video-MinVideoBitrate/Enabled,br:20000kbps/`, which raises the target bitrate to 20 Mbps.
+    - Tried OpenH264 for lower QP: worse (QP about 26), so it stays on VideoToolbox.
+  - Wall TV app 1.2 (versionCode 3): `TextureView` instead of `SurfaceView`, so frames composite on the graphics plane like the web app did. Installed on the projector and set as `/opt/bestly/stream/bestly-wall-tv.apk` (1.1 kept as `.bak_1.1`). The projector reports 56 fps with 1 dropped frame in 1,626. CPU is higher: app about 57%, surfaceflinger about 36%.
+- **Projector facts.** Keystone is held flat in game mode (see `house/wall/projector-geometry-recovery`). Panel is 1920x1080. `picture_sharpness` is 6.
