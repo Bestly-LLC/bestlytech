@@ -52,7 +52,7 @@ const props = (card: string) => [...new Set(unfold(card).split("\n").map((l) => 
 /** Shape of each TEL on a card: how many digits, and whether it starts with +. No number is ever logged. */
 const telShapes = (card: string) => unfold(card).split("\n")
   .filter((l) => /^(?:item\d+\.)?TEL[;:]/i.test(l))
-  .map((l) => { const v = l.slice(l.indexOf(":") + 1); return `${v.trim().startsWith("+") ? "+" : ""}${v.replace(/\D/g, "").length}d`; })
+  .map((l) => l.replace(/\d/g, "#"))
   .slice(0, 6).join(" ") || "none";
 
 const PRINCIPAL_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
