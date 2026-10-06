@@ -55,7 +55,12 @@ const props = (card: string) => [...new Set(unfold(card).split("\n").map((l) => 
 const PRINCIPAL_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
 const HOME_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:cd="urn:ietf:params:xml:ns:carddav"><d:prop><cd:addressbook-home-set/></d:prop></d:propfind>`;
 const BOOKS_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:resourcetype/></d:prop></d:propfind>`;
-const CARDS_XML = `<?xml version="1.0" encoding="utf-8"?><cd:addressbook-query xmlns:d="DAV:" xmlns:cd="urn:ietf:params:xml:ns:carddav"><d:prop><cd:address-data/></d:prop><cd:filter/></cd:addressbook-query>`;
+// Listing then fetching, rather than one addressbook-query: iCloud caps a query at 1000 results, and a silent cap
+// would import the first 1000 contacts and quietly drop the rest. A PROPFIND lists every card, and multiget fetches
+// them in chunks, so the real total is always known. (Jared's book tripped this exactly: 1000 of 1000.)
+const HREFS_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:getetag/></d:prop></d:propfind>`;
+const multigetXml = (hrefs: string[]) => `<?xml version="1.0" encoding="utf-8"?><cd:addressbook-multiget xmlns:d="DAV:" xmlns:cd="urn:ietf:params:xml:ns:carddav"><d:prop><cd:address-data/></d:prop>${hrefs.map((h) => `<d:href>${h.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</d:href>`).join("")}</cd:addressbook-multiget>`;
+const CHUNK = 150;
 
 /** Every address book on the account. `trace` records each step with nothing private in it (no login, no account number). */
 export async function addressBooks(c: Creds, trace: string[] = []): Promise<string[]> {
@@ -95,6 +100,12 @@ export function toE164(v: string): string | null {
 
 const unescape = (s: string) => s.replace(/\\n/gi, " ").replace(/\\([,;\\])/g, "$1").replace(/\s+/g, " ").trim();
 
+/** Emoji and pictographs out of a name: Jared tags contacts with them (an airplane, a tent, a lightning bolt) and the
+ *  voice would read every one aloud. Letters, marks and ordinary punctuation stay, so accents and apostrophes survive. */
+const speakable = (s: string) => s
+  .replace(/[\u{1F000}-\u{1FAFF}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{2BFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{20E3}]/gu, "")
+  .replace(/\s+/g, " ").trim();
+
 /** One vCard -> one row per usable phone number (a person with a mobile and a home line becomes two rows, same name). */
 export function parseCard(card: string): Person[] {
   const lines = unfold(card).split("\n");
@@ -111,7 +122,7 @@ export function parseCard(card: string): Person[] {
     else if (name === "UID" && !uid) uid = value.trim().slice(0, 120);
     else if (name === "TEL") tels.push(value);
   }
-  const who = (fn || n || org).slice(0, 60);
+  const who = speakable(fn || n || org).slice(0, 60);
   if (!who) return [];
   const seen = new Set<string>();
   const out: Person[] = [];
@@ -130,22 +141,38 @@ export async function fetchPeople(c: Creds, trace: string[] = []): Promise<{ peo
   const byPhone = new Map<string, Person>();
   let cards = 0;
   for (const book of books) {
-    const r = await dav(book, "REPORT", c, CARDS_XML, { depth: "1" });
-    if (r.status >= 400) { trace.push(`4 ${hostOf(r.url)} returned ${r.status}, skipped`); continue; }
-    const got = blocks(r.text, "response");
-    cards += got.length;
-    let withData = 0;
-    for (const resp of got) {
-      const data = first(resp, "address-data");
-      if (!data) continue;
-      withData++;
-      const card = unxml(data);
-      if (withData === 1) trace.push(`4 first card props: ${props(card)}`);
-      for (const p of parseCard(card)) if (!byPhone.has(p.phone)) byPhone.set(p.phone, p);
+    // 1. every card on the shelf (paths only, no contact data)
+    const list = await dav(book, "PROPFIND", c, HREFS_XML, { depth: "1" });
+    if (list.status >= 400) { trace.push(`4 ${hostOf(list.url)} returned ${list.status} listing cards, skipped`); continue; }
+    const hrefs: string[] = [];
+    for (const r of blocks(list.text, "response")) {
+      const href = first(r, "href");
+      if (!href) continue;
+      const path = unxml(href);
+      if (/\.vcf$/i.test(path)) hrefs.push(path);
     }
-    if (!withData) trace.push(`4 no address-data in the answer; elements: ${tagList(r.text)}`);
-    else trace.push(`4 ${withData}/${got.length} response(s) carried a card`);
+    trace.push(`4 ${hrefs.length} card(s) listed`);
+
+    // 2. the cards themselves, in chunks
+    let withData = 0;
+    for (let i = 0; i < hrefs.length; i += CHUNK) {
+      const slice = hrefs.slice(i, i + CHUNK);
+      const r = await dav(book, "REPORT", c, multigetXml(slice), { depth: "1" });
+      if (r.status >= 400) { trace.push(`5 chunk at ${i} returned ${r.status}, skipped`); continue; }
+      const got = blocks(r.text, "response");
+      cards += got.length;
+      for (const resp of got) {
+        const data = first(resp, "address-data");
+        if (!data) continue;
+        withData++;
+        const card = unxml(data);
+        if (withData === 1) trace.push(`5 first card props: ${props(card)}`);
+        for (const p of parseCard(card)) if (!byPhone.has(p.phone)) byPhone.set(p.phone, p);
+      }
+    }
+    if (!withData) trace.push("5 no address-data came back");
+    trace.push(`5 ${withData} card(s) read`);
   }
-  trace.push(`4 ${cards} card(s) -> ${byPhone.size} number(s)`);
+  trace.push(`6 ${cards} card(s) -> ${byPhone.size} number(s)`);
   return { people: [...byPhone.values()], cards, books: books.length };
 }
