@@ -29,7 +29,7 @@ BRAND = {
     "label": {"family": "InterTight", "weight": 600},
     "themes": {n: {"bg": f"linear-gradient(180deg, {a} 0%, {c} 100%)", "veil": a, "ink": "#FFFFFF", "dim": "#B9B4C8",
                    "accent": "#4FE0C4", "head": "#FFFFFF"} for n, (a, c) in GROUNDS.items()},
-    "logo": {"wordmark": {"parts": [{"text": "Cookie Yeti"}], "family": "InterTight", "weight": 600, "size": 44,
+    "logo": {"wordmark": {"parts": [{"text": "Cookie Yeti"}], "family": "InterTight", "weight": 600, "size": 52,
                           "tagline": "PRIVACY · AUTOMATIC"}},
     "end": {"image": "art/cookieyeti-icon.png", "imageHeight": 420, "imageRadius": 94, "handle": "@cookie_yeti_privacy"},
 }

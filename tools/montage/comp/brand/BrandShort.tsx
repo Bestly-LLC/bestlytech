@@ -148,7 +148,7 @@ const Logo: React.FC<{b: Brand}> = ({b}) => {
           ))}
         </div>
         {w.tagline ? (
-          <div style={{fontFamily: w.family, fontWeight: 500, fontSize: Math.round(w.size * 0.36), letterSpacing: '0.22em', color: b.themes[Object.keys(b.themes)[0]].dim, marginTop: 10, opacity: 0.85}}>{w.tagline}</div>
+          <div style={{fontFamily: w.family, fontWeight: 500, fontSize: Math.round(w.size * 0.44), letterSpacing: '0.22em', color: b.themes[Object.keys(b.themes)[0]].dim, marginTop: 10, opacity: 0.85}}>{w.tagline}</div>
         ) : null}
       </div>
     );

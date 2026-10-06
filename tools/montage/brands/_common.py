@@ -70,6 +70,22 @@ def glue(text):
     return re.sub(rf"\b({NUMWORD}) +(?=[a-z])", r"\1" + NBSP, t, flags=re.I)
 
 
+def tidy(p):
+    """Free models like typographic characters the card fonts may not carry: plain hyphen, apostrophe, quotes, dashes."""
+    def fix(t):
+        t = (t or "").replace("\u2010", "-").replace("\u2011", "-").replace("\u2013", "-").replace("\u2014", ", ")
+        t = t.replace("\u2018", "'").replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')
+        return t.replace("\u00a0", " ").replace("\u202f", " ").replace("\u2026", "...")
+    for s in p.get("scenes") or []:
+        for k in ("kicker", "line", "say", "shot"):
+            if k in s:
+                s[k] = fix(s[k])
+    for k in ("caption", "title", "topic"):
+        if k in p:
+            p[k] = fix(p[k])
+    return p
+
+
 def _wc(t):
     return len((t or "").split())
 
@@ -214,7 +230,7 @@ def write(job, log, cfg):
     for attempt in range(1, 5):
         msg, prov = freellm.chat(msgs, None, max_tokens=3000, deadline=deadline, json_mode=True)
         try:
-            p = bm._json(msg.get("content"))
+            p = tidy(bm._json(msg.get("content")))
             errs, score = check(cfg, p, broll), 0.0
             if not errs:
                 errs, score = review(cfg, p, deadline)

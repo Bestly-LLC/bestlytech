@@ -28,13 +28,13 @@ CFG = {
 END = CFG["end"]
 BRAND = {
     "fonts": [{"family": "Manrope", "file": f"fonts/Manrope-{w}.ttf", "weight": str(w)} for w in (500, 600, 700, 800)],
-    "head": {"family": "Manrope", "weight": 700, "sizes": [96, 84, 72], "spacing": "-0.02em"},
+    "head": {"family": "Manrope", "weight": 700, "sizes": [112, 98, 84], "spacing": "-0.02em"},
     "label": {"family": "Manrope", "weight": 700},
     "themes": {n: {"bg": f"linear-gradient(180deg, {a} 0%, {c} 100%)", "veil": a, "ink": "#FFFFFF", "dim": "#AEB6C8",
                    "accent": acc, "head": acc} for n, ((a, c), acc) in GROUNDS.items()},
     "logo": {"wordmark": {"parts": [{"text": "Inventory"}, {"text": "Proof", "color": "#F2A33A"},
                                     {"text": "°", "color": "#F2A33A", "size": 22, "dy": -10}],
-                          "family": "Manrope", "weight": 700, "size": 44}},
+                          "family": "Manrope", "weight": 700, "size": 52}},
     "end": {"image": "art/proofy-cheering-arms-up.png", "imageHeight": 520, "handle": "@inventoryproof"},
 }
 ASSETS = {**{f"fonts/Manrope-{w}.ttf": f"{KIT}/fonts/Manrope-{w}.ttf" for w in (500, 600, 700, 800)},
