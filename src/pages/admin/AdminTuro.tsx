@@ -13,6 +13,7 @@ import { AlertTriangle, CheckCircle2, ExternalLink, Pause, Play, Send, Settings 
 import { Link } from "react-router-dom";
 import { GuestRow, useGuestRows } from "./LaxGuests";
 import { CarHealth, SuperchargeAudit } from "./CarOps";
+import { PlugPuller } from "./PlugPuller";
 import { ReadyWidget } from "@/components/admin/turo/ReadyWidget";
 import { CarProtectLog, TollCheck } from "@/components/admin/turo/CarProtect";
 import { toast } from "sonner";
@@ -121,6 +122,9 @@ export default function AdminTuro() {
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <SuperchargeAudit />
         <CarHealth />
+      </div>
+      <div className="grid scroll-mt-24 items-start gap-4 lg:grid-cols-2" id="plug-puller-row">
+        <PlugPuller />
       </div>
 
       {/* Status + controls */}
