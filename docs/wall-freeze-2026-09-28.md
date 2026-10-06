@@ -281,3 +281,9 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - Trips are capsules behind the dates: purple `#6A4FD8` for LAX pickups (the LAX trip page's purple, brightened) and teal `#2E8F86` for home pickups (the home trip page's teal, brightened). A guest's name shows only when a trip spans 2 or more days in a row, and is never cut off. The key reads Home, LAX, Open.
   - Data: migration `20261006010000_wall_turo_calendar_where.sql` adds `where` (`lax` when there's an `airport_code` or the pickup address is an airport) and always returns 36 or more days.
 - **Preview tool.** `~/Bestly/wall-mac/cardshot.mjs <cardId> <out.png> [guest-to-tint-LAX]` renders one card flat, without the projector warp.
+- **HIG pass (6:28 PM, ui-ux-pro-max).** Backup `.bak_tcal4_*`:
+  - Weekday letters raised to .6 alpha for small-text contrast.
+  - 4 pt row rhythm (25 px rows, 4 px gaps); medium-weight tabular dates; 12 px minimum (month tag).
+  - Today circle inset to 24 px.
+  - Non-color cue on named trips: a house glyph for home pickups, an airplane for LAX.
+  - Every key item has a swatch, including a hollow ring for Open, and zero counts are dimmed.
