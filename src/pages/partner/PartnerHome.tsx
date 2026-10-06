@@ -758,7 +758,7 @@ function DoneList({ done, tick, onOpen }: { done: Todo[]; tick: (t: Todo, s: "do
                 </button>
                 <p className="mt-0.5 text-xs text-white/60">
                   {t.done_at ? `Done ${new Date(t.done_at).toLocaleDateString("en-US", { month: "short", day: "numeric", ...PT })}` : "Done"}
-                  {t.action?.meeting ? ` · ${callLabel(t.action.meeting)}` : ""}
+                  {t.action?.meeting ? ` · From the ${callLabel(t.action.meeting)}` : ""}
                 </p>
               </div>
             </li>

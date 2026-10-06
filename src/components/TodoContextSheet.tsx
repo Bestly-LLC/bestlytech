@@ -29,16 +29,16 @@ interface Ctx {
 const PT = { timeZone: "America/Los_Angeles" } as const;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** "meeting-20261006-0900" -> a Date (Pacific wall time read as local; only the day is used). */
+/** "meeting-20261006-0900" or "call-2026-09-29" -> a Date (Pacific wall time read as local; only the day is used). */
 function nameDate(name: string | undefined | null) {
-  const k = String(name ?? "").match(/(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})/);
-  return k ? new Date(Number(k[1]), Number(k[2]) - 1, Number(k[3]), Number(k[4]), Number(k[5])) : null;
+  const k = String(name ?? "").match(/(\d{4})-?(\d{2})-?(\d{2})(?:-(\d{2})(\d{2}))?/);
+  return k ? new Date(Number(k[1]), Number(k[2]) - 1, Number(k[3]), Number(k[4] ?? 12), Number(k[5] ?? 0)) : null;
 }
 
-/** Short label for a to-do's call, for the row under the title: "Oct 6 call". */
+/** Short label for a to-do's call, for the row under the title: "Oct 6 call" (or just "call"). */
 export function callLabel(meeting: unknown) {
   const d = nameDate(String(meeting ?? ""));
-  return d ? `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} call` : "the call";
+  return d ? `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} call` : "call";
 }
 
 const clock = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, ...PT });
