@@ -18,6 +18,7 @@ import {
 } from "@/components/admin/ui";
 import { supabase } from "@/integrations/supabase/client";
 import { askScout } from "@/components/admin/scoutBus";
+import { TodoContextSheet, callLabel } from "@/components/TodoContextSheet";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -68,6 +69,8 @@ export function ScoutToday() {
   const [running, setRunning] = useState<string | null>(null);
   const [openCols, setOpenCols] = useState<Record<string, boolean>>({});
   const [allDrafts, setAllDrafts] = useState(false);
+  // The call to-do whose "where it came from" sheet is open.
+  const [ctxRow, setCtxRow] = useState<Row | null>(null);
   const today = laDay();
 
   const load = useCallback(async () => {
@@ -311,10 +314,20 @@ export function ScoutToday() {
                         <li key={c.id} className={cn(rowCls, "py-2 pl-2 sm:pl-3")}>
                           <CheckCircle label={`Mark done: ${c.title}`} onClick={() => set(c, "done", "Marked done")} />
                           <div className="min-w-0 flex-1">
-                            <p className={text.title}>{c.title}</p>
+                            {/* Tap the to-do: the call it came from and the moment it was said. */}
+                            <button type="button" aria-haspopup="dialog" onClick={() => setCtxRow(c)}
+                              className={cn(text.title, "rounded-md text-left underline-offset-2 hover:underline", focusRing)}>
+                              {c.title}
+                            </button>
                             <p className={cn(text.detail, "mt-0.5")}>
                               <OwnerMenu owner={col.owner} mine={col.mine} people={people} onPick={(o) => setOwner(c, o)} />
-                              {c.action?.due ? ` · due ${c.action.due}` : ""}{c.action?.meeting ? ` · ${String(c.action.meeting)}` : ""}
+                              {c.action?.due ? <> · <span className="whitespace-nowrap">due {c.action.due}</span></> : ""}
+                              {c.action?.meeting ? (
+                                <> · <button type="button" aria-haspopup="dialog" onClick={() => setCtxRow(c)}
+                                  className={cn("whitespace-nowrap rounded font-medium text-[#0A84FF] underline-offset-2 hover:underline bento:text-[#007AFF]", focusRing)}>
+                                  From the {callLabel(c.action.meeting)}
+                                </button></>
+                              ) : ""}
                             </p>
                           </div>
                           {c.action?.deck_url && (
@@ -335,7 +348,8 @@ export function ScoutToday() {
               })}
             </div>
           )}
-          {callsDone.length > 0 && <CallsDone rows={callsDone} onReopen={(r) => set(r, "open", "Back on your list")} />}
+          {callsDone.length > 0 && <CallsDone rows={callsDone} onReopen={(r) => set(r, "open", "Back on your list")} onOpen={setCtxRow} />}
+          <TodoContextSheet todoId={ctxRow?.id ?? null} title={ctxRow?.title} viewer="jared" onClose={() => setCtxRow(null)} />
         </section>
       )}
 
@@ -384,7 +398,7 @@ function CheckCircle({ label, onClick, checked }: { label: string; onClick: () =
  * Finished call to-dos. Collapsed, newest first: tap the green check to put one
  * back on the list. A to-do that can only ever go one way is a trap, not a list.
  */
-function CallsDone({ rows, onReopen }: { rows: Row[]; onReopen: (r: Row) => void }) {
+function CallsDone({ rows, onReopen, onOpen }: { rows: Row[]; onReopen: (r: Row) => void; onOpen: (r: Row) => void }) {
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(false);
   const shown = all ? rows : rows.slice(0, FOLD);
@@ -400,7 +414,10 @@ function CallsDone({ rows, onReopen }: { rows: Row[]; onReopen: (r: Row) => void
               <li key={r.id} className={cn(rowCls, "py-2 pl-2 sm:pl-4")}>
                 <CheckCircle checked label={`Put back on the list: ${r.title}`} onClick={() => onReopen(r)} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] text-white/50 line-through decoration-white/30">{r.title}</p>
+                  <button type="button" aria-haspopup="dialog" onClick={() => onOpen(r)}
+                    className={cn("rounded-md text-left text-[15px] text-white/50 line-through decoration-white/30 hover:text-white/70", focusRing)}>
+                    {r.title}
+                  </button>
                   <p className="mt-0.5 text-[13px] text-white/45">
                     {String(r.action?.owner ?? "Jared")}
                     {r.done_at ? ` · done ${new Date(r.done_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" })}` : ""}

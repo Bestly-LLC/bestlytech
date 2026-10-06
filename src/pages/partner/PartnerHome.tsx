@@ -39,6 +39,7 @@ import { BellButton, BellSheet, ConnectClaude, useNextMeeting, usePartnerNotifs,
 import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState } from "./PartnerScout";
 import { ProjectSheet, ProjectsButton, ProjectsNav } from "./PartnerProjects";
 import { AvaDemoSheet } from "./PartnerAva";
+import { TodoContextSheet, callLabel } from "@/components/TodoContextSheet";
 
 /* ───────── types + helpers ───────── */
 
@@ -423,6 +424,8 @@ function HomeTab(props: {
   const { reload, canCheck, wxFixed, wxNote, onWxPlace, first, company, callUrl, joinUrl, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
   // "Check if it's done" for his own to-dos: check only, never closes anything for him
   const pc = usePartnerCheck(reload, mine as CheckRow[]);
+  // Tapping a to-do opens where it came from: the call, and the moment it was said.
+  const [ctxTodo, setCtxTodo] = useState<Todo | null>(null);
   const [q, setQ] = useState("");
   const [excited, setExcited] = useState(false); // hovering the greeting: the mark reacts
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", ...PT });
@@ -511,8 +514,19 @@ function HomeTab(props: {
                     <Check className="h-3.5 w-3.5" />
                   </button>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[0.975rem]">{t.title}</p>
-                    <p className="mt-0.5 text-xs text-white/60">{t.action?.due ? `Due ${t.action.due} · ` : ""}{String(t.action?.meeting ?? "")}</p>
+                    <button type="button" aria-haspopup="dialog" onClick={() => setCtxTodo(t)}
+                      className="rounded-md text-left text-[0.975rem] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF]">
+                      {t.title}
+                    </button>
+                    <p className="mt-0.5 text-xs text-white/60">
+                      {t.action?.due ? <><span className="whitespace-nowrap">Due {t.action.due}</span> · </> : ""}
+                      {t.action?.meeting ? (
+                        <button type="button" aria-haspopup="dialog" onClick={() => setCtxTodo(t)}
+                          className="whitespace-nowrap rounded font-medium text-[#0A84FF] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF]">
+                          From the {callLabel(t.action.meeting)}
+                        </button>
+                      ) : null}
+                    </p>
                     {t.action?.check && !checking && (
                       <CheckResult r={t as CheckRow} tc={{ feedback: pc.feedback }} onDone={() => tick(t, "done")} onNext={(q) => ask(q)} />
                     )}
@@ -523,15 +537,24 @@ function HomeTab(props: {
               })}
             </ul>
           )}
-          {done.length > 0 && <DoneList done={done} tick={tick} />}
+          {done.length > 0 && <DoneList done={done} tick={tick} onOpen={setCtxTodo} />}
           {jareds.length > 0 && (
             <div className="mt-4 rounded-2xl bg-white/[0.035] p-4 bento:bg-[#F3F2EE]">
               <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-white/60"><Users className="h-3.5 w-3.5" /> Jared is on</p>
               <ul className="mt-2 space-y-1.5">
-                {jareds.slice(0, 6).map((t) => <li key={t.id} className="text-sm text-white/75">{t.title}</li>)}
+                {jareds.slice(0, 6).map((t) => (
+                  <li key={t.id}>
+                    <button type="button" aria-haspopup="dialog" onClick={() => setCtxTodo(t)}
+                      className="rounded text-left text-sm text-white/75 underline-offset-2 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF]">
+                      {t.title}
+                    </button>
+                  </li>
+                ))}
               </ul>
             </div>
           )}
+          <TodoContextSheet todoId={ctxTodo?.id ?? null} title={ctxTodo?.title} viewer={props.me || "jared"} onClose={() => setCtxTodo(null)}
+            onOpenCall={(id) => { const m = meetings?.find((x) => String(x.id) === id); if (m) openCall(m); }} />
         </Panel>
 
         {/* Scout */}
@@ -709,7 +732,7 @@ function FileRow({ a }: { a: Att & { mail?: MailRow } }) {
 }
 
 /** Finished to-dos: collapsed by default, tap the green check to put one back on the list. */
-function DoneList({ done, tick }: { done: Todo[]; tick: (t: Todo, s: "done" | "open") => void }) {
+function DoneList({ done, tick, onOpen }: { done: Todo[]; tick: (t: Todo, s: "done" | "open") => void; onOpen: (t: Todo) => void }) {
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(false);
   const shown = all ? done : done.slice(0, 8);
@@ -729,10 +752,13 @@ function DoneList({ done, tick }: { done: Todo[]; tick: (t: Todo, s: "done" | "o
                 <Check className="h-3.5 w-3.5" />
               </button>
               <div className="min-w-0">
-                <p className="text-[0.95rem] text-white/60 line-through decoration-white/30">{t.title}</p>
+                <button type="button" aria-haspopup="dialog" onClick={() => onOpen(t)}
+                  className="rounded text-left text-[0.95rem] text-white/60 line-through decoration-white/30 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF]">
+                  {t.title}
+                </button>
                 <p className="mt-0.5 text-xs text-white/60">
                   {t.done_at ? `Done ${new Date(t.done_at).toLocaleDateString("en-US", { month: "short", day: "numeric", ...PT })}` : "Done"}
-                  {t.action?.meeting ? ` · ${String(t.action.meeting)}` : ""}
+                  {t.action?.meeting ? ` · ${callLabel(t.action.meeting)}` : ""}
                 </p>
               </div>
             </li>
