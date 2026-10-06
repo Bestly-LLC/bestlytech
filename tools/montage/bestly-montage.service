@@ -1,0 +1,20 @@
+[Unit]
+Description=Bestly Montage - Spark's video worker (OpenMontage)
+After=network-online.target bestly-freellm.service
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/opt/bestly/montage
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 /opt/bestly/montage/worker.py
+Restart=always
+RestartSec=20
+Nice=10
+# keep the wall, voice and Home Assistant responsive while a video renders
+CPUQuota=300%
+MemoryMax=6G
+
+[Install]
+WantedBy=multi-user.target
