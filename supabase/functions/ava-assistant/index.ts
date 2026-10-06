@@ -123,6 +123,13 @@ function callerNotes(c: { relationship?: string | null; notes?: string | null; i
   return bits.join(" ");
 }
 
+/** Best-effort Scout push: a notification must never be the thing that fails a job. db.rpc() returns a thenable,
+ *  not a real Promise, so .catch() on it throws ("db.rpc(...).catch is not a function") and took a finished
+ *  contacts sync down with it. */
+async function notifyQuietly(args: Record<string, unknown>): Promise<void> {
+  try { await db.rpc("scout_notify", args); } catch { /* best effort */ }
+}
+
 /** The shareable facts, as a bullet list for the prompt. The ONLY knowledge source for calls. */
 async function knowledge(): Promise<string> {
   const { data } = await db.from("ava_knowledge").select("topic, fact").in("scope", ["personal", "both"]).eq("active", true).eq("status", "live").not("topic", "ilike", "Story:%").order("topic");
@@ -605,15 +612,15 @@ async function contactsSync(b: Record<string, unknown>): Promise<Response> {
         added += r.added ?? 0; renamed += r.renamed ?? 0; total = r.total ?? total;
       });
       await note(added || renamed ? `${added} new, ${renamed} renamed.` : "Already up to date.", total);
-      await db.rpc("scout_notify", { p_title: "Ava (assistant): contacts synced from iCloud",
+      await notifyQuietly({ p_title: "Ava (assistant): contacts synced from iCloud",
         p_body: `${added} new, ${renamed} renamed, ${total} saved in all. She greets these people by name now.`,
-        p_severity: "info", p_push: added > 0, p_url: "/admin/ava", p_dedupe: `ava-contacts-sync-${new Date().toISOString().slice(0, 13)}` }).catch(() => {});
+        p_severity: "info", p_push: added > 0, p_url: "/admin/ava", p_dedupe: `ava-contacts-sync-${new Date().toISOString().slice(0, 13)}` });
     } catch (e) {
       const why = e instanceof Error ? e.message : "iCloud didn't answer";
-      await note(`Stopped: ${why}${added ? ` (${added} saved first)` : ""}`, total || null).catch(() => {});
-      await db.rpc("scout_notify", { p_title: "Ava (assistant): the contacts sync failed",
+      try { await note(`Stopped: ${why}${added ? ` (${added} saved first)` : ""}`, total || null); } catch { /* best effort */ }
+      await notifyQuietly({ p_title: "Ava (assistant): the contacts sync failed",
         p_body: `${why}${added ? `. ${added} saved before it stopped` : ""}. Steps: ${trace.join(" | ")}`,
-        p_severity: "warning", p_url: "/admin/ava", p_dedupe: `ava-contacts-sync-fail-${new Date().toISOString().slice(0, 10)}` }).catch(() => {});
+        p_severity: "warning", p_url: "/admin/ava", p_dedupe: `ava-contacts-sync-fail-${new Date().toISOString().slice(0, 10)}` });
     }
   })();
   // waitUntil keeps the worker alive after the response; without it the sync would be killed mid-chunk.
