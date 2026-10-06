@@ -29,6 +29,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm, LlmUnavailable } from "../_shared/free-llm.ts";
 import { corsWith } from "../_shared/cors.ts";
 import { estimatePipeline, previewRequest, type Ctx } from "./estimates.ts";
+import { answeredQuestions, bookingStep, thirdParties } from "./booking.ts";
 
 const SECRETS: string[] = (() => {
   const out: string[] = [];
@@ -260,6 +261,18 @@ async function work(c: Case, daily: boolean, settings: Record<string, any>): Pro
     notes.push(`estimate pipeline error: ${String(e).slice(0, 100)}`);
     await event(c, "error", "Estimate pipeline hit an error", { error: String(e).slice(0, 300) });
     try { await db.rpc("bestly_raise", { p_key: "claims.estimates", p_kind: "problem", p_severity: "warning", p_title: "Claims Closer estimate step failed", p_body: String(e).slice(0, 300), p_area: "turo", p_needs_jared: null, p_healed: false }); } catch { /* */ }
+  }
+
+  // ---- v2: answers Jared / Scout gave, the guest's insurer and the garage, and the repair booking (each isolated; none blocks the guest)
+  for (const [name, step] of [["answers", () => answeredQuestions(ctx, c, notes)], ["third parties", () => thirdParties(ctx, c, notes)], ["booking", async () => {
+      const fresh = (await db.from("claim_cases").select("*").eq("id", c.id).maybeSingle()).data ?? c;   // an answer above may have just changed the booking state
+      await bookingStep(ctx, fresh, notes); }]] as [string, () => Promise<void>][]) {
+    try { await step(); }
+    catch (e) {
+      notes.push(`${name} error: ${String(e).slice(0, 100)}`);
+      await event(c, "error", `Claims Closer step failed: ${name}`, { error: String(e).slice(0, 300) });
+      try { await db.rpc("bestly_raise", { p_key: `claims.${name.replace(" ", "-")}`, p_kind: "problem", p_severity: "warning", p_title: `Claims Closer ${name} step failed`, p_body: String(e).slice(0, 300), p_area: "turo", p_needs_jared: null, p_healed: false }); } catch { /* */ }
+    }
   }
 
   // ---- what to say next (one pending draft per case, nothing while a message is going out)

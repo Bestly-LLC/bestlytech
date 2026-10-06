@@ -7,6 +7,7 @@
 //                        connection pointed at ElevenLabs), her own ElevenLabs agent + post-call webhook + caller-lookup
 //                        webhook, moves the number off RoofGuard, imports it for inbound + outbound. Safe to re-run.
 //   {action:"call"}      admin (JWT): {phone, name, purpose, first_line} -> one outbound call.
+//   {action:"calendar_add"} admin/service: {uid, start, end, summary, description} -> one event on the calendar Ava books to (Claims Closer repair drop-offs).
 //   {action:"live"}      admin (JWT): calls in progress right now (either direction) with the transcript so far.
 //   {action:"audio"}     admin (JWT): {call_id} -> the recording.
 //   {action:"callback"}  admin/service: {id} -> places the follow-up call Jared approved (ava_followups row in status
@@ -1597,6 +1598,24 @@ async function bookingResult(callId: string, bk: Booking, bookedRaw: string | nu
   return { ok: true };
 }
 
+/** Service/admin: put one event on the calendar Ava books to (Claims Closer adds a confirmed repair drop-off). A repeat uid is fine (create-only). */
+async function calendarAdd(b: Record<string, unknown>): Promise<Response> {
+  const start = String(b.start ?? ""), end = String(b.end ?? "");
+  const uid = String(b.uid ?? "").replace(/[^\w@.-]/g, "").slice(0, 80);
+  if (!uid || !Number.isFinite(Date.parse(start)) || !Number.isFinite(Date.parse(end)) || Date.parse(end) <= Date.parse(start)) return jerr("start, end and uid are needed", 400);
+  try {
+    const cfg = await calSettings(), creds = await calCreds();
+    const ncs = cfg.found?.nextcloud ?? [];
+    const target = ncs.find((c) => c.id === cfg.book_to) ?? ncs.find((c) => c.writable && /\/personal\/?$/.test(c.href)) ?? ncs.find((c) => c.writable);
+    if (!creds.nextcloud || !target) return jerr("no writable Nextcloud calendar is connected", 412);
+    await putEvent(creds.nextcloud, target.href, { uid, start, end, summary: String(b.summary ?? "Event").slice(0, 160), description: String(b.description ?? "").slice(0, 1000) });
+    return Response.json({ ok: true }, { headers: CORS });
+  } catch (e) {
+    if (/\b412\b/.test(errText(e))) return Response.json({ ok: true, already: true }, { headers: CORS });
+    return jerr(errText(e), 502);
+  }
+}
+
 /** Watchdog (inside the 10-minute health run): each connected calendar is checked once an hour; a failure is retried on the next run and alerts at most hourly. */
 async function calendarHealth(): Promise<string[]> {
   const notes: string[] = [];
@@ -1751,6 +1770,7 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.action === "setup") return setup();
   if (body.action === "call") return call(body);
+  if (body.action === "calendar_add") return calendarAdd(body);
   if (body.action === "bridge") return bridgeCall(body);
   if (body.action === "contacts_sync") return contactsSync(body);
   if (body.action === "callback") return callback(String(body.id ?? ""));
