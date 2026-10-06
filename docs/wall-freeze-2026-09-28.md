@@ -351,3 +351,19 @@ Plan: `docs/wall-sky-hd-opusplan.md`.
   for the 50 px tag to get ~14 projector rows), which makes planes about 2x larger on the ceiling (at true size a tag was
   ~7 rows: unreadable). Trails moved to screen canvas `#airScrTr` (old `#airCv` hidden by `body.scrtr`, its display and
   opacity still drive the trails). 61 fps on the Mac. Backups `wall.html.bak_skyplanes*_*`.
+
+## Oct 6, 12:15 AM: Siri on/off + sleep without deep standby ("picture off")
+- **Why:** deep standby (`KEYCODE_SLEEP`) still makes the Capsule 3 shut itself off ~2.5 h later every night (power_log:
+  reach goes false ~9,000 s after each midnight sleep), and only the remote can revive it.
+- **Picture off:** `settings put global Anker_ProjectorSettings_PictureOff 1` turns the DLP light off while Android stays awake;
+  `0` lights it again instantly (Nebula projector-settings observer -> `setDlpProjectionMode(17/16)`; found by decompiling
+  `com.zhixin.projector.settings`). Verified by Jared's eyes at 12:10 AM both ways.
+- **Watchdog (`watchdog.py`, backup `.bak_picoff_*`):** schedule sleep = sleep show + picture off; wake = clear picture off
+  (+ `KEYCODE_WAKEUP` only if Android is asleep). The 7 AM clean reboot still runs. power_log lines now carry `dark`.
+  Heat and battery-heat guards still use real standby on purpose.
+- **Server (`server.py`, backup `.bak_picoff_*`):** `proj_dark()`, `proj_lit()`, `proj_power()`; admin Wake/Sleep, Restart,
+  alarm prep and the counting-sheep finish use picture off. Loopback-only `GET /api/projector/{status,on,off}`.
+- **Siri:** Homebridge accessory "Projector" (`homebridge-http-switch`, stateful, polls status every 30 s;
+  `/mnt/ssd/apps/homebridge/config.json`, backup `config.json.bak_projector_*`). "Hey Siri, turn off/on the projector."
+  Off holds until the next schedule boundary (midnight or 7 AM), same as the admin buttons.
+- **Watch next:** whether Android stays awake all night in picture off (power_log `awake` should stay true with `dark` true).
