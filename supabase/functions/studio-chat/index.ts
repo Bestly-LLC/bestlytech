@@ -346,7 +346,8 @@ const TOOLS = [
       "status: where a video is (ref = job ref or the post code like H01; omit for this thread's latest). " +
       "ALWAYS quote first and paste the returned text word for word, ending with OPTIONS: Make it | Not now (or OPTIONS: With b-roll | Text only, when they did not say). " +
       "After make, paste the returned text word for word. Montage posts progress and the finished post code into this thread by itself. " +
-      "To change a finished Montage video, the person taps Changes with a note on the post; Montage re-cuts the same post. Brands with a Montage style: HOKU.",
+      "To change a finished Montage video, the person taps Changes with a note on the post; Montage re-cuts the same post. Brands with a Montage style: HOKU, InventoryProof, Cookie Yeti and Bestly Cloud. " +
+      "Montage NEVER makes Centering YOU videos (Elizabeth records her own) or real-estate videos (listings are photo-only tours, coming later): the quote refuses them, so tell the person that plainly and do not use make_video for them either.",
     input_schema: {
       type: "object",
       properties: {
