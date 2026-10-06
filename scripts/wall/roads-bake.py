@@ -104,6 +104,7 @@ WAYS = {}                                # way id -> element, every bucket (labe
 def short_name(n):
     w = n.split()
     if len(w) > 1 and w[0] in DIRS: w[0] = DIRS[w[0]]
+    if len(w) > 2 and w[-1] in DIRS and w[-2] in ABBR: w[-2], w[-1] = ABBR[w[-2]], DIRS[w[-1]]   # Cahuenga Blvd W
     if len(w) > 1 and w[-1] in ABBR: w[-1] = ABBR[w[-1]]
     return " ".join(w)
 

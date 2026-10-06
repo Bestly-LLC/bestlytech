@@ -322,3 +322,18 @@ Plan: `docs/wall-sky-hd-opusplan.md`.
     - Tried OpenH264 for lower QP: worse (QP about 26), so it stays on VideoToolbox.
   - Wall TV app 1.2 (versionCode 3): `TextureView` instead of `SurfaceView`, so frames composite on the graphics plane like the web app did. Installed on the projector and set as `/opt/bestly/stream/bestly-wall-tv.apk` (1.1 kept as `.bak_1.1`). The projector reports 56 fps with 1 dropped frame in 1,626. CPU is higher: app about 57%, surfaceflinger about 36%.
 - **Projector facts.** Keystone is held flat in game mode (see `house/wall/projector-geometry-recovery`). Panel is 1920x1080. `picture_sharpness` is 6.
+
+## Update Oct 5, 8:20-8:40 PM: crisp sky text, road signs, home sync (Sky Sync)
+- **Sky text:** place and star names are drawn upright on a screen canvas (`#airScrL`, `scrLabels()` every 1.5 s, positions taken
+  from the hidden SVG text). Roads got brighter and thicker (freeways .8 alpha, 3.4-3.8 px). Backup `wall.html.bak_skyhd3_*`.
+- **Road signs (`#airScrS`, `drawSigns()` inside `geoRoads`):** `roads.json` v3 adds `lab` rows
+  `[class, kind, text, lat, lon, dlat, dlon]` baked by `scripts/wall/roads-bake.py` (1,280 signs). Interstate / US / CA shields
+  at every zoom; arterial names at 14 mi and in; secondary at 8; local streets at 4. Names run along the road, kept upright;
+  overlaps (with each other, place names, spots and the Home tag) are dropped. Backup `roads.json.bak_v2_*`.
+- **Move-home bug:** moving home moved only the planes and Home tag; roads, traffic and city names waited for the next
+  `airFit()`, and `airFit()` itself placed home last. Now `airFit()` places home first, and the 0.9 s glide redraws
+  roads, signs, traffic and landmarks every 60 ms, then runs `airFit()`. Backups `wall.html.bak_skysync_*`, `.bak_skysync2_*`.
+- **Sky Sync (employee `wall-sky-sync`, Mac mini, every 5 min):** each layer stamps the home/zoom/bearing it drew with;
+  `window.__skyAudit()` reports the gap per layer; the page heals itself, Sky Sync reloads and then alerts (`wall.skysync`),
+  flags unregistered layers, and runs a move-home test after each `wall.html` change. See `tools/wall-sky-sync/README.md`.
+  **Any new sky layer must be stamped and added to `SKYLAYERS`.**
