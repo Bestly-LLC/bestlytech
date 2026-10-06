@@ -572,43 +572,56 @@ async function contactsSync(b: Record<string, unknown>): Promise<Response> {
   const creds = (await calCreds()).icloud;
   if (!creds) return Response.json({ ok: false, error: "Her iCloud login isn't saved. Connect iCloud in Ava's calendars first." }, { status: 412, headers: CORS });
 
-  const trace: string[] = [];
-  // Written as each chunk of cards is read, not all at the end: one big write at the end hit the function's limit.
-  // A run cut short has still saved everything it got to.
-  let added = 0, renamed = 0, total = 0, numbers = 0;
-  const onChunk = dry ? undefined : async (people: Person[]) => {
-    numbers += people.length;
-    const { data, error } = await db.rpc("ava_contacts_apply", { p_people: people });
-    if (error) { trace.push(`save failed at ${numbers}: ${error.message}`); return; }
-    const r = (data ?? {}) as { added?: number; renamed?: number; total?: number };
-    added += r.added ?? 0; renamed += r.renamed ?? 0; total = r.total ?? total;
-  };
-
-  let found: { people: Person[]; cards: number; books: number };
-  try {
-    found = await fetchPeople(creds, trace, onChunk);
-  } catch (e) {
-    const why = e instanceof Error ? e.message : "iCloud didn't answer";
-    await db.rpc("scout_notify", { p_title: "Ava (assistant): the contacts sync failed",
-      p_body: `${why}${added ? `. ${added} saved before it stopped` : ""}. Steps: ${trace.join(" | ")}`,
-      p_severity: "warning", p_url: "/admin/ava", p_dedupe: `ava-contacts-sync-fail-${new Date().toISOString().slice(0, 10)}` }).catch(() => {});
-    return Response.json({ ok: false, error: why, added, trace }, { status: 502, headers: CORS });
-  }
-
+  // A dry run is quick enough to answer in the request: look, count, write nothing.
   if (dry) {
-    const { data: existing } = await db.from("ava_contacts").select("phone");
-    const saved = new Set((existing ?? []).map((r: { phone: string }) => r.phone));
-    const fresh = found.people.filter((p) => !saved.has(p.phone));
-    return Response.json({ ok: true, dry_run: true, address_books: found.books, cards: found.cards,
-      numbers: found.people.length, already_saved: found.people.length - fresh.length, would_add: fresh.length,
-      sample: fresh.slice(0, 8).map((p) => p.name), trace }, { headers: CORS });
+    const trace: string[] = [];
+    try {
+      const found = await fetchPeople(creds, trace);
+      const { data: existing } = await db.from("ava_contacts").select("phone");
+      const saved = new Set((existing ?? []).map((r: { phone: string }) => r.phone));
+      const fresh = found.people.filter((p) => !saved.has(p.phone));
+      return Response.json({ ok: true, dry_run: true, address_books: found.books, cards: found.cards,
+        numbers: found.people.length, already_saved: found.people.length - fresh.length, would_add: fresh.length,
+        sample: fresh.slice(0, 8).map((p) => p.name), trace }, { headers: CORS });
+    } catch (e) {
+      return Response.json({ ok: false, error: e instanceof Error ? e.message : "iCloud didn't answer", trace }, { status: 502, headers: CORS });
+    }
   }
 
-  const now = new Date().toISOString();
-  await db.rpc("scout_notify", { p_title: "Ava (assistant): contacts synced from iCloud",
-    p_body: `${added} new, ${renamed} renamed, ${total} saved in all. She greets these people by name now.`,
-    p_severity: "info", p_push: added > 0, p_url: "/admin/ava", p_dedupe: `ava-contacts-sync-${now.slice(0, 13)}` }).catch(() => {});
-  return Response.json({ ok: true, added, renamed, numbers, total, cards: found.cards, trace }, { headers: CORS });
+  // The real sync reads a thousand cards, which takes longer than a request may stay open: every chunk was saved and
+  // then the function was killed at the end, so a sync that had worked still answered 500. Answer now, finish behind it.
+  const work = (async () => {
+    const trace: string[] = [];
+    let added = 0, renamed = 0, total = 0, numbers = 0;
+    const note = async (text: string, count: number | null) => {
+      await db.from("ava_settings").update({ contacts_synced_at: new Date().toISOString(), contacts_count: count, contacts_note: text.slice(0, 300) }).eq("id", true);
+    };
+    try {
+      await fetchPeople(creds, trace, async (people) => {
+        numbers += people.length;
+        const { data, error } = await db.rpc("ava_contacts_apply", { p_people: people });
+        if (error) { trace.push(`save failed at ${numbers}: ${error.message}`); return; }
+        const r = (data ?? {}) as { added?: number; renamed?: number; total?: number };
+        added += r.added ?? 0; renamed += r.renamed ?? 0; total = r.total ?? total;
+      });
+      await note(added || renamed ? `${added} new, ${renamed} renamed.` : "Already up to date.", total);
+      await db.rpc("scout_notify", { p_title: "Ava (assistant): contacts synced from iCloud",
+        p_body: `${added} new, ${renamed} renamed, ${total} saved in all. She greets these people by name now.`,
+        p_severity: "info", p_push: added > 0, p_url: "/admin/ava", p_dedupe: `ava-contacts-sync-${new Date().toISOString().slice(0, 13)}` }).catch(() => {});
+    } catch (e) {
+      const why = e instanceof Error ? e.message : "iCloud didn't answer";
+      await note(`Stopped: ${why}${added ? ` (${added} saved first)` : ""}`, total || null).catch(() => {});
+      await db.rpc("scout_notify", { p_title: "Ava (assistant): the contacts sync failed",
+        p_body: `${why}${added ? `. ${added} saved before it stopped` : ""}. Steps: ${trace.join(" | ")}`,
+        p_severity: "warning", p_url: "/admin/ava", p_dedupe: `ava-contacts-sync-fail-${new Date().toISOString().slice(0, 10)}` }).catch(() => {});
+    }
+  })();
+  // waitUntil keeps the worker alive after the response; without it the sync would be killed mid-chunk.
+  const rt = (globalThis as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  if (rt?.waitUntil) rt.waitUntil(work); else await work;
+  const { data: st } = await db.from("ava_settings").select("contacts_count").eq("id", true).maybeSingle();
+  return Response.json({ ok: true, started: true, saved_now: st?.contacts_count ?? null,
+    message: "Syncing in the background. The count on this page updates when it finishes, in about a minute." }, { headers: CORS });
 }
 
 // ---------- follow-up call (only ever a row Jared approved: status 'dialing') ----------
