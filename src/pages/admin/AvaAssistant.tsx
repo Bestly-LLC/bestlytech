@@ -3,10 +3,13 @@
  *   Her line (816) 429-9495: anyone can call, she takes a message, Jared gets a Scout push.
  *   Dial: she calls someone for a reason Jared types.
  * Also: "Your cell" (missed calls forwarded to her line) and "Spam & Do Not Call" (AvaCell.tsx, AvaSpam.tsx).
- * Data: ava_calls, ava_contacts, ava_settings (admin RLS), ava_costs(); edge fn ava-assistant (live, audio, call, setup).
+ *   "People Ava knows": the address book she greets by name. Jared's iCloud contacts sync in ("how about we connect
+ *   my contacts from icloud/mac/apple", 2026-10-05) — personal Ava only, nothing here touches RoofGuard. Search,
+ *   "Sync now", and an Inner circle switch per person (warm, no gatekeeping, messages urgent).
+ * Data: ava_calls, ava_contacts, ava_settings (admin RLS), ava_costs(); edge fn ava-assistant (live, audio, call, setup, contacts_sync).
  * Separate on purpose: nothing here reads or writes rg_* (RoofGuard can be split off and sold).
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -15,10 +18,11 @@ import { VoiceSwitcher } from "@/components/admin/roofguard/VoiceSwitcher";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { CallNo, ReplyGuard, LiveTranscript, type Line } from "@/components/admin/roofguard/AvaCalls";
 import { DialerSheet, LivePill } from "@/components/admin/roofguard/AvaDialer";
-import { BridgeTag, FollowupsList, ForwardedTag, KnowledgeList, MessageSheet, MessagesList, SpendChip, YourVoiceTag, type Msg } from "@/components/admin/roofguard/AvaShared";
+import { BridgeTag, FollowupsList, ForwardedTag, InnerCircleTag, KnowledgeList, MessageSheet, MessagesList, SpendChip, YourVoiceTag, type Msg } from "@/components/admin/roofguard/AvaShared";
+import { invokeError } from "@/components/admin/roofguard/AvaActions";
 import { useLiveCalls, LIVE_ENDED_EVENT } from "@/components/admin/roofguard/AvaLive";
 import { AvaCalendars } from "@/components/admin/roofguard/AvaCalendars";
-import { AvaCell } from "@/components/admin/roofguard/AvaCell";
+import { AvaCell, CellSwitch } from "@/components/admin/roofguard/AvaCell";
 import { AvaSpam } from "@/components/admin/roofguard/AvaSpam";
 import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
 import { CollapsibleSection } from "@/components/admin/roofguard/CollapsibleSection";
@@ -28,15 +32,19 @@ import { CoachSection } from "@/components/admin/roofguard/AvaCoach";
 import { ArchivedCalls, useArchiveReload } from "@/components/admin/roofguard/AvaArchive";
 import { onOpenCall, takePendingCall } from "@/components/admin/roofguard/coachBus";
 import { toast } from "sonner";
-import { Check, ChevronRight, Copy, Grid3x3, Phone, PhoneIncoming, PhoneOutgoing, Plus, UserRound } from "lucide-react";
+import { Check, ChevronRight, Copy, Grid3x3, Loader2, Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCw, Search, UserRound, X } from "lucide-react";
 
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
   conversation_id: string | null; status: string; summary: string | null; message: string | null; urgent: boolean; callback_wanted: boolean;
   duration_sec: number | null; transcript: { role: string; message: string | null; time_in_call_secs?: number }[] | null; read_at: string | null; created_at: string;
   deleted_at: string | null; archived_at?: string | null; call_no: number | null; voice?: "ava" | "jared"; forwarded?: boolean; booked_slot?: string | null;
   bridge?: boolean; bridge_org?: string | null };
-type Contact = { id: string; name: string; phone: string | null; relationship: string | null; notes: string | null };
-type Settings = { agent_id: string | null; phone_number_id: string | null; from_number: string; setup_log: { m: string }[] };
+// source: 'manual' is a row Jared typed, 'icloud' came from the address book sync. The sync only ever rewrites
+// icloud rows, and only their name / apple_uid / synced_at — a relationship or note stays whatever he wrote.
+type Contact = { id: string; name: string; phone: string | null; relationship: string | null; notes: string | null;
+  source?: "manual" | "icloud" | null; inner_circle?: boolean | null; synced_at?: string | null };
+type Settings = { agent_id: string | null; phone_number_id: string | null; from_number: string; setup_log: { m: string }[];
+  contacts_synced_at?: string | null; contacts_count?: number | null; contacts_note?: string | null };
 type Costs = { total: number; month: number; minutes: number; calls: number; unread: number };
 
 const tbl = (t: string) => supabase.from(t as never) as unknown as {
@@ -50,6 +58,13 @@ const usd = (n: number | undefined) => (n ?? 0).toLocaleString("en-US", { style:
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(/ (AM|PM)/, " $1");
 const mmss = (s: number | null) => s == null ? "" : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 const slim = (t: Call["transcript"]): Line[] => (t ?? []).filter((x) => x.message).map((x) => ({ role: x.role, text: x.message as string, t: x.time_in_call_secs ?? 0 }));
+const digits = (v: string | null) => (v ?? "").replace(/\D/g, "");
+/** Hard ceiling on the contacts read. High enough for the whole address book with room to grow, low enough to stay one request. */
+const CONTACT_LIMIT = 5000;
+/** How many of the everyone-else contacts the list draws at once. Inner circle and hand-typed rows always show on top of these. */
+const CONTACT_PAGE = 50;
+/** Sort band: inner circle (0) above the rows Jared typed (1) above the synced crowd (2). */
+const rank = (k: Contact) => (k.inner_circle ? 0 : k.source === "icloud" ? 2 : 1);
 
 export default function AvaAssistant() {
   const [calls, setCalls] = useState<Call[]>([]);
@@ -68,8 +83,10 @@ export default function AvaAssistant() {
   const load = useCallback(async () => {
     const [c, k, st, co] = await Promise.all([
       tbl("ava_calls").select("*").order("created_at", { ascending: false }).limit(100),
-      tbl("ava_contacts").select("*").order("name", { ascending: true }).limit(200),
-      tbl("ava_settings").select("agent_id, phone_number_id, from_number, setup_log").order("updated_at", { ascending: false }).limit(1),
+      // the whole address book, not a page of it: the iCloud sync put ~926 people in here and the old limit(200)
+      // hid the rest with nothing on screen to say so. Search filters this list in the browser, so it has to be whole.
+      tbl("ava_contacts").select("*").order("name", { ascending: true }).limit(CONTACT_LIMIT),
+      tbl("ava_settings").select("agent_id, phone_number_id, from_number, setup_log, contacts_synced_at, contacts_count, contacts_note").order("updated_at", { ascending: false }).limit(1),
       (supabase.rpc as unknown as (f: string) => Promise<{ data: Costs | null }>)("ava_costs"),
     ]);
     const e = c.error ?? k.error ?? st.error;
@@ -221,23 +238,8 @@ export default function AvaAssistant() {
       {/* one Voice section: how Ava sounds, and My voice (record, bank, clone) */}
       <VoicePicker source="ava" openSignal={studio} />
 
-      {/* contacts */}
-      <CollapsibleSection id="ava-people" title="People Ava knows" icon={<UserRound className="h-4 w-4 text-white/60" />}
-        summary={contacts.length ? <><span className="tabular-nums">{contacts.length}</span>&nbsp;{contacts.length === 1 ? "person" : "people"} she greets by name</> : "Nobody saved yet"}>
-        <div className="p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <p className="text-xs text-white/60">When one of these numbers calls, Ava greets them by name.</p>
-            <button type="button" onClick={() => setContactOpen({})} className="ml-auto inline-flex min-h-[44px] items-center gap-1 rounded-lg px-3 text-sm text-sky-300 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"><Plus className="h-4 w-4" aria-hidden />Add</button>
-          </div>
-          <ul className="flex flex-wrap gap-2">
-            {contacts.map((k) => (
-              <li key={k.id}><button type="button" onClick={() => setContactOpen(k)} className="min-h-[44px] rounded-xl bg-white/[0.05] px-3 py-2 text-left ring-1 ring-white/10 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
-                <span className="block text-sm font-medium text-white">{k.name}{k.relationship ? <span className="font-normal text-white/60"> · {k.relationship}</span> : null}</span>
-                <span className="block text-xs tabular-nums text-white/60">{fmt(k.phone)}</span></button></li>
-            ))}
-          </ul>
-        </div>
-      </CollapsibleSection>
+      {/* contacts: ~926 of them since the iCloud sync, so this section searches rather than listing everything */}
+      <PeopleSection contacts={contacts} settings={s} onReload={load} onEdit={setContactOpen} />
 
       <MessageSheet item={open ? toMsg(open) : null} onClose={() => setOpen(null)}
         onDeleted={() => { const id = open?.id; setOpen(null); setCalls((cs) => cs.filter((x) => x.id !== id)); void load(); }} />
@@ -249,15 +251,165 @@ export default function AvaAssistant() {
   );
 }
 
+/**
+ * "People Ava knows": the address book she greets callers by name from.
+ *
+ * Jared's ask (2026-10-05): "how about we connect my contacts from icloud/mac/apple", and "this is for personal ava
+ * only". That brought ~926 people in, so this section does not draw the whole book:
+ *   - Inner circle first, then the rows he typed himself, then one page of the synced crowd.
+ *   - A search box for everyone else (name, relationship, or number — punctuation in the number is ignored).
+ *   - "Sync now" calls the edge function, which answers straight away and then works for another 60 to 90 seconds,
+ *     so this watches ava_settings for the finish stamp to move rather than trusting the first reply.
+ */
+function PeopleSection({ contacts, settings, onReload, onEdit }: {
+  contacts: Contact[]; settings: Settings | null; onReload: () => void; onEdit: (c: Partial<Contact>) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [startedFrom, setStartedFrom] = useState<string | null>(null); // contacts_synced_at as it stood when this sync began
+  const [note, setNote] = useState<{ t: "ok" | "err"; m: string } | null>(null);
+  const syncedAt = settings?.contacts_synced_at ?? null;
+  const savedNote = settings?.contacts_note?.trim() || null;
+
+  // The function returns { started: true } and keeps going in the background, so poll for the stamp instead of
+  // declaring victory. Twelve ticks of 10 seconds covers the slowest sync seen; after that the page's own
+  // 30-second refresh picks the result up and nothing is left spinning.
+  useEffect(() => {
+    if (!syncing) return;
+    let tries = 0, stopped = false;
+    const tick = async () => {
+      tries += 1;
+      const { data } = await tbl("ava_settings").select("contacts_synced_at, contacts_note").order("updated_at", { ascending: false }).limit(1);
+      if (stopped) return;
+      const row = ((data ?? [])[0] ?? null) as { contacts_synced_at?: string | null; contacts_note?: string | null } | null;
+      if (row?.contacts_synced_at && row.contacts_synced_at !== startedFrom) {
+        setSyncing(false); setNote({ t: "ok", m: row.contacts_note?.trim() || "Your contacts are up to date." }); onReload(); return;
+      }
+      if (tries >= 12) { setSyncing(false); setNote({ t: "ok", m: "Still reading your contacts. The list fills in on its own when she is done." }); onReload(); }
+    };
+    const t = setInterval(() => void tick(), 10000);
+    return () => { stopped = true; clearInterval(t); };
+  }, [syncing, startedFrom, onReload]);
+
+  const sync = async () => {
+    setStartedFrom(syncedAt); setNote(null); setSyncing(true);
+    const { data, error } = await supabase.functions.invoke("ava-assistant", { body: { action: "contacts_sync" } });
+    const body = data as { ok?: boolean; message?: string; error?: string } | null;
+    if (error || !body?.ok) {
+      setSyncing(false);
+      setNote({ t: "err", m: await invokeError(error, body, "The sync didn't start. Try again in a minute.") });
+      return;
+    }
+    setNote({ t: "ok", m: body.message?.trim() || "Reading your iCloud contacts now." });
+  };
+
+  const { total, shown } = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const nd = digits(q); // typing "816 500" should find +18165007236, so match on digits only
+    const hit = (k: Contact) => !needle || k.name.toLowerCase().includes(needle)
+      || (k.relationship ?? "").toLowerCase().includes(needle)
+      || (nd.length >= 3 && digits(k.phone).includes(nd));
+    const found = contacts.filter(hit).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+    const pinned = found.filter((k) => rank(k) < 2);
+    return { total: found.length, shown: [...pinned, ...found.filter((k) => rank(k) === 2).slice(0, CONTACT_PAGE)] };
+  }, [contacts, q]);
+
+  const people = (n: number) => (n === 1 ? "person" : "people");
+  const count = <span className="whitespace-nowrap"><span className="tabular-nums">{contacts.length}</span> {people(contacts.length)}</span>;
+  const state = syncing ? "syncing with iCloud now" : syncedAt ? `synced ${when(syncedAt)}` : "not synced with iCloud yet";
+  const btn = "inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-3 text-sm font-medium transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 motion-safe:active:scale-[0.98] motion-reduce:transition-none disabled:opacity-50";
+
+  return (
+    <CollapsibleSection id="ava-people" title="People Ava knows" icon={<UserRound className="h-4 w-4 text-white/60" />}
+      summary={contacts.length ? <>{count} she greets by name · {state}</> : "Nobody saved yet"}>
+      <div className="p-4">
+        {/* Sync state and the two actions live at the top of the body, not in the header: CollapsibleSection's
+            header is itself one big button, and a button cannot hold another button. */}
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+          <div className="min-w-0 flex-1 basis-56">
+            <p className="text-sm text-white/75">{count} saved. When one of these numbers calls, Ava greets them by name.</p>
+            <p className="mt-0.5 text-xs text-white/55" aria-live="polite">
+              {syncing ? "Reading your iCloud contacts."
+                : syncedAt ? <>Last synced with iCloud <span className="whitespace-nowrap">{when(syncedAt)}</span>.{savedNote ? ` ${savedNote}` : ""}</>
+                : "Not synced with iCloud yet."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => void sync()} disabled={syncing} className={cn(btn, "text-[#FFA270]")}>
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}
+              {syncing ? "Syncing" : "Sync now"}
+            </button>
+            <button type="button" onClick={() => onEdit({})} className={cn(btn, "text-sky-300")}><Plus className="h-4 w-4" aria-hidden />Add</button>
+          </div>
+        </div>
+        {note && <p role={note.t === "err" ? "alert" : undefined} className={cn("mt-2 text-sm", note.t === "err" ? "text-red-300" : "text-white/70")}>{note.m}</p>}
+        {/* the old limit(200) hid 700 people with nothing on screen to say so; if the read ever fills up again, say it out loud */}
+        {contacts.length >= CONTACT_LIMIT && (
+          <p role="alert" className="mt-2 text-sm text-amber-200">
+            This page reads the first <span className="whitespace-nowrap tabular-nums">{CONTACT_LIMIT} people</span> and your book is at least that big, so some are missing here. Ava still knows all of them.
+          </p>
+        )}
+
+        <div className="relative mt-3">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" aria-hidden />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or number"
+            aria-label="Search the people Ava knows, by name or number"
+            className="h-11 w-full rounded-xl bg-white/[0.05] pl-9 pr-12 text-[15px] text-white outline-none ring-1 ring-white/10 placeholder:text-white/35 focus:ring-white/25" />
+          {q && (
+            <button type="button" onClick={() => setQ("")} aria-label="Clear the search"
+              className="absolute right-0 top-0 grid h-11 w-11 place-items-center rounded-xl text-white/45 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          )}
+        </div>
+
+        {total === 0 ? (
+          <p className="py-6 text-center text-sm text-white/45">{q.trim() ? "Nobody by that name or number." : "Nobody saved yet."}</p>
+        ) : (
+          <>
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {shown.map((k) => (
+                <li key={k.id}>
+                  <button type="button" onClick={() => onEdit(k)}
+                    className="min-h-[44px] rounded-xl bg-white/[0.05] px-3 py-2 text-left ring-1 ring-white/10 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-white">
+                      {k.name}{k.relationship ? <span className="font-normal text-white/60">· {k.relationship}</span> : null}
+                      {k.inner_circle ? <InnerCircleTag className="font-normal" /> : null}
+                    </span>
+                    <span className="block text-xs text-white/60">
+                      <span className="tabular-nums">{fmt(k.phone) || "No number"}</span>
+                      {/* quiet, because which rows came from the address book only matters when he is editing one */}
+                      {k.source === "icloud" ? <span className="whitespace-nowrap text-white/40"> · from iCloud</span> : null}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {shown.length < total && (
+              <p className="mt-3 text-xs text-white/55">
+                <span className="whitespace-nowrap">Showing <span className="tabular-nums">{shown.length}</span> of <span className="tabular-nums">{total} {people(total)}</span></span>. Search to find anyone else.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </CollapsibleSection>
+  );
+}
+
 function ContactSheet({ c, onClose, onSaved }: { c: Partial<Contact> | null; onClose: () => void; onSaved: () => void }) {
   const [f, setF] = useState<Partial<Contact>>({});
   const [err, setErr] = useState<string | null>(null);
+  const innerId = useId();
   useEffect(() => { setF(c ?? {}); setErr(null); }, [c]);
+  const fromICloud = !!f.id && f.source === "icloud";
   const save = async () => {
     const phone = f.phone ? toE164(f.phone) : null;
     if (!f.name?.trim()) { setErr("Add a name."); return; }
     if (f.phone && !phone) { setErr("Phone should be a 10-digit US number."); return; }
-    const row = { name: f.name.trim(), phone, relationship: f.relationship?.trim() || null, notes: f.notes?.trim() || null };
+    // source, apple_uid and synced_at are the sync's to set, never this form's: writing source here would make a
+    // synced row look hand-typed and the next sync would stop keeping its name current.
+    const row = { name: f.name.trim(), phone, relationship: f.relationship?.trim() || null, notes: f.notes?.trim() || null, inner_circle: !!f.inner_circle };
     const { error } = f.id ? await tbl("ava_contacts").update(row).eq("id", f.id) : await tbl("ava_contacts").insert(row);
     if (error) { setErr(error.message); return; }
     onSaved();
@@ -269,10 +421,23 @@ function ContactSheet({ c, onClose, onSaved }: { c: Partial<Contact> | null; onC
         <SheetTitle className="text-white">{f.id ? "Edit contact" : "New contact"}</SheetTitle>
         <SheetDescription className="text-white/50">Ava greets saved numbers by name and knows how they're related to you.</SheetDescription>
         <div className="mt-4 space-y-3">
+          {/* accurate, and worth saying: the sync rewrites name / apple_uid / synced_at on icloud rows and nothing else */}
+          {fromICloud && (
+            <p className="rounded-xl bg-white/[0.04] p-3 text-xs text-white/60 ring-1 ring-white/10">
+              This one came from iCloud. The next sync refreshes the name from your address book, and keeps the relationship and notes you type here.
+            </p>
+          )}
           <label className="block"><span className="mb-1 block text-xs text-white/60">Name</span><input className={input} value={f.name ?? ""} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="e.g. Mom" /></label>
           <label className="block"><span className="mb-1 block text-xs text-white/60">Phone</span><input className={input} inputMode="tel" value={f.phone ?? ""} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="(555) 123-4567" /></label>
           <label className="block"><span className="mb-1 block text-xs text-white/60">Relationship</span><input className={input} value={f.relationship ?? ""} onChange={(e) => setF({ ...f, relationship: e.target.value })} placeholder="e.g. mother, business partner" /></label>
           <label className="block"><span className="mb-1 block text-xs text-white/60">Notes for Ava</span><textarea rows={3} className={cn(input, "h-auto py-2")} value={f.notes ?? ""} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="Anything that helps her be warm and useful" /></label>
+          <div className="flex items-start gap-3 rounded-xl bg-white/[0.04] p-3 ring-1 ring-white/10">
+            <span className="min-w-0 flex-1">
+              <span id={innerId} className="block text-sm font-medium text-white">Inner circle</span>
+              <span className="mt-0.5 block text-xs text-white/60">Ava is warm with them, skips asking what it's about, and marks their messages urgent.</span>
+            </span>
+            <CellSwitch on={!!f.inner_circle} busy={false} onChange={(v) => setF({ ...f, inner_circle: v })} labelledBy={innerId} />
+          </div>
           {err && <p role="alert" className="text-sm text-red-300">{err}</p>}
           <button type="button" onClick={() => void save()} className="inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl bg-white text-[15px] font-semibold text-black active:scale-[0.98]">Save</button>
         </div>

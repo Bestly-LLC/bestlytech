@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
-  AlarmClock, AlertTriangle, ArrowRightLeft, CalendarCheck, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, Mic, PhoneCall, PhoneForwarded, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
+  AlarmClock, AlertTriangle, ArrowRightLeft, CalendarCheck, CalendarClock, CheckCircle2, Heart, Inbox, Lightbulb, Loader2, Mic, PhoneCall, PhoneForwarded, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
 } from "lucide-react";
 import { CallNo, DeleteCallButton, LiveTranscript, Recording, ShareCall, type Line } from "./AvaCalls";
 import { ActionPills, useActions } from "./AvaActions";
@@ -52,6 +52,17 @@ export function BridgeTag({ org, className }: { org?: string | null; className?:
   return (
     <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70", className)}>
       <ArrowRightLeft className="h-3 w-3" aria-hidden />Bridge{org?.trim() ? ` · ${org.trim()}` : ""}
+    </span>
+  );
+}
+
+/** Small label on the handful of people Ava treats as family (ava_contacts.inner_circle): she is warm, skips the
+ *  "what's this about" gatekeeping, and marks their messages urgent. Rose, so it reads as closeness, not a warning.
+ *  Opt-in per person on /admin/ava (Jared's ask, 2026-10-05: iCloud brings in everyone, only a few are inner circle). */
+export function InnerCircleTag({ className }: { className?: string }) {
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-medium text-rose-300", className)}>
+      <Heart className="h-3 w-3" aria-hidden />Inner circle
     </span>
   );
 }
