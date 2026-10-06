@@ -440,12 +440,19 @@ export async function estimatePipeline(ctx: Ctx, c: Row, settings: Row, notes: s
       const docPath = `${c.id}/estimate/${e.id}.pdf`;
       await ctx.db.storage.from("claim-evidence").upload(docPath, pdf, { contentType: "application/pdf", upsert: true });
       await ctx.db.from("claim_estimates").update({ doc_path: docPath }).eq("id", e.id);
-      const { data: ev } = await ctx.db.from("claim_evidence").select("storage_path").eq("case_id", c.id).eq("kind", "after").order("taken_at").limit(6);
-      const message = `Repair estimate from ${shop.name}: ${ctx.money(Number(c.estimate_amount))} for the damage found at check-in (passenger-side front bumper corner). `
-        + `This invoice is for ${ctx.money(amount)}, the most Turo allows here under your protection plan. The estimate and photos are attached. `
-        + `If you have personal auto insurance, send me the insurer and policy number and I'll run the full repair through it.`;
+      // Turo's invoice form only takes photos already on the reservation (its media picker lists /api/reservation/imagesV2), so the
+      // evidence is the damage photos; the estimate itself goes in the message (500 character limit).
+      const { data: ev } = await ctx.db.from("claim_evidence").select("uuid, kind").eq("case_id", c.id).order("taken_at");
+      const evRows = (ev ?? []) as Row[];
+      const evidenceIds = [...evRows.filter((p) => p.kind === "after").slice(0, 8), ...evRows.filter((p) => p.kind === "before").slice(0, 2)].map((p) => p.uuid);
+      const shopShort = String(shop.name).replace(/ Collision Center.*$/i, "").replace(/ Body Shop.*$/i, "");
+      const msg = [`Repair estimate: ${ctx.money(Number(c.estimate_amount))} from ${shop.name}`,
+        e.repair_vs_replace ? ` (${e.repair_vs_replace === "both" ? "repair and replace" : e.repair_vs_replace})` : "",
+        `, for the passenger-side front bumper damage found at check-in. This invoice is ${ctx.money(amount)}, the most Turo allows here under your protection plan.`,
+        Number(c.estimate_amount) > amount ? " The photos are attached. If you have personal auto insurance, send me your insurer and policy number and I'll run the full repair through it." : " The photos are attached."].join("");
+      const message = msg.length <= 500 ? msg : msg.replace(` from ${shop.name}`, ` from ${shopShort}`).slice(0, 500);
       await ctx.db.from("claim_turo_actions").insert({ case_id: c.id, kind: "create_invoice",
-        payload: { amount, message, estimate_total: Number(c.estimate_amount), shop: shop.name, doc_path: docPath, photo_paths: (ev ?? []).map((p: Row) => p.storage_path) } });
+        payload: { amount, message, estimate_total: Number(c.estimate_amount), shop: shop.name, doc_path: docPath, evidence_ids: evidenceIds, incident_number: String(c.turo_claim_no ?? "") } });
       await ctx.db.from("turo_reader_state").update({ poke_at: new Date().toISOString() }).eq("id", 1);
       await ctx.event(c, "turo_action", `Queued the Turo invoice: ${ctx.money(amount)}`, { amount, shop: shop.name });
       notes.push(`queued Turo invoice ${ctx.money(amount)}`);

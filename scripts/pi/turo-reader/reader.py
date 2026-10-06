@@ -14,6 +14,11 @@ Why this shape (2026-10-03, docs/pi-move-opusplan-2026-10-03.md):
     claims summary + incident (next action, deadline, invoice max), the damage report (guest answers + Jared's report) and the
     before/after photos (downloaded inside this signed-in Chromium, AVIF -> JPEG with ffmpeg, pushed to claims-evidence; a known
     photo uuid is never fetched again). Every Claims call is wrapped so a failure can never stop trip or inbox reading.
+  - 1.3.0 (2026-10-06): Claims Closer works the Turo action queue (claims_turo_claim -> claims_turo_done): create_invoice posts the
+    resolve-directly invoice (POST /api/incidents/{id}/invoice/create {amount, evidenceIds, incidentNumber, message}, the same call
+    Turo's own "Create invoice" form makes). Re-reads the incident first (an invoice already there is never doubled, the amount may
+    never exceed Turo's own maxAmountAllowedForResolveDirectlyInvoice) and verifies afterwards. payload.dry_run runs every check and
+    posts nothing. Wrapped so a failure never stops trip/inbox reading.
   - Every 2 minutes, or within ~15 s when the iPhone Turo shortcut pings (turo_reader_note returns poke).
   - Signed out: the tab goes to Turo's sign-in page and a LAN-only noVNC view starts on :6080 so Jared can
     sign in once from any browser at home; it stops by itself once signed in.
@@ -24,7 +29,7 @@ import asyncio, base64, json, os, subprocess, sys, tempfile, time, urllib.reques
 
 import websockets
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
 PUB = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"
 CDP = "http://127.0.0.1:9334"
@@ -143,6 +148,58 @@ async def send_claims(tab):
         except Exception as e:
             log(f"claims: send {j['id']} failed: {e}")
             try: rpc("claims_send_done", {"p_token": TOKEN, "p_id": j["id"], "p_ok": False, "p_error": str(e)[:300]})
+            except Exception: pass
+
+
+# ---------------------------------------------------------------- Claims Closer v2: Turo actions (create invoice)
+CREATE_INVOICE_JS = """
+const a = %s;
+const g = await fetch('/api/v2/incidents/' + a.incident_id, {credentials:'include'});
+if (g.status === 401 || g.status === 403) throw new Error('Turo is signed out on the Pi (' + g.status + ')');
+if (!g.ok) throw new Error('incident read ' + g.status);
+const inc = await g.json();
+if (inc.invoiceDetails) return {already: true, invoice: inc.invoiceDetails};
+const max = inc.maxAmountAllowedForResolveDirectlyInvoice && inc.maxAmountAllowedForResolveDirectlyInvoice.amount;
+if (!(max > 0)) throw new Error('Turo shows no invoice maximum for this incident (' + inc.incidentStatus + ')');
+if (!(a.amount > 0) || a.amount > max) throw new Error('amount ' + a.amount + ' is not within 0 and Turo max ' + max);
+if (String(inc.incidentNumber) !== String(a.incident_number)) throw new Error('incident number mismatch ' + inc.incidentNumber);
+if (!Array.isArray(a.evidence_ids) || !a.evidence_ids.length) throw new Error('no evidence photos');
+const list = await (await fetch('/api/reservation/imagesV2?reservationId=' + inc.reservationId, {credentials:'include'})).json();
+const have = new Set(((list && list.images) || []).map(x => x.uuid));
+const ids = a.evidence_ids.filter(u => have.has(u));
+if (!ids.length) throw new Error('none of the evidence photos are on the Turo reservation');
+const body = {amount: a.amount, evidenceIds: ids, incidentNumber: String(inc.incidentNumber), message: String(a.message || '').slice(0, 500) || undefined};
+if (a.dry_run) return {dry_run: true, would_post: body, max: max, status: inc.incidentStatus};
+const r = await fetch('/api/incidents/' + a.incident_id + '/invoice/create', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+const t = await r.text();
+if (r.status === 401 || r.status === 403) throw new Error('Turo is signed out on the Pi (' + r.status + ')');
+if (!r.ok) throw new Error('create ' + r.status + ': ' + t.slice(0, 200));
+let invoice = null;
+for (let i = 0; i < 4 && !invoice; i++) {
+  await new Promise(x => setTimeout(x, 2500));
+  try { const v = await (await fetch('/api/v2/incidents/' + a.incident_id, {credentials:'include'})).json(); invoice = v.invoiceDetails || null; } catch (e) {}
+}
+return {created: true, http: r.status, verified: !!invoice, invoice: invoice, response: t.slice(0, 200)};
+"""
+
+
+async def turo_actions(tab):
+    """Claims Closer: work the queued Turo actions. Each is claimed first (claims_turo_claim) so it can never run twice."""
+    jobs = rpc("claims_turo_claim", {"p_token": TOKEN}) or []
+    for j in jobs:
+        try:
+            if j["kind"] != "create_invoice":
+                raise RuntimeError(f"the reader does not do '{j['kind']}' yet")
+            p = j["payload"] or {}
+            arg = {"incident_id": int(j["incident_id"]), "incident_number": str(p.get("incident_number") or ""),
+                   "amount": float(p["amount"]), "message": p.get("message") or "",
+                   "evidence_ids": p.get("evidence_ids") or [], "dry_run": bool(p.get("dry_run"))}
+            res = await tab.js(CREATE_INVOICE_JS % json.dumps(arg), timeout=90) or {}
+            rpc("claims_turo_done", {"p_token": TOKEN, "p_id": j["id"], "p_ok": True, "p_result": res})
+            log(f"claims: turo {j['kind']} for incident {j['incident_id']} -> {str(res)[:160]}")
+        except Exception as e:
+            log(f"claims: turo action {j['id']} failed: {e}")
+            try: rpc("claims_turo_done", {"p_token": TOKEN, "p_id": j["id"], "p_ok": False, "p_error": str(e)[:300]})
             except Exception: pass
 
 
@@ -408,6 +465,10 @@ async def main():
                         await send_claims(tab)
                     except Exception as e:
                         log(f"claims: {e}")
+                    try:
+                        await turo_actions(tab)
+                    except Exception as e:
+                        log(f"claims turo actions: {e}")
                     if time.time() - last_sync >= (60 if poke else SYNC_EVERY):
                         last_sync = time.time()
                         try:
