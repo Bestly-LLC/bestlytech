@@ -46,6 +46,9 @@ const unxml = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").repl
 const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^p\d+-/, "pNN-"); } catch { return "?"; } };
 const tagList = (xml: string) => [...new Set((xml.match(/<(?:[\w-]+:)?[\w-]+/g) ?? []).map((t) => t.replace(/^<(?:[\w-]+:)?/, "")))].slice(0, 24).join(",");
 
+/** Property names in a vCard, no values: used to see why a card yielded no phone number. */
+const props = (card: string) => [...new Set(unfold(card).split("\n").map((l) => l.slice(0, Math.max(l.indexOf(":"), 0)).toUpperCase().replace(/^ITEM\d+\./, "").split(";")[0]).filter(Boolean))].slice(0, 20).join(",");
+
 const PRINCIPAL_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
 const HOME_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:cd="urn:ietf:params:xml:ns:carddav"><d:prop><cd:addressbook-home-set/></d:prop></d:propfind>`;
 const BOOKS_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:resourcetype/></d:prop></d:propfind>`;
@@ -128,11 +131,17 @@ export async function fetchPeople(c: Creds, trace: string[] = []): Promise<{ peo
     if (r.status >= 400) { trace.push(`4 ${hostOf(r.url)} returned ${r.status}, skipped`); continue; }
     const got = blocks(r.text, "response");
     cards += got.length;
+    let withData = 0;
     for (const resp of got) {
       const data = first(resp, "address-data");
       if (!data) continue;
-      for (const p of parseCard(unxml(data))) if (!byPhone.has(p.phone)) byPhone.set(p.phone, p);
+      withData++;
+      const card = unxml(data);
+      if (withData === 1) trace.push(`4 card props: ${props(card)}`);
+      for (const p of parseCard(card)) if (!byPhone.has(p.phone)) byPhone.set(p.phone, p);
     }
+    if (!withData) trace.push(`4 no address-data in the answer; elements: ${tagList(r.text)}`);
+    else trace.push(`4 ${withData}/${got.length} response(s) carried a card`);
   }
   trace.push(`4 ${cards} card(s) -> ${byPhone.size} number(s)`);
   return { people: [...byPhone.values()], cards, books: books.length };
