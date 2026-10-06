@@ -20,8 +20,10 @@
 // Booking is idempotent: rg_calls.cal_event_id / cal_prep_event_id are saved as soon as they exist, and a second
 // book updates those same events (same Meet link) instead of creating new ones.
 //
-// SETUP (once): set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in Edge Function secrets and add
-// <SUPABASE_URL>/functions/v1/partner-google/callback to the OAuth client's authorized redirect URIs.
+// SETUP (once): set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in Edge Function secrets, and add the
+// callback to the OAuth client's authorized redirect URIs. Use https://bestly.tech/auth/google/callback (rewritten
+// to this function in vercel.json) and set GOOGLE_REDIRECT_URI to the same value, so nothing a customer sees says
+// supabase.co. Without GOOGLE_REDIRECT_URI it falls back to <SUPABASE_URL>/functions/v1/partner-google/callback.
 // With the secrets missing every action answers { configured: false } and the callback shows a plain page.
 //
 // Deterministic only: no AI / LLM calls anywhere in this function. The refresh token lives in Vault
@@ -40,7 +42,11 @@ const db = createClient(SUPABASE_URL, SB_SECRET, { auth: { persistSession: false
 const CLIENT_ID = Deno.env.get("GOOGLE_OAUTH_CLIENT_ID") ?? "";
 const CLIENT_SECRET = Deno.env.get("GOOGLE_OAUTH_CLIENT_SECRET") ?? "";
 const CONFIGURED = !!(CLIENT_ID && CLIENT_SECRET);
-const REDIRECT_URI = `${SUPABASE_URL}/functions/v1/partner-google/callback`;
+// What Google redirects back to, and what we must repeat on the token exchange -- the two have to match exactly.
+// Default is the raw Supabase URL. Set GOOGLE_REDIRECT_URI to a bestly.tech path instead (Vercel rewrites it
+// straight to this function) so the consent screen a customer sees says bestly.tech, never supabase.co.
+const REDIRECT_URI = Deno.env.get("GOOGLE_REDIRECT_URI")
+  || `${SUPABASE_URL}/functions/v1/partner-google/callback`;
 const SCOPES = "https://www.googleapis.com/auth/calendar.events openid email";
 const CAL_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 const SITE = "https://bestly.tech";
