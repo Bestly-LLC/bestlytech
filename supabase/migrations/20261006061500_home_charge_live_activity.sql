@@ -1,0 +1,27 @@
+-- Home charging Live Activity + idle-fee guard (Jared 2026-10-05). Applied by hand the same night; kept here so it can be rebuilt.
+--
+-- WHY. The charger in his building (ESSEX / THE BLAKE 01, priced by Essex Property Trust, billed through
+-- ChargePoint) charges time-of-use energy PLUS $3.00/hour once the car has been done charging for 30 minutes.
+-- Three sessions since May carried that fee without him seeing it coming -- about $15. Tesla reports power and
+-- state but never a running kWh or a cost, so there was nothing to show and nothing to warn from.
+--
+-- WHAT THIS DOES. car_charge_tick (every 2 min) keeps its own session: it integrates the car's own kW reading
+-- over time and prices each slice at the band it fell in, so kWh and dollars exist live. The moment the car
+-- stops drawing it starts the grace clock; the Pi's Live Activity turns into a countdown, pushes before the
+-- meter starts, and goes red while the fee runs. Supercharging is Tesla's own card's job: this one only ever
+-- shows on the home plug (at_home and not dc_fast).
+--
+-- RATES, read off his receipts 2026-10-05 -- change them in home_charge_settings, never in code:
+--   8 PM - 10 AM  $0.2588/kWh      10 AM - 8 PM  $0.2885/kWh
+--   $0.25 flat per session      $3.00/hour idle, after a 30-minute grace
+--
+-- The full text of what was applied lives in the Supabase migration history under these names:
+--   home_charge_sessions_and_idle_watch     tables, home_charge_rate, car_charge_tick, wall_pi_home_charge, cron
+--   car_charge_tick_fix_ambiguous           the at_home variable shadowed the column
+--   home_charge_watchdog_and_team_card      car_charge_watchdog + the Charge Watch team card
+--
+-- Pi side (/opt/bestly/wall/server.py, backups bak_homecharge_/bak_chgpri_/bak_chgset_):
+--   HOMECHG cache + _homechg() reading wall_pi_home_charge
+--   _la_charge() -- charging / done / idle_fee cards, and the two pushes
+--   "charge" added to LA_TAGS, to the wants dict, to the priority tuple AND its own la_set call.
+--   All four are needed: a card that is built but missing from the priority list or from la_set never shows.
