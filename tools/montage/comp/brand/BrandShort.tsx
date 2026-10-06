@@ -86,7 +86,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
           ) : null}
           <Rise delay={5} dur={dur}>
             <div style={{fontFamily: b.head.family, fontWeight: b.head.weight, fontSize: size, lineHeight: 1.1, letterSpacing: b.head.spacing,
-                         color: t.head || t.ink, maxWidth: 888, overflowWrap: 'break-word'}}>
+                         color: t.head || t.ink, maxWidth: 888, overflowWrap: 'break-word', textWrap: 'balance' as any}}>
               {s.line}
             </div>
           </Rise>
@@ -114,7 +114,7 @@ const EndView: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b,
              style={{height: b.end.imageHeight ?? 440, borderRadius: b.end.imageRadius ?? 0, opacity: up, transform: `translateY(${(1 - up) * 260}px)`, marginBottom: 70}} />
       ) : null}
       <Rise delay={8} dur={hold} style={{textAlign: 'center'}}>
-        <div style={{fontFamily: b.head.family, fontWeight: b.head.weight, fontSize: 112, lineHeight: 1.1, letterSpacing: b.head.spacing, color: t.head || t.ink}}>{e.title}</div>
+        <div style={{fontFamily: b.head.family, fontWeight: b.head.weight, fontSize: 112, lineHeight: 1.1, letterSpacing: b.head.spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
       </Rise>
       {e.sub ? (
         <Rise delay={14} dur={hold} style={{textAlign: 'center', marginTop: 34}}>

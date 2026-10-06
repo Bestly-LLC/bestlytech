@@ -40,7 +40,8 @@ Write 4 or 5 scenes. Each scene has:
 - "line": 2 to 9 words shown large on screen. A flat statement that ends with a period.
 - "say": 5 to 18 words the narrator reads. Plain spoken English, said once. It can repeat or extend the line.{shot_rule}
 All "say" together: 35 to 70 words. One idea, told in order, quietly. Useful to someone who never installs or buys anything.
-Do not name {name} in any scene. No statistics, prices, percentages or numerals (write any number as a word).
+Speak to the viewer ("you"); never say "we" and never describe what {name} does inside the scenes. Do not name {name} in any scene.
+In the caption's last paragraph say only what the facts above say {name} does; invent no feature, promise or result. No statistics, prices, percentages or numerals (write any number as a word).
 Write only what is true and verifiable; if unsure, say less. American English spelling.
 "caption": 25 to 70 words of prose for the post, two or three short paragraphs. {name} appears only in the LAST paragraph,
 once, answering the idea the video told. No hashtags, emoji, questions or "link in bio".

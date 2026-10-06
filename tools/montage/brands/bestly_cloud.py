@@ -31,7 +31,7 @@ BRAND = {
     "label": {"family": "BestlySans", "weight": 600},
     "themes": {"night": {"bg": "radial-gradient(circle at 92% 62%, #232b5c 0%, #151a38 30%, #0b0c18 62%, #08080c 100%)",
                          "veil": "#0b0c18", "ink": "#FFFFFF", "dim": "#9ea6bc", "accent": "#8b9bf0", "head": "#FFFFFF"}},
-    "logo": {"image": "pill.png", "height": 76, "blend": "lighten"},
+    "logo": {"image": "pill.png", "height": 92, "blend": "lighten"},
     "end": {},
 }
 ASSETS = {"fonts/serif700.woff2": f"{KIT}/serif700.woff2", "fonts/serif600.woff2": f"{KIT}/serif600.woff2",
