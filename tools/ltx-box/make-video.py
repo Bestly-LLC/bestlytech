@@ -17,6 +17,10 @@ wf = json.load(open(TPL))
 for n in wf["nodes"]:
     if n["type"] == "SaveVideo":
         n["widgets_values"][0] = prefix
+    if n["type"] == "ResolutionSelector":  # top-level node that actually drives the subgraph's width/height (links 792/793)
+        n["widgets_values"][0] = "9:16 (Portrait Widescreen)" if height > width * 1.3 else "16:9 (Widescreen)"
+        n["widgets_values"][1] = round(width * height / 1e6, 1)
+        n["widgets_values"][2] = 32
     if n.get("id") == 405:  # subgraph "Text to Video (LTX-2.5)": [prompt, enhance, duration, width, height, seed, fps, ...]
         n["widgets_values"][0] = prompt
         n["widgets_values"][2] = secs
