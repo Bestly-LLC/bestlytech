@@ -55,9 +55,39 @@ function writeManifest() {
 
 // Runs in the page before Talk loads: record every remote audio track.
 const INIT = () => {
+  // Scout never has a camera. Chrome's fake camera is a green test pattern with a
+  // spinning pie, and Talk turns it back on after reconnects. So hide every camera
+  // and strip video out of every media request: Talk then shows Scout's avatar.
+  const md = navigator.mediaDevices;
+  if (md) {
+    const gum = md.getUserMedia.bind(md);
+    md.getUserMedia = (c = {}) => {
+      if (!c.audio) return Promise.reject(new DOMException("Scout has no camera", "NotFoundError"));
+      return gum({ audio: c.audio });
+    };
+    const enumDev = md.enumerateDevices.bind(md);
+    md.enumerateDevices = async () => (await enumDev()).filter((d) => d.kind !== "videoinput");
+    if (md.getDisplayMedia) md.getDisplayMedia = () => Promise.reject(new DOMException("no screen share", "NotAllowedError"));
+  }
   const Orig = window.RTCPeerConnection;
   const seen = new Set();
   window.__ntRecs = [];
+  window.__ntPcs = [];
+  // Belt and braces: if any video ever gets sent anyway, cut it. Returns how many.
+  window.__ntKillVideo = () => {
+    let n = 0;
+    for (const pc of window.__ntPcs) {
+      if (pc.connectionState === "closed") continue;
+      for (const s of pc.getSenders()) {
+        if (s.track && s.track.kind === "video") {
+          s.track.stop();
+          s.replaceTrack(null).catch(() => {});
+          n++;
+        }
+      }
+    }
+    return n;
+  };
   const toB64 = (blob) =>
     new Promise((r) => {
       const fr = new FileReader();
@@ -81,6 +111,7 @@ const INIT = () => {
   }
   function Wrapped(...a) {
     const pc = new Orig(...a);
+    window.__ntPcs.push(pc);
     pc.addEventListener("track", (e) => record(e.track, e.streams && e.streams[0]));
     return pc;
   }
@@ -272,10 +303,18 @@ async function main() {
   process.on("SIGINT", () => stop("SIGINT"));
   process.on("SIGTERM", () => stop("SIGTERM"));
 
+  let videoKills = 0;
   let debugDumped = false;
   let namingWarned = false;
   while (!stopping) {
     try {
+      const killed = await page.evaluate(() => (window.__ntKillVideo ? window.__ntKillVideo() : 0));
+      if (killed) {
+        videoKills += killed;
+        log("camera was sending video - cut it", killed, "total", videoKills);
+        const off = page.getByRole("button", { name: /disable video|turn off camera/i });
+        if (await off.count()) await off.first().click().catch(() => {});
+      }
       const who = await page.evaluate(WHO);
       for (const [id, name] of Object.entries(who)) {
         if (tracks[id]) tracks[id].names[name] = (tracks[id].names[name] || 0) + 1;
