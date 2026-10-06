@@ -9,11 +9,16 @@
  * Looks like the wall: dark sky, planes colored by kind (bigger = flying lower), name tags, and rings plus a
  * red dot on the one plane in the name tag (the wall's airFocus, else the closest). North is up.
  * Motion is dead-reckoned from speed and heading between snapshots and eased, so planes glide instead of jumping.
+ *
+ * 2026-10-06 (Jared): the wall's Roads and Traffic layers, plus a Current location button. One tap re-centers the map on
+ * him and shows that spot's planes, traffic and weather (°F, mph); tap again to go back home. The switches only change
+ * this map (saved in this browser), never the projector. Roads and traffic are TomTom tiles through the sky-area edge
+ * function (key in Vault); planes away from home and the weather come from sky-area too.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { Maximize2, Minimize2, Plane, RotateCw, Compass } from "lucide-react";
+import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone } from "lucide-react";
 
 type Air = {
   hex: string; cs?: string | null; reg?: string | null; t?: string | null; cat?: string | null;
@@ -77,6 +82,17 @@ function toMi(lat: number, lon: number, home: [number, number]) {
   return { x: (lon - home[1]) * 69.172 * Math.cos((home[0] * Math.PI) / 180), y: (lat - home[0]) * 68.97 };
 }
 
+/** Web Mercator tile math (TomTom tiles are 256 px, the same grid as OpenStreetMap). */
+const lon2x = (lon: number, z: number) => ((lon + 180) / 360) * 2 ** z;
+const lat2y = (lat: number, z: number) => { const r = (lat * Math.PI) / 180; return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** z; };
+const x2lon = (x: number, z: number) => (x / 2 ** z) * 360 - 180;
+const y2lat = (y: number, z: number) => { const n = Math.PI - (2 * Math.PI * y) / 2 ** z; return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))); };
+type Tile = { k: string; layer: "roads" | "traffic"; z: number; x: number; y: number };
+type Here = { lat: number; lon: number; acc: number | null };
+type Cond = { place: string | null; weather: { temp_f: number; feels_f: number; wind_mph: number; wind_from: string; sky: string; is_day: boolean; rain_pct: number | null } | null };
+const LAYERS_KEY = "bestly.sky.layers";
+const FN = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sky-area`;
+
 /** Airplane silhouette pointing up, ~24 units long. */
 const PLANE = "M0-12 1.6-8.6 1.7-3.2 10-0.4 10 1.8 1.7 0.6 1.1 7.2 4.2 9.4 4.2 11 0 10 -4.2 11 -4.2 9.4 -1.1 7.2 -1.7 0.6 -10 1.8 -10 -0.4 -1.7 -3.2 -1.6 -8.6Z";
 
@@ -97,6 +113,19 @@ export default function Sky() {
   // mapUp: degrees clockwise that "up" on screen is rotated from North.
   // 0 = North up, 90 = East up, 180 = South up, 270 = West up.
   const [mapUp, setMapUp] = useState(0);
+  // Current location: null = the map is centered on home (the wall's own planes).
+  const [here, setHere] = useState<Here | null>(null);
+  const hereRef = useRef<Here | null>(null);
+  hereRef.current = here;
+  const [locating, setLocating] = useState(false);
+  const [locErr, setLocErr] = useState<string | null>(null);
+  const [cond, setCond] = useState<Cond | null>(null);
+  // Roads / Traffic: this map only, remembered in this browser. Missing = on, like the wall.
+  const [layers, setLayers] = useState<{ roads: boolean; traffic: boolean }>(() => {
+    try { return { roads: true, traffic: true, ...JSON.parse(localStorage.getItem(LAYERS_KEY) ?? "{}") }; } catch { return { roads: true, traffic: true }; }
+  });
+  useEffect(() => { try { localStorage.setItem(LAYERS_KEY, JSON.stringify(layers)); } catch { /* private mode */ } }, [layers]);
+  const radiusRef = useRef(15);
   const UP_LABELS: Record<number, string> = { 0: "N↑", 90: "E↑", 180: "S↑", 270: "W↑" };
   const cycleUp = () => setMapUp((v) => (v + 90) % 360);
   const [, setFrame] = useState(0);
@@ -118,9 +147,22 @@ export default function Sky() {
     if (busy.current || document.hidden) return;
     busy.current = true;
     try {
+      const h = hereRef.current;
+      if (h) {
+        // Away from home: planes around him, from the public feed through sky-area.
+        const { data: b, error: e } = await supabase.functions.invoke("sky-area", { body: { op: "planes", lat: h.lat, lon: h.lon, radius_mi: radiusRef.current } });
+        const bb = b as { list?: Air[]; at?: number; error?: string } | null;
+        if (hereRef.current !== h) return;
+        if (e || !bb || bb.error) { setErr(bb?.error ?? e?.message ?? "No planes feed right now."); return; }
+        setFeed({ list: bb.list ?? [], at: (bb.at ?? Date.now() / 1000) * 1000, home: [h.lat, h.lon], radius: radiusRef.current, source: "feed", focus: null, error: null, fetchedAt: Date.now() });
+        setErr(null);
+        return;
+      }
       const { data, error } = await (supabase.rpc as unknown as (fn: string) => Promise<{ data: unknown; error: { message: string } | null }>)("wall_admin_air");
       const d = data as { data?: { list?: Air[]; at?: number; home?: [number, number]; radius_mi?: number; focus?: { hex?: string; until?: number } | null } | null; age_s?: number | null; radius_mi?: number; focus?: { hex?: string; until?: number } | null } | null;
       const fresh = !error && d?.data && Array.isArray(d.data.list) && d.age_s != null && d.age_s < 45;
+      if (hereRef.current) return;
+      radiusRef.current = d?.radius_mi ?? d?.data?.radius_mi ?? radiusRef.current;
       if (fresh && d?.data) {
         const f = d.focus ?? d.data.focus ?? null;
         setFeed({
@@ -135,6 +177,7 @@ export default function Sky() {
       const radius = d?.radius_mi ?? 15;
       const { data: b, error: e2 } = await supabase.functions.invoke("wall-sky", { body: { radius_mi: radius } });
       const bb = b as { list?: Air[]; at?: number; error?: string } | null;
+      if (hereRef.current) return;
       if (e2 || !bb || bb.error) { setErr(error?.message ?? bb?.error ?? e2?.message ?? "No planes feed right now."); return; }
       setFeed({ list: bb.list ?? [], at: (bb.at ?? Date.now() / 1000) * 1000, home: HOME, radius, source: "feed", focus: null, error: null, fetchedAt: Date.now() });
       setErr(null);
@@ -143,11 +186,64 @@ export default function Sky() {
 
   useEffect(() => {
     void pull();
-    const t = window.setInterval(() => void pull(), 3000);
+    let n = 0;
+    // Home: every 3 s (the wall's own feed). Away: every 6 s (the public feed, through sky-area).
+    const t = window.setInterval(() => { n++; if (!hereRef.current || n % 2 === 0) void pull(); }, 3000);
     const vis = () => { if (!document.hidden) void pull(); };
     document.addEventListener("visibilitychange", vis);
     return () => { window.clearInterval(t); document.removeEventListener("visibilitychange", vis); };
   }, [pull]);
+
+  // Re-center: a new spot starts clean (no planes gliding in from the old center).
+  useEffect(() => {
+    disp.current.clear();
+    setPick(null);
+    setFeed(null);
+    busy.current = false;
+    void pull();
+  }, [here, pull]);
+
+  const centerLat = here?.lat ?? HOME[0];
+  const centerLon = here?.lon ?? HOME[1];
+
+  // That spot's weather and place name, refreshed every 10 minutes.
+  useEffect(() => {
+    let live = true;
+    const get = async () => {
+      const { data } = await supabase.functions.invoke("sky-area", { body: { op: "conditions", lat: centerLat, lon: centerLon } });
+      if (live && data && !(data as { error?: string }).error) setCond(data as Cond);
+    };
+    setCond(null);
+    void get();
+    const t = window.setInterval(() => void get(), 10 * 60_000);
+    return () => { live = false; window.clearInterval(t); };
+  }, [centerLat, centerLon]);
+
+  const locate = () => {
+    setLocErr(null);
+    if (here) { setHere(null); return; }
+    if (!navigator.geolocation) { setLocErr("This browser can't share your location."); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setLocating(false); setHere({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy ?? null }); },
+      (e) => {
+        setLocating(false);
+        setLocErr(e.code === 1 ? "Location is off for bestly.tech. Allow it in Settings, then tap again." : "Couldn't find you. Tap to try again.");
+      },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
+    );
+  };
+
+  // Map tiles (roads, traffic) as blob URLs: fetched with his session so the TomTom key never reaches the browser.
+  const tileUrls = useRef(new Map<string, string>());
+  const tileBusy = useRef(new Set<string>());
+  const [, setTileTick] = useState(0);
+  const [trafficBucket, setTrafficBucket] = useState(() => Math.floor(Date.now() / 120_000));
+  useEffect(() => {
+    const t = window.setInterval(() => setTrafficBucket(Math.floor(Date.now() / 120_000)), 30_000);
+    return () => window.clearInterval(t);
+  }, []);
+  useEffect(() => () => { for (const u of tileUrls.current.values()) URL.revokeObjectURL(u); tileUrls.current.clear(); }, []);
 
   // ~30 fps while visible: dead-reckon each plane from its last report, ease the drawn position toward it.
   useEffect(() => {
@@ -187,7 +283,8 @@ export default function Sky() {
   };
 
   const radius = Math.min(25, Math.max(2, feed?.radius ?? 15));
-  const home = feed?.home ?? HOME;
+  // Map center: him when Current location is on, else home.
+  const home: [number, number] = here ? [here.lat, here.lon] : (feed?.home ?? HOME);
   const now = Date.now();
   const dtFrame = Math.min(0.25, (performance.now() - lastT.current) / 1000);
   lastT.current = performance.now();
@@ -227,6 +324,61 @@ export default function Sky() {
   const u = Math.min(2.8, Math.max(1, 1000 / Math.max(1, Math.min(box.w, box.h))));
   const fs = 13 * u;
 
+  // Tiles for this view: zoom so a tile is ~256 screen px, covering the rotated square around the center.
+  const wantTiles: Tile[] = [];
+  if (layers.roads || layers.traffic) {
+    const cos = Math.cos((home[0] * Math.PI) / 180);
+    let z = Math.min(15, Math.max(8, Math.round(Math.log2((24901 * cos) / ((256 * u) / S)))));
+    for (;;) {
+      const span = radius * 1.6;
+      const dLat = span / 68.97, dLon = span / (69.172 * cos);
+      const x0 = Math.floor(lon2x(home[1] - dLon, z)), x1 = Math.floor(lon2x(home[1] + dLon, z));
+      const y0 = Math.floor(lat2y(home[0] + dLat, z)), y1 = Math.floor(lat2y(home[0] - dLat, z));
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 49 && z > 8) { z--; continue; }
+      for (const layer of ["roads", "traffic"] as const) {
+        if (!layers[layer]) continue;
+        for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++)
+          wantTiles.push({ k: `${layer}/${z}/${x}/${y}${layer === "traffic" ? "@" + trafficBucket : ""}`, layer, z, x, y });
+      }
+      break;
+    }
+  }
+  const wantKey = wantTiles.map((t) => t.k).join(",");
+  useEffect(() => {
+    let live = true;
+    const todo = wantTiles.filter((t) => !tileUrls.current.has(t.k) && !tileBusy.current.has(t.k));
+    if (!todo.length) return;
+    void (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session || !live) return;
+      const headers = { Authorization: `Bearer ${session.access_token}`, apikey: String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "") };
+      let i = 0;
+      const worker = async () => {
+        while (live && i < todo.length) {
+          const t = todo[i++];
+          tileBusy.current.add(t.k);
+          try {
+            const r = await fetch(`${FN}?op=tile&layer=${t.layer}&z=${t.z}&x=${t.x}&y=${t.y}`, { headers });
+            if (r.ok) { tileUrls.current.set(t.k, URL.createObjectURL(await r.blob())); setTileTick((n) => (n + 1) % 1e6); }
+          } catch { /* the sky still draws without this tile */ } finally { tileBusy.current.delete(t.k); }
+        }
+      };
+      await Promise.all(Array.from({ length: 6 }, worker));
+      // Keep the cache small: drop tiles from old spots and old traffic once it grows.
+      if (tileUrls.current.size > 160) {
+        const keep = new Set(wantTiles.map((t) => t.k));
+        for (const [k, url] of tileUrls.current) if (!keep.has(k)) { URL.revokeObjectURL(url); tileUrls.current.delete(k); }
+      }
+    })();
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantKey]);
+  /** Current tile, or the last traffic refresh while the new one loads (no flicker every 2 minutes). */
+  const tileUrl = (t: Tile) => tileUrls.current.get(t.k)
+    ?? (t.layer === "traffic" ? tileUrls.current.get(t.k.replace(/@\d+$/, "@" + (trafficBucket - 1))) : undefined);
+  const homeMi = toMi(HOME[0], HOME[1], home);
+  const homeShown = Math.hypot(homeMi.x, homeMi.y) <= radius * 1.04;
+
   // Name tags: the focus plane first, then nearest first; each tries four spots and skips if all collide.
   type Tag = { hex: string; x: number; y: number; w: number; h: number; text: string; sub: string | null; col: string; isF: boolean };
   const tags: Tag[] = [];
@@ -249,7 +401,11 @@ export default function Sky() {
   }
 
   const ageS = feed ? Math.max(0, Math.round((now - feed.fetchedAt) / 1000)) : null;
-  const srcText = !feed ? "Connecting…" : feed.source === "wall" ? "Live from the wall" : "Wall not sharing · public feed";
+  const srcText = !feed ? "Connecting…" : here ? "Near you · public feed" : feed.source === "wall" ? "Live from the wall" : "Wall not sharing · public feed";
+  const w = cond?.weather;
+  const weatherText = w ? [`${w.temp_f}°F`, w.sky, `Wind ${w.wind_mph}${NB}mph ${w.wind_from}`, w.rain_pct != null && w.rain_pct >= 20 ? `${w.rain_pct}%${NB}rain` : ""].filter(Boolean).join(" · ") : "";
+  // Short place name so the card stays two lines on a phone ("Santa Monica Pier", not the whole address).
+  const placeName = here ? (cond?.place?.split(",")[0]?.trim() || "you") : "home";
 
   const fa = focus?.a;
   const fi = focus?.i;
@@ -265,8 +421,10 @@ export default function Sky() {
         style={{ backgroundImage: "radial-gradient(120% 90% at 50% 45%, #101a3a 0%, #070b1f 45%, #02030a 100%)" }}>
         {/* the sky */}
         <svg viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" role="img"
-          aria-label={`Sky over home, ${inView.length} ${inView.length === 1 ? "aircraft" : "aircraft"} within ${radius} miles`}>
+          aria-label={`Sky over ${placeName}, ${inView.length} ${inView.length === 1 ? "aircraft" : "aircraft"} within ${radius} miles`}>
           <defs>
+            <clipPath id="sky-clip"><circle cx={500} cy={500} r={radius * S * 1.04} /></clipPath>
+            <radialGradient id="sky-you" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#0A84FF" stopOpacity=".45" /><stop offset="100%" stopColor="#0A84FF" stopOpacity="0" /></radialGradient>
             <radialGradient id="sky-home" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#64D2FF" stopOpacity=".35" /><stop offset="100%" stopColor="#64D2FF" stopOpacity="0" /></radialGradient>
           </defs>
           {STARS.map((s, n) => <circle key={n} cx={s.x * 1000} cy={s.y * 1000} r={s.s} fill="#fff" opacity={s.o} />)}
@@ -277,16 +435,46 @@ export default function Sky() {
             </g>
           ))}
           <g transform={`rotate(${mapUp} 500 500)`}>
+          {/* roads + traffic (TomTom), clipped to the outer ring like the wall's sky */}
+          {wantTiles.length > 0 && (
+            <g clipPath="url(#sky-clip)">
+              {wantTiles.map((t) => {
+                const url = tileUrl(t);
+                if (!url) return null;
+                const nw = toMi(y2lat(t.y, t.z), x2lon(t.x, t.z), home);
+                const se = toMi(y2lat(t.y + 1, t.z), x2lon(t.x + 1, t.z), home);
+                return <image key={t.k} href={url} x={X(nw.x)} y={Y(nw.y)} width={X(se.x) - X(nw.x) + 0.6} height={Y(se.y) - Y(nw.y) + 0.6}
+                  preserveAspectRatio="none" opacity={t.layer === "roads" ? 0.6 : 0.9} />;
+              })}
+            </g>
+          )}
           {["N", "E", "S", "W"].map((c, n) => {
             const ang = (n * Math.PI) / 2, rr = radius * S + 14 * u;
             const cx = 500 + Math.sin(ang) * rr, cy = 500 - Math.cos(ang) * rr + 5 * u;
             // counter-rotate the label so text stays readable regardless of mapUp
             return <text key={c} x={cx} y={cy} textAnchor="middle" fill="#fff" fillOpacity={c === "N" ? 0.85 : 0.45} fontSize={13 * u} fontWeight={700} letterSpacing={2} transform={`rotate(${-mapUp} ${cx} ${cy})`}>{c}</text>;
           })}
-          {/* home */}
-          <circle cx={500} cy={500} r={26 * u} fill="url(#sky-home)" />
-          <path d="M0 -12 L11 -3 L11 10 L-11 10 L-11 -3 Z" transform={`translate(500 500) scale(${Math.max(1, u * 0.75)})`} fill="#64D2FF" stroke="#02030a" strokeWidth={2} strokeLinejoin="round" />
-          <text x={500} y={500 + 22 * u} textAnchor="middle" fill="#64D2FF" fontSize={11 * u} fontWeight={700} letterSpacing={1.5} transform={`rotate(${-mapUp} 500 ${500 + 22 * u})`}>HOME</text>
+          {/* home (at the center, or where it sits from his current location) */}
+          {homeShown && (() => {
+            const hx = X(homeMi.x), hy = Y(homeMi.y);
+            return (
+              <g>
+                <circle cx={hx} cy={hy} r={26 * u} fill="url(#sky-home)" />
+                <path d="M0 -12 L11 -3 L11 10 L-11 10 L-11 -3 Z" transform={`translate(${hx} ${hy}) scale(${Math.max(1, u * 0.75)})`} fill="#64D2FF" stroke="#02030a" strokeWidth={2} strokeLinejoin="round" />
+                <text x={hx} y={hy + 22 * u} textAnchor="middle" fill="#64D2FF" fontSize={11 * u} fontWeight={700} letterSpacing={1.5} transform={`rotate(${-mapUp} ${hx} ${hy + 22 * u})`}>HOME</text>
+              </g>
+            );
+          })()}
+          {/* him, when Current location is on */}
+          {here && (
+            <g>
+              <circle cx={500} cy={500} r={30 * u} fill="url(#sky-you)">
+                <animate attributeName="r" values={`${22 * u};${34 * u};${22 * u}`} dur="2.6s" repeatCount="indefinite" />
+              </circle>
+              <circle cx={500} cy={500} r={8 * u} fill="#0A84FF" stroke="#fff" strokeWidth={2.5 * u} />
+              <text x={500} y={500 + 24 * u} textAnchor="middle" fill="#fff" fontSize={11 * u} fontWeight={700} letterSpacing={1.5} transform={`rotate(${-mapUp} 500 ${500 + 24 * u})`}>YOU</text>
+            </g>
+          )}
 
           {/* planes — all rotated to account for mapUp so aircraft face their true direction of travel */}
           {inView.map(({ a, d, i }) => {
@@ -344,13 +532,15 @@ export default function Sky() {
 
         {/* top bar */}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-4" style={{ paddingTop: full ? "max(0.75rem, env(safe-area-inset-top))" : undefined }}>
-          <div className="pointer-events-auto rounded-2xl bg-black/45 px-3.5 py-2 ring-1 ring-white/10">
-            <div className="text-[17px] font-semibold leading-tight">Sky over home</div>
-            <div className="mt-0.5 flex items-center gap-1.5 text-[13px] text-white/60" aria-live="polite">
-              <span className={cn("h-2 w-2 rounded-full", !feed ? "bg-white/40" : feed.source === "wall" ? "bg-emerald-400" : "bg-amber-400")} aria-hidden />
+          <div className="pointer-events-auto max-w-[min(60vw,420px)] rounded-2xl bg-black/45 px-3.5 py-2 ring-1 ring-white/10">
+            <div className="text-[17px] font-semibold leading-tight">Sky over {placeName}</div>
+            {weatherText && <div className="mt-0.5 text-[13px] text-white/80">{weatherText}</div>}
+            <div className="mt-0.5 text-[13px] leading-snug text-white/60" aria-live="polite">
+              <span className={cn("mr-1.5 inline-block h-2 w-2 rounded-full align-middle", !feed ? "bg-white/40" : feed.source === "wall" ? "bg-emerald-400" : "bg-amber-400")} aria-hidden />
               {srcText}{ageS != null && ageS > 8 ? ` · ${ageS}${NB}sec ago` : ""} · <span className="whitespace-nowrap">{inView.length} in {radius}{NB}mi</span>
             </div>
             {err && <div className="mt-0.5 text-[13px] text-amber-300">{err}</div>}
+            {locErr && <div className="mt-0.5 max-w-[260px] text-[13px] text-amber-300" role="alert">{locErr}</div>}
           </div>
           <div className="pointer-events-auto flex gap-2">
             <button type="button" onClick={() => { setPick(null); void pull(); }} aria-label="Refresh"
@@ -367,6 +557,23 @@ export default function Sky() {
               {full ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}
               <span className="hidden sm:inline">{full ? "Exit full screen" : "Full screen"}</span>
             </button>
+          </div>
+        </div>
+
+        {/* map controls, Apple Maps style: Current location, Roads, Traffic (this map only) */}
+        <div className="pointer-events-none absolute right-3 top-[76px] sm:right-4 sm:top-[84px]" style={{ top: full ? "calc(max(0.75rem, env(safe-area-inset-top)) + 64px)" : undefined }}>
+          <div className="pointer-events-auto flex flex-col overflow-hidden rounded-2xl bg-black/55 ring-1 ring-white/10 backdrop-blur-md">
+            {([
+              { key: "loc", label: here ? "Back to home" : locating ? "Finding you" : "Show my location", on: !!here, Icon: locating ? Loader2 : LocateFixed, act: locate },
+              { key: "roads", label: layers.roads ? "Hide roads" : "Show roads", on: layers.roads, Icon: Route, act: () => setLayers((l) => ({ ...l, roads: !l.roads })) },
+              { key: "traffic", label: layers.traffic ? "Hide traffic" : "Show traffic", on: layers.traffic, Icon: TrafficCone, act: () => setLayers((l) => ({ ...l, traffic: !l.traffic })) },
+            ]).map(({ key, label, on, Icon, act }, n) => (
+              <button key={key} type="button" onClick={act} aria-label={label} title={label} aria-pressed={on} disabled={key === "loc" && locating}
+                className={cn("grid h-11 w-11 place-items-center text-white/80 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400",
+                  n > 0 && "border-t border-white/10", on && "text-[#0A84FF]")}>
+                <Icon className={cn("h-5 w-5", key === "loc" && locating && "animate-spin")} aria-hidden />
+              </button>
+            ))}
           </div>
         </div>
 
@@ -415,6 +622,13 @@ export default function Sky() {
               <div key={k} className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ background: col }} aria-hidden />{name}</div>
             ))}
             <div className="mt-1 flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#FF453A] ring-2 ring-white/70" aria-hidden />The plane in the name tag</div>
+            {layers.traffic && (
+              <div className="mt-1 flex items-center gap-1.5">Traffic:
+                <span className="h-1.5 w-4 rounded-full bg-[#30D158]" aria-hidden />moving
+                <span className="h-1.5 w-4 rounded-full bg-[#FF9F0A]" aria-hidden />slow
+                <span className="h-1.5 w-4 rounded-full bg-[#FF453A]" aria-hidden />jammed
+              </div>
+            )}
             {feed && <div className="mt-1 text-white/45">Updated {time12(feed.fetchedAt)}</div>}
           </div>
         </div>

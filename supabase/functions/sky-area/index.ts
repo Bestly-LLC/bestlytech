@@ -120,7 +120,7 @@ async function conditions(lat: number, lon: number) {
 async function tile(layer: string, z: number, x: number, y: number) {
   const k = await key();
   const u = layer === "traffic"
-    ? `https://api.tomtom.com/traffic/map/4/tile/flow/relative0-dark/${z}/${x}/${y}.png?key=${k}&thickness=8&tileSize=256`
+    ? `https://api.tomtom.com/traffic/map/4/tile/flow/relative0-dark/${z}/${x}/${y}.png?key=${k}&tileSize=256`
     : `https://api.tomtom.com/map/1/tile/hybrid/night/${z}/${x}/${y}.png?key=${k}&tileSize=256&view=Unified&language=en-US`;
   const r = await fetch(u, { signal: AbortSignal.timeout(8000) });
   if (!r.ok) { await tileHealth(false, `${r.status} for ${layer}`); return new Response(null, { status: 502, headers: cors }); }
