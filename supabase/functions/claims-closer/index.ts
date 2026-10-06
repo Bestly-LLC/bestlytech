@@ -28,7 +28,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm, LlmUnavailable } from "../_shared/free-llm.ts";
 import { corsWith } from "../_shared/cors.ts";
-import { estimatePipeline, type Ctx } from "./estimates.ts";
+import { estimatePipeline, previewRequest, type Ctx } from "./estimates.ts";
 
 const SECRETS: string[] = (() => {
   const out: string[] = [];
@@ -322,6 +322,11 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const op = String(body.op ?? "tick");
   const settings = await loadSettings();
+  if (op === "preview_request") {
+    const { data: pc } = await db.from("claim_cases").select("*").eq("reservation_id", Number(body.reservation)).maybeSingle();
+    if (!pc) return J({ error: "no case" }, 404);
+    return J({ ok: true, ...(await previewRequest(ctx, pc, settings)) });
+  }
   if (op === "evidence_urls") {   // Claims page: signed photo links (1 hour)
     const { data } = await db.from("claim_evidence").select("id, storage_path").eq("case_id", String(body.case_id ?? ""));
     const out: Record<string, string> = {};

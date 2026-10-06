@@ -458,3 +458,13 @@ export async function estimatePipeline(ctx: Ctx, c: Row, settings: Row, notes: s
     await ctx.db.from("claim_cases").update({ next_check_at: new Date(Date.now() + 30 * 60_000).toISOString() }).eq("id", c.id);
 }
 const low = (rs: Row[]) => Math.min(...rs.map((x) => Number(x.amount)));
+
+// op preview_request: what the first email would say and who would be asked; nothing is sent or saved
+export async function previewRequest(ctx: Ctx, c: Row, settings: Row) {
+  const shops = (await rankShops(ctx, settings, !!(c.insurer?.covers_full), [])).slice(0, Number(settings.shops_per_request ?? 3));
+  const { data: ev } = await ctx.db.from("claim_evidence").select("kind").eq("case_id", c.id);
+  const n = { after: ((ev ?? []) as Row[]).filter((x) => x.kind === "after").length, before: ((ev ?? []) as Row[]).filter((x) => x.kind === "before").length };
+  const damage = await damageSentence(ctx, c);
+  return { shops: shops.map((s) => ({ name: s.name, channel: s.email ? "email" : "call", score: Math.round(shopScore(s) * 10) / 10 })),
+    subject: `Photo estimate request: ${carName(c)} bumper damage [CC-XXXXX]`, body: requestBody(shops[0] ?? { name: "Shop" }, c, damage, { after: Math.min(n.after, 8), before: Math.min(n.before, 2) }, "CC-XXXXX") };
+}
