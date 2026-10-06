@@ -218,6 +218,7 @@ def main(argv):
                   "station_lat": s.get("lat"), "station_lon": s.get("lon"),
                   "idle_since": idle_since.isoformat() if idle_since else None})
     station = s.get("device_name") or s.get("company") or "ChargePoint"
+    new_session = False
     stopped_before = str(sid) in loc.get("stopped", {})
     if stopped_before and (s.get("state") or "").lower() not in ACTIVE:
         if not dry:
@@ -228,9 +229,7 @@ def main(argv):
         patch.update({"session_started_at": start.isoformat(), "stop_tries": 0,
                       "log_kind": "watching", "log_session": str(sid),
                       "log_detail": {"station": station, "target": target, "override": st.get("target_override")}})
-        if not dry:
-            tgt = f"{target}%" + (" (your one-off target)" if st.get("target_override") else " (the car's limit)") if target else "when the car is done"
-            _notify(f"Watching your charge at {station}", f"I'll end the ChargePoint session at {tgt}.", "passive", f"cp-watch-{sid}")
+        new_session = True
 
     # Is the Tesla reading about this plug? (car parked at the station, or the station has no location)
     d = _dist_m(car.get("lat"), car.get("lon"), s.get("lat"), s.get("lon"))
@@ -250,6 +249,9 @@ def main(argv):
     if not reason:
         if not dry:
             lib.rpc("charge_stop_save", p=patch)
+            if new_session:
+                tgt = (f"{target}%" + (" (your one-off target)" if st.get("target_override") else " (the car's limit)")) if target else "when the car is done"
+                _notify(f"Watching your charge at {station}", f"I'll end the ChargePoint session at {tgt}.", "passive", f"cp-watch-{sid}")
         b = car.get("battery")
         return f"ok: watching session {sid} at {station}: car {b}% / target {target}%, {power:.1f} kW"
 
@@ -270,7 +272,8 @@ def main(argv):
                       "stopped_summary": summary, "log_kind": "stopped", "log_session": str(sid),
                       "log_detail": {"reason": reason, "battery": car.get("battery"), "kwh": kwh, "cost": cost, "station": station}})
         lib.rpc("charge_stop_save", p=patch)
-        _raise("chargepoint.stop", "resolved")
+        if tries > 1:
+            _raise("chargepoint.stop", "resolved")
         _notify(f"Ended your charge at {car.get('battery')}%",
                 f"{kwh:.1f} kWh" + (f", ${float(cost):.2f}" if cost else "") + f" at {station}. "
                 "The ChargePoint session is closed, so no idle fee. Unplug whenever.", "active", f"cp-stopped-{sid}")

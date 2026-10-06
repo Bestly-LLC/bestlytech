@@ -99,7 +99,7 @@ begin
   select to_jsonb(s) - 'station_lat' - 'station_lon' into j;
   return j || jsonb_build_object(
     'connected', exists (select 1 from vault.secrets where name = 'pi:chargepoint:token'),
-    'log', coalesce((select jsonb_agg(x order by x.at desc) from (select at, kind, detail from charge_stop_log order by at desc limit 8) x), '[]'));
+    'log', coalesce((select jsonb_agg(x order by x.at desc) from (select at, kind, detail from charge_stop_log where kind not like 'test\_%' order by at desc limit 8) x), '[]'));
 end $$;
 revoke all on function public.charge_stop_set(int, boolean, boolean) from public, anon;
 revoke all on function public.charge_stop_status() from public, anon;
