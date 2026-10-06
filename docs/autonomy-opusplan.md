@@ -63,3 +63,22 @@ turning on paid AI. Every automatic fix keeps an undo and is listed in the recap
 ## Build order
 Phase 1 first: it alone should take Needs you from ~21 cards to about 3. Then 6 (security), then 7-9, then 10-13.
 Every new job gets a team card (`team_onboard`) and a pulse, per CLAUDE.md.
+
+## Built (2026-10-06, overnight)
+| Piece | Where | Result on day one |
+|---|---|---|
+| Push gate | `notify_route` + `interrupt_class()`; off: `autonomy_settings.push_gate` | Last week's ~800 phone alerts would have been ~44 (about 6 a day). Held items: `autonomy_held` + silent bell rows |
+| Needs you gate + one card per problem | `admin_today_rows()` (old rules kept as `admin_today_rows_all()`); off: `needs_you_gate` | 21 cards → 4 (2 security, 2 client-facing) |
+| Every alert signed | trigger `admin_notifications_sign` | Title name → owned prefix → kind → Scout |
+| Auto-clear | `autonomy_sweep()` cron `autonomy-sweep` every 10 min | First run: 2 warnings closed by good news, 3 self-healed incidents resolved |
+| Security fixes itself | `security_autofix()` cron `security-autofix` hourly (Ares's "Auto-Fixer") | 9 functions locked from the public key, 49 search paths pinned, 2 confirmed public on purpose (in the API logs), 2 handed to Jared (El Dora domain in Rohit's account, Pi ports), hoku-clean.com watched until 30 days. Undo for every change in `security_autofix_log` |
+| Scout keeps going on free AI | admin-chat v33 (commit 5ad6e84, stub v46) | Out of steps → progress note → calls itself again, up to 8 rounds; a new message from Jared stops it |
+| 7 PM recap | `autonomy_recap()` via `autonomy-recap` hourly tick; `recap_hour` setting | Scout-signed, one screen, done items by employee; Sundays add the week |
+| Watchdog | `autonomy_watch()` cron `autonomy-watch` every 30 min ("Inbox Keeper") | Over 5 cards or 2 days → Scout incident; "still down after an hour" pushes once |
+| Team cards | Inbox Keeper (tool of Scout), Auto-Fixer (tool of Ares) | |
+
+Not done on purpose:
+- **Studio previews are not auto-shipped.** The open ones are 10+ days old and built on an older Studio, so shipping them would roll back newer work (the Sep 20 incident). Internal previews stay with Spark; client ones stay in Needs you.
+- **Turo "trip has not closed"** stays as designed on Oct 5 (key comes off at 2 hours anyway); it is now held, not pushed.
+- **The Improver's weekly review** is the Sunday line in the recap for now; a deeper rule-tuning loop is a follow-up.
+- `notify_route` no longer prunes `notify_ledger` (deletes needed his approval overnight); with the gate it gets a handful of rows a day. Add a prune job.
