@@ -8,6 +8,21 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Line } from "./AvaCalls";
 
 export type LiveSource = "ava" | "roofguard";
+
+/**
+ * Where a call is right now, so "ringing" and "she is actually talking to someone" never look the same.
+ * The voice platform's own words: in-progress = they answered; processing = they hung up and the transcript is
+ * still being written; done = finished. Anything earlier (our own "dialing", its "initiated") is still ringing --
+ * unless a line has already been said, which only happens once someone picks up.
+ */
+export type CallPhase = "ringing" | "connected" | "wrapping" | "ended";
+export function callPhase(status: string | null | undefined, turns = 0): CallPhase {
+  const s = (status ?? "").toLowerCase();
+  if (s === "done" || s === "failed") return "ended";
+  if (s === "processing") return "wrapping";
+  if (s === "in-progress" || s === "in_progress") return "connected";
+  return turns > 0 ? "connected" : "ringing";
+}
 export type LiveItem = {
   key: string; conversation_id: string | null; call_id: string | null; who: string; phone: string | null; status: string; elapsed: number;
   direction: "inbound" | "outbound" | "callback"; transcript: Line[]; forwarded: boolean; voice: "ava" | "jared"; isTest: boolean; contact: string | null;

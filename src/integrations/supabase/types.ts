@@ -1462,6 +1462,90 @@ export type Database = {
           },
         ]
       }
+      ava_actions: {
+        Row: {
+          call_id: string
+          created_at: string
+          id: string
+          kind: string
+          label: string
+          payload: Json
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          call_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          label: string
+          payload?: Json
+          source: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          call_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          label?: string
+          payload?: Json
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ava_brief_cache: {
+        Row: {
+          day: string
+          error: string | null
+          events: Json
+          fetched_at: string
+          ok: boolean
+        }
+        Insert: {
+          day: string
+          error?: string | null
+          events?: Json
+          fetched_at?: string
+          ok?: boolean
+        }
+        Update: {
+          day?: string
+          error?: string | null
+          events?: Json
+          fetched_at?: string
+          ok?: boolean
+        }
+        Relationships: []
+      }
+      ava_brief_log: {
+        Row: {
+          at: string
+          body: string | null
+          day: string
+          note: string | null
+          status: string
+        }
+        Insert: {
+          at?: string
+          body?: string | null
+          day: string
+          note?: string | null
+          status: string
+        }
+        Update: {
+          at?: string
+          body?: string | null
+          day?: string
+          note?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       ava_call_quality: {
         Row: {
           agent_turns: number
@@ -1513,8 +1597,75 @@ export type Database = {
         }
         Relationships: []
       }
+      ava_call_reviews: {
+        Row: {
+          call_id: string
+          call_no: number | null
+          created_at: string
+          error: string | null
+          model: string | null
+          overall: number | null
+          provider: string | null
+          rule_flags: string[]
+          scores: Json | null
+          status: string
+          tries: number
+          updated_at: string
+          went_well: string | null
+          work_on: string | null
+        }
+        Insert: {
+          call_id: string
+          call_no?: number | null
+          created_at?: string
+          error?: string | null
+          model?: string | null
+          overall?: number | null
+          provider?: string | null
+          rule_flags?: string[]
+          scores?: Json | null
+          status?: string
+          tries?: number
+          updated_at?: string
+          went_well?: string | null
+          work_on?: string | null
+        }
+        Update: {
+          call_id?: string
+          call_no?: number | null
+          created_at?: string
+          error?: string | null
+          model?: string | null
+          overall?: number | null
+          provider?: string | null
+          rule_flags?: string[]
+          scores?: Json | null
+          status?: string
+          tries?: number
+          updated_at?: string
+          went_well?: string | null
+          work_on?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ava_call_reviews_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: true
+            referencedRelation: "ava_calls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ava_calls: {
         Row: {
+          appointment_purpose: string | null
+          appt_constraints: string | null
+          appt_duration_min: number | null
+          archived_at: string | null
+          booked_slot: string | null
+          booking: Json | null
+          bridge: boolean
+          bridge_org: string | null
           call_no: number | null
           callback_number: string | null
           callback_wanted: boolean
@@ -1522,6 +1673,8 @@ export type Database = {
           connect_to_jared: boolean
           contact_id: string | null
           conversation_id: string | null
+          counterpart_business: string | null
+          counterpart_phone: string | null
           created_at: string
           deleted_at: string | null
           direction: string
@@ -1534,10 +1687,13 @@ export type Database = {
           forwarded: boolean
           forwarded_from: string | null
           id: string
+          intent: string | null
           is_spam: boolean
           llm_cost: number | null
           message: string | null
+          next_actions: string | null
           phone: string | null
+          preferred_times: string | null
           purpose: string | null
           read_at: string | null
           robocall: boolean
@@ -1554,6 +1710,14 @@ export type Database = {
           voice: string
         }
         Insert: {
+          appointment_purpose?: string | null
+          appt_constraints?: string | null
+          appt_duration_min?: number | null
+          archived_at?: string | null
+          booked_slot?: string | null
+          booking?: Json | null
+          bridge?: boolean
+          bridge_org?: string | null
           call_no?: number | null
           callback_number?: string | null
           callback_wanted?: boolean
@@ -1561,6 +1725,8 @@ export type Database = {
           connect_to_jared?: boolean
           contact_id?: string | null
           conversation_id?: string | null
+          counterpart_business?: string | null
+          counterpart_phone?: string | null
           created_at?: string
           deleted_at?: string | null
           direction: string
@@ -1573,10 +1739,13 @@ export type Database = {
           forwarded?: boolean
           forwarded_from?: string | null
           id?: string
+          intent?: string | null
           is_spam?: boolean
           llm_cost?: number | null
           message?: string | null
+          next_actions?: string | null
           phone?: string | null
+          preferred_times?: string | null
           purpose?: string | null
           read_at?: string | null
           robocall?: boolean
@@ -1593,6 +1762,14 @@ export type Database = {
           voice?: string
         }
         Update: {
+          appointment_purpose?: string | null
+          appt_constraints?: string | null
+          appt_duration_min?: number | null
+          archived_at?: string | null
+          booked_slot?: string | null
+          booking?: Json | null
+          bridge?: boolean
+          bridge_org?: string | null
           call_no?: number | null
           callback_number?: string | null
           callback_wanted?: boolean
@@ -1600,6 +1777,8 @@ export type Database = {
           connect_to_jared?: boolean
           contact_id?: string | null
           conversation_id?: string | null
+          counterpart_business?: string | null
+          counterpart_phone?: string | null
           created_at?: string
           deleted_at?: string | null
           direction?: string
@@ -1612,10 +1791,13 @@ export type Database = {
           forwarded?: boolean
           forwarded_from?: string | null
           id?: string
+          intent?: string | null
           is_spam?: boolean
           llm_cost?: number | null
           message?: string | null
+          next_actions?: string | null
           phone?: string | null
+          preferred_times?: string | null
           purpose?: string | null
           read_at?: string | null
           robocall?: boolean
@@ -1650,28 +1832,40 @@ export type Database = {
       }
       ava_contacts: {
         Row: {
+          apple_uid: string | null
           created_at: string
           id: string
+          inner_circle: boolean
           name: string
           notes: string | null
           phone: string | null
           relationship: string | null
+          source: string
+          synced_at: string | null
         }
         Insert: {
+          apple_uid?: string | null
           created_at?: string
           id?: string
+          inner_circle?: boolean
           name: string
           notes?: string | null
           phone?: string | null
           relationship?: string | null
+          source?: string
+          synced_at?: string | null
         }
         Update: {
+          apple_uid?: string | null
           created_at?: string
           id?: string
+          inner_circle?: boolean
           name?: string
           notes?: string | null
           phone?: string | null
           relationship?: string | null
+          source?: string
+          synced_at?: string | null
         }
         Relationships: []
       }
@@ -1767,7 +1961,13 @@ export type Database = {
           active: boolean
           fact: string
           id: string
+          proposed_at: string | null
+          proposed_by: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           scope: string
+          status: string
           topic: string
           updated_at: string
         }
@@ -1775,7 +1975,13 @@ export type Database = {
           active?: boolean
           fact: string
           id?: string
+          proposed_at?: string | null
+          proposed_by?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scope: string
+          status?: string
           topic: string
           updated_at?: string
         }
@@ -1783,7 +1989,13 @@ export type Database = {
           active?: boolean
           fact?: string
           id?: string
+          proposed_at?: string | null
+          proposed_by?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scope?: string
+          status?: string
           topic?: string
           updated_at?: string
         }
@@ -1816,8 +2028,55 @@ export type Database = {
         }
         Relationships: []
       }
+      ava_playbook: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          id: string
+          kind: string
+          origin: string
+          result: Json | null
+          rule: string
+          size: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          why: string | null
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          kind?: string
+          origin?: string
+          result?: Json | null
+          rule: string
+          size?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          why?: string | null
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          kind?: string
+          origin?: string
+          result?: Json | null
+          rule?: string
+          size?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          why?: string | null
+        }
+        Relationships: []
+      }
       ava_reply_incidents: {
         Row: {
+          action_at: string | null
+          action_state: string
           call_id: string
           call_no: number | null
           created_at: string
@@ -1827,11 +2086,15 @@ export type Database = {
           kind: string
           leak: boolean
           llm: string | null
+          playbook_id: string | null
           reviewed_at: string | null
+          scout_task_ref: string | null
           source: string
           subkind: string | null
         }
         Insert: {
+          action_at?: string | null
+          action_state?: string
           call_id: string
           call_no?: number | null
           created_at?: string
@@ -1841,11 +2104,15 @@ export type Database = {
           kind: string
           leak?: boolean
           llm?: string | null
+          playbook_id?: string | null
           reviewed_at?: string | null
+          scout_task_ref?: string | null
           source: string
           subkind?: string | null
         }
         Update: {
+          action_at?: string | null
+          action_state?: string
           call_id?: string
           call_no?: number | null
           created_at?: string
@@ -1855,7 +2122,9 @@ export type Database = {
           kind?: string
           leak?: boolean
           llm?: string | null
+          playbook_id?: string | null
           reviewed_at?: string | null
+          scout_task_ref?: string | null
           source?: string
           subkind?: string | null
         }
@@ -1864,6 +2133,14 @@ export type Database = {
       ava_settings: {
         Row: {
           agent_id: string | null
+          brief_enabled: boolean
+          brief_fetch_at: string | null
+          brief_minute: number
+          calendars: Json
+          coach_needs_approval: boolean
+          contacts_count: number | null
+          contacts_note: string | null
+          contacts_synced_at: string | null
           cost_phone_per_min: number
           cost_voice_per_min: number
           daily_spend_cap: number
@@ -1873,6 +2150,8 @@ export type Database = {
           from_number: string
           id: boolean
           jared_cell: string
+          jared_ivc_voice_id: string | null
+          jared_pvc_voice_id: string | null
           jared_voice_for_contacts: boolean
           jared_voice_id: string | null
           jared_voice_paused_at: string | null
@@ -1880,6 +2159,13 @@ export type Database = {
           llm: string
           llm_fallbacks: string[]
           phone_number_id: string | null
+          pvc_checked_at: string | null
+          pvc_guard_at: string | null
+          pvc_last_train_at: string | null
+          pvc_live_at: string | null
+          pvc_note: string | null
+          pvc_state: string
+          pvc_trained_seconds: number
           setup_log: Json
           telnyx_in_connection_id: string | null
           telnyx_out_connection_id: string | null
@@ -1890,6 +2176,14 @@ export type Database = {
         }
         Insert: {
           agent_id?: string | null
+          brief_enabled?: boolean
+          brief_fetch_at?: string | null
+          brief_minute?: number
+          calendars?: Json
+          coach_needs_approval?: boolean
+          contacts_count?: number | null
+          contacts_note?: string | null
+          contacts_synced_at?: string | null
           cost_phone_per_min?: number
           cost_voice_per_min?: number
           daily_spend_cap?: number
@@ -1899,6 +2193,8 @@ export type Database = {
           from_number?: string
           id?: boolean
           jared_cell?: string
+          jared_ivc_voice_id?: string | null
+          jared_pvc_voice_id?: string | null
           jared_voice_for_contacts?: boolean
           jared_voice_id?: string | null
           jared_voice_paused_at?: string | null
@@ -1906,6 +2202,13 @@ export type Database = {
           llm?: string
           llm_fallbacks?: string[]
           phone_number_id?: string | null
+          pvc_checked_at?: string | null
+          pvc_guard_at?: string | null
+          pvc_last_train_at?: string | null
+          pvc_live_at?: string | null
+          pvc_note?: string | null
+          pvc_state?: string
+          pvc_trained_seconds?: number
           setup_log?: Json
           telnyx_in_connection_id?: string | null
           telnyx_out_connection_id?: string | null
@@ -1916,6 +2219,14 @@ export type Database = {
         }
         Update: {
           agent_id?: string | null
+          brief_enabled?: boolean
+          brief_fetch_at?: string | null
+          brief_minute?: number
+          calendars?: Json
+          coach_needs_approval?: boolean
+          contacts_count?: number | null
+          contacts_note?: string | null
+          contacts_synced_at?: string | null
           cost_phone_per_min?: number
           cost_voice_per_min?: number
           daily_spend_cap?: number
@@ -1925,6 +2236,8 @@ export type Database = {
           from_number?: string
           id?: boolean
           jared_cell?: string
+          jared_ivc_voice_id?: string | null
+          jared_pvc_voice_id?: string | null
           jared_voice_for_contacts?: boolean
           jared_voice_id?: string | null
           jared_voice_paused_at?: string | null
@@ -1932,6 +2245,13 @@ export type Database = {
           llm?: string
           llm_fallbacks?: string[]
           phone_number_id?: string | null
+          pvc_checked_at?: string | null
+          pvc_guard_at?: string | null
+          pvc_last_train_at?: string | null
+          pvc_live_at?: string | null
+          pvc_note?: string | null
+          pvc_state?: string
+          pvc_trained_seconds?: number
           setup_log?: Json
           telnyx_in_connection_id?: string | null
           telnyx_out_connection_id?: string | null
@@ -1987,6 +2307,99 @@ export type Database = {
           status?: string
           updated_at?: string
           website?: string | null
+        }
+        Relationships: []
+      }
+      ava_turn_votes: {
+        Row: {
+          call_id: string | null
+          conversation_id: string | null
+          created_at: string
+          id: string
+          note: string | null
+          said: string
+          seen_by_coach: boolean
+          source: string
+          turn_index: number
+          turn_t: number | null
+          updated_at: string
+          vote: string
+        }
+        Insert: {
+          call_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          said: string
+          seen_by_coach?: boolean
+          source: string
+          turn_index: number
+          turn_t?: number | null
+          updated_at?: string
+          vote: string
+        }
+        Update: {
+          call_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          said?: string
+          seen_by_coach?: boolean
+          source?: string
+          turn_index?: number
+          turn_t?: number | null
+          updated_at?: string
+          vote?: string
+        }
+        Relationships: []
+      }
+      ava_voice_bank: {
+        Row: {
+          added_at: string
+          id: string
+          meeting: string
+          part: number
+          score: number | null
+          seconds: number
+          xi_sample_id: string | null
+        }
+        Insert: {
+          added_at?: string
+          id?: string
+          meeting: string
+          part?: number
+          score?: number | null
+          seconds: number
+          xi_sample_id?: string | null
+        }
+        Update: {
+          added_at?: string
+          id?: string
+          meeting?: string
+          part?: number
+          score?: number | null
+          seconds?: number
+          xi_sample_id?: string | null
+        }
+        Relationships: []
+      }
+      ava_voice_bank_skips: {
+        Row: {
+          at: string
+          meeting: string
+          why: string | null
+        }
+        Insert: {
+          at?: string
+          meeting: string
+          why?: string | null
+        }
+        Update: {
+          at?: string
+          meeting?: string
+          why?: string | null
         }
         Relationships: []
       }
@@ -3619,6 +4032,8 @@ export type Database = {
       }
       claim_cases: {
         Row: {
+          car: string | null
+          closed_at: string | null
           escalate_by: string | null
           estimate_amount: number | null
           estimate_due_at: string | null
@@ -3628,6 +4043,8 @@ export type Database = {
           guest_first: string | null
           guest_last: string | null
           guest_max: number | null
+          history: boolean
+          host_responsibility: number | null
           id: string
           insurer: Json
           invoices: Json
@@ -3638,15 +4055,21 @@ export type Database = {
           needs_work: boolean
           opened_at: string
           opened_from_mail: string | null
+          outcome: string | null
           path: string
+          recovered_amount: number | null
           reservation_id: number
           status: string
           trip_end: string | null
+          turo_claim_no: string | null
+          turo_incident_id: number | null
           updated_at: string
           vin: string | null
           work_reason: string | null
         }
         Insert: {
+          car?: string | null
+          closed_at?: string | null
           escalate_by?: string | null
           estimate_amount?: number | null
           estimate_due_at?: string | null
@@ -3656,6 +4079,8 @@ export type Database = {
           guest_first?: string | null
           guest_last?: string | null
           guest_max?: number | null
+          history?: boolean
+          host_responsibility?: number | null
           id?: string
           insurer?: Json
           invoices?: Json
@@ -3666,15 +4091,21 @@ export type Database = {
           needs_work?: boolean
           opened_at?: string
           opened_from_mail?: string | null
+          outcome?: string | null
           path?: string
+          recovered_amount?: number | null
           reservation_id: number
           status?: string
           trip_end?: string | null
+          turo_claim_no?: string | null
+          turo_incident_id?: number | null
           updated_at?: string
           vin?: string | null
           work_reason?: string | null
         }
         Update: {
+          car?: string | null
+          closed_at?: string | null
           escalate_by?: string | null
           estimate_amount?: number | null
           estimate_due_at?: string | null
@@ -3684,6 +4115,8 @@ export type Database = {
           guest_first?: string | null
           guest_last?: string | null
           guest_max?: number | null
+          history?: boolean
+          host_responsibility?: number | null
           id?: string
           insurer?: Json
           invoices?: Json
@@ -3694,10 +4127,14 @@ export type Database = {
           needs_work?: boolean
           opened_at?: string
           opened_from_mail?: string | null
+          outcome?: string | null
           path?: string
+          recovered_amount?: number | null
           reservation_id?: number
           status?: string
           trip_end?: string | null
+          turo_claim_no?: string | null
+          turo_incident_id?: number | null
           updated_at?: string
           vin?: string | null
           work_reason?: string | null
@@ -6275,6 +6712,54 @@ export type Database = {
         }
         Relationships: []
       }
+      edge_guard_beat: {
+        Row: {
+          at: string
+          id: number
+          ok: boolean
+          summary: string | null
+        }
+        Insert: {
+          at?: string
+          id?: number
+          ok?: boolean
+          summary?: string | null
+        }
+        Update: {
+          at?: string
+          id?: number
+          ok?: boolean
+          summary?: string | null
+        }
+        Relationships: []
+      }
+      edge_guard_log: {
+        Row: {
+          action: string
+          at: string
+          detail: string | null
+          id: number
+          site: string
+          state: string
+        }
+        Insert: {
+          action: string
+          at?: string
+          detail?: string | null
+          id?: never
+          site: string
+          state: string
+        }
+        Update: {
+          action?: string
+          at?: string
+          detail?: string | null
+          id?: never
+          site?: string
+          state?: string
+        }
+        Relationships: []
+      }
       edge_key_usage: {
         Row: {
           hits: number
@@ -8457,6 +8942,7 @@ export type Database = {
       ltx_box: {
         Row: {
           comfy_fail_streak: number | null
+          hf_token_fetched_at: string | null
           id: boolean
           instance_id: string
           last_detail: Json | null
@@ -8466,6 +8952,7 @@ export type Database = {
         }
         Insert: {
           comfy_fail_streak?: number | null
+          hf_token_fetched_at?: string | null
           id?: boolean
           instance_id: string
           last_detail?: Json | null
@@ -8475,6 +8962,7 @@ export type Database = {
         }
         Update: {
           comfy_fail_streak?: number | null
+          hf_token_fetched_at?: string | null
           id?: boolean
           instance_id?: string
           last_detail?: Json | null
@@ -9488,6 +9976,39 @@ export type Database = {
         }
         Relationships: []
       }
+      partner_google: {
+        Row: {
+          connected_at: string
+          email: string | null
+          last_error: string | null
+          last_ok_at: string | null
+          needs_reconnect: boolean
+          scope: string | null
+          user_id: string
+          vault_secret_name: string
+        }
+        Insert: {
+          connected_at?: string
+          email?: string | null
+          last_error?: string | null
+          last_ok_at?: string | null
+          needs_reconnect?: boolean
+          scope?: string | null
+          user_id: string
+          vault_secret_name: string
+        }
+        Update: {
+          connected_at?: string
+          email?: string | null
+          last_error?: string | null
+          last_ok_at?: string | null
+          needs_reconnect?: boolean
+          scope?: string | null
+          user_id?: string
+          vault_secret_name?: string
+        }
+        Relationships: []
+      }
       partner_mail: {
         Row: {
           account: string
@@ -9979,6 +10500,33 @@ export type Database = {
           id?: never
           platform?: string
           props?: Json
+        }
+        Relationships: []
+      }
+      product_watch_state: {
+        Row: {
+          checked_at: string | null
+          error: string | null
+          id: number
+          raised: number | null
+          red: number | null
+          resolved: number | null
+        }
+        Insert: {
+          checked_at?: string | null
+          error?: string | null
+          id?: number
+          raised?: number | null
+          red?: number | null
+          resolved?: number | null
+        }
+        Update: {
+          checked_at?: string | null
+          error?: string | null
+          id?: number
+          raised?: number | null
+          red?: number | null
+          resolved?: number | null
         }
         Relationships: []
       }
@@ -10618,16 +11166,97 @@ export type Database = {
         }
         Relationships: []
       }
+      rg_call_reviews: {
+        Row: {
+          call_id: string
+          call_no: number | null
+          confidence: number | null
+          created_at: string
+          error: string | null
+          impulse: Json | null
+          model: string | null
+          objections: string[]
+          overall: number | null
+          playbook_arms: Json | null
+          provider: string | null
+          rule_flags: string[]
+          scores: Json | null
+          status: string
+          tries: number
+          updated_at: string
+          went_well: string | null
+          work_on: string | null
+        }
+        Insert: {
+          call_id: string
+          call_no?: number | null
+          confidence?: number | null
+          created_at?: string
+          error?: string | null
+          impulse?: Json | null
+          model?: string | null
+          objections?: string[]
+          overall?: number | null
+          playbook_arms?: Json | null
+          provider?: string | null
+          rule_flags?: string[]
+          scores?: Json | null
+          status?: string
+          tries?: number
+          updated_at?: string
+          went_well?: string | null
+          work_on?: string | null
+        }
+        Update: {
+          call_id?: string
+          call_no?: number | null
+          confidence?: number | null
+          created_at?: string
+          error?: string | null
+          impulse?: Json | null
+          model?: string | null
+          objections?: string[]
+          overall?: number | null
+          playbook_arms?: Json | null
+          provider?: string | null
+          rule_flags?: string[]
+          scores?: Json | null
+          status?: string
+          tries?: number
+          updated_at?: string
+          went_well?: string | null
+          work_on?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rg_call_reviews_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: true
+            referencedRelation: "rg_calls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rg_calls: {
         Row: {
+          appointment_purpose: string | null
+          archived_at: string | null
           attempt: number
           batch_id: string | null
+          cal_booked_by: string | null
+          cal_error: string | null
+          cal_event_id: string | null
+          cal_meet_url: string | null
+          cal_prep_event_id: string | null
+          cal_start_at: string | null
           call_no: number | null
           callback_at: string | null
           callback_number: string | null
           callback_wanted: boolean
           caller_name: string | null
           conversation_id: string | null
+          counterpart_business: string | null
+          counterpart_phone: string | null
           deleted_at: string | null
           direction: string
           dm_name: string | null
@@ -10636,6 +11265,7 @@ export type Database = {
           duration_sec: number | null
           ended_at: string | null
           id: string
+          intent: string | null
           is_test: boolean
           kept_talking: boolean | null
           lead_id: string
@@ -10643,9 +11273,12 @@ export type Database = {
           meeting_times: string | null
           message: string | null
           moved_to_ava_at: string | null
+          next_actions: string | null
           notes: string | null
           opener_key: string | null
           outcome: string | null
+          playbook_arms: Json | null
+          preferred_times: string | null
           provider: string
           queued_at: string
           read_at: string | null
@@ -10658,14 +11291,24 @@ export type Database = {
           urgent: boolean
         }
         Insert: {
+          appointment_purpose?: string | null
+          archived_at?: string | null
           attempt?: number
           batch_id?: string | null
+          cal_booked_by?: string | null
+          cal_error?: string | null
+          cal_event_id?: string | null
+          cal_meet_url?: string | null
+          cal_prep_event_id?: string | null
+          cal_start_at?: string | null
           call_no?: number | null
           callback_at?: string | null
           callback_number?: string | null
           callback_wanted?: boolean
           caller_name?: string | null
           conversation_id?: string | null
+          counterpart_business?: string | null
+          counterpart_phone?: string | null
           deleted_at?: string | null
           direction?: string
           dm_name?: string | null
@@ -10674,6 +11317,7 @@ export type Database = {
           duration_sec?: number | null
           ended_at?: string | null
           id?: string
+          intent?: string | null
           is_test?: boolean
           kept_talking?: boolean | null
           lead_id: string
@@ -10681,9 +11325,12 @@ export type Database = {
           meeting_times?: string | null
           message?: string | null
           moved_to_ava_at?: string | null
+          next_actions?: string | null
           notes?: string | null
           opener_key?: string | null
           outcome?: string | null
+          playbook_arms?: Json | null
+          preferred_times?: string | null
           provider?: string
           queued_at?: string
           read_at?: string | null
@@ -10696,14 +11343,24 @@ export type Database = {
           urgent?: boolean
         }
         Update: {
+          appointment_purpose?: string | null
+          archived_at?: string | null
           attempt?: number
           batch_id?: string | null
+          cal_booked_by?: string | null
+          cal_error?: string | null
+          cal_event_id?: string | null
+          cal_meet_url?: string | null
+          cal_prep_event_id?: string | null
+          cal_start_at?: string | null
           call_no?: number | null
           callback_at?: string | null
           callback_number?: string | null
           callback_wanted?: boolean
           caller_name?: string | null
           conversation_id?: string | null
+          counterpart_business?: string | null
+          counterpart_phone?: string | null
           deleted_at?: string | null
           direction?: string
           dm_name?: string | null
@@ -10712,6 +11369,7 @@ export type Database = {
           duration_sec?: number | null
           ended_at?: string | null
           id?: string
+          intent?: string | null
           is_test?: boolean
           kept_talking?: boolean | null
           lead_id?: string
@@ -10719,9 +11377,12 @@ export type Database = {
           meeting_times?: string | null
           message?: string | null
           moved_to_ava_at?: string | null
+          next_actions?: string | null
           notes?: string | null
           opener_key?: string | null
           outcome?: string | null
+          playbook_arms?: Json | null
+          preferred_times?: string | null
           provider?: string
           queued_at?: string
           read_at?: string | null
@@ -11164,6 +11825,51 @@ export type Database = {
         }
         Relationships: []
       }
+      rg_playbook: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          id: string
+          kind: string
+          origin: string
+          result: Json | null
+          rule: string
+          size: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          why: string | null
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          kind?: string
+          origin?: string
+          result?: Json | null
+          rule: string
+          size?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          why?: string | null
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          kind?: string
+          origin?: string
+          result?: Json | null
+          rule?: string
+          size?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          why?: string | null
+        }
+        Relationships: []
+      }
       rg_settings: {
         Row: {
           agent_id: string | null
@@ -11172,6 +11878,7 @@ export type Database = {
           callback_number: string | null
           calling_enabled: boolean
           close_rate: number
+          coach_auto_test: boolean
           cost_number_monthly: number
           cost_phone_per_min: number
           cost_voice_per_min: number
@@ -11220,6 +11927,7 @@ export type Database = {
           callback_number?: string | null
           calling_enabled?: boolean
           close_rate?: number
+          coach_auto_test?: boolean
           cost_number_monthly?: number
           cost_phone_per_min?: number
           cost_voice_per_min?: number
@@ -11268,6 +11976,7 @@ export type Database = {
           callback_number?: string | null
           calling_enabled?: boolean
           close_rate?: number
+          coach_auto_test?: boolean
           cost_number_monthly?: number
           cost_phone_per_min?: number
           cost_voice_per_min?: number
@@ -14252,6 +14961,24 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_recut_check_log: {
+        Row: {
+          at: string
+          id: number
+          result: Json
+        }
+        Insert: {
+          at?: string
+          id?: number
+          result: Json
+        }
+        Update: {
+          at?: string
+          id?: number
+          result?: Json
+        }
+        Relationships: []
+      }
       studio_request_messages: {
         Row: {
           body: string
@@ -14343,6 +15070,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      studio_tool_manifest: {
+        Row: {
+          added_at: string
+          backup: string | null
+          bytes: number
+          current: boolean
+          kit: string
+          note: string | null
+          path: string
+          sha256: string
+          version: number
+        }
+        Insert: {
+          added_at?: string
+          backup?: string | null
+          bytes: number
+          current?: boolean
+          kit: string
+          note?: string | null
+          path: string
+          sha256: string
+          version: number
+        }
+        Update: {
+          added_at?: string
+          backup?: string | null
+          bytes?: number
+          current?: boolean
+          kit?: string
+          note?: string | null
+          path?: string
+          sha256?: string
+          version?: number
+        }
+        Relationships: []
       }
       studio_ui_contract_fetch: {
         Row: {
@@ -14810,6 +15573,125 @@ export type Database = {
             referencedColumns: ["slug"]
           },
         ]
+      }
+      team_owner_rules: {
+        Row: {
+          created_at: string
+          learned_from: string | null
+          owner_slug: string
+          pattern: string
+          strict: boolean
+        }
+        Insert: {
+          created_at?: string
+          learned_from?: string | null
+          owner_slug: string
+          pattern: string
+          strict?: boolean
+        }
+        Update: {
+          created_at?: string
+          learned_from?: string | null
+          owner_slug?: string
+          pattern?: string
+          strict?: boolean
+        }
+        Relationships: []
+      }
+      team_product_duties: {
+        Row: {
+          agent_slug: string | null
+          duty: string
+          note: string | null
+          product_slug: string
+          tools: string[]
+          updated_at: string
+        }
+        Insert: {
+          agent_slug?: string | null
+          duty: string
+          note?: string | null
+          product_slug: string
+          tools?: string[]
+          updated_at?: string
+        }
+        Update: {
+          agent_slug?: string | null
+          duty?: string
+          note?: string | null
+          product_slug?: string
+          tools?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_product_duties_product_slug_fkey"
+            columns: ["product_slug"]
+            isOneToOne: false
+            referencedRelation: "team_products"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      team_products: {
+        Row: {
+          assets: string[]
+          blurb: string | null
+          created_at: string
+          icon: string | null
+          kind: string
+          lead_slug: string
+          monitor_prefixes: string[]
+          name: string
+          platforms: string[]
+          release_source: string | null
+          slug: string
+          social_brand: string | null
+          sort: number | null
+          status: string
+          store_url: string | null
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          assets?: string[]
+          blurb?: string | null
+          created_at?: string
+          icon?: string | null
+          kind: string
+          lead_slug?: string
+          monitor_prefixes?: string[]
+          name: string
+          platforms?: string[]
+          release_source?: string | null
+          slug: string
+          social_brand?: string | null
+          sort?: number | null
+          status: string
+          store_url?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          assets?: string[]
+          blurb?: string | null
+          created_at?: string
+          icon?: string | null
+          kind?: string
+          lead_slug?: string
+          monitor_prefixes?: string[]
+          name?: string
+          platforms?: string[]
+          release_source?: string | null
+          slug?: string
+          social_brand?: string | null
+          sort?: number | null
+          status?: string
+          store_url?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: []
       }
       team_reorgs: {
         Row: {
@@ -18762,6 +19644,11 @@ export type Database = {
         Args: { p_patch: Json; p_slug: string }
         Returns: Json
       }
+      admin_archived_calls: {
+        Args: { p_limit?: number; p_source: string }
+        Returns: Json
+      }
+      admin_ava_brief_preview: { Args: never; Returns: Json }
       admin_bluesteel_sweep_ack: { Args: never; Returns: Json }
       admin_bluesteel_sweep_calibrate: {
         Args: { p_note?: string; p_side: string; p_zone: string }
@@ -18773,6 +19660,10 @@ export type Database = {
       }
       admin_bluesteel_sweep_state: { Args: never; Returns: Json }
       admin_bluesteel_sweep_test: { Args: never; Returns: number }
+      admin_call_review: {
+        Args: { p_call: string; p_source: string }
+        Returns: Json
+      }
       admin_car_events: { Args: { p_days?: number }; Returns: Json }
       admin_car_events_read: { Args: { p_kinds: string[] }; Returns: number }
       admin_car_fix: { Args: { p_action: string }; Returns: Json }
@@ -18795,6 +19686,16 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_coach: { Args: { p_source: string }; Returns: Json }
+      admin_coach_feed: {
+        Args: { p_limit?: number; p_source: string }
+        Returns: Json
+      }
+      admin_coach_manage: { Args: { p_source: string }; Returns: Json }
+      admin_coach_setting_set: {
+        Args: { p_on: boolean; p_source: string }
+        Returns: Json
+      }
       admin_delete_cloud_lead: { Args: { p_lead_id: string }; Returns: Json }
       admin_dnd: { Args: { p_minutes: number }; Returns: Json }
       admin_freshness_sweep: { Args: never; Returns: Json }
@@ -18811,6 +19712,11 @@ export type Database = {
         Args: { p_id: string; p_note?: string; p_status: string }
         Returns: undefined
       }
+      admin_incident_set: {
+        Args: { p_action: string; p_id: string; p_ref?: string }
+        Returns: Json
+      }
+      admin_incident_teach: { Args: { p_id: string }; Returns: Json }
       admin_login_email: { Args: { p_username: string }; Returns: string }
       admin_login_push: { Args: never; Returns: number }
       admin_meeting_forget: { Args: { p_name: string }; Returns: Json }
@@ -18874,9 +19780,47 @@ export type Database = {
         Returns: Json
       }
       admin_org_chart: { Args: never; Returns: Json }
+      admin_playbook_calls: {
+        Args: { p_id: string; p_source: string }
+        Returns: Json
+      }
+      admin_playbook_delete: {
+        Args: { p_id: string; p_source: string }
+        Returns: Json
+      }
+      admin_playbook_set: {
+        Args: { p_action: string; p_id: string; p_source: string }
+        Returns: undefined
+      }
+      admin_playbook_upsert: {
+        Args: {
+          p_id: string
+          p_kind: string
+          p_rule: string
+          p_size: string
+          p_source: string
+          p_why: string
+        }
+        Returns: Json
+      }
+      admin_product_duty_set: {
+        Args: {
+          p_agent: string
+          p_duty: string
+          p_product: string
+          p_tools?: string[]
+        }
+        Returns: Json
+      }
+      admin_product_set: {
+        Args: { p_patch: Json; p_slug: string }
+        Returns: Json
+      }
+      admin_products: { Args: never; Returns: Json }
       admin_reorg_execute: { Args: { p_id: string }; Returns: Json }
       admin_reorg_keep: { Args: { p_id: string }; Returns: undefined }
       admin_reorg_undo: { Args: { p_id: string }; Returns: string }
+      admin_reply_incidents: { Args: { p_source: string }; Returns: Json }
       admin_report: {
         Args: { p_detail?: string; p_ok?: boolean; p_where: string }
         Returns: Json
@@ -18937,6 +19881,26 @@ export type Database = {
         }[]
       }
       admin_today_undo: { Args: { p_key: string }; Returns: boolean }
+      admin_turn_vote: {
+        Args: {
+          p_call?: string
+          p_conversation?: string
+          p_note?: string
+          p_said: string
+          p_source: string
+          p_turn: number
+          p_vote?: string
+        }
+        Returns: Json
+      }
+      admin_turn_vote_feed: {
+        Args: { p_limit?: number; p_source: string }
+        Returns: Json
+      }
+      admin_turn_votes: {
+        Args: { p_call?: string; p_conversation?: string; p_source: string }
+        Returns: Json
+      }
       admin_watchdogs: { Args: never; Returns: Json }
       adopt_unmanaged_keys: { Args: never; Returns: Json }
       agent_beat: {
@@ -19008,6 +19972,32 @@ export type Database = {
       audience_from_text: { Args: { p: string }; Returns: string }
       auto_fix_pattern_issues: { Args: never; Returns: Json }
       ava_action: { Args: { p_action: string }; Returns: number }
+      ava_actions_make: {
+        Args: {
+          p_appt: string
+          p_business: string
+          p_call_id: string
+          p_intent: string
+          p_message: string
+          p_name: string
+          p_phone: string
+          p_source: string
+          p_times: string
+        }
+        Returns: undefined
+      }
+      ava_archive_call: {
+        Args: { p_archive?: boolean; p_id: string }
+        Returns: undefined
+      }
+      ava_brief_compose: { Args: { p_day: string }; Returns: Json }
+      ava_brief_tick: { Args: never; Returns: string }
+      ava_brief_watch: { Args: never; Returns: string }
+      ava_cal_secret_put: {
+        Args: { p_name: string; p_value: string }
+        Returns: undefined
+      }
+      ava_cal_secret_status: { Args: never; Returns: Json }
       ava_call_quality_digest: { Args: never; Returns: undefined }
       ava_call_quality_log: {
         Args: {
@@ -19033,6 +20023,8 @@ export type Database = {
           slow_n: number
         }[]
       }
+      ava_coach_notes: { Args: never; Returns: string }
+      ava_contacts_apply: { Args: { p_people: Json }; Returns: Json }
       ava_costs: { Args: never; Returns: Json }
       ava_delete_call: { Args: { p_id: string }; Returns: undefined }
       ava_digits10: { Args: { p: string }; Returns: string }
@@ -19049,6 +20041,34 @@ export type Database = {
         Args: { p_call_id: string; p_call_no: number; p_transcript: Json }
         Returns: undefined
       }
+      ava_incident_rule: {
+        Args: { p_kind: string; p_leak: boolean; p_subkind: string }
+        Returns: string
+      }
+      ava_incident_sync: { Args: never; Returns: number }
+      ava_incident_teach_do: { Args: { p_id: string }; Returns: Json }
+      ava_knowledge_partner_list: {
+        Args: never
+        Returns: {
+          fact: string
+          id: string
+          proposed_at: string
+          review_note: string
+          status: string
+          topic: string
+        }[]
+      }
+      ava_knowledge_pending_count: { Args: never; Returns: number }
+      ava_knowledge_propose: {
+        Args: { p_fact: string; p_id?: string; p_topic: string }
+        Returns: string
+      }
+      ava_knowledge_resolve_if_clear: { Args: never; Returns: undefined }
+      ava_knowledge_review: {
+        Args: { p_approve: boolean; p_id: string; p_note?: string }
+        Returns: undefined
+      }
+      ava_knowledge_withdraw: { Args: { p_id: string }; Returns: undefined }
       ava_leak_log: {
         Args: {
           p_call_id: string
@@ -19059,6 +20079,20 @@ export type Database = {
         }
         Returns: boolean
       }
+      ava_light: {
+        Args: {
+          p_checked: string
+          p_detail: string
+          p_items?: Json
+          p_key: string
+          p_label: string
+          p_state: string
+          p_word?: string
+        }
+        Returns: Json
+      }
+      ava_lights_clock: { Args: { p_ts: string }; Returns: string }
+      ava_lights_when: { Args: { p_ts: string }; Returns: string }
       ava_long_call_check: {
         Args: {
           p_call_id: string
@@ -19101,6 +20135,11 @@ export type Database = {
       ava_spend: { Args: { p_source: string }; Returns: Json }
       ava_spend_calc: { Args: { p_source: string }; Returns: Json }
       ava_spend_gate: { Args: { p_source: string }; Returns: Json }
+      ava_status_lights: { Args: { p_source: string }; Returns: Json }
+      ava_turn_votes_attach: {
+        Args: { p_call: string; p_conversation: string; p_source: string }
+        Returns: undefined
+      }
       ava_voice_say_take: {
         Args: { p_cap?: number; p_source: string }
         Returns: Json
@@ -19474,6 +20513,17 @@ export type Database = {
         Args: { p_body: string; p_subject: string }
         Returns: number
       }
+      claims_send_claim: { Args: { p_token: string }; Returns: Json }
+      claims_send_done: {
+        Args: {
+          p_error?: string
+          p_id: string
+          p_ok: boolean
+          p_token: string
+          p_verified?: boolean
+        }
+        Returns: undefined
+      }
       claims_sender_set: { Args: { p_on: boolean }; Returns: Json }
       claims_tick: { Args: never; Returns: Json }
       cleanup_activation_rate_limits: { Args: never; Returns: undefined }
@@ -19642,6 +20692,40 @@ export type Database = {
         Returns: undefined
       }
       clips_watch: { Args: never; Returns: undefined }
+      coach_backfill_list: {
+        Args: {
+          p_include_deleted?: boolean
+          p_limit?: number
+          p_source: string
+        }
+        Returns: Json
+      }
+      coach_next: {
+        Args: { p_limit?: number; p_source: string }
+        Returns: Json
+      }
+      coach_propose: {
+        Args: { p_rules: Json; p_source: string }
+        Returns: Json
+      }
+      coach_save: {
+        Args: {
+          p_call: string
+          p_error?: string
+          p_model: string
+          p_provider: string
+          p_review: Json
+          p_source: string
+        }
+        Returns: undefined
+      }
+      coach_transcript: { Args: { t: Json }; Returns: string }
+      coach_turn_votes: {
+        Args: { p_call: string; p_source: string }
+        Returns: Json
+      }
+      coach_watch: { Args: never; Returns: Json }
+      coach_week: { Args: { p_source: string }; Returns: Json }
       crm_set_stage: {
         Args: { p_key: string; p_stage: string }
         Returns: string
@@ -19739,6 +20823,21 @@ export type Database = {
       driver_name_score: {
         Args: { turo: string; typed: string }
         Returns: number
+      }
+      edge_guard_beat_t: {
+        Args: { p_ok?: boolean; p_summary?: string; p_token: string }
+        Returns: undefined
+      }
+      edge_guard_note_t: {
+        Args: {
+          p_action: string
+          p_alert?: Json
+          p_detail?: string
+          p_site: string
+          p_state: string
+          p_token: string
+        }
+        Returns: Json
       }
       edge_key_ok: { Args: { p_key: string; p_name: string }; Returns: boolean }
       emergency_battery_check: { Args: never; Returns: string }
@@ -20650,6 +21749,24 @@ export type Database = {
       partner_connector_create: { Args: { p_label?: string }; Returns: Json }
       partner_connector_list: { Args: never; Returns: Json }
       partner_connector_revoke: { Args: { p_id: string }; Returns: boolean }
+      partner_google_status: {
+        Args: never
+        Returns: {
+          connected: boolean
+          email: string
+          last_ok_at: string
+          needs_reconnect: boolean
+        }[]
+      }
+      partner_google_vault_delete: {
+        Args: { p_name: string }
+        Returns: undefined
+      }
+      partner_google_vault_get: { Args: { p_name: string }; Returns: string }
+      partner_google_vault_put: {
+        Args: { p_name: string; p_secret: string }
+        Returns: undefined
+      }
       partner_mail_known: {
         Args: { p_ids: string[]; p_key: string; p_roster: string }
         Returns: string[]
@@ -20718,6 +21835,7 @@ export type Database = {
       pi_spark_session: { Args: never; Returns: string }
       pi_spark_session_end: { Args: { p_token: string }; Returns: boolean }
       platform_specs: { Args: never; Returns: Json }
+      playbook_guard: { Args: { p_rule: string }; Returns: string }
       post_audience_guess: { Args: { p_item: string }; Returns: string }
       post_is_crisis: { Args: { p_item: string }; Returns: boolean }
       post_offers_support: { Args: { p_text: string }; Returns: boolean }
@@ -20742,6 +21860,16 @@ export type Database = {
       posting_pause_tick: { Args: never; Returns: Json }
       posting_paused: { Args: { p_brand?: string }; Returns: Json }
       process_user_reports: { Args: never; Returns: Json }
+      product_channel: { Args: { c: string }; Returns: string }
+      product_clip: { Args: { n: number; t: string }; Returns: string }
+      product_n: {
+        Args: { many?: string; n: number; one: string }
+        Returns: string
+      }
+      product_status: { Args: never; Returns: Json }
+      product_watch: { Args: never; Returns: Json }
+      product_watch_safe: { Args: never; Returns: Json }
+      product_when: { Args: { p_ts: string }; Returns: string }
       public_catalogue: {
         Args: never
         Returns: {
@@ -20866,6 +21994,10 @@ export type Database = {
       reset_failed_domains_cron: { Args: never; Returns: Json }
       reset_render_attempts: { Args: { p_domain: string }; Returns: number }
       rg_apply_pace: { Args: never; Returns: Json }
+      rg_archive_call: {
+        Args: { p_archive?: boolean; p_id: string }
+        Returns: undefined
+      }
       rg_assign_openers: { Args: { p_n: number }; Returns: string[] }
       rg_ava_calls: {
         Args: never
@@ -20996,6 +22128,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      rg_coach_notes: { Args: never; Returns: Json }
       rg_costs: { Args: never; Returns: Json }
       rg_daily_report: { Args: never; Returns: Json }
       rg_deal_add: {
@@ -21134,6 +22267,7 @@ export type Database = {
         Args: { p_reason: string; p_target?: number; p_trigger: string }
         Returns: string
       }
+      rg_playbook_decide: { Args: never; Returns: Json }
       rg_record_call: {
         Args: {
           p_callback_at?: string
@@ -21907,6 +23041,10 @@ export type Database = {
         Returns: boolean
       }
       studio_mail_next_uid: { Args: never; Returns: number }
+      studio_mail_visible: {
+        Args: { p_slug: string; p_staff: string }
+        Returns: boolean
+      }
       studio_mail_watch: { Args: never; Returns: Json }
       studio_mark_posted: {
         Args: {
@@ -22114,6 +23252,7 @@ export type Database = {
         }
         Returns: Json
       }
+      studio_recut_check: { Args: never; Returns: Json }
       studio_recut_handoff: {
         Args: { p_items?: string[]; p_slug?: string; p_token: string }
         Returns: Json
@@ -22310,6 +23449,7 @@ export type Database = {
         Args: { p_client: string; p_token: string }
         Returns: Json
       }
+      studio_tool_sign: { Args: { p_path: string }; Returns: number }
       studio_touch_session: { Args: { p_token: string }; Returns: undefined }
       studio_trail: {
         Args: { p_id: string; p_kind: string; p_token: string }
@@ -22447,6 +23587,7 @@ export type Database = {
       team_role_apply: { Args: { p: Json }; Returns: number }
       team_roster_scan: { Args: { p_quiet?: boolean }; Returns: Json }
       team_roster_scan_safe: { Args: never; Returns: Json }
+      team_roster_selfheal: { Args: never; Returns: Json }
       team_union_info: { Args: { p_cause: string }; Returns: Json }
       team_watch: { Args: never; Returns: Json }
       team_watch_ping: { Args: { p_token?: string }; Returns: Json }
@@ -22623,6 +23764,7 @@ export type Database = {
       todo_owner_norm: { Args: { p_owner: string }; Returns: string }
       todo_owner_watchdog: { Args: never; Returns: Json }
       todo_set_owner: { Args: { p_id: string; p_owner: string }; Returns: Json }
+      tomtom_key_put_once: { Args: { p_key: string }; Returns: string }
       trip_car_wash: { Args: { p_token: string }; Returns: Json }
       trip_car_wash_nav: { Args: { p_token: string }; Returns: Json }
       trip_changes_sync: { Args: never; Returns: Json }
@@ -22958,7 +24100,12 @@ export type Database = {
         Returns: Json
       }
       wall_pi_feeds: { Args: { p_token: string }; Returns: Json }
+      wall_pi_handoff: { Args: { p_token: string }; Returns: Json }
       wall_pi_icloud: { Args: { p_token: string }; Returns: Json }
+      wall_pi_key_resend: {
+        Args: { p_reservation: number; p_token: string }
+        Returns: Json
+      }
       wall_pi_mail_label: {
         Args: { p_error?: string; p_rows: Json; p_token: string }
         Returns: Json

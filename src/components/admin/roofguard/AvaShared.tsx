@@ -355,7 +355,7 @@ export function MessageSheet({ item, onClose, onDeleted }: { item: Msg | null; o
             <PhoneCall className="h-4 w-4" aria-hidden />Call again</button>
         )}
         <CallReview source={item.source === "ava" ? "ava" : "roofguard"} callId={item.id} />
-        <div><h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Transcript</h4><LiveTranscript lines={item.transcript} them={item.name} inline /></div>
+        <div><h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Transcript</h4><LiveTranscript lines={item.transcript} them={item.name} inline source={item.source === "ava" ? "ava" : "roofguard"} callId={item.id} /></div>
         <ArchiveCallButton source={item.source === "ava" ? "ava" : "roofguard"} callId={item.id} onChanged={onDeleted} />
         <DeleteCallButton rpc={item.source === "ava" ? "ava_delete_call" : "rg_delete_call"} callId={item.id} onDeleted={onDeleted} />
       </div>

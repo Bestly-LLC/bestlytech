@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, Copy, Delete, Grid3x3, History, Loader2, Phone, PhoneIncoming, RotateCcw } from "lucide-react";
-import { LiveTranscript, Recording, type Line } from "./AvaCalls";
+import { LiveTranscript, Recording, type Line, PhasePill } from "./AvaCalls";
 import { AvaOrb, AVA_GLOW } from "./AvaOrb";
 import { BridgeTag, ForwardedTag, SpendChip, YourVoiceTag } from "./AvaShared";
 import { AvaStatusLights } from "./AvaStatusLights";
@@ -489,13 +489,17 @@ function InCall({ call, onNew, onDone, onRedial, redialBusy, redialErr }: { call
         <div className="mt-1 text-[26px] font-semibold text-white">{call.who}</div>
         {(call.voice === "jared" || call.forwarded || call.bridgeOrg != null) && <div className="mt-1 flex flex-wrap justify-center gap-2">
           {call.forwarded && <ForwardedTag />}{call.bridgeOrg != null && <BridgeTag org={call.bridgeOrg} />}{call.voice === "jared" && <YourVoiceTag />}</div>}
-        <div className={cn("mt-1 inline-flex items-center gap-2 text-[15px]", ended ? "text-white/60" : "text-[#FFA270]")}>
-          {!ended && <span className="h-2 w-2 rounded-full bg-[#FFA270] motion-safe:animate-pulse" aria-hidden />}
-          <span>{label}</span><span className="font-mono tabular-nums text-white">{clock(secs)}</span>
+        <div className="mt-1 inline-flex items-center gap-2 text-[15px]">
+          {st ? <PhasePill status={st.status} turns={st.transcript?.length ?? 0} />
+              : <span className={cn("inline-flex items-center gap-2", miss > 20 ? "text-white/60" : "text-[#FFA270]")}>
+                  {miss <= 20 && <span className="h-2 w-2 rounded-full bg-[#FFA270] motion-safe:animate-pulse" aria-hidden />}{label}</span>}
+          <span className="font-mono tabular-nums text-white">{clock(secs)}</span>
         </div>
       </div>
       <div className="mt-4 flex min-h-0 flex-1 flex-col">
-        <LiveTranscript lines={st?.transcript ?? []} live={!ended} them={call.who} className="min-h-0 flex-1 rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/10" />
+        <LiveTranscript lines={st?.transcript ?? []} live={!ended} them={call.who}
+          source={call.fn === "roofguard-caller" ? "roofguard" : "ava"} callId={call.id ?? null} conversationId={call.conversationId ?? null}
+          className="min-h-0 flex-1 rounded-2xl bg-white/[0.03] p-4 ring-1 ring-white/10" />
       </div>
       {ended && call.id && <div className="mt-3 shrink-0"><Recording callId={call.id} fn={call.fn} /></div>}
       {redialErr && <p role="alert" className="mt-3 shrink-0 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">{redialErr}</p>}

@@ -18,11 +18,12 @@ import { AvaOrb } from "./AvaOrb";
 import { cn } from "@/lib/utils";
 import {
   AlarmClock, AlertTriangle, Download, Share, Ban, Calendar, CheckCircle2, ChevronRight, CircleDashed, Clock, FlaskConical, GraduationCap, Headphones, Loader2,
-  Mail, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, Play, ShieldAlert, Trash2, UserRound, Voicemail, Wrench, XCircle,
+  Mail, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, Play, ShieldAlert, ThumbsDown, ThumbsUp, Trash2, UserRound, Voicemail, Wrench, XCircle,
 } from "lucide-react";
 import { DirIcon, FollowupsList, KnowledgeList, MessageSheet, MessagesList, rgIncomingToMsg, type Msg, type RgIncoming } from "./AvaShared";
 import { askScout } from "../scoutBus";
 import { ScrollSheet } from "./AvaSheet";
+import { callPhase, type CallPhase, type LiveSource } from "./AvaLive";
 import { toast } from "sonner";
 
 // ---------- types ----------
@@ -88,13 +89,84 @@ const outcomeStage = (o: string | null): Stage => ({ booked: "booked", callback_
   wrong_number: "bad_number", no_answer: "no_answer" } as Record<string, Stage>)[o ?? ""] ?? "other";
 
 // ---------- shared pieces ----------
+/** Ringing, connected, wrapping up -- as a pill you cannot miss, because "is she actually talking to someone"
+ *  is the first thing you want to know when you glance at a live call. */
+const PHASES: Record<CallPhase, { text: string; cls: string; dot: string }> = {
+  ringing:   { text: "Ringing",     cls: "bg-amber-400/15 text-amber-200",     dot: "bg-amber-300 motion-safe:animate-pulse" },
+  connected: { text: "Connected",   cls: "bg-emerald-400/15 text-emerald-200", dot: "bg-emerald-300 motion-safe:animate-pulse" },
+  wrapping:  { text: "Wrapping up", cls: "bg-sky-400/15 text-sky-200",         dot: "bg-sky-300" },
+  ended:     { text: "Ended",       cls: "bg-white/10 text-white/70",          dot: "bg-white/40" },
+};
+export function PhasePill({ status, turns }: { status: string | null | undefined; turns?: number }) {
+  const p = PHASES[callPhase(status, turns ?? 0)];
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider", p.cls)}>
+      <span className={cn("h-2 w-2 rounded-full", p.dot)} aria-hidden />{p.text}
+    </span>
+  );
+}
+
+/** Thumbs on one of Ava's lines. Jared's judgment on an exact sentence is worth more than anything the Coach
+ *  infers on its own, so it is stored against the line and read back into her next review.
+ *  Works mid-call: a live call has no row yet, so the vote is keyed by the voice platform's conversation id. */
+type Votes = Record<string, { vote: "up" | "down"; note: string | null }>;
+function TurnVote({ source, callId, conversationId, turn, said, votes, setVotes }:
+  { source: LiveSource; callId?: string | null; conversationId?: string | null; turn: number; said: string;
+    votes: Votes; setVotes: (v: Votes) => void }) {
+  const [busy, setBusy] = useState(false);
+  const mine = votes[String(turn)]?.vote ?? null;
+  const cast = async (v: "up" | "down") => {
+    const next = mine === v ? null : v;
+    setBusy(true);
+    const before = votes;
+    const after = { ...votes };
+    if (next) after[String(turn)] = { vote: next, note: after[String(turn)]?.note ?? null };
+    else delete after[String(turn)];
+    setVotes(after);
+    const { error } = await supabase.rpc("admin_turn_vote", {
+      p_source: source, p_turn: turn, p_said: said, p_vote: next,
+      p_call: callId ?? null, p_conversation: conversationId ?? null,
+    });
+    setBusy(false);
+    if (error) { setVotes(before); toast.error(error.message); }
+    else if (next === "down") toast.success("Noted. The Coach gets this with her next review.");
+  };
+  const btn = (v: "up" | "down", Icon: typeof ThumbsUp, label: string, on: string) => (
+    <button type="button" disabled={busy} aria-pressed={mine === v} aria-label={label} title={label}
+      onClick={() => void cast(v)}
+      className={cn("grid h-11 w-11 place-items-center rounded-lg transition-colors disabled:opacity-50",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-300",
+        mine === v ? on : "text-white/35 hover:bg-white/10 hover:text-white/80")}>
+      <Icon className="h-4 w-4" aria-hidden />
+    </button>
+  );
+  return (
+    <div className="-mb-1 -ml-1 mt-0.5 flex items-center">
+      {btn("up", ThumbsUp, "Good line", "bg-emerald-400/15 text-emerald-300")}
+      {btn("down", ThumbsDown, "Bad line, tell the Coach", "bg-rose-400/15 text-rose-300")}
+    </div>
+  );
+}
+
 /** Who said what, newest at the bottom; stays pinned while new lines arrive unless the reader scrolls up.
  *  `inline`: no scroller of its own (inside a sheet whose body already scrolls, a second scroller would swallow touch drags).
- *  Otherwise it scrolls at the height its className gives it, and only blocks scroll chaining while it truly overflows. */
-export function LiveTranscript({ lines, live, className, them = "Them", inline }: { lines: Line[]; live?: boolean; className?: string; them?: string; inline?: boolean }) {
+ *  Otherwise it scrolls at the height its className gives it, and only blocks scroll chaining while it truly overflows.
+ *  Pass `source` plus a call id or conversation id to put thumbs on Ava's lines. */
+export function LiveTranscript({ lines, live, className, them = "Them", inline, source, callId, conversationId }:
+  { lines: Line[]; live?: boolean; className?: string; them?: string; inline?: boolean;
+    source?: LiveSource; callId?: string | null; conversationId?: string | null }) {
   const box = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const last = lines[lines.length - 1]?.text;
+  const votable = !!source && !!(callId || conversationId);
+  const [votes, setVotes] = useState<Votes>({});
+  useEffect(() => {
+    if (!votable) return;
+    let alive = true;
+    void supabase.rpc("admin_turn_votes", { p_source: source, p_call: callId ?? null, p_conversation: conversationId ?? null })
+      .then(({ data, error }) => { if (alive && !error && data) setVotes(data as Votes); });
+    return () => { alive = false; };
+  }, [votable, source, callId, conversationId]);
   useEffect(() => {
     const el = box.current; if (!el || inline) return;
     el.dataset.scrollable = el.scrollHeight > el.clientHeight + 1 ? "true" : "false";
@@ -103,7 +175,7 @@ export function LiveTranscript({ lines, live, className, them = "Them", inline }
   return (
     <div ref={box} onScroll={inline ? undefined : (e) => { const el = e.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }}
       className={cn("space-y-2", !inline && "overflow-y-auto data-[scrollable=true]:overscroll-contain", className)} aria-live={live ? "polite" : undefined}>
-      {lines.length === 0 && <p className="text-sm text-white/45">{live ? "Ringing…" : "No transcript."}</p>}
+      {lines.length === 0 && <p className="text-sm text-white/45">{live ? "Ringing, nobody has said anything yet." : "No transcript."}</p>}
       {lines.map((l, i) => {
         const ava = l.role === "agent";
         return (
@@ -112,6 +184,8 @@ export function LiveTranscript({ lines, live, className, them = "Them", inline }
               ava ? "rounded-bl-md bg-white/[0.07] text-white" : "rounded-br-md bg-sky-500/20 text-sky-50")}>
               <div className="mb-0.5 text-[11px] font-medium text-white/45">{ava ? "Ava" : them}<span className="tabular-nums"> · {mmss(l.t)}</span></div>
               {l.text}
+              {ava && votable && <TurnVote source={source} callId={callId} conversationId={conversationId}
+                turn={i} said={l.text} votes={votes} setVotes={setVotes} />}
             </div>
           </div>
         );
@@ -592,7 +666,6 @@ function LiveBanner({ call }: { call: LiveCall }) {
   useEffect(() => { const t = setInterval(() => force((n) => n + 1), 1000); return () => clearInterval(t); }, []);
   const secs = base.elapsed + Math.round((Date.now() - base.at) / 1000);
   const incoming = call.direction === "inbound";
-  const label = call.status === "in-progress" || call.status === "processing" ? "On the call" : call.status === "done" ? "Wrapping up" : incoming ? "Answering" : "Ringing";
   return (
     <section aria-label={`Live call with ${call.company}`} className="overflow-hidden rounded-3xl bg-emerald-500/[0.06] ring-1 ring-emerald-500/30">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 pt-4">
@@ -605,11 +678,13 @@ function LiveBanner({ call }: { call: LiveCall }) {
         {call.contact && <span className="text-sm text-white/60">{call.contact}</span>}
         {call.is_test && <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[11px] text-violet-300"><FlaskConical className="h-3 w-3" aria-hidden />Test</span>}
         <span className="ml-auto flex items-center gap-2 text-sm text-white/60">
-          {label}<span className="whitespace-nowrap font-mono text-[15px] tabular-nums text-white">{mmss(secs)}</span>
+          <PhasePill status={call.status} turns={call.transcript.length} />
+          <span className="whitespace-nowrap font-mono text-[15px] tabular-nums text-white">{mmss(secs)}</span>
         </span>
       </header>
       <div className="px-5 pb-1 pt-0.5 text-xs text-white/45">{fmtPhone(call.to_number)}</div>
-      <LiveTranscript lines={call.transcript} live className="max-h-[320px] px-5 pb-5 pt-3" />
+      <LiveTranscript lines={call.transcript} live source="roofguard" callId={call.call_id || null} conversationId={call.conversation_id ?? null}
+        className="max-h-[320px] px-5 pb-5 pt-3" />
     </section>
   );
 }
@@ -808,7 +883,7 @@ function CallSheet({ row, nos, focusId, onClose, onDeleted }: { row: BoardRow | 
               <CallReview source="roofguard" callId={c.call_id} />
               <div>
                 <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/55">Transcript</h4>
-                <LiveTranscript lines={c.transcript ?? []} inline />
+                <LiveTranscript lines={c.transcript ?? []} inline source="roofguard" callId={c.call_id} />
               </div>
               <ArchiveCallButton source="roofguard" callId={c.call_id} onChanged={onDeleted} />
               <DeleteCallButton rpc="rg_delete_call" callId={c.call_id} onDeleted={onDeleted} />
