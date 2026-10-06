@@ -38,7 +38,8 @@ def main():
     dst = OM / "remotion-composer" / "projects" / f"bestly-{brand}"
     if dst.exists():
         shutil.rmtree(dst)
-    shutil.copytree(COMPS / brand, dst)
+    src = COMPS / (comp.get("comp_dir") or brand)      # a brand may share a composition folder (comp_dir "brand")
+    shutil.copytree(src, dst)
     exclude = OM / ".git" / "info" / "exclude"
     line = "remotion-composer/projects/bestly-*\n"
     if line not in (exclude.read_text() if exclude.exists() else ""):
@@ -53,7 +54,7 @@ def main():
             "composition_id": comp["composition_id"],
             "props_path": str(job_dir / "props.json"),
             "public_dir": str(job_dir / "public"),
-            "art_direction": (COMPS / brand / "ART_DIRECTION.md").read_text() if (COMPS / brand / "ART_DIRECTION.md").exists() else None,
+            "art_direction": (src / "ART_DIRECTION.md").read_text() if (src / "ART_DIRECTION.md").exists() else None,
             "crf": 20,
             "concurrency": 3,
         },

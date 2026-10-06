@@ -208,10 +208,15 @@ def check(out, total):
 
 
 def brand_for(slug):
-    if slug == "hoku":
-        from brands import hoku
-        return hoku
-    raise RuntimeError(f"no Montage brand style for '{slug}' yet (phase 3 adds IP, Cookie Yeti, Centering YOU)")
+    """brands/<slug with - as _>.py, only when montage_brand_policy says montage_ok for that client (default: refuse)."""
+    pol = (lib.get("montage_brand_policy", f"select=montage_ok,note&client_slug=eq.{slug}") or [None])[0]
+    if not pol or not pol.get("montage_ok"):
+        raise RuntimeError(f"Montage does not make videos for '{slug}': {(pol or {}).get('note') or 'no policy row for this client'}")
+    import importlib
+    try:
+        return importlib.import_module("brands." + slug.replace("-", "_"))
+    except ModuleNotFoundError as e:
+        raise RuntimeError(f"no Montage brand style for '{slug}' yet ({e})")
 
 
 def process(job):
@@ -253,10 +258,12 @@ def process(job):
     props = {"theme": script["theme"],
              "scenes": [{**{k: s[k] for k in ("kicker", "line", "start", "end")}, **({"clip": clips[i]} if i in clips else {})}
                         for i, s in enumerate(script["scenes"])],
-             "end": {k: script["end"][k] for k in ("title", "cta", "start", "end")},
+             "end": {k: v for k, v in script["end"].items() if k != "say"},
              "audio": {"narration": "narration.wav", "music": "pad.wav", "musicVolume": 0.1}}
+    if getattr(brand, "BRAND", None):        # shared composition (comp/brand): palettes, fonts, logo, closing art ride in the props
+        props["brand"] = brand.BRAND
     json.dump(props, open(f"{jd}/props.json", "w"))
-    json.dump({"composition_id": brand.COMPOSITION,
+    json.dump({"composition_id": brand.COMPOSITION, "comp_dir": getattr(brand, "COMP_DIR", None),
                "script_text": " ".join(s["say"] for s in script["scenes"]) + " " + script["end"]["say"]},
               open(f"{jd}/comp.json", "w"))
     report(jid, stage="rendering", script=script, note=f"{total:.1f}s long, {len(clips)} b-roll clip(s); rendering in OpenMontage")
@@ -290,7 +297,7 @@ def process(job):
                        "render_s": render_s, "length_s": round(total, 1), "openmontage": "9327439"},
         "note": ((f"Re-cut with the note: \"{(job.get('revise_note') or '')[:300]}\". " if job.get("parent_job_id") else "")
                  + f"Montage made this from the brief: \"{job['brief'][:300]}\". Script by free AI ({script['provider']}), "
-                 f"passed HOKU's claim rules and fact check (editor {script['score']:g}/10). Voice: Piper. "
+                 f"passed {getattr(brand, 'NAME', 'HOKU')}'s claim rules and fact check (editor {script['score']:g}/10). Voice: Piper. "
                  + (f"{len(clips)} b-roll clip(s) from the LTX box. " if clips else "")
                  + f"Rendered on the Pi in {render_s}s with OpenMontage.")})
     return f"filed #{r.get('code')} '{script['title']}' ({total:.0f}s video, rendered in {render_s}s)"
