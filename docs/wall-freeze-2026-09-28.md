@@ -257,3 +257,18 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
 - **Stream bitrate.** In `agent.mjs` the bitrate pins went up to min 12, start 16, max 24 Mbps (backup `agent.mjs.bak_br_*`). Checked afterward at 59 fps with VideoToolbox.
 - **Known.** `fitVisible` does not find a rectangle with the new `air` quad: the screen's bottom corners fall past the box's vanishing line. So `AF` covers the whole box and the 25 mi radius spans the box width, not just the visible part.
 - **Mac disk.** On Oct 5 the Mac's data volume hit 100% (115 MB free) and screenshots failed. The iCloud Drive cache (`~/Library/Caches/CloudKit/com.apple.bird`, about 25 GB) was growing by about 0.4 GB a minute. Cleared Homebrew and esphome caches, which gave about 3 GB. Jared needs to decide on iCloud Drive (turn on Optimize Mac Storage, or pause what's syncing).
+
+## Oct 5, 5:10 PM: roads redesigned ("spaghetti" at 25 mi and zoomed in)
+
+- **Why it looked bad.**
+  - Traffic was TomTom *raster* tiles (z10 for the basin, z12 at home) stretched onto the warped sky. That gave thick, blurry red/green doubled lines on every road, free flow included.
+  - Every primary road plus the dense home grid drew at every zoom. At 25 mi the grid collapsed into a blob.
+- **Traffic is vector now.**
+  - `server.py` `traffic_loop` pulls TomTom *vector* flow tiles (`/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.pbf`, same 16 tiles and same quota) and decodes them with `mvt.py` (no dependencies; repo copy in `scripts/wall/mvt.py`).
+  - It publishes only slowed or closed stretches to `cache/traffic/flow.json`, served at `/traffic/flow.json`. Each segment carries `l` = relative speed, `c` = 0 freeway / 1 arterial / 2 local, `x` = closure, `p` = flat lat,lon list.
+  - The wall draws them as crisp lines on the same projection as the roads, in Apple colors: heavy (`l` < .42) `#FF453A`, slow (`l` < .70) `#FF9F0A`.
+  - Free flow is not colored (Apple Maps style). Arterials only show heavy stretches longer than about 1/8 mi; locals only at 6 mi or less; closures only on freeways.
+- **Base roads thin out by zoom.** The `roads.json` v2 bake (`scripts/wall/roads-bake.py`) splits classes into `fwy`, `link`, `art`, `sec` and `dense`.
+  - `geoRoads` fades each class by radius: freeways always (.5 alpha); arterials up to 18 mi; secondary up to 15 mi, drawn together with arterials so streets don't break into dashes where their class changes; ramps up to 11 mi; local grid up to 6 mi.
+  - Backups: `.bak_roadsv2*`, `roads.json.bak_v1_*`, `server.py.bak_trafvec_*`.
+- **Checked** at 10 mi and 25 mi during rush hour: clean street grid, red only on real jams. Jared had switched Roads and Traffic off at 4:53 PM; they're back on.

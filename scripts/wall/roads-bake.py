@@ -19,6 +19,7 @@ DENSE_MI = 2.2                       # dense bucket is clipped to this radius (s
 DENSE_BOX = (0.035, 0.042)           # lat/lon degrees, >= DENSE_MI so the clip decides the edge
 FREEWAY_BOX = (0.36, 0.43)           # ±25 mi: freeways for the widest strip view
 ARTERIAL_BOX = (0.10, 0.14)          # ±7 mi: primaries; beyond that only freeways read at zoom
+SECONDARY_BOX = (0.06, 0.075)        # ±4 mi: secondary/tertiary for the mid zooms (v2)
 MIN_STEP_M = 12                      # drop vertices closer than this to the last kept one
 ENDPOINTS = ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter")
 
@@ -107,20 +108,24 @@ def main():
     ap.add_argument("-o", "--out", default="/tmp/wall-roads.json")
     a = ap.parse_args()
     dense = fetch("dense", box(*DENSE_BOX), DENSE_RE, clip_mi=DENSE_MI)
-    fwy = fetch("freeways", box(*FREEWAY_BOX), "motorway|motorway_link|trunk|trunk_link")
+    fwy = fetch("freeways", box(*FREEWAY_BOX), "motorway|trunk")
+    link = fetch("ramps", box(*ARTERIAL_BOX), "motorway_link|trunk_link")
     art = fetch("arterials", box(*ARTERIAL_BOX), "primary|primary_link")
+    sec = fetch("secondary", box(*SECONDARY_BOX), "secondary|tertiary")
     out = {
-        "v": 1,
+        "v": 2,
         "home": list(HOME),
         "gen": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime()),
         "dense_mi": DENSE_MI,
         "credit": "(c) OpenStreetMap contributors, ODbL",
         "dense": dense,
-        "major": fwy + art,
+        "major": fwy + link + art,   # v1 readers
+        # v2: one bucket per road class so the wall can thin the map by zoom (Oct 5: "spaghetti" at 25 mi)
+        "fwy": fwy, "link": link, "art": art, "sec": sec,
     }
     with open(a.out, "w") as f:
         json.dump(out, f, separators=(",", ":"))
-    n = len(dense) + len(fwy) + len(art)
+    n = len(dense) + len(fwy) + len(link) + len(art) + len(sec)
     print(f"wrote {a.out}: {n} lines, {len(out['major'])} major / {len(dense)} dense, "
           f"{len(open(a.out,'rb').read())//1024} KiB", file=sys.stderr)
 
