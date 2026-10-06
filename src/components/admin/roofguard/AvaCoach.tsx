@@ -18,6 +18,7 @@ import { AlertTriangle, ArrowDownRight, ArrowUpRight, Check, CheckCircle2, Chevr
 import { CollapsibleSection } from "./CollapsibleSection";
 import { PlaybookManager, StatusPill } from "./CoachPlaybook";
 import { CoachReviews } from "./CoachReviews";
+import { CoachNotes } from "./CoachNotes";
 import { onCoachChanged, onOpenCoach, openCoach } from "./coachBus";
 import {
   APRICOT, FLAG, OBJECTION, STEPS, Score, fmt, plural, ring, rpc, weekLabel, whenDay12,
@@ -195,6 +196,7 @@ export function CoachPanel({ source, admin, variant = "full", data }: { source: 
       <PlaybookManager source={source} rules={m?.playbook ?? []} loading={!m} reload={reload} />
       {!m && err && <p role="alert" className="text-sm text-red-200">Could not load the rules: {err}</p>}
       <CoachReviews source={source} pending={c.pending} onReviewed={() => void reload()} />
+      <CoachNotes source={source} />
       <Objections c={c} />
     </div>
   );
