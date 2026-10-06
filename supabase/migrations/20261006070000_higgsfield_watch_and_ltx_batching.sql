@@ -1,0 +1,14 @@
+-- Record of what was applied 2026-10-05 (pieces via execute_sql).
+-- 1. Higgsfield end-of-plan watchdog (Jared cancelled Higgsfield Plus; remind him before it ends so credits get used on
+--    InventoryProof / Cookie Yeti / Bestly Cloud b-roll via Spark). Plan end estimated from the billing cycle (credits
+--    granted on the 3rd at 01:48 UTC): 2026-11-03 01:48 UTC = Sun Nov 2, 6:48 PM PT. Credits only update when a Claude
+--    chat checks Higgsfield (no API key; connector only).
+--    Tables: higgsfield_burn (single row), higgsfield_clips (log), higgsfield_reminders (sent thresholds).
+--    higgsfield_watch(): bell + Scout alert signed Spark at 14 d, 7 d, 3 d, 1 d, 6 h left, and a final "ended" note.
+--    Cron higgsfield-watch hourly at :15; owned by Spark (pulse.also).
+-- 2. Studio house brand bestly-cloud (social_brand 'bestlycloud', no social_brand_settings row = no auto-posting).
+-- 3. LTX wake rule: ltx_waiting() wakes a sleeping box only for a batch (ltx_box.batch_min = 3 clips), an urgent clip
+--    (ltx_rush(code)), or a clip that has waited batch_wait_min (20). Awake box keeps the real count.
+--    ltx_request() says when the box will wake. ltx_watch_jobs() allows batch_wait_min + 20 before calling a job stuck.
+--    ltx_box.idle_stop_min set to 3 (box script still has 10 hard-coded until the next box edit).
+select 1;
