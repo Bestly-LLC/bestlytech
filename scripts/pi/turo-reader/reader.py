@@ -10,17 +10,21 @@ Why this shape (2026-10-03, docs/pi-move-opusplan-2026-10-03.md):
   - 1.1.0 (2026-10-05): sends ONLY the Claims Closer messages Jared approved at /admin/claims
     (claims_send_claim -> POST /api/v2/message/send in the Turo thread -> confirm in the feed -> claims_send_done).
     Approving pokes this reader, so a message goes out within ~15 s. Nothing else is ever sent from here.
+  - 1.2.0 (2026-10-06): Claims Closer v2 evidence sync. Every 10 minutes (and on a poke) for each open claim with a Turo incident:
+    claims summary + incident (next action, deadline, invoice max), the damage report (guest answers + Jared's report) and the
+    before/after photos (downloaded inside this signed-in Chromium, AVIF -> JPEG with ffmpeg, pushed to claims-evidence; a known
+    photo uuid is never fetched again). Every Claims call is wrapped so a failure can never stop trip or inbox reading.
   - Every 2 minutes, or within ~15 s when the iPhone Turo shortcut pings (turo_reader_note returns poke).
   - Signed out: the tab goes to Turo's sign-in page and a LAN-only noVNC view starts on :6080 so Jared can
     sign in once from any browser at home; it stops by itself once signed in.
 Self-healing: systemd restarts this (and Chromium with it); 30 failed loops in a row -> exit; turo_reader_watchdog
 (pg_cron, 5 min) tells Scout when it's stale or signed out, and the Mac mini sync takes over while it's stale.
 """
-import asyncio, json, os, subprocess, sys, time, urllib.request, urllib.error
+import asyncio, base64, json, os, subprocess, sys, tempfile, time, urllib.request, urllib.error
 
 import websockets
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
 PUB = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"
 CDP = "http://127.0.0.1:9334"
@@ -28,6 +32,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOKEN = open(os.path.join(HERE, ".token")).read().strip()
 FULL_EVERY = 120
 TICK = 15
+SYNC_EVERY = 600
+PHOTO_W, PHOTO_H = 2000, 1500
 TRIPS_URL = "https://turo.com/us/en/trips"
 LOGIN_URL = "https://turo.com/us/en/login"
 
@@ -137,6 +143,193 @@ async def send_claims(tab):
             except Exception: pass
 
 
+# ---------------------------------------------------------------- Claims Closer v2: evidence sync (read-only in Turo)
+SYNC_JS = """
+const ids = %s;
+const out = {summary: null, cases: {}};
+const s = await fetch('/api/claims/host/2907746', {credentials:'include'});
+if (s.status === 401 || s.status === 403) return {signed_out: s.status};
+if (s.ok) { const j = await s.json(); out.summary = j.claimsSummary || (j.claims && j.claims.claimsSummary) || null; }
+for (const c of ids) {
+  const r = {};
+  try { const i = await fetch('/api/v2/incidents/' + c.incident_id, {credentials:'include'}); r.incident = i.ok ? await i.json() : {error: i.status}; } catch (e) { r.incident = {error: String(e)}; }
+  await new Promise(x => setTimeout(x, 600));
+  try { const f = await fetch('/api/claims/static/fnol/context?reservationId=' + c.reservation_id, {credentials:'include'}); r.fnol = f.ok ? await f.json() : {error: f.status}; } catch (e) { r.fnol = {error: String(e)}; }
+  await new Promise(x => setTimeout(x, 600));
+  r.photos = {};
+  for (const t of ['BEFORE_DAMAGE', 'AFTER_DAMAGE']) {
+    try { const p = await fetch('/api/claims/fnol/photos?photoType=' + t + '&reservationId=' + c.reservation_id, {credentials:'include'}); r.photos[t] = p.ok ? ((await p.json()).images || []) : []; } catch (e) { r.photos[t] = []; }
+    await new Promise(x => setTimeout(x, 500));
+  }
+  out.cases[c.case_id] = r;
+}
+return out;
+"""
+
+
+def money(o):
+    try:
+        return float(o["amount"]) if o and o.get("amount") is not None else None
+    except Exception:
+        return None
+
+
+def parse_fnol(ctx):
+    """Turo's damage-report context -> {guest: {submitted, answers}, host: {...}} (plain text only)."""
+    out = {"guest": {"answers": {}}, "host": {"answers": {}}}
+    try:
+        secs = ctx["flows"][0]["screens"][0]["sections"]
+    except Exception:
+        return None
+    who = None
+    for sec in secs:
+        t = sec.get("sectionType")
+        title = sec.get("title")
+        cl = sec.get("contentList") or []
+        if t == "HEADER":
+            tl = (title or "").lower()
+            who = "guest" if "response" in tl else "host" if "submitted by" in tl else None
+            foot = next((c.get("footer") for c in cl if c.get("footer")), None)
+            if who and foot:
+                out[who]["submitted"] = foot
+            continue
+        if who and t == "PLAIN_TEXT" and title:
+            txt = " | ".join(str(c.get("descriptionText")) for c in cl if c.get("descriptionText") and c.get("descriptionText") != "-")
+            if txt:
+                out[who]["answers"][title] = txt[:1200]
+        if who == "guest" and t == "PHOTO_DISPLAY":
+            out["guest"]["photos"] = " | ".join(str(c.get("descriptionText")) for c in cl if c.get("descriptionText"))[:200] or None
+    return out
+
+
+class ImgTab:
+    """A throwaway tab that loads Turo photos as <img> (Turo 303-redirects them to a signed URL that fetch() cannot follow).
+    The final image bytes are read with Network.getResponseBody; the tab is always closed."""
+    def __init__(self):
+        self.ws = None; self.id = None; self.n = 0; self.ev = []
+
+    async def open(self):
+        t = json.load(urllib.request.urlopen(urllib.request.Request(f"{CDP}/json/new?https://turo.com/robots.txt", method="PUT"), timeout=10))
+        self.id = t["id"]
+        self.ws = await websockets.connect(t["webSocketDebuggerUrl"], max_size=None, open_timeout=10)
+        await asyncio.sleep(3)
+        await self.call("Network.enable")
+
+    async def call(self, method, params=None):
+        self.n += 1; my = self.n
+        await self.ws.send(json.dumps({"id": my, "method": method, "params": params or {}}))
+        while True:
+            m = json.loads(await asyncio.wait_for(self.ws.recv(), timeout=30))
+            if "id" not in m:
+                self.ev.append(m); continue
+            if m["id"] == my:
+                if "error" in m: raise RuntimeError(str(m["error"])[:200])
+                return m.get("result") or {}
+
+    async def photo(self, uuid):
+        """-> raw image bytes (AVIF/HEIC/JPEG) or None"""
+        self.ev.clear()
+        url = f"https://turo.com/api/reservation/imageV2/thumbnail?uuid={uuid}&width={PHOTO_W}&height={PHOTO_H}"
+        await self.call("Runtime.evaluate", {"expression": "window.__i = new Image(); window.__i.src = %s; 1" % json.dumps(url)})
+        end = time.time() + 25
+        got = {}
+        while time.time() < end:
+            try:
+                self.ev.append(json.loads(await asyncio.wait_for(self.ws.recv(), timeout=1)))
+            except asyncio.TimeoutError:
+                pass
+            for e in self.ev:
+                m = e.get("method")
+                if m == "Network.responseReceived" and "images.turo.com" in e["params"]["response"]["url"]:
+                    got[e["params"]["requestId"]] = e["params"]["response"]["status"]
+                if m == "Network.loadingFinished" and e["params"]["requestId"] in got and got[e["params"]["requestId"]] == 200:
+                    r = await self.call("Network.getResponseBody", {"requestId": e["params"]["requestId"]})
+                    return base64.b64decode(r["body"]) if r.get("base64Encoded") else r["body"].encode("latin1")
+            self.ev.clear()
+        return None
+
+    async def close(self):
+        try:
+            if self.ws: await self.ws.close()
+        except Exception:
+            pass
+        try:
+            if self.id: urllib.request.urlopen(f"{CDP}/json/close/{self.id}", timeout=10)
+        except Exception:
+            pass
+
+
+def to_jpeg(raw):
+    """AVIF/HEIC/PNG/JPEG bytes -> (jpeg bytes, width, height) via ffmpeg + Pillow"""
+    from PIL import Image
+    with tempfile.TemporaryDirectory() as d:
+        src, dst = os.path.join(d, "in.bin"), os.path.join(d, "out.jpg")
+        open(src, "wb").write(raw)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-q:v", "3", dst], check=True, timeout=60)
+        data = open(dst, "rb").read()
+        w, h = Image.open(dst).size
+        return data, w, h
+
+
+async def sync_claims(tab):
+    """Claims Closer evidence sync. Read-only in Turo; failures here are logged and never raised."""
+    cases = rpc("claims_sync_list", {"p_token": TOKEN}) or []
+    if not cases:
+        return
+    r = await tab.js(SYNC_JS % json.dumps(cases), timeout=180) or {}
+    if r.get("signed_out"):
+        log("claims sync: Turo signed out"); return
+    summary = {str(x.get("id")): x for x in (r.get("summary") or []) if isinstance(x, dict)}
+    img = None
+    new_photos = 0
+    try:
+        for c in cases:
+            d = (r.get("cases") or {}).get(c["case_id"]) or {}
+            inc = d.get("incident") or {}
+            sm = summary.get(str(c["incident_id"])) or {}
+            if inc.get("error") and not sm:
+                log(f"claims sync {c['reservation_id']}: incident read failed {inc.get('error')}"); continue
+            fn = parse_fnol(d.get("fnol") or {}) or {}
+            data = {
+                "status": sm.get("claimStatus") or inc.get("incidentStatus"),
+                "next_action": sm.get("dashboardStatus"),
+                "deadline": inc.get("responseEligibilityEndDate") or sm.get("hostResponseEligibilityEndDateForGuestReportedDamage"),
+                "invoice_max": money(inc.get("maxAmountAllowedForResolveDirectlyInvoice")),
+                "host_deductible": money(inc.get("hostDeductible")),
+                "guest_max": money(inc.get("guestOutOfPocketMax")),
+                "invoice": inc.get("invoiceDetails"),
+                "guest_response": fn.get("guest") if (fn.get("guest") or {}).get("answers") else None,
+                "damage_report": fn.get("host") if (fn.get("host") or {}).get("answers") else None,
+            }
+            rpc("claims_sync_put", {"p_token": TOKEN, "p_case": c["case_id"], "p_data": data})
+            known = set(c.get("known") or [])
+            for ptype, kind in (("BEFORE_DAMAGE", "before"), ("AFTER_DAMAGE", "after")):
+                for p in (d.get("photos") or {}).get(ptype, []):
+                    u = p.get("uuid") or p.get("imageId")
+                    if not u or u in known:
+                        continue
+                    try:
+                        if img is None:
+                            img = ImgTab(); await img.open()
+                        raw = await img.photo(u)
+                        if not raw:
+                            log(f"claims photo {u}: no bytes"); continue
+                        jpg, w, h = to_jpeg(raw)
+                        taken = ((p.get("takenAtTime") or {}).get("epochMillis"))
+                        post(f"{SB}/functions/v1/claims-evidence", {"op": "put", "case_id": c["case_id"], "uuid": u, "kind": kind,
+                             "step": p.get("step"), "description": p.get("description"),
+                             "taken_at": (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(taken / 1000)) if taken else None),
+                             "width": w, "height": h, "jpeg_b64": base64.b64encode(jpg).decode()}, {"x-tesla-worker": TOKEN}, timeout=90)
+                        known.add(u); new_photos += 1
+                        await asyncio.sleep(1.5)
+                    except Exception as e:
+                        log(f"claims photo {u}: {e}")
+        log(f"claims sync: {len(cases)} case(s), {new_photos} new photo(s)")
+    finally:
+        if img is not None:
+            await img.close()
+
+
 class NoVNC:
     """LAN-only sign-in view (noVNC -> wayvnc on 127.0.0.1:5911). Only runs while Turo is signed out."""
     def __init__(self):
@@ -168,6 +361,7 @@ async def main():
         sys.exit(1)
     log(f"turo-reader {VERSION} up")
     last_full = 0.0
+    last_sync = 0.0
     last_reload = time.time()
     fails = 0
     signed_out = False
@@ -211,6 +405,12 @@ async def main():
                         await send_claims(tab)
                     except Exception as e:
                         log(f"claims: {e}")
+                    if time.time() - last_sync >= (60 if poke else SYNC_EVERY):
+                        last_sync = time.time()
+                        try:
+                            await sync_claims(tab)
+                        except Exception as e:
+                            log(f"claims sync: {e}")
             fails = 0
         except Exception as e:
             fails += 1
