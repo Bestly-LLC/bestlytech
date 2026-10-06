@@ -9,9 +9,14 @@
 //   op run     admin button: same as tick.
 //   op preview {reservation, kind, extra?} write a draft, save and send nothing (testing).
 //
-// Hard rules (the reason this exists without a human in the loop for drafting):
-//   - Nothing reaches a guest without Jared's yes. This function only writes claim_drafts rows (status pending).
-//     Approved rows go out through the Link Sender (turo_sender_claim, claims-only mode).
+// v2 (2026-10-06, docs/claims-closer-v2-opusplan.md): FULLY HANDS-OFF per Jared. Guest messages, shop estimate requests and the
+// Turo invoice go out on their own (settings.autonomy = 'full'; 'guest_approval' brings back the old tap-to-send). Only booking the
+// repair waits for Jared. The estimate pipeline lives in claims-estimates.ts (shops, Resend email with Jared's Bestly signature,
+// reply parsing, Ava calls, choosing, the Turo invoice queue).
+//
+// Hard rules (the reason this can run without a human in the loop):
+//   - Guest drafts pass reviewGuard + moneyGuard first. In 'full' they are inserted already approved and the Pi reader sends them
+//     (claims_send_claim); in 'guest_approval' they wait pending for Jared as in v1.
 //   - Reviews: may say Jared will leave an honest review of how the trip and car were handled; never ties the review
 //     to payment, insurance or the claim (Turo can treat that as leverage and it hurts the claim). Enforced by
 //     reviewGuard() after the model writes, not just by the prompt.
@@ -23,6 +28,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm, LlmUnavailable } from "../_shared/free-llm.ts";
 import { corsWith } from "../_shared/cors.ts";
+import { estimatePipeline, type Ctx } from "./estimates.ts";
 
 const SECRETS: string[] = (() => {
   const out: string[] = [];
@@ -50,6 +56,15 @@ async function authorized(req: Request) {
 
 const fmt = (iso?: string | null) => iso ? new Date(iso).toLocaleString("en-US", { timeZone: TZ, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : null;
 const money = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
+
+const ctx: Ctx = { db, llm, LlmUnavailable, notify: (t, b, d, s) => notify(t, b, d, s), event: (c, k, t, d) => event(c, k, t, d), fmt, money,
+  supabaseUrl: Deno.env.get("SUPABASE_URL")!, serviceKey: SECRET };
+async function loadSettings() {
+  const { data } = await db.from("claims_settings").select("*").eq("id", true).maybeSingle();
+  return (data ?? { autonomy: "full", max_shop_miles: 15, shops_per_request: 3 }) as Record<string, any>;
+}
+// verify snippet the Pi reader looks for in the Turo thread after sending (same rule as claims_draft_decide)
+const snippetOf = (t: string) => (/^[A-Za-z0-9 ,.]{8,40}/.exec(t.replace(/\s+/g, " ")) ?? [""])[0].slice(0, 40);
 
 // "October 06 at 11:55 AM" (Turo's wording, Los Angeles time) -> epoch ms, this year (next year if that is far past).
 const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
@@ -108,7 +123,7 @@ Never mention AI, drafts, automation or that someone else is writing. Never ask 
 Reply ONLY with JSON: {"message": "<the message>", "reason": "<one line for Jared: why this message now>"}`;
 
 async function draft(kind: string, c: Case, trip: any, thread: Msg[], extra: string): Promise<{ message: string; reason: string } | null> {
-  const allowed = [Number(c.guest_max ?? 500), ...(c.estimate_amount ? [Number(c.estimate_amount)] : []),
+  const allowed = [Number(c.guest_max ?? 500), ...(c.invoice_max ? [Number(c.invoice_max)] : []), ...(c.estimate_amount ? [Number(c.estimate_amount)] : []),
     ...((c.invoices ?? []) as any[]).map((i) => Number(i.amount)).filter((n) => !Number.isNaN(n))];
   const caseData = {
     guest_first_name: c.guest_first, reservation: c.reservation_id,
@@ -124,7 +139,7 @@ async function draft(kind: string, c: Case, trip: any, thread: Msg[], extra: str
     follow_up: "The guest has not replied. Write a polite, short follow-up that asks for their auto insurance details (insurer name + policy number) so it can go through insurance. If insurance was already asked, gently restate it and mention the alternative of paying through the Turo app.",
     insurance_ask: "Ask the guest whether they have personal auto insurance and, if so, for their insurer's name and policy number so Jared can run the repair through it.",
     reply: "Reply to the guest's latest message. Answer what they said using only the CASE facts, then move toward the goal (insurance details, or paying through the Turo app). If they share insurance details, thank them and say Jared will open the claim with the estimate. If they dispute fault, stay calm: the pre-trip photos show the corner was undamaged at handoff and the damage was found at check-in.",
-    estimate: "Share the body shop estimate amount with the guest and ask how they want to handle it: through their auto insurance (preferred, send insurer + policy number), or by paying their Turo plan's maximum through the Turo app invoice.",
+    estimate: "Tell the guest the body shop estimate total, that an invoice for the guest plan's maximum is now in the Turo app with the estimate attached (that is the most Turo lets Jared invoice and it will not cover the whole repair), and that the way to get the full repair covered is their personal auto insurance: ask for the insurer's name and policy number. Never say the guest owes more than the plan maximum out of pocket.",
   }[kind] ?? "Write the next helpful message toward the goal.";
   const user = `CASE: ${JSON.stringify(caseData)}\n\nCONVERSATION (oldest first):\n${convo || "(none)"}\n\nTASK: ${task}${extra ? `\nNOTE: ${extra}` : ""}`;
 
@@ -164,7 +179,13 @@ async function event(c: Case, kind: string, title: string, detail: unknown = nul
   await db.from("claim_events").insert({ case_id: c.id, reservation_id: c.reservation_id, kind, title, detail });
 }
 
-async function work(c: Case, daily: boolean): Promise<string> {
+// the Turo invoice is posted (or Turo already shows one) before the guest is told about it
+async function invoiceDone(c: Case): Promise<boolean> {
+  const { data } = await db.from("claim_turo_actions").select("id").eq("case_id", c.id).eq("kind", "create_invoice").eq("status", "done").limit(1);
+  return (data ?? []).length > 0 || (c.invoices ?? []).some((i: any) => i.amount) || !!(c.turo_invoice && Object.keys(c.turo_invoice).length);
+}
+
+async function work(c: Case, daily: boolean, settings: Record<string, any>): Promise<string> {
   const [{ data: trip }, { data: inbox }, { data: drafts }] = await Promise.all([
     db.from("turo_trips").select("*").eq("reservation_id", c.reservation_id).maybeSingle(),
     db.from("turo_inbox").select("message_id, sent_at, role, author, body").eq("reservation_id", c.reservation_id).order("sent_at", { ascending: true }).limit(60),
@@ -172,17 +193,35 @@ async function work(c: Case, daily: boolean): Promise<string> {
   ]);
   const thread = (inbox ?? []) as Msg[];
   const all = (drafts ?? []) as Draft[];
+  // hands-off: a draft written before autonomy was switched on (or while the guards were unsure) goes out now if it passes them
+  if (settings.autonomy === "full") {
+    for (const d of all.filter((x) => x.status === "pending" && x.kind !== "escalation")) {
+      const g = reviewGuard(d.body);
+      const allowedNow = [Number(c.guest_max ?? 500), ...(c.invoice_max ? [Number(c.invoice_max)] : []), ...(c.estimate_amount ? [Number(c.estimate_amount)] : [])];
+      if (!g.ok || !moneyGuard(d.body, allowedNow)) continue;
+      const nowIso = new Date().toISOString();
+      const { error: upErr } = await db.from("claim_drafts").update({ status: "approved", approved_at: nowIso, verify_snippet: snippetOf(d.body), updated_at: nowIso }).eq("id", d.id).eq("status", "pending");
+      if (!upErr) {
+        d.status = "approved";
+        await event(c, "approved", `Sending a ${String(d.kind).replace("_", " ")} to ${c.guest_first ?? "the guest"}`, { draft_id: d.id, auto: true });
+        await db.from("turo_reader_state").update({ poke_at: nowIso }).eq("id", 1);
+        notes.push(`sent waiting ${d.kind}`);
+      }
+    }
+  }
   const pending = all.find((d) => d.status === "pending" && d.kind !== "escalation");
   const inFlight = all.find((d) => ["approved", "sending"].includes(d.status));
   const lastGuest = [...thread].reverse().find((m) => m.role === "GUEST");
   const lastHost = [...thread].reverse().find((m) => m.role === "HOST");
   const notes: string[] = [];
   const now = Date.now();
+  // the scheduled re-check that woke us is spent; the pipeline sets a new one below if it is still waiting on shops
+  if (c.next_check_at && Date.parse(c.next_check_at) <= now) await db.from("claim_cases").update({ next_check_at: null }).eq("id", c.id);
 
   // ---- daily deadline check (pushes to Jared, never to the guest)
   if (daily) {
     const day = new Date().toLocaleDateString("en-CA", { timeZone: TZ });
-    if (c.estimate_due_at && !c.estimate_amount) {
+    if (c.estimate_due_at && !c.estimate_amount && !c.estimates_requested_at) {
       const hrs = (new Date(c.estimate_due_at).getTime() - now) / 36e5;
       if (hrs < 36) {
         await notify(`Claims: estimate for ${c.guest_first ?? c.reservation_id} due ${fmt(c.estimate_due_at)}`,
@@ -215,13 +254,22 @@ async function work(c: Case, daily: boolean): Promise<string> {
     }
   }
 
+  // ---- v2: shops, estimates, choosing, the Turo invoice (failures here never block talking to the guest)
+  try { await estimatePipeline(ctx, c, settings, notes); }
+  catch (e) {
+    notes.push(`estimate pipeline error: ${String(e).slice(0, 100)}`);
+    await event(c, "error", "Estimate pipeline hit an error", { error: String(e).slice(0, 300) });
+    try { await db.rpc("bestly_raise", { p_key: "claims.estimates", p_kind: "problem", p_severity: "warning", p_title: "Claims Closer estimate step failed", p_body: String(e).slice(0, 300), p_area: "turo", p_needs_jared: null, p_healed: false }); } catch { /* */ }
+  }
+
   // ---- what to say next (one pending draft per case, nothing while a message is going out)
   let kind: string | null = null, extra = "", forMsg: string | null = null;
   const lastSentAt = Math.max(...all.filter((d) => d.status === "sent").map((d) => Date.parse(d.sent_at)), 0, lastHost ? Date.parse(lastHost.sent_at) : 0);
   if (!pending && !inFlight) {
     if (lastGuest && Date.parse(lastGuest.sent_at) > lastSentAt && !all.some((d) => d.for_message_id === lastGuest.message_id)) {
       kind = "reply"; forMsg = lastGuest.message_id;
-    } else if (c.estimate_amount && !all.some((d) => d.kind === "estimate" && ["approved", "sending", "sent", "pending"].includes(d.status))) {
+    } else if (c.estimate_amount && !all.some((d) => d.kind === "estimate" && ["approved", "sending", "sent", "pending"].includes(d.status))
+               && (c.path !== "resolve_directly" || await invoiceDone(c))) {
       kind = "estimate";
     } else if (c.follow_up_at && Date.parse(c.follow_up_at) <= now && (!lastGuest || Date.parse(lastGuest.sent_at) < lastSentAt)) {
       const sinceGuest = all.filter((d) => d.status === "sent" && d.kind === "follow_up" && (!lastGuest || Date.parse(d.sent_at) > Date.parse(lastGuest.sent_at))).length;
@@ -245,12 +293,19 @@ async function work(c: Case, daily: boolean): Promise<string> {
         notes.push("reply draft failed; pinged Jared");
       } else notes.push(`${kind} draft failed`);
     } else {
-      const { data: row } = await db.from("claim_drafts").insert({ case_id: c.id, reservation_id: c.reservation_id, kind, body: d.message, reason: d.reason, for_message_id: forMsg })
-        .select("id").single();
-      await event(c, "draft", `Drafted a ${kind.replace("_", " ")} for Jared`, { draft_id: row?.id });
-      await notify(`Claims: message to ${c.guest_first ?? "guest"} ready for your OK`, d.message.slice(0, 220), `claims-draft-${row?.id}`);
-      await db.from("claim_drafts").update({ notified_at: new Date().toISOString() }).eq("id", row?.id);
-      notes.push(`drafted ${kind}`);
+      const auto = settings.autonomy === "full";
+      const nowIso = new Date().toISOString();
+      const { data: row } = await db.from("claim_drafts").insert({ case_id: c.id, reservation_id: c.reservation_id, kind, body: d.message, reason: d.reason, for_message_id: forMsg,
+        ...(auto ? { status: "approved", approved_at: nowIso, verify_snippet: snippetOf(d.message), notified_at: nowIso } : {}) }).select("id").single();
+      if (auto) {
+        await event(c, "approved", `Sending a ${kind.replace("_", " ")} to ${c.guest_first ?? "the guest"}`, { draft_id: row?.id, auto: true });
+        await db.from("turo_reader_state").update({ poke_at: nowIso }).eq("id", 1);   // the Pi sends within ~15 s
+      } else {
+        await event(c, "draft", `Drafted a ${kind.replace("_", " ")} for Jared`, { draft_id: row?.id });
+        await notify(`Claims: message to ${c.guest_first ?? "guest"} ready for your OK`, d.message.slice(0, 220), `claims-draft-${row?.id}`);
+        await db.from("claim_drafts").update({ notified_at: nowIso }).eq("id", row?.id);
+      }
+      notes.push(`${auto ? "sent" : "drafted"} ${kind}`);
       if (kind === "follow_up") await db.from("claim_cases").update({ follow_up_at: null }).eq("id", c.id);
     }
   }
@@ -266,6 +321,13 @@ Deno.serve(async (req) => {
   if (!(await authorized(req))) return J({ error: "unauthorized" }, 401);
   const body = await req.json().catch(() => ({}));
   const op = String(body.op ?? "tick");
+  const settings = await loadSettings();
+  if (op === "evidence_urls") {   // Claims page: signed photo links (1 hour)
+    const { data } = await db.from("claim_evidence").select("id, storage_path").eq("case_id", String(body.case_id ?? ""));
+    const out: Record<string, string> = {};
+    for (const e of (data ?? []) as any[]) { const { data: u } = await db.storage.from("claim-evidence").createSignedUrl(e.storage_path, 3600); if (u?.signedUrl) out[e.id] = u.signedUrl; }
+    return J({ ok: true, urls: out });
+  }
   const daily = op === "daily";
   // op preview {reservation, kind}: write a draft but save and send nothing (testing the voice and the guards).
   if (op === "preview") {
@@ -280,10 +342,10 @@ Deno.serve(async (req) => {
     let q = db.from("claim_cases").select("*").not("status", "in", "(paid,closed)");
     const { data: cases, error } = await q;
     if (error) throw error;
-    const due = (cases ?? []).filter((c: Case) => daily || op === "run" || c.needs_work || (c.follow_up_at && Date.parse(c.follow_up_at) <= Date.now()));
+    const due = (cases ?? []).filter((c: Case) => daily || op === "run" || c.needs_work || (c.follow_up_at && Date.parse(c.follow_up_at) <= Date.now()) || (c.next_check_at && Date.parse(c.next_check_at) <= Date.now()));
     const out: string[] = [];
     for (const c of due) {
-      try { out.push(await work(c, daily)); }
+      try { out.push(await work(c, daily, settings)); }
       catch (e) {
         out.push(`${c.reservation_id}: error ${String(e).slice(0, 120)}`);
         await db.from("claim_cases").update({ last_run_at: new Date().toISOString() }).eq("id", c.id);
