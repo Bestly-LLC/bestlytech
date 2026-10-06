@@ -287,3 +287,22 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - Today circle inset to 24 px.
   - Non-color cue on named trips: a house glyph for home pickups, an airplane for LAX.
   - Every key item has a swatch, including a hollow ring for Open, and zero counts are dimmed.
+
+## Oct 5, 7:42 PM: sky HD (screen-space lines), Turo card tightened
+
+Plan: `docs/wall-sky-hd-opusplan.md`.
+
+- **Cause.** A frame grab of `/wall.mp4` was sharp, so the stream is fine. The roads were hairlines inside the CSS-warped sky layer, shrunk 2 to 4 times without mipmaps, which broke them into dashes. Then the ceiling's defocus blurred whatever was left.
+- **Roads and traffic now draw in screen space.**
+  - Two full-screen device-resolution canvases, `#airScrR` and `#airScrT` (z 3, under `#air`). Each vertex goes through the sky's projection: rotate `th`, then `homo(AW, AH, q)`.
+  - Lines are clipped to the sky box so they never cross the strip.
+  - Widths are fixed screen pixels: freeway 3.0 to 3.4, arterial 2.2, secondary 1.8, local 1.5, traffic 4.2 freeway and 2.8 arterial.
+  - The canvases copy `#air`'s opacity every 100 ms. The old `#airRoads` and `#airTraffic` are hidden.
+  - Backups: `.bak_skyhd_*`, `.bak_skyhd2_*`.
+- **Sky text.** Landmark labels went to 32 px at .5 alpha (was 30 px, .26); the Home label to .85 alpha.
+- **Turo card.** Backup `.bak_tcal5_*`:
+  - Trips continue across week rows with square ends, Apple Calendar style.
+  - The guest's name sits on the longest piece of each trip.
+  - The weekday row is closer to the dates and the key has more room above it.
+  - Weekday letters are 13 px with no tracking.
+- **Checked.** A new frame grab shows solid, continuous roads, and the stream holds 60 fps.
