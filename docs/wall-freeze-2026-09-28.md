@@ -272,3 +272,12 @@ Real symptom is **hitches**: frames stalling 0.35-0.8 s, 2-6 a minute, while fps
   - `geoRoads` fades each class by radius: freeways always (.5 alpha); arterials up to 18 mi; secondary up to 15 mi, drawn together with arterials so streets don't break into dashes where their class changes; ramps up to 11 mi; local grid up to 6 mi.
   - Backups: `.bak_roadsv2*`, `roads.json.bak_v1_*`, `server.py.bak_trafvec_*`.
 - **Checked** at 10 mi and 25 mi during rush hour: clean street grid, red only on real jams. Jared had switched Roads and Traffic off at 4:53 PM; they're back on.
+
+## Oct 5, 6:15 PM: sky drawn at 4K, new Apple-style Turo calendar
+
+- **Sky quality.** The Mac copy now renders the page at `deviceScaleFactor: 2` (3840x2160) and captures at 1920x1080 (`max` constraints in `agent.mjs`, backup `agent.mjs.bak_dsf_*`). The 1080p projector gets a supersampled frame, the sharpest it can show. Checked steady at 58 to 60 fps.
+- **Turo calendar v2** (`wall.html` `w2bTcal`, CSS block "Turo calendar v2"; backups `.bak_tcal2_*`, `.bak_tcal3_*`):
+  - Apple Calendar month view: Sunday-first weekday row and 5 full weeks starting this Sunday. Past days are dim, and so are days after the 30-day window. Today is a red circle.
+  - Trips are capsules behind the dates: purple `#6A4FD8` for LAX pickups (the LAX trip page's purple, brightened) and teal `#2E8F86` for home pickups (the home trip page's teal, brightened). A guest's name shows only when a trip spans 2 or more days in a row, and is never cut off. The key reads Home, LAX, Open.
+  - Data: migration `20261006010000_wall_turo_calendar_where.sql` adds `where` (`lax` when there's an `airport_code` or the pickup address is an airport) and always returns 36 or more days.
+- **Preview tool.** `~/Bestly/wall-mac/cardshot.mjs <cardId> <out.png> [guest-to-tint-LAX]` renders one card flat, without the projector warp.
