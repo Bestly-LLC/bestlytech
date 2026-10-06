@@ -583,40 +583,24 @@ async function contactsSync(b: Record<string, unknown>): Promise<Response> {
     return Response.json({ ok: false, error: why, trace }, { status: 502, headers: CORS });
   }
 
-  const { data: existing } = await db.from("ava_contacts").select("id, phone, name, source, apple_uid");
-  const byPhone = new Map((existing ?? []).map((r: { phone: string }) => [r.phone, r as { id: string; phone: string; name: string; source: string; apple_uid: string | null }]));
-
   if (dry) {
-    const fresh = found.people.filter((p) => !byPhone.has(p.phone));
+    const { data: existing } = await db.from("ava_contacts").select("phone");
+    const saved = new Set((existing ?? []).map((r: { phone: string }) => r.phone));
+    const fresh = found.people.filter((p) => !saved.has(p.phone));
     return Response.json({ ok: true, dry_run: true, address_books: found.books, cards: found.cards,
       numbers: found.people.length, already_saved: found.people.length - fresh.length, would_add: fresh.length,
       sample: fresh.slice(0, 8).map((p) => p.name), trace }, { headers: CORS });
   }
 
+  // One database call, not one per contact: 923 separate updates ran the function out of time on the first sync.
+  const { data: applied, error: applyErr } = await db.rpc("ava_contacts_apply", { p_people: found.people });
+  if (applyErr) return Response.json({ ok: false, error: `Saving them failed: ${applyErr.message}`, trace }, { status: 502, headers: CORS });
+  const { added = 0, renamed = 0, total = 0 } = (applied ?? {}) as { added?: number; renamed?: number; total?: number };
   const now = new Date().toISOString();
-  const add = found.people.filter((p) => !byPhone.has(p.phone))
-    .map((p) => ({ name: p.name, phone: p.phone, relationship: p.org ?? null, source: "icloud", apple_uid: p.uid, synced_at: now }));
-  let added = 0;
-  // inserted in batches so one bad row can't lose the rest, and a big address book can't blow the statement size
-  for (let i = 0; i < add.length; i += 200) {
-    const { error, count } = await db.from("ava_contacts").insert(add.slice(i, i + 200), { count: "exact" });
-    if (!error) added += count ?? add.slice(i, i + 200).length;
-  }
-  // names that changed in iCloud, on synced rows only: his hand-written rows keep the name he gave them
-  let renamed = 0;
-  for (const p of found.people) {
-    const row = byPhone.get(p.phone);
-    if (!row || row.source !== "icloud") continue;
-    const patch: Record<string, unknown> = { synced_at: now };
-    if (row.name !== p.name) { patch.name = p.name; renamed++; }
-    if (!row.apple_uid && p.uid) patch.apple_uid = p.uid;
-    await db.from("ava_contacts").update(patch).eq("id", row.id);
-  }
-  const { count: total } = await db.from("ava_contacts").select("id", { count: "exact", head: true });
   await db.rpc("scout_notify", { p_title: "Ava (assistant): contacts synced from iCloud",
-    p_body: `${added} new, ${renamed} renamed, ${total ?? 0} saved in all. She greets these people by name now.`,
-    p_url: "https://bestly.tech/admin/ava", p_dedupe: `ava-contacts-sync-${now.slice(0, 13)}` }).catch(() => {});
-  return Response.json({ ok: true, added, renamed, numbers: found.people.length, total: total ?? 0, cards: found.cards, trace }, { headers: CORS });
+    p_body: `${added} new, ${renamed} renamed, ${total} saved in all. She greets these people by name now.`,
+    p_severity: "info", p_push: added > 0, p_url: "/admin/ava", p_dedupe: `ava-contacts-sync-${now.slice(0, 13)}` }).catch(() => {});
+  return Response.json({ ok: true, added, renamed, numbers: found.people.length, total, cards: found.cards, trace }, { headers: CORS });
 }
 
 // ---------- follow-up call (only ever a row Jared approved: status 'dialing') ----------
