@@ -1,0 +1,10 @@
+[Unit]
+Description=LTX video job worker (Bestly)
+After=network-online.target comfyui.service
+[Service]
+User=ubuntu
+ExecStart=/opt/ltx/ltx-worker.py
+Restart=always
+RestartSec=10
+[Install]
+WantedBy=multi-user.target
