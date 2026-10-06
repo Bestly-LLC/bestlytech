@@ -150,3 +150,9 @@ thing that waits for Jared is booking ("Book it" button), and anything that woul
   existing tab / new CDP tabs, slow cadence, close tabs you open.
 - Every new automatic job: on the Team page via `team_onboard` (pulse names its cron jobs, `owns` alert prefixes).
 - Commit + push to main after each phase. Write decisions to `bestly_private_memory` (area `turo`).
+- **New RPCs the Pi calls with the publishable key** (e.g. `claims_turo_claim`, `claims_turo_done`, evidence RPCs) must be
+  added to `security_public_rpcs` in the same migration, or Ares's Auto-Fixer locks them within an hour.
+- **Notifications (autonomy rule 2026-10-06):** only security, money, a real person waiting, or something down an hour
+  interrupts Jared. Use `claims_notify` (it goes through `notify_route`, which holds the rest for the 7 PM recap).
+  Interrupt-worthy here: a `claims_ask` question, a booking confirmed (date/time), money landed, a deadline about to be
+  missed. Routine progress (estimate requested, message sent) goes as `success`/info so it lands in the recap.
