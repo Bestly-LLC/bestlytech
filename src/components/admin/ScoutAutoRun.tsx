@@ -63,36 +63,6 @@ export function useScoutAutoRun() {
   return { autoRun: prefs ? prefs.auto_run : null, setAutoRun: (on: boolean) => set("auto_run", on) };
 }
 
-function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={onToggle}
-      className={cn(
-        "relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200",
-        on ? "bg-[#34c759]" : "bg-[#3a3a40] bento:bg-[#d9d7d0]",
-      )}
-    >
-      <span className={cn("absolute top-0.5 h-6 w-6 rounded-full bg-[#ffffff] shadow transition-[left] duration-200", on ? "left-[1.375rem]" : "left-0.5")} />
-    </button>
-  );
-}
-
-function Row({ title, sub, on, onToggle }: { title: string; sub: string; on: boolean; onToggle: () => void }) {
-  return (
-    <div className="flex items-center gap-3 py-1.5">
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold text-white">{title}</p>
-        <p className="text-[0.6875rem] leading-snug text-white/55">{sub}</p>
-      </div>
-      <Switch on={on} label={title} onToggle={onToggle} />
-    </div>
-  );
-}
-
 type Budget = { spent: number; cap: number; total_today?: number };
 function useSpend() {
   const [b, setB] = useState<{ chat: Budget; background: Budget } | null>(null);
@@ -130,29 +100,84 @@ function paidCopy(p: Prefs): { title: string; sub: string } {
   }
 }
 
+/** A switch you can read: a mini track plus its name, in one tappable pill (UI Pro Max: label + state, 40pt+ target). */
+function Pill({ on, label, hint, tint = "#34c759", onToggle }: { on: boolean; label: string; hint: string; tint?: string; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={hint}
+      title={hint}
+      onClick={onToggle}
+      className={cn(
+        "scout-press inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-full border pl-1.5 pr-3 text-[0.8125rem] font-medium transition-colors sm:min-h-8",
+        on ? "border-white/15 bg-white/[0.08] text-white" : "border-white/10 text-white/60 hover:text-white",
+      )}
+    >
+      <span className="relative h-[1.125rem] w-[1.875rem] shrink-0 rounded-full transition-colors duration-200" style={{ background: on ? tint : "rgba(127,127,127,.35)" }} aria-hidden>
+        <span className={cn("absolute top-[0.125rem] h-[0.875rem] w-[0.875rem] rounded-full bg-[#ffffff] shadow transition-[left] duration-200", on ? "left-[0.875rem]" : "left-[0.125rem]")} />
+      </span>
+      {label}
+    </button>
+  );
+}
+
+/**
+ * 2026-10-06 cleanup: the two switches used to be two full rows with a paragraph each (a quarter of the panel on a
+ * laptop). Now one row of pills; the explanations and today's spend sit behind the spend button.
+ */
 export function ScoutAutoRunBar() {
   const { prefs, set } = usePrefs();
   const spend = useSpend();
+  const [more, setMore] = useState(false);
   if (!prefs) return null;
+  const paid = paidCopy(prefs);
+  const paidLabel = prefs.paid_ai_ok
+    ? prefs.paid_ai_until ? `Paid AI to ${clock(prefs.paid_ai_until)}` : "Paid AI"
+    : prefs.paid_ai_off_reason === "cap" ? "Paid AI · cap hit" : "Paid AI";
   return (
-    <div className="border-b border-white/[0.06] px-3 py-1">
-      <Row
-        title={`Auto-run is ${prefs.auto_run ? "on" : "off"}`}
-        sub={prefs.auto_run ? "Scout just does it. No buttons to tap." : "Scout asks you before it changes anything."}
-        on={prefs.auto_run}
-        onToggle={() => set("auto_run", !prefs.auto_run)}
-      />
-      <Row
-        {...paidCopy(prefs)}
-        on={prefs.paid_ai_ok}
-        onToggle={() => set("paid_ai_ok", !prefs.paid_ai_ok)}
-      />
-      {spend && (
-        <p className="pb-1.5 text-[0.6875rem] leading-snug text-white/55">
-          Spent today: chat {usd(spend.chat.spent)} of {usd(spend.chat.cap)} cap · background jobs {usd(spend.background.spent)} of {usd(spend.background.cap)} cap
-          {" · "}Cookie Yeti and other AI {usd(Math.max(0, Number(spend.chat.total_today ?? 0) - Number(spend.chat.spent) - Number(spend.background.spent)))}
-        </p>
-      )}
+    <div className="border-b border-white/[0.06] px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Pill
+          on={prefs.auto_run}
+          label="Auto-run"
+          hint={prefs.auto_run ? "Auto-run is on: Scout just does it. Tap to turn off." : "Auto-run is off: Scout asks before it changes anything. Tap to turn on."}
+          onToggle={() => set("auto_run", !prefs.auto_run)}
+        />
+        <Pill
+          on={prefs.paid_ai_ok}
+          label={paidLabel}
+          tint="#ff9f0a"
+          hint={`${paid.title}. ${paid.sub}`}
+          onToggle={() => set("paid_ai_ok", !prefs.paid_ai_ok)}
+        />
+        <button
+          type="button"
+          onClick={() => setMore((m) => !m)}
+          aria-expanded={more}
+          className="ml-auto inline-flex min-h-10 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[0.75rem] tabular-nums text-white/50 hover:text-white sm:min-h-8"
+        >
+          {spend ? `${usd(spend.chat.spent + spend.background.spent)}${NB}today` : "Spend"}
+          <svg viewBox="0 0 10 10" className={cn("h-2.5 w-2.5 transition-transform duration-200", more && "rotate-180")} aria-hidden>
+            <path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+      <div className={cn("scout-collapse", more && "is-open")}>
+        <div>
+          <div className="space-y-1.5 pt-2 text-[0.75rem] leading-snug text-white/60">
+            <p><span className="font-semibold text-white/85">Auto-run {prefs.auto_run ? "on" : "off"}.</span> {prefs.auto_run ? "Scout just does it. No buttons to tap." : "Scout asks you before it changes anything."}</p>
+            <p><span className="font-semibold text-white/85">{paid.title}.</span> {paid.sub}</p>
+            {spend && (
+              <p>
+                Spent today: chat {usd(spend.chat.spent)} of {usd(spend.chat.cap)}{NB}cap · background {usd(spend.background.spent)} of {usd(spend.background.cap)}{NB}cap
+                {" · "}Cookie Yeti and other AI {usd(Math.max(0, Number(spend.chat.total_today ?? 0) - Number(spend.chat.spent) - Number(spend.background.spent)))}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -314,7 +314,10 @@ const SCOUT_CSS = `
 @keyframes scout-dot { 0%,60%,100% { opacity: .25; transform: translateY(0) } 30% { opacity: 1; transform: translateY(-2px) } }
 .scout-row .scout-tools { opacity: 0; transition: opacity .12s ease; }
 .scout-row:hover .scout-tools, .scout-row:focus-within .scout-tools { opacity: 1; }
-@media (hover: none) { .scout-row .scout-tools { opacity: 1; } }
+@media (hover: none) {
+  .scout-row .scout-tools { opacity: 0; pointer-events: none; }
+  .scout-row.scout-tools-on .scout-tools { opacity: 1; pointer-events: auto; }
+}
 @media (prefers-reduced-motion: reduce) {
   .scoutie-lids, .scoutie-eyes, .scout-nudge, .scout-pop-in, .scout-bubble-in, .scout-dots span, .scout-launcher, .scout-badge-pop,
   .scout-msg-user, .scout-msg-bot, .scout-view-fwd, .scout-view-back, .scout-chip, .scout-card-in, .scout-shimmer { animation: none !important }
@@ -349,6 +352,7 @@ export function Scout() {
   const [renameText, setRenameText] = useState("");
   const [copied, setCopied] = useState<number | null>(null);
   const [copiedFix, setCopiedFix] = useState<"ok" | "fail" | null>(null);
+  const [toolsFor, setToolsFor] = useState<number | null>(null);
   const [bubble, setBubble] = useState(false);
   // v34: queue + interrupt. `chaining` = the server is still carrying the job on by itself after the request returned.
   const [queue, setQueue] = useState<Queued[]>([]);
@@ -468,6 +472,8 @@ export function Scout() {
   const chainAlive = !!lastMsg && lastMsg.role === "assistant" && CONTINUING.test(lastMsg.body)
     && Date.now() - Date.parse(lastMsg.created_at ?? "") < CHAIN_IDLE_MS;
   const running = busy || chainAlive;
+  const lastUserIdx = msgs.map((m) => m.role === "user" && m.body !== STOP_MARK).lastIndexOf(true);
+  const lastBotIdx = msgs.map((m) => m.role === "assistant").lastIndexOf(true);
 
   const send = useCallback(
     async (body: string, replacing?: string | null, fresh?: boolean, about?: string, opts?: { now?: boolean; raw?: boolean }) => {
@@ -591,6 +597,8 @@ export function Scout() {
   useEffect(() => {
     const el = inputRef.current;
     if (!el) return;
+    el.style.height = "";
+    if (!text) return; // empty: the CSS height (one line) is right
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight + 2, 112)}px`;
   }, [text, open, view]);
@@ -944,7 +952,7 @@ export function Scout() {
               onClick={resetBox}
               aria-label="Put Scout back in the corner"
               title="Put back in the corner"
-              className="scout-press h-10 w-10 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
+              className="scout-press h-11 w-11 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
             >
               <RotateCcw className="h-3.5 w-3.5" />
             </Button>
@@ -956,7 +964,7 @@ export function Scout() {
                 size="icon"
                 onClick={newChat}
                 aria-label="New conversation"
-                className="scout-press h-10 w-10 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
+                className="scout-press h-11 w-11 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -969,7 +977,7 @@ export function Scout() {
                   setView("history");
                 }}
                 aria-label="History"
-                className="scout-press h-10 w-10 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
+                className="scout-press h-11 w-11 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
               >
                 <MessagesSquare className="h-4 w-4" />
               </Button>
@@ -981,7 +989,7 @@ export function Scout() {
             size="icon"
             onClick={close}
             aria-label="Close Scout"
-            className="scout-press h-10 w-10 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
+            className="scout-press h-11 w-11 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -1072,16 +1080,36 @@ export function Scout() {
             extra={Math.max(0, (todayRows?.length ?? 0) - urgent.length)}
             onAsk={(r) => { askAbout(r); void refreshToday(); }}
             onOpen={openUrl}
+            startFolded={msgs.length > 0}
           />
           <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4">
-            {msgs.length === 0 && (
-              <p className="text-sm text-white/80">
-                I can read anything in the database, change the site, and run jobs on the Mac mini (you tap Run). I know which page you're on. What do you need?
-              </p>
+            {msgs.length === 0 && !running && (
+              <div className="scout-card-in flex flex-col items-center px-2 pb-2 pt-6 text-center">
+                <Scoutie mood="idle" className="h-8 w-11 text-white" />
+                <p className="mt-3 text-[1.0625rem] font-semibold text-white">What do you need?</p>
+                <p className="mt-1 max-w-[18rem] text-[0.8125rem] leading-snug text-white/55">
+                  I read the data, fix things and run jobs on the Mac mini. I know which page you're on.
+                </p>
+                <div className="mt-5 w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.04] text-left">
+                  {OPENERS.map((o, n) => (
+                    <button
+                      key={o}
+                      type="button"
+                      onClick={() => send(o)}
+                      style={{ animationDelay: `${80 + n * 60}ms` }}
+                      className="scout-chip flex min-h-12 w-full items-center gap-3 border-t text-left border-white/[0.06] px-4 text-[0.9375rem] text-white first:border-t-0 hover:bg-white/[0.05] sm:min-h-11 sm:text-sm"
+                    >
+                      <span className="flex-1">{o}</span>
+                      <ArrowUp className="h-3.5 w-3.5 rotate-45 text-white/35" aria-hidden />
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
 
             {jobCards(-1)}
             {msgs.map((m, i) => {
+              const toolsOn = i === lastUserIdx || i === lastBotIdx || i === toolsFor;
               // Messages-style time stamps: the first message, and again after a 10-minute gap.
               const prev = msgs[i - 1];
               const gap = !prev?.created_at || !m.created_at || Date.parse(m.created_at) - Date.parse(prev.created_at) > 10 * 60_000;
@@ -1104,7 +1132,13 @@ export function Scout() {
               return (
               <Fragment key={m.id ?? i}>
               {stamp}
-              <div className={cn("scout-row group", m.role === "user" ? "scout-msg-user" : "scout-msg-bot")}>
+              <div
+                className={cn("scout-row group", toolsOn && "scout-tools-on", m.role === "user" ? "scout-msg-user" : "scout-msg-bot")}
+                onClick={(e) => {
+                  // On a phone there is no hover: tap a message to show its copy / edit buttons.
+                  if (!(e.target as HTMLElement).closest("button, a, pre")) setToolsFor((t) => (t === i ? null : i));
+                }}
+              >
                 {m.role === "user" ? (
                   <div className="flex items-start justify-end gap-1">
                     <span className="scout-tools flex shrink-0 gap-0.5 pt-1">
@@ -1113,7 +1147,7 @@ export function Scout() {
                         size="icon"
                         aria-label="Edit and resend"
                         onClick={() => startEdit(m)}
-                        className="h-7 w-7 border-0 text-white/40 hover:bg-white/5 hover:text-white"
+                        className="h-7 w-7 border-0 text-white/40 hover:bg-white/5 hover:text-white [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -1122,7 +1156,7 @@ export function Scout() {
                         size="icon"
                         aria-label="Delete from here"
                         onClick={() => dropFrom(m)}
-                        className="h-7 w-7 border-0 text-white/40 hover:bg-red-500/10 hover:text-red-400"
+                        className="h-7 w-7 border-0 text-white/40 hover:bg-red-500/10 hover:text-red-400 [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -1169,7 +1203,7 @@ export function Scout() {
                           setTimeout(() => setCopied(null), 1200);
                         }
                       }}
-                      className="scout-tools h-7 w-7 shrink-0 border-0 text-white/40 hover:bg-white/5 hover:text-white"
+                      className="scout-tools h-7 w-7 shrink-0 border-0 text-white/40 hover:bg-white/5 hover:text-white [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
                     >
                       {copied === i ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                     </Button>
@@ -1204,21 +1238,6 @@ export function Scout() {
             {/* Everything tappable lives here, directly above the composer: the openers on an
                 empty chat, then the reply options. Under the message they ended up wherever
                 the reply happened to end and scrolled away as the conversation grew. */}
-            {!running && !editing && msgs.length === 0 && (
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                {OPENERS.map((o, n) => (
-                  <button
-                    key={o}
-                    type="button"
-                    onClick={() => send(o)}
-                    style={{ animationDelay: `${80 + n * 60}ms` }}
-                    className="scout-chip min-h-9 rounded-full border border-white/15 bg-white/[0.06] px-3.5 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/[0.12] active:scale-[0.97]"
-                  >
-                    {o}
-                  </button>
-                ))}
-              </div>
-            )}
             {!running && !editing && (() => {
               const lastBot = [...msgs].reverse().find((m) => m.role !== "user");
               if (!lastBot) return null;
@@ -1262,7 +1281,7 @@ export function Scout() {
                     {copiedFix === "ok" ? <Check className="h-3.5 w-3.5" /> : <Wrench className="h-3.5 w-3.5" />}
                     {copiedFix === "ok" ? "Copied - paste to Claude"
                       : copiedFix === "fail" ? "Couldn't copy - long-press the reply"
-                      : "Prompt Claude to fix"}
+                      : "Fix with Claude"}
                   </button>
                 </div>
               );
@@ -1363,7 +1382,7 @@ export function Scout() {
                   }
                 }}
                 enterKeyHint={phone ? "enter" : "send"}
-                placeholder={running ? "Type to queue the next thing..." : attach.count ? "Ask about the file, or just send it..." : "Ask, or say what to change..."}
+                placeholder={running ? "Queue the next thing" : attach.count ? "Ask about the file" : "Ask Scout anything"}
                 className={cn(overDrop && "border-[#0A84FF] bg-[#0A84FF]/10", "max-h-28 min-h-[2.75rem] flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-base sm:min-h-[2.375rem] sm:text-sm text-white transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-white/40 focus:border-white/25 focus:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
               />
               {running && !text.trim() && !attach.count ? (

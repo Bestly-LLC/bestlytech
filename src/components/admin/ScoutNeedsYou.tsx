@@ -84,6 +84,7 @@ export function NeedsYouCard({
   onAsk,
   onOpen,
   disabled,
+  startFolded,
 }: {
   rows: TodayRow[];
   /** Lower-rank items on the Today page, counted but not listed here. */
@@ -91,21 +92,29 @@ export function NeedsYouCard({
   onAsk: (r: TodayRow) => void;
   onOpen: (url: string) => void;
   disabled?: boolean;
+  /** In a running conversation the card starts as one line ("2 things need you"); on an empty chat it opens. */
+  startFolded?: boolean;
 }) {
   // Folded state is remembered for this exact set of items: a new item unfolds it again.
   const sig = rows.map((r) => r.key).join("|");
-  const [folded, setFolded] = useState(() => {
-    try { return sessionStorage.getItem(HIDE_KEY) === sig; } catch { return false; }
-  });
+  const read = () => {
+    try {
+      const v = sessionStorage.getItem(HIDE_KEY);
+      if (v === sig) return true;
+      if (v === `open:${sig}`) return false;
+    } catch { /* private mode */ }
+    return !!startFolded;
+  };
+  const [folded, setFolded] = useState(read);
   const [openKey, setOpenKey] = useState<string | null>(null);
   useEffect(() => {
-    try { setFolded(sessionStorage.getItem(HIDE_KEY) === sig); } catch { /* private mode */ }
-  }, [sig]);
+    setFolded(read());
+  }, [sig, startFolded]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!rows.length) return null;
 
   const fold = (v: boolean) => {
     setFolded(v);
-    try { v ? sessionStorage.setItem(HIDE_KEY, sig) : sessionStorage.removeItem(HIDE_KEY); } catch { /* private mode */ }
+    try { sessionStorage.setItem(HIDE_KEY, v ? sig : `open:${sig}`); } catch { /* private mode */ }
   };
 
   return (
