@@ -337,3 +337,10 @@ Plan: `docs/wall-sky-hd-opusplan.md`.
   `window.__skyAudit()` reports the gap per layer; the page heals itself, Sky Sync reloads and then alerts (`wall.skysync`),
   flags unregistered layers, and runs a move-home test after each `wall.html` change. See `tools/wall-sky-sync/README.md`.
   **Any new sky layer must be stamped and added to `SKYLAYERS`.**
+- **8:45 PM, label orientation (Jared: "read it from the desk facing east, like the Home tag"):** sky labels, star names,
+  road signs and the Home tag are no longer upright on the projector's screen. Each is drawn in the sky's own frame at its
+  spot (`scrFrame()`: local inner->screen axes from `scrProj`, inverse via `unmap` in `scrInner()`), so it reads parallel to
+  Kings Rd like paint on the ceiling. The frame is normalized so glyphs keep >= 80% pixel height, with stretch capped at 3x
+  near the wall. Road names are 500-weight mixed case in see-through blue-gray (`rgba(150,182,218,.56-.72)`) so they don't
+  read as places (bold white caps). The Home tag (`#airYou`) is redrawn sharp on `#airScrL`; the warped one is hidden.
+  Backups `wall.html.bak_skyframe*_*`.
