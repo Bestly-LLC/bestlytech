@@ -12,6 +12,7 @@ Also: AWS connector reconnected; Bestly is in the AMD AI Developer Program (AMD 
 - Track B done: box renders native 704x1280 (job 6938e70, $0.039); overcharge fixed; Spark no-AI-footage guard live. Test spend about $0.20.
 - Track C done: Fireworks rung `fireworks:kimi-k3` dormant until Vault `fireworks_api_key`; AMD Dev Cloud script written, not run (LTX-2.5 on ROCm unverified).
 - Tracks D and E: waiting on Jared.
+- Jared 2026-10-06: AMD Developer Cloud is the BACKUP to AWS, used only when needed. Trigger to build into the Pi controller: AWS start fails (InsufficientInstanceCapacity) or clips wait too long, and Vault has `amd_devcloud_token`. Exception: while AMD credits are active (30-day clock), using them first saves AWS money, so activate only for a planned burst.
 
 ## Where things stand (start of this plan)
 - Montage (OpenMontage on the Pi, `tools/montage`, systemd `bestly-montage`) makes HOKU shorts: free-AI script inside
