@@ -37,6 +37,7 @@
 // path reads Vault, bestly_memory, scout_* or any other table into a prompt.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchPeople, type Person } from "./contacts.ts";
 import { busyFrom, DEFAULT_HOURS, discover, eventsIn, ptParts, zonedToUtc, durationFor, freeSlots, parseConstraints, putEvent, spoken, turoWindows, TURO_WINDOW_MIN, type Busy, type Cal, type Creds, type Hours, type Provider, type Slot } from "./calendar.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -110,6 +111,16 @@ async function coachNotes(): Promise<string> {
   const { data, error } = await db.rpc("ava_coach_notes");
   const t = error ? "" : String(data ?? "").replace(/\{\{|\}\}/g, "").trim();
   return t || "(none yet)";
+}
+
+/** The "Who you're talking to" line. The prompt's inner-circle rule looks for the words "inner circle", so they are
+ *  spelled out here rather than left to whatever Jared happened to type in the notes. */
+function callerNotes(c: { relationship?: string | null; notes?: string | null; inner_circle?: boolean | null } | null, lead = "They're Jared's"): string {
+  if (!c) return "";
+  const bits = [`${lead} ${c.relationship ?? "contact"}.`];
+  if (c.inner_circle) bits.push("INNER CIRCLE, close family: be warm, skip the gatekeeping, treat what they say as urgent unless they say it isn't.");
+  if (c.notes) bits.push(String(c.notes).replace(/\{\{|\}\}/g, ""));
+  return bits.join(" ");
 }
 
 /** The shareable facts, as a bullet list for the prompt. The ONLY knowledge source for calls. */
@@ -483,7 +494,7 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
   if (!s?.agent_id || !s.phone_number_id || !key) return { ok: false, error: "Ava isn't set up yet. Run Setup on /admin/ava.", status: 412 };
   const gate = await spendGate();
   if (gate.over) return { ok: false, error: gate.message ?? "Daily spend cap reached. Raise it in Setup or try tomorrow.", status: 429 };
-  const { data: contact } = await db.from("ava_contacts").select("id, name, relationship, notes").eq("phone", to).maybeSingle();
+  const { data: contact } = await db.from("ava_contacts").select("id, name, relationship, notes, inner_circle").eq("phone", to).maybeSingle();
   const name = String(o.name ?? "").trim().slice(0, 40) || contact?.name || "";
   const purpose = String(o.purpose ?? "").replace(/\{\{|\}\}/g, "").trim().slice(0, o.booking ? 900 : 600) || "No specific reason given: use the check-in.";
   const connect = o.connect === true;
@@ -519,7 +530,7 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
           : connect
           ? `OUTBOUND: you called ${name || "them"}; they did not call you. You're calling to connect them to Jared. Why he wants to talk: ${purpose}. Check they're free, then connect them to Jared.`
           : `OUTBOUND: you called ${name || "them"}; they did not call you. Jared asked you to make this call. The reason for it: ${purpose}`,
-        caller_name: name || "them", caller_notes: contact ? `(${contact.relationship ?? "contact"}) ${contact.notes ?? ""}` : "",
+        caller_name: name || "them", caller_notes: callerNotes(contact, "They're Jared's"),
         caller_trusted: !bridge && (contact || to === (s.jared_cell ?? JARED_CELL)) ? "yes" : "no",
         knowledge: bridge ? "- (nothing: this is a bridge call, share nothing)" : await knowledge(),
         jared_stories: !bridge && contact ? await stories() : "", coach_notes: await coachNotes(), ...nowVars() } } }),
@@ -547,6 +558,65 @@ async function bridgeCall(body: Record<string, unknown>): Promise<Response> {
   const r = await place({ phone: String(body.phone ?? ""), org: String(body.org ?? ""), purpose: topic, bridge: true });
   return r.ok ? Response.json({ ok: true, call_id: r.call_id, calling: r.calling }, { headers: CORS })
     : Response.json({ ok: false, error: r.error }, { status: r.status, headers: CORS });
+}
+
+// ---------- iCloud contacts -> ava_contacts ----------
+/** Jared's ask, 2026-10-05: "connect my contacts from icloud/mac/apple". Personal Ava only.
+ *  Same app-specific password as her calendar, so there is nothing new to set up. Two shapes:
+ *    {action:"contacts_sync", dry_run:true}   look only: how many contacts, and a few names, nothing written
+ *    {action:"contacts_sync"}                 write: new numbers added, synced names refreshed
+ *  Rows Jared wrote by hand (source 'manual': Mom, Eli) are never edited, because he tuned their notes and
+ *  relationship and those go into her prompt. His Apple notes are deliberately not imported. */
+async function contactsSync(b: Record<string, unknown>): Promise<Response> {
+  const dry = b.dry_run === true;
+  const creds = (await calCreds()).icloud;
+  if (!creds) return Response.json({ ok: false, error: "Her iCloud login isn't saved. Connect iCloud in Ava's calendars first." }, { status: 412, headers: CORS });
+
+  const trace: string[] = [];
+  let found: { people: Person[]; cards: number; books: number };
+  try {
+    found = await fetchPeople(creds, trace);
+  } catch (e) {
+    const why = e instanceof Error ? e.message : "iCloud didn't answer";
+    await db.rpc("scout_notify", { p_title: "Ava (assistant): the contacts sync failed", p_body: `${why}. Steps: ${trace.join(" | ")}`,
+      p_url: "https://bestly.tech/admin/ava", p_dedupe: `ava-contacts-sync-fail-${new Date().toISOString().slice(0, 10)}` }).catch(() => {});
+    return Response.json({ ok: false, error: why, trace }, { status: 502, headers: CORS });
+  }
+
+  const { data: existing } = await db.from("ava_contacts").select("id, phone, name, source, apple_uid");
+  const byPhone = new Map((existing ?? []).map((r: { phone: string }) => [r.phone, r as { id: string; phone: string; name: string; source: string; apple_uid: string | null }]));
+
+  if (dry) {
+    const fresh = found.people.filter((p) => !byPhone.has(p.phone));
+    return Response.json({ ok: true, dry_run: true, address_books: found.books, cards: found.cards,
+      numbers: found.people.length, already_saved: found.people.length - fresh.length, would_add: fresh.length,
+      sample: fresh.slice(0, 8).map((p) => p.name), trace }, { headers: CORS });
+  }
+
+  const now = new Date().toISOString();
+  const add = found.people.filter((p) => !byPhone.has(p.phone))
+    .map((p) => ({ name: p.name, phone: p.phone, relationship: p.org ?? null, source: "icloud", apple_uid: p.uid, synced_at: now }));
+  let added = 0;
+  // inserted in batches so one bad row can't lose the rest, and a big address book can't blow the statement size
+  for (let i = 0; i < add.length; i += 200) {
+    const { error, count } = await db.from("ava_contacts").insert(add.slice(i, i + 200), { count: "exact" });
+    if (!error) added += count ?? add.slice(i, i + 200).length;
+  }
+  // names that changed in iCloud, on synced rows only: his hand-written rows keep the name he gave them
+  let renamed = 0;
+  for (const p of found.people) {
+    const row = byPhone.get(p.phone);
+    if (!row || row.source !== "icloud") continue;
+    const patch: Record<string, unknown> = { synced_at: now };
+    if (row.name !== p.name) { patch.name = p.name; renamed++; }
+    if (!row.apple_uid && p.uid) patch.apple_uid = p.uid;
+    await db.from("ava_contacts").update(patch).eq("id", row.id);
+  }
+  const { count: total } = await db.from("ava_contacts").select("id", { count: "exact", head: true });
+  await db.rpc("scout_notify", { p_title: "Ava (assistant): contacts synced from iCloud",
+    p_body: `${added} new, ${renamed} renamed, ${total ?? 0} saved in all. She greets these people by name now.`,
+    p_url: "https://bestly.tech/admin/ava", p_dedupe: `ava-contacts-sync-${now.slice(0, 13)}` }).catch(() => {});
+  return Response.json({ ok: true, added, renamed, numbers: found.people.length, total: total ?? 0, cards: found.cards, trace }, { headers: CORS });
 }
 
 // ---------- follow-up call (only ever a row Jared approved: status 'dialing') ----------
@@ -1050,7 +1120,7 @@ async function initHook(req: Request): Promise<Response> {
   if (!secret || req.headers.get("x-ava-init") !== secret) return new Response("unauthorized", { status: 401 });
   const b = await req.json().catch(() => ({}));
   const caller = toE164(String(b.caller_id ?? "")) ?? String(b.caller_id ?? "");
-  const { data: c } = caller ? await db.from("ava_contacts").select("name, relationship, notes").eq("phone", caller).maybeSingle() : { data: null };
+  const { data: c } = caller ? await db.from("ava_contacts").select("name, relationship, notes, inner_circle").eq("phone", caller).maybeSingle() : { data: null };
   const { data: st } = await db.from("ava_settings").select("jared_cell, forward_enabled, forward_voice, jared_voice_id, jared_voice_paused_at").eq("id", true).maybeSingle();
   const trusted = !!c || (!!caller && caller === (st?.jared_cell ?? JARED_CELL)) ? "yes" : "no";
 
@@ -1066,13 +1136,13 @@ async function initHook(req: Request): Promise<Response> {
     const greeting = FWD_GREETING(first);
     return Response.json({ type: "conversation_initiation_client_data",
       conversation_config_override: { agent: { first_message: greeting }, ...(useJared ? { tts: { voice_id: st!.jared_voice_id } } : {}) },
-      dynamic_variables: { ...UNKNOWN, ...(c ? { caller_name: c.name, caller_notes: `They're Jared's ${c.relationship ?? "contact"}. ${c.notes ?? ""}` } : {}),
+      dynamic_variables: { ...UNKNOWN, ...(c ? { caller_name: c.name, caller_notes: callerNotes(c) } : {}),
         caller_trusted: trusted, greeting, forward_rules: FORWARD_RULES, voice_rules: useJared ? VOICE_RULES_FWD : "",
         call_voice: useJared ? "jared" : "ava", forwarded: "yes", forwarded_from: fwd.from ?? JARED_CELL,
         call_context: "A call to Jared's own cell that he didn't answer, forwarded to you. You are his assistant taking the call. Take a message.", ...base } });
   }
   const vars = c ? {
-    caller_trusted: trusted, caller_name: c.name, caller_notes: `They're Jared's ${c.relationship ?? "contact"}. ${c.notes ?? ""}`,
+    caller_trusted: trusted, caller_name: c.name, caller_notes: callerNotes(c),
     greeting: IN_GREETING(String(c.name).replace(/\{\{|\}\}/g, "").trim().split(/\s+/)[0] || null),
   } : { ...UNKNOWN, caller_trusted: trusted };
   return Response.json({ type: "conversation_initiation_client_data",
@@ -1662,6 +1732,7 @@ Deno.serve(async (req) => {
   if (body.action === "setup") return setup();
   if (body.action === "call") return call(body);
   if (body.action === "bridge") return bridgeCall(body);
+  if (body.action === "contacts_sync") return contactsSync(body);
   if (body.action === "callback") return callback(String(body.id ?? ""));
   if (body.action === "health") return health();
   if (body.action === "live") return live(body.call_id ? String(body.call_id) : null, /^[\w-]{6,80}$/.test(String(body.conversation_id ?? "")) ? String(body.conversation_id) : null);
