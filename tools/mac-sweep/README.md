@@ -20,6 +20,7 @@ Bestly AI employee `mac-sweep` (Team page; reports to Ares, Head of Security & I
 | Every run | Deletes files of its own in `/private/tmp` older than 2 days (screenshots, renders, logs, archives). Trims any log over 200 MB to its last 20 MB. |
 | Daily | Prunes the uv cache, runs `brew cleanup`, and clears the npm cache when it's over 2 GB and the pip cache when it's over 1 GB. Deletes Xcode build caches older than 7 days. Weekly, deletes Xcode simulators that are no longer available. |
 | Every 6 h | Moves files to Nextcloud on the Pi over the LAN, through `/mnt/ssd/staging-mac`. Each copy is checked by SHA-256 and found in Nextcloud before the Mac copy is deleted. |
+| Under 25 GB free | Clears iCloud Drive's download cache (`CloudKit/com.apple.bird/*/Assets`) when it's over 10 GB, but only when `brctl status` says iCloud is idle, so nothing is waiting to upload. It reached 23 GB on Oct 5 and macOS doesn't count it as purgeable. |
 | Under 12 GB free | Emergency mode: `uv cache clean`, npm cache clean, and clears the Playwright, Chrome and Codex caches. Sends an urgent push. |
 
 What it moves to Nextcloud:
@@ -38,7 +39,7 @@ It checks in through `agent_beat` every run. Its pulse gap is 30 min, so Scout n
 
 ## Never touched
 
-Photos, iCloud Drive and its cache, Documents, Desktop, `~/Developer` code, Claude app data, Ollama models, the Keychain, and anything holding secrets (for example the signing keys in `~/cy-ship`).
+Photos, iCloud Drive files (only the download cache above is cleared), Documents, Desktop, `~/Developer` code, Claude app data, Ollama models, the Keychain, and anything holding secrets (for example the signing keys in `~/cy-ship`).
 
 ## Commands
 

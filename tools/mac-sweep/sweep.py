@@ -249,8 +249,35 @@ def clean_caches(st, emergency):
                   os.path.join(HOME, "Library", "Caches", "com.openai.codex")):
             if os.path.isdir(p):
                 remove(p, "emergency: rebuildable cache")
+    if emergency or free_gb() < WARN_GB:
+        clean_icloud_cache()
     st["caches_at"] = time.time()
     return max(0, (free_gb() - before) * 1e9)
+
+
+def clean_icloud_cache():
+    """iCloud Drive's download cache (CloudKit/com.apple.bird/*/Assets) is not counted as purgeable and grew to 23 GB
+    on Oct 5. Only when space is low and iCloud says it is idle (nothing waiting to upload): stop bird, set the folder
+    aside, delete it. iCloud downloads files again on demand."""
+    base = os.path.join(HOME, "Library", "Caches", "CloudKit", "com.apple.bird")
+    rc, out = run(["brctl", "status"], 60)
+    if rc or "client:idle" not in out:
+        log("  iCloud cache left alone (iCloud is busy)"); return 0
+    freed = 0
+    for n in os.listdir(base) if os.path.isdir(base) else []:
+        assets = os.path.join(base, n, "Assets")
+        if not os.path.isdir(assets) or dir_bytes(assets, 300) < 10e9:
+            continue
+        if DRY:
+            log("  [dry] would clear iCloud download cache %s" % assets); continue
+        run(["killall", "bird"], 20)
+        aside = assets + ".old-sweep"
+        try:
+            os.rename(assets, aside)
+        except OSError as e:
+            log("  iCloud cache rename failed: %s" % e); continue
+        freed += remove(aside, "iCloud Drive download cache (iCloud idle, re-downloads on demand)")
+    return freed
 
 
 # ----------------------------------------------------------------- Nextcloud (Pi, over the LAN)
