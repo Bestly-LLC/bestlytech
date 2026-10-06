@@ -49,6 +49,12 @@ const tagList = (xml: string) => [...new Set((xml.match(/<(?:[\w-]+:)?[\w-]+/g) 
 /** Property names in a vCard, no values: used to see why a card yielded no phone number. */
 const props = (card: string) => [...new Set(unfold(card).split("\n").map((l) => l.slice(0, Math.max(l.indexOf(":"), 0)).toUpperCase().replace(/^ITEM\d+\./, "").split(";")[0]).filter(Boolean))].slice(0, 20).join(",");
 
+/** Shape of each TEL on a card: how many digits, and whether it starts with +. No number is ever logged. */
+const telShapes = (card: string) => unfold(card).split("\n")
+  .filter((l) => /^(?:item\d+\.)?TEL[;:]/i.test(l))
+  .map((l) => { const v = l.slice(l.indexOf(":") + 1); return `${v.trim().startsWith("+") ? "+" : ""}${v.replace(/\D/g, "").length}d`; })
+  .slice(0, 6).join(" ") || "none";
+
 const PRINCIPAL_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
 const HOME_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:cd="urn:ietf:params:xml:ns:carddav"><d:prop><cd:addressbook-home-set/></d:prop></d:propfind>`;
 const BOOKS_XML = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:resourcetype/></d:prop></d:propfind>`;
@@ -137,7 +143,7 @@ export async function fetchPeople(c: Creds, trace: string[] = []): Promise<{ peo
       if (!data) continue;
       withData++;
       const card = unxml(data);
-      if (withData === 1) trace.push(`4 card props: ${props(card)}`);
+      if (withData === 1) trace.push(`4 card props: ${props(card)}`, `4 card tels: ${telShapes(card)}`, `4 card chars: ${card.length}, lines: ${unfold(card).split("\n").length}`);
       for (const p of parseCard(card)) if (!byPhone.has(p.phone)) byPhone.set(p.phone, p);
     }
     if (!withData) trace.push(`4 no address-data in the answer; elements: ${tagList(r.text)}`);
