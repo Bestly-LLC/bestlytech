@@ -475,3 +475,17 @@ export async function previewRequest(ctx: Ctx, c: Row, settings: Row) {
   return { shops: shops.map((s) => ({ name: s.name, channel: s.email ? "email" : "call", score: Math.round(shopScore(s) * 10) / 10 })),
     subject: `Photo estimate request: ${carName(c)} bumper damage [CC-XXXXX]`, body: requestBody(shops[0] ?? { name: "Shop" }, c, damage, { after: Math.min(n.after, 8), before: Math.min(n.before, 2) }, "CC-XXXXX") };
 }
+
+// op preview_parse {shop, subject, body}: run the reply reader on sample text and show what it would record; nothing is saved
+export async function previewParse(ctx: Ctx, shop: string, subject: string, bodyText: string) {
+  const body = cleanReply(bodyText);
+  const r = await ctx.llm({ task: "extract", system: EXTRACT_SYS, user: `SHOP: ${shop}\nSUBJECT: ${subject}\nHAS ATTACHMENT: false\nREPLY:\n${body}`,
+    json: true, job: SLUG, ref: "preview", fn: SLUG, paid: "never", privacy: "private", deadlineMs: 45_000, maxTokens: 600, validate: (j: Row) => typeof j === "object" && j ? null : "not an object" });
+  const x = r.json as Row;
+  let total: number | null = typeof x.total === "number" ? x.total : null;
+  if (total !== null) {
+    const asText = [total.toLocaleString("en-US"), total.toFixed(2), String(Math.round(total))];
+    if (!asText.some((t) => body.replace(/,/g, "").includes(t.replace(/,/g, "")))) total = null;
+  }
+  return { parsed: x, total_accepted: total, regex_total: regexTotal(body) };
+}

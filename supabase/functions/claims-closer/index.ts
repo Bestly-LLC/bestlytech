@@ -28,7 +28,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm, LlmUnavailable } from "../_shared/free-llm.ts";
 import { corsWith } from "../_shared/cors.ts";
-import { estimatePipeline, previewRequest, type Ctx } from "./estimates.ts";
+import { estimatePipeline, previewParse, previewRequest, type Ctx } from "./estimates.ts";
 import { answeredQuestions, bookingStep, thirdParties } from "./booking.ts";
 
 const SECRETS: string[] = (() => {
@@ -340,6 +340,7 @@ Deno.serve(async (req) => {
     if (!pc) return J({ error: "no case" }, 404);
     return J({ ok: true, ...(await previewRequest(ctx, pc, settings)) });
   }
+  if (op === "preview_parse") return J({ ok: true, ...(await previewParse(ctx, String(body.shop ?? "Shop"), String(body.subject ?? ""), String(body.body ?? ""))) });
   if (op === "evidence_urls") {   // Claims page: signed photo links (1 hour)
     const { data } = await db.from("claim_evidence").select("id, storage_path").eq("case_id", String(body.case_id ?? ""));
     const out: Record<string, string> = {};
