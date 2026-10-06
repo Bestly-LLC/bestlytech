@@ -3,6 +3,14 @@
 #   roster: comma-separated names of everyone on the call besides Jared.
 #           "-" means none given. With no roster argument at all, asks in a dialog.
 cd "$HOME/MeetingRec"
+# Already recording? Don't start a second recorder (two at once cut each other off).
+OLD="$(cat .pid 2>/dev/null)"
+if [ -n "$OLD" ] && ps -p "$OLD" -o comm= 2>/dev/null | grep -q talkrec; then
+  SINCE=$(date -r "$(cat .started 2>/dev/null || date +%s)" "+%-I:%M %p")
+  osascript -e "display notification \"Already recording since $SINCE. Nothing else to do.\" with title \"Meeting Recorder\"" 2>/dev/null
+  echo "already recording: $(cat .current) (pid $OLD) since $SINCE"
+  exit 0
+fi
 NAME="${1:-meeting-$(date +%Y%m%d-%H%M)}"
 ROSTER="$2"
 # Scout (agent.py) can't record by itself: macOS only lets the Start Recording

@@ -82,24 +82,40 @@ def label(n):
     return re.sub(r"\s+", "-", n.strip()).upper()
 
 
-rows = []
-people = {}
-for t in others:
+def track_rows(t, lab):
+    """Transcribe one Talk track; rows are (seconds on the recording's clock, label, text)."""
     src = f"{tdir}/{t['file']}"
     m4a = src[:-5] + ".m4a"
     if not os.path.exists(m4a):
         subprocess.run([FFMPEG, "-loglevel", "error", "-y", "-i", src, "-ac", "1", "-c:a", "aac", "-b:a", "64k", m4a], check=False)
     if not os.path.exists(m4a) or os.path.getsize(m4a) < 2000:
-        continue
-    lab = label(t["name"])
+        return None
     offset = t["t0"] / 1000.0 - started
     out = subprocess.run([SCRIBE, m4a, lab], capture_output=True, text=True).stdout
-    n = 0
+    got = []
     for line in out.splitlines():
         p = line.split("\t")
         if len(p) >= 3 and p[2].strip():
-            rows.append((float(p[0]) + offset, lab, p[2].strip()))
-            n += 1
+            got.append((float(p[0]) + offset, lab, p[2].strip()))
+    return got
+
+
+def media_seconds(path):
+    """Length of an audio file, 0 if missing or unreadable (e.g. the recorder hung before finishing it)."""
+    r = subprocess.run([FFMPEG, "-i", path], capture_output=True, text=True)
+    m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", r.stderr)
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else 0.0
+
+
+rows = []
+people = {}
+for t in others:
+    lab = label(t["name"])
+    got = track_rows(t, lab)
+    if got is None:
+        continue
+    rows += got
+    n = len(got)
     people.setdefault(t["name"].strip(), {"lines": 0, "minutes": 0.0})
     people[t["name"].strip()]["lines"] += n
     if t.get("t1"):
@@ -117,6 +133,21 @@ try:
 except OSError:
     pass
 
+# If the mic recording stopped early or is unreadable, Jared's own Talk track
+# (what everyone else heard) fills in from where the mic ends.
+mic_end = media_seconds(f"{R}/{name}-mic.m4a")
+jared_filled = 0
+for t in tracks:
+    if t["name"].strip().lower() not in JARED_NAMES:
+        continue
+    t_end = ((t.get("t1") or t["t0"]) / 1000.0) - started
+    if t.get("t1") and t_end <= mic_end + 5:
+        continue                     # the mic already covers this whole track
+    for r in track_rows(t, "JARED") or []:
+        if r[0] > mic_end - 1:
+            rows.append(r)
+            jared_filled += 1
+
 rows.sort(key=lambda r: r[0])
 out = []
 for t, lab, txt in rows:
@@ -125,6 +156,9 @@ for t, lab, txt in rows:
 
 hdr = ["# Names come straight from Nextcloud Talk: the notetaker recorded each person on their own track.",
        "# JARED = your own mic."]
+if jared_filled:
+    hdr.append(f"# Your mic recording ended at {int(mic_end) // 60:02d}:{int(mic_end) % 60:02d}; "
+               f"{jared_filled} of your lines after that come from your Talk audio.")
 if fallback_used:
     hdr.append(f"# {fallback_used} name(s) taken from Talk's 'joined the call' log (the page didn't show them).")
 for who, info in people.items():

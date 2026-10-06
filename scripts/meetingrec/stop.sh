@@ -10,6 +10,8 @@ stage() { echo "== $1 =="; echo "$1" > .stage; }
 stage "stopping the recording"
 [ -n "$PID" ] && kill -INT "$PID" 2>/dev/null
 for i in $(seq 1 20); do kill -0 "$PID" 2>/dev/null || break; sleep 1; done
+# a recorder that hung never finishes on its own; don't leave it running
+kill -0 "$PID" 2>/dev/null && { echo "recorder $PID did not stop, killing it"; kill -9 "$PID" 2>/dev/null; }
 ls -la "recordings/$NAME"-*.m4a
 # the notetaker (Talk) finishes its per-person tracks
 if [ -d "recordings/$NAME-talk" ]; then
