@@ -344,3 +344,10 @@ Plan: `docs/wall-sky-hd-opusplan.md`.
   near the wall. Road names are 500-weight mixed case in see-through blue-gray (`rgba(150,182,218,.56-.72)`) so they don't
   read as places (bold white caps). The Home tag (`#airYou`) is redrawn sharp on `#airScrL`; the warped one is hidden.
   Backups `wall.html.bak_skyframe*_*`.
+- **9:30 PM, planes in screen space:** `#airPlanes` now lives in a fixed screen layer `#airScrP` (moved there at load by
+  `scrPlanesInit()`, clipped to the sky quad, opacity mirrored from `#air`). The one plane writer (`o.el.style.transform`)
+  calls `skyPt(x,y)`, which returns a 2D `matrix()` from the sky frame at that spot, so rings, beacons, rotors and tags
+  keep all their CSS and animation but paint at the projector's resolution. Scale `PJ.kp` = max(true size at home, enough
+  for the 50 px tag to get ~14 projector rows), which makes planes about 2x larger on the ceiling (at true size a tag was
+  ~7 rows: unreadable). Trails moved to screen canvas `#airScrTr` (old `#airCv` hidden by `body.scrtr`, its display and
+  opacity still drive the trails). 61 fps on the Mac. Backups `wall.html.bak_skyplanes*_*`.
