@@ -154,7 +154,7 @@ const frame = "admin-shell flex h-[100dvh] w-full flex-col gap-0 overflow-hidden
 const pad = "px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6";
 
 /** Everything needed to place (or place again) one call. */
-type CallParams = { mode: DialMode; phone: string; name: string; purpose: string; company: string; connect: boolean; voice?: "jared" };
+type CallParams = { mode: DialMode; phone: string; name: string; purpose: string; company: string; connect: boolean; voice?: "jared"; force?: boolean };
 
 /** Tab labels, so the tablist is built from whichever kinds a page offers instead of a hardcoded pair. */
 const MODE_LABEL: Record<DialMode, string> = { personal: "Personal", demo: "RoofGuard", bridge: "Bridge" };
@@ -182,7 +182,7 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
   const openRef = useRef(onOpenChange);
   openRef.current = onOpenChange;
 
-  useEffect(() => { if (!open) { setErr(null); setBusy(false); } }, [open]);
+  useEffect(() => { if (!open) { setErr(null); setBusy(false); setRetry(null); } }, [open]);
   useEffect(() => { if (open) setRecents(loadRecents(mode)); }, [open, mode]);
   useEffect(() => {
     if (!open) return;
@@ -229,6 +229,8 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
   const voiceReady = !!voiceInfo?.id && !voiceInfo.paused;
   const voiceOn = useVoice && voiceReady;
 
+  // the call the redial guard turned down; Jared can send it again with force
+  const [retry, setRetry] = useState<CallParams | null>(null);
   const [redialBusy, setRedialBusy] = useState(false);
   const [redialErr, setRedialErr] = useState<string | null>(null);
 
@@ -238,12 +240,17 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
     const fn = pr.mode === "demo" ? "roofguard-caller" : "ava-assistant";
     const voice = pr.mode === "personal" && pr.voice === "jared" && voiceReady ? "jared" : undefined;
     const body = pr.mode === "personal"
-      ? { action: "call", phone: pr.phone, name: pr.name, purpose: pr.purpose, connect: pr.connect, ...(voice ? { voice } : {}) }
+      ? { action: "call", phone: pr.phone, name: pr.name, purpose: pr.purpose, connect: pr.connect, ...(pr.force ? { force: true } : {}), ...(voice ? { voice } : {}) }
       : pr.mode === "bridge"
         ? { action: "bridge", phone: pr.phone, org: pr.company.trim(), topic: pr.purpose }
         : { action: "demo_call", phone: pr.phone, name: pr.name, company: pr.company.trim() };
     const { data, error } = await supabase.functions.invoke(fn, { body });
-    if (error || !data?.ok) return invokeError(error, data, "The call didn't go out. Try again in a minute.");
+    if (error || !data?.ok) {
+      // the redial guard: a refusal Jared can override, so offer "Call anyway" instead of a dead end
+      setRetry(data?.retryable === true ? pr : null);
+      return invokeError(error, data, "The call didn't go out. Try again in a minute.");
+    }
+    setRetry(null);
     setRecents(saveRecent(pr.mode, { phone: pr.phone, name: pr.name, purpose: pr.purpose, company: pr.company, connect: pr.connect, ...(voice ? { voice } : {}) }));
     // a bridge call has no "their name" field, so the company is who the in-call screen says the call is with
     const who = pr.mode === "bridge" ? pr.company.trim() || fmt(pr.phone) : pr.name.trim() || fmt(pr.phone);
@@ -265,6 +272,16 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
     if (!canCall) return;
     setBusy(true); setErr(null);
     const msg = await place({ mode, phone: clean, name, purpose, company, connect, ...(voiceOn ? { voice: "jared" as const } : {}) });
+    setBusy(false);
+    if (msg) { setErr(msg); return; }
+    setDigits(""); setName(""); setCompany(""); setPurpose(""); setConnect(false); setUseVoice(false);
+  };
+  /** Jared overriding the redial guard: the same call again, with force. */
+  const callAnyway = async () => {
+    const pr = retry;
+    if (!pr) return;
+    setBusy(true); setErr(null); setRetry(null);
+    const msg = await place({ ...pr, force: true });
     setBusy(false);
     if (msg) { setErr(msg); return; }
     setDigits(""); setName(""); setCompany(""); setPurpose(""); setConnect(false); setUseVoice(false);
@@ -410,7 +427,12 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
               <p className="text-xs text-white/50">She runs the RoofGuard script for this company. Leave it blank to use the practice facility (Riverside Medical Center). Leads already on the call list are called by the queue, not from here.</p>
             </div>
           ) : null}
-          {err && <p role="alert" className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}
+          {err && <div role="alert" className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <p>{err}</p>
+            {retry && <button type="button" disabled={busy} onClick={() => void callAnyway()}
+              className="mt-2 inline-flex min-h-[44px] items-center rounded-xl bg-white/10 px-3 text-[15px] font-medium text-white ring-1 ring-white/15 transition hover:bg-white/15 motion-safe:active:scale-[0.98] disabled:opacity-50">
+              Call anyway</button>}
+          </div>}
         </div>
 
         {/* The one real gotcha, in plain words: a missed ring sends the rep back to Ava, so the phone stays in his hand. */}

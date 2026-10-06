@@ -487,13 +487,15 @@ async function setup(): Promise<Response> {
 }
 
 // ---------- outbound ----------
-type Placed = { ok: true; call_id: string | null; calling: string } | { ok: false; error: string; status: number };
+// retryable: Jared can send the same call again with force (the redial gate, which is about the number's reputation,
+// not about money or safety).
+type Placed = { ok: true; call_id: string | null; calling: string } | { ok: false; error: string; status: number; retryable?: boolean };
 
 /** Prompt rules for a call in Jared's cloned voice (docs/ava-voice-clone-opusplan.md). The opener already discloses. */
 const VOICE_RULES = "VOICE MODE: you are speaking in Jared's own voice, so you must be clear you are his AI assistant and not him. Your first line already says so; never skip or contradict it. If anyone asks, say you're an AI. Never say \"this is Jared\" or \"I'm Jared\", and never speak as if you are him. Never commit to anything for him: no money, plans, appointments or promises. Say you'll pass it on.";
 
 /** Places one call as Ava. Everything an outbound call needs lives here so the dialer, "Connect me" and follow-ups share it. */
-async function place(o: { phone: string; name?: string; purpose?: string; connect?: boolean; bridge?: boolean; org?: string; first_line?: string; voice_id?: string; voice_mode?: "ava" | "jared"; booking?: Record<string, unknown> }): Promise<Placed> {
+async function place(o: { phone: string; name?: string; purpose?: string; connect?: boolean; bridge?: boolean; org?: string; force?: boolean; first_line?: string; voice_id?: string; voice_mode?: "ava" | "jared"; booking?: Record<string, unknown> }): Promise<Placed> {
   const to = toE164(o.phone);
   if (!to) return { ok: false, error: "Enter a 10-digit US or Canada number.", status: 400 };
   const { data: s } = await db.from("ava_settings").select("*").eq("id", true).single();
@@ -501,6 +503,12 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
   if (!s?.agent_id || !s.phone_number_id || !key) return { ok: false, error: "Ava isn't set up yet. Run Setup on /admin/ava.", status: 412 };
   const gate = await spendGate();
   if (gate.over) return { ok: false, error: gate.message ?? "Daily spend cap reached. Raise it in Setup or try tomorrow.", status: 429 };
+  // Don't hammer one number: repeat dialing is what gets her line flagged as spam and sent straight to voicemail.
+  if (!o.bridge) {
+    const { data: dg } = await db.rpc("ava_dial_gate", { p_phone: to, p_force: o.force === true });
+    const d = (dg ?? {}) as { blocked?: boolean; message?: string };
+    if (d.blocked) return { ok: false, error: d.message ?? "Ava has called this number several times in the last hour.", status: 429, retryable: true };
+  }
   const { data: contact } = await db.from("ava_contacts").select("id, name, relationship, notes, inner_circle").eq("phone", to).maybeSingle();
   const name = String(o.name ?? "").trim().slice(0, 40) || contact?.name || "";
   const purpose = String(o.purpose ?? "").replace(/\{\{|\}\}/g, "").trim().slice(0, o.booking ? 900 : 600) || "No specific reason given: use the check-in.";
@@ -551,9 +559,9 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
 
 async function call(body: Record<string, unknown>): Promise<Response> {
   const r = await place({ phone: String(body.phone ?? ""), name: String(body.name ?? ""), purpose: String(body.purpose ?? ""),
-    connect: body.connect === true, first_line: String(body.first_line ?? ""), voice_mode: body.voice === "jared" ? "jared" : "ava" });
+    connect: body.connect === true, force: body.force === true, first_line: String(body.first_line ?? ""), voice_mode: body.voice === "jared" ? "jared" : "ava" });
   return r.ok ? Response.json({ ok: true, call_id: r.call_id, calling: r.calling }, { headers: CORS })
-    : Response.json({ ok: false, error: r.error }, { status: r.status, headers: CORS });
+    : Response.json({ ok: false, error: r.error, retryable: r.retryable === true }, { status: r.status, headers: CORS });
 }
 
 /** "Get a human, then get me on": she dials a company, works the phone tree and the hold queue, and transfers the live
