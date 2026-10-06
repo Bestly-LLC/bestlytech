@@ -7,6 +7,12 @@ own plans with those. Centering you she is recording her own videos, do not want
 have to be careful about AI videos as well, if anything i want it to be legal and kinda do what Autoreel app does."
 Also: AWS connector reconnected; Bestly is in the AMD AI Developer Program (AMD Developer Cloud GPUs + Fireworks AI credits).
 
+## Status (end of 2026-10-06)
+- Track A done: Montage makes HOKU, InventoryProof, Cookie Yeti, Bestly Cloud (tests IP adea4e71, CY 17c81d21, BC 9b68699b; HOKU 56e7fb1d no regression). Spark stub pinned 246eb47. B-roll for new brands untested. 6 bestly-cloud claim_rules added unapproved (Jared to review).
+- Track B done: box renders native 704x1280 (job 6938e70, $0.039); overcharge fixed; Spark no-AI-footage guard live. Test spend about $0.20.
+- Track C done: Fireworks rung `fireworks:kimi-k3` dormant until Vault `fireworks_api_key`; AMD Dev Cloud script written, not run (LTX-2.5 on ROCm unverified).
+- Tracks D and E: waiting on Jared.
+
 ## Where things stand (start of this plan)
 - Montage (OpenMontage on the Pi, `tools/montage`, systemd `bestly-montage`) makes HOKU shorts: free-AI script inside
   HOKU's claim rules, Piper voice, HokuShort composition, optional LTX b-roll, files to Studio, posts to the Spark thread.
