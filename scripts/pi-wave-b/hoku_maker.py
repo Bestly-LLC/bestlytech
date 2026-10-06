@@ -44,6 +44,7 @@ import uuid
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import freellm  # noqa: E402
 import lib  # noqa: E402
+import playbook  # noqa: E402  (2026-10-06: content playbook, see playbook.py)
 from jobs import brand_maker as bm  # noqa: E402  (shared: _json, _stats, _learn, _lessons)
 
 KIT = "/opt/bestly/hoku-kit"
@@ -374,7 +375,7 @@ def _write(fmt, layout, topic, posts, past, deadline):
             + (f"Beats already used (do not reuse their words or rhythm): {' | '.join(_PAST_BEATS[-20:])}\n\n" if fmt == "moment" else "")
             + f"Recent HOKU posts (match the voice; do not repeat their ideas or lines):\n{recent}\n"
             + ("\nWhat we have learned (observations with sample sizes):\n" + "\n".join(f"- {l}" for l in lessons[:5]) if lessons else ""))
-    msgs = [{"role": "system", "content": SYS.format(about=ABOUT, format_rules=rules, schema=schema)},
+    msgs = [{"role": "system", "content": playbook.add(SYS.format(about=ABOUT, format_rules=rules, schema=schema))},
             {"role": "user", "content": user}]
     errs, plan, prov, tries, near = [], None, None, [], None
     for _ in range(4):

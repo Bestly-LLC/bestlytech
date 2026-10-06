@@ -36,6 +36,7 @@ import uuid
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import freellm  # noqa: E402
 import lib  # noqa: E402
+import playbook  # noqa: E402  (2026-10-06: content playbook, see playbook.py)
 
 MANIFEST = "https://bestly.tech/social/MANIFEST.json"
 HEALTH = "https://bestly.tech/cloud"
@@ -191,7 +192,7 @@ def _json(text):
 
 
 def _ask_json(system, user, check, deadline, tries=3):
-    msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    msgs = [{"role": "system", "content": playbook.add(system)}, {"role": "user", "content": user}]
     last = []
     for _ in range(tries):
         msg, provider = freellm.chat(msgs, None, max_tokens=2500, deadline=deadline)
@@ -208,7 +209,7 @@ def _ask_json(system, user, check, deadline, tries=3):
 
 
 def _caption(system, brief, deadline):
-    msgs = [{"role": "system", "content": system}, {"role": "user", "content": brief}]
+    msgs = [{"role": "system", "content": playbook.add(system)}, {"role": "user", "content": brief}]
     last, cap = [], ""
     for _ in range(3):
         # 2500 tokens: Gemini's thinking counts against max_tokens; 700 cut captions off mid-sentence.

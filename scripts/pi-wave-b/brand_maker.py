@@ -30,6 +30,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import freellm  # noqa: E402
 import lib  # noqa: E402
+import playbook  # noqa: E402  (2026-10-06: content playbook, see playbook.py)
 
 KEEP_READY = 2
 
@@ -259,7 +260,7 @@ def _make_one(brand, cfg, recent, bank_open, deadline, dry):
             f"Two earlier posts with this layout, ONLY for voice and length. Do not reuse their ideas, facts or words:\n{json.dumps(ex)[:3500]}\n\n"
             f"Recent posts (do not repeat their ideas):\n{recent_titles}\n"
             + ("\nWhat we have learned (observations with sample sizes):\n" + "\n".join(f"- {l}" for l in lessons[:5]) if lessons else ""))
-    msgs = [{"role": "system", "content": SYS.format(name=cfg["name"], about=cfg["about"], n=len(kinds))},
+    msgs = [{"role": "system", "content": playbook.add(SYS.format(name=cfg["name"], about=cfg["about"], n=len(kinds)))},
             {"role": "user", "content": user}]
     errs, plan, prov = [], None, None
     for _ in range(4):

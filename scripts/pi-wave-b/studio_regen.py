@@ -21,6 +21,7 @@ import urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import freellm  # noqa: E402
 import lib  # noqa: E402
+import playbook  # noqa: E402  (2026-10-06: content playbook, see playbook.py)
 
 MAX_ITEMS = 3          # per run; the rest wait an hour
 DEADLINE_S = 600
@@ -95,7 +96,7 @@ def _ask(item, variants, memo, rules, deadline, fix=None):
             f"Claim rules the gate enforces: {rules or '(standard)'}\n\n"
             f"Post type: {item.get('media_type')}\nTitle: {item.get('title')}\nCaption:\n{item.get('caption') or ''}\n\n"
             f"Platform variants:\n{var}\n\nNotes, oldest first:\n{notes}")
-    msgs = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
+    msgs = [{"role": "system", "content": playbook.add(SYSTEM)}, {"role": "user", "content": user}]
     if fix:
         msgs += [{"role": "assistant", "content": json.dumps(fix["prev"])},
                  {"role": "user", "content": "The claim gate blocked that: " + "; ".join(fix["blocks"])

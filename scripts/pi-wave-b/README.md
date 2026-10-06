@@ -42,3 +42,13 @@ Database side: `supabase/migrations/20261004000000_pi_wave_b_c.sql` (Spark sessi
 ## Rollback
 `crontab -l` backups: `/home/pi/scripts/crontab.bak-20261003-waveB`. freellm.py backups:
 `/opt/bestly/cron/freellm.py.bak-20261003-freellm`, `.bak-20261003-writer`.
+
+## Content playbook (2026-10-06)
+Jared: the `scroll-stopping-creative` and `just-scrape` skills are what Spark and Studio use for all content.
+`/opt/bestly/cron/playbook.py` (this folder's `playbook.py`) reads `studio_content_playbook('writing')` from Supabase
+(cached 1 hour in `state/playbook-writing.txt`, last copy used if Supabase is down) and every writer appends it to its
+system prompt: brand_maker, hoku_maker, bestly_social (plans + captions), cy_maker, studio_regen, Montage
+(`brands/_common.py`, `brands/hoku.py`). Spark reads the same RPC with role `all`. To add a skill to all content:
+insert it into `bestly_skills` and add a `studio_content_skills` row. Health check: `python3 /opt/bestly/cron/playbook.py`.
+Research (`just-scrape` CLI) is installed on the Pi; key in Vault `pi:sgai_api_key`. Daily jobs do not research on their
+own (the credits are a one-time allowance); Spark's `web_research` tool does, capped at 3 calls a conversation.

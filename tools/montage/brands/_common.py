@@ -20,6 +20,7 @@ import time
 sys.path.insert(0, "/opt/bestly/cron")
 import freellm  # noqa: E402
 import lib  # noqa: E402
+import playbook  # noqa: E402  (2026-10-06: content playbook, see playbook.py)
 from jobs import brand_maker as bm  # noqa: E402
 
 NBSP = " "
@@ -230,7 +231,7 @@ def write(job, log, cfg):
                            for sc in parent.get("scenes", [])]}
         system += REVISE.format(note=job.get("revise_note") or "", script=json.dumps(keep, indent=1, ensure_ascii=False))
         user = "Re-cut it now."
-    msgs = [{"role": "system", "content": system},
+    msgs = [{"role": "system", "content": playbook.add(system)},
             {"role": "user", "content": user or f"This is the first {cfg['name']} video."}]
     deadline = time.time() + 900
     near, tries = None, []

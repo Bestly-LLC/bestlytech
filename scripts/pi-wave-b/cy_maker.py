@@ -31,6 +31,7 @@ import urllib.request
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import freellm  # noqa: E402
 import lib  # noqa: E402
+import playbook  # noqa: E402  (2026-10-06: content playbook, see playbook.py)
 from jobs import brand_maker as bm  # noqa: E402  (shared _json)
 
 KIT = "/opt/bestly/cy-kit"
@@ -210,7 +211,7 @@ def _write(topic, mid, fb, deadline):
     user = (f"Topic: {topic}\n\nWhat Jared, Eli and Elizabeth have said about recent carousels (write against this):\n{notes}\n"
             + (f"\nHow earlier weekly drafts were decided:\n{mine}\n" if mine else "")
             + "\nExisting post titles (do not repeat their ideas): " + "; ".join((fb.get("titles") or [])[:40]))
-    msgs = [{"role": "system", "content": SYS.format(deck=DECK, voice=VOICE, mid=mid)}, {"role": "user", "content": user}]
+    msgs = [{"role": "system", "content": playbook.add(SYS.format(deck=DECK, voice=VOICE, mid=mid))}, {"role": "user", "content": user}]
     titles = fb.get("titles") or []
     errs, plan, prov, tries, near = [], None, None, [], None
     for _ in range(4):
