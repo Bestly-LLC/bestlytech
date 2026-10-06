@@ -363,6 +363,26 @@ const TOOLS = [
     input_schema: { type: "object", properties: { key: { type: "string" } }, required: ["key"] },
   },
   {
+    name: "make_video",
+    description:
+      "Make an AI video clip (LTX-2.5 on Bestly's AWS GPU box, 1280x720 with sound, 1-20 seconds, default 5). " +
+      "quote: the cost estimate, no money spent. make: queue it; needs confirmed:true after Jared said yes to the estimate. " +
+      "status: where a clip is (ref = its 7-letter code; omit for this thread's latest). " +
+      "ALWAYS quote first and paste the returned text word for word (it carries the cost line), ending with OPTIONS: Make it | Not now. " +
+      "After make, paste the returned text word for word. The finished clip and its actual cost are posted into this thread automatically.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["quote", "make", "status"] },
+        prompt: { type: "string", description: "What the clip shows: subject, action, setting, light, camera move. One rich paragraph." },
+        seconds: { type: "number", description: "Clip length, 1-20. Default 5." },
+        ref: { type: "string" },
+        confirmed: { type: "boolean" },
+      },
+      required: ["action"],
+    },
+  },
+  {
     name: "ask_user",
     description:
       "Ask Jared 1-4 multiple-choice questions, shown as tappable answers (he can always type his own instead). Use it when the ask is " +
@@ -844,7 +864,7 @@ ${convo}`;
  */
 const FREE_TOOLS = new Set([
   "today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "notify", "mark_done",
-  "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user",
+  "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user", "make_video",
 ]);
 const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript"]);
 const FREE_STEPS = 10;
@@ -891,6 +911,7 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["todo_owner", "mark_done"], /\b(to-?dos?|tasks?|done|finish|mark|owner|assign|mine|eli'?s?)\b/i],
   [["clear_alerts", "resolve_incident"], /\b(alerts?|incidents?|bell|resolve|clear|fixed|warning|notification)\b/i],
   [["learn"], /\b(learn|remember|lesson|next time)\b/i],
+  [["make_video"], /\b(video|videos|clip|clips|ltx|render|animate|animation|footage|b-?roll|reel)\b/i],
 ];
 const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "ask_user"]);
 
@@ -1337,6 +1358,32 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
       out = error ? { ok: false, error: error.message } : { ok: true, cleared: data };
       break;
     }
+    case "make_video": {
+      // 2026-10-05: LTX-2.5 clips on the AWS GPU box (migration 20261006050000_ltx_video_queue). Cost in-line: estimate, then actual.
+      const secs = Math.max(1, Math.min(20, Math.round(Number(args.seconds ?? 5)) || 5));
+      if (args.action === "status") {
+        let ref = String(args.ref ?? "").trim();
+        if (!ref) {
+          const { data: last } = await db.from("ltx_jobs").select("code").eq("thread_id", threadId).order("requested_at", { ascending: false }).limit(1);
+          ref = (last as any)?.[0]?.code ?? "";
+        }
+        if (!ref) { out = { ok: false, error: "no video in this thread yet" }; break; }
+        const { data, error } = await db.rpc("ltx_status", { p_ref: ref });
+        out = error ? { ok: false, error: error.message } : { ok: true, ...(data as any) };
+        break;
+      }
+      if (args.action === "make" && args.confirmed === true) {
+        const prompt = String(args.prompt ?? "").trim();
+        if (prompt.length < 3) { out = { ok: false, error: "prompt required" }; break; }
+        const { data, error } = await db.rpc("ltx_request", { p_prompt: prompt, p_seconds: secs, p_source: "scout", p_thread: threadId });
+        out = error ? { ok: false, error: error.message } : { ok: true, ...(data as any) };
+        break;
+      }
+      const { data, error } = await db.rpc("ltx_quote", { p_seconds: secs });
+      out = error ? { ok: false, error: error.message }
+        : { ok: true, ...(data as any), hint: args.action === "make" ? "Not made yet: show him this estimate and ask. Call make with confirmed:true after his yes." : undefined };
+      break;
+    }
     case "ask_user":
       // Reached only when the questions were malformed (a valid call ends the turn before tools run).
       out = { ok: false, error: "bad_questions", hint: "1-4 questions, each with a question and 2-4 options (label, optional description)." };
@@ -1453,7 +1500,7 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
 }
 
 // Tools autopilot never runs even without a confirmed flag: they reach Jared or a machine.
-const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "db_write", "clear_alerts", "ask_user"]);
+const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "db_write", "clear_alerts", "ask_user", "make_video"]);
 
 
 /**

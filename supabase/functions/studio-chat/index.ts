@@ -337,6 +337,26 @@ const TOOLS = [
     },
   },
   {
+    name: "make_video",
+    description:
+      "Make an AI video clip (LTX-2.5 on Bestly's AWS GPU box, 1280x720 with sound, 1-20 seconds, default 5) - b-roll, a product moment, a mood shot. " +
+      "quote: the cost estimate, nothing spent. make: queue it; needs confirmed:true and only after the person said yes to that estimate. " +
+      "status: where a clip is (ref = its 7-letter code; omit for this thread's latest). " +
+      "ALWAYS quote first and paste the returned text word for word (it carries the cost line), ending with OPTIONS: Make it | Not now. " +
+      "After make, paste the returned text word for word. The finished clip link and its actual cost are posted into this thread automatically.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["quote", "make", "status"] },
+        prompt: { type: "string", description: "What the clip shows: subject, action, setting, light, camera move. One rich paragraph." },
+        seconds: { type: "number", description: "Clip length, 1-20. Default 5." },
+        ref: { type: "string" },
+        confirmed: { type: "boolean" },
+      },
+      required: ["action"],
+    },
+  },
+  {
     name: "handoff",
     description:
       "Record a job that needs a person or a full Cowork session rather than you or the builder: re-rendering carousel or video images, " +
@@ -565,6 +585,35 @@ async function runTool(
       }).eq("id", requestId);
       await db.from("studio_request_messages").insert({ request_id: requestId, role: "claude", staff_id: staffId, body: `[needs a person] ${args.title}\n\n${args.brief}` });
       out = { ok: true, handed_off: true };
+      break;
+    }
+    case "make_video": {
+      // 2026-10-05: LTX-2.5 clips on the AWS GPU box (migration 20261006050000_ltx_video_queue). Cost in-line: estimate, then actual.
+      const secs = Math.max(1, Math.min(20, Math.round(Number(args.seconds ?? 5)) || 5));
+      if (args.action === "status") {
+        let ref = String(args.ref ?? "").trim();
+        if (!ref) {
+          const { data: last } = await db.from("ltx_jobs").select("code").eq("thread_id", requestId).order("requested_at", { ascending: false }).limit(1);
+          ref = (last as any)?.[0]?.code ?? "";
+        }
+        out = ref ? await rpc("ltx_status", { p_ref: ref }) : { ok: false, error: "no video in this thread yet" };
+        break;
+      }
+      if (args.action === "make" && args.confirmed === true) {
+        // money is spent only on a plain yes to the estimate
+        const { data: lastStaff } = await db.from("studio_request_messages").select("body").eq("request_id", requestId).eq("role", "staff")
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (!/^\s*(yes|yep|yeah|sure|ok|okay|go|do it|make it)\b/i.test(String((lastStaff as any)?.body ?? ""))) {
+          out = { ok: false, error: "not_confirmed", hint: "Show the estimate and wait for their yes (OPTIONS: Make it | Not now)." };
+          break;
+        }
+        const prompt = String(args.prompt ?? "").trim();
+        if (prompt.length < 3) { out = { ok: false, error: "prompt required" }; break; }
+        out = await rpc("ltx_request", { p_prompt: prompt, p_seconds: secs, p_source: "spark", p_thread: requestId });
+        break;
+      }
+      out = await rpc("ltx_quote", { p_seconds: secs });
+      if (args.action === "make") out = { ...out, hint: "Not made yet: show this estimate and ask. Call make with confirmed:true after their yes." };
       break;
     }
     default:

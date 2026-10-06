@@ -109,3 +109,6 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.wall-badge-email]
     verify_jwt = false
+
+[functions.ltx-box]
+    verify_jwt = false

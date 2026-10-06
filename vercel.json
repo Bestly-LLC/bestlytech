@@ -34,6 +34,10 @@
       "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass?t=:token"
     },
     {
+      "source": "/v/:code",
+      "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/ltx-box?v=:code"
+    },
+    {
       "source": "/t/(.*)",
       "destination": "/trip.html"
     },
