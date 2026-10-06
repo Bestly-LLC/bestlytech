@@ -79,6 +79,11 @@ import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: 
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v34 (2026-10-06, Jared: "queue messages to Scout as well as interrupt and send now, just like Claude"): his window
+//   queues what he types while Scout works and sends it when Scout is done. "Send now" / Stop interrupt: op:"stop"
+//   writes a STOP_MARK message, and every run (free steps, paid turns, auto-continue hops, the final write) checks
+//   for a message from him newer than the one it is answering; if there is one it stops and writes nothing more.
+//   An interactive message takes the one-paid-reply lock instead of being refused (the old run is stopping anyway).
 // v33 (2026-10-05): on free AI Scout keeps working until the job is done or it needs him. When a free run uses up
 //   its steps or time with work in hand, it posts a short progress note and calls itself again (auto_continue,
 //   up to AUTO_HOPS rounds). A new message from him stops the chain. Paid AI keeps its own budget unchanged.
@@ -115,6 +120,15 @@ import { corsWith } from "../_shared/cors.ts";
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
 const MAX_TURNS = 10;
 const AUTO_HOPS = 8;             // v33: free-AI jobs carry on by themselves up to 8 more rounds (~80 steps) before asking
+const STOP_MARK = "[Stopped]";   // v34: his Stop button; the window draws it as a divider, the models read it as "he stopped you"
+
+/** v34: has he written (or tapped Stop) since `since`? Then the run answering the older message stops. */
+async function supersededSince(threadId: string, since: string | null): Promise<boolean> {
+  if (!since) return false;
+  const { data } = await db.from("admin_chat_messages").select("id").eq("thread_id", threadId).eq("role", "user")
+    .gt("created_at", since).limit(1);
+  return !!data?.length;
+}
 const BUILD_POLLS = 10;          // ~65s of watching; builds here take ~35s
 const PI_WAIT_MS = 60_000;       // how long to wait for the Pi to report back inside one turn
 const REC_WAIT_MS = 20_000;      // how long to wait for the Mac mini to pick up a recorder job
@@ -958,8 +972,8 @@ function trimForBudget(msgs: Msg[], maxTokens = 3800) {
 /** The message holding his current request: trimming never drops it. */
 const KEEP = new WeakSet<Msg>();
 
-async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean; askFirst?: boolean } = {}):
-  Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean }> {
+async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean; askFirst?: boolean; since?: string | null } = {}):
+  Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean; stopped?: boolean }> {
   const autopilot = !!opts.autopilot;
   const until = Date.now() + FREE_BUDGET_MS;
 
@@ -1019,7 +1033,8 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     .filter((m) => !(m.role === "assistant" && /^(I'd need paid AI|NEEDS_YES: Let Scout work on this with paid AI)/.test(String(m.body))));
   turns.forEach((m, i) => {
     const role = m.role === "assistant" ? "assistant" : "user";
-    const body = String(m.body ?? "").slice(0, i === turns.length - 1 ? 20_000 : 700) || "(empty)";
+    const raw = String(m.body ?? "") === STOP_MARK ? "(Jared stopped your last reply here.)" : String(m.body ?? "");
+    const body = raw.slice(0, i === turns.length - 1 ? 20_000 : 700) || "(empty)";
     const last = msgs[msgs.length - 1];
     if (last.role === role) last.content += "\n\n" + body;
     else msgs.push({ role, content: body });
@@ -1033,6 +1048,8 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   let replied = false, acted = false, fails = 0, nudges = 0;
 
   for (let i = 0; i < FREE_STEPS && Date.now() < until - 8000; i++) {
+    // v34: he interrupted (Send now / Stop): drop this run where it stands.
+    if (i > 0 && await supersededSince(threadId, opts.since ?? null)) return { why: "", tools: used, stopped: true };
     toolDeadline = Math.min(until - 5000, Date.now() + 60_000);
     trimForBudget(msgs);
     let r: ChatResult;
@@ -1112,6 +1129,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   }
 
   if (!replied) return { why: "The free AI isn't answering right now.", tools: used };
+  if (await supersededSince(threadId, opts.since ?? null)) return { why: "", tools: used, stopped: true };
   // Out of steps or time with work in hand: say what was found. Chat offers to keep going for free; autopilot
   // keeps the findings next to the paid offer (a STUCK verdict), so the paid run starts from them.
   if (used.length) {
@@ -1580,6 +1598,15 @@ Deno.serve(async (req) => {
 
   // Auto-run applies to chats and, when he has switched it on, to the fix ladder too - except
   // code changes to the live site, which still wait for his tap when nobody is watching.
+  // v34: Stop. Marks the thread so whatever run is going stops at its next step and writes nothing more.
+  if (body.op === "stop" && !autopilot) {
+    const tid = body.thread_id ? String(body.thread_id) : "";
+    if (!tid) return J({ ok: true, stopped: false });
+    await db.from("admin_chat_messages").insert({ thread_id: tid, role: "user", body: STOP_MARK });
+    await db.from("admin_chat_threads").update({ busy_until: null, updated_at: new Date().toISOString() }).eq("id", tid);
+    return J({ ok: true, thread_id: tid, stopped: true });
+  }
+
   const { data: prefs } = await db.rpc("scout_prefs");
   // "keep going" is his yes for this request: auto-run for this one turn. Not a yes to paid AI (v21).
   // v33: a self-call that carries on a free-AI job (auto_continue = hop number). It acts as his "keep going".
@@ -1607,15 +1634,19 @@ Deno.serve(async (req) => {
     if (error) return J({ ok: false, error: error.message }, 500);
     threadId = data.id;
   }
+  // v34: the moment this run's message landed. Anything he sends (or a Stop) after it interrupts this run.
+  let runSince: string | null = null;
   if (autoHop) {
     // He wrote something since the job started (or stopped it): his message wins, this hop ends quietly.
-    const since = String(body.chain_from ?? new Date(0).toISOString());
-    const { data: newer } = await db.from("admin_chat_messages").select("id").eq("thread_id", threadId).eq("role", "user")
-      .gt("created_at", since).limit(1);
-    if (newer?.length) return J({ ok: true, thread_id: threadId, stopped: "he wrote since" });
+    runSince = String(body.chain_from ?? new Date(0).toISOString());
+    if (await supersededSince(threadId, runSince)) return J({ ok: true, thread_id: threadId, stopped: "he wrote since" });
   } else {
-    await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "user", body: text });
+    const { data: mine } = await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "user", body: text })
+      .select("created_at").single();
+    runSince = autopilot ? null : ((mine as any)?.created_at ?? new Date().toISOString());
   }
+  const interrupted = () => supersededSince(threadId, runSince);
+  const stoppedReply = () => J({ ok: true, thread_id: threadId, stopped: true });
 
   // v18: moving call to-dos between people needs no AI.
   if (!autopilot) {
@@ -1632,6 +1663,7 @@ Deno.serve(async (req) => {
     // "keep going" alone is NOT a yes to spending.
     let paidOk = false;
     const say = async (reply: string, extra: Record<string, unknown> = {}) => {
+      if (await interrupted()) return stoppedReply();   // v34: he moved on; this answer is stale
       if (extra.free) routerBeat(`Free reply${Array.isArray(extra.tools) && extra.tools.length ? ` (${extra.tools.length} steps)` : ""}`);
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
       await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
@@ -1677,7 +1709,8 @@ Deno.serve(async (req) => {
         let free = askFirst ? { why: "" } as { answer?: string; why: string } : await freeTry(threadId, text, body.page);
         if (free.answer) return await say(free.answer, { free: true });
         // v28: before asking to spend, the free model tries the job itself with tools.
-        const agent = await freeAgent(threadId, text, body.page, { askFirst });
+        const agent = await freeAgent(threadId, text, body.page, { askFirst, since: runSince });
+        if (agent.stopped) return stoppedReply();
         if (agent.answer && agent.more) {
           // v33 (Jared, Oct 5): on free AI Scout keeps working until it is done or needs him. No "Keep going" bursts.
           if (autoHop < AUTO_HOPS) {
@@ -1724,7 +1757,7 @@ Deno.serve(async (req) => {
   const messages: any[] = [];
   for (const m of (hist ?? []).reverse() as { role: string; body: string }[]) {
     const role = m.role === "assistant" ? "assistant" : "user";
-    const body = String(m.body ?? "").slice(0, 8000) || "(empty)";
+    const body = (String(m.body ?? "") === STOP_MARK ? "(Jared stopped your last reply here.)" : String(m.body ?? "")).slice(0, 8000) || "(empty)";
     if (!messages.length && role !== "user") continue;          // must open on a user turn
     const last = messages[messages.length - 1];
     if (last && last.role === role) last.content += "\n\n" + body; // unanswered retries fold together
@@ -1767,7 +1800,8 @@ Deno.serve(async (req) => {
   if ((budget as any)?.ok === false) {
     // v31: don't stop. Hand this message to the free AI (with tools), and offer to raise today's cap.
     const head = `Paid AI hit today's cap ($${Number((budget as any).spent).toFixed(2)} of $${Number((budget as any).cap).toFixed(2)}), so I'm on free AI for now.`;
-    const agent = await freeAgent(threadId, text, body.page, { autopilot }).catch(() => ({ why: "", tools: [] as string[] }) as { answer?: string; why: string; tools?: string[] });
+    const agent = await freeAgent(threadId, text, body.page, { autopilot, since: runSince }).catch(() => ({ why: "", tools: [] as string[] }) as { answer?: string; why: string; tools?: string[]; stopped?: boolean });
+    if (agent.stopped || await interrupted()) return stoppedReply();
     const done = !!agent.answer && !/^STUCK:/m.test(agent.answer);
     const why = done
       ? `${head}\n\n${agent.answer}${autopilot || /^\s*OPTIONS:/m.test(agent.answer!) ? "" : `\n\n${CAP_OPTIONS}`}`
@@ -1776,9 +1810,12 @@ Deno.serve(async (req) => {
     await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
     return J({ ok: true, thread_id: threadId, reply: why, capped: true, free: done, tools: agent.tools ?? [] });
   }
-  // One paid reply per chat at a time.
-  const { data: locked } = await db.from("admin_chat_threads").update({ busy_until: new Date(Date.now() + 150_000).toISOString() })
-    .eq("id", threadId).or(`busy_until.is.null,busy_until.lt.${new Date().toISOString()}`).select("id");
+  // One paid reply per chat at a time. v34: his own new message takes the lock (the run holding it sees his
+  // message at its next turn and stops); only autopilot still waits its turn.
+  const lockQ = db.from("admin_chat_threads").update({ busy_until: new Date(Date.now() + 150_000).toISOString() }).eq("id", threadId);
+  const { data: locked } = autopilot
+    ? await lockQ.or(`busy_until.is.null,busy_until.lt.${new Date().toISOString()}`).select("id")
+    : await lockQ.select("id");
   if (!locked?.length) {
     return J({ ok: true, thread_id: threadId, reply: "Still working on your last message. The answer lands here in a moment.", busy: true });
   }
@@ -1792,6 +1829,8 @@ Deno.serve(async (req) => {
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       // v30: the switch overrides everything, even a reply already running. Turned off (by him, the hour, or the cap) = stop now.
+      // v34: he sent something newer or tapped Stop. Leave the lock alone: his new run holds it now.
+      if (turn > 0 && await interrupted()) return stoppedReply();
       if (turn > 0) {
         const { data: st } = await db.rpc("scout_paid_state_ro");
         if ((st as any)?.on !== true) {
@@ -1887,6 +1926,7 @@ Deno.serve(async (req) => {
   }
 
   if (!reply) reply = "Done.";
+  if (await interrupted()) return stoppedReply();
   routerBeat(`Paid reply, ${used.length} step${used.length === 1 ? "" : "s"}, $${spentNow.toFixed(3)}`);
   // Paid AI answered, so any "out of credit" card is stale: clear it so Scout offers paid AI again.
   await db.from("admin_notifications").update({ read_at: new Date().toISOString() }).like("dedupe_key", "scout.credit:%").is("read_at", null);

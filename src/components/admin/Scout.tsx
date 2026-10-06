@@ -10,7 +10,6 @@ import { playNotifySound, playSuccessSound } from "@/lib/notifySound";
 import { useStickToBottom } from "@/lib/useStickToBottom";
 import {
   X,
-  CornerDownLeft,
   ArrowLeft,
   Plus,
   MessagesSquare,
@@ -20,6 +19,9 @@ import {
   Check,
   RotateCcw,
   Wrench,
+  Square,
+  ArrowUp,
+  Clock3,
 } from "lucide-react";
 import { CopyBlock } from "@/components/CopyText";
 import { copyText } from "@/lib/copyForClaude";
@@ -28,6 +30,7 @@ import { JobCard, useJobFollow, useMacJobs, type MacJob } from "./ScoutJobs";
 import { AttachBar, AttachButton, useScoutFiles } from "./ScoutAttach";
 import { ScoutAutoRunBar } from "./ScoutAutoRun";
 import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
+import { NeedsYouCard, useNeedsYou, type TodayRow } from "./ScoutNeedsYou";
 
 /**
  * Scout - the assistant that lives in the corner of the admin.
@@ -60,6 +63,25 @@ interface ThreadRow {
 }
 
 type Mood = "idle" | "think" | "alert";
+
+/** v34 (2026-10-06): what Jared typed while Scout was busy. Sent as one message when Scout finishes, the way
+ *  Claude queues mid-turn messages; "Send now" interrupts instead. */
+interface Queued {
+  id: number;
+  body: string;
+}
+/** Written by the server when he taps Stop (admin-chat v34). Drawn as a divider, never as a bubble. */
+const STOP_MARK = "[Stopped]";
+/** The last line of a free-AI progress note while it carries on by itself (admin-chat v33). */
+const CONTINUING = /Still working on it\.\s*$/;
+/** A chain that has said nothing for this long has died: stop showing it as running. */
+const CHAIN_IDLE_MS = 4 * 60_000;
+
+/** 4:05 PM, the way the rest of the admin writes times. */
+function clockTime(iso?: string): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
 
 const OPENERS = [
   "What needs me most right now?",
@@ -327,8 +349,13 @@ export function Scout() {
   const [renameText, setRenameText] = useState("");
   const [copied, setCopied] = useState<number | null>(null);
   const [copiedFix, setCopiedFix] = useState<"ok" | "fail" | null>(null);
-  const [waiting, setWaiting] = useState(0);
   const [bubble, setBubble] = useState(false);
+  // v34: queue + interrupt. `chaining` = the server is still carrying the job on by itself after the request returned.
+  const [queue, setQueue] = useState<Queued[]>([]);
+  const [chaining, setChaining] = useState(false);
+  const [runStart, setRunStart] = useState<string | null>(null);
+  const runId = useRef(0);
+  const lastSeen = useRef(Date.now());
   const logRef = useRef<HTMLDivElement>(null);
   const { state: rec, latest: lastCall, refresh: refreshRec } = useRecorder(open);
   const recNow = useNow(rec?.status === "recording");
@@ -384,22 +411,18 @@ export function Scout() {
   const { jobs, refresh: refreshJobs } = useMacJobs(threadId, open);
   const pendingJobs = jobs.filter((j) => j.status === "proposed").length;
 
+  // The badge and the list inside Scout read the same rows, so the number always has something behind it.
+  const { rows: todayRows, urgent, refresh: refreshToday } = useNeedsYou(open);
+  const waiting = urgent.length;
+  const urgentSig = urgent.map((r) => r.key).join("|");
+  const bubbleFor = useRef<string>("");
   useEffect(() => {
-    let gone = false;
-    (async () => {
-      const { data, error } = await (supabase.rpc as any)("admin_today");
-      if (gone || error) return; // a failed count is not a count of zero: leave the badge alone
-      const urgent = ((data ?? []) as { rank: number }[]).filter((r) => r.rank <= 1).length;
-      setWaiting(urgent);
-      if (urgent > 0) {
-        setBubble(true);
-        setTimeout(() => setBubble(false), 9000);
-      }
-    })();
-    return () => {
-      gone = true;
-    };
-  }, []);
+    // A new set of items speaks up once; the same set never nags again.
+    if (!urgentSig || urgentSig === bubbleFor.current || open) return;
+    bubbleFor.current = urgentSig;
+    setBubble(true);
+    window.setTimeout(() => setBubble(false), 9000);
+  }, [urgentSig, open]);
 
   // The log sits at the bottom, the way a chat should, and only the reader can unpin it
   // (see useStickToBottom for why layout reflows used to throw it back up the page).
@@ -409,15 +432,6 @@ export function Scout() {
     if (open && view === "chat" && !phone) inputRef.current?.focus();
   }, [open, view, phone]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || !open) return;
-      if (view === "history") setView("chat");
-      else close();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, view]);
 
   const loadThreads = useCallback(async () => {
     const { data } = await supabase
@@ -448,11 +462,31 @@ export function Scout() {
   const attach = useScoutFiles();
   const [overDrop, setOverDrop] = useState(false);
 
+  // v34: Scout is "running" while a request is in flight OR while the server is still carrying the job on by itself
+  // (its last note ends "Still working on it." and is recent). Derived from the messages, so it can't get stuck.
+  const lastMsg = msgs[msgs.length - 1];
+  const chainAlive = !!lastMsg && lastMsg.role === "assistant" && CONTINUING.test(lastMsg.body)
+    && Date.now() - Date.parse(lastMsg.created_at ?? "") < CHAIN_IDLE_MS;
+  const running = busy || chainAlive;
+
   const send = useCallback(
-    async (body: string, replacing?: string | null, fresh?: boolean, about?: string) => {
+    async (body: string, replacing?: string | null, fresh?: boolean, about?: string, opts?: { now?: boolean; raw?: boolean }) => {
       const asked = body.trim();
       // A file on its own is a real ask ("read this"), so an empty box with an attachment sends.
-      if ((!asked && !attach.count) || busy || attach.busy) return;
+      if ((!asked && !attach.count) || attach.busy) return;
+
+      // Busy, and not told to cut in: it waits in line and goes out when Scout is done (like Claude's queue).
+      if (running && !opts?.now && !replacing && !fresh) {
+        const queued = opts?.raw ? asked : attach.compose(asked);
+        setQueue((q) => [...q, { id: Date.now() + Math.random(), body: queued }]);
+        setText("");
+        attach.drop();
+        requestAnimationFrame(toNewest);
+        return;
+      }
+      // From here on this is the run the window follows. Anything still in flight is stale: its answer is
+      // ignored here, and the server stops it because this message is newer than the one it was answering.
+      const my = ++runId.current;
 
       if (replacing) {
         await (supabase.rpc as any)("admin_chat_truncate", { p_message_id: replacing });
@@ -465,16 +499,21 @@ export function Scout() {
       }
       // The files' text rides along in the message body, so the thread keeps the whole ask and
       // Scout can refer back to a file later in the conversation without re-reading it.
-      const withFiles = attach.compose(asked);
-      setMsgs((m) => [...(fresh ? [] : m), { role: "user", body: withFiles, created_at: new Date().toISOString() }]);
-      setText("");
-      attach.drop();
+      const withFiles = opts?.raw ? asked : attach.compose(asked);
+      const at = new Date().toISOString();
+      setMsgs((m) => [...(fresh ? [] : m), { role: "user", body: withFiles, created_at: at }]);
+      if (!opts?.raw) {
+        setText("");
+        attach.drop();
+      }
       requestAnimationFrame(toNewest); // you just asked: follow the answer
       setBusy(true);
+      setRunStart(at);
 
       const { data, error } = await supabase.functions.invoke("admin-chat", {
         body: { body: withFiles, thread_id: fresh ? null : threadId, page: pageContext(location.pathname + location.search, about) },
       });
+      if (my !== runId.current) return; // he sent something newer or tapped Stop while this one ran
 
       const id = (data as { thread_id?: string })?.thread_id ?? (fresh ? null : threadId);
       if (error) {
@@ -491,14 +530,90 @@ export function Scout() {
       }
 
       setBusy(false);
-      if (error) playNotifySound(); else playSuccessSound(); // done: the happy pop; a problem: the alert sound
+      // Done: the happy pop. A problem: the alert. Still carrying on by itself: quiet until it really finishes.
+      if (error) playNotifySound();
+      else if (!(data as { continuing?: boolean })?.continuing) playSuccessSound();
       refreshJobs();
       inputRef.current?.focus();
     },
     // 2026-09-24: attach.* must be here. Without them send() kept the first render's attach (no files), so
     // attachments uploaded and read fine but the message went out without them ("can you read that?" -> nothing).
-    [busy, threadId, loadThread, location.pathname, location.search, refreshJobs, toNewest, attach.compose, attach.count, attach.busy, attach.drop],
+    [running, threadId, loadThread, location.pathname, location.search, refreshJobs, toNewest, attach.compose, attach.count, attach.busy, attach.drop],
   );
+
+  /** Stop: like Esc in Claude. The run ends where it is, and anything queued comes back into the box to edit. */
+  const stop = useCallback(async () => {
+    if (!running) return;
+    runId.current++;
+    setBusy(false);
+    if (queue.length) {
+      setText((t) => [...queue.map((q) => q.body), t].filter((x) => x.trim()).join("\n\n"));
+      setQueue([]);
+    }
+    setMsgs((m) => [...m, { role: "user", body: STOP_MARK, created_at: new Date().toISOString() }]);
+    inputRef.current?.focus();
+    if (threadId) {
+      await supabase.functions.invoke("admin-chat", { body: { op: "stop", thread_id: threadId } });
+      await loadThread(threadId);
+    }
+  }, [running, queue, threadId, loadThread]);
+
+  /** Send now: interrupt whatever is running and send the queue (and whatever is in the box) this second. */
+  const sendNow = useCallback(() => {
+    const parts = [...queue.map((q) => q.body), attach.compose(text.trim())].filter((x) => x.trim());
+    if (!parts.length) return;
+    setQueue([]);
+    setText("");
+    attach.drop();
+    void send(parts.join("\n\n"), null, false, undefined, { now: true, raw: true });
+  }, [queue, text, attach, send]);
+
+  // While a job runs on the server, follow it: its progress notes and the final answer land here live.
+  useEffect(() => {
+    if (!open || !threadId || !running) return;
+    const t = window.setInterval(() => {
+      // While a request is in flight the window already shows his message; only reload once the server
+      // has had time to save it, or the optimistic bubble would blink.
+      if (busy && runStart && Date.now() - Date.parse(runStart) < 5000) return;
+      void loadThread(threadId);
+    }, 3000);
+    return () => window.clearInterval(t);
+  }, [open, threadId, running, busy, runStart, loadThread]);
+
+  // The job carried on by itself and has now finished: same sound as a normal finish.
+  const wasChain = useRef(false);
+  useEffect(() => {
+    if (wasChain.current && !chainAlive && !busy && lastMsg?.body !== STOP_MARK) playSuccessSound();
+    wasChain.current = chainAlive;
+  }, [chainAlive, busy, lastMsg?.body]);
+
+  // The box grows with what is in it (a queue pulled back after Stop can be several lines), up to its max height.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight + 2, 112)}px`;
+  }, [text, open, view]);
+
+  // Esc: stops a running job first (like Claude), then leaves History, then closes.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || !open) return;
+      if (running && view === "chat") { e.preventDefault(); void stop(); return; }
+      if (view === "history") setView("chat");
+      else close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, view, running, stop, close]);
+
+  // Scout is done: what he queued goes out as one message, in the order he wrote it.
+  useEffect(() => {
+    if (running || !queue.length || attach.busy) return;
+    const body = queue.map((q) => q.body).join("\n\n");
+    setQueue([]);
+    void send(body, null, false, undefined, { raw: true });
+  }, [running, queue, attach.busy, send]);
 
   // Other parts of the admin open Scout or hand it a question (scoutBus.ts).
   const pendingAsk = useRef<ScoutAsk | null>(null);
@@ -685,7 +800,14 @@ export function Scout() {
   const recording = rec?.status === "recording";
 
   const needs = waiting + pendingJobs;
-  const mood: Mood = busy ? "think" : needs > 0 && !open ? "alert" : "idle";
+  const mood: Mood = running ? "think" : needs > 0 && !open ? "alert" : "idle";
+  const workingFor = useNow(running);
+  const openUrl = (url: string) => {
+    if (/^https?:\/\//.test(url)) window.open(url, "_blank", "noopener");
+    else navigate(url);
+  };
+  const askAbout = (r: TodayRow) =>
+    send(`Help me with this one from Needs you: ${r.title}${r.detail ? `\n\n${r.detail}` : ""}\n\nWhat's the fastest way to clear it, and can you do any of it for me?`, null, true);
 
   if (!open) {
     return (
@@ -759,7 +881,7 @@ export function Scout() {
           settling && "scout-settling",
           phone
             ? "inset-0 max-w-[100vw] overflow-x-hidden rounded-none border-0"
-            : !box && "bottom-5 right-5 w-[min(25rem,calc(100vw-2.5rem))] max-h-[min(38rem,calc(100vh-6rem))]",
+            : !box && "bottom-5 right-5 w-[min(25rem,calc(100vw-2.5rem))] max-h-[min(44rem,calc(100vh-6rem))]",
           "border border-white/[0.08] bg-black/95 backdrop-blur-xl",
         )}
       >
@@ -803,15 +925,15 @@ export function Scout() {
           )}
 
           <div className="min-w-0 flex-1 px-1">
-            <p className="truncate text-sm font-semibold text-white">
+            <p className="break-words text-sm font-semibold leading-tight text-white">
               {view === "history" ? "History" : title ?? "Scout"}
             </p>
-            <p className="truncate text-[0.6875rem] text-white/50">
+            <p className="text-[0.6875rem] leading-tight text-white/50">
               {view === "history"
                 ? `${threads.length} conversation${threads.length === 1 ? "" : "s"}`
-                : busy
-                  ? "thinking it through"
-                  : recording ? "recording your call" : pendingJobs ? "waiting for your OK" : "reads the data, fixes things, runs the Mac"}
+                : running
+                  ? queue.length ? `working · ${queue.length} queued` : "working on it"
+                  : recording ? "recording your call" : pendingJobs ? "waiting for your OK" : "reads data, fixes things"}
             </p>
           </div>
 
@@ -874,7 +996,7 @@ export function Scout() {
             )}
             <ul className="space-y-1">
               {threads.map((t) => (
-                <li key={t.id} className="scout-row group rounded-xl px-2 py-2 hover:bg-white/[0.04]">
+                <li key={t.id} className="scout-row group rounded-xl px-2.5 py-2.5 hover:bg-white/[0.04]">
                   {renaming === t.id ? (
                     <div className="flex items-center gap-1.5">
                       <input
@@ -908,10 +1030,9 @@ export function Scout() {
                         }}
                         className="min-w-0 flex-1 text-left"
                       >
-                        <p className="truncate text-sm text-white">{t.title ?? "Untitled"}</p>
-                        <p className="truncate text-xs text-white/45">
-                          {when(t.updated_at)} · {t.message_count} message{t.message_count === 1 ? "" : "s"}
-                          {t.last_body ? ` · ${t.last_body.slice(0, 40)}` : ""}
+                        <p className="break-words text-sm leading-snug text-white">{t.title ?? "Untitled"}</p>
+                        <p className="mt-0.5 text-xs text-white/45">
+                          {when(t.updated_at)} · <span className="whitespace-nowrap">{t.message_count} message{t.message_count === 1 ? "" : "s"}</span>
                         </p>
                       </button>
                       <span className="scout-tools flex shrink-0 gap-0.5">
@@ -944,8 +1065,14 @@ export function Scout() {
             </ul>
           </div>
         ) : (
-          <div key="chat" className={cn("flex min-h-0 flex-1 flex-col", viewDir === "back" ? "scout-view-back" : "")}>
+          <div key="chat" className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", viewDir === "back" ? "scout-view-back" : "")}>
           <RecorderBar state={rec} latest={lastCall} refresh={refreshRec} onDebrief={debrief} />
+          <NeedsYouCard
+            rows={urgent}
+            extra={Math.max(0, (todayRows?.length ?? 0) - urgent.length)}
+            onAsk={(r) => { askAbout(r); void refreshToday(); }}
+            onOpen={openUrl}
+          />
           <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4">
             {msgs.length === 0 && (
               <p className="text-sm text-white/80">
@@ -954,8 +1081,29 @@ export function Scout() {
             )}
 
             {jobCards(-1)}
-            {msgs.map((m, i) => (
+            {msgs.map((m, i) => {
+              // Messages-style time stamps: the first message, and again after a 10-minute gap.
+              const prev = msgs[i - 1];
+              const gap = !prev?.created_at || !m.created_at || Date.parse(m.created_at) - Date.parse(prev.created_at) > 10 * 60_000;
+              const stamp = gap && m.created_at ? (
+                <p className="pt-1 text-center text-[0.6875rem] font-medium text-white/35">{clockTime(m.created_at)}</p>
+              ) : null;
+              if (m.body === STOP_MARK) {
+                return (
+                  <Fragment key={m.id ?? i}>
+                    <div className="flex items-center gap-2 py-1 text-[0.6875rem] font-medium text-white/40" role="note">
+                      <span className="h-px flex-1 bg-white/10" />
+                      <Square className="h-2.5 w-2.5 fill-current" aria-hidden />
+                      You stopped Scout{m.created_at ? ` at ${clockTime(m.created_at)}` : ""}
+                      <span className="h-px flex-1 bg-white/10" />
+                    </div>
+                    {jobCards(i)}
+                  </Fragment>
+                );
+              }
+              return (
               <Fragment key={m.id ?? i}>
+              {stamp}
               <div className={cn("scout-row group", m.role === "user" ? "scout-msg-user" : "scout-msg-bot")}>
                 {m.role === "user" ? (
                   <div className="flex items-start justify-end gap-1">
@@ -979,7 +1127,7 @@ export function Scout() {
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </span>
-                    <p className="max-w-[85%] break-words rounded-2xl rounded-br-sm bg-white px-3 py-2 text-[0.9375rem] text-black sm:max-w-[80%] sm:text-sm">
+                    <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-[1.125rem] rounded-br-md bg-[#0A84FF] px-3.5 py-2 text-[0.9375rem] leading-snug text-[#fff] sm:max-w-[80%] sm:text-sm">
                       {m.body}
                     </p>
                   </div>
@@ -1030,17 +1178,22 @@ export function Scout() {
               </div>
               {jobCards(i)}
               </Fragment>
-            ))}
+              );
+            })}
 
-            {busy && (
-              <p className="scout-msg-bot flex items-center gap-2 text-sm text-white/50" aria-live="polite">
+            {running && (
+              <div className="scout-msg-bot flex items-center gap-2 text-sm text-white/50" aria-live="polite">
                 <Scoutie mood="think" className="h-[1.15rem] w-[1.55rem] shrink-0 text-white/60" />
                 <span className="scout-dots scout-shimmer">
-                  Scout is working<span>.</span>
+                  {busy ? "Scout is working" : "Still going on its own"}<span>.</span>
                   <span>.</span>
                   <span>.</span>
                 </span>
-              </p>
+                <span className="whitespace-nowrap text-xs tabular-nums text-white/35">
+                  {clock(runStart ?? lastMsg?.created_at ?? null, workingFor)}
+                </span>
+                <span className="ml-auto hidden text-[0.6875rem] text-white/30 sm:inline">esc to stop</span>
+              </div>
             )}
           </div>
           </div>
@@ -1051,7 +1204,7 @@ export function Scout() {
             {/* Everything tappable lives here, directly above the composer: the openers on an
                 empty chat, then the reply options. Under the message they ended up wherever
                 the reply happened to end and scrolled away as the conversation grew. */}
-            {!busy && !editing && msgs.length === 0 && (
+            {!running && !editing && msgs.length === 0 && (
               <div className="mb-2 flex flex-wrap gap-1.5">
                 {OPENERS.map((o, n) => (
                   <button
@@ -1066,12 +1219,12 @@ export function Scout() {
                 ))}
               </div>
             )}
-            {!busy && !editing && (() => {
+            {!running && !editing && (() => {
               const lastBot = [...msgs].reverse().find((m) => m.role !== "user");
               if (!lastBot) return null;
               const asked = splitQuestions(lastBot.body);
               if (asked.questions.length) {
-                return <QuestionCard questions={asked.questions} onSubmit={(msg) => send(msg)} disabled={busy} />;
+                return <QuestionCard questions={asked.questions} onSubmit={(msg) => send(msg)} disabled={running} />;
               }
               const { text: botText, options } = splitOptions(asked.text);
               const chips = options.length ? options : fallbackOptions(botText);
@@ -1130,9 +1283,57 @@ export function Scout() {
                 </button>
               </div>
             )}
+            {queue.length > 0 && (
+              <div className="scout-card-in mb-2 rounded-2xl border border-white/[0.08] bg-white/[0.04] p-2" aria-label="Queued messages">
+                <div className="flex items-center gap-1.5 px-1.5 pb-1.5 text-[0.6875rem] font-medium text-white/50">
+                  <Clock3 className="h-3 w-3" aria-hidden />
+                  <span className="flex-1">
+                    {queue.length === 1 ? "Queued. Sends when Scout finishes." : `${queue.length} queued. They go as one message when Scout finishes.`}
+                  </span>
+                </div>
+                <ul className="max-h-32 space-y-1 overflow-y-auto">
+                  {queue.map((q) => (
+                    <li key={q.id} className="flex items-start gap-1 rounded-xl bg-white/[0.05] py-1 pl-2.5 pr-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Tap to take it back into the box and change it.
+                          setQueue((all) => all.filter((x) => x.id !== q.id));
+                          setText((t) => [t, q.body].filter((x) => x.trim()).join("\n\n"));
+                          inputRef.current?.focus();
+                        }}
+                        className="min-h-9 min-w-0 flex-1 whitespace-pre-wrap break-words py-1.5 text-left text-sm text-white/85"
+                        aria-label="Edit this queued message"
+                      >
+                        {q.body}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQueue((all) => all.filter((x) => x.id !== q.id))}
+                        aria-label="Remove from queue"
+                        className="scout-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/40 hover:bg-white/5 hover:text-white"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex items-center gap-2 px-1 pt-2">
+                  <button
+                    type="button"
+                    onClick={sendNow}
+                    className="scout-press inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[#0A84FF] px-3.5 text-[0.8125rem] font-semibold text-[#fff]"
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" aria-hidden />
+                    Send now
+                  </button>
+                  <span className="text-[0.6875rem] text-white/40">stops Scout and sends these</span>
+                </div>
+              </div>
+            )}
             <AttachBar files={attach.files} onRemove={attach.remove} />
             <div className="flex items-end gap-2">
-              <AttachButton onPick={attach.add} disabled={busy} />
+              <AttachButton onPick={attach.add} disabled={attach.busy} />
               <textarea
                 ref={inputRef}
                 id="scout-input"
@@ -1156,22 +1357,40 @@ export function Scout() {
                   // and the button sends. On a keyboard, Enter sends and Shift+Enter wraps.
                   if (e.key === "Enter" && !e.shiftKey && !phone) {
                     e.preventDefault();
-                    send(text, editing);
+                    // While Scout works: Enter queues, Cmd/Ctrl+Enter interrupts and sends now.
+                    if (running && (e.metaKey || e.ctrlKey)) sendNow();
+                    else send(text, editing);
                   }
                 }}
                 enterKeyHint={phone ? "enter" : "send"}
-                placeholder={attach.count ? "Ask about the file, or just send it..." : "Ask, or say what to change..."}
+                placeholder={running ? "Type to queue the next thing..." : attach.count ? "Ask about the file, or just send it..." : "Ask, or say what to change..."}
                 className={cn(overDrop && "border-[#0A84FF] bg-[#0A84FF]/10", "max-h-28 min-h-[2.75rem] flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-base sm:min-h-[2.375rem] sm:text-sm text-white transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-white/40 focus:border-white/25 focus:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
               />
-              <Button
-                size="icon"
-                onClick={() => send(text, editing)}
-                disabled={busy || attach.busy || (!text.trim() && !attach.count)}
-                aria-label="Send to Scout"
-                className="scout-press h-11 w-11 shrink-0 bg-white text-black transition-opacity hover:bg-white/90 disabled:opacity-40 sm:h-[2.375rem] sm:w-[2.375rem]"
-              >
-                <CornerDownLeft className="h-4 w-4" />
-              </Button>
+              {running && !text.trim() && !attach.count ? (
+                <Button
+                  size="icon"
+                  onClick={() => void stop()}
+                  aria-label="Stop Scout"
+                  title="Stop (Esc)"
+                  className="scout-press h-11 w-11 shrink-0 rounded-full bg-white text-black transition-opacity hover:bg-white/90 sm:h-[2.375rem] sm:w-[2.375rem]"
+                >
+                  <Square className="h-3.5 w-3.5 fill-current" />
+                </Button>
+              ) : (
+                <Button
+                  size="icon"
+                  onClick={() => send(text, editing)}
+                  disabled={attach.busy || (!text.trim() && !attach.count)}
+                  aria-label={running ? "Add to the queue" : "Send to Scout"}
+                  title={running ? "Queue it (Enter). Cmd+Enter sends now." : "Send (Enter)"}
+                  className={cn(
+                    "scout-press h-11 w-11 shrink-0 rounded-full transition-opacity disabled:opacity-40 sm:h-[2.375rem] sm:w-[2.375rem]",
+                    running ? "border border-white/20 bg-white/[0.08] text-white hover:bg-white/[0.14]" : "bg-[#0A84FF] text-[#fff] hover:bg-[#0A84FF]/90",
+                  )}
+                >
+                  {running ? <Clock3 className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+                </Button>
+              )}
             </div>
           </div>
         )}
