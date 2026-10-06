@@ -79,6 +79,9 @@ import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: 
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v33 (2026-10-05): on free AI Scout keeps working until the job is done or it needs him. When a free run uses up
+//   its steps or time with work in hand, it posts a short progress note and calls itself again (auto_continue,
+//   up to AUTO_HOPS rounds). A new message from him stops the chain. Paid AI keeps its own budget unchanged.
 // v32 (2026-10-04): Ask User Questions. Scout (paid and free) has an ask_user tool: when something is unclear, it is
 //   unsure which way Jared wants it, or it needs a detail no tool can find, it asks 1-4 multiple-choice questions instead
 //   of guessing. The turn ends with a QUESTIONS: {json} line that his window turns into a one-question-at-a-time card
@@ -111,6 +114,7 @@ import { corsWith } from "../_shared/cors.ts";
 
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
 const MAX_TURNS = 10;
+const AUTO_HOPS = 8;             // v33: free-AI jobs carry on by themselves up to 8 more rounds (~80 steps) before asking
 const BUILD_POLLS = 10;          // ~65s of watching; builds here take ~35s
 const PI_WAIT_MS = 60_000;       // how long to wait for the Pi to report back inside one turn
 const REC_WAIT_MS = 20_000;      // how long to wait for the Mac mini to pick up a recorder job
@@ -955,7 +959,7 @@ function trimForBudget(msgs: Msg[], maxTokens = 3800) {
 const KEEP = new WeakSet<Msg>();
 
 async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean; askFirst?: boolean } = {}):
-  Promise<{ answer?: string; why: string; tools?: string[]; note?: string }> {
+  Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean }> {
   const autopilot = !!opts.autopilot;
   const until = Date.now() + FREE_BUDGET_MS;
 
@@ -1119,7 +1123,8 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       if (sum && !s.toolCalls.length) {
         return autopilot
           ? { answer: `${sum.replace(/^(FIXED|NEEDS_YES|STUCK):.*$/gm, "").trim()}\nSTUCK: the free AI ran out of time before finishing.`, why: "", tools: used }
-          : { answer: `${sum}\n\nOPTIONS: Keep going | Yes, use paid AI`, why: "", tools: used };
+          // v33: out of steps with work in hand is not a stop on free AI: the handler picks it back up by itself.
+          : { answer: sum, why: "", tools: used, more: true };
       }
     } catch { /* fall through to the paid ask */ }
   }
@@ -1577,6 +1582,9 @@ Deno.serve(async (req) => {
   // code changes to the live site, which still wait for his tap when nobody is watching.
   const { data: prefs } = await db.rpc("scout_prefs");
   // "keep going" is his yes for this request: auto-run for this one turn. Not a yes to paid AI (v21).
+  // v33: a self-call that carries on a free-AI job (auto_continue = hop number). It acts as his "keep going".
+  const autoHop = !autopilot && Number.isInteger(body.auto_continue) ? Math.max(0, Number(body.auto_continue)) : 0;
+  if (autoHop) body.body = "keep going";
   const keepGoing = !autopilot && /^\s*keep going\b/i.test(String(body.body ?? ""));
   autoRunOn = (prefs as any)?.auto_run === true || keepGoing;
   // v30: the Paid AI switch is the ONLY gate. scout_prefs() returns the truth (it turns itself off when the hour or the
@@ -1599,7 +1607,15 @@ Deno.serve(async (req) => {
     if (error) return J({ ok: false, error: error.message }, 500);
     threadId = data.id;
   }
-  await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "user", body: text });
+  if (autoHop) {
+    // He wrote something since the job started (or stopped it): his message wins, this hop ends quietly.
+    const since = String(body.chain_from ?? new Date(0).toISOString());
+    const { data: newer } = await db.from("admin_chat_messages").select("id").eq("thread_id", threadId).eq("role", "user")
+      .gt("created_at", since).limit(1);
+    if (newer?.length) return J({ ok: true, thread_id: threadId, stopped: "he wrote since" });
+  } else {
+    await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "user", body: text });
+  }
 
   // v18: moving call to-dos between people needs no AI.
   if (!autopilot) {
@@ -1662,6 +1678,22 @@ Deno.serve(async (req) => {
         if (free.answer) return await say(free.answer, { free: true });
         // v28: before asking to spend, the free model tries the job itself with tools.
         const agent = await freeAgent(threadId, text, body.page, { askFirst });
+        if (agent.answer && agent.more) {
+          // v33 (Jared, Oct 5): on free AI Scout keeps working until it is done or needs him. No "Keep going" bursts.
+          if (autoHop < AUTO_HOPS) {
+            const chainFrom = String(body.chain_from ?? new Date().toISOString());
+            const res = await say(`${agent.answer}\n\nStill working on it.`, { free: true, tools: agent.tools ?? [], continuing: true });
+            const hop = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/admin-chat`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: req.headers.get("Authorization") ?? "", apikey: req.headers.get("apikey") ?? "" },
+              body: JSON.stringify({ thread_id: threadId, body: "keep going", page: body.page, auto_continue: autoHop + 1, chain_from: chainFrom }),
+            }).then((r) => r.text()).catch(() => null);
+            const er = (globalThis as any).EdgeRuntime;
+            if (er?.waitUntil) er.waitUntil(hop); else await hop;
+            return res;
+          }
+          return await say(`${agent.answer}\n\nOPTIONS: Keep going | Yes, use paid AI`, { free: true, tools: agent.tools ?? [] });
+        }
         if (agent.answer) return await say(agent.answer, { free: true, tools: agent.tools ?? [] });
         free = { why: agent.why || free.why };
         // Don't offer a paid run that can't happen: say the real blocker instead.
