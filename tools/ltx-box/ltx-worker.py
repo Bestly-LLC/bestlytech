@@ -32,9 +32,10 @@ while True:
         if os.path.exists(BUSY): os.remove(BUSY)
         time.sleep(15); continue
     open(BUSY, "w").write(job["id"])
-    log("job", job["code"], job["seconds"], "s:", job["prompt"][:80])
+    log("job", job["code"], job["seconds"], "s", f'{job.get("width") or 1280}x{job.get("height") or 720}:', job["prompt"][:80])
     try:
-        p = subprocess.run(["/opt/ltx/make-video.py", job["prompt"], f"video/ltx_{job['code']}", str(job["seconds"])],
+        p = subprocess.run(["/opt/ltx/make-video.py", job["prompt"], f"video/ltx_{job['code']}", str(job["seconds"]),
+                            str(job.get("width") or 1280), str(job.get("height") or 720)],
                            capture_output=True, text=True, timeout=2700)
         last = [l for l in p.stdout.strip().splitlines() if l.startswith("{")]
         out = json.loads(last[-1]) if last else {}

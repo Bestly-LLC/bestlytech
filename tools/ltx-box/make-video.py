@@ -1,6 +1,7 @@
 #!/opt/ltx/venv/bin/python
-"""Render one clip with the official ComfyUI LTX-2.5 text-to-video template (1280x720, 24 fps).
-Usage: make-video.py "prompt" [out_prefix] [seconds]
+"""Render one clip with the official ComfyUI LTX-2.5 text-to-video template (default 1280x720, 24 fps).
+Usage: make-video.py "prompt" [out_prefix] [seconds] [width] [height]
+2026-10-06: width/height so Montage can order vertical b-roll (704x1280; LTX wants multiples of 32).
 Prints progress lines, then one JSON line: {status, seconds, files, msgs}."""
 import json, random, sys, time, urllib.request, uuid
 from playwright.sync_api import sync_playwright
@@ -9,6 +10,9 @@ BASE = "http://127.0.0.1:8188"
 prompt = sys.argv[1]
 prefix = sys.argv[2] if len(sys.argv) > 2 else "video/bestly"
 secs = max(1, min(20, int(sys.argv[3]))) if len(sys.argv) > 3 else 5
+width = int(sys.argv[4]) if len(sys.argv) > 4 else 1280
+height = int(sys.argv[5]) if len(sys.argv) > 5 else 720
+width, height = max(256, min(1920, width // 32 * 32)), max(256, min(1920, height // 32 * 32))
 wf = json.load(open(TPL))
 for n in wf["nodes"]:
     if n["type"] == "SaveVideo":
@@ -16,6 +20,8 @@ for n in wf["nodes"]:
     if n.get("id") == 405:  # subgraph "Text to Video (LTX-2.5)": [prompt, enhance, duration, width, height, seed, fps, ...]
         n["widgets_values"][0] = prompt
         n["widgets_values"][2] = secs
+        n["widgets_values"][3] = width
+        n["widgets_values"][4] = height
         n["widgets_values"][5] = random.randint(1, 2**48)
 with sync_playwright() as p:
     b = p.chromium.launch()

@@ -337,9 +337,33 @@ const TOOLS = [
     },
   },
   {
+    name: "make_montage",
+    description:
+      "Make a finished short video (vertical Reel, 20-40 seconds) with Montage, Bestly's video crew on the Pi (OpenMontage). Your MAIN video tool: " +
+      "Montage writes the script inside the brand's claim rules, voices it, lays it out in the brand's video style, renders, checks it, and files it in Drafts > To review. " +
+      "broll:true adds AI footage behind each card (Montage orders it from the LTX box itself) and costs money; broll:false is text-and-voice cards, free. " +
+      "quote: the time and cost, nothing started. make: start it; needs confirmed:true and, when broll is true, only after the person said yes to that quote. " +
+      "status: where a video is (ref = job ref or the post code like H01; omit for this thread's latest). " +
+      "ALWAYS quote first and paste the returned text word for word, ending with OPTIONS: Make it | Not now (or OPTIONS: With b-roll | Text only, when they did not say). " +
+      "After make, paste the returned text word for word. Montage posts progress and the finished post code into this thread by itself. " +
+      "To change a finished Montage video, the person taps Changes with a note on the post; Montage re-cuts the same post. Brands with a Montage style: HOKU.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["quote", "make", "status"] },
+        brief: { type: "string", description: "What the video is about and the feeling, in the person's words plus anything from the brand notes: one moment, one idea. Never invent claims." },
+        broll: { type: "boolean", description: "AI footage behind the cards (costs money, needs a yes). Default false." },
+        client_slug: { type: "string", description: "Defaults to the client the person is looking at." },
+        ref: { type: "string" },
+        confirmed: { type: "boolean" },
+      },
+      required: ["action"],
+    },
+  },
+  {
     name: "make_video",
     description:
-      "Make an AI video clip (LTX-2.5 on Bestly's AWS GPU box, 1280x720 with sound, 1-20 seconds, default 5) - b-roll, a product moment, a mood shot. " +
+      "Make ONE raw AI clip (LTX-2.5 on Bestly's AWS GPU box, 1280x720 with sound, 1-20 seconds, default 5): a single b-roll or mood shot with no words, voice or edit. For a finished video use make_montage instead. " +
       "quote: the cost estimate, nothing spent. make: queue it; needs confirmed:true and only after the person said yes to that estimate. " +
       "status: where a clip is (ref = its 7-letter code; omit for this thread's latest). " +
       "ALWAYS quote first and paste the returned text word for word (it carries the cost line), ending with OPTIONS: Make it | Not now. " +
@@ -397,14 +421,15 @@ The app itself is two HTML files served from studio_builds: the staff Studio and
 Every Bestly chat — you, the builder, and Jared's Cowork sessions — shares one memory: bestly_memory. The notes that exist right now are listed (area/key — title) just before the live section.
 Read before you answer from habit: \`recall\` the relevant note when a question touches how the studio works, a decision, a client, or anything you are unsure of. Write when it matters: when the person tells you something durable (a decision, a preference, a client fact, a lesson, where something lives), or says "remember", \`remember\` it and say so in a few words. Secrets never go in memory — passwords, keys and tokens belong in Supabase Vault; record only where they live, and never ask anyone to paste one into chat.
 
-# Six jobs, told apart by what they ask for
+# Seven jobs, told apart by what they ask for
 1. **Make content** — "write a carousel about…": read \`look\` what:"brand" once, write the slides as words (kicker / headline / body, one idea per slide, the last slide a soft close), write the caption, \`check_claims\`, then \`create_post\`. Say what you made in one line and where it is.
 2. **Change content** — a caption, a title, hashtags, a variant: read it whole, rewrite, \`check_claims\` if it makes any claim, \`edit_post\`, report the change.
 3. **Change the app** — anything about how Studio or the client board looks or behaves: buttons, layout, colours, sizes, text on screen, a new panel, a bug. First \`app_find\` the code, then \`queue_build\` with a brief that names the real functions, classes and line numbers. Tell them it is with the builder and a preview opens inside Studio in about 20 minutes. If he wants the words instead of the work, \`write_brief\`.
 4. **Her feedback** — answer from client_feedback / client_said, in her words.
 5. **Explain / status** — "how does X work", "why did that fail", "is it live": read the code with app_find / app_read, or \`app_status\`, and answer plainly.
 6. **Remember** — "remember that…", "from now on…", a decision or fact worth keeping: \`remember\` it.
-Jobs neither you nor the builder can do — rendering new slide or video images, changing a carousel or video template, database or pipeline changes, integrations, credentials — go to \`handoff\` with a clear brief. Never tell someone a builder will do what it cannot, and never call it a failure: it is waiting on a person.
+7. **Make a video** — any "make a video / reel / short / TikTok": \`make_montage\` (quote first, then make). Montage writes, voices, renders and files it; you never write the script yourself. \`make_video\` is only for one raw AI clip with no words.
+Jobs neither you, Montage nor the builder can do — rendering new slide images, changing a carousel template or a Montage brand style, database or pipeline changes, integrations, credentials — go to \`handoff\` with a clear brief. Never tell someone a builder will do what it cannot, and never call it a failure: it is waiting on a person.
 If a request mixes jobs ("she hated the hook, fix it"), do the content job and cite the feedback that drove it. Making a post is never a build.
 
 # How to behave
@@ -585,6 +610,32 @@ async function runTool(
       }).eq("id", requestId);
       await db.from("studio_request_messages").insert({ request_id: requestId, role: "claude", staff_id: staffId, body: `[needs a person] ${args.title}\n\n${args.brief}` });
       out = { ok: true, handed_off: true };
+      break;
+    }
+    case "make_montage": {
+      // 2026-10-06: Montage (OpenMontage on the Pi) is Spark's main video tool. Money only on a yes to the quote.
+      const client = String(args.client_slug || slug || "");
+      const broll = args.broll === true;
+      if (args.action === "status") {
+        out = await rpc("montage_status", { p_ref: String(args.ref ?? "").trim(), p_thread: requestId });
+        break;
+      }
+      if (args.action === "make" && args.confirmed === true) {
+        if (broll) {
+          const { data: lastStaff } = await db.from("studio_request_messages").select("body").eq("request_id", requestId).eq("role", "staff")
+            .order("created_at", { ascending: false }).limit(1).maybeSingle();
+          if (!/^\s*(yes|yep|yeah|sure|ok|okay|go|do it|make it|with b-?roll)\b/i.test(String((lastStaff as any)?.body ?? ""))) {
+            out = { ok: false, error: "not_confirmed", hint: "Show the quote and wait for their yes (OPTIONS: Make it | Not now)." };
+            break;
+          }
+        }
+        const brief = String(args.brief ?? "").trim();
+        if (brief.length < 10) { out = { ok: false, error: "brief required: what the video is about, in a sentence or two" }; break; }
+        out = await rpc("montage_start", { p: { client, brief, broll, thread: requestId, requested_by: "spark" } });
+        break;
+      }
+      out = await rpc("montage_quote", { p: { client, broll } });
+      if (args.action === "make") out = { ...out, hint: "Not started yet: show this quote and ask. Call make with confirmed:true after their yes." };
       break;
     }
     case "make_video": {
