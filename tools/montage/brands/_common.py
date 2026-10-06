@@ -103,7 +103,13 @@ def _claims(cfg, pieces):
         if r.get("severity") == "setup":      # no claim rules approved for this client yet: house rules (this file) only
             return e
         if r.get("ok") is False or r.get("severity") == "soft":
-            e.append(f"{where} broke the claim rule '{r.get('reason')}' - say it without that")
+            hit = ""
+            try:       # name the offending words so the model can drop them (Postgres \\m \\M word edges -> \\b)
+                m = re.search((r.get("pattern") or "").replace("\\m", r"\b").replace("\\M", r"\b"), t, re.I)
+                hit = f" (you wrote '{m.group(0)}')" if m and m.group(0) else ""
+            except re.error:
+                pass
+            e.append(f"{where} broke the claim rule '{r.get('reason')}'{hit} - say it without that word or idea")
     return e
 
 
