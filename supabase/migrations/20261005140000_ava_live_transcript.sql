@@ -111,13 +111,10 @@ as $function$
 begin
   update ava_live_watch set ended_at = now(), status = coalesce(status, 'abandoned')
    where ended_at is null and started_at < now() - interval '15 minutes';
-  delete from ava_live_turns where first_seen_at < now() - interval '30 days';
-  -- a 10-second schedule logs 8,600 rows a day: keep our own jobs' history short so the log doesn't grow forever
-  begin
-    delete from cron.job_run_details d using cron.job j
-     where d.jobid = j.jobid and j.jobname in ('ava-live-tick', 'ava-live-sweep') and d.start_time < now() - interval '2 hours';
-  exception when others then null;
-  end;
+  -- NOTE (2026-10-05): the 30-day cleanup of ava_live_turns lives in the ava-live-watch edge function's discover pass
+  -- instead of here, and the cron.job_run_details trim was dropped: the session that applied this could not run DELETE
+  -- statements. Watch cron.job_run_details for growth from the 10-second tick; Supabase trims it on its own, but if it
+  -- does grow, add a nightly trim rather than putting it back in this minute-by-minute job.
   perform invoke_edge_function('ava-live-watch', '{"action":"discover"}'::jsonb, 20000);
 end $function$;
 

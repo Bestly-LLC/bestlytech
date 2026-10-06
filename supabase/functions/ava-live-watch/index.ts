@@ -26,7 +26,12 @@ const XI = "https://api.elevenlabs.io/v1";
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 
-const LIVE = new Set(["initiated", "in-progress"]);
+// ON_CALL  = someone is actually on the phone (the "live" dot, and the only state where a mid-call word counts as partial)
+// KEEP      = still worth polling. "processing" means the call ended and the platform is still writing up the transcript,
+//             so we must KEEP polling through it: that is when the words actually appear, and dropping the watch there
+//             would leave a just-ended call showing an empty transcript.
+const ON_CALL = new Set(["initiated", "in-progress"]);
+const KEEP = new Set(["initiated", "in-progress", "processing"]);
 const MAX_WATCH = 6;          // never poll more than this many calls in one pass
 const STALE_MINS = 12;        // a watch older than this is closed no matter what the platform says
 
@@ -96,13 +101,13 @@ async function tick(key: string): Promise<Response> {
       if (!error) wrote += rows.length;
     }
 
-    const live = LIVE.has(status);
-    const done = !live || stale;
+    const onCall = status === "in-progress";
+    const done = !KEEP.has(status) || stale;
     await db.from("ava_live_watch").update({
       status, polls: (w.polls ?? 0) + 1, last_poll_at: new Date().toISOString(), turns_seen: turns.length,
       ...(turns.length && !w.first_turn_seen_at ? { first_turn_seen_at: new Date().toISOString() } : {}),
       // the answer to the open question: did we get words while the call was still going?
-      ...(turns.length && live ? { mid_call_partial: true } : {}),
+      ...(turns.length && onCall ? { mid_call_partial: true } : {}),
       ...(c.metadata?.call_duration_secs != null ? { duration_sec: c.metadata.call_duration_secs } : {}),
       ...(done ? { ended_at: new Date().toISOString() } : {}),
     }).eq("conversation_id", w.conversation_id);
@@ -125,7 +130,7 @@ async function discover(key: string): Promise<Response> {
   let added = 0;
   for (const [agentId, source] of agents) {
     const list = await xiGet(key, `/convai/conversations?agent_id=${agentId}&page_size=10`);
-    const live = ((list?.conversations ?? []) as Raw[]).filter((c) => LIVE.has(String(c.status ?? ""))).slice(0, 3);
+    const live = ((list?.conversations ?? []) as Raw[]).filter((c) => ON_CALL.has(String(c.status ?? ""))).slice(0, 3);
     for (const c of live) {
       const cid = String(c.conversation_id ?? "");
       if (!/^conv_[A-Za-z0-9]{6,60}$/.test(cid)) continue;
@@ -142,6 +147,8 @@ async function discover(key: string): Promise<Response> {
       if (!error) added++;
     }
   }
+  // retention lives here, not in the sweep: 30 days of words is plenty and the table should not grow forever
+  await db.from("ava_live_turns").delete().lt("first_seen_at", new Date(Date.now() - 30 * 864e5).toISOString());
   return ok({ added });
 }
 
@@ -163,7 +170,7 @@ async function feed(body: Raw): Promise<Response> {
 
   const calls = watches.map((w) => ({
     conversation_id: w.conversation_id, call_id: w.call_id, source: w.source, direction: w.direction,
-    phone: w.phone, status: w.status, live: !w.ended_at && LIVE.has(String(w.status ?? "")),
+    phone: w.phone, status: w.status, live: !w.ended_at && ON_CALL.has(String(w.status ?? "")),
     elapsed: Math.max(0, Math.round((Date.parse(w.ended_at ?? new Date().toISOString()) - Date.parse(w.started_at)) / 1000)),
     duration_sec: w.duration_sec, words_live: w.mid_call_partial === true,
     turns: byId.get(w.conversation_id) ?? [],
