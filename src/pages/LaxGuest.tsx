@@ -35,6 +35,7 @@ import { ChargeNow, OpenStalls, RangeCheck, sendNearestSupercharger, type RangeC
 import { ReturnChargeBlock, returnCharge, returnChargeLive } from "./lax/ReturnCharge";
 import { BestlyAd } from "./lax/BestlyAd";
 import { PhoneHandoff } from "./lax/PhoneHandoff";
+import { HostPanel } from "./lax/HostPanel";
 import { UnlockStart } from "./lax/Valet";
 import { renderPassImage } from "./lax/passImage";
 import { DemoBar, demoKind, demoPass, demoPub, isDemo, useDemoStage, useDemoWeather, useRealDemoKey } from "./lax/demo";
@@ -438,6 +439,7 @@ export default function LaxGuest() {
       </div>
 
       <main className="mx-auto max-w-md px-5 pb-48 pt-5">
+        <HostPanel token={token || undefined} />
         {!pub ? (
           <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-white/60" /></div>
         ) : !pub.ok ? (
@@ -452,8 +454,10 @@ export default function LaxGuest() {
             {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /><TripChanged at={pub.trip_changed_at} /></div>}
 
             {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token || undefined} /> : <>
+            <div className="host-grey">
             <NextStep next={guide.next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? carCommand : undefined} kind="lax"
               extra={guide.next?.chargeCard ? <ReturnChargeBlock compact kind="lax" endsAt={pub.trip?.ends_at} pickup={pub.pickup_battery} battery={(demoCar ? demoState : pub.car)?.battery} rc={pub.range_check} run={live ? carCommand : undefined} observedAt={(demoCar ? demoState : pub.car)?.observed_at} /> : undefined} />
+            </div>
 
             {/* QR */}
             {qrPhase !== "done" && (

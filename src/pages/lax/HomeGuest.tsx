@@ -28,6 +28,7 @@ import { ReturnChecklist } from "./ReturnChecklist";
 import { FindCarButton } from "./FindCar";
 import { InstallToast } from "./InstallToast";
 import { Fold } from "./HomeGuide";
+import { HostPanel } from "./HostPanel";
 import { homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./Charging";
@@ -327,13 +328,16 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
       <DecoRule className="mx-5 -mt-px" />
 
       <main className="mx-auto max-w-md px-5 pb-48 pt-5">
+        <HostPanel token={token} />
         {!ended && <p className="text-[17px] leading-relaxed text-white/85">Your Turo Tesla is parked on <b className="text-white">{street.replace(/^\d+\s*/, "")}</b>. <b className="text-white">Your phone is the key.</b> No meetup, no keys.</p>}
 
         {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /><TripChanged at={pub.trip_changed_at} /></div>}
 
         {ended && pub.trip ? <TripDone trip={pub.trip} charging={pub.charging} token={token} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" /> : <>
+        <div className="host-grey">
         <NextStep next={next} glow={glow.has("next")} onAction={doNext} onHasApp={markHasApp} run={live ? run : undefined} kind="home"
           extra={next?.chargeCard ? <ReturnChargeBlock compact kind="home" endsAt={pub.trip?.ends_at} pickup={pub.pickup_battery} battery={car?.battery} rc={pub.range_check} run={live ? run : undefined} observedAt={car?.observed_at} /> : undefined} />
+        </div>
 
         {/* On the trip these three swipe (Your car · Supercharging · Help & guides); before it they stack. */}
         <TripSlides on={onTrip} id="home-trip" labels={[...(carConnected ? [] : ["Your car"]), ...(pub.charging ? ["Supercharging"] : []), "Help & guides"]}>
