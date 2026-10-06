@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
-  AlarmClock, AlertTriangle, CalendarCheck, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, Mic, PhoneCall, PhoneForwarded, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
+  AlarmClock, AlertTriangle, ArrowRightLeft, CalendarCheck, CalendarClock, CheckCircle2, Inbox, Lightbulb, Loader2, Mic, PhoneCall, PhoneForwarded, PhoneIncoming, PhoneOutgoing, Plus, ShieldCheck,
 } from "lucide-react";
 import { CallNo, DeleteCallButton, LiveTranscript, Recording, ShareCall, type Line } from "./AvaCalls";
 import { ActionPills, useActions } from "./AvaActions";
@@ -42,6 +42,16 @@ export function ForwardedTag({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-300", className)}>
       <PhoneForwarded className="h-3 w-3" aria-hidden />Forwarded
+    </span>
+  );
+}
+
+/** Small label on calls where Ava dialed a company to reach a human and hand the call over (ava_calls.bridge). Neutral
+ *  grey on purpose: it is a fact about the call, not a warning. Named with the company when there is one. */
+export function BridgeTag({ org, className }: { org?: string | null; className?: string }) {
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70", className)}>
+      <ArrowRightLeft className="h-3 w-3" aria-hidden />Bridge{org?.trim() ? ` · ${org.trim()}` : ""}
     </span>
   );
 }
@@ -211,7 +221,7 @@ export type Msg = {
   id: string; source: Source; call_no: number | null; direction: "inbound" | "outbound" | "callback"; name: string; phone: string | null;
   message: string | null; urgent: boolean; callback_wanted: boolean; read_at: string | null; at: string; summary: string | null;
   duration_sec: number | null; transcript: Line[]; purpose?: string | null; hasRecording: boolean; company?: string | null; forwarded?: boolean;
-  voice?: "ava" | "jared"; booked?: string | null;
+  voice?: "ava" | "jared"; booked?: string | null; bridge?: boolean; bridgeOrg?: string | null;
 };
 
 /** The list itself. The page owns what opening a message does (mark read, show the sheet), so it can reuse its own sheet. */
@@ -239,6 +249,7 @@ export function MessagesList({ items, source, onOpen, className }: { items: Msg[
                     <CallNo n={m.call_no} />
                     <span className="text-[15px] font-medium text-white">{m.name}</span>
                     {m.forwarded && <ForwardedTag />}
+                    {m.bridge && <BridgeTag org={m.bridgeOrg} />}
                     {m.urgent &&<span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] text-rose-300"><AlertTriangle className="h-3 w-3" aria-hidden />Urgent</span>}
                     {m.callback_wanted && <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-300"><PhoneCall className="h-3 w-3" aria-hidden />Wants a call back</span>}
                     <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-white/55">{whenShort(m.at)}</span>
@@ -293,7 +304,7 @@ export function MessageSheet({ item, onClose, onDeleted }: { item: Msg | null; o
   };
   return (
     <ScrollSheet open onClose={onClose}
-      title={<><CallNo n={item.call_no} className="text-[13px]" />{item.name}{item.forwarded && <ForwardedTag className="font-normal" />}{item.voice === "jared" && <YourVoiceTag className="font-normal" />}</>}
+      title={<><CallNo n={item.call_no} className="text-[13px]" />{item.name}{item.forwarded && <ForwardedTag className="font-normal" />}{item.bridge && <BridgeTag org={item.bridgeOrg} className="font-normal" />}{item.voice === "jared" && <YourVoiceTag className="font-normal" />}</>}
       description={<>
         {item.direction === "inbound" ? (item.forwarded ? "Called your cell, forwarded to Ava" : "Called in") : item.direction === "callback" ? "Ava called back" : "Ava called"} · {whenShort(item.at)}
         {item.phone ? ` · ${fmtPhone(item.phone)}` : ""}{item.duration_sec != null ? ` · ${mmss(item.duration_sec)}` : ""}</>}>

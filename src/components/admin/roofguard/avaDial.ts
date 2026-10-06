@@ -5,7 +5,9 @@
  *   recents       the last five numbers dialed from THIS browser, per kind of call (localStorage, always in try/catch:
  *                 private windows and blocked storage just mean no recents, never an error).
  */
-export type DialMode = "personal" | "demo";
+/** `bridge`: Ava calls a company's main line, gets a human, then hands the call to Jared's cell. The org name rides in
+ *  `company`, the same field the RoofGuard demo uses, so recents keep working without a second field. */
+export type DialMode = "personal" | "demo" | "bridge";
 /** `closes`: the call whose suggested-action buttons are finished once this call goes out (Call back, Reply by call). */
 export type DialRequest = { mode: DialMode; phone: string; name?: string; purpose?: string; company?: string; closes?: { source: "ava" | "roofguard"; callId: string } };
 export type Recent = { phone: string; name: string; purpose: string; company: string; connect?: boolean; voice?: "jared"; at: number };

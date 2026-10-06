@@ -1,8 +1,10 @@
 /**
  * Top of /admin/roofguard: Ava's own number (copyable), what she has cost so far (rg_costs, top-right), and the Dial
- * button that opens an iPhone-style keypad. Two kinds of call:
- *   Personal       Ava as "Jared's AI assistant" with a reason you type (edge fn {action:"personal_call"}, admin only)
+ * button that opens an iPhone-style keypad. Three kinds of call (DialerSheet takes the ones a page offers):
+ *   Personal       Ava as "Jared's AI assistant" with a reason you type (edge fn {action:"call"}, admin only)
  *   RoofGuard demo the cold-call script against the fictional Riverside Medical Center ({action:"demo_call"})
+ *   Bridge         she dials a company, works the phone tree and the hold queue, then hands the human to Jared's cell
+ *                  ({action:"bridge"}). She is told nothing about him, so she can leak nothing about him.
  * Either way the call shows up live on the Calls tab within seconds, and in the Live button at the top of the page.
  * Also here: the last five numbers dialed from this browser (Recent + one-tap Redial), Redial after a call ends, and
  * the live pill (LivePill) that opens any live call's transcript from anywhere on the page.
@@ -15,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Check, Copy, Delete, Grid3x3, History, Loader2, Phone, PhoneIncoming, RotateCcw } from "lucide-react";
 import { LiveTranscript, Recording, type Line } from "./AvaCalls";
 import { AvaOrb, AVA_GLOW } from "./AvaOrb";
-import { ForwardedTag, SpendChip, YourVoiceTag } from "./AvaShared";
+import { BridgeTag, ForwardedTag, SpendChip, YourVoiceTag } from "./AvaShared";
 import { AvaStatusLights } from "./AvaStatusLights";
 import { SettingsButton } from "./AvaSettings";
 import { ACTIONS_EVENT, invokeError } from "./AvaActions";
@@ -146,15 +148,20 @@ export function AvaTopBar({ onCalled, extra, onOpenSettings, onOpenSetup }: { on
 
 const KEYS: [string, string][] = [["1", ""], ["2", "ABC"], ["3", "DEF"], ["4", "GHI"], ["5", "JKL"], ["6", "MNO"], ["7", "PQRS"], ["8", "TUV"], ["9", "WXYZ"], ["", ""], ["0", "+"], ["del", ""]];
 const digits10 = (v: string) => v.replace(/\D/g, "").replace(/^1(?=\d{10})/, "").slice(0, 10);
+/** What to call a recent: the person, else the company (a bridge recent has no name), else the number. */
+const recentLabel = (r: Recent) => r.name.trim() || r.company.trim() || fmt(r.phone);
 const frame = "admin-shell flex h-[100dvh] w-full flex-col gap-0 overflow-hidden border-white/10 bg-[#0b0b0d] p-0 text-white sm:max-w-md";
 const pad = "px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6";
 
 /** Everything needed to place (or place again) one call. */
 type CallParams = { mode: DialMode; phone: string; name: string; purpose: string; company: string; connect: boolean; voice?: "jared" };
 
-export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal", "demo"] }: { open: boolean; onOpenChange: (o: boolean) => void; onCalled: () => void; kinds?: ("personal" | "demo")[] }) {
+/** Tab labels, so the tablist is built from whichever kinds a page offers instead of a hardcoded pair. */
+const MODE_LABEL: Record<DialMode, string> = { personal: "Personal", demo: "RoofGuard", bridge: "Bridge" };
+
+export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal", "demo"] }: { open: boolean; onOpenChange: (o: boolean) => void; onCalled: () => void; kinds?: DialMode[] }) {
   const [digits, setDigits] = useState("");
-  const [mode, setMode] = useState<"personal" | "demo">(kinds[0]);
+  const [mode, setMode] = useState<DialMode>(kinds[0]);
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [purpose, setPurpose] = useState("");
@@ -167,6 +174,9 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
   const [err, setErr] = useState<string | null>(null);
   const clean = digits10(digits);
   const valid = clean.length === 10;
+  // A bridge call needs the company and a sentence on what it's about: the edge function turns down a topic under four
+  // characters, so the Call button stays off until there is one instead of failing after the tap.
+  const canCall = mode === "bridge" ? valid && !!company.trim() && purpose.trim().length >= 4 : valid;
   const closes = useRef<DialRequest["closes"] | null>(null);
   const kindKey = kinds.join(",");
   const openRef = useRef(onOpenChange);
@@ -224,15 +234,20 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
 
   /** Places one call. Used by the Call button, Redial on the keypad, and Redial on the in-call screen. */
   const place = async (pr: CallParams): Promise<string | null> => {
-    // personal calls belong to personal Ava (ava-assistant); demos to RoofGuard Ava (roofguard-caller)
-    const fn = pr.mode === "personal" ? "ava-assistant" : "roofguard-caller";
+    // personal and bridge calls belong to personal Ava (ava-assistant); demos to RoofGuard Ava (roofguard-caller)
+    const fn = pr.mode === "demo" ? "roofguard-caller" : "ava-assistant";
     const voice = pr.mode === "personal" && pr.voice === "jared" && voiceReady ? "jared" : undefined;
-    const { data, error } = pr.mode === "personal"
-      ? await supabase.functions.invoke(fn, { body: { action: "call", phone: pr.phone, name: pr.name, purpose: pr.purpose, connect: pr.connect, ...(voice ? { voice } : {}) } })
-      : await supabase.functions.invoke(fn, { body: { action: "demo_call", phone: pr.phone, name: pr.name, company: pr.company.trim() } });
+    const body = pr.mode === "personal"
+      ? { action: "call", phone: pr.phone, name: pr.name, purpose: pr.purpose, connect: pr.connect, ...(voice ? { voice } : {}) }
+      : pr.mode === "bridge"
+        ? { action: "bridge", phone: pr.phone, org: pr.company.trim(), topic: pr.purpose }
+        : { action: "demo_call", phone: pr.phone, name: pr.name, company: pr.company.trim() };
+    const { data, error } = await supabase.functions.invoke(fn, { body });
     if (error || !data?.ok) return invokeError(error, data, "The call didn't go out. Try again in a minute.");
     setRecents(saveRecent(pr.mode, { phone: pr.phone, name: pr.name, purpose: pr.purpose, company: pr.company, connect: pr.connect, ...(voice ? { voice } : {}) }));
-    if (data.call_id) setActive({ id: data.call_id, fn, who: pr.name.trim() || fmt(pr.phone), voice: voice ?? "ava", redial: { ...pr, ...(voice ? { voice } : { voice: undefined }) } });
+    // a bridge call has no "their name" field, so the company is who the in-call screen says the call is with
+    const who = pr.mode === "bridge" ? pr.company.trim() || fmt(pr.phone) : pr.name.trim() || fmt(pr.phone);
+    if (data.call_id) setActive({ id: data.call_id, fn, who, voice: voice ?? "ava", ...(pr.mode === "bridge" ? { bridgeOrg: pr.company.trim() } : {}), redial: { ...pr, ...(voice ? { voice } : { voice: undefined }) } });
     // a Call back / Reply by call button: that call is made, so the suggestions for the message are finished
     const c = closes.current; closes.current = null;
     if (c) {
@@ -247,7 +262,7 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
   const call = async () => {
     // like the iPhone keypad: pressing Call with nothing typed fills in the last number (a second press places the call)
     if (!clean && last) { refill(last); return; }
-    if (!valid) return;
+    if (!canCall) return;
     setBusy(true); setErr(null);
     const msg = await place({ mode, phone: clean, name, purpose, company, connect, ...(voiceOn ? { voice: "jared" as const } : {}) });
     setBusy(false);
@@ -273,10 +288,11 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
         <SheetTitle className="text-white">Dial with Ava</SheetTitle>
         <SheetDescription className="text-white/55">Type or paste a number. Ava calls from her own line and the live transcript shows right here.</SheetDescription>
 
-        {kinds.length > 1 && <div role="tablist" aria-label="Kind of call" className="mt-4 grid grid-cols-2 rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
-          {([["personal", "Personal"], ["demo", "RoofGuard"]] as const).map(([id, label]) => (
+        {kinds.length > 1 && <div role="tablist" aria-label="Kind of call"
+          className={cn("mt-4 grid rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10", kinds.length > 2 ? "grid-cols-3" : "grid-cols-2")}>
+          {kinds.map((id) => (
             <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => setMode(id)}
-              className={cn("min-h-[36px] rounded-lg text-sm font-medium transition-colors", mode === id ? "bg-white text-black shadow-sm" : "text-white/65 hover:text-white")}>{label}</button>
+              className={cn("min-h-[36px] rounded-lg text-sm font-medium transition-colors", mode === id ? "bg-white text-black shadow-sm" : "text-white/65 hover:text-white")}>{MODE_LABEL[id]}</button>
           ))}
         </div>}
 
@@ -285,15 +301,15 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
             <button type="button" onClick={() => refill(last)} disabled={busy}
               className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-[#FFA270] px-4 text-[15px] font-semibold text-[#1c1c1e] transition hover:bg-[#ffb48a] motion-safe:active:scale-[0.98] disabled:opacity-50">
               <RotateCcw className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="truncate">Redial {last.name.trim() || fmt(last.phone)}</span>
+              <span className="truncate">Redial {recentLabel(last)}</span>
             </button>
             <h3 className="mb-1.5 mt-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/55"><History className="h-3.5 w-3.5" aria-hidden />Recent</h3>
             <ul className="flex flex-wrap gap-2">
               {recents.map((r) => (
                 <li key={r.phone} className="min-w-0 max-w-full">
-                  <button type="button" onClick={() => refill(r)} aria-label={`Fill in ${r.name.trim() || fmt(r.phone)}, ${fmt(r.phone)}`}
+                  <button type="button" onClick={() => refill(r)} aria-label={`Fill in ${recentLabel(r)}, ${fmt(r.phone)}`}
                     className="flex min-h-[44px] max-w-full flex-col justify-center rounded-xl bg-white/[0.06] px-3 py-1.5 text-left ring-1 ring-white/10 transition hover:bg-white/[0.1] motion-safe:active:scale-[0.98]">
-                    <span className="truncate text-[14px] font-medium leading-tight text-white">{r.name.trim() || fmt(r.phone)}{r.name.trim() ? <span className="font-normal tabular-nums text-white/55">{"  "}{fmt(r.phone)}</span> : null}</span>
+                    <span className="truncate text-[14px] font-medium leading-tight text-white">{recentLabel(r)}{r.name.trim() || r.company.trim() ? <span className="font-normal tabular-nums text-white/55">{"  "}{fmt(r.phone)}</span> : null}</span>
                     {(r.purpose || r.company) && <span className="mt-0.5 max-w-[240px] truncate text-[12px] leading-tight text-white/55">{r.purpose || r.company}</span>}
                   </button>
                 </li>
@@ -319,11 +335,30 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
         </div>
 
         <div className="mt-5 space-y-3">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-white/60">Their name <span className="text-white/40">(optional)</span></span>
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder={mode === "personal" ? "e.g. Mom" : "e.g. Bill"}
-              className="h-11 w-full rounded-xl bg-white/[0.05] px-3 text-[15px] text-white outline-none ring-1 ring-white/10 placeholder:text-white/35 focus:ring-white/25" />
-          </label>
+          {/* bridge: she calls a switchboard, so there is nobody to name — the company and the topic are the whole form */}
+          {mode !== "bridge" && (
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-white/60">Their name <span className="text-white/40">(optional)</span></span>
+              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder={mode === "personal" ? "e.g. Mom" : "e.g. Bill"}
+                className="h-11 w-full rounded-xl bg-white/[0.05] px-3 text-[15px] text-white outline-none ring-1 ring-white/10 placeholder:text-white/35 focus:ring-white/25" />
+            </label>
+          )}
+          {mode === "bridge" ? (
+            <>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-white/60">Company</span>
+                <input value={company} onChange={(e) => setCompany(e.target.value)} maxLength={60} placeholder="e.g. Tower Federal Credit Union"
+                  className="h-11 w-full rounded-xl bg-white/[0.05] px-3 text-[15px] text-white outline-none ring-1 ring-white/10 placeholder:text-white/35 focus:ring-white/25" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-white/60">What it's about</span>
+                <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} maxLength={600} rows={3}
+                  placeholder="e.g. Gap benefits after the Model Y accident, and what happens to the loan"
+                  className="w-full rounded-xl bg-white/[0.05] px-3 py-2 text-[15px] text-white outline-none ring-1 ring-white/10 placeholder:text-white/35 focus:ring-white/25" />
+                <span className="mt-1 block text-[11px] text-white/40">One sentence is enough. She says this much to get to the right department, and nothing more.</span>
+              </label>
+            </>
+          ) : null}
           {mode === "personal" ? (
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-white/60">What should Ava call about?</span>
@@ -365,7 +400,7 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
                 <span className={cn("absolute left-0 top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow transition-transform", connect ? "translate-x-[22px]" : "translate-x-[2px]")} />
               </button>
             </label>
-          ) : (
+          ) : mode === "demo" ? (
             <div className="space-y-2">
               <label className="block">
                 <span className="mb-1 block text-xs font-medium text-white/60">Company <span className="text-white/40">(optional)</span></span>
@@ -374,15 +409,30 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
               </label>
               <p className="text-xs text-white/50">She runs the RoofGuard script for this company. Leave it blank to use the practice facility (Riverside Medical Center). Leads already on the call list are called by the queue, not from here.</p>
             </div>
-          )}
+          ) : null}
           {err && <p role="alert" className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}
         </div>
 
-        <button type="button" onClick={() => void call()} disabled={(!valid && !(clean === "" && last)) || busy} aria-label={clean === "" && last ? `Fill in the last number, ${fmt(last.phone)}` : "Call"}
-          className="mx-auto mt-5 grid h-[72px] w-[72px] shrink-0 place-items-center rounded-full bg-[#30D158] text-white shadow-lg transition active:scale-95 disabled:opacity-40">
-          {busy ? <Loader2 className="h-7 w-7 animate-spin" /> : <Phone className="h-7 w-7 fill-current" />}
+        {/* The one real gotcha, in plain words: a missed ring sends the rep back to Ava, so the phone stays in his hand. */}
+        {mode === "bridge" && (
+          <div className="mt-4 shrink-0 space-y-2 rounded-xl bg-white/[0.04] px-3 py-2.5 text-[12px] leading-snug text-white/55 ring-1 ring-white/10">
+            <p>Ava dials the main line, presses her way through the phone tree and waits on hold. When a real person picks up she says one sentence, rings your cell, and hands them over.</p>
+            <p className="text-white/70"><span className="font-semibold text-white">Keep your phone in your hand.</span> If you miss the ring, your cell forwards back to Ava's line and the rep ends up back with her.</p>
+            <p>She is given nothing about you, so she cannot give out your Social Security number, date of birth or account numbers. You verify yourself once you're on.</p>
+          </div>
+        )}
+
+        <button type="button" onClick={() => void call()} disabled={(!canCall && !(clean === "" && last)) || busy}
+          aria-label={clean === "" && last ? `Fill in the last number, ${fmt(last.phone)}` : mode === "bridge" ? "Call and bridge me in" : "Call"}
+          className={cn("mt-5 shrink-0 bg-[#30D158] text-white shadow-lg transition active:scale-95 disabled:opacity-40",
+            mode === "bridge" ? "flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl px-4 text-[17px] font-semibold"
+              : "mx-auto grid h-[72px] w-[72px] place-items-center rounded-full")}>
+          {busy ? <Loader2 className={cn("animate-spin", mode === "bridge" ? "h-5 w-5" : "h-7 w-7")} /> : <Phone className={cn("fill-current", mode === "bridge" ? "h-5 w-5" : "h-7 w-7")} />}
+          {mode === "bridge" && <span>Call and bridge me in</span>}
         </button>
-        <p className="mt-2 text-center text-[11px] text-white/50">{clean === "" && last ? "Press Call to fill in the last number, then again to call." : "Only call people who'd expect it. Ava's number may show as unknown."}</p>
+        <p className="mt-2 text-center text-[11px] text-white/50">{clean === "" && last ? "Press Call to fill in the last number, then again to call."
+          : mode === "bridge" ? <>She holds as long as it takes, up to <span className="whitespace-nowrap">25 minutes</span>.</>
+          : "Only call people who'd expect it. Ava's number may show as unknown."}</p>
         </div>}
       </SheetContent>
     </Sheet>
@@ -392,7 +442,7 @@ export function DialerSheet({ open, onOpenChange, onCalled, kinds = ["personal",
 // ---------- in-call screen (same for personal Ava and RoofGuard) ----------
 /** `id` is the call row (empty for a live call that has no row yet, such as an incoming one: then `conversationId` finds it). */
 export type ActiveCall = { id: string; conversationId?: string | null; fn: "ava-assistant" | "roofguard-caller"; who: string; voice?: "ava" | "jared"; kind?: string;
-  incoming?: boolean; forwarded?: boolean; redial?: CallParams };
+  incoming?: boolean; forwarded?: boolean; bridgeOrg?: string | null; redial?: CallParams };
 type LiveState = { status: string; elapsed: number; duration: number | null; transcript: Line[] };
 const DONE = new Set(["done", "failed"]);
 const clock = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
@@ -437,7 +487,8 @@ function InCall({ call, onNew, onDone, onRedial, redialBusy, redialErr }: { call
           {call.incoming ? <><PhoneIncoming className="h-3.5 w-3.5" aria-hidden />{who} answering{call.kind ? ` · ${call.kind}` : ""}</> : <>{who} calling{call.kind ? ` · ${call.kind}` : ""}</>}
         </div>
         <div className="mt-1 text-[26px] font-semibold text-white">{call.who}</div>
-        {(call.voice === "jared" || call.forwarded) && <div className="mt-1 flex justify-center gap-2">{call.forwarded && <ForwardedTag />}{call.voice === "jared" && <YourVoiceTag />}</div>}
+        {(call.voice === "jared" || call.forwarded || call.bridgeOrg != null) && <div className="mt-1 flex flex-wrap justify-center gap-2">
+          {call.forwarded && <ForwardedTag />}{call.bridgeOrg != null && <BridgeTag org={call.bridgeOrg} />}{call.voice === "jared" && <YourVoiceTag />}</div>}
         <div className={cn("mt-1 inline-flex items-center gap-2 text-[15px]", ended ? "text-white/60" : "text-[#FFA270]")}>
           {!ended && <span className="h-2 w-2 rounded-full bg-[#FFA270] motion-safe:animate-pulse" aria-hidden />}
           <span>{label}</span><span className="font-mono tabular-nums text-white">{clock(secs)}</span>

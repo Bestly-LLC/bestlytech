@@ -15,7 +15,7 @@ import { VoiceSwitcher } from "@/components/admin/roofguard/VoiceSwitcher";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { CallNo, ReplyGuard, LiveTranscript, type Line } from "@/components/admin/roofguard/AvaCalls";
 import { DialerSheet, LivePill } from "@/components/admin/roofguard/AvaDialer";
-import { FollowupsList, ForwardedTag, KnowledgeList, MessageSheet, MessagesList, SpendChip, YourVoiceTag, type Msg } from "@/components/admin/roofguard/AvaShared";
+import { BridgeTag, FollowupsList, ForwardedTag, KnowledgeList, MessageSheet, MessagesList, SpendChip, YourVoiceTag, type Msg } from "@/components/admin/roofguard/AvaShared";
 import { useLiveCalls, LIVE_ENDED_EVENT } from "@/components/admin/roofguard/AvaLive";
 import { AvaCalendars } from "@/components/admin/roofguard/AvaCalendars";
 import { AvaCell } from "@/components/admin/roofguard/AvaCell";
@@ -33,7 +33,8 @@ import { Check, ChevronRight, Copy, Grid3x3, Phone, PhoneIncoming, PhoneOutgoing
 type Call = { id: string; direction: "inbound" | "outbound"; phone: string | null; contact_id: string | null; caller_name: string | null; purpose: string | null;
   conversation_id: string | null; status: string; summary: string | null; message: string | null; urgent: boolean; callback_wanted: boolean;
   duration_sec: number | null; transcript: { role: string; message: string | null; time_in_call_secs?: number }[] | null; read_at: string | null; created_at: string;
-  deleted_at: string | null; archived_at?: string | null; call_no: number | null; voice?: "ava" | "jared"; forwarded?: boolean; booked_slot?: string | null };
+  deleted_at: string | null; archived_at?: string | null; call_no: number | null; voice?: "ava" | "jared"; forwarded?: boolean; booked_slot?: string | null;
+  bridge?: boolean; bridge_org?: string | null };
 type Contact = { id: string; name: string; phone: string | null; relationship: string | null; notes: string | null };
 type Settings = { agent_id: string | null; phone_number_id: string | null; from_number: string; setup_log: { m: string }[] };
 type Costs = { total: number; month: number; minutes: number; calls: number; unread: number };
@@ -108,7 +109,8 @@ export default function AvaAssistant() {
   const toMsg = (c: Call): Msg => ({
     id: c.id, source: "ava", call_no: c.call_no, direction: c.direction, name: nameOf(c), phone: c.phone, message: c.message, urgent: c.urgent,
     callback_wanted: c.callback_wanted, read_at: c.read_at, at: c.created_at, summary: c.summary, duration_sec: c.duration_sec, transcript: slim(c.transcript),
-    purpose: c.purpose, hasRecording: !!c.conversation_id, forwarded: c.forwarded === true, voice: c.voice, booked: c.booked_slot ?? null });
+    purpose: c.purpose, hasRecording: !!c.conversation_id, forwarded: c.forwarded === true, voice: c.voice, booked: c.booked_slot ?? null,
+    bridge: c.bridge === true, bridgeOrg: c.bridge_org ?? null });
   const messages: Msg[] = calls.filter((c) => c.message).map(toMsg);
   const ready = !!s?.agent_id && !!s?.phone_number_id;
 
@@ -182,8 +184,9 @@ export default function AvaAssistant() {
                   <button type="button" onClick={() => void markRead(c)} className="flex min-h-[44px] w-full items-start gap-3 px-4 py-3 text-left hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
                     {c.direction === "inbound" ? <PhoneIncoming className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" aria-label="Incoming" /> : <PhoneOutgoing className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" aria-label="Outgoing" />}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2"><CallNo n={c.call_no} /><span className="text-[15px] font-medium text-white">{nameOf(c)}</span>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><CallNo n={c.call_no} /><span className="text-[15px] font-medium text-white">{nameOf(c)}</span>
                         {c.forwarded && <ForwardedTag />}
+                        {c.bridge && <BridgeTag org={c.bridge_org} />}
                         {c.voice === "jared" && <YourVoiceTag />}
                         <span className="text-xs tabular-nums text-white/40">{mmss(c.duration_sec)}</span>
                         <span className="ml-auto shrink-0 text-xs text-white/40">{when(c.created_at)}</span></div>
@@ -240,7 +243,8 @@ export default function AvaAssistant() {
         onDeleted={() => { const id = open?.id; setOpen(null); setCalls((cs) => cs.filter((x) => x.id !== id)); void load(); }} />
       <ContactSheet c={contactOpen} onClose={() => setContactOpen(null)} onSaved={() => { setContactOpen(null); void load(); }} />
       <AvaSettingsSheet source="ava" open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <DialerSheet kinds={["personal"]} open={dial} onOpenChange={setDial} onCalled={() => { setTimeout(() => void load(), 3000); }} />
+      {/* personal and bridge both run on ava-assistant, so one sheet offers both and the tablist picks (Jared's ask, 2026-10-05) */}
+      <DialerSheet kinds={["personal", "bridge"]} open={dial} onOpenChange={setDial} onCalled={() => { setTimeout(() => void load(), 3000); }} />
     </div>
   );
 }

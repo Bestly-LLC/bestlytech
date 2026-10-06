@@ -49,6 +49,9 @@ const LINE = "+18164299495";
 const JARED_CELL = "+18165007236";
 // Money stopper hard caps, set on the agent by setup (seconds): a call never runs past 10 minutes, and dead air ends it after 20.
 const MAX_CALL_SECS = 600;
+// Bridge calls (she holds in a company's phone queue for Jared) legitimately run long: a credit union hold can pass 15 minutes.
+// Her own talking is tiny on these, so the cost is mostly the line. Still capped so a stuck queue can't run all day.
+const MAX_BRIDGE_SECS = 1500;
 
 // A call the line provider still lists as live but that can't be: a ring that never connected stays "initiated" forever
 // (call #69, Mom, 2026-10-05: a second ring sat there and the page said "on a call, 35 minutes"), and nothing outlives
@@ -141,6 +144,7 @@ This call: {{call_context}}
 Who you're talking to: {{caller_name}}. {{caller_notes}}
 {{voice_rules}}
 {{forward_rules}}
+{{bridge_rules}}
 
 What you can share (the only facts you may use to help someone):
 {{knowledge}}
@@ -233,6 +237,24 @@ const FORWARD_RULES = `FORWARDED CALL: someone called Jared's own cell and he di
 - Take a message and, if they want a call back, get the best number: the usual message flow.
 - NEVER use the transfer tool on this call, and never offer to connect, patch through or transfer them to Jared. His cell forwards straight back to you, so it would loop. If they ask for him, say you'll pass on a message and he'll call them back.`;
 
+/** Rules for a bridge call: she dials a company, works the phone tree, waits on hold, and hands a live human to Jared.
+ *  She never identifies him and never answers a verification question: that is the whole point of the mode. */
+const bridgeRules = (org: string, topic: string) => `BRIDGE CALL: you called ${org}'s main line for Jared. Your job is to get a real human on the line and then hand the call to Jared. You are NOT handling his business yourself.
+What Jared needs this call to be about (say this ONLY to a human, in one sentence, and only enough to get routed to the right department): ${topic}
+- Phone trees: listen to the options and press the right key with the keypad tone tool. Aim for a person: "speak to a representative", "member services", "all other inquiries", or zero. If a menu asks for an account or member number, do NOT enter one: press zero or stay on the line for an agent.
+- If a recording asks you to say why you're calling, say the topic in a few words.
+- Hold: wait quietly. Hold music, "your call is important", "estimated wait" and silence are all normal. Never hang up on hold, and never speak over hold music. If asked to leave a number for a callback, decline politely and keep holding; if the system forces it, end the call and Jared will see you tried.
+- When a REAL human is on the line:
+  1. "Hi, I'm Ava, Jared Best's assistant. I'm calling for him about ${topic}."
+  2. If they ask who they're speaking to or whether you're an AI, say you're his AI assistant, plainly.
+  3. "He's right here, let me put him on." Then use the transfer tool immediately.
+  4. If they want to verify identity FIRST, say "He'll verify, he's right here" and transfer. Do not try to answer it.
+- Never, on this call, say or confirm: his Social Security number or any part of it, his date of birth, account, card, loan or policy numbers, his address, his mother's maiden name, a PIN, a password, or a security answer. You do not have them. If asked for any of it: "I don't have that, he'll give it to you directly." Then transfer. Never guess and never read back a number from anywhere else in this prompt.
+- Never agree to anything, accept any offer, authorize anything, or make any change to any account. You are only getting a human on the phone.
+- If they refuse to talk to an assistant at all, say "Understood, let me get him," and transfer.
+- If you reach the wrong company or a dead line, end the call.
+- Do not use the check-in, do not tell a story, and do not take a message for Jared on this call.`;
+
 const DATA_COLLECTION = {
   caller_name: { type: "string", description: "The other person's name as they gave it. Empty if unknown." },
   message_for_jared: { type: "string", description: "The message they want passed to Jared, in one or two plain sentences, in their words where possible. Empty if none." },
@@ -259,7 +281,7 @@ const DATA_COLLECTION = {
   booked_slot: { type: "string", description: "Only when Ava offered specific meeting times on an outbound call: the start of the time the other person agreed to, as an ISO 8601 date-time with the Pacific UTC offset (use the call date to resolve days like Thursday). Empty if they did not agree to one of the offered times." },
 };
 
-const UNKNOWN = { jared_stories: "", caller_name: "a caller Ava doesn't know yet", caller_notes: "", caller_trusted: "no", voice_rules: "", forward_rules: "", call_voice: "ava", forwarded: "no", forwarded_from: "", greeting:
+const UNKNOWN = { bridge_rules: "", jared_stories: "", caller_name: "a caller Ava doesn't know yet", caller_notes: "", caller_trusted: "no", voice_rules: "", forward_rules: "", call_voice: "ava", forwarded: "no", forwarded_from: "", greeting:
   "Hey, Jared's phone. What's up?" };
 
 /** Turn incoming calls on for an ElevenLabs phone number and confirm it with a GET. Tries the documented inbound trunk
@@ -388,7 +410,7 @@ async function setup(): Promise<Response> {
             // "Connect me": can only ever dial Jared's own cell
             transfer_to_number: { name: "transfer_to_number", params: { system_tool_type: "transfer_to_number", transfers: [{
               phone_number: s?.jared_cell ?? "+18165007236", transfer_type: "sip_refer",
-              condition: "Only on an outbound call whose context says to connect them to Jared, after the person said yes to talking now. NEVER on an incoming or forwarded call: Jared's cell forwards back to this line, so it would loop." }] } },
+              condition: "Only on an outbound call Ava placed, in one of two cases: (a) the context says to connect them to Jared and the person said yes to talking now, or (b) it is a BRIDGE call and a real human from the company is now on the line. NEVER on an incoming or forwarded call: Jared's cell forwards back to this line, so it would loop." }] } },
           } },
       },
       // Money stopper: hard caps no matter what the prompt does
@@ -402,7 +424,7 @@ async function setup(): Promise<Response> {
     platform_settings: {
       data_collection: DATA_COLLECTION,
       // a single call may swap the voice (voice test, "Use my voice", forwarded calls) and the first line (forwarded calls); nothing else is overridable
-      overrides: { conversation_config_override: { agent: { first_message: true }, tts: { voice_id: true } }, enable_conversation_initiation_client_data_from_webhook: true },
+      overrides: { conversation_config_override: { agent: { first_message: true }, tts: { voice_id: true }, conversation: { max_duration_seconds: true } }, enable_conversation_initiation_client_data_from_webhook: true },
       workspace_overrides: {
         webhooks: { post_call_webhook_id: webhookId, events: ["transcript"], send_audio: false },
         conversation_initiation_client_data_webhook: { url: `${SELF}?hook=init`, request_headers: { "x-ava-init": initSecret } },
@@ -448,7 +470,7 @@ type Placed = { ok: true; call_id: string | null; calling: string } | { ok: fals
 const VOICE_RULES = "VOICE MODE: you are speaking in Jared's own voice, so you must be clear you are his AI assistant and not him. Your first line already says so; never skip or contradict it. If anyone asks, say you're an AI. Never say \"this is Jared\" or \"I'm Jared\", and never speak as if you are him. Never commit to anything for him: no money, plans, appointments or promises. Say you'll pass it on.";
 
 /** Places one call as Ava. Everything an outbound call needs lives here so the dialer, "Connect me" and follow-ups share it. */
-async function place(o: { phone: string; name?: string; purpose?: string; connect?: boolean; first_line?: string; voice_id?: string; voice_mode?: "ava" | "jared"; booking?: Record<string, unknown> }): Promise<Placed> {
+async function place(o: { phone: string; name?: string; purpose?: string; connect?: boolean; bridge?: boolean; org?: string; first_line?: string; voice_id?: string; voice_mode?: "ava" | "jared"; booking?: Record<string, unknown> }): Promise<Placed> {
   const to = toE164(o.phone);
   if (!to) return { ok: false, error: "Enter a 10-digit US or Canada number.", status: 400 };
   const { data: s } = await db.from("ava_settings").select("*").eq("id", true).single();
@@ -458,8 +480,10 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
   if (gate.over) return { ok: false, error: gate.message ?? "Daily spend cap reached. Raise it in Setup or try tomorrow.", status: 429 };
   const { data: contact } = await db.from("ava_contacts").select("id, name, relationship, notes").eq("phone", to).maybeSingle();
   const name = String(o.name ?? "").trim().slice(0, 40) || contact?.name || "";
-  const purpose = String(o.purpose ?? "").trim().slice(0, o.booking ? 900 : 600) || "No specific reason given: use the check-in.";
+  const purpose = String(o.purpose ?? "").replace(/\{\{|\}\}/g, "").trim().slice(0, o.booking ? 900 : 600) || "No specific reason given: use the check-in.";
   const connect = o.connect === true;
+  const bridge = o.bridge === true;
+  const org = (String(o.org ?? "").replace(/\{\{|\}\}/g, "").trim().slice(0, 80)) || name || "them";
   // her voice for this call: the agent's own, a one-call override (the voice test), or Jared's clone ("Use my voice")
   let voiceOverride: string | null = o.voice_id ?? null, voiceTag: "ava" | "jared" = "ava", voiceRules = "";
   if (o.voice_mode === "jared") {
@@ -468,31 +492,54 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
     voiceOverride = s.jared_voice_id; voiceTag = "jared"; voiceRules = VOICE_RULES;
   }
   const first = name ? ` ${name.split(" ")[0]}` : "";
-  const greeting = voiceTag === "jared"
+  // A bridge call's first line is usually heard by a robot, so it stays short and gives nothing away.
+  const greeting = bridge
+    ? "Hi, I'm calling on behalf of a member."
+    : voiceTag === "jared"
     ? `Hey${first}, it's Jared's AI assistant, using his voice.`   // disclosure first, always
     : String(o.first_line ?? "").trim().slice(0, 300) ||
       `Hi${first}, it's Ava, Jared's AI assistant, on a recorded line. ${connect ? "Jared would love a quick word with you." : "He asked me to give you a call."}`;
   const res = await fetch(`${XI}/convai/sip-trunk/outbound-call`, {
     method: "POST", headers: { "xi-api-key": key, "content-type": "application/json" },
     body: JSON.stringify({ agent_id: s.agent_id, agent_phone_number_id: s.phone_number_id, to_number: to,
-      conversation_initiation_client_data: { ...(voiceOverride ? { conversation_config_override: { tts: { voice_id: voiceOverride } } } : {}), dynamic_variables: {
-        greeting, voice_rules: voiceRules, call_context: connect
+      conversation_initiation_client_data: {
+        ...(voiceOverride || bridge
+          ? { conversation_config_override: { ...(voiceOverride ? { tts: { voice_id: voiceOverride } } : {}), ...(bridge ? { conversation: { max_duration_seconds: MAX_BRIDGE_SECS } } : {}) } }
+          : {}),
+        dynamic_variables: {
+        greeting, voice_rules: voiceRules,
+        bridge_rules: bridge ? bridgeRules(org, purpose) : "",
+        call_context: bridge
+          ? `OUTBOUND BRIDGE: you called ${org}'s phone line for Jared. Follow the BRIDGE CALL rules: get a human, then hand the call to Jared. Share nothing about him.`
+          : connect
           ? `OUTBOUND: you called ${name || "them"}; they did not call you. You're calling to connect them to Jared. Why he wants to talk: ${purpose}. Check they're free, then connect them to Jared.`
           : `OUTBOUND: you called ${name || "them"}; they did not call you. Jared asked you to make this call. The reason for it: ${purpose}`,
         caller_name: name || "them", caller_notes: contact ? `(${contact.relationship ?? "contact"}) ${contact.notes ?? ""}` : "",
-        caller_trusted: contact || to === (s.jared_cell ?? JARED_CELL) ? "yes" : "no",
-        knowledge: await knowledge(), jared_stories: contact ? await stories() : "", coach_notes: await coachNotes(), ...nowVars() } } }),
+        caller_trusted: !bridge && (contact || to === (s.jared_cell ?? JARED_CELL)) ? "yes" : "no",
+        knowledge: bridge ? "- (nothing: this is a bridge call, share nothing)" : await knowledge(),
+        jared_stories: !bridge && contact ? await stories() : "", coach_notes: await coachNotes(), ...nowVars() } } }),
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok || j?.success === false) return { ok: false, error: `The call didn't go out: ${JSON.stringify(j).slice(0, 200)}`, status: 502 };
   const { data: row } = await db.from("ava_calls").insert({ direction: "outbound", phone: to, contact_id: contact?.id ?? null, caller_name: name || null,
-    purpose, conversation_id: j.conversation_id ?? null, status: "queued", connect_to_jared: connect, voice: voiceTag, ...(o.booking ? { booking: o.booking } : {}) }).select("id").single();
+    purpose, conversation_id: j.conversation_id ?? null, status: "queued", connect_to_jared: connect || bridge, bridge, bridge_org: bridge ? org : null, voice: voiceTag, ...(o.booking ? { booking: o.booking } : {}) }).select("id").single();
   return { ok: true, call_id: row?.id ?? null, calling: to };
 }
 
 async function call(body: Record<string, unknown>): Promise<Response> {
   const r = await place({ phone: String(body.phone ?? ""), name: String(body.name ?? ""), purpose: String(body.purpose ?? ""),
     connect: body.connect === true, first_line: String(body.first_line ?? ""), voice_mode: body.voice === "jared" ? "jared" : "ava" });
+  return r.ok ? Response.json({ ok: true, call_id: r.call_id, calling: r.calling }, { headers: CORS })
+    : Response.json({ ok: false, error: r.error }, { status: r.status, headers: CORS });
+}
+
+/** "Get a human, then get me on": she dials a company, works the phone tree and the hold queue, and transfers the live
+ *  human to Jared's cell. Nothing about him enters the prompt, so nothing about him can be said. Jared has to be holding
+ *  his phone: his cell forwards back to Ava's line when he misses it, so a missed bridge lands the rep back with her. */
+async function bridgeCall(body: Record<string, unknown>): Promise<Response> {
+  const topic = String(body.topic ?? body.purpose ?? "").trim();
+  if (topic.length < 4) return Response.json({ ok: false, error: "Say what the call is about, in a sentence." }, { status: 400, headers: CORS });
+  const r = await place({ phone: String(body.phone ?? ""), org: String(body.org ?? ""), purpose: topic, bridge: true });
   return r.ok ? Response.json({ ok: true, call_id: r.call_id, calling: r.calling }, { headers: CORS })
     : Response.json({ ok: false, error: r.error }, { status: r.status, headers: CORS });
 }
@@ -1609,6 +1656,7 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.action === "setup") return setup();
   if (body.action === "call") return call(body);
+  if (body.action === "bridge") return bridgeCall(body);
   if (body.action === "callback") return callback(String(body.id ?? ""));
   if (body.action === "health") return health();
   if (body.action === "live") return live(body.call_id ? String(body.call_id) : null, /^[\w-]{6,80}$/.test(String(body.conversation_id ?? "")) ? String(body.conversation_id) : null);
