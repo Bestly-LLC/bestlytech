@@ -136,9 +136,10 @@ export function parseCard(card: string): Person[] {
 }
 
 /** Everyone in the account with a dialable North American number. Same phone in two contacts: the first name wins. */
-export async function fetchPeople(c: Creds, trace: string[] = []): Promise<{ people: Person[]; cards: number; books: number }> {
+export async function fetchPeople(c: Creds, trace: string[] = [], onChunk?: (people: Person[]) => Promise<void>): Promise<{ people: Person[]; cards: number; books: number }> {
   const books = await addressBooks(c, trace);
   const byPhone = new Map<string, Person>();
+  const seen = new Set<string>();
   let cards = 0;
   for (const book of books) {
     // 1. every card on the shelf (paths only, no contact data)
@@ -161,18 +162,25 @@ export async function fetchPeople(c: Creds, trace: string[] = []): Promise<{ peo
       if (r.status >= 400) { trace.push(`5 chunk at ${i} returned ${r.status}, skipped`); continue; }
       const got = blocks(r.text, "response");
       cards += got.length;
+      const batch: Person[] = [];
       for (const resp of got) {
         const data = first(resp, "address-data");
         if (!data) continue;
         withData++;
         const card = unxml(data);
         if (withData === 1) trace.push(`5 first card props: ${props(card)}`);
-        for (const p of parseCard(card)) if (!byPhone.has(p.phone)) byPhone.set(p.phone, p);
+        for (const p of parseCard(card)) {
+          if (seen.has(p.phone)) continue;
+          seen.add(p.phone);
+          batch.push(p);
+          if (!onChunk) byPhone.set(p.phone, p);   // only kept in memory when nobody is draining them
+        }
       }
+      if (onChunk && batch.length) await onChunk(batch);
     }
     if (!withData) trace.push("5 no address-data came back");
     trace.push(`5 ${withData} card(s) read`);
   }
-  trace.push(`6 ${cards} card(s) -> ${byPhone.size} number(s)`);
+  trace.push(`6 ${cards} card(s) -> ${seen.size} number(s)`);
   return { people: [...byPhone.values()], cards, books: books.length };
 }

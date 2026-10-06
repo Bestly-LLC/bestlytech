@@ -573,14 +573,26 @@ async function contactsSync(b: Record<string, unknown>): Promise<Response> {
   if (!creds) return Response.json({ ok: false, error: "Her iCloud login isn't saved. Connect iCloud in Ava's calendars first." }, { status: 412, headers: CORS });
 
   const trace: string[] = [];
+  // Written as each chunk of cards is read, not all at the end: one big write at the end hit the function's limit.
+  // A run cut short has still saved everything it got to.
+  let added = 0, renamed = 0, total = 0, numbers = 0;
+  const onChunk = dry ? undefined : async (people: Person[]) => {
+    numbers += people.length;
+    const { data, error } = await db.rpc("ava_contacts_apply", { p_people: people });
+    if (error) { trace.push(`save failed at ${numbers}: ${error.message}`); return; }
+    const r = (data ?? {}) as { added?: number; renamed?: number; total?: number };
+    added += r.added ?? 0; renamed += r.renamed ?? 0; total = r.total ?? total;
+  };
+
   let found: { people: Person[]; cards: number; books: number };
   try {
-    found = await fetchPeople(creds, trace);
+    found = await fetchPeople(creds, trace, onChunk);
   } catch (e) {
     const why = e instanceof Error ? e.message : "iCloud didn't answer";
-    await db.rpc("scout_notify", { p_title: "Ava (assistant): the contacts sync failed", p_body: `${why}. Steps: ${trace.join(" | ")}`,
-      p_url: "https://bestly.tech/admin/ava", p_dedupe: `ava-contacts-sync-fail-${new Date().toISOString().slice(0, 10)}` }).catch(() => {});
-    return Response.json({ ok: false, error: why, trace }, { status: 502, headers: CORS });
+    await db.rpc("scout_notify", { p_title: "Ava (assistant): the contacts sync failed",
+      p_body: `${why}${added ? `. ${added} saved before it stopped` : ""}. Steps: ${trace.join(" | ")}`,
+      p_severity: "warning", p_url: "/admin/ava", p_dedupe: `ava-contacts-sync-fail-${new Date().toISOString().slice(0, 10)}` }).catch(() => {});
+    return Response.json({ ok: false, error: why, added, trace }, { status: 502, headers: CORS });
   }
 
   if (dry) {
@@ -592,15 +604,11 @@ async function contactsSync(b: Record<string, unknown>): Promise<Response> {
       sample: fresh.slice(0, 8).map((p) => p.name), trace }, { headers: CORS });
   }
 
-  // One database call, not one per contact: 923 separate updates ran the function out of time on the first sync.
-  const { data: applied, error: applyErr } = await db.rpc("ava_contacts_apply", { p_people: found.people });
-  if (applyErr) return Response.json({ ok: false, error: `Saving them failed: ${applyErr.message}`, trace }, { status: 502, headers: CORS });
-  const { added = 0, renamed = 0, total = 0 } = (applied ?? {}) as { added?: number; renamed?: number; total?: number };
   const now = new Date().toISOString();
   await db.rpc("scout_notify", { p_title: "Ava (assistant): contacts synced from iCloud",
     p_body: `${added} new, ${renamed} renamed, ${total} saved in all. She greets these people by name now.`,
     p_severity: "info", p_push: added > 0, p_url: "/admin/ava", p_dedupe: `ava-contacts-sync-${now.slice(0, 13)}` }).catch(() => {});
-  return Response.json({ ok: true, added, renamed, numbers: found.people.length, total, cards: found.cards, trace }, { headers: CORS });
+  return Response.json({ ok: true, added, renamed, numbers, total, cards: found.cards, trace }, { headers: CORS });
 }
 
 // ---------- follow-up call (only ever a row Jared approved: status 'dialing') ----------
