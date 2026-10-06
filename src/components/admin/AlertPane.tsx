@@ -8,6 +8,22 @@ import { copyText, formatForClaude } from "@/lib/copyForClaude";
 import { toast } from "sonner";
 import { FixLadder } from "@/components/admin/FixLadder";
 
+// Alerts store links both ways: "/admin/claims" and "https://bestly.tech/admin/claims". React Router treats a full URL
+// as a relative path (the "Go to the page" button went nowhere), so our own site becomes an in-app path and anything
+// else opens as a normal link.
+export function openAlertLink(url: string, navigate: (to: string) => void) {
+  try {
+    const u = new URL(url, window.location.origin);
+    if (u.origin === window.location.origin || /(^|\.)bestly\.tech$/i.test(u.hostname) && !/^(cloud|studio|review)\./i.test(u.hostname)) {
+      navigate(u.pathname + u.search + u.hash);
+    } else {
+      window.open(u.href, "_blank", "noopener");
+    }
+  } catch {
+    navigate(url);
+  }
+}
+
 export type PaneAlert = {
   id: string;
   created_at: string;
@@ -116,7 +132,7 @@ export function AlertPane({ alert, onClose }: { alert: PaneAlert | null; onClose
         <div className="px-5 py-4 text-[0.9375rem] leading-relaxed text-white/80">
           <CopyText text={alert.body || alert.title} />
           {alert.url && (
-            <button type="button" onClick={() => { onClose(); navigate(alert.url!); }}
+            <button type="button" onClick={() => { onClose(); openAlertLink(alert.url!, navigate); }}
               className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-sky-300 hover:underline bento:text-sky-700">
               Go to the page <ArrowUpRight className="h-4 w-4" aria-hidden />
             </button>

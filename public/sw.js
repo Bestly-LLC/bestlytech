@@ -47,7 +47,13 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = new URL((event.notification.data && event.notification.data.url) || "/admin", self.location.origin).href;
+  // Links arrive as "/admin/claims" or "https://bestly.tech/admin/claims". A full link to our own site (bestly.tech or
+  // www.bestly.tech) is turned into this origin's path; otherwise navigate() is cross-origin and silently does nothing.
+  let raw = new URL((event.notification.data && event.notification.data.url) || "/admin", self.location.origin);
+  if (raw.origin !== self.location.origin && /(^|\.)bestly\.tech$/i.test(raw.hostname) && !/^(cloud|studio|review)\./i.test(raw.hostname)) {
+    raw = new URL(raw.pathname + raw.search + raw.hash, self.location.origin);
+  }
+  const target = raw.href;
   event.waitUntil(
     (async () => {
       const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
@@ -56,8 +62,15 @@ self.addEventListener("notificationclick", (event) => {
       const same = wins.find((w) => new URL(w.url).pathname.split("/")[1] === section) || wins[0];
       if (same) {
         await same.focus();
-        if ("navigate" in same && same.url !== target) {
-          try { await same.navigate(target); } catch { /* cross-origin or not controlled */ }
+        if (same.url !== target) {
+          let moved = false;
+          if ("navigate" in same) {
+            try { moved = !!(await same.navigate(target)); } catch { /* not controlled by this worker */ }
+          }
+          if (!moved) {
+            // Uncontrolled window: ask the page to route itself, and open the link if nobody answers.
+            same.postMessage({ type: "bestly-open", url: target });
+          }
         }
         return;
       }

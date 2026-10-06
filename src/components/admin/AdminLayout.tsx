@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
-import { Outlet, Link, useLocation } from "react-router-dom";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "./AdminSidebar";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
@@ -66,6 +66,19 @@ export function AdminLayout() {
   const { signOut, user } = useAdminAuth();
   const textSize = useAdminTextSize();
   useEffect(() => armNotifySound(), []);
+  // A tapped phone notification asks the open admin tab to go to its page (public/sw.js "bestly-open").
+  const navigateTo = useNavigate();
+  useEffect(() => {
+    const sw = typeof navigator !== "undefined" ? navigator.serviceWorker : undefined;
+    if (!sw) return;
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { type?: string; url?: string } | null;
+      if (d?.type !== "bestly-open" || !d.url) return;
+      try { const u = new URL(d.url, window.location.origin); if (u.origin === window.location.origin) navigateTo(u.pathname + u.search + u.hash); } catch { /* ignore */ }
+    };
+    sw.addEventListener("message", onMsg);
+    return () => sw.removeEventListener("message", onMsg);
+  }, [navigateTo]);
   const [muted, setMuted] = useState(notifySoundMuted());
   const { bento, toggle: toggleTheme } = useAdminTheme();
   useDeployRefresh();
