@@ -191,6 +191,7 @@ async function work(c: Case, daily: boolean, settings: Record<string, any>): Pro
     db.from("turo_inbox").select("message_id, sent_at, role, author, body").eq("reservation_id", c.reservation_id).order("sent_at", { ascending: true }).limit(60),
     db.from("claim_drafts").select("*").eq("case_id", c.id).order("created_at", { ascending: false }).limit(30),
   ]);
+  const notes: string[] = [];
   const thread = (inbox ?? []) as Msg[];
   const all = (drafts ?? []) as Draft[];
   // hands-off: a draft written before autonomy was switched on (or while the guards were unsure) goes out now if it passes them
@@ -213,7 +214,6 @@ async function work(c: Case, daily: boolean, settings: Record<string, any>): Pro
   const inFlight = all.find((d) => ["approved", "sending"].includes(d.status));
   const lastGuest = [...thread].reverse().find((m) => m.role === "GUEST");
   const lastHost = [...thread].reverse().find((m) => m.role === "HOST");
-  const notes: string[] = [];
   const now = Date.now();
   // the scheduled re-check that woke us is spent; the pipeline sets a new one below if it is still waiting on shops
   if (c.next_check_at && Date.parse(c.next_check_at) <= now) await db.from("claim_cases").update({ next_check_at: null }).eq("id", c.id);
