@@ -2,6 +2,9 @@
 //
 // Plan + frozen interface: docs/scout-free-llm-opusplan.md §3. Owned by that plan; consumers (todo-check,
 // scout-daily, admin-chat) import it and must not edit it.
+// 2026-10-07: docs/scout-chief-of-staff-opusplan.md owns this file's FreeLLM routing: never bare "auto" for agent/chat work,
+// a vetted model ladder driven by public.llm_model_health (Pi model_prober), a denylist, and text-tool-call rescue.
+// The exported interface is unchanged (additions only).
 //
 //   import { llm, LlmUnavailable } from "../_shared/free-llm.ts";
 //   const r = await llm({ task: "judge", system, user, json: true, job: "todo-check", ref: id, fn: "todo-check" });
@@ -70,7 +73,7 @@ const M = {
   local: "qwen3:8b",
   gemini: "gemini-2.5-flash-lite",
   openrouter: "nvidia/nemotron-3-super-120b-a12b:free",
-  freellm: "auto",
+  freellm: "gpt-oss-120b",   // 2026-10-07: was "auto" (landed on dots-3-note-preview). Only the canary and last-resort paths use this now.
   freellmCode: "qwen3-coder-480b", // v31: FreeLLM's best coding model (also has kimi-k2.7-code, devstral-2, codestral); task=code
 };
 // Estimated input+output ceilings per rung. Groq free = 8K tokens/min PER MODEL, so prompt + output must fit.
@@ -85,11 +88,114 @@ const CF_NEURONS: Record<string, [number, number]> = {
 };
 const ANTHROPIC_PRICE: Record<string, [number, number]> = { haiku: [1, 5], sonnet: [3, 15], opus: [15, 75] };
 
-function routes(task: LlmTask, privacy: LlmPrivacy): Rung[] {
+/* ───────── FreeLLM vetted ladder (chief-of-staff plan, section 1) ───────── */
+
+/** Models that must never serve agent or chat work: preview/flash models that loop, think out loud, or write tool calls as text. */
+const DENY_MODEL = /^(dots|ling-|fusion$|auto$|claude-)|note-preview|qwen3[.\d]*-flash|-safety|guard|nemoguard|uncensored|heretic|cerebras|pythia|tiny-aya|riva-|llama-3\.2-1b|qwen3\.5-0\.8b|qwen3-0\.6b/i;
+/** Strongest first. Re-ordered from the daily tool-call probe (llm_model_health); a model that failed the probe is dropped. */
+const FREELLM_PREFERRED = ["gpt-oss-120b", "gemini-3.8-flash", "deepseek-v4-flash", "nemotron-3-super-120b", "qwen3.8-27b", "llama-4-maverick", "gemini-2.5-flash"];
+const FREELLM_PREFERRED_CODE = ["qwen3-coder-480b", "kimi-k2-instruct-0905", "qwen3-coder-30b-a3b-instruct", "gpt-oss-120b", "deepseek-v4-flash", "gemini-3.8-flash"];
+const FREELLM_LAST = "auto:smartest";   // never bare "auto" (it picked dots-3-note-preview)
+const FREELLM_RUNGS_MAX = 4;
+
+interface Health { ok: boolean | null; benched: number }
+let _health: { at: number; v: Map<string, Health> } | null = null;
+async function modelHealth(): Promise<Map<string, Health>> {
+  if (_health && Date.now() - _health.at < 60_000) return _health.v;
+  const v = new Map<string, Health>();
+  try {
+    const { data } = await db().from("llm_model_health").select("model, ok_tool_calls, benched_until").limit(500);
+    for (const r of (data ?? []) as any[]) v.set(r.model, { ok: r.ok_tool_calls, benched: r.benched_until ? Date.parse(r.benched_until) : 0 });
+  } catch { /* table missing or blip: fall back to the static list */ }
+  _health = { at: Date.now(), v };
+  return v;
+}
+/** FreeLLM rungs, best first: preferred models that are not failed/benched/denied, then the last-resort router. */
+async function freellmChain(code: boolean): Promise<Rung[]> {
+  const h = await modelHealth();
+  const now = Date.now();
+  const usable = (m: string) => {
+    if (DENY_MODEL.test(m)) return false;
+    const x = h.get(m);
+    if (x && (x.benched > now || x.ok === false)) return false;
+    if ((modelSkip.get(m) ?? 0) > now) return false;
+    return true;
+  };
+  const order = [...(code ? FREELLM_PREFERRED_CODE : []), ...FREELLM_PREFERRED];
+  // Probed-good models not on the preferred list come after it.
+  for (const [m, x] of h) if (x.ok === true && !order.includes(m) && !DENY_MODEL.test(m)) order.push(m);
+  // A model the prober has never seen is only trusted if it is on the preferred list and the prober has run at all.
+  const known = h.size > 0;
+  const picks = order.filter((m) => usable(m) && (!known || h.get(m)?.ok === true || (h.get(m) === undefined && false)));
+  const fallback = picks.length ? picks : order.filter(usable);
+  const rungs: Rung[] = fallback.slice(0, FREELLM_RUNGS_MAX).map((m) => ({ provider: "freellm", model: m, maxIn: FREELLM_MAX }));
+  rungs.push({ provider: "freellm", model: FREELLM_LAST, maxIn: FREELLM_MAX });
+  return rungs;
+}
+/** Record that a model misbehaved (text tool call, loop, empty). Benched in-process now and in llm_model_health for a while. */
+async function strike(model: string, why: string, minutes = 60) {
+  modelSkip.set(model, Date.now() + Math.min(minutes, 30) * 60_000);
+  if (_health) _health.v.set(model, { ok: _health.v.get(model)?.ok ?? null, benched: Date.now() + minutes * 60_000 });
+  try { await db().rpc("llm_model_strike", { p_model: model, p_reason: why, p_bench_minutes: minutes }); } catch { /* best effort */ }
+}
+
+/* ───────── text tool-call rescue + reply scrub ───────── */
+
+const TOOL_SYNTAX = /<\s*(?:antml:)?(?:[a-z_]*function_calls?|invoke|tool_call|tool_use)\b[\s\S]*?(?:<\/\s*(?:antml:)?(?:[a-z_]*function_calls?|invoke|tool_call|tool_use)\s*>|$)/gi;
+const TOOL_JSON_BLOCK = /```(?:json)?\s*\{[\s\S]*?"(?:name|tool)"\s*:[\s\S]*?"(?:arguments|args|parameters|input)"\s*:[\s\S]*?```/gi;
+const TOOL_JSON_LINE = /^\s*\{\s*"(?:name|tool)"\s*:\s*"[\w.-]+"\s*,\s*"(?:arguments|args|parameters|input)"\s*:[\s\S]*\}\s*$/gm;
+/** Remove tool syntax a model wrote as text. Exported: Scout's reply scrub uses it too. */
+export function stripToolSyntax(t: string): string {
+  return String(t ?? "").replace(TOOL_SYNTAX, "").replace(TOOL_JSON_BLOCK, "").replace(TOOL_JSON_LINE, "")
+    .replace(/^\s*NEEDS_TOOLS:.*$/gim, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+export function hasToolSyntax(t: string): boolean {
+  const s = String(t ?? "");
+  return /<\s*(?:antml:)?(?:[a-z_]*function_calls?|invoke|tool_call|tool_use)\b/i.test(s) || new RegExp(TOOL_JSON_BLOCK.source, "i").test(s) || new RegExp(TOOL_JSON_LINE.source, "im").test(s);
+}
+/** Parse text-encoded tool calls into real ones (only for tools that were declared). */
+export function rescueToolCalls(content: string, toolNames: Set<string>): ChatToolCall[] {
+  const out: ChatToolCall[] = [];
+  const add = (name: string, args: unknown) => {
+    const n = String(name ?? "").replace(/^functions\./, "").trim();
+    if (!toolNames.has(n)) return;
+    let a: Record<string, unknown> = {};
+    if (typeof args === "string") { try { a = JSON.parse(args); } catch { a = {}; } } else if (args && typeof args === "object") a = args as Record<string, unknown>;
+    out.push({ id: `rescued_${Date.now()}_${out.length}`, name: n, args: a, raw: JSON.stringify(a) });
+  };
+  // <invoke name="x"><parameter name="k">v</parameter></invoke>
+  for (const m of content.matchAll(/<\s*invoke\b[^>]*\bname\s*=\s*["']([\w.-]+)["'][^>]*>([\s\S]*?)<\/\s*invoke\s*>/gi)) {
+    const args: Record<string, unknown> = {};
+    for (const p of m[2].matchAll(/<\s*parameter\b[^>]*\bname\s*=\s*["']([\w.-]+)["'][^>]*>([\s\S]*?)<\/\s*parameter\s*>/gi)) {
+      const v = p[2].trim();
+      try { args[p[1]] = /^[\[{]|^(true|false|-?\d+(\.\d+)?)$/.test(v) ? JSON.parse(v) : v; } catch { args[p[1]] = v; }
+    }
+    if (!Object.keys(args).length) { const j = m[2].trim(); if (j.startsWith("{")) { try { Object.assign(args, JSON.parse(j)); } catch { /* none */ } } }
+    add(m[1], args);
+  }
+  if (out.length) return out;
+  // {"name": "x", "arguments": {...}} in a tag, a fenced block, or bare
+  const blobs: string[] = [];
+  for (const m of content.matchAll(/<\s*(?:[a-z_]*function_calls?|tool_call)\b[^>]*>([\s\S]*?)<\/\s*(?:[a-z_]*function_calls?|tool_call)\s*>/gi)) blobs.push(m[1]);
+  for (const m of content.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) blobs.push(m[1]);
+  if (/^\s*[\[{]/.test(content)) blobs.push(content);
+  for (const b of blobs) {
+    const objs = b.match(/\{[\s\S]*\}/);
+    if (!objs) continue;
+    try {
+      const j = JSON.parse(objs[0]);
+      for (const c of Array.isArray(j) ? j : [j]) add(c?.name ?? c?.tool ?? c?.function?.name, c?.arguments ?? c?.args ?? c?.parameters ?? c?.input ?? c?.function?.arguments ?? {});
+    } catch { /* not json */ }
+    if (out.length) return out;
+  }
+  return out;
+}
+
+function routes(task: LlmTask, privacy: LlmPrivacy, chain: Rung[]): Rung[] {
   // v31 (2026-10-03, Jared): FreeLLM FIRST (257 free models via the Mac mini's Funnel /v1, freellm_base_url), then Groq,
   // Cloudflare, Gemini, OpenRouter, the Mac mini's Ollama. When freellm_watch sees it down it sets a cooldown and it skips in 0 ms.
-  const freellmRung: Rung = { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX };
-  const freellmCodeRung: Rung = { provider: "freellm", model: M.freellmCode, maxIn: FREELLM_MAX };
+  // 2026-10-07: `chain` is the vetted FreeLLM list (freellmChain); never bare "auto".
+  const freellmRungs: Rung[] = chain;
   const tail: Rung[] = [
     { provider: "gemini", model: M.gemini, maxIn: GEMINI_MAX },
     { provider: "openrouter", model: M.openrouter, maxIn: OR_MAX },
@@ -98,19 +204,19 @@ function routes(task: LlmTask, privacy: LlmPrivacy): Rung[] {
   switch (task) {
     case "code":
       // Coding agent first, then general FreeLLM, then Groq's best, then the rest.
-      return [freellmCodeRung, freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
+      return [...freellmRungs, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
         { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     case "judge":
     case "pick":
-      return [freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+      return [...freellmRungs, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
         { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     case "classify":
-      return [freellmRung, { provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+      return [...freellmRungs, { provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
         { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     case "write":
-      return [freellmRung, { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
+      return [...freellmRungs, { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
     default: // extract, reflect, triage, summarize
-      return [freellmRung, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
+      return [...freellmRungs, { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX }, { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
         { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX }, ...tail];
   }
 }
@@ -185,6 +291,11 @@ async function rateLimited(rung: Rung, f: Fail) {
   // Retry-After, so it fell to 60 s and the ladder knocked on Cloudflare all day. Pause until its reset.
   if (rung.provider === "cloudflare" && /daily free allocation|neurons/i.test(f.message)) {
     await cooldown(rung.provider, (Date.parse(utcDayStart(1)) - Date.now()) / 1000, `Daily free cap (10,000 neurons) used up. Back at its reset, 00:00 UTC.`);
+    return;
+  }
+  // 2026-10-07: FreeLLM routes many providers; a 429 on one model must not pause them all (provider cooldown means "Pi unreachable").
+  if (rung.provider === "freellm") {
+    modelSkip.set(rung.model, Date.now() + Math.max(20, Math.min(f.retryAfter || 60, 300)) * 1000);
     return;
   }
   await cooldown(rung.provider, f.retryAfter, f.message);
@@ -463,7 +574,7 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
   const tried: LlmResult["tried"] = [];
   const [prov, k] = await Promise.all([providers(), keys()]);
 
-  const ladder: Rung[] = routes(req.task, privacy);
+  const ladder: Rung[] = routes(req.task, privacy, await freellmChain(req.task === "code"));
   const paidRung: Rung = { provider: "anthropic", model: paidModel, maxIn: 190_000 };
   if (paid === "first") ladder.unshift(paidRung);
   else if (paid === "fallback") ladder.push(paidRung);
@@ -502,6 +613,13 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
       // 2026-10-07: a model thinking out loud is a miss, not an answer (see thinkingLeak).
       if (!req.json && rung.provider !== "anthropic" && thinkingLeak(c.text)) {
         await log(req, rung.provider, c.model, "invalid", ms, c, "thinking out loud");
+        tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
+        continue;
+      }
+      // 2026-10-07: tool syntax written as text, or an answer from a denylisted model, is a miss (and a strike), never a reply.
+      if (!req.json && rung.provider !== "anthropic" && (hasToolSyntax(c.text) || (rung.provider === "freellm" && DENY_MODEL.test(c.model.replace(/^.*\//, ""))))) {
+        await strike(c.model, hasToolSyntax(c.text) ? "wrote a tool call as text" : "denylisted model answered", 120);
+        await log(req, rung.provider, c.model, "invalid", ms, c, "tool syntax or denylisted model");
         tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
         continue;
       }
@@ -566,14 +684,18 @@ export interface ChatRequest {
   scope?: "background" | "chat";
   /** v3 (2026-10-07): "code" runs the step on the coding ladder (FreeLLM qwen3-coder-480b first) with a longer per-rung wait. */
   task?: "chat" | "code";
+  /** v4: called per rung with that rung's window (tokens for messages); returns the messages to send. Lets a 120K-window rung see
+   *  more than an 8K-window Groq rung. Must not mutate `messages`. */
+  trim?: (messages: Record<string, unknown>[], targetTokens: number) => Record<string, unknown>[];
+  /** v4: when true the reply must be a plain answer (toolChoice none); tool syntax in it is stripped. */
 }
-export interface ChatResult { content: string; toolCalls: ChatToolCall[]; provider: Provider; model: string; tried: LlmResult["tried"] }
+export interface ChatResult { content: string; toolCalls: ChatToolCall[]; provider: Provider; model: string; tried: LlmResult["tried"]; rescued?: boolean }
 
 // v30 (2026-10-03): Groq's three models and Cloudflare's 10K Neurons run dry by midday, and this ladder stopped there,
 // so every turn after that became a paid-AI ask. Gemini, OpenRouter and FreeLLM now follow; each skips in 0 ms until its key
 // (and, for FreeLLM, a public freellm_base_url) is in Vault.
-const CHAT_LADDER: Rung[] = [
-  { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },        // v31: first (Jared). Tool calls verified 2026-10-03.
+// v4 (2026-10-07): the FreeLLM rungs in front come from freellmChain() (vetted, health-driven), not one bare "auto".
+const CHAT_TAIL: Rung[] = [
   { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
   { provider: "groq", model: M.groqQwen, maxIn: GROQ_MAX },
   { provider: "groq", model: M.groqSmall, maxIn: GROQ_MAX },
@@ -585,9 +707,7 @@ const CHAT_LADDER: Rung[] = [
 // v3 (2026-10-07, scout-free-parity): the step that WRITES code (commit_files, a code job) goes to FreeLLM's coding model first,
 // then FreeLLM's general model, Groq's best and Cloudflare. Gemini and OpenRouter are not on it at all: they train on prompts
 // (llm_providers.private_ok = false), and code and data are private. Reading steps keep CHAT_LADDER above.
-const CODE_CHAT_LADDER: Rung[] = [
-  { provider: "freellm", model: M.freellmCode, maxIn: FREELLM_MAX },
-  { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },
+const CODE_CHAT_TAIL: Rung[] = [
   { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
   { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
 ];
@@ -634,12 +754,13 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
   const code = input.task === "code";
   const maxTokens = input.maxTokens ?? (code ? 4000 : 1200);
   const deadline = Date.now() + (input.deadlineMs ?? (code ? 60_000 : 45_000));
-  const need = estTokens(JSON.stringify(messages) + JSON.stringify(input.tools ?? [])) + maxTokens;
   const logReq: LlmRequest = { task: "judge", system: "", user: "", job: input.job, ref: input.ref ?? null, fn: input.fn, scope: input.scope ?? "chat" };
   const tried: LlmResult["tried"] = [];
   const [prov, k] = await Promise.all([providers(), keys()]);
 
-  for (const rung of (code ? CODE_CHAT_LADDER : CHAT_LADDER)) {
+  const chain = [...(await freellmChain(code)), ...(code ? CODE_CHAT_TAIL : CHAT_TAIL)];
+  const toolNames = new Set<string>(((input.tools ?? []) as any[]).map((t) => String(t?.function?.name ?? "")).filter(Boolean));
+  for (const rung of chain) {
     const left = deadline - Date.now();
     const skip = (outcome: Outcome) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0 });
     if (left < 3000) { skip("timeout"); continue; }
@@ -654,13 +775,18 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
     // v39: a daily-cap pause is not a "false pause": Cloudflare answers 429 until 00:00 UTC, every time. Skipping it saves a
     // wasted round trip on every step (16 straight 429s in 40 minutes on Oct 6 before this).
     if (p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now() && /^Daily free cap/i.test(String((p as any).cooldown_reason ?? ""))) { skip("skipped_budget"); continue; }
+    // v4: size the context to THIS rung's window (Groq 8K tokens/min keeps the old small budget; big windows see much more).
+    const toolTok = estTokens(JSON.stringify(input.tools ?? []));
+    const window = rung.provider === "groq" ? 3800 : 24_000;
+    const sendMsgs = input.trim ? input.trim(messages, window) : messages;
+    const need = estTokens(JSON.stringify(sendMsgs)) + toolTok + maxTokens;
     if (need > rung.maxIn) { skip("skipped_size"); continue; }
     if (p?.daily_cap && (await usedToday(rung.provider)) >= p.daily_cap) { skip("skipped_budget"); continue; }
 
     const gptOss = rung.model.includes("gpt-oss");
     const body: Record<string, unknown> = {
       model: rung.model,
-      messages: rung.provider === "groq" ? messages : forCloudflare(messages), // Cloudflare + Gemini want string content
+      messages: rung.provider === "groq" || rung.provider === "freellm" ? sendMsgs : forCloudflare(sendMsgs), // Cloudflare + Gemini want string content
       max_tokens: maxTokens,
       ...(gptOss ? { reasoning_effort: "low" } : {}),
     };
@@ -693,6 +819,24 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
         return { id: String(c.id ?? `call_${Date.now()}_${i}`), name: String(c.function.name).replace(/^functions\./, ""), args, raw: raw || "{}" };
       });
       let content = stripThink(String(msg.content ?? "")).trim();
+      // v4 (2026-10-07): a model that wrote its tool call as TEXT (dots-3-note-preview did this into Jared's chat). Parse it into a real
+      // call once, strike the model, and never pass the text on.
+      let rescued = false;
+      if (hasToolSyntax(content)) {
+        if (!toolCalls.length && toolNames.size) {
+          const rc = rescueToolCalls(content, toolNames);
+          if (rc.length) { toolCalls.push(...rc); rescued = true; }
+        }
+        content = stripToolSyntax(content);
+        await strike(String(j.model ?? rung.model), "wrote a tool call as text", 120);
+      }
+      // Routed to a denylisted model (auto:smartest can land anywhere): a miss, and the model is benched.
+      if (DENY_MODEL.test(String(j.model ?? rung.model).replace(/^.*\//, "")) && rung.provider === "freellm") {
+        await strike(String(j.model), "denylisted model answered via auto", 24 * 60);
+        await log(logReq, rung.provider, String(j.model), "invalid", ms, undefined, "denylisted model");
+        tried.push({ provider: rung.provider, model: String(j.model), outcome: "invalid", ms });
+        continue;
+      }
       // 2026-10-07: reasoning written as content. With tool calls it is just noise beside them, so drop it;
       // on its own it is a miss and the next model answers (logged "invalid" so no provider gets paused).
       const leaked = thinkingLeak(content);
@@ -708,7 +852,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       }
       await log(logReq, rung.provider, c.model, "ok", ms, c);
       tried.push({ provider: rung.provider, model: c.model, outcome: "ok", ms });
-      return { content, toolCalls, provider: rung.provider, model: c.model, tried };
+      return { content, toolCalls, provider: rung.provider, model: c.model, tried, rescued };
     } catch (e) {
       const ms = Date.now() - t0;
       const f = e instanceof Fail ? e : new Fail("error", (e as Error).message);
