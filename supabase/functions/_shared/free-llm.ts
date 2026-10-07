@@ -689,7 +689,7 @@ export interface ChatRequest {
   trim?: (messages: Record<string, unknown>[], targetTokens: number) => Record<string, unknown>[];
   /** v4: when true the reply must be a plain answer (toolChoice none); tool syntax in it is stripped. */
 }
-export interface ChatResult { content: string; toolCalls: ChatToolCall[]; provider: Provider; model: string; tried: LlmResult["tried"]; rescued?: boolean }
+export interface ChatResult { content: string; toolCalls: ChatToolCall[]; provider: Provider; model: string; tried: LlmResult["tried"]; rescued?: boolean; inTokens?: number; outTokens?: number }
 
 // v30 (2026-10-03): Groq's three models and Cloudflare's 10K Neurons run dry by midday, and this ladder stopped there,
 // so every turn after that became a paid-AI ask. Gemini, OpenRouter and FreeLLM now follow; each skips in 0 ms until its key
@@ -852,7 +852,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       }
       await log(logReq, rung.provider, c.model, "ok", ms, c);
       tried.push({ provider: rung.provider, model: c.model, outcome: "ok", ms });
-      return { content, toolCalls, provider: rung.provider, model: c.model, tried, rescued };
+      return { content, toolCalls, provider: rung.provider, model: c.model, tried, rescued, inTokens: inT || need, outTokens: outT };
     } catch (e) {
       const ms = Date.now() - t0;
       const f = e instanceof Fail ? e : new Fail("error", (e as Error).message);

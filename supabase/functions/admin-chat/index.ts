@@ -1,5 +1,5 @@
 import { SECRET_KEY, isServiceRequest } from "../_shared/keys.ts";
-import { llm, llmChat, llmVision, LlmUnavailable, thinkingLeak, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
+import { llm, llmChat, llmVision, LlmUnavailable, thinkingLeak, stripToolSyntax, hasToolSyntax, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
 // admin-chat — Scout, the assistant inside bestly.tech/admin.
 //
 // Rules, in order of how much trouble breaking them causes:
@@ -165,7 +165,7 @@ import { sendAsJared } from "../_shared/bestly-signature.ts";
 
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
 const MAX_TURNS = 10;
-const AUTO_HOPS = 24;            // v36 (was 8): free-AI jobs carry on by themselves up to 24 more rounds, or 20 minutes, before asking
+const AUTO_HOPS = 4;             // v41 (was 24): a TASK may carry on by itself up to 4 more rounds, and only while each round adds a write or a new finding; a QUESTION never does
 const STOP_MARK = "[Stopped]";   // v34: his Stop button; the window draws it as a divider, the models read it as "he stopped you"
 
 /** v34: has he written (or tapped Stop) since `since`? Then the run answering the older message stops. */
@@ -393,6 +393,16 @@ const TOOLS = [
       },
       required: ["action"],
     },
+  },
+  {
+    name: "search_mail",
+    description: "Find emails fast: the 10 newest matches as one line each (id, date, from, subject, snippet). who = a name or address on the email (from or to); about = words in the subject or body (separate alternatives with |); days = how far back (default 60). Then read_email on the id you need. Never page through raw bestly_mail rows with run_sql.",
+    input_schema: { type: "object", properties: { who: { type: "string" }, about: { type: "string" }, days: { type: "number" } } },
+  },
+  {
+    name: "read_email",
+    description: "Read one email in full: subject, from, to, date, and the body with quoted replies and signature removed (up to 8,000 characters). id is from search_mail. One call gives the whole message; never read an email in pieces with substr.",
+    input_schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
   },
   {
     name: "meeting_transcript",
@@ -886,6 +896,47 @@ async function recorderCommand(args: Record<string, any>): Promise<Record<string
   return { ok: true, status: "queued", note: "The Mac mini has not picked it up yet; it will within seconds if it is awake." };
 }
 
+const PT_FMT = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const ptTime = (ts: unknown) => { const d = new Date(String(ts ?? "")); return Number.isNaN(d.getTime()) ? "" : PT_FMT.format(d); };
+const safeTerm = (v: unknown) => String(v ?? "").replace(/[^\p{L}\p{N}@._ \-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+
+/** v41 (chief of staff): the 10 newest matching emails, one line each, so the model never pages raw rows. */
+async function searchMail(args: Record<string, any>): Promise<Record<string, unknown>> {
+  const who = safeTerm(args.who);
+  const about = String(args.about ?? "").split("|").map(safeTerm).filter(Boolean).slice(0, 4);
+  const days = Math.max(1, Math.min(Number(args.days) || 60, 365));
+  if (!who && !about.length) return { ok: false, error: "give who and/or about" };
+  const conds = [`sent_at > now() - interval '${Math.round(days)} days'`];
+  if (who) conds.push(`(from_addr ilike '%${who}%' or from_name ilike '%${who}%' or to_addrs::text ilike '%${who}%')`);
+  if (about.length) conds.push("(" + about.map((a) => `subject ilike '%${a}%' or body_text ilike '%${a}%'`).join(" or ") + ")");
+  const sql = `select id, sent_at, from_addr, from_name, subject, left(regexp_replace(coalesce(body_text,''), '\\s+', ' ', 'g'), 160) as snippet from bestly_mail where ${conds.join(" and ")} order by sent_at desc limit 10`;
+  const { data, error } = await db.rpc("admin_sql_read", { p_query: sql, p_limit: 10 });
+  if (error) return { ok: false, error: error.message };
+  const rows = ((data ?? []) as any[]).map((r) => `${r.id} | ${ptTime(r.sent_at)} | ${r.from_name ? r.from_name + " " : ""}<${r.from_addr}> | ${String(r.subject ?? "").slice(0, 100)} | ${r.snippet}`);
+  return { ok: true, count: rows.length, matches: rows, next: rows.length ? "read_email {id} for the whole message" : "nothing matched: widen days or change the words" };
+}
+/** Strip quoted replies and signatures so a thread is read once, small. */
+function cleanMailBody(raw: string): string {
+  const lines = String(raw ?? "").replace(/\r/g, "").split("\n");
+  const out: string[] = [];
+  for (const ln of lines) {
+    if (/^\s*>/.test(ln)) continue;
+    if (/^\s*On .{10,120}wrote:\s*$/i.test(ln) || /^-{2,}\s*Original Message\s*-{2,}/i.test(ln) || /^\s*From:\s.+/.test(ln) && out.length > 3) break;
+    if (/^--\s*$/.test(ln) || /^Sent from my (iPhone|iPad|Android)/i.test(ln)) break;
+    out.push(ln);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+async function readEmail(args: Record<string, any>): Promise<Record<string, unknown>> {
+  const id = String(args.id ?? "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, error: "id must be the uuid from search_mail" };
+  const { data } = await db.from("bestly_mail").select("id, from_addr, from_name, to_addrs, subject, sent_at, body_text").eq("id", id).maybeSingle();
+  if (!data) return { ok: false, error: "no email with that id (use search_mail)" };
+  const d = data as any;
+  return { ok: true, id, subject: d.subject, from: `${d.from_name ? d.from_name + " " : ""}<${d.from_addr}>`, to: String(Array.isArray(d.to_addrs) ? d.to_addrs.join(", ") : d.to_addrs ?? "").slice(0, 200),
+    date: ptTime(d.sent_at), body: cleanMailBody(d.body_text).slice(0, 8000), note: "quoted replies and signature removed" };
+}
+
 async function meetingTranscript(args: Record<string, any>): Promise<Record<string, unknown>> {
   if (args.list) {
     const { data, error } = await db.from("meeting_recordings")
@@ -1041,7 +1092,7 @@ async function paidOutOfCredit(): Promise<boolean> {
 /** v23: a request for work. The free model has no tools, so it must never field one. */
 const ASKS_FOR_WORK = /^take this off my plate|^keep going|^do it\b|\b(are|is) (you|scout) (doing|on) it\b|\b(fix|resolve|push|pull|merge|deploy|run|restart|install|update|delete|remove|send|commit|revert|rollback|roll back|clear|handle|finish|redo|retry)\b/i;
 /** v23: a free answer that promises, refuses or reports work - the free model is not allowed to say any of it. */
-const CLAIMS_WORK = /\b(scout|i)\s*(will|'ll|would|am going to|can'?t|cannot|can not|won'?t|is unable|am unable|don'?t have|doesn'?t have)\b|\bi'll\b|\bmanually\b|\byou('ll| will)? (need|have) to\b|\b(it'?s|it is|all|now) (done|fixed|resolved|pushed)\b|\bno action (is )?needed\b|\btakes? (a few )?minutes\b/i;
+const CLAIMS_WORK = /\b(scout|i)\s*(will|'ll|would|am going to|can'?t|cannot|can not|won'?t|is unable|am unable|don'?t have|doesn'?t have)\b|\bi'll\b|\bmanually\b|\byou('ll| will)? (need|have) to\b|\b(it'?s|it is|all|now) (done|fixed|resolved|pushed)\b|\bno action (is )?(needed|required)\b|\btakes? (a few )?minutes\b|\bit will pick (it|this) up\b|\bi'?ll keep (going|working|at it)\b|\bstill (working|finding out)\b/i;
 
 async function freeTry(threadId: string, text: string, page: unknown): Promise<{ answer?: string; why: string }> {
   // v27 (2026-09-23): the free AI now READS the same live snapshot the paid one starts from (admin_today + open
@@ -1125,10 +1176,11 @@ const FREE_TOOLS = new Set([
   "today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "notify", "mark_done",
   "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user", "make_video",
   "send_email", "look", "report_spam",
+  "search_mail", "read_email",   // v41
   "commit_files", "db_write", "mac_command",   // v38: the same hands as paid Scout (same confirmation rules, same AUTOPILOT_NEVER)
 ]);
-const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "look"]);
-const FREE_STEPS = 14;           // v36 (was 10); the 85 s budget still bounds each hop
+const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "look", "search_mail", "read_email"]);
+const FREE_STEPS = 26;           // v41: a TASK gets 25 tool calls a hop (QUESTION_CALLS for a question); the 85 s budget still bounds each hop
 const FREE_BUDGET_MS = 85_000;   // freeTry (up to 30s) + this + the 20s summary must stay under the 150s platform limit
 const REFUSES = /\b(can'?t|cannot|can not|unable to|not able to|don'?t have (access|the ability))\b|\bmanually\b|\byou('ll| will)? (need|have) to\b/i;
 // v37: a claim of work SCOUT did ("I fixed it", "it's done", "Done."), not any status word. The old bare-word list
@@ -1176,6 +1228,7 @@ const ASK_PAID_TOOL = {
  * metered in tokens (Groq 8K/min and 200K/day per model, Cloudflare 10K Neurons/day). All 15 cost ~2K tokens a step.
  */
 const TOOL_TOPICS: [string[], RegExp][] = [
+  [["search_mail", "read_email"], /\b(e-?mails?|mail|inbox|thread|invoice|invoices|bill|billing|billed|wrote|replied|said|message|messages|from|sent|received|quote|contract|elizabeth|eli|rohit|rate|price|pricing)\b/i],
   [["pi_command"], /\b(pi|network|wi-?fi|router|internet|dns|pi-?hole|nextcloud|homebridge|home ?assistant|devices?|lan|ping|speed|coffee|spinn)\b/i],
   [["mac_run"], /\b(mac|mini|script|job|terminal|launchd|restart|install|brew|git|build|worker|agent|log|logs)\b/i],
   [["notify"], /\b(notify|push|remind|ping me|let me know|tell (me|eli))\b/i],
@@ -1226,8 +1279,10 @@ function trimForBudget(msgs: Msg[], maxTokens = 3800) {
     const c = String(msgs[i].content ?? "");
     if (c.length > keep) msgs[i].content = c.slice(0, keep) + tag;
   };
-  for (const i of toolIdx.slice(0, -2)) { if (est() <= maxTokens) return; shrink(i, 300, "...(older result shortened)"); }
-  for (const i of toolIdx.slice(-2)) { if (est() <= maxTokens) return; shrink(i, 1200, "...(cut to fit)"); }
+  // v41: a big-window rung (FreeLLM, Cloudflare, Gemini) keeps much more, so the model can see what it already read and stops re-reading it.
+  const big = maxTokens > 10_000;
+  for (const i of toolIdx.slice(0, -2)) { if (est() <= maxTokens) return; shrink(i, big ? 1500 : 300, "...(older result shortened)"); }
+  for (const i of toolIdx.slice(-2)) { if (est() <= maxTokens) return; shrink(i, big ? 6000 : 1200, "...(cut to fit)"); }
   // Last resort: drop the oldest chat turns before his request (never the system prompt, his request or a tool turn).
   while (est() > maxTokens) {
     const ask = msgs.findIndex((m) => KEEP.has(m));
@@ -1238,6 +1293,43 @@ function trimForBudget(msgs: Msg[], maxTokens = 3800) {
 }
 /** The message holding his current request: trimming never drops it. */
 const KEEP = new WeakSet<Msg>();
+/** v41: llmChat calls this per rung with that rung's window; it trims a COPY, so a later, bigger rung still sees the full conversation. */
+function rungTrimmer(src: Msg[]) {
+  return (_ignored: Record<string, unknown>[], target: number) => {
+    const copy: Msg[] = src.map((m) => { const c = { ...m }; if (KEEP.has(m)) KEEP.add(c); return c; });
+    trimForBudget(copy, target);
+    return copy;
+  };
+}
+
+/** v41: classify a message in code (no AI). A QUESTION gets 8 tool calls then must answer; a TASK gets 25 a round and up to 4 rounds. */
+const TASK_VERB = /^\s*(?:please\s+|pls\s+|can you\s+|could you\s+|go ahead and\s+)?(?:add|build|make|create|fix|change|update|send|write|draft|delete|remove|move|set|turn|run|deploy|restart|install|commit|push|schedule|book|cancel|mark|assign|clear|resolve|handle|code|implement|redo|retry|reply|forward|post|publish|generate|rename|connect|configure|enable|disable|start|stop|kill|take this off my plate|keep going|do it|go ahead|help me finish|merge|pull|revert|rollback|refactor|migrate|upgrade|rebuild|ship|launch|set up)\b/i;
+const QUESTION_LEAD = /^\s*(?:who|what|what's|whats|why|how|should|which|when|where|is|are|does|do|did|can|could|would|will|any|tell me|show me|explain|list|find|check|summari[sz]e|remind me|status)\b/i;
+function classifyAsk(text: string): "question" | "task" {
+  const t = String(text ?? "").trim();
+  if (TASK_VERB.test(t)) return "task";
+  if (QUESTION_LEAD.test(t) || /\?\s*$/.test(t)) return "question";
+  return t.length < 140 ? "question" : "task";
+}
+const QUESTION_CALLS = 8, TASK_CALLS = 25;
+const FREE_INPUT_CEILING = 250_000;   // input tokens one free request may use before it must answer with what it has
+/** The next model call must answer, not look. */
+const ANSWER_NOW = "Answer now from what you found. If you're missing something, say exactly what in one line. Under 90 words, lead with the answer, no tool calls.";
+/** Same read twice in one run is the loop that burned 2.1M tokens on Oct 7. */
+const PAGING = /\bsubstr(?:ing)?\s*\(\s*[^,()]+,\s*(?:[2-9]|\d{2,})\b|\bsubstring\s*\([^)]*\bfrom\s+(?:[2-9]|\d{2,})\b|\blimit\s+1\s+offset\s+[1-9]|\boffset\s+[1-9]\d*\s+limit\s+1\b/i;
+const DOING: Record<string, string> = {
+  run_sql: "checking the database", search_mail: "searching your mail", read_email: "reading an email", read_file: "reading the code",
+  list_files: "looking through the files", today: "checking your queue", incidents: "checking open incidents", meeting_transcript: "reading the call transcript",
+  commit_files: "committing a code change", db_write: "updating data", mac_run: "preparing a Mac mini job", pi_command: "talking to the Pi",
+  send_email: "sending an email", look: "looking at your files", notify: "sending a notification", code_job: "handing code to the Mac mini",
+};
+const pt12 = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" });
+/** v41 output scrub: no tool syntax, no NEEDS_TOOLS, no thinking out loud ever reaches a saved message. "" = a failed step, not a reply. */
+function scrubReply(s: string): string {
+  let t = stripToolSyntax(String(s ?? ""));
+  if (thinkingLeak(t)) return "";
+  return t.replace(/^\s*(?:no action (?:is )?(?:needed|required)\.?)\s*$/gim, "").trim();
+}
 
 /** v36: what a free run has done so far, carried from hop to hop in admin_chat_threads.run_state. */
 interface RunCall { tool: string; h: string; args: string; result: string; stale?: boolean }
@@ -1259,7 +1351,7 @@ interface RunState {
 interface TryEntry { at: string; what: string; why: string }
 const RUN_STATE_CAP = 12_000;       // bytes of JSON kept per thread
 const RUN_MAX_MS = 20 * 60_000;     // wall clock for one free run (hops included)
-const PAUSE_MAX = 4;                // v39: busy-free-AI pauses in a row (30 s apart) before Scout says so
+const PAUSE_MAX = 2;                // v39: busy-free-AI pauses in a row (30 s apart) before Scout says so
 const RUN_RESUME_MS = 60 * 60_000;  // a hand-typed "keep going" picks the memory back up if it is this fresh
 
 /** Same tool + same arguments = same hash (key order and the confirmation flags don't matter). */
@@ -1412,6 +1504,11 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   const used: string[] = [];
   let replied = false, acted = false, fails = 0, nudges = 0;
   const goal = prior?.goal ?? text.replace(/\s+/g, " ").slice(0, 600);
+  // v41 (chief of staff): classify once, in code. A question answers within 8 tool calls; a task gets 25 a round.
+  const isQ = !autopilot && classifyAsk(goal) === "question" && !(prior?.pending);
+  const callBudget = isQ ? QUESTION_CALLS : TASK_CALLS;
+  let forceAnswer = false, inTokens = 0, endHop = false;
+  const repeats = new Map<string, number>();   // same tool + same arguments, this request
   const codeJob = !autopilot && tools.some((t) => t.function.name === "commit_files");   // v38: code steps use the coding ladder
   let pendingTry: { what: string; why: string } | null = null;
   let deferred: { name: string; args: Record<string, any> } | null = null;
@@ -1429,12 +1526,14 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   const busyPause = () => {
     const pauses = (prior?.pauses ?? 0) + 1;
     const st: RunState = { ...snapshot(), pauses };
-    const out = pauses > PAUSE_MAX;
+    const out = isQ || pauses > PAUSE_MAX;
+    const back = pt12(Date.now() + 30 * 60_000);
+    // v41: ONE honest message when the free AI is out of room (no "busy, picking it back up" chatter): when, and what he can do.
     return {
       answer: out
-        ? `The free AI has been too busy to answer for a few minutes (rate limits). Your job is saved where it stopped.${notes.length ? ` Last thing I found: ${oneLine(notes[notes.length - 1])}` : ""}`
-        : "The free AI is busy right now (rate limits). Picking it back up in 30 seconds.",
-      why: "", tools: used, more: true, stalled: out, paused: !out, state: st,
+        ? `Free AI is out of room until ${back}.${notes.length ? ` Last thing I found: ${oneLine(notes[notes.length - 1])}` : ""}\n\nOPTIONS: Use paid AI for this one | Wait and retry at ${back}`
+        : "Waiting for the free AI to free up.",
+      why: "", tools: used, more: !isQ, stalled: out, paused: !out, state: st,
     };
   };
   const escalate = () => ({ why: "", tools: used, escalate: { what: goal, log: tryLog }, state: snapshot() });
@@ -1459,26 +1558,36 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     }
   }
 
-  for (let i = 0; i < FREE_STEPS && Date.now() < until - 8000; i++) {
+  for (let i = 0; i < (isQ ? 12 : FREE_STEPS) && Date.now() < until - 8000; i++) {
     // v34: he interrupted (Send now / Stop): drop this run where it stands.
     if (i > 0 && await supersededSince(threadId, opts.since ?? null)) return { why: "", tools: used, stopped: true };
+    // v41: out of tool calls (or tokens, or a loop was caught): a question must answer NOW; a task ends this round and summarizes.
+    if (!forceAnswer && (newCalls >= callBudget || inTokens > FREE_INPUT_CEILING || endHop)) {
+      if (!isQ) break;
+      forceAnswer = true;
+      msgs.push({ role: "user", content: ANSWER_NOW });
+    }
     toolDeadline = Math.min(until - 5000, Date.now() + 60_000);
     // v38: the step that writes code runs on the coding ladder (FreeLLM qwen3-coder-480b first) with room for a real edit; reading steps stay fast.
     const codeStep = codeJob && (tries > 0 || used.includes("read_file") || calls.some((x) => x.tool === "read_file"));
     if (codeStep && until - Date.now() < 30_000) break;   // not enough of this round left for a coding call: the next hop does it with a fresh budget
-    trimForBudget(msgs, codeStep ? 24_000 : 3800);
     let r: ChatResult;
     try {
-      r = await llmChat({ messages: msgs, tools, maxTokens: codeStep ? 4000 : 1200, deadlineMs: Math.min(until - Date.now() - 2000, codeStep ? 60_000 : 45_000), task: codeStep ? "code" : "chat", job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
+      r = await llmChat({ messages: msgs, tools, trim: rungTrimmer(msgs), toolChoice: forceAnswer ? "none" : "auto", maxTokens: codeStep ? 4000 : 1200, deadlineMs: Math.min(until - Date.now() - 2000, codeStep ? 60_000 : 45_000), task: codeStep ? "code" : "chat", job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
     } catch {
       if (++fails > 1) break;
       continue;
     }
     replied = true;
+    inTokens += r.inTokens ?? 0;
+    if (forceAnswer) r.toolCalls = [];   // told to answer: any call it still wrote is dropped
 
     if (!r.toolCalls.length) {
       const reply = r.content.trim();
+      if (!reply) { fails++; if (forceAnswer || fails > 2) break; continue; }
       const nudge = (why: string) => { msgs.push({ role: "assistant", content: reply }); msgs.push({ role: "user", content: why }); nudges++; };
+      // v41: status filler is not an answer ("No action needed", "it will pick up", "still working").
+      if (/\bno action (is )?(needed|required)\b|\bit will pick (it|this) up\b|\bstill (working|finding out)\b|\bi'?ll keep (going|working)\b/i.test(reply) && nudges < 2) { nudge("That is status filler, not an answer. Give Jared the actual answer from what you found, or say exactly what is missing."); continue; }
       if (PLACEHOLDER.test(reply) && nudges < 2) { nudge("That reply has placeholders instead of real values. Get the real values with a tool, then reply."); continue; }
       if (REFUSES.test(reply) && nudges < 1) { nudge("You DO have tools (see the list), including commit_files for code and db_write for data. Use them to do this."); continue; }
       const own = reply.split(/^\s*OPTIONS:/m)[0];
@@ -1510,7 +1619,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     // Tool turn: echo the calls back exactly, then one result per call (max 3 run per step).
     msgs.push({ role: "assistant", content: r.content || null, tool_calls: r.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.raw } })) });
     for (const [n, c] of r.toolCalls.entries()) {
-      const answer = (out: unknown) => { let s = JSON.stringify(out); const cap = codeJob ? 12_000 : 2500; if (s.length > cap) s = s.slice(0, cap) + "...(cut)"; msgs.push({ role: "tool", tool_call_id: c.id, content: s }); };   // v38: a code job needs the whole snippet it will quote back
+      const answer = (out: unknown) => { let s = JSON.stringify(out); const cap = codeJob ? 12_000 : 8000; if (s.length > cap) s = s.slice(0, cap) + "...(cut)"; msgs.push({ role: "tool", tool_call_id: c.id, content: s }); };   // v38: a code job needs the whole snippet it will quote back
       if (n >= 3) { answer({ ok: false, error: "skipped: run at most 3 tools at once" }); continue; }
       if (c.name === "ask_user") {
         const line = questionsLine(c.args);
@@ -1549,11 +1658,19 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       }
       // v36: the same read, with the same arguments, already answered earlier in this run: hand back that result.
       const h = argsHash(c.name, args);
+      if (c.name === "run_sql" && PAGING.test(String(args.query ?? ""))) {
+        answer({ ok: false, error: "paging_refused", hint: "Don't read one row in pieces (substr / OFFSET). Use read_email {id} for a whole email, or search_mail to find it, or select exactly the columns you need." });
+        continue;
+      }
       if (FREE_READS.has(c.name)) {
         const seen = calls.find((x) => x.h === h && x.tool === c.name && !x.stale);
         if (seen) {
           cachedHits++;
-          msgs.push({ role: "tool", tool_call_id: c.id, content: `(from earlier in this run) ${seen.result}` });
+          const n = (repeats.get(h) ?? 0) + 1;
+          repeats.set(h, n);
+          // v41: 2nd time = the saved result plus "you already have this"; the 3rd time ends the round and forces an answer.
+          if (n >= 2) endHop = true;
+          msgs.push({ role: "tool", tool_call_id: c.id, content: `You already have this (same call as earlier). ${n >= 2 ? "Stop looking and answer now. " : ""}Earlier result: ${seen.result}` });
           continue;
         }
       }
@@ -1597,7 +1714,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       }
       if (ok && !autopilot) {
         let r = ""; try { r = JSON.stringify(out); } catch { r = String(out); }
-        calls.push({ tool: c.name, h, args: JSON.stringify(Object.fromEntries(Object.entries(args).filter(([k]) => k !== "confirmed" && k !== "__free"))).slice(0, 160), result: r.slice(0, 600) });
+        calls.push({ tool: c.name, h, args: JSON.stringify(Object.fromEntries(Object.entries(args).filter(([k]) => k !== "confirmed" && k !== "__free"))).slice(0, 160), result: r.slice(0, 2000) });
       }
       if (!ok) fails++;
       answer(out);
@@ -1619,8 +1736,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   if (used.length || cachedHits) {
     try {
       msgs.push({ role: "user", content: "Stop using tools now. In under 90 words, tell Jared what you found so far and what is left, using only the tool results above. Start with one short sentence (under 20 words) that says where you are. No options line." });
-      trimForBudget(msgs);
-      const s = await llmChat({ messages: msgs, tools, toolChoice: "none", maxTokens: 700, deadlineMs: Math.min(20_000, Math.max(6_000, reqStartedAt + REQ_HARD_MS - Date.now() - 6_000)), job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
+      const s = await llmChat({ messages: msgs, tools, trim: rungTrimmer(msgs), toolChoice: "none", maxTokens: 700, deadlineMs: Math.min(20_000, Math.max(6_000, reqStartedAt + REQ_HARD_MS - Date.now() - 6_000)), job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
       const sum = s.content.replace(/^\s*OPTIONS:.*$/m, "").trim();
       if (sum && !s.toolCalls.length) {
         return autopilot
@@ -1633,7 +1749,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
             if (isNew) notes.push(sum.slice(0, 500));
             const staleHops = isNew ? 0 : (prior?.stale_hops ?? 0) + 1;
             const state: RunState = { ...snapshot(), stale_hops: staleHops };
-            return { answer: sum, why: "", tools: used, more: true, stalled: !deferred && (newCalls === 0 || staleHops >= 2), state };
+            return { answer: sum, why: "", tools: used, more: !isQ, stalled: isQ || (!deferred && (newCalls === 0 || staleHops >= 2)), state };
           })();
       }
     } catch { /* fall through */ }
@@ -1859,6 +1975,14 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
     }
     case "meeting_transcript": {
       out = await meetingTranscript(args);
+      break;
+    }
+    case "search_mail": {
+      out = await searchMail(args);
+      break;
+    }
+    case "read_email": {
+      out = await readEmail(args);
       break;
     }
     case "learn": {
@@ -2469,6 +2593,8 @@ Deno.serve(async (req) => {
     let sayId: string | null = null;   // v36: the message say() just wrote (the first hop's progress note is edited in place later)
     const say = async (reply: string, extra: Record<string, unknown> = {}) => {
       if (await interrupted()) return stoppedReply();   // v34: he moved on; this answer is stale
+      reply = scrubReply(reply);
+      if (!reply) reply = "That step failed on my side: the free AI sent back unusable text. I benched that model; send it again or say keep going.";
       if (extra.free) routerBeat(`Free reply${Array.isArray(extra.tools) && extra.tools.length ? ` (${extra.tools.length} steps)` : ""}`);
       if (!autopilot) reply = await adhdShape(reply, text, threadId);   // v40: ADHD format + quick replies, enforced
       const { data: ins } = await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply }).select("id").single();
@@ -2493,7 +2619,7 @@ Deno.serve(async (req) => {
         paidOk = await flip(60, "cap_raised");
         routerBeat(`Cap raised to $${Number((b as any)?.cap ?? 0).toFixed(2)} for today`);
         if (!paidOk) return await say("I raised today's cap but the Paid AI switch didn't turn on. Try \"Yes, use paid AI\".", { capped: true });
-      } else if (/^always,? stop asking\.?$/i.test(text) || /^yes,? use paid ai\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
+      } else if (/^always,? stop asking\.?$/i.test(text) || /^(yes,? use paid ai|use paid ai for this one)\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
         const always = /^always/i.test(text);
         paidOk = await flip(always ? null : 60, always ? "always" : "yes_tap");
         if (!paidOk) {
@@ -2507,6 +2633,8 @@ Deno.serve(async (req) => {
         return await say(
           "OK, no paid AI. Nothing was spent. The job is still open: I can keep at it on free AI from where it stopped, or drop it.\n\nOPTIONS: Keep going | Drop it",
         );
+      } else if (/^wait and retry at\b/i.test(text)) {
+        return await say("Okay, I'll hold. Your job is saved where it stopped; say keep going once the free AI has room.");
       } else if (/^(drop it|leave it)\.?$/i.test(text)) {
         await saveRunState(threadId, null).catch(() => {});
         return await say("Dropped. Nothing was spent.");
@@ -2594,7 +2722,9 @@ Deno.serve(async (req) => {
             st.chain_from = chainFrom;
             st.hop = autoHop;
             // One progress note, edited in place. created_at moves with it so the window still sees the run alive.
-            const note = `${oneLine(agent.answer)}\n\nStill working on it (step ${st.steps}, ${minutesIn(st)} min in).`;
+            // v41: honest, short, in place: what it is doing in a few words and the step count. Never the model's own words.
+            const lastTool = (agent.tools ?? []).slice(-1)[0] ?? "";
+            const note = agent.paused ? `Working: waiting for the free AI to free up (${st.steps} steps)` : `Working: ${DOING[lastTool] ?? "working through your request"} (${st.steps} steps)`;
             let res: Response;
             if (st.progress_msg_id) {
               if (await interrupted()) return stoppedReply();
@@ -2621,7 +2751,7 @@ Deno.serve(async (req) => {
           }
           // Out of hops or time, or it stopped finding anything new: say what it has and let him decide. Memory stays for "Keep going".
           await endRun(st);
-          return await say(`${agent.answer}\n\nOPTIONS: Keep going | Yes, use paid AI`, { free: true, tools: agent.tools ?? [] });
+          return await say(/^\s*OPTIONS:/m.test(agent.answer) ? agent.answer : `${agent.answer}\n\nOPTIONS: Keep going | Use paid AI for this one`, { free: true, tools: agent.tools ?? [] });
         }
         // v37: a run that ends in a paid ask keeps its memory, so a "No, skip it" then "Keep going" resumes on free AI.
         await endRun(agent.answer ? undefined : (runIn ?? undefined));
@@ -2644,7 +2774,7 @@ Deno.serve(async (req) => {
           );
         }
         return await say(
-          `I'd need paid AI (Claude) for this. ${free.why} A reply costs about 5 to 50 cents. Yes turns the Paid AI switch on for one hour (you'll see it flip), then it turns itself off.\n\nOPTIONS: Yes, use paid AI | No, skip it`,
+          `Free AI is out of room until ${pt12(Date.now() + 30 * 60_000)}. ${free.why} Paid AI costs about 5 to 50 cents; yes turns the Paid AI switch on for one hour, then it turns itself off.\n\nOPTIONS: Use paid AI for this one | Wait and retry at ${pt12(Date.now() + 30 * 60_000)}`,
           { paid_needed: true },
         );
       }
