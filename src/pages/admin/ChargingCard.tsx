@@ -27,7 +27,7 @@ interface Settings {
 interface Live { open: boolean; started_at: string; ended_at: string | null; at_home: boolean; dc_fast: boolean; kwh: number; cost: number; idle_fee: number; start_pct: number | null; end_pct: number | null; stopped_at: string | null }
 interface Admin {
   settings: Settings;
-  chargepoint: { email_at: string | null; password_at: string | null; ready: boolean };
+  chargepoint: { email_at: string | null; password_at: string | null; token_at: string | null; ready: boolean };
   now: Live | null;
   recent: { started_at: string; ended_at: string; kwh: number; cost: number; idle_fee: number; at_home: boolean }[];
 }
@@ -42,6 +42,7 @@ export function ChargingCard() {
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [token, setToken] = useState("");
   const [rates, setRates] = useState<{ night: string; day: string; fee: string; grace: string; idle: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -58,12 +59,16 @@ export function ChargingCard() {
   useEffect(() => { void load(); }, [load]);
 
   const saveLogin = async () => {
-    if (!email.trim() || !password) { toast.error("Add the email and the password."); return; }
+    if (!email.trim() && !password && !token.trim()) { toast.error("Nothing to save."); return; }
     setBusy(true);
     try {
-      await putVaultSecret("home_hub_chargepoint_email", email.trim(), "ChargePoint driver login (Charge Watch)");
-      await putVaultSecret("home_hub_chargepoint_password", password, "ChargePoint driver password (Charge Watch)");
-      setEmail(""); setPassword("");
+      if (email.trim())
+        await putVaultSecret("home_hub_chargepoint_email", email.trim(), "ChargePoint driver login (Charge Watch)");
+      if (password)
+        await putVaultSecret("home_hub_chargepoint_password", password, "ChargePoint driver password (Charge Watch)");
+      if (token.trim())
+        await putVaultSecret("home_hub_chargepoint_token", token.trim(), "ChargePoint coulomb_sess session token (Charge Watch)");
+      setEmail(""); setPassword(""); setToken("");
       toast.success("Saved to Vault. The value never comes back to this page.");
       await load();
     } catch (e) {
@@ -155,7 +160,8 @@ export function ChargingCard() {
           <div className="min-w-0">
             <p className={cn("text-[15px] font-semibold", label)}>ChargePoint login</p>
             <p className={cn("mt-0.5 text-[13px] leading-snug", secondary)}>
-              So Charge Watch can end the session before the idle fee starts. Stored in Vault, write-only.
+              So Charge Watch can end the session before the idle fee starts. Stored in Vault, write-only &mdash;
+              nothing typed here can be read back, by this page or anyone.
             </p>
           </div>
           {a.chargepoint.ready ? (
@@ -182,12 +188,32 @@ export function ChargingCard() {
           </label>
         </div>
 
+        {/* The token is the part that actually works: ChargePoint blocks password logins from servers. */}
+        <label className="block">
+          <span className={cn("mb-1 block text-[13px]", secondary)}>
+            Session token <span className={tertiary}>&middot; this is the one that works</span>
+          </span>
+          <input type="password" autoComplete="off" className={field} value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder={a.chargepoint.token_at ? "Saved \u00b7 paste a new one to replace" : "paste coulomb_sess here"} />
+          <span className={cn("mt-1.5 block text-[12px] leading-snug", tertiary)}>
+            ChargePoint refuses password logins from servers, so Charge Watch signs in with a session token
+            instead. In Chrome on driver.chargepoint.com: right-click &rarr; Inspect &rarr; Application &rarr;
+            Cookies &rarr; driver.chargepoint.com, then copy the value of <strong>coulomb_sess</strong>. It is
+            marked HttpOnly, which is why only you can copy it.
+          </span>
+        </label>
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className={cn("inline-flex items-center gap-1.5 text-[12px]", tertiary)}>
             <Lock className="h-3.5 w-3.5" aria-hidden />
-            {a.chargepoint.email_at ? `Last saved ${when(a.chargepoint.email_at)}` : "Nothing saved yet"}
+            {a.chargepoint.token_at
+              ? `Token saved ${when(a.chargepoint.token_at)}`
+              : a.chargepoint.email_at
+                ? "Email saved, still needs a session token"
+                : "Nothing saved yet"}
           </p>
-          <button type="button" className={btnPrimary} onClick={saveLogin} disabled={busy || !email.trim() || !password}>
+          <button type="button" className={btnPrimary} onClick={saveLogin} disabled={busy || (!email.trim() && !password && !token.trim())}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <BatteryCharging className="h-4 w-4" aria-hidden />}
             Save to Vault
           </button>
