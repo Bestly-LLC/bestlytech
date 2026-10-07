@@ -261,7 +261,7 @@ def voice(brand, script, jd, job_id, client_slug=None):
         cmd += ["-i", w]
     parts = [f"[{i}:a]aresample=44100,adelay={int(a * 1000)}:all=1[a{i}]" for i, a in enumerate(ats)]
     mix = "".join(f"[a{i}]" for i in range(len(ats)))
-    cmd += ["-filter_complex", ";".join(parts) + f";{mix}amix=inputs={len(ats)}:normalize=0,apad,atrim=0:{total:.3f}[out]",
+    cmd += ["-filter_complex", ";".join(parts) + f";{mix}amix=inputs={len(ats)}:normalize=0,apad=whole_dur={total:.3f},atrim=0:{total:.3f}[out]",
             "-map", "[out]", "-ac", "2", f"{pub}/narration.wav"]
     subprocess.run(cmd, check=True)
     # Soft A-major pad, low-passed, faded; sits ~-20 dB under the voice. Free and local (no music keys yet).
