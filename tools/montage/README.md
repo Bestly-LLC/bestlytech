@@ -73,6 +73,9 @@ Per scene: `POST /v1/text-to-speech/{voice_id}?output_format=mp3_44100_128` with
 2 retries on 429/5xx. Any failure on any scene throws all ElevenLabs audio away and the whole video is voiced by Piper (the unchanged path). Scene timing
 still follows the audio length. Re-cuts follow the same rules. The job log carries `voice: elevenlabs <name> (<n> chars)` or `voice: piper (<reason>)`, and the
 estimated cost (`chars x 22 / 131000`) is added to `cost_usd`.
+ElevenLabs clips are silence-trimmed and the finished narration is levelled to -16 LUFS (ElevenLabs arrives near -24, Piper near -16). The narration mix uses
+`apad=whole_dur` (an open-ended `apad` hung ffmpeg on ElevenLabs audio). `montage_file` keeps the voice cost: `cost_usd` = LTX actuals + the job's own cost. Observed bill on the
+Creator plan: about 0.5 credit per character on multilingual v2 (1,060 credits for about 2,200 characters), the worker still budgets 1 per character (the safe side).
 Alerts (`scout_notify`, titles start "Montage:"): low credits = warning, push, dedupe `montage-voice-low-<date>`; outage/error = info, no push, dedupe `montage-voice-down-<date>`.
 
 ### Settings row (no deploy needed)
