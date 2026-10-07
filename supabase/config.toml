@@ -112,3 +112,6 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.ltx-box]
     verify_jwt = false
+
+[functions.freellm-keys]
+    verify_jwt = true
