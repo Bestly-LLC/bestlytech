@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { toast } from "sonner";
 import {
   AlertTriangle, AppWindow, ArrowDown, ArrowRight, BookOpen, Bot, Box, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight,
-  ChevronsUpDown, CircleDashed, Clapperboard, Cloud, Compass, Cookie, Droplet, Droplets, ExternalLink, Flower2, Gem,
+  ChevronsUpDown, CircleDashed, Clapperboard, Cloud, Compass, Cookie, Droplet, Droplets, ExternalLink, Flower2, Gavel, Gem,
   Globe, GraduationCap, Headphones, HeartHandshake, House, KeyRound, Laptop, Leaf, Lightbulb, Megaphone, MessageCircle,
   Mic, Monitor, Package, PackageCheck, LayoutDashboard, Flower, Projector, RefreshCw, Rocket, School, Server, ShieldCheck, ShoppingBag, Smartphone, Sparkles, Store, Tv,
   XCircle,
@@ -109,7 +109,7 @@ const PRODUCT_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   home: House, clapperboard: Clapperboard, megaphone: Megaphone, tv: Tv, lightbulb: Lightbulb, "key-round": KeyRound,
   camera: Camera, headphones: Headphones, "book-open": BookOpen, "message-circle": MessageCircle, sparkles: Sparkles,
   "app-window": AppWindow, laptop: Laptop, monitor: Monitor, store: Store, school: School, bot: Bot, rocket: Rocket, mic: Mic,
-  "package-check": PackageCheck, "layout-dashboard": LayoutDashboard, flower: Flower, projector: Projector,
+  "package-check": PackageCheck, "layout-dashboard": LayoutDashboard, flower: Flower, projector: Projector, gavel: Gavel,
 };
 
 const siteImage = (slug: string) => siteProducts.find((x) => x.id === slug)?.image;
