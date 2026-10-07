@@ -380,13 +380,21 @@ export function Scout() {
     const v = window.visualViewport;
     if (!phone || !open) return setVv(null);
     if (!v) return;
-    const on = () => setVv({ top: v.offsetTop, left: v.offsetLeft, width: v.width, height: v.height });
+    let raf: number | null = null;
+    const on = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        setVv({ top: v.offsetTop, left: v.offsetLeft, width: v.width, height: v.height });
+      });
+    };
     on();
     v.addEventListener("resize", on);
     v.addEventListener("scroll", on);
     return () => {
       v.removeEventListener("resize", on);
       v.removeEventListener("scroll", on);
+      if (raf) cancelAnimationFrame(raf);
       setVv(null);
     };
   }, [phone, open]);
