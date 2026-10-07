@@ -24,7 +24,7 @@ interface Settings {
   night_rate: number; day_rate: number; night_from_hour: number; night_to_hour: number;
   session_fee: number; idle_grace_min: number; idle_rate_hr: number; station: string;
 }
-interface Live { open: boolean; started_at: string; ended_at: string | null; at_home: boolean; kwh: number; cost: number; idle_fee: number; start_pct: number | null; end_pct: number | null; stopped_at: string | null }
+interface Live { open: boolean; started_at: string; ended_at: string | null; at_home: boolean; dc_fast: boolean; kwh: number; cost: number; idle_fee: number; start_pct: number | null; end_pct: number | null; stopped_at: string | null }
 interface Admin {
   settings: Settings;
   chargepoint: { email_at: string | null; password_at: string | null; ready: boolean };
@@ -95,7 +95,11 @@ export function ChargingCard() {
   }
 
   const live = a.now;
-  const idling = !!live?.open && !!live.stopped_at;
+  const open = !!live?.open;
+  // An open session somewhere else (a Supercharger) isn't this charger's: these rates and the idle fee
+  // don't apply, so the card says so rather than showing a $0.00 charge that reads as free electricity.
+  const away = open && !live!.at_home;
+  const idling = open && !away && !!live!.stopped_at;
 
   return (
     <Section
@@ -109,24 +113,36 @@ export function ChargingCard() {
           <div className="min-w-0">
             <p className={cn("text-[13px]", secondary)}>{a.settings.station}</p>
             <p className={cn("mt-0.5 text-[17px] font-semibold", label)}>
-              {!live?.open ? "Nothing on the plug" : idling ? "Done charging, still plugged in" : "Charging now"}
+              {!open
+                ? "Nothing on the plug"
+                : away
+                  ? `Plugged in elsewhere${live!.dc_fast ? ", fast charging" : ""}`
+                  : idling
+                    ? "Done charging, still plugged in"
+                    : "Charging now"}
             </p>
           </div>
           <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[12px] font-semibold",
-            !live?.open ? pill.blue : idling ? pill.orange : pill.green)}>
-            {!live?.open ? "Idle" : idling ? "Watch it" : "Live"}
+            !open ? pill.blue : away ? pill.blue : idling ? pill.orange : pill.green)}>
+            {!open ? "Idle" : away ? "Away" : idling ? "Watch it" : "Live"}
           </span>
         </div>
-        {live?.open && (
+        {open && away && (
+          <p className={cn("border-t border-[#38383A] pt-3 text-[13px] leading-snug bento:border-[#C6C6C8]", secondary)}>
+            {live!.kwh.toFixed(2)} kWh so far. These rates and the idle fee are {a.settings.station} only, so
+            nothing here is priced.
+          </p>
+        )}
+        {open && !away && (
           <dl className="grid grid-cols-3 gap-3 border-t border-[#38383A] pt-3 bento:border-[#C6C6C8]">
             {[
-              ["Energy", `${live.kwh.toFixed(2)} kWh`],
-              ["Cost so far", money(live.cost)],
-              ["Idle fee", live.idle_fee > 0 ? money(live.idle_fee) : "None"],
+              ["Energy", `${live!.kwh.toFixed(2)} kWh`],
+              ["Cost so far", money(live!.cost)],
+              ["Idle fee", live!.idle_fee > 0 ? money(live!.idle_fee) : "None"],
             ].map(([k, v]) => (
               <div key={k}>
                 <dt className={cn("text-[12px]", secondary)}>{k}</dt>
-                <dd className={cn("mt-0.5 text-[15px] font-semibold tabular-nums", k === "Idle fee" && live.idle_fee > 0 ? tint.orange : label)}>{v}</dd>
+                <dd className={cn("mt-0.5 text-[15px] font-semibold tabular-nums", k === "Idle fee" && live!.idle_fee > 0 ? tint.orange : label)}>{v}</dd>
               </div>
             ))}
           </dl>
