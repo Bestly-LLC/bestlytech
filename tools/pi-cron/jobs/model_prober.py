@@ -33,7 +33,7 @@ TOOLS = [{"type": "function", "function": {
     "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}}]
 
 
-def post(key, body, timeout=60):
+def post(key, body, timeout=45):
     req = urllib.request.Request(FREELLM + "/v1/chat/completions", data=json.dumps(body).encode(), method="POST",
                                  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -98,12 +98,15 @@ def main(argv):
             unsure.append(model)
             continue
         rows.append({"model": model, "ok": ok, "note": why, "ms": ms})
+        lib.rpc("llm_model_health_report", p_rows=[rows[-1]])   # report as we go: a slow run must not lose its results
+        print(f"  {model}: {'PASS' if ok else 'FAIL'} {why} {ms}ms", flush=True)
         (passed if ok else failed).append(model if ok else f"{model} ({why})")
         time.sleep(1.5)
     # Denylisted models seen as ready are recorded as failed so they show in the table and stay benched.
     for model in ready:
         if DENY.match(model) and model not in ("auto", "fusion") and not model.startswith("claude-"):
             rows.append({"model": model, "ok": False, "note": "denylist", "ms": 0})
-    if rows:
-        lib.rpc("llm_model_health_report", p_rows=rows)
+    deny_rows = [r for r in rows if r["note"] == "denylist"]
+    if deny_rows:
+        lib.rpc("llm_model_health_report", p_rows=deny_rows)
     return f"ok probed {len(todo)}: pass {len(passed)} [{', '.join(passed)}]; fail {len(failed)} [{'; '.join(failed)}]; inconclusive {len(unsure)}"
