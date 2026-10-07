@@ -30,14 +30,15 @@ from zoneinfo import ZoneInfo
 import requests
 from playwright.sync_api import sync_playwright
 
-VERSION = "pi-1.1.0"
+VERSION = "pi-1.2.0"
 TZ = ZoneInfo("America/Los_Angeles")
 CDP = "http://127.0.0.1:9334"
 DRY = "--dry" in sys.argv
 CFG = {
     "VEHICLE_ID": 2522178, "COMP_RADIUS_MI": 25.0, "CEILING_MULT": 1.10, "HOST_FACTOR": 0.603,
     "WINDOW_DAYS": 8, "MAX_MOVE": 0.25, "WHIPLASH": 0.30, "MIN_N": 5, "MIN_CAL_DAYS": 30,
-    "SETTLE_S": 9, "DEMAND_BOOST": {"Busy": 0.05, "Hot": 0.10}, "VERIFY_WAIT_S": 20, "ENV": "/home/pi/scripts/.env",
+    "SETTLE_S": 9, "DEMAND_BOOST": {"Busy": 0.05, "Hot": 0.10},
+    "EDGAR_ID": "edgar-model3", "EDGAR_UNDERCUT": 3, "EDGAR_SANE": (0.7, 1.5), "VERIFY_WAIT_S": 20, "ENV": "/home/pi/scripts/.env",
 }
 LOG = []
 
@@ -288,21 +289,28 @@ def lead_mult(lead):
     return 1.20 if lead >= 8 else 1.12 if lead >= 4 else 1.06 if lead >= 2 else 1.00
 
 
-def plan_day(lead, floor, cur, mkt, boost=0.0):
-    """mkt = nearby Model 3 median in LISTING dollars. Moves up when the market allows, holds when competitive."""
+def plan_day(lead, floor, cur, mkt, boost=0.0, edgar=None):
+    """mkt / edgar in LISTING dollars. Moves up when the market or Edgar allows, holds when competitive."""
     mult = lead_mult(lead)
     base = round(floor * mult)                                    # Turo's price + the lead premium
     pull = round(mkt * (1 + boost))                               # the market median (plus demand)
     cap = round(mkt * CFG["CEILING_MULT"] * (1 + boost))          # still competitive up to 10% over market
-    target = max(base, pull)
     why = f"lead {lead} x{mult:g} = ${base}, market ${round(mkt)}" + (f" +{round(boost * 100)}% demand" if boost else "")
+    src = "market"
+    if edgar:
+        under = round(edgar - CFG["EDGAR_UNDERCUT"])              # just under Edgar, so side-by-side we win
+        why += f", Edgar ${round(edgar)}"
+        if under > pull:
+            pull, src = under, "$3 under Edgar"
+        cap = max(cap, round(edgar))                              # matching Edgar is never overpriced
+    target = max(base, pull)
     if cur > target:
         if cur <= max(base, cap):
             target, why = cur, why + f" - hold ${cur} (within 10% of market)"
         else:
             target, why = max(base, cap), why + f" - over market, back to ${max(base, cap)}"
     elif pull > base:
-        why += " - up to market"
+        why += f" - up to {src} ${pull}"
     final = max(round(cur * (1 - CFG["MAX_MOVE"])), min(target, round(cur * (1 + CFG["MAX_MOVE"]))))
     if final != target:
         why += f" - 25% move cap ${final}"
@@ -310,7 +318,7 @@ def plan_day(lead, floor, cur, mkt, boost=0.0):
     return int(final), ("no-op" if final == cur else "planned"), why + (" - floor wins" if final == floor else "")
 
 
-def build_plan(cal, today, mkt, boost=0.0):
+def build_plan(cal, today, mkt, boost=0.0, edgar=None):
     rows = []
     for i in range(1, CFG["WINDOW_DAYS"] + 1):
         ds = (today + datetime.timedelta(days=i)).isoformat()
@@ -323,7 +331,7 @@ def build_plan(cal, today, mkt, boost=0.0):
         elif not info["floor"] or not info["cur"]:
             rows.append({**base, "floor": info["floor"], "cur": info["cur"], "proposed": None, "status": "no-data", "reason": "null/zero floor or price"})
         else:
-            p, st, why = plan_day(i, info["floor"], info["cur"], mkt, boost)
+            p, st, why = plan_day(i, info["floor"], info["cur"], mkt, boost, edgar)
             rows.append({**base, "floor": info["floor"], "cur": info["cur"], "proposed": p, "status": st, "reason": why})
     return rows
 
@@ -448,17 +456,28 @@ def main():
                 ceiling = round(market_base * CFG["HOST_FACTOR"] * CFG["CEILING_MULT"])  # listing dollars too
             log(f"comps n={len(comps)} market ${market_base} renter = ${host_net} listing, cap ${ceiling}")
 
-            # Demand first, so a Busy/Hot week can push prices up this run.
+            # Demand and Edgar first, so they can push prices up this run (not just show up in a tip).
             if not bridge_err:
                 try:
                     demand = check_demand(page, cal, today)
                 except Exception as e:
                     log(f"demand failed: {e}")
+                try:
+                    competitors = check_competitors(page, start, end)
+                except Exception as e:
+                    log(f"competitors failed: {e}")
             dm = {d["scope"]: d for d in demand}
             dscore = (dm.get("model3") or dm.get("all") or {}).get("score")
             boost = CFG["DEMAND_BOOST"].get(band(dscore), 0.0) if dscore is not None else 0.0
-            if cal and market_base:
-                plan = build_plan(cal, today, market_base * CFG["HOST_FACTOR"], boost)
+            mkt = market_base * CFG["HOST_FACTOR"] if market_base else None
+            ed = next((c for c in competitors if c["target_id"] == CFG["EDGAR_ID"]), None)
+            edgar = ed["host_equiv"] if ed else None
+            if edgar and mkt and not (CFG["EDGAR_SANE"][0] * mkt <= edgar <= CFG["EDGAR_SANE"][1] * mkt):
+                log(f"Edgar ${edgar} listing is far from market ${round(mkt)}; ignored this run")
+                edgar = None
+            log(f"pricing inputs: market ${round(mkt) if mkt else None} listing, Edgar ${edgar}, demand {dscore} (+{round(boost * 100)}%)")
+            if cal and mkt:
+                plan = build_plan(cal, today, mkt, boost, edgar)
 
             prev = sb("GET", "turo_runs?select=market_base&market_base=not.is.null&order=ran_at.desc&limit=1") or []
             gates, tripped = run_gates(comps, cal, cal_err, plan, market_base, float(prev[0]["market_base"]) if prev else None, today, bridge_err)
@@ -467,11 +486,6 @@ def main():
             for r in plan:
                 log(f"  {r['date']} lead {r['lead']} floor {r['floor']} cur {r['cur']} -> {r['proposed']} [{r['status']}]")
 
-            if not bridge_err:
-                try:
-                    competitors = check_competitors(page, start, end)
-                except Exception as e:
-                    log(f"competitors failed: {e}")
             for c in competitors:
                 log(f"competitor {c['target_id']}: {c['car']} ${c['trip_total']} = ${c['renter_daily']}/day")
             for d in demand:

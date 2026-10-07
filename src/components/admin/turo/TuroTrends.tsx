@@ -133,14 +133,20 @@ export function TuroTrends({ rows }: { rows: SeriesRow[] | null }) {
 
 const mult = (lead: number) => (lead >= 8 ? 1.2 : lead >= 4 ? 1.12 : lead >= 2 ? 1.06 : 1);
 const HOST_FACTOR = 0.603; // renter price -> listing price (Turo's cut)
+const EDGAR_UNDERCUT = 3;  // the manager prices $3 under Edgar's Model 3 when he's above us
 
-/** Same math as scripts/pi/turo-watch/turo_watch_pi.py plan_day (pi-1.1.0), for days the last run didn't plan. */
-function estimate(lead: number, floor: number, cur: number | null, mkt: number | null) {
+/** Same math as scripts/pi/turo-watch/turo_watch_pi.py plan_day (pi-1.2.0), for days the last run didn't plan. */
+function estimate(lead: number, floor: number, cur: number | null, mkt: number | null, edgar: number | null) {
   const base = Math.round(floor * mult(lead));
   let target = base;
   if (mkt != null) {
-    const cap = Math.round(mkt * 1.1);
-    target = Math.max(base, Math.round(mkt));
+    let pull = Math.round(mkt);
+    let cap = Math.round(mkt * 1.1);
+    if (edgar != null && edgar >= mkt * 0.7 && edgar <= mkt * 1.5) {
+      pull = Math.max(pull, Math.round(edgar - EDGAR_UNDERCUT));
+      cap = Math.max(cap, Math.round(edgar));
+    }
+    target = Math.max(base, pull);
     if (cur != null && cur > target) target = cur <= Math.max(base, cap) ? cur : Math.max(base, cap);
   }
   if (cur != null) target = Math.min(Math.max(target, Math.round(cur * 0.75)), Math.round(cur * 1.25));
@@ -169,7 +175,7 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
     const cur = p?.cur ?? sorted.filter((r) => r.series === "us" && r.day === d).map((r) => Number(r.value))[0] ?? null;
     const booked = p?.status === "booked";
     let rec = booked ? null : p?.applied ?? p?.proposed ?? null;
-    if (rec == null && !booked && floor != null) rec = estimate(i + 1, floor, cur, mkt);
+    if (rec == null && !booked && floor != null) rec = estimate(i + 1, floor, cur, mkt, edgar);
     return { d, lead: i + 1, floor, cur, rec, booked, status: p?.status ?? (floor == null ? "no-data" : "estimate") };
   });
 
@@ -185,9 +191,13 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
   const tips: string[] = [];
   if (next7 != null && edgar != null) {
     const gap = Math.round(edgar - next7);
-    tips.push(gap > 3 ? `Edgar's Model 3 is about $${gap}/day more than your next week. There's room to go up.`
-      : gap < -3 ? `You're about $${-gap}/day above Edgar's Model 3. Fine while bookings hold; watch for empty days.`
-      : "You're priced right alongside Edgar's Model 3.");
+    const goal = Math.round(edgar - EDGAR_UNDERCUT);
+    tips.push(gap > 3
+      ? (paused || !canWrite
+        ? `Edgar's Model 3 is about $${gap}/day more than your next week. The manager wants to move your open days up to $${goal}, but it's ${paused ? "paused" : "signed out of Turo"}, so nothing changes until that's fixed.`
+        : `Edgar's Model 3 is about $${gap}/day more than your next week. The next run moves your open days up to $${goal} ($3 under him).`)
+      : gap < -3 ? `You're about $${-gap}/day above Edgar's Model 3. The manager holds there while you're within 10% of market; watch for empty days.`
+      : `You're priced right alongside Edgar's Model 3 (the manager keeps you about $3 under him).`);
   }
   if (next7 != null && market != null) {
     const gap = Math.round(market - next7);
@@ -201,7 +211,7 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
         <div>
           <h2 className="text-sm font-semibold text-white">Price manager</h2>
           <p className="mt-0.5 max-w-xl text-xs text-white/60">
-            Never goes under Turo's dynamic price. Moves up to the nearby Model 3 market when there's room, holds any price still within 10% of market, and adds 5 to 10% in a busy week. Moves at most 25% per run.
+            Never goes under Turo's dynamic price. Moves up to the nearby Model 3 market, or to $3 under Edgar's Model 3 when he's higher, holds any price still within 10% of market, and adds 5 to 10% in a busy week. Moves at most 25% per run.
           </p>
         </div>
         <span className={cn("rounded-full px-3 py-1 text-xs font-semibold",
