@@ -200,7 +200,35 @@ export function scrub(s: string): string {
 const estTokens = (s: string) => Math.ceil(s.length / 3.5);
 
 function stripThink(t: string) {
-  return t.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  // Also drops an unopened "...reasoning</think>answer" (some models emit only the closing tag).
+  return t.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/^[\s\S]*?<\/think>/, "").trim();
+}
+
+/**
+ * 2026-10-07 (Jared: "Scout sends really long messages, 'the user's asking for this and that'"): some FreeLLM "auto"
+ * models (dots-3-note-preview, ling-3.0-flash, qwen3.x-flash) write their private reasoning as plain content, no
+ * <think> tags, and it reached his chat as 2,000-5,000-character replies. Such a reply is a miss, like an empty one:
+ * the ladder throws it away and the next model answers. True for any text that reads as the model talking to itself.
+ */
+const THINK_START = /^\s*(?:the user\b|jared'?s (?:last )?(?:message|request)\b|we (?:have|need|should|are|must)\b|let me (?!know)|let'?s (?:see|look|think|check|draft|summari)|i need to\b|i should\b|okay[,.]|ok[,.]\s|alright\b|hmm\b|so,? (?:the|i|we) |first,? (?:i|let)|now,? (?:i|let)|wait\b|looking at the|based on the (?:snapshot|tool results|conversation|lessons)|from the (?:snapshot|tool results))/i;
+const THINK_META: RegExp[] = [
+  /\bthe user (?:wants|is asking|asked|says|said|is telling|needs|requested)\b/i,
+  /\bword count\b|\b(?:under|below|within) \d+ words\b|\bthat'?s about \d+ words\b/i,
+  /\bthe (?:prompt|rules|instructions|constraints|system prompt|lessons) (?:say|says|said)\b/i,
+  /\blet me (?:re-?read|think|check|count|draft|review|see|summari[sz]e)\b/i,
+  /\bi need to (?:reply|answer|respond|summari[sz]e|provide|keep it|be concise|include|make sure|diagnose|figure|understand|check|read|verify|draft)\b/i,
+  /\bno options line\b|\boptions line\b/i,
+  /\b(?:first|last|final) line (?:is|should|must)\b|\bthe answer should\b/i,
+  /^\s*wait\b|\bwait[,—–-]\s/im,
+  /\bi recall\b|\bperhaps i (?:can|should)\b|\bi think (?:i|we|for)\b/i,
+  /\bjared'?s last message\b|\breply to jared\b/i,
+];
+export function thinkingLeak(text: string): boolean {
+  const t = String(text ?? "");
+  if (t.length < 60) return false;
+  const hits = THINK_META.filter((re) => re.test(t)).length;
+  if (THINK_START.test(t.slice(0, 120))) return hits >= 1 || t.length > 600;
+  return hits >= 2;
 }
 
 /**
@@ -471,6 +499,12 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
         default: c = await callAnthropic(rung.model, req, left);
       }
       const ms = Date.now() - t0;
+      // 2026-10-07: a model thinking out loud is a miss, not an answer (see thinkingLeak).
+      if (!req.json && rung.provider !== "anthropic" && thinkingLeak(c.text)) {
+        await log(req, rung.provider, c.model, "invalid", ms, c, "thinking out loud");
+        tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
+        continue;
+      }
       let parsed: any;
       if (req.json) {
         try { parsed = parseJson(c.text); } catch {
@@ -658,13 +692,17 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
         try { const a = JSON.parse(raw || "{}"); if (a && typeof a === "object") args = a; } catch { /* keep {} */ }
         return { id: String(c.id ?? `call_${Date.now()}_${i}`), name: String(c.function.name).replace(/^functions\./, ""), args, raw: raw || "{}" };
       });
-      const content = stripThink(String(msg.content ?? "")).trim();
+      let content = stripThink(String(msg.content ?? "")).trim();
+      // 2026-10-07: reasoning written as content. With tool calls it is just noise beside them, so drop it;
+      // on its own it is a miss and the next model answers (logged "invalid" so no provider gets paused).
+      const leaked = thinkingLeak(content);
+      if (leaked && toolCalls.length) content = "";
       const inT = Number(j.usage?.prompt_tokens ?? 0), outT = Number(j.usage?.completion_tokens ?? 0);
       const c: Call = { text: content, model: String(j.model ?? rung.model), inT, outT, cost: 0 };
       if (rung.provider === "cloudflare") { const [ni, no] = CF_NEURONS[rung.model] ?? [40_000, 80_000]; c.units = Number(j.usage?.neurons) || (inT * ni + outT * no) / 1e6; }
-      if (!content && !toolCalls.length) {
+      if ((!content || leaked) && !toolCalls.length) {
         // A blank turn is the model's miss, not the provider's: "invalid" keeps free_llm_watch from pausing a healthy provider.
-        await log(logReq, rung.provider, c.model, "invalid", ms, c, `empty reply (finish ${j.choices?.[0]?.finish_reason ?? "?"})`);
+        await log(logReq, rung.provider, c.model, "invalid", ms, c, leaked ? "thinking out loud" : `empty reply (finish ${j.choices?.[0]?.finish_reason ?? "?"})`);
         tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
         continue;
       }
