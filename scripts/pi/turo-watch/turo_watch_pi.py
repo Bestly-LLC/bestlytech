@@ -6,7 +6,12 @@ the same job the "Turo Watch 7:05am / 7:12pm" Claude scheduled tasks did through
 Rules come from bestly_private_memory area='turo' (algorithm, gates, run-procedure) and are unchanged:
   - never log in, never enter credentials, never solve a CAPTCHA, never work around a bot check
   - "You've been blocked" / a challenge = Bridge down -> PROPOSE-ONLY, write nothing, say so
-  - never below the Turo dynamic floor, ceiling = market median x1.10, max +/-25% per day per run
+  - never below the Turo dynamic floor, max +/-25% per day per run
+  - 2026-10-06 (pi-1.1.0): market is compared in LISTING dollars (renter median x 0.603). Before this the
+    ceiling was renter dollars vs listing prices, so the market never touched a price and the only driver
+    was Turo's price x the lead multiplier - which marked every open day DOWN as it got closer.
+    Now: pull up to the market median, hold any price still within 10% of market (no markdowns from the
+    lead tiers), Busy/Hot demand adds 5%/10%. Only prices more than 10% over market AND over Turo x lead come down.
   - never touch booked days, only vehicle 2522178, never listing content
   - HTTP 200 is not proof: every write is verified by a re-pull ~20 s later, stop on the first mismatch
   - every run is recorded (turo_runs, turo_day_prices, turo_comps, turo_competitor_prices, turo_demand)
@@ -25,14 +30,14 @@ from zoneinfo import ZoneInfo
 import requests
 from playwright.sync_api import sync_playwright
 
-VERSION = "pi-1.0.0"
+VERSION = "pi-1.1.0"
 TZ = ZoneInfo("America/Los_Angeles")
 CDP = "http://127.0.0.1:9334"
 DRY = "--dry" in sys.argv
 CFG = {
     "VEHICLE_ID": 2522178, "COMP_RADIUS_MI": 25.0, "CEILING_MULT": 1.10, "HOST_FACTOR": 0.603,
     "WINDOW_DAYS": 8, "MAX_MOVE": 0.25, "WHIPLASH": 0.30, "MIN_N": 5, "MIN_CAL_DAYS": 30,
-    "SETTLE_S": 9, "VERIFY_WAIT_S": 20, "ENV": "/home/pi/scripts/.env",
+    "SETTLE_S": 9, "DEMAND_BOOST": {"Busy": 0.05, "Hot": 0.10}, "VERIFY_WAIT_S": 20, "ENV": "/home/pi/scripts/.env",
 }
 LOG = []
 
@@ -283,15 +288,29 @@ def lead_mult(lead):
     return 1.20 if lead >= 8 else 1.12 if lead >= 4 else 1.06 if lead >= 2 else 1.00
 
 
-def plan_day(lead, floor, cur, ceiling):
+def plan_day(lead, floor, cur, mkt, boost=0.0):
+    """mkt = nearby Model 3 median in LISTING dollars. Moves up when the market allows, holds when competitive."""
     mult = lead_mult(lead)
-    final = max(floor, min(round(floor * mult), ceiling))
-    final = max(round(cur * (1 - CFG["MAX_MOVE"])), min(final, round(cur * (1 + CFG["MAX_MOVE"]))))
-    final = max(final, floor)                       # floor beats the move cap
-    return int(final), ("no-op" if final == cur else "planned"), f"lead {lead} x{mult:g}" + (" - floor wins" if final == floor else "")
+    base = round(floor * mult)                                    # Turo's price + the lead premium
+    pull = round(mkt * (1 + boost))                               # the market median (plus demand)
+    cap = round(mkt * CFG["CEILING_MULT"] * (1 + boost))          # still competitive up to 10% over market
+    target = max(base, pull)
+    why = f"lead {lead} x{mult:g} = ${base}, market ${round(mkt)}" + (f" +{round(boost * 100)}% demand" if boost else "")
+    if cur > target:
+        if cur <= max(base, cap):
+            target, why = cur, why + f" - hold ${cur} (within 10% of market)"
+        else:
+            target, why = max(base, cap), why + f" - over market, back to ${max(base, cap)}"
+    elif pull > base:
+        why += " - up to market"
+    final = max(round(cur * (1 - CFG["MAX_MOVE"])), min(target, round(cur * (1 + CFG["MAX_MOVE"]))))
+    if final != target:
+        why += f" - 25% move cap ${final}"
+    final = max(final, floor)                                     # floor beats the move cap
+    return int(final), ("no-op" if final == cur else "planned"), why + (" - floor wins" if final == floor else "")
 
 
-def build_plan(cal, today, ceiling):
+def build_plan(cal, today, mkt, boost=0.0):
     rows = []
     for i in range(1, CFG["WINDOW_DAYS"] + 1):
         ds = (today + datetime.timedelta(days=i)).isoformat()
@@ -304,7 +323,7 @@ def build_plan(cal, today, ceiling):
         elif not info["floor"] or not info["cur"]:
             rows.append({**base, "floor": info["floor"], "cur": info["cur"], "proposed": None, "status": "no-data", "reason": "null/zero floor or price"})
         else:
-            p, st, why = plan_day(i, info["floor"], info["cur"], ceiling)
+            p, st, why = plan_day(i, info["floor"], info["cur"], mkt, boost)
             rows.append({**base, "floor": info["floor"], "cur": info["cur"], "proposed": p, "status": st, "reason": why})
     return rows
 
@@ -425,11 +444,21 @@ def main():
                     bridge_err, comps = cerr, []
             if comps:
                 market_base = round(statistics.median(c["daily_renter"] for c in comps), 2)
-                host_net = round(market_base * CFG["HOST_FACTOR"])
-                ceiling = round(market_base * CFG["CEILING_MULT"])
-            log(f"comps n={len(comps)} market ${market_base} ceiling ${ceiling}")
-            if cal and ceiling:
-                plan = build_plan(cal, today, ceiling)
+                host_net = round(market_base * CFG["HOST_FACTOR"])       # market median in listing dollars
+                ceiling = round(market_base * CFG["HOST_FACTOR"] * CFG["CEILING_MULT"])  # listing dollars too
+            log(f"comps n={len(comps)} market ${market_base} renter = ${host_net} listing, cap ${ceiling}")
+
+            # Demand first, so a Busy/Hot week can push prices up this run.
+            if not bridge_err:
+                try:
+                    demand = check_demand(page, cal, today)
+                except Exception as e:
+                    log(f"demand failed: {e}")
+            dm = {d["scope"]: d for d in demand}
+            dscore = (dm.get("model3") or dm.get("all") or {}).get("score")
+            boost = CFG["DEMAND_BOOST"].get(band(dscore), 0.0) if dscore is not None else 0.0
+            if cal and market_base:
+                plan = build_plan(cal, today, market_base * CFG["HOST_FACTOR"], boost)
 
             prev = sb("GET", "turo_runs?select=market_base&market_base=not.is.null&order=ran_at.desc&limit=1") or []
             gates, tripped = run_gates(comps, cal, cal_err, plan, market_base, float(prev[0]["market_base"]) if prev else None, today, bridge_err)
@@ -443,10 +472,6 @@ def main():
                     competitors = check_competitors(page, start, end)
                 except Exception as e:
                     log(f"competitors failed: {e}")
-                try:
-                    demand = check_demand(page, cal, today)
-                except Exception as e:
-                    log(f"demand failed: {e}")
             for c in competitors:
                 log(f"competitor {c['target_id']}: {c['car']} ${c['trip_total']} = ${c['renter_daily']}/day")
             for d in demand:
@@ -498,7 +523,6 @@ def main():
             ed = next((c for c in competitors if c["target_id"] == "edgar-model3"), None)
             open_days = [r for r in plan if r.get("cur") and r["status"] not in ("booked", "no-data")]
             ours = round(sum(r["cur"] for r in open_days) / len(open_days), 2) if open_days else None
-            dm = {d["scope"]: d for d in demand}
             wrote = sum(1 for r in plan if r.get("applied"))
             ver = sum(1 for v in vmap.values() if v["verified"])
             line1 = f"Market ${market_base}/day (n={len(comps)})" + (f", demand {band(dm['model3']['score'])} {dm['model3']['score']}" if "model3" in dm else "")

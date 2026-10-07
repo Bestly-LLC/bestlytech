@@ -132,6 +132,25 @@ export function TuroTrends({ rows }: { rows: SeriesRow[] | null }) {
 /* ───────── price manager ───────── */
 
 const mult = (lead: number) => (lead >= 8 ? 1.2 : lead >= 4 ? 1.12 : lead >= 2 ? 1.06 : 1);
+const HOST_FACTOR = 0.603; // renter price -> listing price (Turo's cut)
+
+/** Same math as scripts/pi/turo-watch/turo_watch_pi.py plan_day (pi-1.1.0), for days the last run didn't plan. */
+function estimate(lead: number, floor: number, cur: number | null, mkt: number | null) {
+  const base = Math.round(floor * mult(lead));
+  let target = base;
+  if (mkt != null) {
+    const cap = Math.round(mkt * 1.1);
+    target = Math.max(base, Math.round(mkt));
+    if (cur != null && cur > target) target = cur <= Math.max(base, cap) ? cur : Math.max(base, cap);
+  }
+  if (cur != null) target = Math.min(Math.max(target, Math.round(cur * 0.75)), Math.round(cur * 1.25));
+  return Math.max(target, floor);
+}
+
+const STATUS: Record<string, string> = {
+  applied: "Set", "no-op": "Already set", planned: "Pending", booked: "Booked", blocked: "Not set",
+  "not-verified": "Check Turo", estimate: "Estimate", "no-data": "Needs a run",
+};
 
 export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
   rows: SeriesRow[] | null; plan: PlanDay[]; marketBase: number | null; paused: boolean; canWrite: boolean;
@@ -140,21 +159,18 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
   const sorted = (rows ?? []).slice().sort((a, b) => a.day.localeCompare(b.day));
   const market = lastOn(sorted, "market", today);
   const edgar = lastOn(sorted, "edgar", today);
-  const ceiling = marketBase != null ? Math.round(marketBase * 1.1) : null;
+  // market_base on a run is what renters pay; prices here are listing dollars, so convert before comparing.
+  const mkt = marketBase != null ? Number(marketBase) * HOST_FACTOR : null;
 
   // Next 8 days: the latest run's plan where we have it, else the last known Turo price and ours.
   const days = Array.from({ length: 8 }, (_, i) => addDays(today, i + 1)).map((d, i) => {
     const p = plan.find((x) => x.date === d);
     const floor = p?.floor ?? sorted.filter((r) => r.series === "turo" && r.day === d).map((r) => Number(r.value))[0] ?? null;
     const cur = p?.cur ?? sorted.filter((r) => r.series === "us" && r.day === d).map((r) => Number(r.value))[0] ?? null;
-    let rec = p?.applied ?? p?.proposed ?? null;
-    if (rec == null && floor != null) {
-      rec = Math.round(floor * mult(i + 1));
-      if (ceiling != null) rec = Math.min(rec, ceiling);
-      if (cur != null) rec = Math.min(Math.max(rec, Math.round(cur * 0.75)), Math.round(cur * 1.25));
-      rec = Math.max(rec, floor);
-    }
-    return { d, lead: i + 1, floor, cur, rec, status: p?.status ?? (floor == null ? "no-data" : "estimate") };
+    const booked = p?.status === "booked";
+    let rec = booked ? null : p?.applied ?? p?.proposed ?? null;
+    if (rec == null && !booked && floor != null) rec = estimate(i + 1, floor, cur, mkt);
+    return { d, lead: i + 1, floor, cur, rec, booked, status: p?.status ?? (floor == null ? "no-data" : "estimate") };
   });
 
   // What the manager earns over Turo's own pricing, last 30 days of rental days.
@@ -185,7 +201,7 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
         <div>
           <h2 className="text-sm font-semibold text-white">Price manager</h2>
           <p className="mt-0.5 max-w-xl text-xs text-white/60">
-            Starts from Turo's dynamic price (never goes under it), adds more the further out a day is, and caps at 10% over the nearby Model 3 market. Moves at most 25% per run.
+            Never goes under Turo's dynamic price. Moves up to the nearby Model 3 market when there's room, holds any price still within 10% of market, and adds 5 to 10% in a busy week. Moves at most 25% per run.
           </p>
         </div>
         <span className={cn("rounded-full px-3 py-1 text-xs font-semibold",
@@ -214,24 +230,26 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
           </thead>
           <tbody className="divide-y divide-white/[0.05]">
             {days.map((x) => {
-              const up = x.rec != null && x.floor != null ? x.rec - x.floor : null;
+              const shown = x.booked ? x.cur : x.rec;
+              const up = shown != null && x.floor != null ? Math.round(shown - x.floor) : null;
               return (
                 <tr key={x.d}>
                   <td className="py-2.5 pr-2 text-white">{new Date(x.d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-white/60">{money(x.floor)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-white/75">{money(x.cur)}</td>
-                  <td className="px-2 py-2.5 text-right font-semibold tabular-nums text-white">{money(x.rec)}</td>
-                  <td className="px-2 py-2.5 text-right tabular-nums text-emerald-300 bento:text-emerald-700">{up != null ? `+$${up}` : "–"}</td>
-                  <td className="py-2.5 pl-2 text-right text-xs text-white/60">
-                    {x.status === "applied" ? "Set" : x.status === "estimate" ? "Estimate" : x.status === "no-data" ? "Needs a run" : x.status === "blocked" ? "Not set" : x.status}
+                  <td className="px-2 py-2.5 text-right font-semibold tabular-nums text-white">{x.booked ? "–" : money(x.rec)}</td>
+                  <td className={cn("whitespace-nowrap px-2 py-2.5 text-right tabular-nums",
+                    up == null ? "text-white/60" : up > 0 ? "text-emerald-300 bento:text-emerald-700" : up < 0 ? "text-red-300 bento:text-red-600" : "text-white/60")}>
+                    {up == null ? "–" : up > 0 ? `+$${up}` : up < 0 ? `−$${-up}` : "$0"}
                   </td>
+                  <td className="py-2.5 pl-2 text-right text-xs text-white/60">{STATUS[x.status] ?? x.status}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-white/60">"Estimate" rows use the last known Turo price; the next run with Turo signed in replaces them with live numbers and sets them.</p>
+      <p className="mt-2 text-xs text-white/60">"vs Turo" is your price minus Turo's dynamic price for that day (booked days show what they booked at). "Estimate" rows use the last known Turo price; the next run replaces them with live numbers.</p>
     </section>
   );
 }
