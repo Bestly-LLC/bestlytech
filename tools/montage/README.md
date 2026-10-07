@@ -39,6 +39,41 @@ Brand files the videos use: `fetch-assets.sh` downloads Cookie Yeti and Inventor
 4. Render one free text-only job through `montage_start`, look at frames, then name the brand in `make_montage`'s description in `studio-chat`.
 (`comp/<slug>` is still supported: leave `COMP_DIR` unset and om_render copies `comp/<slug>`.)
 
+## Voice (ElevenLabs first, Piper as the backup)
+`worker.voice()` picks ONE provider per video (never mixes voices). Track V, 2026-10-06.
+
+A brand module gives its ElevenLabs voice as `VOICE_11` (next to the Piper `VOICE`, which stays as the fallback):
+```python
+VOICE_11 = {"voice_id": "<id from GET /v1/voices>", "name": "<display name>",
+            "stability": 0.5, "similarity_boost": 0.75, "style": 0.0, "speed": 1.0}
+```
+- `voice_id`, `name`: required. A premade or library voice only, never a cloned person. Keep each brand's voice distinct, and do not
+  reuse the RoofGuard caller's voice (Sarah).
+- `stability`, `similarity_boost`, `style`, `speed`: optional (defaults above), sent as the request's `voice_settings`
+  (`use_speaker_boost` is always true). `speed` is 0.7 to 1.2.
+- No `VOICE_11` in the module = that brand always uses Piper. Nothing else to wire: `worker.voice()` reads the attribute with `getattr`.
+
+### How to add a voice to a brand
+1. `GET https://api.elevenlabs.io/v1/voices` (key: Vault `elevenlabs_api_key`; the Pi reads it only through `pi_secret`). Pick a premade or library voice that fits the brand.
+2. Add `VOICE_11 = {...}` to `brands/<slug>.py`, keep the old `VOICE` line.
+3. Check the client's `montage_brand_policy.ai_voice_ok` is true (otherwise Piper is used, on purpose).
+4. Render one free text-only job (`montage_start`), confirm the job log says `voice: elevenlabs <name> (<n> chars)`.
+
+### Rules (worker.voice)
+ElevenLabs is used only when ALL hold: `montage_settings` row `voice` says `"provider":"elevenlabs"`; the client's `ai_voice_ok` is true;
+the brand has `VOICE_11`; the key resolves through `pi_secret`; `GET /v1/user/subscription` answers; and the credits left AFTER this video
+(`character_limit - character_count - chars x rate`) stay at or above `reserve_pct`% of `character_limit` (the calls' share). Rate is 1 credit/char
+for multilingual and v3 models, 0.5 for `eleven_flash_*` / `eleven_turbo_*`.
+Per scene: `POST /v1/text-to-speech/{voice_id}?output_format=mp3_44100_128` with `model_id`, `voice_settings`, `previous_text`/`next_text`; 30 s timeout,
+2 retries on 429/5xx. Any failure on any scene throws all ElevenLabs audio away and the whole video is voiced by Piper (the unchanged path). Scene timing
+still follows the audio length. Re-cuts follow the same rules. The job log carries `voice: elevenlabs <name> (<n> chars)` or `voice: piper (<reason>)`, and the
+estimated cost (`chars x 22 / 131000`) is added to `cost_usd`.
+Alerts (`scout_notify`, titles start "Montage:"): low credits = warning, push, dedupe `montage-voice-low-<date>`; outage/error = info, no push, dedupe `montage-voice-down-<date>`.
+
+### Settings row (no deploy needed)
+`montage_settings` (service role only): key `voice` = `{"provider":"elevenlabs","model":"eleven_multilingual_v2","reserve_pct":30}`.
+Flip `provider` to `"piper"` to switch ElevenLabs off, or `model` to `"eleven_flash_v2_5"` to halve the cost.
+
 ## Watchdogs
 - cron `montage-watch` every 5 min (requeue stalled jobs 3x, then fail + push; push if work waits and the worker is quiet).
 - `agent_beats` row `montage` every 2 min while idle, every minute while working (Team card pulse).
