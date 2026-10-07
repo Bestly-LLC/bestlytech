@@ -79,11 +79,11 @@ export function BellSheet({ notifs, open, onOpenChange }: { notifs: ReturnType<t
             </div>
           </div>
           <div className="flex gap-2 px-5 py-3">
-            <a href={STUDIO} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 px-4 text-sm font-semibold text-[#fff]">
+            <a href={STUDIO} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 px-4 text-sm font-semibold text-[#fff]">
               Open Studio <ExternalLink className="h-3.5 w-3.5" />
             </a>
             {notifs.unread > 0 && (
-              <button onClick={notifs.markSeen} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/[0.08] px-3.5 text-sm text-white/80"><Check className="h-4 w-4" /> Mark all read</button>
+              <button onClick={notifs.markSeen} className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/[0.08] px-3.5 text-sm text-white/80"><Check className="h-4 w-4" /> Mark all read</button>
             )}
           </div>
           <ul className="min-h-0 flex-1 divide-y divide-white/[0.06] overflow-y-auto">

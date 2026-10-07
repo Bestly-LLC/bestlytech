@@ -24,7 +24,7 @@ type Proj = { id: ProjectId; name: string; sub: string; dot: string; links: { la
 
 export const PROJECTS: Proj[] = [
   { id: "vesta", name: "Vesta", sub: "Women-only social + well-being, with Eli and Rohit", dot: "bg-rose-400", links: [
-    { label: "Walkthrough", hint: "For investors and partners", href: "https://vesta.bestly.tech" },
+    { label: "Walkthrough", hint: "For investors and partners. Asks for an access code from Jared", href: "https://vesta.bestly.tech" },
     { label: "The app", hint: "Women sign in here", href: "https://vesta-app.bestly.tech" },
   ] },
   { id: "inventoryproof", name: "InventoryProof", sub: "Proof-of-inventory for resellers", dot: "bg-sky-400", links: [
@@ -87,6 +87,7 @@ const message = (code: string, n: number) =>
   `You're invited to Vesta, a private app just for women. Talk, ask anything anonymously, and find support.\n\n` +
   `Tap to join: ${link(code)}\n` +
   (n > 1 ? `This link works for up to ${n} women, so please share it with your group.\n\n` : `\n`) +
+  `Link not working? Open the app and type this invite code: ${code}\n\n` +
   `You'll sign in with Face ID or your fingerprint. No password.`;
 const investorMessage =
   `Here's Vesta, the women-only social and well-being app we're building: private rooms, anonymous questions, ` +
@@ -190,7 +191,7 @@ function VestaTeam() {
 
   const msg = (m: { name: string; url: string }) =>
     `Hi ${m.name.split(" ")[0]}, here's your Bestly partner login for Vesta. Tap it on your phone and set up Face ID:\n${m.url}\n\nFrom there you can make Vesta invite links for the women you bring in. The link works for 7 days.`;
-  const field = "h-12 w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-[17px] text-white outline-none placeholder:text-white/35 focus:border-[#0A84FF] bento:bg-[#F3F2EE]";
+  const field = "h-12 w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-[17px] text-white outline-none placeholder:text-white/60 focus:border-[#0A84FF] bento:bg-[#F3F2EE]";
 
   return (
     <section className="mt-6">
@@ -201,7 +202,7 @@ function VestaTeam() {
             {team.map((m) => (
               <li key={m.id} className="flex min-h-12 items-center gap-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] font-medium">{m.name}</p>
+                  <p className="break-words text-[15px] font-medium">{m.name}</p>
                   <p className={cn("text-sm", m.claim_used_at ? "text-emerald-300 bento:text-emerald-700" : "text-white/50")}>{m.claim_used_at ? "Signed in" : "Link sent, not opened yet"}</p>
                 </div>
                 {!m.claim_used_at && <button type="button" disabled={busy} onClick={() => void invite(m.name, m.email)}
@@ -302,7 +303,7 @@ function VestaInvites() {
     catch (e) { setGone((g) => g.filter((x) => x !== code)); setErr("Couldn't delete it. Try again."); reportToScout("vesta-share.delete", e); }
   };
 
-  const field = "h-12 w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-[17px] text-white outline-none placeholder:text-white/35 focus:border-[#0A84FF] bento:bg-[#F3F2EE]";
+  const field = "h-12 w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-[17px] text-white outline-none placeholder:text-white/60 focus:border-[#0A84FF] bento:bg-[#F3F2EE]";
   const primary = "inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl bg-[#0A84FF] text-[17px] font-semibold text-[#fff] transition hover:bg-[#0A84FF]/90 active:scale-[0.99] disabled:opacity-50";
   const quiet = "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 text-[15px] font-medium text-white/70 transition hover:bg-white/[0.06]";
 
@@ -316,7 +317,7 @@ function VestaInvites() {
 
             {!codes && !loadErr ? <div className="mt-4 h-24 animate-pulse rounded-2xl bg-white/[0.05]" /> : showForm ? (
               <>
-                <label htmlFor="v-who" className="mb-1.5 mt-4 block px-1 text-sm text-white/60">Her name <span className="text-white/40">(only you see this)</span></label>
+                <label htmlFor="v-who" className="mb-1.5 mt-4 block px-1 text-sm text-white/60">Her name <span className="text-white/60">(only you see this)</span></label>
                 <input id="v-who" value={who} onChange={(e) => setWho(e.target.value)} maxLength={48} autoComplete="off" placeholder="Priya" className={field} />
                 <button type="button" onClick={() => void makeOne()} disabled={busy} className={cn(primary, "mt-4")}>
                   {busy && <Loader2 className="h-5 w-5 animate-spin" />}{busy ? "Making…" : "Create invite link"}
@@ -330,15 +331,20 @@ function VestaInvites() {
               <div className="mt-4">
                 <div className="rounded-2xl bg-emerald-500/[0.08] px-4 py-3 ring-1 ring-emerald-500/25">
                   <p className="text-sm font-semibold text-emerald-300 bento:text-emerald-700">{open.label ? `For ${open.label}` : "Invite ready"}</p>
-                  <p className="mt-1 break-all text-[15px] font-medium">{link(open.code).replace("https://", "")}</p>
-                  <p className="mt-0.5 text-xs text-white/55">Works once · expires in 30&nbsp;days</p>
+                  <p className="mt-2 text-xs uppercase tracking-wide text-white/60">Invite code</p>
+                  <p className="select-all break-all font-mono text-[1.35rem] font-semibold tracking-wider">{open.code}</p>
+                  <p className="mt-2 break-all text-sm text-white/70">{link(open.code).replace("https://", "")}</p>
+                  <p className="mt-1 text-xs text-white/60">Works once · expires in 30&nbsp;days</p>
                 </div>
                 <div className="mt-3 flex gap-2">
                   <SendButton primary id="cur" text={message(open.code, 1)} copied={copied} copy={copy} />
                   <button type="button" onClick={() => void remove(open.code)} disabled={busy}
                     className="min-h-11 rounded-2xl px-4 text-[15px] font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-50 bento:text-red-600">Delete</button>
                 </div>
-                <button type="button" onClick={() => { setFresh(true); setCurrent(null); }} className={cn(quiet, "mt-1 w-full")}>New invite</button>
+                <div className="mt-1 flex gap-2">
+                  <button type="button" onClick={() => void copy("code", open.code)} className={cn(quiet, "flex-1")}>{copied === "code" ? "Code copied" : "Copy code only"}</button>
+                  <button type="button" onClick={() => { setFresh(true); setCurrent(null); }} className={cn(quiet, "flex-1")}>New invite</button>
+                </div>
               </div>
             )}
           </>
@@ -351,7 +357,7 @@ function VestaInvites() {
             {batch ? (
               <div className="mt-4">
                 <div className="rounded-2xl bg-emerald-500/[0.08] px-4 py-3 ring-1 ring-emerald-500/25">
-                  <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300 bento:text-emerald-700"><Check className="h-4 w-4" /> {batch.codes.length} invites made</p>
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300 bento:text-emerald-700"><Check className="h-4 w-4" /> {batch.codes.length}&nbsp;invites made</p>
                   <p className="mt-1 text-[15px]">{batch.group} · downloaded to your device</p>
                 </div>
                 <div className="mt-3 flex gap-2">
@@ -370,7 +376,7 @@ function VestaInvites() {
                     onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value.replace(/\D/g, "")) || 1)))}
                     className={cn(field, "w-24 text-center font-semibold tabular-nums")} />
                   <button type="button" aria-label="More" onClick={() => setCount((n) => Math.min(100, n + 5))} className="grid h-12 w-12 place-items-center rounded-2xl bg-white/[0.07] text-xl font-semibold bento:bg-[#F3F2EE]"><Plus className="h-5 w-5" /></button>
-                  <span className="text-sm text-white/45">up to 100</span>
+                  <span className="text-sm text-white/60">up to 100</span>
                 </div>
                 <button type="button" onClick={() => void makeGroup()} disabled={busy} className={cn(primary, "mt-5")}>
                   {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}{busy ? "Making…" : `Make ${count} and download Excel`}
@@ -396,7 +402,7 @@ function VestaInvites() {
               {joined.slice(0, 20).map((c) => (
                 <li key={c.code} className="flex min-h-12 items-center gap-3 px-4 py-2">
                   <Check className="h-4 w-4 shrink-0 text-emerald-400 bento:text-emerald-600" />
-                  <p className="min-w-0 flex-1 truncate text-[15px]">{(c.label ?? "").replace(GROUP, "") || "Invite"}</p>
+                  <p className="min-w-0 flex-1 break-words text-[15px]">{(c.label ?? "").replace(GROUP, "") || "Invite"}</p>
                   <p className="shrink-0 text-sm text-white/50">{new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
                 </li>
               ))}
@@ -444,8 +450,8 @@ export function ProjectSheet() {
                     <button type="button" onClick={() => setId(x.id)} className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04]">
                       <span aria-hidden className={cn("h-2.5 w-2.5 shrink-0 rounded-full", x.dot)} />
                       <span className="min-w-0 flex-1"><span className="block text-[16px] font-semibold">{x.name}</span>
-                        <span className="block truncate text-sm text-white/55">{x.sub}</span></span>
-                      <ChevronRight className="h-4 w-4 text-white/40" />
+                        <span className="block text-sm text-white/60">{x.sub}</span></span>
+                      <ChevronRight className="h-4 w-4 text-white/60" />
                     </button>
                   </li>
                 ))}
@@ -464,7 +470,7 @@ export function ProjectSheet() {
                     <a href={l.href} target="_blank" rel="noreferrer" className="flex min-h-14 items-center gap-3 px-4 py-2.5 hover:bg-white/[0.04]">
                       <span className="min-w-0 flex-1"><span className="block text-[16px] font-medium">{l.label}</span>
                         <span className="block text-sm text-white/55">{l.hint}</span></span>
-                      <ExternalLink className="h-4 w-4 text-white/40" />
+                      <ExternalLink className="h-4 w-4 text-white/60" />
                     </a>
                   </li>
                 ))}

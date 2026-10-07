@@ -840,7 +840,7 @@ function CallsTab({ meetings, open, upcoming = [] }: { meetings: Meeting[] | nul
                 </div>
                 {e.join_url && (
                   <a href={e.join_url} target="_blank" rel="noreferrer"
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 text-sm font-semibold text-[#052E1F] transition hover:bg-emerald-400">
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 text-sm font-semibold text-[#052E1F] transition hover:bg-emerald-400">
                     <Video className="h-4 w-4" /> Join
                   </a>
                 )}
@@ -926,7 +926,7 @@ export function CallView({ m, onBack, onAsk }: { m: Meeting; onBack: () => void;
 
 function AskAbout({ onClick, label }: { onClick: () => void; label: string }) {
   return (
-    <button onClick={onClick} className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-full bg-white/[0.07] px-3.5 text-sm font-medium text-white/85 transition hover:bg-white/[0.12] bento:bg-[#F3F2EE]">
+    <button onClick={onClick} className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/[0.07] px-3.5 text-sm font-medium text-white/85 transition hover:bg-white/[0.12] bento:bg-[#F3F2EE]">
       <Binoculars className="h-4 w-4" /> {label}
     </button>
   );
