@@ -11,7 +11,7 @@ import { Brush, FileWarning,
   Car,
   Mic,
   Handshake,
-  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, Siren, CarFront, Flower2, PhoneCall,
+  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, ShieldAlert, Siren, CarFront, Flower2, PhoneCall,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -83,6 +83,7 @@ const turoItems = [
 // read-only cache; this is the copy we own.
 const opsItems = [
   { title: "Security", url: "/admin/security", icon: ShieldCheck },
+  { title: "Spam Desk", url: "/admin/spam", icon: ShieldAlert },
   { title: "Claude Skills", url: "/admin/skills", icon: BookMarked },
   { title: "Scout's playbook", url: "/admin/playbook", icon: BookOpen },
 ];
