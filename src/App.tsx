@@ -115,6 +115,7 @@ const Sky = lazyPage(() => import("./pages/admin/Sky"));
 const Security = lazyPage(() => import("./pages/admin/Security"));
 const SpamDesk = lazyPage(() => import("./pages/admin/SpamDesk"));
 const Team = lazyPage(() => import("./pages/admin/Team"));
+const ScoutLab = lazyPage(() => import("./pages/admin/ScoutLab"));
 const AdminSkills = lazyPage(() => import("./pages/admin/AdminSkills"));
 const AdminNotFound = lazyPage(() => import("./pages/admin/AdminNotFound"));
 
@@ -258,6 +259,7 @@ const App = () => {
                   <Route path="security" element={<Security />} />
                   <Route path="spam" element={<SpamDesk />} />
                   <Route path="team" element={<Team />} />
+                  <Route path="scout-lab" element={<ScoutLab />} />
                   <Route path="turo" element={<AdminTuro />} />
                   <Route path="claims" element={<ClaimsCloser />} />
                   <Route path="turo/lax-pass" element={<LaxPassRedirect />} />

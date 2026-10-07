@@ -54,6 +54,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/turo": "Turo Watch",
   "/admin/playbook": "Scout's playbook",
   "/admin/skills": "Claude Skills",
+  "/admin/scout-lab": "Scout Lab",
 };
 
 /** ui/sidebar.tsx saves the desktop open/collapsed state in this cookie; read it back on load. */

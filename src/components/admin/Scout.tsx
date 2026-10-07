@@ -33,6 +33,9 @@ import { ScoutAutoRunBar } from "./ScoutAutoRun";
 import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
 import { NeedsYouCard, useNeedsYou, type TodayRow } from "./ScoutNeedsYou";
 import { dotHex, markScoutThreadRead, publishScoutDot, scoutDotColor, useScoutUnread } from "./scoutUnread";
+import { ScoutBuddy, type ScoutMood } from "./scout/ScoutBuddy";
+import { useScoutMood, useWorkingLine, type ScoutReply } from "./scout/useScoutMood";
+import { DEFAULT_PITCH, greeting, pageOffer, parseProgress, welcomeBack } from "./scout/scoutLines";
 
 /**
  * Scout - the assistant that lives in the corner of the admin.
@@ -64,8 +67,6 @@ interface ThreadRow {
   last_body: string | null;
 }
 
-type Mood = "idle" | "think" | "alert";
-
 /** v34 (2026-10-06): what Jared typed while Scout was busy. Sent as one message when Scout finishes, the way
  *  Claude queues mid-turn messages; "Send now" interrupts instead. */
 interface Queued {
@@ -77,6 +78,7 @@ const STOP_MARK = "[Stopped]";
 /** The last line of a free-AI progress note while it carries on by itself (admin-chat v33). */
 // v36: the one progress note reads "...\n\nStill working on it (step 23, 4 min in)."; the older form ended "Still working on it."
 const CONTINUING = /Still working on it(?: \([^)\n]*\))?\.\s*$/;
+const isProgressNote = (body: string) => CONTINUING.test(body);
 /** A chain that has said nothing for this long has died: stop showing it as running. */
 const CHAIN_IDLE_MS = 4 * 60_000;
 
@@ -270,46 +272,7 @@ export function claudeFixPrompt(botText: string, userText?: string, path?: strin
 }
 
 
-function Scoutie({ mood, className }: { mood: Mood; className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 26 20"
-      className={cn("scoutie", `scoutie-${mood}`, className)}
-      fill="none"
-      aria-hidden="true"
-    >
-      <g>
-        <rect x="10.4" y="6.2" width="5.2" height="3" rx="1.2" fill="currentColor" />
-        <circle cx="6.6" cy="9.4" r="6.1" fill="none" stroke="currentColor" strokeWidth="1.7" />
-        <circle cx="19.4" cy="9.4" r="6.1" fill="none" stroke="currentColor" strokeWidth="1.7" />
-        <g className="scoutie-eyes">
-          <circle cx="8.5" cy="9.9" r="2.1" fill="currentColor" />
-          <circle cx="21.3" cy="9.9" r="2.1" fill="currentColor" />
-        </g>
-        <g className="scoutie-lids">
-          <path d="M0 8.2 h13.2 v-4 a6.6 6.6 0 0 0 -13.2 0 z" fill="currentColor" />
-          <path d="M12.8 8.2 h13.2 v-4 a6.6 6.6 0 0 0 -13.2 0 z" fill="currentColor" />
-        </g>
-      </g>
-    </svg>
-  );
-}
-
 const SCOUT_CSS = `
-.scoutie { overflow: visible; }
-.scoutie-lids { transform-box: fill-box; transform-origin: center top; }
-.scoutie-eyes { transform-box: fill-box; transform-origin: center; }
-.scoutie-idle .scoutie-lids { animation: scout-blink 6.5s ease-in-out infinite; }
-.scoutie-idle .scoutie-eyes { animation: scout-glance 9s ease-in-out infinite; }
-.scoutie-think .scoutie-lids { animation: scout-squint 1.4s ease-in-out infinite; }
-.scoutie-think .scoutie-eyes { animation: scout-scan 1.1s ease-in-out infinite; }
-.scoutie-alert .scoutie-lids { animation: scout-pop 2.6s ease-in-out infinite; }
-.scoutie-alert .scoutie-eyes { animation: scout-glance 3.4s ease-in-out infinite; }
-@keyframes scout-blink { 0%,88%,100% { transform: translateY(0) } 92%,95% { transform: translateY(3.8px) } }
-@keyframes scout-glance { 0%,30%,100% { transform: translateX(0) } 40%,52% { transform: translateX(1.5px) } 62%,74% { transform: translateX(-1.5px) } }
-@keyframes scout-squint { 0%,100% { transform: translateY(2.1px) } 50% { transform: translateY(2.9px) } }
-@keyframes scout-scan { 0%,100% { transform: translateX(-1.6px) } 50% { transform: translateX(1.6px) } }
-@keyframes scout-pop { 0%,100% { transform: translateY(0) } 8%,26% { transform: translateY(-2.2px) } }
 .scout-nudge { animation: scout-nudge 4.5s ease-in-out infinite; }
 @keyframes scout-nudge {
   0%,82%,100% { transform: translateY(0) rotate(0deg) }
@@ -363,7 +326,7 @@ const SCOUT_CSS = `
   .scout-row.scout-tools-on .scout-tools { opacity: 1; pointer-events: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .scoutie-lids, .scoutie-eyes, .scout-nudge, .scout-pop-in, .scout-bubble-in, .scout-dots span, .scout-launcher, .scout-badge-pop,
+  .scout-nudge, .scout-pop-in, .scout-bubble-in, .scout-dots span, .scout-launcher, .scout-badge-pop,
   .scout-msg-user, .scout-msg-bot, .scout-view-fwd, .scout-view-back, .scout-chip, .scout-card-in, .scout-shimmer { animation: none !important }
   .scout-settling, .scout-panel, .scout-launcher, .scout-collapse, .scout-chip, .scout-press { transition: none !important }
   .scout-shimmer { color: inherit; background: none }
@@ -380,7 +343,7 @@ function when(iso: string): string {
 }
 
 /** What the host needs to know about the primary window to draw the launcher. */
-interface PrimaryStatus { open: boolean; running: boolean; pendingJobs: number }
+interface PrimaryStatus { open: boolean; running: boolean; pendingJobs: number; mood: ScoutMood; replay: number; typing: boolean }
 export interface ScoutHandle { open: () => void }
 
 interface WindowProps {
@@ -407,10 +370,12 @@ interface WindowProps {
   /** A secondary window closed itself: the host forgets it. */
   onRemove: (id: string) => void;
   onStatus?: (s: PrimaryStatus) => void;
+  /** The primary window only: a new reply landed (the launcher decides whether it earns a bubble). */
+  onReply?: (r: ScoutReply) => void;
 }
 
 const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
-  { id: winId, primary, n, z, isFront, canSpawn, others, today, recorder, unreadThreads, onFront, onThread, onSpawn, onRemove, onStatus },
+  { id: winId, primary, n, z, isFront, canSpawn, others, today, recorder, unreadThreads, onFront, onThread, onSpawn, onRemove, onStatus, onReply },
   handleRef,
 ) {
   // Where you were (open or not, which conversation, a half-typed message) survives a reload,
@@ -592,6 +557,29 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
   const lastUserIdx = msgs.map((m) => m.role === "user" && m.body !== STOP_MARK).lastIndexOf(true);
   const lastBotIdx = msgs.map((m) => m.role === "assistant").lastIndexOf(true);
 
+  // Scout's face and what he says while he works (scout/ScoutBuddy.tsx, useScoutMood.ts, scoutLines.ts).
+  const workingFor = useNow(running);
+  const unreadAny = unreadThreads.some((t) => t.unread > 0);
+  const needsAny = unreadThreads.some((t) => t.needs_you);
+  const face = useScoutMood({
+    open, busy, chainAlive, typing: text.trim().length > 0, msgs, threadId, runStart,
+    anyUnread: unreadAny, anyNeedsYou: needsAny, urgentCount: waiting, pendingJobs,
+    isProgress: isProgressNote, stopMark: STOP_MARK, primary,
+  });
+  const mood = face.mood;
+  const runStartMs = runStart ? Date.parse(runStart) : lastMsg?.created_at ? Date.parse(lastMsg.created_at) : null;
+  const working = useWorkingLine({
+    running,
+    tool: face.tool,
+    elapsedMs: runStartMs ? Math.max(0, workingFor - runStartMs) : face.elapsedMs,
+    progress: parseProgress(lastMsg?.role === "assistant" ? lastMsg.body : null),
+    chainOnly: !busy && chainAlive,
+  });
+  const offer = pageOffer(location.pathname);
+  useEffect(() => {
+    if (primary && face.reply) onReply?.(face.reply);
+  }, [primary, face.reply, onReply]);
+
   const send = useCallback(
     async (body: string, replacing?: string | null, fresh?: boolean, about?: string, opts?: { now?: boolean; raw?: boolean }) => {
       const asked = body.trim();
@@ -693,15 +681,16 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
 
   // While a job runs on the server, follow it: its progress notes and the final answer land here live.
   useEffect(() => {
-    if (!open || !threadId || !running) return;
+    // The primary keeps following while closed too (slower): its final answer is what the launcher reacts to.
+    if (!(open || primary) || !threadId || !running) return;
     const t = window.setInterval(() => {
       // While a request is in flight the window already shows his message; only reload once the server
       // has had time to save it, or the optimistic bubble would blink.
       if (busy && runStart && Date.now() - Date.parse(runStart) < 5000) return;
       void loadThread(threadId);
-    }, 3000);
+    }, open ? 3000 : 6000);
     return () => window.clearInterval(t);
-  }, [open, threadId, running, busy, runStart, loadThread]);
+  }, [open, primary, threadId, running, busy, runStart, loadThread]);
 
   // The job carried on by itself and has now finished: same sound as a normal finish.
   const wasChain = useRef(false);
@@ -932,9 +921,6 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
 
   const recording = rec?.status === "recording";
 
-  const needs = waiting + pendingJobs;
-  const mood: Mood = running ? "think" : needs > 0 && !open ? "alert" : "idle";
-  const workingFor = useNow(running);
   const openUrl = (url: string) => {
     if (/^https?:\/\//.test(url)) window.open(url, "_blank", "noopener");
     else navigate(url);
@@ -944,8 +930,8 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
 
   // The primary tells the host what the launcher needs; the launcher itself lives in the host (drawn once).
   useEffect(() => {
-    onStatus?.({ open, running, pendingJobs });
-  }, [open, running, pendingJobs, onStatus]);
+    onStatus?.({ open, running, pendingJobs, mood, replay: face.replay, typing: text.trim().length > 0 });
+  }, [open, running, pendingJobs, mood, face.replay, text, onStatus]);
 
   if (!open) return null;
 
@@ -1009,7 +995,7 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
               <ArrowLeft className="h-4 w-4" />
             </Button>
           ) : (
-            <Scoutie mood={mood} className="ml-1.5 h-[1.15rem] w-[1.55rem] shrink-0 text-white" />
+            <ScoutBuddy mood={mood} replay={face.replay} size="sm" className="ml-1 shrink-0 text-white" />
           )}
 
           <div className="min-w-0 flex-1 px-1">
@@ -1194,11 +1180,20 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
           <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4">
             {msgs.length === 0 && !running && (
               <div className="scout-card-in flex flex-col items-center px-2 pb-2 pt-6 text-center">
-                <Scoutie mood="idle" className="h-8 w-11 text-white" />
-                <p className="mt-3 text-[1.0625rem] font-semibold text-white">What do you need?</p>
-                <p className="mt-1 max-w-[18rem] text-[0.8125rem] leading-snug text-white/55">
-                  I read the data, fix things and run jobs on the Mac mini. I know which page you're on.
-                </p>
+                <ScoutBuddy mood="idle" size="lg" className="text-white" />
+                <p className="mt-2 text-[0.8125rem] font-medium text-white/55">{greeting()}</p>
+                <p className="mt-0.5 text-[1.0625rem] font-semibold text-white">What do you need?</p>
+                {offer ? (
+                  <button
+                    type="button"
+                    onClick={() => send(offer.send)}
+                    className="scout-press mt-1 min-h-11 max-w-[18rem] rounded-lg px-2 text-[0.8125rem] leading-snug text-white/80 underline decoration-white/25 underline-offset-4 hover:text-white sm:min-h-8"
+                  >
+                    {offer.line}
+                  </button>
+                ) : (
+                  <p className="mt-1 max-w-[18rem] text-[0.8125rem] leading-snug text-white/55">{DEFAULT_PITCH}</p>
+                )}
                 <div className="mt-5 w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.04] text-left">
                   {OPENERS.map((o, n) => (
                     <button
@@ -1344,17 +1339,23 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
             })}
 
             {running && (
-              <div className="scout-msg-bot flex items-center gap-2 text-sm text-white/50" aria-live="polite">
-                <Scoutie mood="think" className="h-[1.15rem] w-[1.55rem] shrink-0 text-white/60" />
-                <span className="scout-dots scout-shimmer">
-                  {busy ? "Scout is working" : "Still going on its own"}<span>.</span>
+              <div className="scout-msg-bot flex min-h-10 items-center gap-2 text-sm text-white/50">
+                {/* Announced only when the tool changes; the rotating lines stay silent. */}
+                <span className="sr-only" aria-live="polite">{working.announce}</span>
+                <ScoutBuddy
+                  mood={mood === "searching" || mood === "working" ? mood : "thinking"}
+                  size="sm"
+                  className="shrink-0 text-white/60"
+                />
+                <span className="scout-dots scout-shimmer min-w-0 flex-1 break-words" aria-hidden>
+                  {working.line}<span>.</span>
                   <span>.</span>
                   <span>.</span>
                 </span>
                 <span className="whitespace-nowrap text-xs tabular-nums text-white/35">
                   {clock(runStart ?? lastMsg?.created_at ?? null, workingFor)}
                 </span>
-                <span className="ml-auto hidden text-[0.6875rem] text-white/30 sm:inline">esc to stop</span>
+                <span className="hidden whitespace-nowrap text-[0.6875rem] text-white/30 sm:inline">esc to stop</span>
               </div>
             )}
           </div>
@@ -1560,8 +1561,13 @@ export function Scout() {
   const [wins, setWins] = useState<WinEntry[]>(loadWindows);
   // Back to front. The last one is on top, and gets Esc when focus is not inside any Scout window.
   const [order, setOrder] = useState<string[]>(() => wins.map((w) => w.id));
-  const [status, setStatus] = useState<PrimaryStatus>(() => ({ open: loadScoutState()?.open ?? false, running: false, pendingJobs: 0 }));
+  const [status, setStatus] = useState<PrimaryStatus>(() => ({ open: loadScoutState()?.open ?? false, running: false, pendingJobs: 0, mood: "idle", replay: 0, typing: false }));
   const [bubble, setBubble] = useState(false);
+  // Unprompted bubbles (the Clippy moment, done politely): see showNote.
+  const [note, setNote] = useState<{ key: number; text: string } | null>(null);
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  const noteTimer = useRef<number>();
   const primaryRef = useRef<ScoutHandle>(null);
 
   const shown = phone ? wins.slice(0, 1) : wins;
@@ -1609,6 +1615,54 @@ export function Scout() {
   const needs = waiting + pendingJobs;
   // Unread replies across every thread: the dot on the launcher, the phone tab bar and the History rows.
   const { threads: unreadThreads, anyUnread, anyNeedsYou } = useScoutUnread(anyOpen);
+  const unreadCount = unreadThreads.reduce((n, t) => n + t.unread, 0);
+  const unreadCountRef = useRef(0);
+  unreadCountRef.current = unreadCount;
+
+  /** One unprompted bubble at most every 30 min, never while he types or a menu is open, silent until tomorrow after "Not now". */
+  const showNote = useCallback((text: string) => {
+    const st = statusRef.current;
+    if (st.open || st.typing || quietNow() || Date.now() - lastNoteAt() < NOTE_GAP_MS) return;
+    if (typeof document !== "undefined" && document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]')) return;
+    stampNote();
+    window.clearTimeout(noteTimer.current);
+    setNote({ key: Date.now(), text });
+    noteTimer.current = window.setTimeout(() => setNote(null), 9000);
+  }, []);
+  useEffect(() => () => window.clearTimeout(noteTimer.current), []);
+  useEffect(() => {
+    if (status.open) setNote(null);
+  }, [status.open]);
+  const onReply = useCallback((r: ScoutReply) => {
+    if (r.whileClosed) showNote(r.line);
+  }, [showNote]);
+
+  // He came back after two hours away with replies waiting.
+  useEffect(() => {
+    let last = Date.now();
+    const back = () => {
+      const n = Date.now();
+      const away = n - last;
+      last = n;
+      if (away >= AWAY_MS && unreadCountRef.current > 0) showNote(welcomeBack(unreadCountRef.current));
+    };
+    const onVis = () => document.visibilityState === "visible" && back();
+    const evs = ["pointerdown", "keydown"] as const;
+    // Throttled: the first event after a gap is what matters, so only stamp "last seen" once a few seconds have passed.
+    let stamp = 0;
+    const touch = () => {
+      const n = Date.now();
+      if (n - stamp < 5000) return;
+      stamp = n;
+      back();
+    };
+    evs.forEach((e) => window.addEventListener(e, touch, { passive: true }));
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      evs.forEach((e) => window.removeEventListener(e, touch));
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [showNote]);
   const dotColor = scoutDotColor({
     anyNeedsYou,
     urgent: waiting,
@@ -1619,7 +1673,6 @@ export function Scout() {
   useEffect(() => {
     publishScoutDot(dotColor);
   }, [dotColor]);
-  const mood: Mood = running ? "think" : needs > 0 && !status.open ? "alert" : "idle";
   const recording = recorder.state?.status === "recording";
   const openPrimary = () => primaryRef.current?.open();
 
@@ -1648,10 +1701,38 @@ export function Scout() {
           onSpawn={spawn}
           onRemove={remove}
           onStatus={w.id === PRIMARY_ID ? setStatus : undefined}
+          onReply={w.id === PRIMARY_ID ? onReply : undefined}
         />
       ))}
       {!status.open && (
         <>
+          {!bubble && pendingJobs === 0 && note && (
+            <div
+              key={note.key}
+              className="scout-bubble-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-5 z-40 hidden md:block max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setNote(null);
+                  openPrimary();
+                }}
+                className="block w-full text-left"
+              >
+                {note.text}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  muteUntilTomorrow();
+                  setNote(null);
+                }}
+                className="mt-1.5 min-h-8 text-[0.6875rem] font-medium text-black/50 underline underline-offset-2 hover:text-black"
+              >
+                Not now
+              </button>
+            </div>
+          )}
           {!bubble && pendingJobs > 0 && (
             <button
               type="button"
@@ -1676,7 +1757,7 @@ export function Scout() {
           <button
             type="button"
             onClick={openPrimary}
-            aria-label={`Open Scout (Cmd+J)${dotColor === "orange" ? ", needs you" : dotColor === "purple" ? ", unread replies" : ""}`}
+            aria-label={`Open Scout (Cmd+J)${running ? ", working" : dotColor === "orange" ? ", needs you" : dotColor === "purple" ? ", unread replies" : ""}`}
             title="Scout (⌘J)"
             className={cn(
               "scout-launcher fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 hidden items-center gap-2.5 rounded-full md:flex",
@@ -1686,7 +1767,7 @@ export function Scout() {
               "relative",
             )}
           >
-            <Scoutie mood={mood} className="h-[1.15rem] w-[1.55rem]" />
+            <ScoutBuddy mood={status.mood} replay={status.replay} size="sm" />
             Scout
             {recording && (
               <span className="ml-0.5 flex items-center gap-1.5 rounded-full bg-red-500 px-2 py-0.5 text-[0.6875rem] font-bold tabular-nums text-white">
@@ -1718,3 +1799,26 @@ export function Scout() {
   );
 }
 const NO_THREADS: string[] = [];
+
+/* Unprompted bubbles: at most one per 30 minutes, and "Not now" mutes them until tomorrow. Needs-you bubbles are
+   not unprompted in this sense (they are one of the four kinds of news) and ignore all of this. */
+const NOTE_GAP_MS = 30 * 60_000;
+const AWAY_MS = 2 * 60 * 60_000;
+const QUIET_KEY = "scout-quiet-until";
+const NOTE_KEY = "scout-last-note";
+let noteAt = 0;
+function lastNoteAt(): number {
+  try { return Math.max(noteAt, Number(localStorage.getItem(NOTE_KEY)) || 0); } catch { return noteAt; }
+}
+function stampNote() {
+  noteAt = Date.now();
+  try { localStorage.setItem(NOTE_KEY, String(noteAt)); } catch { /* private window: this page still throttles */ }
+}
+function quietNow(): boolean {
+  try { return Date.now() < (Number(localStorage.getItem(QUIET_KEY)) || 0); } catch { return false; }
+}
+function muteUntilTomorrow() {
+  const t = new Date();
+  t.setHours(24, 0, 0, 0);
+  try { localStorage.setItem(QUIET_KEY, String(t.getTime())); } catch { /* private window: it just won't be remembered */ }
+}
