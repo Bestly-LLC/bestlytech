@@ -788,7 +788,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       model: rung.model,
       messages: rung.provider === "groq" || rung.provider === "freellm" ? sendMsgs : forCloudflare(sendMsgs), // Cloudflare + Gemini want string content
       max_tokens: maxTokens,
-      ...(gptOss ? { reasoning_effort: "low" } : {}),
+      ...(gptOss ? { reasoning_effort: rung.provider === "freellm" ? "medium" : "low" } : {}),   // v4: FreeLLM has room to think; Groq/Cloudflare stay "low"
     };
     if (input.tools?.length) { body.tools = input.tools; body.tool_choice = input.toolChoice ?? "auto"; }
 
