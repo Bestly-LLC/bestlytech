@@ -23,6 +23,8 @@ import {
   ArrowUp,
   Clock3,
   AppWindow,
+  LayoutGrid,
+  Minus,
 } from "lucide-react";
 import { CopyBlock } from "@/components/CopyText";
 import { copyText } from "@/lib/copyForClaude";
@@ -36,6 +38,10 @@ import { dotHex, markScoutThreadRead, publishScoutDot, scoutDotColor, useScoutUn
 import { ScoutBuddy, type ScoutMood } from "./scout/ScoutBuddy";
 import { useScoutMood, useWorkingLine, type ScoutReply } from "./scout/useScoutMood";
 import { DEFAULT_PITCH, greeting, pageOffer, parseProgress, welcomeBack } from "./scout/scoutLines";
+import {
+  DOCK_RESERVE, Dock, StatusDot, WindowsMenu, loadLayouts, orderForTiling, snapBox, snapZoneAt, storeLayouts, tileBoxes, MAX_LAYOUTS,
+  type Box, type DotKind, type Layout, type SnapZone,
+} from "./ScoutLayout";
 
 /**
  * Scout - the assistant that lives in the corner of the admin.
@@ -97,7 +103,6 @@ const OPENERS = [
 /* Where Scout sits. Dragging the header moves it, the corner grips resize it,
  * double-clicking the header puts it back. Remembered per browser; on phones it
  * always docks (there is no room to move it). */
-type Box = { x: number; y: number; w: number; h: number };
 const BOX_KEY = "scout.box.v1";
 /** The first window ("main") keeps the keys Scout has always used, so nothing saved is lost. Others get per-id keys. */
 const PRIMARY_ID = "main";
@@ -177,28 +182,40 @@ function saveScoutState(v: Omit<ScoutSaved, "at">, key: string = SCOUT_STATE_KEY
   try { localStorage.setItem(key, JSON.stringify({ ...v, at: Date.now() })); } catch { /* private mode */ }
 }
 
-/* The open windows, remembered across a reload: [{ id, threadId }]. The first one is always the primary. */
+/* The open windows, remembered across a reload: [{ id, threadId, min }]. The first one is always the primary.
+ * `min` = minimized to the dock (desktop). */
 const WINDOWS_KEY = "bestly-scout-windows";
 const MAX_WINDOWS = 4;
 const CASCADE = 32;
-interface WinEntry { id: string; threadId: string | null }
+interface WinEntry { id: string; threadId: string | null; min?: boolean }
 function loadWindows(): WinEntry[] {
-  const main: WinEntry = { id: PRIMARY_ID, threadId: loadScoutState()?.threadId ?? null };
+  const saved = loadScoutState();
   try {
     const raw = JSON.parse(localStorage.getItem(WINDOWS_KEY) ?? "[]");
-    const extra = (Array.isArray(raw) ? raw : [])
-      .filter((w): w is WinEntry => !!w && typeof w.id === "string" && w.id !== PRIMARY_ID)
+    const list: unknown[] = Array.isArray(raw) ? raw : [];
+    const mainRaw = list.find((w) => !!w && (w as WinEntry).id === PRIMARY_ID) as WinEntry | undefined;
+    // The primary can only be minimized while it is open.
+    const main: WinEntry = { id: PRIMARY_ID, threadId: saved?.threadId ?? null, min: !!mainRaw?.min && !!saved?.open };
+    const extra = list
+      .filter((w): w is WinEntry => !!w && typeof (w as WinEntry).id === "string" && (w as WinEntry).id !== PRIMARY_ID)
       // A window whose saved state has aged out (12 hours) is gone, like the primary's open/closed state.
       .filter((w) => !!loadScoutState(stateKeyFor(w.id)))
-      .map((w) => ({ id: w.id, threadId: loadScoutState(stateKeyFor(w.id))?.threadId ?? null }));
+      .map((w) => ({ id: w.id, threadId: loadScoutState(stateKeyFor(w.id))?.threadId ?? null, min: !!w.min }));
     return [main, ...extra].slice(0, MAX_WINDOWS);
   } catch {
-    return [main];
+    return [{ id: PRIMARY_ID, threadId: saved?.threadId ?? null }];
   }
 }
 
+/** Where the primary docks by default (bottom-right), as a rect, for when nothing is on screen to measure. */
+function defaultRect(): Box {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const w = Math.min(400, vw - 40), h = Math.min(608, vh - 96);
+  return { x: vw - w - 20, y: vh - h - 20, w, h };
+}
+
 /** Where a new window opens: 32 px off the one that spawned it, on screen, and not exactly on top of another window. */
-function cascadeBox(from: DOMRect): Box {
+function cascadeBox(from: { left: number; top: number; width: number; height: number }): Box {
   const taken = [...document.querySelectorAll("[data-scout-window]")].map((el) => el.getBoundingClientRect());
   const size = { w: from.width, h: from.height };
   const dirs: Array<[number, number]> = [[1, 1], [-1, -1], [1, -1], [-1, 1]];
@@ -286,6 +303,12 @@ const SCOUT_CSS = `
 @keyframes scout-close { to { opacity: 0; transform: translateY(12px) scale(0.92); filter: blur(3px) } }
 .scout-settling { transition: left .34s cubic-bezier(0.2,1,0.3,1), top .34s cubic-bezier(0.2,1,0.3,1), width .34s cubic-bezier(0.2,1,0.3,1), height .34s cubic-bezier(0.2,1,0.3,1); }
 .scout-panel { transition: box-shadow .2s ease, transform .2s ease; }
+.scout-dot-pulse { animation: scout-dot-pulse 1.3s ease-in-out infinite; }
+@keyframes scout-dot-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(10,132,255,.55); opacity: 1 } 50% { box-shadow: 0 0 0 4px rgba(10,132,255,0); opacity: .65 } }
+.scout-title-flash { border-radius: 6px; animation: scout-title-flash 1.6s ease-out 1 both; }
+@keyframes scout-title-flash { 0%,30% { background-color: rgba(10,132,255,.38); box-shadow: 0 0 0 3px rgba(10,132,255,.38) } 100% { background-color: transparent; box-shadow: 0 0 0 3px transparent } }
+.scout-snap-preview { transition: left .14s ease-out, top .14s ease-out, width .14s ease-out, height .14s ease-out, opacity .14s ease-out; animation: scout-snap-in .16s ease-out both; }
+@keyframes scout-snap-in { from { opacity: 0 } to { opacity: 1 } }
 .scout-dragging { box-shadow: 0 40px 90px -24px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.12); transform: scale(1.01); }
 .scout-launcher { transition: transform .22s cubic-bezier(0.2,1.3,0.4,1), box-shadow .22s ease; animation: scout-launch 320ms cubic-bezier(0.2,1.3,0.4,1) both; }
 .scout-launcher:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 14px 30px -10px rgba(0,0,0,.45); }
@@ -327,8 +350,9 @@ const SCOUT_CSS = `
 }
 @media (prefers-reduced-motion: reduce) {
   .scout-nudge, .scout-pop-in, .scout-bubble-in, .scout-dots span, .scout-launcher, .scout-badge-pop,
-  .scout-msg-user, .scout-msg-bot, .scout-view-fwd, .scout-view-back, .scout-chip, .scout-card-in, .scout-shimmer { animation: none !important }
-  .scout-settling, .scout-panel, .scout-launcher, .scout-collapse, .scout-chip, .scout-press { transition: none !important }
+  .scout-msg-user, .scout-msg-bot, .scout-view-fwd, .scout-view-back, .scout-chip, .scout-card-in, .scout-shimmer,
+  .scout-dot-pulse, .scout-title-flash, .scout-snap-preview { animation: none !important }
+  .scout-settling, .scout-panel, .scout-launcher, .scout-collapse, .scout-chip, .scout-press, .scout-snap-preview { transition: none !important }
   .scout-shimmer { color: inherit; background: none }
 }
 `;
@@ -344,7 +368,33 @@ function when(iso: string): string {
 
 /** What the host needs to know about the primary window to draw the launcher. */
 interface PrimaryStatus { open: boolean; running: boolean; pendingJobs: number; mood: ScoutMood; replay: number; typing: boolean }
-export interface ScoutHandle { open: () => void }
+/** What the host can ask of a window: show it, glide it somewhere, say where it is, or swap its conversation. */
+export interface ScoutHandle {
+  open: () => void;
+  /** Move/resize with the settling transition. `final` is the box to keep afterwards (null = back to the docked corner). */
+  glide: (target: Box, final?: Box | null) => void;
+  /** Where it is now: the stored box (null = docked) and its measured rectangle. */
+  snapshot: () => { box: Box | null; rect: Box };
+  /** Layouts: open this window on a saved conversation and box. */
+  adopt: (threadId: string | null, box: Box | null) => void;
+}
+/** What the host shows for a window in the dock. */
+interface WinMeta { title: string; dot: DotKind }
+/** Window to host: everything the desktop window furniture needs, in one stable object. */
+interface HostApi {
+  minimize: (id: string) => void;
+  /** Un-minimize (if it was) and bring to front. */
+  restore: (id: string) => void;
+  arrange: () => void;
+  arranged: boolean;
+  /** The person moved or resized a window by hand: an arrangement no longer describes the screen. */
+  moved: (id: string) => void;
+  meta: (id: string, m: WinMeta) => void;
+  layouts: Layout[];
+  saveLayout: (name: string) => "ok" | "full";
+  applyLayout: (name: string) => void;
+  deleteLayout: (name: string) => void;
+}
 
 interface WindowProps {
   id: string;
@@ -358,6 +408,9 @@ interface WindowProps {
   isFront: boolean;
   /** Room for another window (under the max). */
   canSpawn: boolean;
+  /** Minimized to the dock (desktop): mounted and running, but not drawn. */
+  minimized: boolean;
+  host: HostApi;
   /** Conversations open in the other windows, so a Mac job card shows up in the window that owns its thread. */
   others: string[];
   today: ReturnType<typeof useNeedsYou>;
@@ -366,7 +419,7 @@ interface WindowProps {
   unreadThreads: ReturnType<typeof useScoutUnread>["threads"];
   onFront: (id: string) => void;
   onThread: (id: string, threadId: string | null) => void;
-  onSpawn: (from: DOMRect) => void;
+  onSpawn: (from: { left: number; top: number; width: number; height: number }) => void;
   /** A secondary window closed itself: the host forgets it. */
   onRemove: (id: string) => void;
   onStatus?: (s: PrimaryStatus) => void;
@@ -375,7 +428,7 @@ interface WindowProps {
 }
 
 const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
-  { id: winId, primary, n, z, isFront, canSpawn, others, today, recorder, unreadThreads, onFront, onThread, onSpawn, onRemove, onStatus, onReply },
+  { id: winId, primary, n, z, isFront, canSpawn, minimized, host, others, today, recorder, unreadThreads, onFront, onThread, onSpawn, onRemove, onStatus, onReply },
   handleRef,
 ) {
   // Where you were (open or not, which conversation, a half-typed message) survives a reload,
@@ -403,6 +456,9 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
   const [chaining, setChaining] = useState(false);
   const [runStart, setRunStart] = useState<string | null>(null);
   const runId = useRef(0);
+  /** How the last request ended, so the one place that hears "finished" knows whether to play the success sound. */
+  const endKind = useRef<"ok" | "error" | "continuing">("ok");
+  const attendRef = useRef(true);
   const lastSeen = useRef(Date.now());
   const logRef = useRef<HTMLDivElement>(null);
   // The recorder, Needs you and the badge are read once by the host and handed down: N windows must not mean N× polling.
@@ -411,6 +467,8 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
   const location = useLocation();
   const navigate = useNavigate();
   const [box, setBox] = useState<Box | null>(() => loadBox(boxKey));
+  const boxRef = useRef(box);
+  boxRef.current = box;
   // On a phone Scout is the whole screen: the draggable box, the resize grips and the
   // saved position are desktop furniture and get ignored rather than shrunk.
   const phone = useIsMobile();
@@ -455,6 +513,15 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
   const [closing, setClosing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [settling, setSettling] = useState(false);
+  // Desktop window furniture. `visible` = on screen: open and not minimized. A minimized window stays mounted,
+  // so a run that finishes while it is in the dock is still noticed.
+  const visible = open && !minimized;
+  attendRef.current = isFront && visible;
+  const [menu, setMenu] = useState(false);
+  const [snap, setSnap] = useState<SnapZone | null>(null);
+  const [unseen, setUnseen] = useState(false); // finished while he was not looking at this window
+  const [flash, setFlash] = useState(0); // bumps on each unseen finish; keys the title flash
+  const [fetchedTitle, setFetchedTitle] = useState<string | null>(null);
   const [viewDir, setViewDir] = useState<"fwd" | "back">("fwd");
   const close = useCallback(() => {
     setClosing(true);
@@ -466,6 +533,19 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
     }, 170);
   }, [primary, winId, onRemove]);
   const sectionRef = useRef<HTMLElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // The Windows menu closes when you tap anywhere else.
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (menuRef.current?.contains(t)) return;
+      if (sectionRef.current?.querySelector("[data-scout-menu-button]")?.contains(t)) return;
+      setMenu(false);
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    return () => document.removeEventListener("pointerdown", onDown, true);
+  }, [menu]);
   const { jobs: liveJobs, refresh: refreshJobs } = useMacJobs(threadId, open);
   // A Mac job belongs to the window whose conversation proposed it. The primary also keeps the ones nobody
   // else owns (exactly what it showed before there were several windows); a secondary shows only its own.
@@ -482,23 +562,23 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
   const { rows: todayRows, urgent, refresh: refreshToday } = today;
   const waiting = urgent.length;
 
-  useImperativeHandle(handleRef, () => ({
-    open: () => {
-      setOpen(true);
-      setView("chat");
-    },
-  }), []);
+  // Show this window: open it, on the chat, and out of the dock if it was minimized.
+  const reveal = useCallback(() => {
+    setOpen(true);
+    setView("chat");
+    host.restore(winId);
+  }, [host, winId]);
   useEffect(() => {
     onThread(winId, threadId);
   }, [winId, threadId, onThread]);
 
   // The log sits at the bottom, the way a chat should, and only the reader can unpin it
   // (see useStickToBottom for why layout reflows used to throw it back up the page).
-  const { jump: toNewest } = useStickToBottom(logRef, `${open}:${view}:${threadId ?? "new"}`);
+  const { jump: toNewest } = useStickToBottom(logRef, `${visible}:${view}:${threadId ?? "new"}`);
 
   useEffect(() => {
-    if (open && view === "chat" && !phone) inputRef.current?.focus();
-  }, [open, view, phone]);
+    if (visible && view === "chat" && !phone) inputRef.current?.focus();
+  }, [visible, view, phone]);
 
 
   const loadThreads = useCallback(async () => {
@@ -522,20 +602,21 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
   // He is looking at this conversation, so what Scout said in it counts as read. Runs when the thread opens and
   // again (debounced ~1 s) when new messages land while he is watching; hidden tabs don't count as looking.
   const lastMsgAt = msgs.length ? msgs[msgs.length - 1].created_at : null;
+  // (A minimized window is not being looked at: its replies stay unread until it is back on screen.)
   useEffect(() => {
-    if (!open || view !== "chat" || !threadId) return;
+    if (!visible || view !== "chat" || !threadId) return;
     const t = window.setTimeout(() => {
       if (document.visibilityState !== "visible") return;
       void markScoutThreadRead(threadId);
     }, 1000);
     return () => window.clearTimeout(t);
-  }, [open, view, threadId, msgs.length, lastMsgAt]);
+  }, [visible, view, threadId, msgs.length, lastMsgAt]);
   useEffect(() => {
-    if (!open || view !== "chat" || !threadId) return;
+    if (!visible || view !== "chat" || !threadId) return;
     const onVis = () => document.visibilityState === "visible" && void markScoutThreadRead(threadId);
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [open, view, threadId]);
+  }, [visible, view, threadId]);
 
   // Put the remembered conversation back on screen, then keep remembering.
   useEffect(() => {
@@ -640,12 +721,15 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
         await loadThread(id);
       }
 
+      endKind.current = error ? "error" : (data as { continuing?: boolean })?.continuing ? "continuing" : "ok";
       setBusy(false);
-      // Done: the happy pop. A problem: the alert. Still carrying on by itself: quiet until it really finishes.
+      // Done: the happy pop (played below, once, when the window stops running). A problem: the alert.
+      // Still carrying on by itself: quiet until it really finishes.
       if (error) playNotifySound();
-      else if (!(data as { continuing?: boolean })?.continuing) playSuccessSound();
       refreshJobs();
-      inputRef.current?.focus();
+      // Back to the box, but only if he is in this window: a run that finishes behind another window must not
+      // yank focus (and the front) away from where he is typing.
+      if (attendRef.current) inputRef.current?.focus();
     },
     // 2026-09-24: attach.* must be here. Without them send() kept the first render's attach (no files), so
     // attachments uploaded and read fine but the message went out without them ("can you read that?" -> nothing).
@@ -692,12 +776,39 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
     return () => window.clearInterval(t);
   }, [open, primary, threadId, running, busy, runStart, loadThread]);
 
-  // The job carried on by itself and has now finished: same sound as a normal finish.
-  const wasChain = useRef(false);
+  // A run finished (a request that came back, or a job that carried on by itself and ended). One place hears it, so
+  // the success sound plays once per finish in every window. If he is not looking at this window (it is behind
+  // another one, minimized, or the tab is hidden) its dot turns green and its title flashes once.
+  const wasRunning = useRef(false);
   useEffect(() => {
-    if (wasChain.current && !chainAlive && !busy && lastMsg?.body !== STOP_MARK) playSuccessSound();
-    wasChain.current = chainAlive;
-  }, [chainAlive, busy, lastMsg?.body]);
+    const was = wasRunning.current;
+    wasRunning.current = running;
+    // Carrying on by itself (no request in flight): whatever the last request said, the real ending is still to come.
+    if (running && !busy) endKind.current = "ok";
+    if (!was || running || lastMsg?.body === STOP_MARK) return;
+    const kind = endKind.current;
+    endKind.current = "ok";
+    if (kind === "continuing") return; // said it would carry on, but nothing shows it: not a finish
+    if (kind === "ok") playSuccessSound();
+    if (phone) return;
+    if (!(isFront && visible && document.visibilityState === "visible")) {
+      setUnseen(true);
+      setFlash((f) => f + 1);
+    }
+  }, [running, busy, lastMsg?.body, isFront, visible, phone]);
+  // Looking at it again clears the green dot.
+  useEffect(() => {
+    if (!unseen || !isFront || !visible) return;
+    const clear = () => document.visibilityState === "visible" && setUnseen(false);
+    clear();
+    document.addEventListener("visibilitychange", clear);
+    return () => document.removeEventListener("visibilitychange", clear);
+  }, [unseen, isFront, visible]);
+  useEffect(() => {
+    if (!flash) return;
+    const t = window.setTimeout(() => setFlash(0), 1700);
+    return () => window.clearTimeout(t);
+  }, [flash]);
 
   // The box grows with what is in it (a queue pulled back after Stop can be several lines), up to its max height.
   useEffect(() => {
@@ -709,21 +820,22 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
     el.style.height = `${Math.min(el.scrollHeight + 2, 112)}px`;
   }, [text, open, view]);
 
-  // Esc: stops a running job first (like Claude), then leaves History, then closes.
-  // With several windows it acts only on the one that has focus; if focus is somewhere else on the page
-  // (as it can be with one window), the front-most window takes it.
+  // Esc: closes the Windows menu if it is up; otherwise stops a running job first (like Claude), then leaves History,
+  // then closes. With several windows it acts only on the one that has focus; if focus is somewhere else on the page
+  // (as it can be with one window), the front-most window takes it. A minimized window is not on screen: it ignores Esc.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || !open) return;
+      if (e.key !== "Escape" || !visible) return;
       const focused = (document.activeElement as HTMLElement | null)?.closest?.("[data-scout-window]");
       if (focused ? focused !== sectionRef.current : !isFront) return;
+      if (menu) { e.preventDefault(); setMenu(false); return; }
       if (running && view === "chat") { e.preventDefault(); void stop(); return; }
       if (view === "history") setView("chat");
       else close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, view, running, stop, close, isFront]);
+  }, [visible, view, running, stop, close, isFront, menu]);
 
   // Scout is done: what he queued goes out as one message, in the order he wrote it.
   useEffect(() => {
@@ -740,8 +852,7 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
     const onAsk = (e: Event) => {
       const d = (e as CustomEvent<ScoutAsk>).detail;
       if (!d?.text) return;
-      setOpen(true);
-      setView("chat");
+      reveal();
       pendingAsk.current = d;
       setTimeout(() => {
         const a = pendingAsk.current;
@@ -749,43 +860,40 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
         if (a) send(a.text, null, a.fresh !== false, a.about);
       }, 0);
     };
-    const onOpen = () => {
-      setOpen(true);
-      setView("chat");
-    };
+    const onOpen = () => reveal();
     window.addEventListener(SCOUT_ASK_EVENT, onAsk);
     window.addEventListener(SCOUT_OPEN_EVENT, onOpen);
     return () => {
       window.removeEventListener(SCOUT_ASK_EVENT, onAsk);
       window.removeEventListener(SCOUT_OPEN_EVENT, onOpen);
     };
-  }, [send, primary]);
+  }, [send, primary, reveal]);
 
   // A push or bell item links to ?scout=open: open Scout and tidy the URL.
   useEffect(() => {
     if (!primary) return;
     const q = new URLSearchParams(location.search);
     if (q.get("scout") !== "open") return;
-    setOpen(true);
-    setView("chat");
+    reveal();
     q.delete("scout");
     const rest = q.toString();
     navigate(location.pathname + (rest ? `?${rest}` : ""), { replace: true });
-  }, [location.search, location.pathname, navigate, primary]);
+  }, [location.search, location.pathname, navigate, primary, reveal]);
 
-  // Cmd/Ctrl+J toggles Scout from anywhere in the admin.
+  // Cmd/Ctrl+J toggles Scout from anywhere in the admin. A minimized primary is not on screen, so it counts as
+  // away: the shortcut brings it back instead of closing it.
   useEffect(() => {
     if (!primary) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === "j" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         if (sectionRef.current) close();
-        else setOpen(true);
+        else reveal();
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [close, primary]);
+  }, [close, primary, reveal]);
 
   // Keep a moved window on screen when the browser is resized.
   useEffect(() => {
@@ -802,20 +910,39 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
     const start = { x: r.left, y: r.top, w: r.width, h: r.height };
     const px = e.clientX, py = e.clientY;
     let last: Box = start;
+    // Snap to edges: while the header is dragged, the pointer touching the left/right edge arms that half, a corner
+    // arms that quarter, the top edge arms maximize. A preview shows it; letting go applies it.
+    let zone: SnapZone | null = null;
+    let moved = false;
     const move = (ev: PointerEvent) => {
       const dx = ev.clientX - px, dy = ev.clientY - py;
+      if (!moved && Math.abs(dx) + Math.abs(dy) > 2) { moved = true; host.moved(winId); }
       const next =
         mode === "move" ? { ...start, x: start.x + dx, y: start.y + dy }
         : mode === "se" ? { ...start, w: start.w + dx, h: start.h + dy }
         : { x: start.x + dx, y: start.y + dy, w: start.w - dx, h: start.h - dy };
       last = clampBox(next);
       setBox(last);
+      if (mode === "move") {
+        const z = snapZoneAt(ev.clientX, ev.clientY, window.innerWidth, window.innerHeight);
+        if (z !== zone) { zone = z; setSnap(z); }
+      }
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       document.body.style.userSelect = "";
       setDragging(false);
+      if (zone) {
+        const to = clampBox(snapBox(zone, window.innerWidth, window.innerHeight));
+        zone = null;
+        setSnap(null);
+        setSettling(true);
+        setBox(to);
+        saveBox(to, boxKey);
+        window.setTimeout(() => setSettling(false), 360);
+        return;
+      }
       saveBox(last, boxKey);
     };
     document.body.style.userSelect = "none";
@@ -838,6 +965,57 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
       setBox(null);
     }, 360);
   };
+
+  // Move or resize with the same glide as "put back in the corner". From the docked corner the window is first pinned at
+  // its current rectangle, so there is something to travel from. Saved like a normal move.
+  const glide = useCallback((target: Box, final?: Box | null) => {
+    const keep = final === undefined ? target : final;
+    const el = sectionRef.current;
+    saveBox(keep, boxKey);
+    if (!el || phone) { setBox(keep); return; }
+    const r = el.getBoundingClientRect();
+    const pin = !boxRef.current;
+    if (pin) setBox({ x: r.left, y: r.top, w: r.width, h: r.height });
+    window.setTimeout(() => {
+      setSettling(true);
+      setBox(target);
+    }, pin ? 40 : 0);
+    window.setTimeout(() => {
+      setSettling(false);
+      if (keep !== target) setBox(keep);
+    }, (pin ? 40 : 0) + 380);
+  }, [boxKey, phone]);
+
+  useImperativeHandle(handleRef, () => ({
+    open: reveal,
+    glide,
+    snapshot: () => {
+      const el = sectionRef.current;
+      const r = el?.getBoundingClientRect();
+      const rect: Box = r ? { x: r.left, y: r.top, w: r.width, h: r.height } : boxRef.current ?? defaultRect();
+      return { box: boxRef.current, rect };
+    },
+    adopt: (tid, b) => {
+      runId.current++; // whatever this window was waiting on is no longer its business
+      setBusy(false);
+      setQueue([]);
+      setEditing(null);
+      setText("");
+      setTitle(null);
+      setFetchedTitle(null);
+      setMsgs([]);
+      setThreadId(tid);
+      if (tid) void loadThread(tid);
+      if (b && canMove()) {
+        const to = clampBox(b);
+        setBox(to);
+        saveBox(to, boxKey);
+      }
+      // Not reveal(): the host has already decided whether this window comes up minimized.
+      setOpen(true);
+      setView("chat");
+    },
+  }), [reveal, glide, loadThread, boxKey]);
 
   const jobFinished = useCallback(
     (j: MacJob) => {
@@ -933,14 +1111,55 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
     onStatus?.({ open, running, pendingJobs, mood, replay: face.replay, typing: text.trim().length > 0 });
   }, [open, running, pendingJobs, mood, face.replay, text, onStatus]);
 
-  if (!open) return null;
+  // The conversation's real title, for the title bar and the dock chip. Only fetched when it was not picked from History
+  // or renamed here; desktop only (the phone's header stays exactly as it was).
+  useEffect(() => {
+    if (phone || !threadId || title) return;
+    let dead = false;
+    void (async () => {
+      const { data } = await supabase.from("admin_chat_thread_list" as any).select("title").eq("id", threadId).limit(1);
+      const t = (data as unknown as Array<{ title: string | null }> | null)?.[0]?.title;
+      if (!dead && t) setFetchedTitle(t);
+    })();
+    return () => { dead = true; };
+  }, [phone, threadId, title, msgs.length]);
+  useEffect(() => { if (!threadId) setFetchedTitle(null); }, [threadId]);
+  const shownTitle = title ?? (phone ? null : fetchedTitle);
+  const baseLabel = shownTitle ?? (primary ? "Scout" : `Scout ${n}`);
+
+  // Status dot: blue pulsing = working, orange = needs you (a Mac job waiting for OK, or a question / OPTIONS he has not
+  // answered), green = finished since he last looked at this window, none = idle.
+  const askedNow = useMemo(() => {
+    if (running || !lastMsg || lastMsg.role !== "assistant" || lastMsg.body === STOP_MARK) return false;
+    const q = splitQuestions(lastMsg.body);
+    return q.questions.length > 0 || splitOptions(q.text).options.length > 0;
+  }, [running, lastMsg]);
+  const dot: DotKind = running ? "working" : pendingJobs > 0 || askedNow ? "needs" : unseen ? "done" : null;
+  useEffect(() => {
+    if (!phone) host.meta(winId, { title: baseLabel, dot });
+  }, [phone, host, winId, baseLabel, dot]);
+
+  if (!visible) return null;
 
   return (
     <>
+      {snap && !phone && (() => {
+        // Where the window will land if he lets go now. Under the dragged window, over every other one.
+        const b = clampBox(snapBox(snap, window.innerWidth, window.innerHeight));
+        return (
+          <div
+            aria-hidden
+            data-scout-snap={snap}
+            style={{ left: b.x, top: b.y, width: b.w, height: b.h, zIndex: 40 + z }}
+            className="scout-snap-preview pointer-events-none fixed rounded-2xl border border-[#0A84FF]/70 bg-[#0A84FF]/20"
+          />
+        );
+      })()}
       <section
         ref={sectionRef}
         data-scout-window={winId}
         aria-label={primary ? "Scout" : `Scout window ${n}`}
+        tabIndex={phone ? undefined : -1}
         onPointerDownCapture={() => onFront(winId)}
         onFocusCapture={() => onFront(winId)}
         style={{
@@ -957,6 +1176,7 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
             ? "inset-0 max-w-[100vw] overflow-x-hidden rounded-none border-0"
             : !box && "bottom-5 right-5 w-[min(25rem,calc(100vw-2.5rem))] max-h-[min(44rem,calc(100vh-6rem))]",
           "border border-white/[0.08] bg-black/95 backdrop-blur-xl",
+          !phone && "focus:outline-none",
         )}
       >
         <div
@@ -1000,7 +1220,10 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
 
           <div className="min-w-0 flex-1 px-1">
             <p className="break-words text-sm font-semibold leading-tight text-white">
-              {view === "history" ? "History" : title ?? (primary ? "Scout" : `Scout ${n}`)}
+              {!phone && view === "chat" && dot && <StatusDot kind={dot} className="mr-1.5 align-middle" />}
+              <span key={flash} className={cn(flash > 0 && "scout-title-flash")}>
+                {view === "history" ? "History" : baseLabel}
+              </span>
             </p>
             <p className="text-[0.6875rem] leading-tight text-white/50">
               {view === "history"
@@ -1011,7 +1234,8 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
             </p>
           </div>
 
-          {box && primary && (
+          {/* On a phone Scout is the one full-screen sheet; this stays as it always was. On a desktop the corner button lives in the Windows menu. */}
+          {box && primary && phone && (
             <Button
               variant="ghost"
               size="icon"
@@ -1025,20 +1249,6 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
           )}
           {view === "chat" && (
             <>
-              {/* Desktop only: a phone keeps its one full-screen sheet. */}
-              {!phone && canMove() && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => sectionRef.current && onSpawn(sectionRef.current.getBoundingClientRect())}
-                  disabled={!canSpawn}
-                  aria-label="New Scout window"
-                  title={canSpawn ? "New Scout window" : `${MAX_WINDOWS} windows is the most`}
-                  className="scout-press h-11 w-11 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white disabled:opacity-30 sm:h-8 sm:w-8"
-                >
-                  <AppWindow className="h-4 w-4" />
-                </Button>
-              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -1064,6 +1274,49 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
             </>
           )}
 
+          {/* Desktop only: Arrange is one tap; the rest of the window controls live in the Windows menu. */}
+          {!phone && canMove() && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => { setMenu(false); host.arrange(); }}
+                aria-label="Arrange windows"
+                aria-pressed={host.arranged}
+                title={host.arranged ? "Put the windows back (Cmd+Shift+E)" : "Arrange windows (Cmd+Shift+E)"}
+                className={cn(
+                  "scout-press h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white",
+                  host.arranged && "bg-white/10 text-white",
+                )}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                data-scout-menu-button
+                onClick={() => setMenu((m) => !m)}
+                aria-label="Windows"
+                aria-haspopup="menu"
+                aria-expanded={menu}
+                title="Windows and layouts"
+                className={cn("scout-press h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white", menu && "bg-white/10 text-white")}
+              >
+                <AppWindow className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => { setMenu(false); host.minimize(winId); }}
+                aria-label="Minimize"
+                title="Minimize to the dock"
+                className="scout-press h-8 w-8 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+
           <Button
             variant="ghost"
             size="icon"
@@ -1074,6 +1327,26 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
             <X className="h-4 w-4" />
           </Button>
         </div>
+
+        {menu && !phone && (
+          <div ref={menuRef}>
+            <WindowsMenu
+              canSpawn={canSpawn}
+              maxWindows={MAX_WINDOWS}
+              onNew={() => {
+                setMenu(false);
+                if (sectionRef.current) onSpawn(sectionRef.current.getBoundingClientRect());
+              }}
+              onCorner={primary && box ? () => { setMenu(false); resetBox(); } : undefined}
+              layouts={host.layouts}
+              canSave
+              onSave={(name) => { const r = host.saveLayout(name); if (r === "ok") setMenu(false); return r; }}
+              onApply={(name) => { setMenu(false); host.applyLayout(name); }}
+              onDelete={host.deleteLayout}
+              onClose={() => setMenu(false)}
+            />
+          </div>
+        )}
 
         {view === "chat" && <ScoutAutoRunBar />}
 
@@ -1547,6 +1820,8 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
   );
 });
 
+const newWindowId = () => `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+
 /**
  * Scout, as callers import it: the launcher (drawn once) plus one ScoutWindow per open window.
  *
@@ -1555,10 +1830,20 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
  * behind the launcher when closed (so a Mac job that finishes still reports back). Closing any other window
  * removes it. A phone shows only the primary, as the one full-screen sheet. The things that poll (Needs you,
  * the call recorder) are read once here and handed down, so more windows do not mean more requests.
+ *
+ * Desktop window furniture lives here too (helpers in ScoutLayout.tsx): Arrange (tile / put back), minimize to the
+ * dock, saved layouts, and the keyboard shortcuts (Cmd/Ctrl+Shift+N new, +E arrange, Ctrl+` cycle).
+ *
+ * The launcher is drawn whenever the primary is not on screen (closed or minimized). It is `fixed` on its own:
+ * adding `relative` to its classes (as the unread-dot commit did) overrides `fixed` in Tailwind's output, which left
+ * it in the page flow shifted 20 px up and left - off the screen, so after closing every window there was no
+ * Scout button and no bubble to get it back.
  */
 export function Scout() {
   const phone = useIsMobile();
   const [wins, setWins] = useState<WinEntry[]>(loadWindows);
+  const winsRef = useRef(wins);
+  winsRef.current = wins;
   // Back to front. The last one is on top, and gets Esc when focus is not inside any Scout window.
   const [order, setOrder] = useState<string[]>(() => wins.map((w) => w.id));
   const [status, setStatus] = useState<PrimaryStatus>(() => ({ open: loadScoutState()?.open ?? false, running: false, pendingJobs: 0, mood: "idle", replay: 0, typing: false }));
@@ -1569,8 +1854,30 @@ export function Scout() {
   statusRef.current = status;
   const noteTimer = useRef<number>();
   const primaryRef = useRef<ScoutHandle>(null);
+  const [metaMap, setMetaMap] = useState<Record<string, WinMeta>>({});
+  const [layouts, setLayouts] = useState<Layout[]>(loadLayouts);
+  const layoutsRef = useRef(layouts);
+  layoutsRef.current = layouts;
+  // Arrange: the boxes the windows had before (null = not arranged). Pressing Arrange again puts them back.
+  const [arranged, setArranged] = useState(false);
+  const arrangeSnap = useRef<Record<string, { box: Box | null; rect: Box }> | null>(null);
+  const handles = useRef<Record<string, ScoutHandle | null>>({});
+  const refCbs = useRef<Record<string, (h: ScoutHandle | null) => void>>({});
+  const refFor = (id: string) => {
+    if (!refCbs.current[id]) refCbs.current[id] = (h) => { handles.current[id] = h; };
+    return refCbs.current[id];
+  };
 
   const shown = phone ? wins.slice(0, 1) : wins;
+  // A window is "up" when it is on screen or in the dock; the primary only while it is open.
+  const isUp = (w: WinEntry) => w.id !== PRIMARY_ID || status.open;
+  const isMin = (w: WinEntry) => !phone && !!w.min && isUp(w);
+  const visibleWins = shown.filter((w) => isUp(w) && !isMin(w));
+  const dockWins = shown.filter((w) => isUp(w) && isMin(w));
+  const primaryEntry = shown.find((w) => w.id === PRIMARY_ID);
+  // The launcher comes back whenever the primary is not on screen.
+  const showLauncher = !status.open || (!!primaryEntry && isMin(primaryEntry));
+
   const anyOpen = status.open || shown.length > 1;
   const today = useNeedsYou(anyOpen);
   const recorder = useRecorder(anyOpen);
@@ -1580,36 +1887,194 @@ export function Scout() {
     try { localStorage.setItem(WINDOWS_KEY, JSON.stringify(wins)); } catch { /* private mode */ }
   }, [wins]);
 
+  const invalidate = useCallback(() => {
+    if (arrangeSnap.current) {
+      arrangeSnap.current = null;
+      setArranged(false);
+    }
+  }, []);
   const front = useCallback((id: string) => setOrder((o) => (o[o.length - 1] === id ? o : [...o.filter((x) => x !== id), id])), []);
   const setThread = useCallback((id: string, threadId: string | null) => {
     setWins((ws) => (ws.some((w) => w.id === id && w.threadId !== threadId) ? ws.map((w) => (w.id === id ? { ...w, threadId } : w)) : ws));
   }, []);
-  const spawn = useCallback((from: DOMRect) => {
-    if (wins.length >= MAX_WINDOWS) return;
-    const id = `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  const spawn = useCallback((from: { left: number; top: number; width: number; height: number }) => {
+    if (winsRef.current.length >= MAX_WINDOWS) return;
+    invalidate();
+    const id = newWindowId();
     saveBox(cascadeBox(from), boxKeyFor(id));
     setWins((ws) => (ws.length >= MAX_WINDOWS ? ws : [...ws, { id, threadId: null }]));
     setOrder((o) => [...o, id]);
-  }, [wins.length]);
+  }, [invalidate]);
   const remove = useCallback((id: string) => {
+    invalidate();
     setWins((ws) => ws.filter((w) => w.id !== id || w.id === PRIMARY_ID));
     setOrder((o) => o.filter((x) => x !== id));
+    setMetaMap((m) => {
+      if (!(id in m) || id === PRIMARY_ID) return m;
+      const rest = { ...m };
+      delete rest[id];
+      return rest;
+    });
     try {
       localStorage.removeItem(stateKeyFor(id));
       localStorage.removeItem(boxKeyFor(id));
     } catch { /* private mode */ }
+  }, [invalidate]);
+  const minimize = useCallback((id: string) => {
+    invalidate();
+    setWins((ws) => ws.map((w) => (w.id === id && !w.min ? { ...w, min: true } : w)));
+  }, [invalidate]);
+  /** Out of the dock (if it was in it) and in front. Safe to call for any window. */
+  const restore = useCallback((id: string) => {
+    if (winsRef.current.some((w) => w.id === id && w.min)) {
+      invalidate();
+      setWins((ws) => ws.map((w) => (w.id === id && w.min ? { ...w, min: false } : w)));
+    }
+    front(id);
+  }, [front, invalidate]);
+  const onMeta = useCallback((id: string, m: WinMeta) => {
+    setMetaMap((p) => (p[id] && p[id].title === m.title && p[id].dot === m.dot ? p : { ...p, [id]: m }));
   }, []);
 
-  // The launcher's bubble: a new set of urgent items speaks up once; the same set never nags again.
+  const visibleIds = visibleWins.map((w) => w.id);
+  const shownOrder = order.filter((id) => visibleIds.includes(id));
+  // Esc goes to the front-most window that is on screen, never to one that is closed or in the dock.
+  const frontId = shownOrder[shownOrder.length - 1];
+  const upIds = shown.filter(isUp).map((w) => w.id);
+  const live = useRef({ visible: visibleIds, front: frontId, docked: dockWins.length > 0, up: upIds });
+  live.current = { visible: visibleIds, front: frontId, docked: dockWins.length > 0, up: upIds };
+
+  /** Tile every window on screen over the viewport; again, and they go back where they were. */
+  const arrange = useCallback(() => {
+    if (arrangeSnap.current) {
+      const before = arrangeSnap.current;
+      arrangeSnap.current = null;
+      setArranged(false);
+      for (const id of Object.keys(before)) handles.current[id]?.glide(before[id].rect, before[id].box);
+      return;
+    }
+    const ids = live.current.visible;
+    if (!ids.length) return;
+    const before: Record<string, { box: Box | null; rect: Box }> = {};
+    const items = ids.map((id) => {
+      const sn = handles.current[id]?.snapshot();
+      if (sn) before[id] = sn;
+      return { id, rect: sn?.rect ?? defaultRect() };
+    });
+    const tiles = tileBoxes(items.length, window.innerWidth, window.innerHeight, live.current.docked ? DOCK_RESERVE : 0);
+    orderForTiling(items).forEach((it, i) => handles.current[it.id]?.glide(tiles[i]));
+    arrangeSnap.current = before;
+    setArranged(true);
+  }, []);
+
+  const saveLayout = useCallback((name: string): "ok" | "full" => {
+    const list = layoutsRef.current;
+    const at = list.findIndex((l) => l.name.toLowerCase() === name.toLowerCase());
+    if (at < 0 && list.length >= MAX_LAYOUTS) return "full";
+    const entry: Layout = {
+      name,
+      at: Date.now(),
+      wins: live.current.up.map((id) => {
+        const w = winsRef.current.find((x) => x.id === id);
+        const r = handles.current[id]?.snapshot().rect ?? defaultRect();
+        return {
+          threadId: w?.threadId ?? null,
+          box: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) },
+          min: !!w?.min,
+        };
+      }),
+    };
+    if (!entry.wins.length) return "ok";
+    const next = at >= 0 ? list.map((l, i) => (i === at ? entry : l)) : [...list, entry];
+    setLayouts(next);
+    storeLayouts(next);
+    toast.success(`Saved layout "${name}"`);
+    return "ok";
+  }, []);
+  const deleteLayout = useCallback((name: string) => {
+    const next = layoutsRef.current.filter((l) => l.name !== name);
+    setLayouts(next);
+    storeLayouts(next);
+  }, []);
+  /** Reopen a layout: the first window takes the primary's place, the rest are new windows, up to four. */
+  const applyLayout = useCallback((name: string) => {
+    const l = layoutsRef.current.find((x) => x.name === name);
+    const items = l?.wins.slice(0, MAX_WINDOWS) ?? [];
+    if (!l || !items.length) return;
+    invalidate();
+    try {
+      for (const w of winsRef.current) {
+        if (w.id === PRIMARY_ID) continue;
+        localStorage.removeItem(stateKeyFor(w.id));
+        localStorage.removeItem(boxKeyFor(w.id));
+      }
+    } catch { /* private mode */ }
+    const extras: WinEntry[] = items.slice(1).map((it) => {
+      const id = newWindowId();
+      saveScoutState({ open: true, threadId: it.threadId, text: "" }, stateKeyFor(id));
+      saveBox(clampBox(it.box), boxKeyFor(id));
+      return { id, threadId: it.threadId, min: it.min };
+    });
+    setWins([{ id: PRIMARY_ID, threadId: items[0].threadId, min: items[0].min }, ...extras]);
+    setOrder([PRIMARY_ID, ...extras.map((e) => e.id)]);
+    setMetaMap({});
+    handles.current[PRIMARY_ID]?.adopt(items[0].threadId, items[0].box);
+  }, [invalidate]);
+
+  const host = useMemo<HostApi>(() => ({
+    minimize, restore, arrange, arranged, moved: invalidate, meta: onMeta,
+    layouts, saveLayout, applyLayout, deleteLayout,
+  }), [minimize, restore, arrange, arranged, invalidate, onMeta, layouts, saveLayout, applyLayout, deleteLayout]);
+
+  // Keyboard, desktop only. Every shortcut carries Cmd/Ctrl, so they work while typing and plain keys are never touched:
+  //   Cmd/Ctrl+Shift+N new window   Cmd/Ctrl+Shift+E arrange   Ctrl+` (and Cmd+` if the browser lets it through) next window
+  const keys = useRef({ spawnFront: () => {}, cycle: (_dir: 1 | -1) => {} });
+  keys.current = {
+    spawnFront: () => {
+      if (winsRef.current.length >= MAX_WINDOWS) return;
+      const el = live.current.front ? document.querySelector(`[data-scout-window="${live.current.front}"]`) : null;
+      const r = defaultRect();
+      spawn(el ? el.getBoundingClientRect() : { left: r.x, top: r.y, width: r.w, height: r.h });
+    },
+    cycle: (dir) => {
+      const ring = live.current.visible;
+      if (!ring.length) return;
+      const at = ring.indexOf(live.current.front);
+      const next = ring[at < 0 ? 0 : (at + dir + ring.length) % ring.length];
+      front(next);
+      requestAnimationFrame(() => {
+        const sec = document.querySelector<HTMLElement>(`[data-scout-window="${next}"]`);
+        (sec?.querySelector<HTMLElement>("textarea") ?? sec)?.focus();
+      });
+    },
+  };
+  useEffect(() => {
+    if (phone) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || e.altKey || !(e.metaKey || e.ctrlKey)) return;
+      const k = e.key.toLowerCase();
+      if (e.shiftKey && k === "n") { e.preventDefault(); keys.current.spawnFront(); return; }
+      if (e.shiftKey && k === "e") { e.preventDefault(); arrange(); return; }
+      if (e.code === "Backquote" || e.key === "`" || e.key === "~") { e.preventDefault(); keys.current.cycle(e.shiftKey ? -1 : 1); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [phone, arrange]);
+
+  // The launcher's bubble: a new set of urgent items speaks up once; the same set never nags again. Once every
+  // window has been closed it is allowed to speak up again for whatever is still waiting.
   const waiting = today.urgent.length;
   const urgentSig = today.urgent.map((r) => r.key).join("|");
   const bubbleFor = useRef("");
   useEffect(() => {
-    if (!urgentSig || urgentSig === bubbleFor.current || status.open) return;
+    if (!anyOpen) bubbleFor.current = "";
+  }, [anyOpen]);
+  useEffect(() => {
+    if (!urgentSig || urgentSig === bubbleFor.current || !showLauncher) return;
     bubbleFor.current = urgentSig;
     setBubble(true);
     window.setTimeout(() => setBubble(false), 9000);
-  }, [urgentSig, status.open]);
+  }, [urgentSig, showLauncher, anyOpen]);
 
   const { pendingJobs, running } = status;
   const needs = waiting + pendingJobs;
@@ -1674,10 +2139,7 @@ export function Scout() {
     publishScoutDot(dotColor);
   }, [dotColor]);
   const recording = recorder.state?.status === "recording";
-  const openPrimary = () => primaryRef.current?.open();
-
-  const shownOrder = order.filter((id) => shown.some((w) => w.id === id));
-  const frontId = shownOrder[shownOrder.length - 1];
+  const openPrimary = () => handles.current[PRIMARY_ID]?.open();
 
   return (
     <>
@@ -1685,13 +2147,15 @@ export function Scout() {
       {shown.map((w, i) => (
         <ScoutWindow
           key={w.id}
-          ref={w.id === PRIMARY_ID ? primaryRef : undefined}
+          ref={refFor(w.id)}
           id={w.id}
           primary={w.id === PRIMARY_ID}
           n={i + 1}
           z={Math.max(0, shownOrder.indexOf(w.id))}
           isFront={w.id === frontId}
           canSpawn={wins.length < MAX_WINDOWS}
+          minimized={isMin(w)}
+          host={host}
           others={phone ? NO_THREADS : wins.filter((x) => x.id !== w.id && x.threadId).map((x) => x.threadId as string)}
           today={today}
           recorder={recorder}
@@ -1704,7 +2168,15 @@ export function Scout() {
           onReply={w.id === PRIMARY_ID ? onReply : undefined}
         />
       ))}
-      {!status.open && (
+      <Dock
+        chips={dockWins.map((w) => ({
+          id: w.id,
+          title: metaMap[w.id]?.title ?? (w.id === PRIMARY_ID ? "Scout" : `Scout ${shown.indexOf(w) + 1}`),
+          dot: metaMap[w.id]?.dot ?? null,
+        }))}
+        onRestore={restore}
+      />
+      {showLauncher && (
         <>
           {!bubble && pendingJobs === 0 && note && (
             <div
@@ -1760,11 +2232,11 @@ export function Scout() {
             aria-label={`Open Scout (Cmd+J)${running ? ", working" : dotColor === "orange" ? ", needs you" : dotColor === "purple" ? ", unread replies" : ""}`}
             title="Scout (⌘J)"
             className={cn(
+              // `fixed` alone is the containing block for the dot below. Do NOT add `relative` here: it beats `fixed`.
               "scout-launcher fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 hidden items-center gap-2.5 rounded-full md:flex",
               "px-4 py-2.5 text-sm font-semibold shadow-lg",
               "bg-white text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               needs > 0 && "scout-nudge",
-              "relative",
             )}
           >
             <ScoutBuddy mood={status.mood} replay={status.replay} size="sm" />
