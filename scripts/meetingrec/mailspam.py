@@ -213,7 +213,7 @@ def tick(key, log):
         return
     try:
         try:
-            r = post(key, {"op": "claim"}, timeout=30)
+            r = post(key, {"op": "claim", "v": 2}, timeout=30)   # v2: knows restore + dispose jobs
         except Exception as e:  # noqa: BLE001
             log("mailspam: claim failed", e)
             return

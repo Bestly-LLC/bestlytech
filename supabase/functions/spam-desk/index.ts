@@ -735,7 +735,9 @@ async function sendReports(id: string): Promise<A> {
 
 /* ───────────────────────── agent ops (Mac mini) ───────────────────────── */
 
-async function opClaim(): Promise<Response> {
+/** a.v >= 2: the worker knows restore and dispose jobs. An older mailspam.py would junk them instead, so it never gets them. */
+async function opClaim(a: A = {}): Promise<Response> {
+  const v2 = Number(a.v ?? 0) >= 2;
   const now = new Date();
   // a worker that died mid-job: give the job back (5 tries, then it fails for good)
   await db.from("spam_reports").update({ status: "queued", claimed_at: null })
@@ -760,7 +762,7 @@ async function opClaim(): Promise<Response> {
     }
   }
   // "Not spam" undos: move the email back out of Junk (stale claims are retried after 10 min, 5 tries)
-  const room2 = 10 - jobs.length;
+  const room2 = v2 ? 10 - jobs.length : 0;
   if (room2 > 0) {
     const stale = new Date(now.getTime() - 10 * 60e3).toISOString();
     const { data: rs } = await db.from("spam_reports").select("id, mailbox, message_id, undo").eq("status", "undone").eq("undo->>restore", "queued")
@@ -774,7 +776,7 @@ async function opClaim(): Promise<Response> {
     }
   }
   // desk replies: off to Trash
-  const room3 = 10 - jobs.length;
+  const room3 = v2 ? 10 - jobs.length : 0;
   if (room3 > 0) {
     const stale = new Date(now.getTime() - 10 * 60e3).toISOString();
     await db.from("spam_desk_replies").update({ status: "failed" }).eq("status", "queued").gte("tries", 5);
@@ -1039,7 +1041,7 @@ Deno.serve(async (req) => {
       const { data: row } = await db.from("meeting_recorder_state").select("key_sha256").eq("id", 1).single();
       if (!row?.key_sha256 || (await sha256(agentKey)) !== row.key_sha256) return J({ ok: false, error: "bad key" }, 401);
       if (!AGENT_OPS.has(op)) return J({ ok: false, error: `unknown op ${op}` }, 400);
-      return op === "claim" ? await opClaim() : op === "source" ? await opSource(body) : op === "junked" ? await opJunked(body) : op === "restored" ? await opRestored(body) : op === "disposed" ? await opDisposed(body) : await opFail(body);
+      return op === "claim" ? await opClaim(body) : op === "source" ? await opSource(body) : op === "junked" ? await opJunked(body) : op === "restored" ? await opRestored(body) : op === "disposed" ? await opDisposed(body) : await opFail(body);
     }
 
     // service: pg_cron and Scout
