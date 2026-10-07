@@ -297,10 +297,12 @@ async function call(id: string, force = false) {
   try {
     out = await claude(
       `${VOICE}\nYou are Scout. Read this call transcript (JARED lines are his own mic; a name ending in ? was a voice guess, so check it against context). ` +
-      `Return JSON only: {"summary":"2 sentences","decisions":["..."],"commitments":[{"owner":"Jared|<first name>","task":"imperative, under 90 characters","due":"YYYY-MM-DD or null"}],"questions":["..."]}. ` +
+      `Return JSON only: {"summary":"2 sentences","decisions":["..."],"commitments":[{"owner":"Jared|<first name>","task":"imperative, under 90 characters","due":"YYYY-MM-DD or null","quote":"exact words"}],"questions":["..."]}. ` +
       `Only what was actually agreed. A due date only if one was said (today is ${la().day}; resolve "Friday" etc. to a date). No duplicates. ` +
       `Owner = the person who will DO it, worked out from what is said ("I'll send it" -> the speaker; "can you..." -> the person asked; "Jared will..." -> Jared). ` +
-      `Speaker labels can be wrong, especially on one-mic recordings (the header says so): trust what the words say over the label. When it's unclear who will do it, the owner is Jared.`,
+      `Speaker labels can be wrong, especially on one-mic recordings (the header says so): trust what the words say over the label. When it's unclear who will do it, the owner is Jared. ` +
+      `NOT commitments: anything said in a demo, test call or role-play (e.g. a phone bot like Ava or RoofGuard "booking" a call, someone pretending to be a customer), ` +
+      `lines read aloud from an app or to-do list, and hypotheticals. Add "quote": the exact words (under 160 characters) the commitment came from.`,
       `Call: ${r.name}\nPeople: Jared, ${(r.roster ?? []).join(", ")}\n\n${t}`,
       2500, "call", id,
     );
@@ -328,7 +330,8 @@ async function call(id: string, force = false) {
     await db.from("scout_daily").upsert({
       day, kind: "call", title: String(c.task).slice(0, 140), why: `${owner}${due ? ` · due ${due}` : ""} · from ${r.name}`,
       source_key: `call:${r.id}:${i}`, url: card?.url ?? null,
-      action: { owner, due, meeting: r.name, meeting_id: r.id, deck_card: card?.id ?? null, deck_url: card?.url ?? null },
+      action: { owner, due, meeting: r.name, meeting_id: r.id, deck_card: card?.id ?? null, deck_url: card?.url ?? null,
+        quote: c.quote ? String(c.quote).slice(0, 200) : null },
     }, { onConflict: "day,kind,source_key", ignoreDuplicates: true });
   }
   await db.from("meeting_recordings").update({
