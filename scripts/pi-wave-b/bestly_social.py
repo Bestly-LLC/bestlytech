@@ -820,8 +820,7 @@ def _studio_file(title, caption, media_url=None, slides=None, provenance=None, a
             pass
     if not (r or {}).get("ok"):
         raise RuntimeError(f"Studio refused the piece: {json.dumps(r)[:400]}")
-    if slides:
-        lib._req("PATCH", f"/rest/v1/approval_items?id=eq.{r['id']}", {"thumb_url": slides[0]})
+    lib._req("PATCH", f"/rest/v1/approval_items?id=eq.{r['id']}", {"thumb_url": slides[0] if slides else media_url})
     return r
 
 
