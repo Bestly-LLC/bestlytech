@@ -28,7 +28,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm, LlmUnavailable } from "../_shared/free-llm.ts";
 import { corsWith } from "../_shared/cors.ts";
-import { estimatePipeline, previewParse, previewRequest, type Ctx } from "./estimates.ts";
+import { estimatePipeline, previewParse, previewRequest, askShops, type Ctx } from "./estimates.ts";
 import { answeredQuestions, bookingStep, thirdParties } from "./booking.ts";
 
 const SECRETS: string[] = (() => {
@@ -339,6 +339,12 @@ Deno.serve(async (req) => {
     const { data: pc } = await db.from("claim_cases").select("*").eq("reservation_id", Number(body.reservation)).maybeSingle();
     if (!pc) return J({ error: "no case" }, 404);
     return J({ ok: true, ...(await previewRequest(ctx, pc, settings)) });
+  }
+  if (op === "ask_shop") {   // {reservation, shop: slug}: ask one named shop for a photo estimate now
+    const { data: pc } = await db.from("claim_cases").select("*").eq("reservation_id", Number(body.reservation)).maybeSingle();
+    const { data: shop } = await db.from("claim_shops").select("id, name").eq("slug", String(body.shop ?? "")).maybeSingle();
+    if (!pc || !shop) return J({ error: !pc ? "no case" : "no shop" }, 404);
+    return J({ ok: true, shop: shop.name, notes: await askShops(ctx, pc, settings, [shop.id]) });
   }
   if (op === "preview_parse") return J({ ok: true, ...(await previewParse(ctx, String(body.shop ?? "Shop"), String(body.subject ?? ""), String(body.body ?? ""))) });
   if (op === "evidence_urls") {   // Claims page: signed photo links (1 hour)

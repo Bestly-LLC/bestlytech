@@ -71,7 +71,9 @@ async function avaCall(ctx: Ctx, o: { phone: string; name: string; purpose: stri
 }
 
 // ---------------------------------------------------------------- shops: rank + pick
-export const shopScore = (s: Row) => Number(s.rating ?? 0) * Math.log(1 + Number(s.rating_count ?? 0)) + (s.tesla_experience ? 3 : 0) - 0.5 * Number(s.distance_mi ?? 0);
+// A shop Jared already uses goes first (Jared, 2026-10-07: "this should have been one of the first places you tried").
+export const shopScore = (s: Row) => Number(s.rating ?? 0) * Math.log(1 + Number(s.rating_count ?? 0)) + (s.tesla_experience ? 3 : 0) - 0.5 * Number(s.distance_mi ?? 0)
+  + (s.used_before ? 12 : 0);
 
 async function rankShops(ctx: Ctx, settings: Row, covered: boolean, excludeIds: string[]) {
   const { data } = await ctx.db.from("claim_shops").select("*").eq("active", true).eq("photo_estimates", true);
@@ -119,9 +121,9 @@ const carName = (c: Row) => (c.car ?? "2020 Tesla Model 3").replace(/\s+\(.*\)$/
 
 function requestBody(shop: Row, c: Row, damage: string, n: { after: number; before: number }, ref: string) {
   const first = String(shop.name).replace(/\s+\(.*\)$/, "");
-  return `Hi ${first} team,
+  return `Hi ${shop.contact_name ? String(shop.contact_name).split(/\s+/)[0] : `${first} team`},
 
-I'm Jared, a car-sharing host in West Hollywood. My ${carName(c)} came back from a rental with new damage: ${damage.replace(/\.$/, "")}. The car is drivable.
+${shop.used_before ? "It's Jared, I've brought cars to you before." : "I'm Jared, a car-sharing host in West Hollywood."} My ${carName(c)} came back from a rental with new damage: ${damage.replace(/\.$/, "")}. The car is drivable.
 
 I attached ${n.after} photo${n.after === 1 ? "" : "s"} of the damage${n.before ? ` and ${n.before} from before the rental showing the same corner undamaged` : ""}. Could you send an itemized estimate from the photos? Please include:
 - the total
@@ -140,13 +142,14 @@ Ref ${ref}`;
 const AVA_PURPOSE = (c: Row) => `Ask how to send photos to get a damage estimate for a ${carName(c)}: new scrapes, a paint chip and a pushed-in bumper cover on the passenger-side front corner. Get the best email address or web form for photos, and whether they quote from photos or need to see the car (earliest walk-in time). If they can give a rough total by phone, take it with OEM vs aftermarket. Do NOT agree to work, book, or share payment details. If they want an email address for Jared, it is jared@bestly.tech. Keep it short.`;
 
 // ---------------------------------------------------------------- request estimates
-async function requestEstimates(ctx: Ctx, c: Row, settings: Row, notes: string[]) {
+async function requestEstimates(ctx: Ctx, c: Row, settings: Row, notes: string[], only?: string[]) {
   const { data: have } = await ctx.db.from("claim_estimates").select("shop_id").eq("case_id", c.id);
   const asked = ((have ?? []) as Row[]).map((e) => e.shop_id);
-  const want = Math.max(1, Number(settings.shops_per_request ?? 3)) - asked.length;
+  const want = only ? only.length : Math.max(1, Number(settings.shops_per_request ?? 3)) - asked.length;
   if (want <= 0) return;
   const covered = !!(c.insurer?.covers_full);
-  const shops = (await rankShops(ctx, settings, covered, asked)).slice(0, want);
+  const ranked = await rankShops(ctx, settings, covered, asked);
+  const shops = (only ? ranked.filter((s) => only.includes(s.id)) : ranked).slice(0, want);
   if (!shops.length) return;
   const photos = await photoAttachments(ctx, c.id);
   if (!photos.after) { await ctx.db.from("claim_cases").update({ next_check_at: new Date(Date.now() + 10 * 60_000).toISOString() }).eq("id", c.id); notes.push("waiting for the damage photos"); return; }
@@ -469,6 +472,13 @@ export async function estimatePipeline(ctx: Ctx, c: Row, settings: Row, notes: s
 const low = (rs: Row[]) => Math.min(...rs.map((x) => Number(x.amount)));
 
 // op preview_request: what the first email would say and who would be asked; nothing is sent or saved
+/** Jared names a shop ("ask Paulee"): send that one shop the photo estimate request now, outside the ranking. */
+export async function askShops(ctx: Ctx, c: Row, settings: Row, shopIds: string[]): Promise<string[]> {
+  const notes: string[] = [];
+  await requestEstimates(ctx, c, settings, notes, shopIds);
+  return notes;
+}
+
 export async function previewRequest(ctx: Ctx, c: Row, settings: Row) {
   const shops = (await rankShops(ctx, settings, !!(c.insurer?.covers_full), [])).slice(0, Number(settings.shops_per_request ?? 3));
   const { data: ev } = await ctx.db.from("claim_evidence").select("kind").eq("case_id", c.id);
