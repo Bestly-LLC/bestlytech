@@ -33,8 +33,7 @@ import { llm, LlmUnavailable } from "../_shared/free-llm.ts";
 import { sendAsJared } from "../_shared/bestly-signature.ts";
 import {
   FREEMAIL, STATUTE_NOTE, addrOf, domainOf, isBlocked, laTime, matchesProtected, parseHeaders, rdapEmail, registrable, sendingIp,
-  type BlockRow,
-} from "../_shared/spam-rules.ts";
+  type BlockRow, relayOrigin, senderIsBrand } from "../_shared/spam-rules.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SECRET_KEY, { auth: { persistSession: false } });
 const CORS = corsWith({ headers: "authorization, content-type, apikey, x-client-info, x-recorder-key", methods: "POST, OPTIONS" });
@@ -113,7 +112,10 @@ async function classify(mails: A[]): Promise<Map<string, Verdict>> {
   const items = mails.map((m, i) => {
     const body = String(m.body_text ?? "");
     return {
-      i, from: `${m.from_name ?? ""} <${m.from_addr}>`, subject: clip(m.subject, 160), to: m.mailbox, link_domains: links(body),
+      i, from: (() => {
+        const orig = relayOrigin(addrOf(m.from_addr));
+        return orig ? `${m.from_name ?? ""} <${orig}> (forwarded by Apple Hide My Email)` : `${m.from_name ?? ""} <${m.from_addr}>`;
+      })(), subject: clip(m.subject, 160), to: m.mailbox, link_domains: links(body),
       has_unsubscribe: /unsubscribe/i.test(body), snippet: body.replace(/\s+/g, " ").slice(0, 420),
     };
   });
@@ -123,6 +125,7 @@ async function classify(mails: A[]): Promise<Map<string, Verdict>> {
     `phishing = pretends to be a brand, agency or person to steal logins, money or data (fake parcel or delivery notices, fake invoices, fake account or security alerts, gift-card or crypto scams, extortion, a link-only body from a sender whose domain does not match the brand).\n` +
     `commercial = an advertisement or cold sales pitch selling something, from a business he has no evident relationship with.\n` +
     `unsure = cannot tell.\n` +
+    `Apple Hide My Email relay addresses are normal and never a sign of phishing: judge the original sender shown. Mail whose sender domain belongs to the brand it names (robinhood.com for Robinhood) is that brand's real mail, not phishing.\n` +
     `confidence 0 to 1. brand = the brand being impersonated or advertised, else "". reasons = up to 3 short concrete reasons. ` +
     `business = the advertiser's company name for commercial, else "". us_business = true if the advertiser appears US-based, false if clearly not, null if unknown.\n` +
     `Return JSON only: {"items":[{"i":0,"verdict":"legit","confidence":0.9,"brand":"","reasons":[],"business":"","us_business":null}]}`;
@@ -767,7 +770,13 @@ async function opAuto(): Promise<Response> {
       });
       if (v.verdict === "legit") continue;
       const sender = m.from_name && m.from_name.length <= 40 ? m.from_name : addrOf(m.from_addr);
-      if (v.verdict === "phishing" && v.confidence >= 0.85 && out.auto_reported < 10) {
+      // Guards (2026-10-06 false positive): never auto-report relayed mail or mail sent from the named brand's own domain.
+      const orig = relayOrigin(addrOf(m.from_addr)) ?? addrOf(m.from_addr);
+      if (v.verdict === "phishing" && senderIsBrand(orig, v.brand)) {
+        await db.from("mail_verdicts").update({ verdict: "legit", reasons: [...v.reasons, "sender domain is the brand's own"] }).eq("mail_id", m.id);
+        continue;
+      }
+      if (v.verdict === "phishing" && v.confidence >= 0.85 && out.auto_reported < 10 && !relayOrigin(addrOf(m.from_addr))) {
         try {
           const { data: draft } = await db.from("scout_daily").select("id, status").eq("source_key", `mail:${m.id}`).eq("kind", "draft").eq("status", "open").limit(1);
           const c = await createReport(m, { verdict: "phishing", how: "auto", reasons: v.reasons, brand: v.brand, draft: draft?.[0] ?? null, v, protectedPats: pats, emailed });

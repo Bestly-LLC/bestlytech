@@ -7,6 +7,9 @@ export const FREEMAIL = new Set([
   "icloud.com", "me.com", "mac.com", "aol.com", "proton.me", "protonmail.com", "pm.me", "gmx.com", "gmx.net", "mail.com", "zoho.com",
   "yandex.com", "yandex.ru", "mail.ru", "qq.com", "163.com", "126.com", "sina.com", "fastmail.com", "hey.com", "comcast.net", "att.net",
   "verizon.net", "sbcglobal.net", "cox.net", "earthlink.net", "charter.net", "bellsouth.net",
+  // Japanese mobile carrier mail (shared by millions, like freemail): block the address, never the domain.
+  "softbank.jp", "i.softbank.jp", "softbank.ne.jp", "docomo.ne.jp", "ezweb.ne.jp", "au.com", "ybb.ne.jp", "nifty.com", "biglobe.ne.jp",
+  "gmx.de", "web.de", "t-online.de", "orange.fr", "free.fr", "laposte.net", "libero.it", "virgilio.it", "naver.com", "daum.net", "hanmail.net", "rediffmail.com", "seznam.cz", "wp.pl", "o2.pl", "rambler.ru",
 ]);
 
 const SECOND_LEVEL = new Set(["co", "com", "org", "net", "ac", "gov", "edu"]);
@@ -130,3 +133,27 @@ export function laTime(iso: string | Date): string {
 export const STATUTE_NOTE =
   "Cal. Bus. & Prof. Code 17529.5: $1,000 per unsolicited commercial email that has a forged header, someone else's domain or a misleading subject line " +
   "($1,000,000 cap per incident); the $1,000 claim has a 1-year deadline. Not legal advice.";
+
+/**
+ * Apple "Hide My Email" forwards real mail with the sender rewritten, e.g.
+ * noreply_at_robinhood_com_g503mx51wc5cgn_53np0210@icloud.com  ->  noreply@robinhood.com
+ * (2026-10-06: a real Robinhood statement was auto-reported as phishing because the model saw the relay address.)
+ * Returns the original address, or null when this is not a relay address.
+ */
+export function relayOrigin(addr: string): string | null {
+  const a = addr.toLowerCase();
+  const m = a.match(/^(.+?)_at_(.+)_[a-z0-9]{6,20}_[a-z0-9]{4,12}@(icloud\.com|privaterelay\.appleid\.com)$/);
+  if (!m) return null;
+  return `${m[1]}@${m[2].replace(/_/g, ".")}`;
+}
+
+/** The brand name appears in the sender's own domain (robinhood.com for "Robinhood"): mail from the brand itself. */
+export function senderIsBrand(addr: string, brand: string | null | undefined): boolean {
+  const b = String(brand ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (b.length < 3) return false;
+  // Only the registrable name counts: mail.paypal.com is PayPal, secure-usps-track.top is not USPS.
+  const reg = registrable((addr.split("@")[1] ?? "").toLowerCase());
+  const label = reg.split(".")[0].replace(/[^a-z0-9]/g, "");
+  return label === b;
+}
+
