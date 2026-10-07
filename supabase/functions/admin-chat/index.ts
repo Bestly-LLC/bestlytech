@@ -1,5 +1,5 @@
 import { SECRET_KEY, isServiceRequest } from "../_shared/keys.ts";
-import { llm, llmChat, llmVision, LlmUnavailable, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
+import { llm, llmChat, llmVision, LlmUnavailable, thinkingLeak, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
 // admin-chat — Scout, the assistant inside bestly.tech/admin.
 //
 // Rules, in order of how much trouble breaking them causes:
@@ -573,6 +573,62 @@ const NO_DRAFT_RULE = `NO UNASKED DRAFTS: never write a draft email, text or rep
 
 // Jared's standing preference, applied to every Scout reply (paid, free helper, free with tools). Plain text only: the chat renders no markdown.
 const ADHD_RULE = `ADHD mode, ALWAYS ON, every reply: the first line is the answer (the TL;DR). Then short lines, one idea each, never a wall of text. One step or one question at a time. State the key point plainly and put it first (no markdown, so no bold or bullets). Cut filler and repetition. End with the single next action, as the last line. ${NO_DRAFT_RULE}`;
+
+/**
+ * v40 (2026-10-07, Jared: "He should have ADHD mode always on and should anticipate my response with the quick replies").
+ * The prompt asked for it; the replies didn't do it (Oct 4-7: half had no OPTIONS line, 46% ran past 80 words, 49 used
+ * markdown the chat can't render). Now it is enforced in code on every reply he sees, free or paid:
+ *  1. markdown is stripped (bold, headings, bullet marks, --- rules);
+ *  2. a body over ADHD_MAX_WORDS is rewritten by the free AI into TL;DR-first short lines, every fact kept,
+ *     unless he asked for detail or the reply carries something that must stay whole (code, a draft, a debrief);
+ *  3. a reply without an OPTIONS line gets 2-4 quick replies he'd most likely tap next, written for this reply.
+ * Free AI only, one call, ~5 s. If it fails, the reply goes out as it was (markdown still stripped).
+ */
+const ADHD_MAX_WORDS = 80;
+const WANTS_DETAIL = /\b(detail(ed|s)?|explain|in depth|full (list|picture|version|report)|everything|walk me through|step[- ]by[- ]step|debrief|transcript|plan|draft|write|email|script|code|diff|show me (all|the (whole|full)))\b/i;
+const KEEP_WHOLE = /```|^\s*(DRAFT|Draft):|^\s*(FIXED|NEEDS_YES|STUCK|QUESTIONS):|^\s*(Subject|To):/m;
+const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
+
+function stripMarkdown(s: string): string {
+  if (/```/.test(s)) return s;   // code blocks: leave it as written
+  return s
+    .replace(/\*\*(.+?)\*\*/g, "$1").replace(/__(.+?)__/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*•]\s+/gm, "")
+    .replace(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/gm, "")
+    .replace(/\n{3,}/g, "\n\n").trim();
+}
+
+async function adhdShape(reply: string, ask: string, threadId: string): Promise<string> {
+  try {
+    if (!reply || /^\s*QUESTIONS:/m.test(reply)) return reply;
+    const m = reply.match(/^\s*OPTIONS:\s*(.+)$/m);
+    const hadOpts = m ? m[1].split("|").map((o) => o.trim()).filter(Boolean).slice(0, 4) : [];
+    let body = stripMarkdown(reply.replace(/^\s*OPTIONS:.*$/m, "").trim());
+    const tooLong = words(body) > ADHD_MAX_WORDS && !WANTS_DETAIL.test(ask) && !KEEP_WHOLE.test(body);
+    const needOpts = hadOpts.length < 2 && !KEEP_WHOLE.test(body);
+    if (tooLong || needOpts) {
+      const r = await llm({
+        task: "summarize", json: true, paid: "never", maxTokens: 700, deadlineMs: 15_000,
+        job: "chat-adhd", ref: threadId, fn: "admin-chat", scope: "chat",
+        system: `You format replies from Scout (Jared's assistant) for Jared, who has ADHD. Return JSON only: {"body": string, "options": string[]}.
+body: ${tooLong ? `rewrite the reply below in ADHD format: line 1 is the answer (TL;DR, one sentence); then at most 4 short lines, one idea each; the last line is the single next action. Under ${ADHD_MAX_WORDS} words. Keep every fact, number, name, time and link exactly as written; add nothing new; drop filler and repetition. Plain text, no markdown, no bullet marks.` : "return the reply body below unchanged, exactly."}
+options: 2-4 quick replies Jared would most likely tap next, written as HE would say them (e.g. "Do it", "Show me first", "Skip it", "Keep going", "Nothing else"), 1-5 words each, the most likely one first. They must fit this exact reply: if it asks a yes/no, give the yes and the no; if it reports something done, give the natural follow-ups.`,
+        user: `Jared's message:\n${ask.slice(0, 1500)}\n\nScout's reply:\n${body.slice(0, 6000)}`,
+        validate: (j: any) => (Array.isArray(j?.options) && typeof j?.body === "string" ? null : "needs body and options"),
+      });
+      const j = r.json as { body: string; options: string[] };
+      const nb = stripMarkdown(String(j.body ?? "").trim());
+      // Use the rewrite only if it really is shorter and is not the model talking to itself.
+      if (tooLong && nb && words(nb) < words(body) && words(nb) >= 5 && !thinkingLeak(nb)) body = nb;
+      const opts = (j.options ?? []).map((o) => String(o).replace(/[|\n]/g, " ").trim().slice(0, 40)).filter(Boolean).slice(0, 4);
+      if (needOpts && opts.length >= 2) return `${body}\n\nOPTIONS: ${opts.join(" | ")}`;
+    }
+    return hadOpts.length >= 2 ? `${body}\n\nOPTIONS: ${hadOpts.join(" | ")}` : body;
+  } catch {
+    return reply;   // never block a reply on formatting
+  }
+}
 
 const SYSTEM = (today: unknown, mac: unknown, incidents: unknown, unread: unknown, recorder: unknown, jobs: unknown, page: unknown, lessons: string) => `
 You are Scout, the assistant inside Jared Best's Bestly admin console at bestly.tech/admin. Your name is Scout; never call yourself anything else.
@@ -2382,6 +2438,7 @@ Deno.serve(async (req) => {
     const say = async (reply: string, extra: Record<string, unknown> = {}) => {
       if (await interrupted()) return stoppedReply();   // v34: he moved on; this answer is stale
       if (extra.free) routerBeat(`Free reply${Array.isArray(extra.tools) && extra.tools.length ? ` (${extra.tools.length} steps)` : ""}`);
+      if (!autopilot) reply = await adhdShape(reply, text, threadId);   // v40: ADHD format + quick replies, enforced
       const { data: ins } = await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply }).select("id").single();
       sayId = (ins as any)?.id ?? null;
       await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
@@ -2780,6 +2837,7 @@ Deno.serve(async (req) => {
   routerBeat(`Paid reply, ${used.length} step${used.length === 1 ? "" : "s"}, $${spentNow.toFixed(3)}`);
   // Paid AI answered, so any "out of credit" card is stale: clear it so Scout offers paid AI again.
   await db.from("admin_notifications").update({ read_at: new Date().toISOString() }).like("dedupe_key", "scout.credit:%").is("read_at", null);
+  if (!autopilot) reply = await adhdShape(reply, text, threadId);   // v40: ADHD format + quick replies, enforced
   await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
   await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
 
