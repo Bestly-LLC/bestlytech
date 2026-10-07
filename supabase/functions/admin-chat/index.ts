@@ -1470,7 +1470,7 @@ Main tables (public schema):
 - turo_vehicle_state: battery_pct, range_real, inside_temp, locked, charging_state, observed_at (the Tesla).
 - trip_health: check_key, label, status, detail, checked_at.
 - monitor_issues: key, title, severity, status ('open'), fix_stage, opened_at (incidents Scout watches).
-- scout_daily: id, day, kind ('call' = to-do), title, status, action (his to-dos).
+- scout_daily: id, day, kind ('call' = to-do), title, status ('open', 'done', 'dismissed': never filter by status when asked why a to-do exists), action jsonb (owner, meeting = the recording it came from, due, check, dismissed_why = why it was dismissed and where it really came from). To answer "why is this to-do here / where did it come from": ONE query `select title, status, action from scout_daily where title ilike '%two or three distinctive words%' order by day desc limit 5`, read action.meeting and action.dismissed_why, and if needed meeting_transcript {name: <that meeting>, find: <keywords>}. Then answer in two lines.
 - admin_notifications: title, body, created_at, read_at (the bell).
 - mac_jobs: title, status, exit_code, output, finished_at (Mac mini jobs).
 - ai_spend: at, provider, job, ok, cost_usd.
