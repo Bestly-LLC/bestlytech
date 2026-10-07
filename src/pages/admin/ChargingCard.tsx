@@ -14,7 +14,6 @@ import { useCallback, useEffect, useState } from "react";
 import { BatteryCharging, Check, CircleAlert, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { putVaultSecret } from "@/services/homeHubApi";
 import { cn } from "@/lib/utils";
 import { Section, btnPrimary, btnTinted, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
 
@@ -27,7 +26,9 @@ interface Settings {
 interface Live { open: boolean; started_at: string; ended_at: string | null; at_home: boolean; dc_fast: boolean; kwh: number; cost: number; idle_fee: number; start_pct: number | null; end_pct: number | null; stopped_at: string | null }
 interface Admin {
   settings: Settings;
-  chargepoint: { email_at: string | null; password_at: string | null; token_at: string | null; ready: boolean };
+  chargepoint: { email_at: string | null; token_at: string | null; ready: boolean;
+                 signed_in: boolean | null; last_error: string | null; last_check_at: string | null;
+                 last_stopped_at: string | null; last_stopped_summary: string | null };
   now: Live | null;
   recent: { started_at: string; ended_at: string; kwh: number; cost: number; idle_fee: number; at_home: boolean }[];
 }
@@ -41,7 +42,6 @@ export function ChargingCard() {
   const [a, setA] = useState<Admin | null>(null);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [token, setToken] = useState("");
   const [rates, setRates] = useState<{ night: string; day: string; fee: string; grace: string; idle: string } | null>(null);
 
@@ -59,21 +59,19 @@ export function ChargingCard() {
   useEffect(() => { void load(); }, [load]);
 
   const saveLogin = async () => {
-    if (!email.trim() && !password && !token.trim()) { toast.error("Nothing to save."); return; }
+    if (!email.trim() && !token.trim()) { toast.error("Add the email or paste a token."); return; }
     setBusy(true);
-    try {
-      if (email.trim())
-        await putVaultSecret("home_hub_chargepoint_email", email.trim(), "ChargePoint driver login (Charge Watch)");
-      if (password)
-        await putVaultSecret("home_hub_chargepoint_password", password, "ChargePoint driver password (Charge Watch)");
-      if (token.trim())
-        await putVaultSecret("home_hub_chargepoint_token", token.trim(), "ChargePoint coulomb_sess session token (Charge Watch)");
-      setEmail(""); setPassword(""); setToken("");
-      toast.success("Saved to Vault. The value never comes back to this page.");
-      await load();
-    } catch (e) {
-      toast.error((e as Error).message || "Couldn't save the login.");
-    } finally { setBusy(false); }
+    // chargepoint_connect writes pi:chargepoint:username / :token -- the same store the Plug Puller job on
+    // the Pi reads. Write-only: the page can save a credential, never read one back.
+    const { error } = await rpc("chargepoint_connect", {
+      p_username: email.trim() || null,
+      p_token: token.trim() || null,
+    });
+    setBusy(false);
+    if (error) { toast.error(error.message || "Couldn't save the login."); return; }
+    setEmail(""); setToken("");
+    toast.success("Saved. The Plug Puller picks it up on its next run.");
+    await load();
   };
 
   const saveRates = async () => {
@@ -164,9 +162,13 @@ export function ChargingCard() {
               nothing typed here can be read back, by this page or anyone.
             </p>
           </div>
-          {a.chargepoint.ready ? (
+          {a.chargepoint.signed_in === false ? (
+            <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold", pill.orange)}>
+              <CircleAlert className="h-3.5 w-3.5" aria-hidden /> Needs a new token
+            </span>
+          ) : a.chargepoint.ready ? (
             <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold", pill.green)}>
-              <Check className="h-3.5 w-3.5" aria-hidden /> Saved
+              <Check className="h-3.5 w-3.5" aria-hidden /> {a.chargepoint.signed_in ? "Signed in" : "Saved"}
             </span>
           ) : (
             <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold", pill.orange)}>
@@ -175,16 +177,11 @@ export function ChargingCard() {
           )}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3">
           <label className="block">
             <span className={cn("mb-1 block text-[13px]", secondary)}>Email</span>
             <input type="email" autoComplete="off" className={field} value={email} onChange={(e) => setEmail(e.target.value)}
               placeholder={a.chargepoint.email_at ? "Saved · type to replace" : "you@example.com"} />
-          </label>
-          <label className="block">
-            <span className={cn("mb-1 block text-[13px]", secondary)}>Password</span>
-            <input type="password" autoComplete="new-password" className={field} value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder={a.chargepoint.password_at ? "Saved · type to replace" : "••••••••"} />
           </label>
         </div>
 
@@ -197,23 +194,26 @@ export function ChargingCard() {
             onChange={(e) => setToken(e.target.value)}
             placeholder={a.chargepoint.token_at ? "Saved \u00b7 paste a new one to replace" : "paste coulomb_sess here"} />
           <span className={cn("mt-1.5 block text-[12px] leading-snug", tertiary)}>
-            ChargePoint refuses password logins from servers, so Charge Watch signs in with a session token
-            instead. In Chrome on driver.chargepoint.com: right-click &rarr; Inspect &rarr; Application &rarr;
-            Cookies &rarr; driver.chargepoint.com, then copy the value of <strong>coulomb_sess</strong>. It is
-            marked HttpOnly, which is why only you can copy it.
+            ChargePoint refuses password logins from servers, so the Plug Puller signs in with a session
+            token instead. Open <strong>na.chargepoint.com</strong> while signed in &mdash; the cookie is not on
+            the driver portal &mdash; then Inspect &rarr; Application &rarr; Cookies &rarr; na.chargepoint.com and
+            copy <strong>coulomb_sess</strong>. It is HttpOnly, which is why only you can copy it. The job
+            refreshes it on its own after this; you only come back here if it ever truly expires.
           </span>
         </label>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className={cn("inline-flex items-center gap-1.5 text-[12px]", tertiary)}>
             <Lock className="h-3.5 w-3.5" aria-hidden />
-            {a.chargepoint.token_at
-              ? `Token saved ${when(a.chargepoint.token_at)}`
-              : a.chargepoint.email_at
-                ? "Email saved, still needs a session token"
-                : "Nothing saved yet"}
+            {a.chargepoint.signed_in === true && a.chargepoint.last_check_at
+              ? `Signed in, checked ${when(a.chargepoint.last_check_at)}`
+              : a.chargepoint.signed_in === false
+                ? a.chargepoint.last_error || "Sign-in is failing"
+                : a.chargepoint.token_at
+                  ? `Token saved ${when(a.chargepoint.token_at)}`
+                  : "Nothing saved yet"}
           </p>
-          <button type="button" className={btnPrimary} onClick={saveLogin} disabled={busy || (!email.trim() && !password && !token.trim())}>
+          <button type="button" className={btnPrimary} onClick={saveLogin} disabled={busy || (!email.trim() && !token.trim())}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <BatteryCharging className="h-4 w-4" aria-hidden />}
             Save to Vault
           </button>
