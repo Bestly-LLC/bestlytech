@@ -154,7 +154,7 @@ async function keys(): Promise<Record<string, string>> {
 let _prov: { at: number; v: Record<string, any> } | null = null;
 async function providers(): Promise<Record<string, any>> {
   if (_prov && Date.now() - _prov.at < 60_000) return _prov.v;
-  const { data } = await db().from("llm_providers").select("name, enabled, private_ok, cooldown_until, daily_cap");
+  const { data } = await db().from("llm_providers").select("name, enabled, private_ok, cooldown_until, cooldown_reason, daily_cap");
   const v = Object.fromEntries((data ?? []).map((p: any) => [p.name, p]));
   _prov = { at: Date.now(), v };
   return v;
@@ -617,6 +617,9 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
     if ((modelSkip.get(rung.model) ?? 0) > Date.now()) { skip("rate_limited"); continue; }
     // Except FreeLLM: its cooldown means the Mac mini is unreachable (freellm_watch), so skip instead of a 25 s timeout.
     if (rung.provider === "freellm" && p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now()) { skip("skipped_off"); continue; }
+    // v39: a daily-cap pause is not a "false pause": Cloudflare answers 429 until 00:00 UTC, every time. Skipping it saves a
+    // wasted round trip on every step (16 straight 429s in 40 minutes on Oct 6 before this).
+    if (p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now() && /^Daily free cap/i.test(String((p as any).cooldown_reason ?? ""))) { skip("skipped_budget"); continue; }
     if (need > rung.maxIn) { skip("skipped_size"); continue; }
     if (p?.daily_cap && (await usedToday(rung.provider)) >= p.daily_cap) { skip("skipped_budget"); continue; }
 

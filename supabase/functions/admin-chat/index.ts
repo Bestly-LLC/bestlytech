@@ -79,6 +79,12 @@ import { llm, llmChat, llmVision, LlmUnavailable, type ChatResult } from "../_sh
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v39 (2026-10-06, 9:50 PM, Jared: "Turo Watch autopilot ... is saying it needs paid AI as well as some other chats"):
+//   five chats running at once drained Groq's per-minute limits while Cloudflare sat at its daily cap, so the free
+//   agent's closing summary (or first reply) failed and the run fell to the old "I'd need paid AI" ask, though the work
+//   itself was fine. A busy free AI is now a pause, not a failure: the chain waits 30 s and picks back up (busyPause,
+//   PAUSE_MAX), and only after that says plainly the free AI is out of room. llmChat also skips a provider whose pause
+//   is a daily cap (it 429s every time until reset) instead of spending a round trip on it.
 // v38 (2026-10-07, Jared 9:00 PM: "this should not be true, there is free AI coding from LLM. Rework how Scout runs: he should have all
 //   the same abilities as paid AI, and only call on paid AI when it fails after 3 tries"). Plan: docs/scout-free-parity-opusplan.md.
 //   Free Scout has every paid tool: commit_files, db_write and mac_command joined FREE_TOOLS (PAID_ONLY_WHY and its early hand-off are gone),
@@ -1160,10 +1166,12 @@ interface RunState {
   tries?: number;           // v38: failed free attempts so far (3 hands the job to paid)
   try_log?: TryEntry[];
   pending?: { name: string; args: Record<string, any> };   // v38: a confirmed commit_files that did not have time to be watched; runs first next hop
+  pauses?: number;          // v39: hops in a row the free AI was too busy (rate limits) to answer; reset by any hop that works
 }
 interface TryEntry { at: string; what: string; why: string }
 const RUN_STATE_CAP = 12_000;       // bytes of JSON kept per thread
 const RUN_MAX_MS = 20 * 60_000;     // wall clock for one free run (hops included)
+const PAUSE_MAX = 4;                // v39: busy-free-AI pauses in a row (30 s apart) before Scout says so
 const RUN_RESUME_MS = 60 * 60_000;  // a hand-typed "keep going" picks the memory back up if it is this fresh
 
 /** Same tool + same arguments = same hash (key order and the confirmation flags don't matter). */
@@ -1211,7 +1219,7 @@ async function saveRunState(threadId: string, st: RunState | null) {
 }
 
 async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean; askFirst?: boolean; since?: string | null; state?: RunState | null; hop?: number } = {}):
-  Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean; stopped?: boolean; stalled?: boolean; state?: RunState; escalate?: { what: string; log: TryEntry[] } }> {
+  Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean; stopped?: boolean; stalled?: boolean; paused?: boolean; state?: RunState; escalate?: { what: string; log: TryEntry[] } }> {
   const autopilot = !!opts.autopilot;
   const until = Date.now() + FREE_BUDGET_MS;
   const prior = autopilot ? null : (opts.state ?? null);   // v36: what earlier hops of this run already did
@@ -1324,7 +1332,23 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   const snapshot = (): RunState => ({
     chain_from: prior?.chain_from ?? "", goal, hop: opts.hop ?? 0, started_at: runStartedAt, steps: (prior?.steps ?? 0) + newCalls,
     stale_hops: prior?.stale_hops ?? 0, progress_msg_id: prior?.progress_msg_id ?? null, notes, calls, tries, try_log: tryLog, pending: deferred ?? undefined,
+    pauses: 0,
   });
+  // v39 (Oct 6, 9:48 PM): a busy free AI is not a failed job. With Groq rate-limited and Cloudflare at its daily cap, the
+  // closing summary (or the first reply) failed and every running chat fell straight to "I'd need paid AI", even though
+  // the work was going fine. Now: pause and retry in 30 s, up to PAUSE_MAX times, then say plainly the free AI is out of
+  // room right now. Paid AI is still only offered after 3 real failed tries (v38) or when he asks.
+  const busyPause = () => {
+    const pauses = (prior?.pauses ?? 0) + 1;
+    const st: RunState = { ...snapshot(), pauses };
+    const out = pauses > PAUSE_MAX;
+    return {
+      answer: out
+        ? `The free AI has been too busy to answer for a few minutes (rate limits). Your job is saved where it stopped.${notes.length ? ` Last thing I found: ${oneLine(notes[notes.length - 1])}` : ""}`
+        : "The free AI is busy right now (rate limits). Picking it back up in 30 seconds.",
+      why: "", tools: used, more: true, stalled: out, paused: !out, state: st,
+    };
+  };
   const escalate = () => ({ why: "", tools: used, escalate: { what: goal, log: tryLog }, state: snapshot() });
 
   // v38: a commit saved by the last hop (it had no time left to be watched) runs first, with its full time budget.
@@ -1500,7 +1524,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     if (fails > 4) break;
   }
 
-  if (!replied) return { why: "The free AI isn't answering right now.", tools: used };
+  if (!replied) return autopilot ? { why: "The free AI isn't answering right now.", tools: used } : busyPause();
   if (await supersededSince(threadId, opts.since ?? null)) return { why: "", tools: used, stopped: true };
   // Out of steps or time with work in hand: say what was found. Chat offers to keep going for free; autopilot
   // keeps the findings next to the paid offer (a STUCK verdict), so the paid run starts from them.
@@ -1524,8 +1548,10 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
             return { answer: sum, why: "", tools: used, more: true, stalled: !deferred && (newCalls === 0 || staleHops >= 2), state };
           })();
       }
-    } catch { /* fall through to the paid ask */ }
+    } catch { /* fall through */ }
   }
+  // v39: the summary call itself failed (busy providers) - that's a pause, not a failed job.
+  if (!autopilot) return busyPause();
   return { why: "The free AI tried but couldn't finish this one.", tools: used };
 }
 
@@ -2494,11 +2520,12 @@ Deno.serve(async (req) => {
             }
             if (await interrupted()) return res;   // he wrote while the note went out: his message wins, nothing carries on
             await saveRunState(threadId, st);
-            const hop = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/admin-chat`, {
+            // v39: a busy pause waits 30 s before the next hop so the rate limits can clear.
+            const hop = new Promise((r) => setTimeout(r, agent.paused ? 30_000 : 0)).then(() => fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/admin-chat`, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: req.headers.get("Authorization") ?? "", apikey: req.headers.get("apikey") ?? "" },
               body: JSON.stringify({ thread_id: threadId, body: "keep going", page: body.page, auto_continue: autoHop + 1, chain_from: chainFrom }),
-            }).then((r) => r.text()).catch(() => null);
+            })).then((r) => r.text()).catch(() => null);
             const er = (globalThis as any).EdgeRuntime;
             if (er?.waitUntil) er.waitUntil(hop); else await hop;
             return res;
