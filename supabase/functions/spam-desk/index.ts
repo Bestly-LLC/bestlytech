@@ -9,7 +9,9 @@
 //
 //   admin / service ops
 //     mark {draft_id | mail_id | from [+subject], verdict?}   the Spam button: report, junk, block, teach the drafter
-//     undo {id}                  only before the report email went out
+//     undo {id} (= not_spam)     "Not spam" on a report, any time: unblock + protect the sender, mark it legit, the Mac mini
+//                                moves the email back to the inbox, and if reports already went out each desk gets a short
+//                                "sent in error, please disregard" note (2026-10-07, after Mom and esearch were junked)
 //     protect {draft_id | mail_id | from}   "Not spam": the sender joins bestly_mail_protected, the card is dismissed
 //     unprotect {from, mail_id}             its undo
 //     list | blocklist | unblock {id} | retry {id}
@@ -20,9 +22,13 @@
 //   service op
 //     auto                       hourly: judge new mail, report clear phishing, make Spam? cards, junk blocked senders, watchdog
 //   agent ops
-//     claim | source {id, eml_b64} | junked {id} | fail {id, error, code}
+//     claim | source {id, eml_b64} | junked {id} | fail {id, error, code} | restored {id, missing?} | disposed {id, missing?}
 //
-// Guardrails: never auto-report a sender Jared emailed or a protected sender; reports go plain (no signature) from
+// Guardrails (tightened 2026-10-07 after Mom and esearch.com were wrongly reported): never touch anyone in his iCloud
+// contacts (mail_contacts, synced daily), a protected sender, a sender he emailed, a forward, or a sender who has written
+// before; auto-report only at confidence >= 0.95, and every "Not spam" undo becomes a lesson the classifier reads next
+// hour. Replies from the abuse desks are moved to Trash by the Mac mini and become a silent note instead (spam_desk_replies).
+// Original rules: reports go plain (no signature) from
 // jared@bestly.tech, one per recipient, at most 8 recipients per email and 60 report emails a day; every send is in
 // email_send_log (template spam-report); scams and phishing are only ever reported, never claimed.
 
@@ -31,6 +37,7 @@ import { SECRET_KEY, isServiceRequest } from "../_shared/keys.ts";
 import { corsWith } from "../_shared/cors.ts";
 import { llm, LlmUnavailable } from "../_shared/free-llm.ts";
 import { sendAsJared } from "../_shared/bestly-signature.ts";
+import { fetchContactEmails } from "../ava-assistant/contacts.ts";
 import {
   FREEMAIL, STATUTE_NOTE, addrOf, domainOf, isBlocked, laTime, matchesProtected, parseHeaders, rdapEmail, registrable, sendingIp,
   type BlockRow, relayOrigin, senderIsBrand } from "../_shared/spam-rules.ts";
@@ -78,14 +85,90 @@ async function emailedSet(addrs: string[]): Promise<Set<string>> {
   }
   return out;
 }
-async function notifyDone(title: string, body: string, key: string) {
-  // success + silent: it never buzzes, and the 7 PM recap counts it under Spam Desk
+async function notifyDone(title: string, body: string, key: string, url = "/admin/spam") {
+  // success + silent: it never buzzes, and the 7 PM recap counts it under Spam Desk. url deep-links to the report's Not spam button.
   await db.from("admin_notifications").upsert(
-    { kind: "mail.spam", title: clip(title, 200), body: clip(body, 500), url: "/admin/spam", severity: "success", silent: true, agent_slug: "spam-desk", dedupe_key: key },
+    { kind: "mail.spam", title: clip(title, 200), body: clip(body, 500), url, severity: "success", silent: true, agent_slug: "spam-desk", dedupe_key: key },
     { onConflict: "dedupe_key", ignoreDuplicates: true });
 }
 const raise = (key: string, kind: "problem" | "resolved", title: string, body: string, needs?: string) =>
   db.rpc("bestly_raise", { p_key: key, p_kind: kind, p_severity: "warning", p_title: title, p_body: body, p_area: "mail", p_needs_jared: needs ?? null, p_healed: false });
+
+/* ───────────────────────── contacts, lessons, desk replies (2026-10-07) ───────────────────────── */
+
+const AUTO_MIN_CONFIDENCE = 0.95;
+
+async function vaultSecret(name: string): Promise<string | null> {
+  const { data, error } = await db.rpc("ava_secret", { p_name: name });
+  return error || typeof data !== "string" || !data ? null : data;
+}
+
+/** Jared's iCloud contacts' email addresses into mail_contacts, at most once every 20 hours. Never throws. */
+async function syncContacts(out: A): Promise<void> {
+  try {
+    const { data: last } = await db.from("mail_contacts").select("synced_at").order("synced_at", { ascending: false }).limit(1);
+    if (last?.[0] && Date.now() - new Date(last[0].synced_at).getTime() < 20 * 3600e3) return;
+    const [user, pass] = await Promise.all([vaultSecret("ava_caldav_icloud_user"), vaultSecret("ava_caldav_icloud_pass")]);
+    if (!user || !pass) { out.contacts = "no iCloud login saved"; return; }
+    const start = new Date().toISOString();
+    const trace: string[] = [];
+    const { emails } = await fetchContactEmails({ user, pass }, trace);
+    if (!emails.length) { out.contacts = `none found (${trace.join(" | ")})`; return; }
+    for (let i = 0; i < emails.length; i += 500) {
+      await db.from("mail_contacts").upsert(emails.slice(i, i + 500).map((e) => ({ email: e.email, name: e.name, synced_at: start })));
+    }
+    await db.from("mail_contacts").delete().lt("synced_at", start);      // removed from his contacts: drop it
+    out.contacts = emails.length;
+  } catch (e) {
+    console.error("contacts sync", e);
+    out.contacts = `failed: ${(e as Error).message}`.slice(0, 120);
+  }
+}
+
+async function contactSet(addrs: string[]): Promise<Set<string>> {
+  const list = [...new Set(addrs.filter(Boolean).map((a) => a.toLowerCase()))];
+  if (!list.length) return new Set();
+  const { data } = await db.from("mail_contacts").select("email").in("email", list);
+  return new Set((data ?? []).map((r: A) => String(r.email)));
+}
+
+/** Senders who wrote before this week: not strangers, so never auto-reported (esearch.com had mailed him for months). */
+async function knownSenders(addrs: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  const before = new Date(Date.now() - 3 * 86400e3).toISOString();
+  for (const a of [...new Set(addrs.filter(Boolean))]) {
+    const { count } = await db.from("bestly_mail").select("id", { count: "exact", head: true }).ilike("from_addr", `%${a}%`).lt("sent_at", before);
+    if ((count ?? 0) > 0) out.add(a);
+  }
+  return out;
+}
+
+/** What Jared has said was NOT spam, newest first: shown to the classifier so the same mistake is not made twice. */
+async function lessons(): Promise<string> {
+  const { data } = await db.from("spam_reports").select("from_name, from_addr, subject").eq("status", "undone").order("updated_at", { ascending: false }).limit(20);
+  if (!data?.length) return "";
+  return `\nJared marked these NOT spam after they were wrongly flagged. Treat them, and mail like them from the same senders, as legit:\n` +
+    data.map((r: A) => `- ${r.from_name ? `${r.from_name} ` : ""}<${r.from_addr}>: ${clip(r.subject, 100)}`).join("\n") + "\n";
+}
+
+/** Every address Spam Desk has ever sent a report or a retraction to, plus the standing target list. */
+async function deskAddresses(): Promise<Set<string>> {
+  const [t, l] = await Promise.all([
+    db.from("spam_report_targets").select("email"),
+    db.from("email_send_log").select("recipient_email").in("template_name", ["spam-report", "spam-retract"]).limit(2000),
+  ]);
+  return new Set([...(t.data ?? []).map((r: A) => String(r.email).toLowerCase()), ...(l.data ?? []).map((r: A) => String(r.recipient_email).toLowerCase())]);
+}
+
+const DESK_LOCAL = /abuse|phish|trust|safety|report|spam|complain|security|noreply|no-reply|support/i;
+const DESK_SUBJECT = /(abuse|phish|spam|report|case|ticket|complaint|incident|disregard|trust\s*(and|&)\s*safety)/i;
+/** A reply from an abuse desk to one of Spam Desk's reports (or a retraction). */
+function isDeskReply(m: A, desks: Set<string>, deskDomains: Set<string>): boolean {
+  const a = addrOf(m.from_addr);
+  if (!a || !DESK_SUBJECT.test(String(m.subject ?? ""))) return false;
+  if (desks.has(a)) return true;
+  return deskDomains.has(registrable(domainOf(a))) && DESK_LOCAL.test(a.split("@")[0]);
+}
 
 /* ───────────────────────── classifying ───────────────────────── */
 
@@ -128,6 +211,8 @@ async function classify(mails: A[]): Promise<Map<string, Verdict>> {
     `Apple Hide My Email relay addresses are normal and never a sign of phishing: judge the original sender shown. Mail whose sender domain belongs to the brand it names (robinhood.com for Robinhood) is that brand's real mail, not phishing.\n` +
     `confidence 0 to 1. brand = the brand being impersonated or advertised, else "". reasons = up to 3 short concrete reasons. ` +
     `business = the advertiser's company name for commercial, else "". us_business = true if the advertiser appears US-based, false if clearly not, null if unknown.\n` +
+    `A forwarded email ("Fwd:") from a person is that person sharing something with Jared: legit, even if what they forwarded looks like a scam.\n` +
+    (await lessons()) +
     `Return JSON only: {"items":[{"i":0,"verdict":"legit","confidence":0.9,"brand":"","reasons":[],"business":"","us_business":null}]}`;
   try {
     const r = await llm({
@@ -310,18 +395,65 @@ async function opMark(a: A, by: string | null): Promise<Response> {
   return J({ ok: true, report: { id: c.report.id, verdict, status: c.report.status }, blocked: c.blocked, message: "Reported as spam. Sender blocked." });
 }
 
+/** "Not spam" on a report, at any stage. Everything the report did gets reversed as far as it can be:
+ *  blocks off, sender protected and marked legit, drafts back, the email moved out of Junk by the Mac mini,
+ *  and when report emails already went out, each desk gets a one-line "sent in error" note. Idempotent. */
 async function opUndo(a: A): Promise<Response> {
   const { data: r } = await db.from("spam_reports").select("*").eq("id", String(a.id ?? "")).maybeSingle();
   if (!r) return J({ ok: false, error: "No such report." }, 404);
-  if (r.status === "undone") return J({ ok: true, already: true });
-  if (r.status === "sent" || r.sent_to?.length) return J({ ok: false, error: "Too late: the report emails already went out." });
-  const u = (r.undo ?? {}) as A;
-  await db.from("spam_reports").update({ status: "undone", updated_at: new Date().toISOString() }).eq("id", r.id);
+  const u = { ...((r.undo ?? {}) as A) };
+  const addr = addrOf(r.from_addr ?? "");
+
+  // 1. unblock: the rows this report made, plus anything else blocking this sender or its domain
   for (const id of u.blocked ?? []) await db.from("mail_blocklist").update({ active: false }).eq("id", id);
+  if (addr) {
+    await db.from("mail_blocklist").update({ active: false }).eq("pattern", addr);
+    const dom = domainOf(addr);
+    if (dom && !FREEMAIL.has(dom)) await db.from("mail_blocklist").update({ active: false }).eq("pattern", registrable(dom));
+  }
+  // 2. protect the sender so the hourly check never judges them again
+  if (addr && !OWN.test(addr)) {
+    const { data: have } = await db.from("bestly_mail_protected").select("pattern").eq("pattern", addr).maybeSingle();
+    if (!have) await db.from("bestly_mail_protected").insert({ pattern: addr, reason: "Not spam (you undid a Spam Desk report)" });
+  }
+  // 3. the verdict and any drafts the report dismissed
+  if (r.mail_id) await db.from("mail_verdicts").upsert({ mail_id: r.mail_id, verdict: "legit", confidence: 1, reasons: ["Jared said not spam"], at: new Date().toISOString() });
   for (const d of u.drafts ?? []) await db.from("scout_daily").update({ status: d.prev ?? "open", done_at: null }).eq("id", d.id).eq("status", "dismissed");
-  if (u.verdict_inserted && r.mail_id) await db.from("mail_verdicts").delete().eq("mail_id", r.mail_id);
-  if (r.verdict === "commercial") await recomputeClaim(registrable(domainOf(addrOf(r.from_addr))));
-  return J({ ok: true });
+  // 4. the Mac mini moves it back to the inbox (it searches the inbox too, so a never-junked one just gets un-flagged)
+  if (!u.restore || u.restore === "failed") u.restore = "queued";
+  u.undone_at = u.undone_at ?? new Date().toISOString();
+  // 5. reports that already went out: tell each desk to disregard it
+  const sentTo: string[] = r.sent_to ?? [];
+  const retracted = new Set<string>(u.retracted ?? []);
+  for (const to of sentTo) {
+    if (retracted.has(to)) continue;
+    const text =
+      `Hello,\n\nPlease disregard my earlier report about this email. It was sent in error by my automated filter. ` +
+      `The sender is legitimate and no action is needed.\n\n` +
+      `From: ${r.from_name ? `${r.from_name} ` : ""}<${r.from_addr}>\nSubject: ${r.subject ?? "(no subject)"}\n` +
+      (r.sent_at_report ? `My report was sent: ${laTime(r.sent_at_report)} PT\n` : "") +
+      `\nSorry for the noise.\n\nJared Best\njared@bestly.tech`;
+    const sent = await sendAsJared(db, {
+      to: [to], subject: clip(`Please disregard: report sent in error (${r.subject ?? "no subject"})`, 200), text,
+      key: `spam-retract-${r.id}-${to}`, signature: false, bcc: false,
+    });
+    await db.from("email_send_log").insert({
+      message_id: sent.id ?? `spam-retract-${r.id}-${to}`, template_name: "spam-retract", recipient_email: to,
+      status: sent.ok ? "sent" : "failed", error_message: sent.ok ? null : sent.error, metadata: { report_id: r.id },
+    });
+    if (sent.ok) retracted.add(to);
+    await new Promise((res) => setTimeout(res, 600));
+  }
+  u.retracted = [...retracted];
+  await db.from("spam_reports").update({ status: "undone", undo: u, claimed_at: null, updated_at: new Date().toISOString() }).eq("id", r.id);
+  if (r.verdict === "commercial") await recomputeClaim(registrable(domainOf(addr)));
+  const left = sentTo.filter((t) => !retracted.has(t));
+  return J({
+    ok: true, retracted: u.retracted, retract_failed: left,
+    message: `Undone. ${addr || "The sender"} is unblocked and protected; the email is going back to your inbox.` +
+      (u.retracted.length ? ` Told ${u.retracted.length} report desk${u.retracted.length === 1 ? "" : "s"} it was a mistake.` : "") +
+      (left.length ? ` Could not reach ${left.join(", ")}.` : ""),
+  });
 }
 
 async function opProtect(a: A): Promise<Response> {
@@ -627,7 +759,48 @@ async function opClaim(): Promise<Response> {
       jobs.push({ id: r.id, mailbox: r.mailbox, message_id: r.message_id, junk_only: true });
     }
   }
+  // "Not spam" undos: move the email back out of Junk (stale claims are retried after 10 min, 5 tries)
+  const room2 = 10 - jobs.length;
+  if (room2 > 0) {
+    const stale = new Date(now.getTime() - 10 * 60e3).toISOString();
+    const { data: rs } = await db.from("spam_reports").select("id, mailbox, message_id, undo").eq("status", "undone").eq("undo->>restore", "queued")
+      .or(`claimed_at.is.null,claimed_at.lt.${stale}`).order("updated_at").limit(room2);
+    for (const r of rs ?? []) {
+      const u = (r.undo ?? {}) as A;
+      const tries = Number(u.restore_tries ?? 0) + 1;
+      if (tries > 5) { await db.from("spam_reports").update({ undo: { ...u, restore: "failed" } }).eq("id", r.id); continue; }
+      await db.from("spam_reports").update({ claimed_at: now.toISOString(), undo: { ...u, restore_tries: tries } }).eq("id", r.id);
+      jobs.push({ id: r.id, mailbox: r.mailbox, message_id: r.message_id, restore: true });
+    }
+  }
+  // desk replies: off to Trash
+  const room3 = 10 - jobs.length;
+  if (room3 > 0) {
+    const stale = new Date(now.getTime() - 10 * 60e3).toISOString();
+    await db.from("spam_desk_replies").update({ status: "failed" }).eq("status", "queued").gte("tries", 5);
+    const { data: ds } = await db.from("spam_desk_replies").select("mail_id, mailbox, message_id, tries").eq("status", "queued")
+      .or(`claimed_at.is.null,claimed_at.lt.${stale}`).order("created_at").limit(room3);
+    for (const d of ds ?? []) {
+      await db.from("spam_desk_replies").update({ claimed_at: now.toISOString(), tries: d.tries + 1 }).eq("mail_id", d.mail_id);
+      jobs.push({ id: d.mail_id, mailbox: d.mailbox, message_id: d.message_id, dispose: true });
+    }
+  }
   return J({ ok: true, jobs });
+}
+
+async function opDisposed(a: A): Promise<Response> {
+  await db.from("spam_desk_replies").update({ status: a.missing ? "missing" : "done", done_at: new Date().toISOString(), claimed_at: null }).eq("mail_id", String(a.id ?? ""));
+  await workerWorks();
+  return J({ ok: true });
+}
+
+async function opRestored(a: A): Promise<Response> {
+  const { data: r } = await db.from("spam_reports").select("id, undo").eq("id", String(a.id ?? "")).maybeSingle();
+  if (!r) return J({ ok: false, error: "no such report" }, 404);
+  const u = (r.undo ?? {}) as A;
+  await db.from("spam_reports").update({ undo: { ...u, restore: a.missing ? "missing" : "done", restored_at: new Date().toISOString() }, claimed_at: null, updated_at: new Date().toISOString() }).eq("id", r.id);
+  await workerWorks();
+  return J({ ok: true });
 }
 
 async function workerWorks() {
@@ -719,7 +892,8 @@ async function opFail(a: A): Promise<Response> {
 async function opAuto(): Promise<Response> {
   const t0 = Date.now();
   const since = new Date(Date.now() - 3 * 3600e3).toISOString();
-  const out: A = { blocked_junked: 0, judged: 0, auto_reported: 0, spam_cards: 0, resent: 0 };
+  const out: A = { blocked_junked: 0, judged: 0, auto_reported: 0, spam_cards: 0, resent: 0, desk_replies: 0 };
+  await syncContacts(out);
   const [block, pats] = await Promise.all([activeBlocklist(), protectedPatterns()]);
   const { data: mailRows } = await db.from("bestly_mail").select(MAIL_COLS).eq("folder", "INBOX").gte("sent_at", since).order("sent_at", { ascending: false }).limit(200);
   const mail = (mailRows ?? []) as A[];
@@ -729,9 +903,29 @@ async function opAuto(): Promise<Response> {
   const { data: rrows } = ids.length ? await db.from("spam_reports").select("mail_id").in("mail_id", ids) : { data: [] as A[] };
   const reported = new Set((rrows ?? []).map((v: A) => v.mail_id));
 
+  const contacts = await contactSet(mail.map((m) => addrOf(m.from_addr)));
+
+  // (c) replies from the abuse desks: off to Trash on the Mac mini, a silent note for Jared instead
+  const desks = await deskAddresses();
+  const deskDomains = new Set([...desks].map((d) => registrable(domainOf(d))).filter(Boolean));
+  for (const m of mail) {
+    if (judged.has(m.id) || reported.has(m.id) || !isDeskReply(m, desks, deskDomains)) continue;
+    const subj = String(m.subject ?? "");
+    const { data: reps } = await db.from("spam_reports").select("id, subject").not("subject", "is", null).order("created_at", { ascending: false }).limit(200);
+    const rep = (reps ?? []).find((r: A) => r.subject && subj.replace(/\s+/g, " ").includes(String(r.subject).replace(/\s+/g, " ").slice(0, 40)));
+    const { error } = await db.from("spam_desk_replies").insert({ mail_id: m.id, mailbox: m.mailbox, message_id: m.message_id, from_addr: addrOf(m.from_addr), subject: clip(subj, 300), report_id: rep?.id ?? null });
+    await db.from("mail_verdicts").upsert({ mail_id: m.id, verdict: "legit", confidence: 1, reasons: ["reply from an abuse desk to a Spam Desk report"], at: new Date().toISOString() });
+    judged.add(m.id);
+    if (error) continue;                                            // already queued
+    out.desk_replies++;
+    const desk = registrable(domainOf(addrOf(m.from_addr))) || addrOf(m.from_addr);
+    await notifyDone(`Spam Desk: ${desk} answered a report`, `${clip(subj.replace(/\s+/g, " "), 160)}. Moved to Trash so it stays out of your inbox.`, `spam-desk-reply-${m.id}`, rep ? `/admin/spam?r=${rep.id}` : "/admin/spam");
+  }
+
   // (b) new mail from a blocked sender: junk it (no report email), and a commercial sender's mail counts toward the claim
   for (const m of mail) {
-    if (reported.has(m.id) || !isBlocked(block, m.from_addr)) continue;
+    if (reported.has(m.id) || judged.has(m.id) || !isBlocked(block, m.from_addr)) continue;
+    if (contacts.has(addrOf(m.from_addr)) || matchesProtected(pats, addrOf(m.from_addr))) continue;
     const b = isBlocked(block, m.from_addr)!;
     const { data: bl } = await db.from("mail_blocklist").select("report_id").eq("pattern", b.pattern).maybeSingle();
     const { data: first } = bl?.report_id ? await db.from("spam_reports").select("verdict, brand").eq("id", bl.report_id).maybeSingle() : { data: null };
@@ -748,13 +942,14 @@ async function opAuto(): Promise<Response> {
   const toJudge: A[] = [];
   for (const m of fresh) {
     const addr = addrOf(m.from_addr);
-    const skip = !addr ? "no address" : OWN.test(addr) ? "ours" : matchesProtected(pats, addr) ? "protected sender" : emailed.has(addr) ? "Jared has emailed this sender" : "";
+    const skip = !addr ? "no address" : OWN.test(addr) ? "ours" : contacts.has(addr) ? "in Jared's contacts" : matchesProtected(pats, addr) ? "protected sender" : emailed.has(addr) ? "Jared has emailed this sender" : "";
     if (skip) {
       await db.from("mail_verdicts").upsert({ mail_id: m.id, verdict: "legit", confidence: 1, reasons: [`not judged: ${skip}`], at: new Date().toISOString() });
       continue;
     }
     toJudge.push(m);
   }
+  const known = await knownSenders(toJudge.map((m) => addrOf(m.from_addr)));
   const BATCH = 8;
   for (let i = 0; i < toJudge.length; i += BATCH) {
     if (Date.now() - t0 > 100_000) break;                       // stay inside the 150 s function limit; the rest wait for the next hour
@@ -776,13 +971,18 @@ async function opAuto(): Promise<Response> {
         await db.from("mail_verdicts").update({ verdict: "legit", reasons: [...v.reasons, "sender domain is the brand's own"] }).eq("mail_id", m.id);
         continue;
       }
-      if (v.verdict === "phishing" && v.confidence >= 0.85 && out.auto_reported < 10 && !relayOrigin(addrOf(m.from_addr))) {
+      // Forwards are a person passing something along (2026-10-07: Mom's "Fwd:" got auto-reported). Never auto-report one;
+      // it becomes a Spam? card at most.
+      const forwarded = /^\s*(fwd?|fw)\s*:/i.test(String(m.subject ?? ""));
+      // "Auto only when certain" (Jared, 2026-10-07): a stranger, not a forward, not relayed, and 0.95+ sure. Anything less is a card.
+      const stranger = !known.has(addrOf(m.from_addr));
+      if (v.verdict === "phishing" && v.confidence >= AUTO_MIN_CONFIDENCE && stranger && out.auto_reported < 10 && !relayOrigin(addrOf(m.from_addr)) && !forwarded) {
         try {
           const { data: draft } = await db.from("scout_daily").select("id, status").eq("source_key", `mail:${m.id}`).eq("kind", "draft").eq("status", "open").limit(1);
           const c = await createReport(m, { verdict: "phishing", how: "auto", reasons: v.reasons, brand: v.brand, draft: draft?.[0] ?? null, v, protectedPats: pats, emailed });
           if (!c.already) {
             out.auto_reported++;
-            await notifyDone(`Spam Desk reported a phishing email from ${sender}`, `${clip(m.subject, 120)}${v.brand ? ` (pretending to be ${v.brand})` : ""}. Reported, moved to Junk, sender blocked.`, `spam-auto-${c.report.id}`);
+            await notifyDone(`Spam Desk reported a phishing email from ${sender}`, `${clip(m.subject, 120)}${v.brand ? ` (pretending to be ${v.brand})` : ""}. Reported, moved to Junk, sender blocked. Not spam? Tap to undo.`, `spam-auto-${c.report.id}`, `/admin/spam?r=${c.report.id}`);
           }
         } catch (e) { console.error("auto report", e); }
       } else {
@@ -821,7 +1021,7 @@ async function opAuto(): Promise<Response> {
 
 /* ───────────────────────── entry ───────────────────────── */
 
-const AGENT_OPS = new Set(["claim", "source", "junked", "fail"]);
+const AGENT_OPS = new Set(["claim", "source", "junked", "fail", "restored", "disposed"]);
 const SERVICE_OPS = new Set(["auto", "mark", "list", "blocklist"]);
 
 Deno.serve(async (req) => {
@@ -838,7 +1038,7 @@ Deno.serve(async (req) => {
       const { data: row } = await db.from("meeting_recorder_state").select("key_sha256").eq("id", 1).single();
       if (!row?.key_sha256 || (await sha256(agentKey)) !== row.key_sha256) return J({ ok: false, error: "bad key" }, 401);
       if (!AGENT_OPS.has(op)) return J({ ok: false, error: `unknown op ${op}` }, 400);
-      return op === "claim" ? await opClaim() : op === "source" ? await opSource(body) : op === "junked" ? await opJunked(body) : await opFail(body);
+      return op === "claim" ? await opClaim() : op === "source" ? await opSource(body) : op === "junked" ? await opJunked(body) : op === "restored" ? await opRestored(body) : op === "disposed" ? await opDisposed(body) : await opFail(body);
     }
 
     // service: pg_cron and Scout
@@ -860,7 +1060,7 @@ Deno.serve(async (req) => {
 
     switch (op) {
       case "mark": return await opMark(body, who.user.id);
-      case "undo": return await opUndo(body);
+      case "undo": case "not_spam": return await opUndo(body);
       case "protect": return await opProtect(body);
       case "unprotect": return await opUnprotect(body);
       case "list": return await opList();

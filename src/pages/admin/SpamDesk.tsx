@@ -1,13 +1,16 @@
 /**
  * Spam Desk: what the Spam button and the hourly check did, who is blocked, and the damages files.
- *   Reports   every email reported (you tapped Spam, caught automatically, or a blocked sender wrote again): who got the report
+ *   Reports   every email reported (you tapped Spam, caught automatically, or a blocked sender wrote again): who got the report.
+ *             "Not spam" works at any stage (2026-10-07): unblocks and protects the sender, moves the email back to the inbox,
+ *             and tells every desk that got a report to disregard it. /admin/spam?r=<id> (the alert link) opens on that report.
  *   Blocked   senders that never get drafts again, one tap to unblock
  *   Claims    commercial spam from a business: count, amount, a drafted letter, and a Send that needs your confirm
  * Reads the spam_* tables (admins only); every change goes through the spam-desk function.
  * Scout is not a lawyer: the claims section says so and nothing is mailed without the confirm dialog.
  */
-import { useCallback, useEffect, useState } from "react";
-import { Ban, Check, ExternalLink, FileText, Loader2, RefreshCw, RotateCcw, Send, ShieldAlert, Undo2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Ban, Check, ExternalLink, FileText, Inbox, Loader2, RefreshCw, RotateCcw, Send, ShieldAlert, ShieldCheck, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { Pill, SectionHeader, btnPrimary, btnTinted, cardCls, divider, focusRing, inset, rowCls, text, tint } from "@/components/admin/ui";
@@ -22,7 +25,9 @@ interface Report {
   verdict: "phishing" | "commercial" | "spam"; how: "tap" | "auto" | "blocked";
   status: "queued" | "fetching" | "ready" | "sent" | "failed" | "undone" | "junk_only";
   sent_to: string[]; error: string | null; created_at: string; sent_at_report: string | null; junked_at: string | null;
+  undo: { restore?: "queued" | "done" | "missing" | "failed"; retracted?: string[] } | null;
 }
+interface DeskReply { mail_id: string; report_id: string | null; from_addr: string | null; subject: string | null; status: string; created_at: string }
 interface Block { id: string; pattern: string; kind: "address" | "domain"; reason: string | null; created_at: string }
 interface Claim {
   id: string; advertiser_domain: string; business_name: string | null; contact_email: string | null; contact_address: string | null;
@@ -62,8 +67,13 @@ function statusLine(r: Report): { tone: "neutral" | "green" | "orange" | "red"; 
       return { tone: "neutral", label: r.junked_at ? "In Junk" : "Moving to Junk", detail: r.error ?? "Blocked sender: moved to Junk, no new report sent." };
     case "failed":
       return { tone: "red", label: "Failed", detail: r.error ?? "Something went wrong." };
-    default:
-      return { tone: "neutral", label: "Undone", detail: "You undid this. The sender is unblocked." };
+    default: {
+      const u = r.undo ?? {};
+      const where = u.restore === "done" ? "Back in your inbox." : u.restore === "missing" ? "It was not in Junk anymore, so nothing to move."
+        : u.restore === "failed" ? "The Mac mini could not move it back. Check Junk in Mail." : "Moving back to your inbox.";
+      const told = u.retracted?.length ? ` Told ${u.retracted.length === 1 ? "1 report desk" : `${u.retracted.length} report desks`} it was a mistake.` : "";
+      return { tone: "green", label: "Not spam", detail: `${where} Sender unblocked and protected, so it won't happen again.${told}` };
+    }
   }
 }
 
@@ -72,16 +82,22 @@ export default function SpamDesk() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
   const [targets, setTargets] = useState<Target[]>([]);
+  const [replies, setReplies] = useState<DeskReply[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const focusId = params.get("r");
+  const scrolled = useRef(false);
 
   const load = useCallback(async () => {
-    const [r, b, c, t] = await Promise.all([
-      supabase.from("spam_reports" as never).select("id, from_addr, from_name, subject, mailbox, verdict, how, status, sent_to, error, created_at, sent_at_report, junked_at")
+    const [r, b, c, t, d] = await Promise.all([
+      supabase.from("spam_reports" as never).select("id, from_addr, from_name, subject, mailbox, verdict, how, status, sent_to, error, created_at, sent_at_report, junked_at, undo")
         .order("created_at", { ascending: false }).limit(100),
       supabase.from("mail_blocklist" as never).select("id, pattern, kind, reason, created_at").eq("active", true).order("created_at", { ascending: false }).limit(300),
       supabase.from("spam_claims" as never).select("*").gt("email_count", 0).order("updated_at", { ascending: false }).limit(50),
       supabase.from("spam_report_targets" as never).select("id, email, applies, mailbox, brand_keywords, source_url, verified_on").eq("active", true).order("email"),
+      supabase.from("spam_desk_replies" as never).select("mail_id, report_id, from_addr, subject, status, created_at").order("created_at", { ascending: false }).limit(200),
     ]);
+    setReplies(((d.data ?? []) as unknown) as DeskReply[]);
     setReports(((r.data ?? []) as unknown) as Report[]);
     setBlocks(((b.data ?? []) as unknown) as Block[]);
     setClaims(((c.data ?? []) as unknown) as Claim[]);
@@ -94,9 +110,16 @@ export default function SpamDesk() {
     return () => clearInterval(t);
   }, [load]);
 
+  // the alert link (?r=<id>) lands on its report
+  useEffect(() => {
+    if (!focusId || !reports || scrolled.current) return;
+    scrolled.current = true;
+    requestAnimationFrame(() => document.getElementById(`report-${focusId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+  }, [focusId, reports]);
+
   const act = async (key: string, body: Record<string, unknown>, ok: string) => {
     setBusy(key);
-    try { await call(body); toast.success(ok); } catch (e) { toast.error((e as Error).message); }
+    try { const r = await call(body); toast.success(typeof r.message === "string" ? r.message : ok); } catch (e) { toast.error((e as Error).message); }
     setBusy(null);
     load();
   };
@@ -114,6 +137,29 @@ export default function SpamDesk() {
 
       {reports === null ? <Loader2 className="h-5 w-5 animate-spin text-white/50" aria-label="Loading" /> : (
         <>
+          {(() => {
+            const f = focusId ? reports.find((r) => r.id === focusId) : null;
+            if (!f) return null;
+            const done = f.status === "undone";
+            return (
+              <div className={cn(cardCls, "space-y-3 py-4", inset)} role="status">
+                <div className="flex items-start gap-3">
+                  {done ? <ShieldCheck className={cn("mt-0.5 h-5 w-5 shrink-0", tint.green)} aria-hidden /> : <ShieldAlert className={cn("mt-0.5 h-5 w-5 shrink-0", tint.orange)} aria-hidden />}
+                  <div className="min-w-0 space-y-1">
+                    <p className={text.title}>{done ? "Marked not spam" : "Was this a mistake?"}</p>
+                    <p className={cn(text.detail, "break-words")}>{f.from_name ? `${f.from_name} <${f.from_addr}>` : f.from_addr}: {f.subject || "(no subject)"}</p>
+                    <p className={cn(text.detail, "break-words")}>{done ? statusLine(f).detail : "Not spam moves it back to your inbox, unblocks the sender for good, and tells every report desk to disregard it."}</p>
+                  </div>
+                </div>
+                {!done && (
+                  <button className={btnPrimary} disabled={busy === f.id} onClick={() => act(f.id, { op: "not_spam", id: f.id }, "Marked not spam")}>
+                    {busy === f.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Inbox className="h-4 w-4" aria-hidden />} Not spam
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
           <section aria-labelledby="sd-reports">
             <SectionHeader id="sd-reports" title="Reports" aside={reports.length ? <><Nb>{sentCount} sent</Nb> · <Nb>{autoCount} automatic</Nb></> : undefined} />
             {reports.length === 0 ? (
@@ -126,9 +172,10 @@ export default function SpamDesk() {
                 {reports.map((r) => {
                   const s = statusLine(r);
                   const v = VERDICT[r.verdict];
-                  const canUndo = ["queued", "fetching", "ready", "failed"].includes(r.status);
+                  const canUndo = r.status !== "undone";
+                  const deskReplies = replies.filter((d) => d.report_id === r.id);
                   return (
-                    <li key={r.id} className={cn("space-y-1.5 py-3", inset)}>
+                    <li key={r.id} id={`report-${r.id}`} className={cn("space-y-1.5 py-3 scroll-mt-24", inset, r.id === focusId && "bg-white/[0.04]")}>
                       <div className="flex flex-wrap items-center gap-1.5">
                         <Pill tone={v.tone}>{v.label}</Pill>
                         <Pill tone="neutral">{HOW[r.how]}</Pill>
@@ -138,6 +185,11 @@ export default function SpamDesk() {
                       <p className={cn(text.title, "break-words")}>{r.subject || "(no subject)"}</p>
                       <p className={cn(text.detail, "break-words")}>From {r.from_name ? `${r.from_name} <${r.from_addr}>` : r.from_addr} · to {r.mailbox}</p>
                       <p className={cn(text.detail, "break-words")}>{s.detail}</p>
+                      {deskReplies.length > 0 && (
+                        <p className={cn(text.detail, "break-words")}>
+                          {deskReplies.length === 1 ? "1 reply" : `${deskReplies.length} replies`} from {[...new Set(deskReplies.map((d) => d.from_addr?.split("@")[1] ?? "a desk"))].join(", ")}, moved to Trash for you.
+                        </p>
+                      )}
                       {(canUndo || r.status === "failed") && (
                         <div className="-mx-1 flex flex-wrap gap-1">
                           {r.status === "failed" && (
@@ -146,8 +198,8 @@ export default function SpamDesk() {
                             </button>
                           )}
                           {canUndo && (
-                            <button className={cn(smallBtn, "text-white/75 hover:bg-white/[0.06]")} disabled={busy === r.id} onClick={() => act(r.id, { op: "undo", id: r.id }, "Report undone")}>
-                              <Undo2 className="h-4 w-4" aria-hidden /> Undo
+                            <button className={cn(smallBtn, "text-white/75 hover:bg-white/[0.06]")} disabled={busy === r.id} onClick={() => act(r.id, { op: "not_spam", id: r.id }, "Marked not spam")}>
+                              {busy === r.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Undo2 className="h-4 w-4" aria-hidden />} Not spam
                             </button>
                           )}
                         </div>
