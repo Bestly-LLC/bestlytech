@@ -367,3 +367,13 @@ Plan: `docs/wall-sky-hd-opusplan.md`.
   `/mnt/ssd/apps/homebridge/config.json`, backup `config.json.bak_projector_*`). "Hey Siri, turn off/on the projector."
   Off holds until the next schedule boundary (midnight or 7 AM), same as the admin buttons.
 - **Watch next:** whether Android stays awake all night in picture off (power_log `awake` should stay true with `dark` true).
+
+## Oct 7, 9:30 AM: the "extend battery life" popup
+- **Source:** `com.oceanwing.nebulalinker` boot action `BatteryProtectionDetectAction` shows "To extend battery life, your Nebula
+  projector learns your daily charging routine, so it will wait to charge past 90%..." on every boot when the battery MCU's
+  protection flag `/sys/class/anker_mcu/bp_flag` is 1. So the protection is built into the battery controller and already on;
+  the 7 AM clean reboot just makes the notice show daily. There is no user setting.
+- **A hard 90% cap is not reachable:** the MCU has a factory limiter (`factory_limit_charger_enable`, `_soc_high`, `_soc_low`),
+  but `/sys/class/anker_mcu/*` needs root and this is a locked user build (`ro.debuggable=0`).
+- **Auto-close (`watchdog.py dismiss_battery_popup()`, backup `.bak_bppopup_*`):** within 30 min of a boot, a `uiautomator dump`
+  of the screen; only if it contains "daily charging routine" does it press DPAD_CENTER (the dialog's OK). Never Back.
