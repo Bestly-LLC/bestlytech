@@ -38,6 +38,8 @@ interface Rep {
 }
 interface Msg { sent_at: string; role: string; author: string | null; body: string }
 
+/** Enough rows that the whole text shows on a phone (about 32 characters a line), never a clipped box. */
+const rowsFor = (t: string) => Math.max(4, Math.ceil(t.length / 30) + 1);
 const pct = (n: number | null | undefined) => (n == null ? "–" : `${n}%`);
 
 function Stars({ n }: { n: number | null }) {
@@ -195,7 +197,7 @@ function ReviewCard({ r, reload }: { r: Review; reload: () => void }) {
           <label htmlFor={`draft-${r.id}`} className="text-xs font-semibold uppercase tracking-widest text-white/60">
             Reply draft{r.draft_by ? <span className="font-normal normal-case tracking-normal"> · {r.draft_by}</span> : null}
           </label>
-          <textarea id={`draft-${r.id}`} value={draft} onChange={(e) => setDraft(e.target.value)} rows={4} className={cn(fieldCls, "leading-relaxed")} disabled={approved} />
+          <textarea id={`draft-${r.id}`} value={draft} onChange={(e) => setDraft(e.target.value)} rows={rowsFor(draft)} className={cn(fieldCls, "leading-relaxed")} disabled={approved} />
           <p className={cn("text-sm", muted)}><span className="whitespace-nowrap">{draft.trim().length} characters</span>. No emoji. Ends with Hope to host you again soon!</p>
         </div>
       )}
@@ -209,7 +211,7 @@ function ReviewCard({ r, reload }: { r: Review; reload: () => void }) {
         <>
           <div>
             <label htmlFor={`notes-${r.id}`} className="text-xs font-semibold uppercase tracking-widest text-white/60">Notes for Stella</label>
-            <input id={`notes-${r.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={approved} placeholder="e.g. mention the airport pickup, keep it shorter" className={cn(fieldCls, "mt-1.5 h-11")} />
+            <input id={`notes-${r.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={approved} placeholder="e.g. keep it shorter" className={cn(fieldCls, "mt-1.5 h-11")} />
           </div>
           <div className="flex flex-wrap gap-2">
             {r.respond_available && !approved && (
@@ -269,7 +271,7 @@ function AskDrafts({ s, reload }: { s: NonNullable<Rep["settings"]>; reload: () 
   const box = (id: string, label: string, val: string, set: (v: string) => void, key: "ask_lax" | "ask_home", saved: string | null) => (
     <div className="space-y-2">
       <label htmlFor={id} className="text-xs font-semibold uppercase tracking-widest text-white/60">{label}</label>
-      <textarea id={id} rows={4} value={val} onChange={(e) => set(e.target.value)} className={cn(fieldCls, "leading-relaxed")} />
+      <textarea id={id} rows={rowsFor(val)} value={val} onChange={(e) => set(e.target.value)} className={cn(fieldCls, "leading-relaxed")} />
       <div className="flex flex-wrap gap-2">
         <button className={pillPrimary} onClick={() => copyText(val, label)}><Clipboard className="h-4 w-4" aria-hidden /> Copy</button>
         {val.trim() !== (saved ?? "").trim() && <button className={pillSecondary} disabled={!!busy} onClick={() => save(key, val)}>{busy === key && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />} Save my edit</button>}
