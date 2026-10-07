@@ -316,7 +316,7 @@ const TOOLS = [
       "action propose: puts a Run card in front of Jared showing the exact script. Nothing runs until he taps Run; you cannot approve it. " +
       "Say in one line what it does and that the Yes button is up. Do not ask him to type yes. (With auto-run on, it starts by itself; the result says so.) " +
       "Write title and why for someone who has never seen a terminal: title = what it does for him ('Restart the call recorder'), why = one sentence on what changes after ('Your next call gets recorded again.'). No commands or jargon in either. " +
-      "action get: read a job's status and output (latest if no id). " +
+      "action get: read a job's status and output (latest if no id). get never runs a script: to run one, propose it. " +
       "Scripts run in zsh -l as Jared's user under launchd: no sudo, no GUI prompts, and macOS privacy may block Desktop/Documents/Downloads. Default timeout 300s.",
     input_schema: {
       type: "object",
@@ -815,12 +815,18 @@ async function meetingTranscript(args: Record<string, any>): Promise<Record<stri
 
 async function macRun(args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
   if (args.action === "get") {
-    let q = db.from("mac_jobs").select("id, title, status, exit_code, created_at, started_at, finished_at, output");
+    let q = db.from("mac_jobs").select("id, title, script, status, exit_code, created_at, started_at, finished_at, output");
     q = args.id ? q.eq("id", String(args.id)) : q.eq("thread_id", threadId).order("created_at", { ascending: false });
     const { data, error } = await q.limit(1);
     if (error) return { ok: false, error: error.message };
     if (!data?.length) return { ok: false, error: "no job found" };
-    const j = data[0] as Record<string, any>;
+    const { script: ranScript, ...j } = data[0] as Record<string, any>;
+    // v37: get never runs anything. A get carrying a NEW script used to hand back the last job's output as if it were
+    // the new one (Oct 6: "cat mail_sync.py" came back as the mail_bridge.py output), and the free model went in circles.
+    const asked = String(args.script ?? "").trim();
+    if (!args.id && asked && asked !== String(ranScript ?? "").trim()) {
+      return { ok: false, error: "get_does_not_run", hint: `get only reads a job that already ran (the latest is "${j.title}"). To run this new script, call mac_run with action propose.` };
+    }
     const out = String(j.output ?? "");
     return { ok: true, ...j, output: out.length > 30_000 ? "[... start cut ...]\n" + out.slice(-30_000) : out };
   }
@@ -966,7 +972,16 @@ const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read
 const FREE_STEPS = 14;           // v36 (was 10); the 85 s budget still bounds each hop
 const FREE_BUDGET_MS = 85_000;   // freeTry (up to 30s) + this + the 20s summary must stay under the 150s platform limit
 const REFUSES = /\b(can'?t|cannot|can not|unable to|not able to|don'?t have (access|the ability))\b|\bmanually\b|\byou('ll| will)? (need|have) to\b/i;
-const CLAIMS_DONE = /\b(done|fixed|resolved|pushed|sent|cleared|moved|restarted|deployed|completed|updated|notified)\b/i;
+// v37: a claim of work SCOUT did ("I fixed it", "it's done", "Done."), not any status word. The old bare-word list
+// read findings as claims: on Oct 6 the mail bridge script said "Moved to the Pi", Scout reported that, "moved" tripped
+// this guard twice, and a correct finding was thrown away for a paid-AI ask.
+const DONE_WORDS = "done|fixed|resolved|pushed|sent|cleared|moved|restarted|deployed|completed|updated|notified|changed|set|turned (?:on|off)";
+const CLAIMS_DONE = new RegExp(
+  `\\b(?:i|i've|i have|i just|scout|scout has|we|we've|we have)\\s+(?:just\\s+|now\\s+|also\\s+)?(?:${DONE_WORDS})\\b` +
+  `|\\b(?:it'?s|it is|that'?s|that is|all|everything is|now)\\s+(?:now\\s+|all\\s+)?(?:done|fixed|resolved|pushed|sent|cleared|restarted|deployed|set)\\b` +
+  `|^\\s*(?:done|fixed|all set|sorted)\\b`,
+  "im",
+);
 /** "It already cleared / the last runs succeeded" reports a state, not work Scout did: not a false claim. */
 const ALREADY = /\b(already|no longer|on its own|since then|has stopped|stopped failing|succeed(ed|s|ing)|not happening|recovered)\b/i;
 const PLACEHOLDER = /\[(?:[A-Z][A-Za-z ]{1,20})\]|(?<!Model )\bX\b(?=\s+[a-z])|<[a-z_ ]{2,20}>/;
@@ -1179,7 +1194,8 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   // Conversation as real turns. Paid-AI asks are left out: they are not answers, and they talk the free model into giving up.
   const msgs: Msg[] = [{ role: "system", content: system }];
   const turns = ((hist ?? []) as any[]).reverse()
-    .filter((m) => !(m.role === "assistant" && /^(I'd need paid AI|NEEDS_YES: Let Scout work on this with paid AI)/.test(String(m.body))));
+    .filter((m) => !(m.role === "assistant" && /^(I'd need paid AI|NEEDS_YES: Let Scout work on this with paid AI|OK, no paid AI)/.test(String(m.body))))
+    .filter((m) => !(m.role === "user" && /^\s*no,? skip it\.?\s*$/i.test(String(m.body))));   // v37: the decline is about money, not the job
   turns.forEach((m, i) => {
     const role = m.role === "assistant" ? "assistant" : "user";
     const raw = String(m.body ?? "") === STOP_MARK ? "(Jared stopped your last reply here.)" : String(m.body ?? "");
@@ -1228,7 +1244,10 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       const own = reply.split(/^\s*OPTIONS:/m)[0];
       if (CLAIMS_DONE.test(own) && !acted && !ALREADY.test(own) && !/\?\s*$/.test(own.trim())) {
         if (nudges < 2) { nudge("Nothing was changed by a tool in this turn, so don't say it's done. Either do it with a tool, or say what you found and what's left."); continue; }
-        return { why: "The free AI tried but couldn't finish this one.", tools: used };
+        // v37: out of nudges is not a dead end. Fall through to the findings summary below (built only from tool results),
+        // so what it read reaches Jared instead of a bare paid-AI ask.
+        msgs.push({ role: "assistant", content: reply });
+        break;
       }
       // Normalize the options line; fewer than two choices means no line.
       const m = reply.match(/^\s*OPTIONS:\s*(.+)$/m);
@@ -2178,7 +2197,15 @@ Deno.serve(async (req) => {
           return await say(`Paid AI is at today's cap ($${Number((sp as any)?.spent ?? 0).toFixed(2)} of $${Number((sp as any)?.cap ?? 5).toFixed(2)}). I can raise it by $5 for today, or wait until midnight. Your message is saved.\n\n${CAP_OPTIONS}`, { capped: true });
         }
       } else if (/^no,? skip it\.?$/i.test(text)) {
-        return await say("OK, skipped. Nothing was spent.");
+        // v37: "No" was a no to SPENDING, not to the job. It used to end the job on the spot ("OK, skipped") and drop
+        // what the free AI had found, so a half-done fix (Oct 6, the Mail Bridge password) just stopped. Now the job
+        // stays open on free AI and he picks: carry on for free, or drop it.
+        return await say(
+          "OK, no paid AI. Nothing was spent. The job is still open: I can keep at it on free AI from where it stopped, or drop it.\n\nOPTIONS: Keep going | Drop it",
+        );
+      } else if (/^drop it\.?$/i.test(text)) {
+        await saveRunState(threadId, null).catch(() => {});
+        return await say("Dropped. Nothing was spent.");
       } else if (autopilot) {
         // v29: the fix ladder tries the free agent first (same autopilot limits: nothing that needs a yes runs).
         // Paid AI is offered only when free can't finish; a free STUCK keeps its diagnosis and adds the paid offer.
@@ -2258,9 +2285,12 @@ Deno.serve(async (req) => {
           await endRun(st);
           return await say(`${agent.answer}\n\nOPTIONS: Keep going | Yes, use paid AI`, { free: true, tools: agent.tools ?? [] });
         }
-        await endRun();
+        // v37: a run that ends in a paid ask keeps its memory, so a "No, skip it" then "Keep going" resumes on free AI.
+        await endRun(agent.answer ? undefined : (runIn ?? undefined));
         if (agent.answer) return await say(agent.answer, { free: true, tools: agent.tools ?? [] });
         free = { why: agent.why || free.why };
+        // v37: say where the free AI got to, not just that it stopped (the autopilot path already did this).
+        if (agent.note) free.why = `${free.why} Where it got to: ${agent.note.replace(/[.\s]+$/, "")}.`;
         // Don't offer a paid run that can't happen: say the real blocker instead.
         if (await paidOutOfCredit()) {
           return await say(
