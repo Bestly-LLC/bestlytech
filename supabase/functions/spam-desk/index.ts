@@ -1022,7 +1022,8 @@ async function opAuto(): Promise<Response> {
 /* ───────────────────────── entry ───────────────────────── */
 
 const AGENT_OPS = new Set(["claim", "source", "junked", "fail", "restored", "disposed"]);
-const SERVICE_OPS = new Set(["auto", "mark", "list", "blocklist"]);
+// not_spam is a service op too, so Scout can undo a report the moment Jared says "that's not spam" in chat.
+const SERVICE_OPS = new Set(["auto", "mark", "list", "blocklist", "not_spam"]);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -1046,6 +1047,7 @@ Deno.serve(async (req) => {
       if (!SERVICE_OPS.has(op)) return J({ ok: false, error: op === "approve_send" ? "Sending a demand letter needs Jared's own tap." : `op ${op} is for admins` }, 403);
       if (op === "auto") return await opAuto();
       if (op === "mark") return await opMark(body, null);
+      if (op === "not_spam") return await opUndo(body);
       return op === "list" ? await opList() : J({ ok: true, blocklist: (await activeBlocklist()) });
     }
 
