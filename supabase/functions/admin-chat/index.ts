@@ -396,7 +396,7 @@ const TOOLS = [
   },
   {
     name: "search_mail",
-    description: "Find emails fast: the 10 newest matches as one line each (id, date, from, subject, snippet). who = a name or address on the email (from or to); about = words in the subject or body (separate alternatives with |); days = how far back (default 60). Then read_email on the id you need. Never page through raw bestly_mail rows with run_sql.",
+    description: "Find emails fast: the 10 newest matches as one line each (id, date, from, subject, snippet). who = a name or address on the email (from or to), e.g. elizabeth; about = words in the subject or body (separate alternatives with |); days = how far back (default 60). Start with who alone for a person, then narrow with about. Then read_email on the id you need. Never page through raw bestly_mail rows with run_sql.",
     input_schema: { type: "object", properties: { who: { type: "string" }, about: { type: "string" }, days: { type: "number" } } },
   },
   {
@@ -934,7 +934,7 @@ async function readEmail(args: Record<string, any>): Promise<Record<string, unkn
   if (!data) return { ok: false, error: "no email with that id (use search_mail)" };
   const d = data as any;
   return { ok: true, id, subject: d.subject, from: `${d.from_name ? d.from_name + " " : ""}<${d.from_addr}>`, to: String(Array.isArray(d.to_addrs) ? d.to_addrs.join(", ") : d.to_addrs ?? "").slice(0, 200),
-    date: ptTime(d.sent_at), body: cleanMailBody(d.body_text).slice(0, 8000), note: "quoted replies and signature removed" };
+    date: ptTime(d.sent_at), body: (cleanMailBody(d.body_text).length >= 20 ? cleanMailBody(d.body_text) : String(d.body_text ?? "").replace(/\r/g, "").trim()).slice(0, 8000), note: "quoted replies and signature removed (whole text when nothing else was there)" };
 }
 
 async function meetingTranscript(args: Record<string, any>): Promise<Record<string, unknown>> {
@@ -1403,6 +1403,8 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
   const autopilot = !!opts.autopilot;
   const until = Date.now() + FREE_BUDGET_MS;
   const prior = autopilot ? null : (opts.state ?? null);   // v36: what earlier hops of this run already did
+  // v41: a QUESTION asked through the service path (autopilot flag, no one watching) still gets the plain-answer prompt, not the FIXED / NEEDS_YES / STUCK verdict one. Writes stay blocked (AUTOPILOT_NEVER).
+  const vm = autopilot && classifyAsk(text) !== "question";
   const calls: RunCall[] = prior ? prior.calls.map((c) => ({ ...c })) : [];
   const notes: string[] = prior ? prior.notes.slice() : [];
   const runStartedAt = prior?.started_at ?? new Date().toISOString();
@@ -1423,7 +1425,7 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
   const saidYes = !autopilot && PLAIN_YES.test(text);
   const queue = ((today ?? []) as any[]).slice(0, 12).map((q) => `- [${q.key}] rank ${q.rank} ${q.title}${q.detail ? `: ${String(q.detail).slice(0, 140)}` : ""}`).join("\n");
 
-  const yesRule = autopilot
+  const yesRule = vm
     ? "Jared is NOT here (the fix ladder sent you). FIRST check it is still happening right now (a scheduled job: SELECT status, return_message, start_time FROM cron.job_run_details d JOIN cron.job j USING (jobid) WHERE j.jobname='<name>' ORDER BY start_time DESC LIMIT 3; anything else: the incidents tool or the table it watches). If it has stopped, say so with the evidence and end FIXED: already clear. Use read tools and do only what needs no yes. Anything that needs his yes: don't call it, say it in your last line."
     : saidYes
       ? "His latest message is a yes: set confirmed:true on the one action he agreed to."
@@ -1441,15 +1443,15 @@ How to work:
 - ${yesRule}
 - mac_run: propose a short, safe, idempotent zsh script with a plain title and why; it waits for his Run tap.
 - Only say something is done if a tool result in this turn shows ok:true for it.
-${autopilot
+${vm
     ? "- This is autopilot: Jared is not here, so commit_files, db_write and mac_run are not available. Anything that needs them: say it in your last line (NEEDS_YES)."
     : `- You can do everything paid Scout can: read (run_sql, today, incidents, read_file, list_files), change data (db_write: ONE INSERT/UPDATE/DELETE with a WHERE), change the admin and site code (commit_files: watched, reverted automatically on a failed build), run jobs on the Mac mini (mac_run, mac_command), the Pi (pi_command), email (send_email), notify. None of it needs paid AI.
 - Code: read the file first, send small commit_files edits (exact old snippet -> new), never a whole large file, never a key or password in a file. If a commit comes back reverted, change the code to fix what broke; never resend the same change. If a result carries deploy_needed, backend code changed: propose that job with mac_run (its title, why and script) and say the Yes button is up. Never say a backend function is live until that job has run.
 - Actions that need confirmed:true follow the yes rule above, exactly like paid Scout.`}
 - Never give Jared SQL to paste into Supabase. Check cron.job / pg_proc with run_sql before calling a job or function missing. A real schema or schedule change: db_write one row into improver_ideas (title, area, kind 'schema', why, change = the exact SQL, effort, impact, status 'new') and tell him in one line it is queued.
-- If a tool fails, change approach.${autopilot ? " Call ask_paid only if you truly can't finish." : ` You have ${TRY_MAX} tries: a build that gets reverted, the same tool failing twice, or you being stuck each use one up, and you will be told "Try 2 of ${TRY_MAX}: ...". Use what failed. Only after the last try does the job go to paid AI. Do not call ask_paid before you have really tried.`}${autopilot ? "" : `
+- If a tool fails, change approach.${vm ? " Call ask_paid only if you truly can't finish." : ` You have ${TRY_MAX} tries: a build that gets reverted, the same tool failing twice, or you being stuck each use one up, and you will be told "Try 2 of ${TRY_MAX}: ...". Use what failed. Only after the last try does the job go to paid AI. Do not call ask_paid before you have really tried.`}${vm ? "" : `
 - If the ask is unclear or you need a detail no tool can find, call ask_user (1-4 tappable questions) instead of guessing.${opts.askFirst ? ` ${ASK_FIRST_NOTE}` : ""}`}
-${autopilot
+${vm
     ? `Reply: plain words, under 90 words, then ONE last line that is exactly one of these three (pick one, never list them):
 FIXED: <what fixed it, or "already clear" and the evidence>
 NEEDS_YES: <the one action you'd take with his yes, in everyday words>
@@ -1611,8 +1613,8 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       const opts = m ? m[1].split("|").map((o) => o.trim()).filter(Boolean).slice(0, 4) : [];
       let body = reply.replace(/^\s*OPTIONS:.*$/m, "").trim();
       // One verdict line only: gpt-oss sometimes copies the whole template ("FIXED: x | NEEDS_YES: none | STUCK: none").
-      if (autopilot) body = body.replace(/^((?:FIXED|NEEDS_YES|STUCK):.*?)\s+\|\s+(?:FIXED|NEEDS_YES|STUCK):.*$/gm, "$1");
-      if (autopilot && !/^(FIXED|NEEDS_YES|STUCK):/m.test(body)) body += "\nSTUCK: the free AI didn't reach a verdict.";
+      if (vm) body = body.replace(/^((?:FIXED|NEEDS_YES|STUCK):.*?)\s+\|\s+(?:FIXED|NEEDS_YES|STUCK):.*$/gm, "$1");
+      if (vm && !/^(FIXED|NEEDS_YES|STUCK):/m.test(body)) body += "\nSTUCK: the free AI didn't reach a verdict.";
       return { answer: `${body}${!autopilot && opts.length >= 2 ? `\n\nOPTIONS: ${opts.join(" | ")}` : ""}`, why: "", tools: used };
     }
 
