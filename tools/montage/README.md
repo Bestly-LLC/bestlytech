@@ -53,6 +53,10 @@ VOICE_11 = {"voice_id": "<id from GET /v1/voices>", "name": "<display name>",
   (`use_speaker_boost` is always true). `speed` is 0.7 to 1.2.
 - No `VOICE_11` in the module = that brand always uses Piper. Nothing else to wire: `worker.voice()` reads the attribute with `getattr`.
 
+Voices in use (premade, none cloned): HOKU Lily `pFZP5JQG7iQjIQuC4Bku`, InventoryProof Matilda `XrExE9yKIg1WjnnlVkGX`, Cookie Yeti Liam `TX3LPaxmHKxFdv7VOQHJ`,
+Bestly Cloud Eric `cjVigY5qzO86Huf0OWal`. Not available: Sarah `EXAVITQu4vr4xnSDxMaL` (the RoofGuard caller). Free premade voices to pick from for a new brand:
+Bella `hpp4J3VqNfWAUOO0d1Us` (warm, bright), Chris `iP95p4xoKVk53GoZ742B` (down-to-earth), Roger `CwhRBWXzGAHq8TQ4Fs17` (laid-back), Jessica `cgSgspJ2msm6clMCkdW9` (playful), River `SAz9YHcvj6GT2YYXdXww` (calm, neutral).
+
 ### How to add a voice to a brand
 1. `GET https://api.elevenlabs.io/v1/voices` (key: Vault `elevenlabs_api_key`; the Pi reads it only through `pi_secret`). Pick a premade or library voice that fits the brand.
 2. Add `VOICE_11 = {...}` to `brands/<slug>.py`, keep the old `VOICE` line.

@@ -34,3 +34,6 @@ comment on table public.montage_settings is 'Montage worker settings (service ro
 insert into public.montage_settings (key, value)
 values ('voice', '{"provider":"elevenlabs","model":"eleven_multilingual_v2","reserve_pct":30}'::jsonb)
 on conflict (key) do nothing;
+
+-- 3) Team card: ElevenLabs is one of Montage's tools (same slug family; Montage's own card is unchanged)
+select public.team_onboard('[{"slug":"elevenlabs-voice","name":"ElevenLabs Voice","role":"Paid narrator (Piper is the backup)","tool_of":"montage","runs_on":"external","schedule":"on demand","what_it_does":"Reads Montage videos aloud, one voice per brand. If credits run low or ElevenLabs is down, Piper reads the whole video instead, so a video never fails over its voice.","pulse":{"src":"none"},"icon":"bot"}]'::jsonb);
