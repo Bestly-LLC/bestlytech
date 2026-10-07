@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { cn } from "@/lib/utils";
 import { BrandLoader } from "@/components/BrandLoader";
+import { loadPartnerLoaderQuotes } from "@/components/loader/loaderDeck";
 import { armNotifySound } from "@/lib/notifySound";
 import { AdminMark, SIGNIN_STARE_RADIUS_PX } from "@/components/AdminMark";
 import { PartnerMark } from "@/components/PartnerMark";
@@ -261,11 +262,17 @@ export default function PartnerPortal() {
   }, [session?.user.id]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => armNotifySound(), []);
+  // Quotes for the loaders (quotes only, never any admin data). Idle-time, once signed in.
+  useEffect(() => {
+    if (!session) return;
+    const t = window.setTimeout(() => { void loadPartnerLoaderQuotes(); }, 1500);
+    return () => window.clearTimeout(t);
+  }, [session?.user.id]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const key = useMemo(() => loc.pathname, [loc.pathname]);
-  if (session === undefined) return <Shell><div key={key}><BrandLoader tone="dark" label="Loading your portal" /></div></Shell>;
+  if (session === undefined) return <Shell><div key={key}><BrandLoader tone="dark" label="Loading your portal" cards="quotes" /></div></Shell>;
   if (!session) return <SignIn />;
-  if (keys === null) return <Shell><BrandLoader tone="dark" label="Loading your portal" /></Shell>;
+  if (keys === null) return <Shell><BrandLoader tone="dark" label="Loading your portal" cards="quotes" /></Shell>;
   if (keys === 0) return <PasskeyGate session={session} done={() => setKeys(1)} />;
   return <PartnerHome session={session} />;
 }

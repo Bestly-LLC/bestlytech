@@ -23,7 +23,7 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
   }, [holding]);
 
   if (loading || holding) {
-    return <BrandLoader tone="dark" fullScreen label="Checking your admin session" />;
+    return <BrandLoader tone="dark" fullScreen label="Checking your admin session" cards="quotes" />;
   }
 
   if (!user) {

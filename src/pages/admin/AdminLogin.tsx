@@ -62,7 +62,7 @@ export default function AdminLogin() {
   // `checking` covers the moment right after sign-in, before the role check answers.
   if (loading || (user && checking && !isAdmin)) {
     return (
-      <BrandLoader tone="dark" fullScreen label="Checking your admin session" />
+      <BrandLoader tone="dark" fullScreen label="Checking your admin session" cards="quotes" />
     );
   }
 

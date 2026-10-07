@@ -7,5 +7,8 @@ export const RouteFallback = () => {
   // The partner portal is the admin shell wearing a different hat, so it gets the
   // same binoculars loader rather than the marketing site's mark.
   const dark = pathname.startsWith("/admin") || pathname.startsWith("/partner");
-  return <BrandLoader tone={dark ? "dark" : "light"} fullScreen={dark} />;
+  // Cards under the mark: facts, tips and quotes on /admin (the deck only holds facts once an admin is
+  // signed in, so before that it is tips and quotes), quotes only in the partner portal, nothing on the public site.
+  const cards = pathname.startsWith("/admin") ? "full" : pathname.startsWith("/partner") ? "quotes" : "none";
+  return <BrandLoader tone={dark ? "dark" : "light"} fullScreen={dark} cards={cards} />;
 };

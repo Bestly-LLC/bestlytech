@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical } from "lucide-react";
 import { Scout } from "./Scout";
+import { startAdminLoaderDeck } from "@/components/loader/loaderDeck";
 
 const BREADCRUMB_MAP: Record<string, string> = {
   "/admin": "Command Center",
@@ -66,6 +67,8 @@ export function AdminLayout() {
   const { signOut, user } = useAdminAuth();
   const textSize = useAdminTextSize();
   useEffect(() => armNotifySound(), []);
+  // Loader cards: pull the deck at idle time once the admin shell is up, refresh every 10 minutes.
+  useEffect(() => startAdminLoaderDeck(), []);
   // A tapped phone notification asks the open admin tab to go to its page (public/sw.js "bestly-open").
   const navigateTo = useNavigate();
   useEffect(() => {
