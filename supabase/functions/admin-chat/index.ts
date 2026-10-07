@@ -1,5 +1,5 @@
 import { SECRET_KEY, isServiceRequest } from "../_shared/keys.ts";
-import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0
+import { llm, llmChat, llmVision, LlmUnavailable, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
 // admin-chat — Scout, the assistant inside bestly.tech/admin.
 //
 // Rules, in order of how much trouble breaking them causes:
@@ -79,6 +79,12 @@ import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: 
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v37 (2026-10-07, Jared: "give Scout vision like Claude: actually look at images, not convert them to text, and let me upload videos"):
+//   Scout sees. A picture, PDF or video he attaches carries a ⟦scout-files: path|path kind=image|pdf|video⟧ line (ScoutAttach.tsx;
+//   a video is frames the browser cut). On paid AI, the files in his two newest file messages reach Claude as real image / document
+//   blocks (fetched from the private scout-files bucket, up to 20 images, none over 5 MB); older turns keep the text copy only.
+//   New tool `look` {paths, question}: re-opens older files (paid: the pictures come back inside the tool result; free: a Groq vision
+//   model answers the question through llmVision, Haiku only as the last rung). Consecutive same-role turns now fold block arrays too.
 // v36 (2026-10-06, Jared: "Can we also have Scout go on longer runs to get the task done on free AI?"): free runs carry
 //   their own working memory. Every hop started from scratch (last 10 chat messages only), so hop N re-read what hop N-1
 //   already found: the Oct 6 11:50 AM run posted eight "Found so far" notes about the same meeting and to-dos, ran out of
@@ -438,6 +444,21 @@ const TOOLS = [
     },
   },
   {
+    name: "look",
+    description:
+      "Look at pictures, video frames or PDFs Jared attached. Pass the paths from the ⟦scout-files: …⟧ line in his message (several separated by |) " +
+      "and a specific question (what does the error say? what is in frame 4?). Free AI cannot see pictures itself: use this for every picture question. " +
+      "Paid AI already sees his two newest file messages: use this only for older files or a closer look. Files are kept 30 days.",
+    input_schema: {
+      type: "object",
+      properties: {
+        paths: { type: "array", items: { type: "string" }, description: "scout-files paths exactly as written in the ⟦scout-files: …⟧ line. Up to 20." },
+        question: { type: "string", description: "What to look for, e.g. \"what does the error say?\"" },
+      },
+      required: ["paths"],
+    },
+  },
+  {
     name: "ask_user",
     description:
       "Ask Jared 1-4 multiple-choice questions, shown as tappable answers (he can always type his own instead). Use it when the ask is " +
@@ -541,6 +562,7 @@ Know this house: most LAN devices use the Verizon router for DNS, not Pi-hole. P
 4. run_sql on home_hub_network_samples for the last day — spikes in gw_loss_pct / inet_loss_pct, dns_ms, or wan_uptime_s dropping (router restarted) show intermittent trouble.
 5. Say what you found in two lines: the cause, and the one fix. Fixes you can do on his tap: pihole.allow {domain} (propose the exact domain; unallow undoes it), pihole.disable {seconds: 300} to test whether Pi-hole is the cause. Fixes that need a hand on the hardware (move the device or repeater, power-cycle it, a 2.4 GHz-only device on a band-steered network) are his: give the single exact step.
 The router is a Verizon Internet Gateway (ASK-NCM1100) at 192.168.1.1. Scout has no router login, only UPnP read (router.probe). If a fix needs the router's own settings (reboot, a device's Wi-Fi signal, band split, DHCP reservation), give Jared the single exact step to do it himself at 192.168.1.1 or in the Verizon app. Never ask for the router password in chat.
+- See what he attaches: images, PDFs and videos (a video arrives as frames in order, "video frame 3 of 9") in his newest file messages are visible to you. Look at them directly and answer from what you see; the "[File: …]" text under each is only a rough copy made by a smaller model, so trust your own eyes over it. For older files use look with the paths from the ⟦scout-files: …⟧ line.
 - Tidy up: clear_alerts, resolve_incident, mark_done.
 - Reach him later: notify (bell, and his phone with push). When you leave something waiting on him, or find something he must act on, notify him before you finish, in one line.
 - Change bestly.tech and the admin: list_files, read_file, commit_files (watched, auto-reverted on a failed build).
@@ -923,9 +945,9 @@ ${convo}`;
 const FREE_TOOLS = new Set([
   "today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "notify", "mark_done",
   "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user", "make_video",
-  "send_email",
+  "send_email", "look",
 ]);
-const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript"]);
+const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "look"]);
 const FREE_STEPS = 14;           // v36 (was 10); the 85 s budget still bounds each hop
 const FREE_BUDGET_MS = 85_000;   // freeTry (up to 30s) + this + the 20s summary must stay under the 150s platform limit
 const REFUSES = /\b(can'?t|cannot|can not|unable to|not able to|don'?t have (access|the ability))\b|\bmanually\b|\byou('ll| will)? (need|have) to\b/i;
@@ -972,6 +994,7 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["learn"], /\b(learn|remember|lesson|next time)\b/i],
   [["make_video"], /\b(video|videos|clip|clips|ltx|render|animate|animation|footage|b-?roll|reel)\b/i],
   [["send_email"], /\b(e-?mails?|mail|send|signature|message (to|eli|rohit)|write to|reply to)\b/i],
+  [["look"], /\b(images?|photos?|screenshots?|pictures?|videos?|frames?|pdf|look|see|seen)\b|scout-files/i],
 ];
 const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "ask_user"]);
 
@@ -1105,6 +1128,7 @@ How to work:
 - Read before you answer or act: run_sql, today, incidents, read_file, meeting_transcript. Never invent numbers, names, files or results. Never use placeholders like X or [Name].
 - run_sql is one SELECT/WITH on the public schema. If a table or column is wrong, look it up: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND table_name ILIKE '%word%'. Then retry. Never answer from a failed query.
 - Times in the data are UTC; show Pacific time, 12-hour (3:05 PM). US units.
+- You can't see pictures yourself. A file he attaches arrives as a text copy plus a ⟦scout-files: …⟧ line; for any question about a picture, video frames or PDF, call look with those paths and a specific question, and answer from what it returns. Say so if look can't open it.
 - ${ADHD_RULE}
 - ${yesRule}
 - mac_run: propose a short, safe, idempotent zsh script with a plain title and why; it waits for his Run tap.
@@ -1143,7 +1167,10 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   turns.forEach((m, i) => {
     const role = m.role === "assistant" ? "assistant" : "user";
     const raw = String(m.body ?? "") === STOP_MARK ? "(Jared stopped your last reply here.)" : String(m.body ?? "");
-    const body = raw.slice(0, i === turns.length - 1 ? 20_000 : 700) || "(empty)";
+    const cut = raw.slice(0, i === turns.length - 1 ? 20_000 : 700);
+    // v36: a long file message is cut for the free model's small window, but the paths `look` needs must survive the cut.
+    const lostPaths = [...raw.matchAll(/⟦scout-files:[^⟧]+⟧/g)].map((x) => x[0]).filter((x) => !cut.includes(x));
+    const body = (cut + (lostPaths.length ? `\n${lostPaths.join("\n")}` : "")) || "(empty)";
     const last = msgs[msgs.length - 1];
     if (last.role === role) last.content += "\n\n" + body;
     else msgs.push({ role, content: body });
@@ -1557,6 +1584,11 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
       out = await sendEmailTool(args, threadId);
       break;
     }
+    case "look": {
+      // Free Scout's look: a vision model answers the question. Paid Scout's look never gets here (it returns the pictures themselves).
+      out = await lookForFree(args, threadId);
+      break;
+    }
     case "ask_user":
       // Reached only when the questions were malformed (a valid call ends the turn before tools run).
       out = { ok: false, error: "bad_questions", hint: "1-4 questions, each with a question and 2-4 options (label, optional description)." };
@@ -1749,10 +1781,178 @@ async function sendEmailTool(args: Record<string, any>, threadId: string): Promi
 }
 
 
+// ---------------------------------------------------------------- v36 vision: pictures, PDFs and video frames he attaches
+// ScoutAttach.tsx puts one machine line under each file's header:  ⟦scout-files: <path>|<path> kind=image|pdf|video⟧
+// (a video's paths are the frames the browser cut, in order). Paid Scout gets the real pixels for his newest file messages;
+// the `look` tool opens any path again. Nothing here may break a chat: a file that can't be fetched is mentioned and skipped.
+const FILES_MARK = /⟦scout-files:\s*([^⟧]+?)\s+kind=(image|pdf|video)⟧/g;
+const SAFE_PATH = /^\d{4}-\d{2}-\d{2}\/[\w.-]{1,200}$/;   // what ScoutAttach writes; also what the model may ask look for
+const SEE_MAX_IMAGES = 20;                 // images (video frames count) in one request
+const SEE_MAX_IMAGE_BYTES = 5 * 1024 * 1024;   // Anthropic's per-image limit; a bigger one is skipped
+const SEE_MAX_PDF_BYTES = 8 * 1024 * 1024;
+const SEE_TOTAL_BYTES = 18 * 1024 * 1024;  // raw bytes of all files in one request (base64 adds a third; the API body limit is 32 MB)
+const SEE_RECENT_USER_TURNS = 8;           // a file message older than this many of his messages keeps only its text copy
+
+interface SeenRef { path: string; kind: "image" | "pdf" | "video" }
+interface Seen {
+  blocks: any[];            // image / document content blocks, in order
+  images: { b64: string; mime: string }[];
+  docs: any[];
+  note: string;             // what was left out, in plain words ("" when nothing was)
+  bytes: number;
+}
+
+/** Every storage path named in ⟦scout-files:…⟧ lines of a message, in order, without repeats. */
+function fileRefs(body: string): SeenRef[] {
+  const out: SeenRef[] = [];
+  for (const m of body.matchAll(FILES_MARK)) {
+    for (const p of m[1].split("|").map((s) => s.trim())) {
+      if (SAFE_PATH.test(p) && !p.includes("..") && !out.some((o) => o.path === p)) out.push({ path: p, kind: m[2] as SeenRef["kind"] });
+    }
+  }
+  return out;
+}
+
+function toB64(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+/** The picture type from its first bytes. The API refuses a wrong media type, so never trust the upload's label. */
+function sniffImageType(b: Uint8Array): string | null {
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "image/gif";
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
+  return null;
+}
+
+const fileLabel = (path: string) => (path.split("/").pop() ?? path).replace(/^[0-9a-f-]{36}-/, "");
+
+/**
+ * Fetch the files behind some refs as content blocks. Images (and video frames) up to `maxImages` and 5 MB each; PDFs as
+ * document blocks only when `pdfs` is true. Stops when `maxBytes` is used up. Frames of one video get a "(frame 3 of 9)" label.
+ */
+async function fetchSeen(refs: SeenRef[], opts: { maxImages: number; maxBytes: number; pdfs: boolean }): Promise<Seen> {
+  const seen: Seen = { blocks: [], images: [], docs: [], note: "", bytes: 0 };
+  const left: string[] = [];
+  const frameTotal = new Map<string, number>();
+  for (const r of refs) if (r.kind === "video") { const k = r.path.replace(/-f\d+\.jpg$/i, ""); frameTotal.set(k, (frameTotal.get(k) ?? 0) + 1); }
+  const frameNo = new Map<string, number>();
+  for (const r of refs) {
+    const name = fileLabel(r.path);
+    if (r.kind === "pdf") {
+      if (!opts.pdfs) { left.push(`${name} (a PDF: use its text copy)`); continue; }
+    } else if (seen.images.length >= opts.maxImages) { left.push(`${name} (over the ${opts.maxImages}-image limit)`); continue; }
+    try {
+      const { data: blob, error } = await db.storage.from("scout-files").download(r.path);
+      if (error || !blob) { left.push(`${name} (couldn't be opened, it may be over 30 days old)`); continue; }
+      const limit = r.kind === "pdf" ? SEE_MAX_PDF_BYTES : SEE_MAX_IMAGE_BYTES;
+      if (blob.size > limit) { left.push(`${name} (too big, over ${limit / 1048576} MB)`); continue; }
+      if (seen.bytes + blob.size > opts.maxBytes) { left.push(`${name} (no room left in this request)`); continue; }
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (r.kind === "pdf") {
+        seen.docs.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: toB64(bytes) } });
+        seen.blocks.push(seen.docs[seen.docs.length - 1]);
+      } else {
+        const mime = sniffImageType(bytes);
+        if (!mime) { left.push(`${name} (not a picture type I can show)`); continue; }
+        if (r.kind === "video") {
+          const k = r.path.replace(/-f\d+\.jpg$/i, "");
+          const n = (frameNo.get(k) ?? 0) + 1;
+          frameNo.set(k, n);
+          seen.blocks.push({ type: "text", text: `(video frame ${n} of ${frameTotal.get(k) ?? n})` });
+        }
+        const b64 = toB64(bytes);
+        seen.images.push({ b64, mime });
+        seen.blocks.push({ type: "image", source: { type: "base64", media_type: mime, data: b64 } });
+      }
+      seen.bytes += blob.size;
+    } catch (e) {
+      left.push(`${name} (${(e as Error).message})`);
+    }
+  }
+  if (left.length) seen.note = `(Not shown to you: ${left.join("; ")}.)`;
+  return seen;
+}
+
+/** His message as Claude should read it: the text, then the pictures / PDF pages. Falls back to the plain text on any trouble. */
+async function messageWithFiles(text: string, refs: SeenRef[], maxImages: number, maxBytes: number): Promise<{ content: any; images: number; bytes: number }> {
+  try {
+    const seen = await fetchSeen(refs, { maxImages, maxBytes, pdfs: true });
+    if (!seen.blocks.length) return { content: seen.note ? `${text}\n\n${seen.note}` : text, images: 0, bytes: 0 };
+    const content: any[] = [{ type: "text", text }, ...seen.blocks];
+    if (seen.note) content.push({ type: "text", text: seen.note });
+    return { content, images: seen.images.length, bytes: seen.bytes };
+  } catch {
+    return { content: text, images: 0, bytes: 0 };
+  }
+}
+
+/** Two turns by the same role fold into one; block arrays and plain strings both work. */
+function foldTurn(last: { content: any }, content: any) {
+  if (typeof last.content === "string" && typeof content === "string") { last.content += "\n\n" + content; return; }
+  const blocks = (c: any) => (typeof c === "string" ? [{ type: "text", text: c }] : c);
+  last.content = [...blocks(last.content), ...blocks(content)];
+}
+
+/** The paths a look call asked for, checked: only files ScoutAttach wrote, no tricks. */
+function lookRefs(args: Record<string, any>): SeenRef[] {
+  const raw = Array.isArray(args.paths) ? args.paths : typeof args.paths === "string" ? args.paths.split("|") : [];
+  const refs: SeenRef[] = [];
+  for (const p of raw.map((x: unknown) => String(x).trim())) {
+    if (!SAFE_PATH.test(p) || p.includes("..") || refs.some((r) => r.path === p)) continue;
+    refs.push({ path: p, kind: /\.pdf$/i.test(p) ? "pdf" : /-f\d{2}\.jpg$/i.test(p) ? "video" : "image" });
+  }
+  return refs.slice(0, SEE_MAX_IMAGES);
+}
+
+/**
+ * Paid Scout's look: the pictures come back inside the tool result as image blocks, so Claude looks at them itself.
+ * A PDF can't ride inside a tool result everywhere, so its document block goes in the same user turn, right after.
+ */
+async function lookForClaude(args: Record<string, any>, threadId: string): Promise<{ content: any[]; docs: any[]; ok: boolean }> {
+  const refs = lookRefs(args);
+  const question = String(args.question ?? "").trim().slice(0, 500);
+  let seen: Seen | null = null;
+  if (refs.length) { try { seen = await fetchSeen(refs, { maxImages: SEE_MAX_IMAGES, maxBytes: SEE_TOTAL_BYTES, pdfs: true }); } catch { /* reported below */ } }
+  const images = seen?.blocks.filter((b) => b.type === "image" || b.type === "text") ?? [];
+  const nImg = seen?.images.length ?? 0, nDoc = seen?.docs.length ?? 0;
+  const ok = nImg + nDoc > 0;
+  const head = !refs.length
+    ? "No usable paths. Copy them exactly from the ⟦scout-files: …⟧ line in his message (several are separated by |)."
+    : !ok
+      ? `Couldn't show those. ${seen?.note ?? ""}`.trim()
+      : `${nImg ? `${nImg} picture${nImg === 1 ? "" : "s"} below` : ""}${nImg && nDoc ? " and " : ""}${nDoc ? `${nDoc} PDF (attached right after this result)` : ""}.${question ? ` Look for: ${question}` : ""} ${seen?.note ?? ""}`.trim();
+  await db.from("admin_chat_actions").insert({ thread_id: threadId, tool: "look", args: { paths: refs.map((r) => r.path), question }, result: { ok, pictures: nImg, pdfs: nDoc, note: seen?.note ?? null }, ok });
+  return { content: [{ type: "text", text: head }, ...images], docs: seen?.docs ?? [], ok };
+}
+
+/** Free Scout's look: a free vision model answers the question about the pictures (Haiku only as the last rung, inside llmVision). */
+async function lookForFree(args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
+  const refs = lookRefs(args);
+  if (!refs.length) return { ok: false, error: "no usable paths", hint: "Copy them exactly from the ⟦scout-files: …⟧ line in his message (several are separated by |)." };
+  const question = String(args.question ?? "").trim().slice(0, 600)
+    || "Describe what is in the picture(s) in a few short lines and copy any readable text exactly.";
+  const seen = await fetchSeen(refs, { maxImages: 10, maxBytes: SEE_TOTAL_BYTES, pdfs: false });
+  if (!seen.images.length) return { ok: false, error: seen.note || "nothing could be opened" };
+  const prompt = `${question}\n\nAnswer only from what you can see. If it isn't visible, say so. Plain text, under 150 words unless the question needs more.${seen.images.length > 1 ? " The images are in the order given; they may be frames of one video." : ""}`;
+  try {
+    const r = await llmVision({ images: seen.images, prompt, maxTokens: 900, job: "look", ref: threadId, fn: "admin-chat", scope: "chat", deadlineMs: 50_000 });
+    return { ok: true, pictures: seen.images.length, answer: r.text, ...(seen.note ? { note: seen.note } : {}) };
+  } catch (e) {
+    if (e instanceof LlmUnavailable) return { ok: false, error: "The free vision models are busy right now, and paid AI is off or at its cap. Try again in a minute, or turn paid AI on and I'll see the pictures directly." };
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 /**
  * v28.5 (2026-09-24): attachments reach Scout even when the page sends the message without them.
  * Looks for files uploaded to scout-files in the last 5 minutes that no chat message has carried yet,
  * reads them (text directly; images/PDFs through the scout-file function) and puts them in front of the question.
+ * v36: the rebuilt blocks carry the same ⟦scout-files:…⟧ line the page writes, so paid Scout sees these files too;
+ * frames named <uuid>-<slug>-f01.jpg, -f02.jpg… are one video and are described together.
  */
 async function withRecentFiles(question: string): Promise<string> {
   const day = (d: Date) => d.toISOString().slice(0, 10);
@@ -1761,26 +1961,54 @@ async function withRecentFiles(question: string): Promise<string> {
   const since = Date.now() - 5 * 60_000;
   const recent: { path: string; name: string }[] = [];
   for (const f of folders) {
-    const { data } = await db.storage.from("scout-files").list(f, { limit: 20, sortBy: { column: "created_at", order: "desc" } });
+    const { data } = await db.storage.from("scout-files").list(f, { limit: 40, sortBy: { column: "created_at", order: "desc" } });
     for (const o of (data ?? []) as any[]) {
       if (o?.created_at && Date.parse(o.created_at) >= since) recent.push({ path: `${f}/${o.name}`, name: String(o.name).replace(/^[0-9a-f-]{36}-/, "") });
     }
   }
   if (!recent.length) return question;
   const { data: sent } = await db.from("admin_chat_messages").select("body").eq("role", "user")
-    .gte("created_at", new Date(since).toISOString()).like("body", "[File:%").limit(20);
-  const carried = ((sent ?? []) as any[]).map((m) => String(m.body));
+    .gte("created_at", new Date(since).toISOString()).limit(40);
+  const carried = ((sent ?? []) as any[]).map((m) => String(m.body)).filter((b) => /^\[(File|Video): /m.test(b));
+  const has = (r: { path: string; name: string }) => carried.some((b) => b.includes(r.path) || b.includes(r.name));
+
+  // Frames of one video share a uuid and end in -fNN.jpg; two or more together are a video, not separate pictures.
+  const groups = new Map<string, { path: string; name: string }[]>();
+  const singles: { path: string; name: string }[] = [];
+  for (const r of recent) {
+    const m = r.path.split("/").pop()!.match(/^([0-9a-f-]{36})-.*-f\d{2}\.jpg$/i);
+    if (m) groups.set(m[1], [...(groups.get(m[1]) ?? []), r]); else singles.push(r);
+  }
+  const videos: { path: string; name: string }[][] = [];
+  for (const g of groups.values()) { if (g.length >= 2) videos.push(g.sort((a, b) => a.path.localeCompare(b.path))); else singles.push(g[0]); }
+
+  const call = async (payload: Record<string, unknown>) => {
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/scout-file`, {
+      method: "POST", headers: { "Content-Type": "application/json", apikey: SECRET_KEY, Authorization: `Bearer ${SECRET_KEY}` },
+      body: JSON.stringify(payload), signal: AbortSignal.timeout(60_000),
+    });
+    return { j: await res.json(), status: res.status };
+  };
   const blocks: string[] = [];
-  for (const r of recent.slice(0, 5)) {
-    if (carried.some((b) => b.includes(r.name))) continue;
+  for (const g of videos.slice(0, 2)) {
+    if (g.some(has)) continue;
+    const name = g[0].name.replace(/-f\d{2}\.jpg$/i, "");
+    const head = `[Video: ${name}, ${g.length} frames — what happens in it]`;
     try {
-      const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/scout-file`, {
-        method: "POST", headers: { "Content-Type": "application/json", apikey: SECRET_KEY, Authorization: `Bearer ${SECRET_KEY}` },
-        body: JSON.stringify({ op: "read", path: r.path }), signal: AbortSignal.timeout(60_000),
-      });
-      const j = await res.json();
-      blocks.push(j?.ok ? `[File: ${r.name}${j.kind === "image" ? " — what the image shows" : j.kind === "pdf" ? " — the document's text" : ""}]\n${j.text}`
-        : `[File: ${r.name} — couldn't be read: ${j?.error ?? res.status}]`);
+      const { j, status } = await call({ op: "frames", paths: g.map((r) => r.path), name });
+      blocks.push(j?.ok ? `${head}\n⟦scout-files: ${g.map((r) => r.path).join("|")} kind=video⟧\n${j.text}`
+        : `[File: ${name} — couldn't be read: ${j?.error ?? status}]`);
+    } catch (e) {
+      blocks.push(`[File: ${name} — couldn't be read: ${(e as Error).message}]`);
+    }
+  }
+  for (const r of singles.slice(0, 5)) {
+    if (has(r)) continue;
+    try {
+      const { j, status } = await call({ op: "read", path: r.path });
+      const mark = j?.ok && (j.kind === "image" || j.kind === "pdf") ? `⟦scout-files: ${r.path} kind=${j.kind}⟧\n` : "";
+      blocks.push(j?.ok ? `[File: ${r.name}${j.kind === "image" ? " — what the image shows" : j.kind === "pdf" ? " — the document's text" : ""}]\n${mark}${j.text}`
+        : `[File: ${r.name} — couldn't be read: ${j?.error ?? status}]`);
     } catch (e) {
       blocks.push(`[File: ${r.name} — couldn't be read: ${(e as Error).message}]`);
     }
@@ -1846,9 +2074,9 @@ Deno.serve(async (req) => {
   if (!text) return J({ ok: false, error: "body required" }, 400);
   // v28.5: safety net for attachments. If he attached a file in the last few minutes and this message arrived
   // without it (an old page still open, a read that failed in the browser), fetch and read it here.
-  if (!autopilot && !/^\[File: /m.test(text)) text = await withRecentFiles(text).catch(() => text);
+  if (!autopilot && !/^\[(File|Video): /m.test(text)) text = await withRecentFiles(text).catch(() => text);
   // v28.5: an attached file rides in the message as text (ScoutAttach), so file messages get a much bigger limit.
-  const hasFile = /^\[File: /m.test(text);
+  const hasFile = /^\[(File|Video): /m.test(text);
   if (text.length > (hasFile ? 130_000 : 6000)) return J({ ok: false, error: hasFile ? "that file is too long for one message" : "that is too long for one message" }, 400);
 
   let threadId = body.thread_id ? String(body.thread_id) : "";
@@ -2028,13 +2256,28 @@ Deno.serve(async (req) => {
   const { data: hist } = await db.from("admin_chat_messages").select("role,body").eq("thread_id", threadId)
     .order("created_at", { ascending: false }).limit(30);
   const messages: any[] = [];
-  for (const m of (hist ?? []).reverse() as { role: string; body: string }[]) {
+  const rows = ((hist ?? []).reverse() as { role: string; body: string }[]);
+  // v36: Scout SEES the files in his two newest file messages (within his last 8 messages): pictures, PDF pages and video
+  // frames go to Claude as real image / document blocks. Older turns keep the text copy only (token cost); `look` re-opens them.
+  const userRows = rows.map((m, i) => (m.role === "user" ? i : -1)).filter((i) => i >= 0);
+  const recentUserRows = new Set(userRows.slice(-SEE_RECENT_USER_TURNS));
+  const seeRows = userRows.filter((i) => recentUserRows.has(i) && fileRefs(String(rows[i].body ?? "")).length).slice(-2);
+  const seen = new Map<number, any>();
+  let imagesLeft = SEE_MAX_IMAGES, bytesLeft = SEE_TOTAL_BYTES;
+  for (const i of [...seeRows].reverse()) {                     // newest first, so the newest file gets the room
+    const body = String(rows[i].body ?? "").slice(0, 8000) || "(empty)";
+    const r = await messageWithFiles(body, fileRefs(String(rows[i].body ?? "")), imagesLeft, bytesLeft);
+    imagesLeft -= r.images; bytesLeft -= r.bytes;
+    seen.set(i, r.content);
+  }
+  for (const [i, m] of rows.entries()) {
     const role = m.role === "assistant" ? "assistant" : "user";
     const body = (String(m.body ?? "") === STOP_MARK ? "(Jared stopped your last reply here.)" : String(m.body ?? "")).slice(0, 8000) || "(empty)";
     if (!messages.length && role !== "user") continue;          // must open on a user turn
+    const content = seen.get(i) ?? body;
     const last = messages[messages.length - 1];
-    if (last && last.role === role) last.content += "\n\n" + body; // unanswered retries fold together
-    else messages.push({ role, content: body });
+    if (last && last.role === role) foldTurn(last, content);    // unanswered retries fold together (text or block arrays)
+    else messages.push({ role, content });
   }
   if (!messages.length) messages.push({ role: "user", content: text });
 
@@ -2139,7 +2382,8 @@ Deno.serve(async (req) => {
         }
       }
       messages.push({ role: "assistant", content: res.content });
-      const results = [];
+      const results: any[] = [];
+      const extras: any[] = [];   // v36: PDF document blocks a look call opened; they ride after the tool results
       for (const c of calls) {
         used.push(c.name);
         let out: Record<string, unknown>;
@@ -2147,6 +2391,13 @@ Deno.serve(async (req) => {
           // The reply ran out of room mid tool call, so its input is incomplete. Never run a half call.
           out = { ok: false, error: "cut_off", hint: "This call was cut off at your output limit, so it was not run. Send much smaller pieces (commit_files edits, not whole files)." };
           results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out) });
+          continue;
+        }
+        // v36: look re-opens attached files. The pictures come back as image blocks inside the tool result, so Claude sees them.
+        if (c.name === "look") {
+          const lk = await lookForClaude((c.input ?? {}) as Record<string, any>, threadId).catch((e) => ({ content: [{ type: "text", text: `look failed: ${(e as Error).message}` }], docs: [] as any[], ok: false }));
+          results.push({ type: "tool_result", tool_use_id: c.id, content: lk.content, ...(lk.ok ? {} : { is_error: true }) });
+          extras.push(...lk.docs);
           continue;
         }
         const blocked = autopilot && (autoRunOn
@@ -2170,7 +2421,7 @@ Deno.serve(async (req) => {
         if (failed && c.name !== "learn") out = await heal(c.name, c.input ?? {}, out, shownFor);
         results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out).slice(0, RESULT_CAP[c.name] ?? 20000) });
       }
-      messages.push({ role: "user", content: results });
+      messages.push({ role: "user", content: extras.length ? [...results, ...extras] : results });
     }
   } catch (e) {
     const err = e as Error;

@@ -697,3 +697,214 @@ export async function llmProbe(provider: Exclude<Provider, "anthropic">): Promis
     return { provider, ok: false, ms, error: `${f.outcome}: ${f.message}`.slice(0, 200) };
   }
 }
+
+/* ───────── vision (2026-10-07, Scout vision plan Part A) ───────── */
+
+/**
+ * Look at images with a model that can see. Free first: a Groq vision model, chosen at run time from Groq's own model
+ * list (the ids change, so none is hard-coded as the only choice). Paid Claude Haiku only as the last rung, and only
+ * when the usual paid gates allow it (daily cap, plus the Paid AI switch for Scout's own functions).
+ *
+ *   const r = await llmVision({ images: [{ b64, mime: "image/jpeg" }], prompt: "What error is this?", job: "look", ref: threadId, fn: "admin-chat", scope: "chat" });
+ *   r.text
+ *
+ * Groq takes at most 5 images per call, so more are sent in batches of 5 and the answers are joined in order.
+ * Anthropic takes them all in one call (capped at 20). The key is the same Vault key as the text rungs (llm_keys: groq_api_key).
+ */
+export interface VisionImage { b64: string; mime: string }
+export interface VisionRequest {
+  images: VisionImage[];
+  prompt: string;
+  system?: string;
+  maxTokens?: number;
+  job: string;
+  ref?: string | null;
+  fn?: string;
+  scope?: "background" | "chat";
+  paid?: "fallback" | "never";
+  deadlineMs?: number;
+}
+export interface VisionResult { text: string; model: string; provider: Provider; cost_usd: number; tried: LlmResult["tried"] }
+
+const GROQ_IMAGES_PER_CALL = 5;
+const GROQ_IMAGE_MAX_B64 = 3_900_000;        // Groq's limit is 4 MB of base64 per image
+const ANTHROPIC_IMAGE_MAX_B64 = 6_800_000;   // Anthropic's limit is 5 MB of raw bytes per image
+const ANTHROPIC_IMAGES_PER_CALL = 20;
+// Used only when Groq's model list can't be read. Both are Groq's Llama 4 vision models.
+const GROQ_VISION_FALLBACK = ["meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"];
+
+let _groqVision: { at: number; ids: string[] } | null = null;
+
+/** Active Groq models that can see, best bet first (Scout has the roomiest free limits, then Maverick, then anything called vision). Cached 6 hours. */
+async function groqVisionModels(key: string): Promise<string[]> {
+  if (_groqVision && Date.now() - _groqVision.at < 6 * 3600_000) return _groqVision.ids;
+  try {
+    const r = await fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error(`models ${r.status}`);
+    const j = await r.json();
+    // Llama 4 (Scout, then Maverick) and anything named vision first; Qwen 3.5+ and -vl models are natively multimodal, so they are the backup if Llama 4 is retired.
+    const rank = (id: string) => (/scout/i.test(id) ? 0 : /maverick/i.test(id) ? 1 : /vision/i.test(id) ? 2 : 3);
+    const ids = ((j.data ?? []) as any[])
+      .filter((m) => m?.id && m.active !== false && /llama-4|vision|-vl\b|qwen3\.[5-9]/i.test(String(m.id)) && !/guard|whisper|tts|embed/i.test(String(m.id)))
+      .map((m) => String(m.id))
+      .sort((a, b) => rank(a) - rank(b))
+      .slice(0, 3);
+    if (!ids.length) throw new Error("no vision model in the list");
+    _groqVision = { at: Date.now(), ids };
+  } catch (e) {
+    console.error("groq vision models", (e as Error).message);
+    // Remember the miss for 10 minutes so every look doesn't pay for another failed lookup.
+    _groqVision = { at: Date.now() - 6 * 3600_000 + 10 * 60_000, ids: GROQ_VISION_FALLBACK };
+  }
+  return _groqVision.ids;
+}
+
+const imageMime = (m: string) => { const x = (m || "").toLowerCase().replace("image/jpg", "image/jpeg"); return /^image\/(png|jpeg|gif|webp)$/.test(x) ? x : "image/jpeg"; };
+
+async function groqVisionOnce(model: string, images: VisionImage[], req: VisionRequest, maxTokens: number, timeoutMs: number, key: string): Promise<Call> {
+  const batches: VisionImage[][] = [];
+  for (let i = 0; i < images.length; i += GROQ_IMAGES_PER_CALL) batches.push(images.slice(i, i + GROQ_IMAGES_PER_CALL));
+  const parts: string[] = [];
+  let inT = 0, outT = 0, used = model, seen = 0;
+  for (const batch of batches) {
+    const content: Record<string, unknown>[] = [{
+      type: "text",
+      text: batches.length > 1
+        ? `${req.prompt}\n\n(These are images ${seen + 1} to ${seen + batch.length} of ${images.length}, in order.)`
+        : req.prompt,
+    }];
+    batch.forEach((im, i) => {
+      if (images.length > 1) content.push({ type: "text", text: `Image ${seen + i + 1}:` });
+      content.push({ type: "image_url", image_url: { url: `data:${imageMime(im.mime)};base64,${im.b64}` } });
+    });
+    const messages: Record<string, unknown>[] = [];
+    if (req.system) messages.push({ role: "system", content: scrub(req.system) });
+    messages.push({ role: "user", content });
+    const j = await postChat("https://api.groq.com/openai/v1/chat/completions", key, { model, max_tokens: maxTokens, messages }, timeoutMs);
+    const text = stripThink(String(j.choices?.[0]?.message?.content ?? "")).trim();
+    if (!text) throw new Fail("error", `empty reply (finish ${j.choices?.[0]?.finish_reason ?? "?"})`);
+    parts.push(batches.length > 1 ? `Images ${seen + 1}-${seen + batch.length}:\n${text}` : text);
+    inT += Number(j.usage?.prompt_tokens ?? 0);
+    outT += Number(j.usage?.completion_tokens ?? 0);
+    used = String(j.model ?? model);
+    seen += batch.length;
+  }
+  return { text: parts.join("\n\n"), model: used, inT, outT, cost: 0 };
+}
+
+async function anthropicVisionOnce(model: string, images: VisionImage[], req: VisionRequest, maxTokens: number, timeoutMs: number): Promise<Call> {
+  const key = cleanAnthropicKey(Deno.env.get("ANTHROPIC_API_KEY"));
+  if (!key) throw new Fail("skipped_nokey", "no ANTHROPIC_API_KEY");
+  // Same gates as the text rung: the daily cap, and for Scout's own functions the Paid AI switch.
+  const { data: budget } = await db().rpc("ai_budget", { p_scope: req.scope ?? "background" });
+  if ((budget as any)?.ok === false) {
+    throw new Fail("skipped_budget", (budget as any).switch_off ? "Paid AI switch is off" : `cap $${(budget as any).cap}, spent $${(budget as any).spent}`);
+  }
+  if (SCOUT_FNS.has(req.fn ?? "")) {
+    const { data: st } = await db().rpc("scout_paid_state_ro");
+    if ((st as any)?.on !== true) throw new Fail("skipped_budget", "Paid AI switch is off");
+  }
+  const content: Record<string, unknown>[] = [];
+  images.forEach((im, i) => {
+    if (images.length > 1) content.push({ type: "text", text: `Image ${i + 1}:` });
+    content.push({ type: "image", source: { type: "base64", media_type: imageMime(im.mime), data: im.b64 } });
+  });
+  content.push({ type: "text", text: req.prompt });
+  let r: Response;
+  try {
+    r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model, max_tokens: maxTokens, ...(req.system ? { system: scrub(req.system) } : {}), messages: [{ role: "user", content }] }),
+      signal: AbortSignal.timeout(Math.min(timeoutMs, 90_000)),
+    });
+  } catch (e) {
+    throw new Fail((e as Error).name === "TimeoutError" ? "timeout" : "error", (e as Error).message);
+  }
+  if (!r.ok) throw new Fail(r.status === 429 ? "rate_limited" : "error", `anthropic ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const j = await r.json();
+  const m = String(j.model ?? model);
+  const [pin, pout] = ANTHROPIC_PRICE[Object.keys(ANTHROPIC_PRICE).find((k) => m.includes(k)) ?? "haiku"];
+  const u = j.usage ?? {};
+  const inT = Number(u.input_tokens ?? 0), outT = Number(u.output_tokens ?? 0);
+  const text = (j.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("").trim();
+  if (!text) throw new Fail("error", "empty reply");
+  return { text, model: m, inT, outT, cost: (inT * pin + outT * pout) / 1e6 };
+}
+
+export async function llmVision(input: VisionRequest): Promise<VisionResult> {
+  const images = (input.images ?? []).filter((i) => i?.b64);
+  const tried: LlmResult["tried"] = [];
+  if (!images.length) throw new LlmUnavailable("all_failed", tried, "no images");
+  const deadline = Date.now() + (input.deadlineMs ?? 80_000);
+  const maxTokens = input.maxTokens ?? 1200;
+  const scope = input.scope ?? "chat";
+  const logReq: LlmRequest = { task: "extract", system: "", user: "", job: input.job, ref: input.ref ?? null, fn: input.fn, scope };
+  const [prov, k] = await Promise.all([providers(), keys()]);
+  let budgetHit = false;
+
+  // Rung 1: Groq vision models (free).
+  const gp = prov.groq;
+  const groqSkip: Outcome | null = !k.groq_api_key ? "skipped_nokey"
+    : gp && !gp.enabled ? "skipped_off"
+    : gp && !gp.private_ok ? "skipped_privacy"                    // pictures are private
+    : images.some((i) => i.b64.length > GROQ_IMAGE_MAX_B64) ? "skipped_size"
+    : null;
+  if (groqSkip) {
+    tried.push({ provider: "groq", model: "vision", outcome: groqSkip, ms: 0 });
+  } else {
+    const models = await groqVisionModels(k.groq_api_key);
+    for (const model of models) {
+      const left = deadline - Date.now();
+      const skip = (outcome: Outcome) => tried.push({ provider: "groq", model, outcome, ms: 0 });
+      if (left < 5000) { skip("timeout"); break; }
+      if ((modelSkip.get(model) ?? 0) > Date.now()) { skip("rate_limited"); continue; }
+      // A paused provider is skipped for background work; in a live chat Jared is waiting, so try it anyway.
+      if (scope !== "chat" && gp?.cooldown_until && Date.parse(gp.cooldown_until) > Date.now()) { skip("rate_limited"); continue; }
+      if (gp?.daily_cap && (await usedToday("groq")) >= gp.daily_cap) { skip("skipped_budget"); break; }
+      const t0 = Date.now();
+      try {
+        const c = await groqVisionOnce(model, images, input, maxTokens, Math.min(left, 45_000), k.groq_api_key);
+        const ms = Date.now() - t0;
+        await log(logReq, "groq", c.model, "ok", ms, c);
+        tried.push({ provider: "groq", model: c.model, outcome: "ok", ms });
+        return { text: c.text, model: c.model, provider: "groq", cost_usd: 0, tried };
+      } catch (e) {
+        const ms = Date.now() - t0;
+        const f = e instanceof Fail ? e : new Fail("error", (e as Error).message);
+        // A 4xx about the picture (too big, a model that can't see) is this model's miss, not Groq being down:
+        // "invalid" keeps the provider watchdog from pausing Groq's text models over it.
+        const outcome: Outcome = f.outcome === "error" && /^4\d\d /.test(f.message) ? "invalid" : f.outcome;
+        tried.push({ provider: "groq", model, outcome, ms });
+        await log(logReq, "groq", model, outcome, ms, undefined, f.message);
+        if (f.outcome === "rate_limited") await rateLimited({ provider: "groq", model, maxIn: GROQ_MAX }, f);
+      }
+    }
+  }
+
+  // Rung 2: Claude Haiku (paid), last.
+  if ((input.paid ?? "fallback") === "fallback") {
+    const model = "claude-haiku-4-5";
+    const left = deadline - Date.now();
+    if (left < 5000) tried.push({ provider: "anthropic", model, outcome: "timeout", ms: 0 });
+    else if (images.some((i) => i.b64.length > ANTHROPIC_IMAGE_MAX_B64)) tried.push({ provider: "anthropic", model, outcome: "skipped_size", ms: 0 });
+    else {
+      const t0 = Date.now();
+      try {
+        const c = await anthropicVisionOnce(model, images.slice(0, ANTHROPIC_IMAGES_PER_CALL), input, maxTokens, left);
+        const ms = Date.now() - t0;
+        await log(logReq, "anthropic", c.model, "ok", ms, c);
+        tried.push({ provider: "anthropic", model: c.model, outcome: "ok", ms });
+        return { text: c.text, model: c.model, provider: "anthropic", cost_usd: c.cost, tried };
+      } catch (e) {
+        const ms = Date.now() - t0;
+        const f = e instanceof Fail ? e : new Fail("error", (e as Error).message);
+        tried.push({ provider: "anthropic", model, outcome: f.outcome, ms });
+        if (f.outcome === "skipped_budget") budgetHit = true;
+        else if (!f.outcome.startsWith("skipped")) await log(logReq, "anthropic", model, f.outcome, ms, undefined, f.message);
+      }
+    }
+  }
+  if (budgetHit) throw new LlmUnavailable("budget", tried);
+  throw new LlmUnavailable("all_failed", tried);
+}
