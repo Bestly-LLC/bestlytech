@@ -19,6 +19,8 @@ import { CarProtectLog, TollCheck } from "@/components/admin/turo/CarProtect";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { SectionTabs } from "@/components/admin/SectionTabs";
+import { lazyPage } from "@/lib/lazyPage";
 import { cn } from "@/lib/utils";
 import { DemandMeter, type DemandRow } from "@/components/admin/turo/DemandMeter";
 import { FleetNow, type Trip, type VehicleState } from "@/components/admin/turo/FleetNow";
@@ -41,7 +43,27 @@ const MODE: Record<string, { label: string; tone: string }> = {
   blocked: { label: "Blocked", tone: "text-red-300 bento:text-red-700" },
 };
 
+const ReviewsTab = lazyPage(() => import("@/components/admin/turo/ReviewsTab"));
+const MaintenanceTab = lazyPage(() => import("@/components/admin/turo/MaintenanceTab"));
+
+/** Turo Watch: the car and prices (Overview), Stella's reviews and All-Star numbers, Mae's maintenance. ?tab=reviews / ?tab=maintenance */
 export default function AdminTuro() {
+  return (
+    <div className="mx-auto max-w-6xl pb-8">
+      <SectionTabs
+        title="Turo Watch"
+        description="Blue Steel · Tesla Model 3 · who has it, the car, prices, reviews and upkeep."
+        tabs={[
+          { value: "overview", label: "Overview", render: () => <TuroOverview /> },
+          { value: "reviews", label: "Reviews", render: () => <ReviewsTab /> },
+          { value: "maintenance", label: "Maintenance", render: () => <MaintenanceTab /> },
+        ]}
+      />
+    </div>
+  );
+}
+
+function TuroOverview() {
   const [runs, setRuns] = useState<Run[] | null>(null);
   const [days, setDays] = useState<Day[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -100,8 +122,8 @@ export default function AdminTuro() {
   const hoursSince = last ? (Date.now() - Date.parse(last.ran_at)) / 3600e3 : null;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-8">
-      <PageHeader title="Turo Watch" description="Blue Steel · Tesla Model 3 · who has it, their guest pages, the car, and what it's priced at."
+    <div className="space-y-6">
+      <PageHeader embedded title="Turo Watch"
         actions={<Link to="/admin/turo/settings" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-white/[0.08] px-4 text-sm font-medium text-white bento:bg-[#0000000d] bento:text-[#111]"><Settings className="h-4 w-4" aria-hidden /> Turo settings</Link>} />
 
       {/* Who has the car right now, with each trip's guest page / key / reminder controls. */}

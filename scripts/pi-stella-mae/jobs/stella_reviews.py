@@ -105,7 +105,7 @@ def main(argv):
     note = ""
     if stats.get("five_star_rate") is not None and stats.get("completed_trips"):
         lib.rpc("rep_save_stats", p=stats)
-        coach = lib.rpc("allostar_coach") or {}
+        coach = lib.rpc("allstar_coach") or {}
         if coach.get("at_risk") or coach.get("all_star") is False:
             lib.rpc("rep_notify", p_agent="stella", p_title="All-Star is at risk" if coach.get("all_star") else "All-Star status lost",
                     p_body=coach.get("message") or "Your All-Star status needs attention.", p_kind="allostar_risk", p_url=URL,

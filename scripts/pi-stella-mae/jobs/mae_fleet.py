@@ -47,18 +47,20 @@ def fmt_day(dt):
 
 
 def tread_estimate(item, row, odo, cfg):
-    """Return (tread_32nds, source, rate_per_1000mi). A manual/photo reading beats the model."""
-    meta, axle_now = row.get("meta") or {}, TIRES[item]
-    if item == "front_tires":
-        axle_now = "front"
-    reads = lib.get("fleet_maint_events", f"select=value,at&kind=eq.tread&item=eq.{item}&order=at.desc&limit=1") or []
+    """Return (tread_32nds, source, rate_per_1000mi). A reading Jared entered beats the model, unless he replaced the tires after it."""
+    meta, axle_now = dict(row.get("meta") or {}), TIRES[item]
     rate_now = float(cfg[AXLE_RATE[axle_now]])
-    if reads and (reads[0].get("value") or {}).get("tread_32nds") is not None:
+    reads = lib.get("fleet_maint_events", f"select=value,at&kind=eq.tread&item=eq.{item}&order=at.desc&limit=1") or []
+    dones = lib.get("fleet_maint_events", f"select=at&kind=eq.done&item=eq.{item}&order=at.desc&limit=1") or []
+    if reads and (reads[0].get("value") or {}).get("tread_32nds") is not None and not (dones and dones[0]["at"] > reads[0]["at"]):
         v = reads[0]["value"]
         base, odo0 = float(v["tread_32nds"]), float(v.get("odometer") or odo)
         return round(max(base - max(odo - odo0, 0) / 1000 * rate_now, 0), 1), "measured", rate_now
+    segs = meta.get("segments") or []
+    if row.get("installed_miles") is not None and (not segs or float(segs[0]["from_miles"]) != float(row["installed_miles"])):
+        segs = [{"axle": axle_now, "from_miles": row["installed_miles"]}]      # tires replaced since the seeded history
     lost = 0.0
-    for seg in meta.get("segments", []):
+    for seg in segs:
         a, b = float(seg["from_miles"]), float(seg.get("to_miles") or odo)
         lost += max(min(b, odo) - a, 0) / 1000 * float(cfg[AXLE_RATE[seg["axle"]]])
     return round(max(float(cfg["new_32nds"]) - lost, 0), 1), "model", rate_now
@@ -185,7 +187,7 @@ def main(argv):
     # ---- guest flags (Stella's stats)
     st = (lib.get("turo_host_stats", "select=flags,ratings&order=taken_at.desc&limit=1") or [{}])[0]
     for name, cnt in (st.get("flags") or {}).items():
-        if dry:
+        if dry or "location" in name.lower():      # car location is a listing/pickup issue, not maintenance
             continue
         item = "brakes" if "brake" in name.lower() else None
         text = (f"Guests flagged {name} {cnt} time(s) in the last 365 days (of {st.get('ratings')} ratings). "
@@ -209,6 +211,6 @@ def main(argv):
         if st_new != row["status"]:
             patch("fleet_maintenance", f"id=eq.{row['id']}", {"status": st_new, "last_check": now.isoformat(), "updated_at": now.isoformat()})
         if st_new in ("watch", "due", "overdue") and item != "cabin_filter":
-            tail = "no install date on file, so check them before the first rain" if not row.get("installed_on") else "past their normal life"
+            tail = "no install date on file, so check before the first rain" if not row.get("installed_on") else "past their normal life"
             event("recommendation", item, {"status": st_new}, f"{row['label']}: {tail}.", f"rain-{item}-{now.year}")
     return "ok: " + ("; ".join(out) if out else "nothing to do")

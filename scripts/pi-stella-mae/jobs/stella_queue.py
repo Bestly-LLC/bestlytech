@@ -70,6 +70,13 @@ def trip_facts(r):
     return "; ".join(bits)
 
 
+def norm(t):
+    """Plain ASCII punctuation: FreeLLM models like narrow no-break spaces and non-breaking hyphens."""
+    for a, b in (("\u202f", " "), ("\u00a0", " "), ("\u2011", "-"), ("\u2010", "-"), ("\u2014", ","), ("\u2013", "-"), ("\u2019", "'"), ("\u2018", "'"), ("\u201c", '"'), ("\u201d", '"')):
+        t = t.replace(a, b)
+    return t.strip()
+
+
 def clean_reply(txt, name):
     txt = re.sub(r"<think>.*?</think>", "", txt or "", flags=re.S).strip().strip('"').strip()
     txt = EMOJI.sub("", txt).replace("—", ",").replace("–", "-")
@@ -165,7 +172,7 @@ def rating_draft(g, trip, msgs):
               "on time or undamaged, and do not invent anything. No emoji. Return only the review text.")
     try:
         msg, _ = freellm.chat([{"role": "system", "content": sysmsg}, {"role": "user", "content": user}], max_tokens=120)
-        txt = EMOJI.sub("", re.sub(r"<think>.*?</think>", "", msg.get("content") or "", flags=re.S).strip().strip('"'))
+        txt = norm(EMOJI.sub("", re.sub(r"<think>.*?</think>", "", msg.get("content") or "", flags=re.S).strip().strip('"')))
         if 20 <= len(txt) <= 300:
             return txt
     except Exception:  # noqa: BLE001
