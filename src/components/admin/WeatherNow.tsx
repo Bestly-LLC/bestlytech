@@ -215,7 +215,7 @@ export function WeatherNow({ className, useDeviceLocation = false, fixedPlace, f
   if (expanded && board) {
     return (
       <div className={cn("w-full min-w-0", className)}>
-        <WeatherBoard data={board} place={place.label} />
+        <WeatherBoard data={board} place={place.label} compact />
       </div>
     );
   }

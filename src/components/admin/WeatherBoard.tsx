@@ -107,30 +107,31 @@ const Card = ({ className, children, label }: { className?: string; children: Re
 
 /* ── now ─────────────────────────────────────────────────────────────────── */
 
-function NowCard({ data, place }: { data: WxData; place: string }) {
+function NowCard({ data, place, compact }: { data: WxData; place: string; compact?: boolean }) {
   const c = data.current;
   const code = c.conditionCode ?? "Clear";
   const feels = toF(c.temperatureApparent), temp = toF(c.temperature);
   return (
     <section
       className={cn(
-        "flex flex-col justify-between rounded-[1.25rem] border border-white/15 p-5 text-center",
+        "flex flex-col justify-between rounded-[1.25rem] border border-white/15 text-center",
+        compact ? "p-3" : "p-5",
         "bg-[linear-gradient(135deg,#5b6b8c_0%,#2c3a57_55%,#1d2740_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]",
         "bento:border-[#d9dde6] bento:bg-[linear-gradient(135deg,#eef2f9_0%,#dfe6f2_100%)]",
       )}
     >
-      <p className="text-lg font-semibold text-white/80 bento:text-[#33313a]">{place}</p>
-      <div className="my-2 flex items-center justify-center gap-3">
-        <WeatherGlyph code={code} day={c.daylight !== false} className="h-20 w-20 shrink-0 drop-shadow" />
+      <p className={cn("font-semibold text-white/80 bento:text-[#33313a]", compact ? "text-sm" : "text-lg")}>{place}</p>
+      <div className={cn("flex items-center justify-center", compact ? "my-1 gap-2" : "my-2 gap-3")}>
+        <WeatherGlyph code={code} day={c.daylight !== false} className={cn("shrink-0 drop-shadow", compact ? "h-10 w-10" : "h-20 w-20")} />
         <div className="text-left">
-          <p className="text-[4rem] font-bold leading-none tracking-tight tabular-nums text-white bento:text-[#17151c]">
+          <p className={cn("font-bold leading-none tracking-tight tabular-nums text-white bento:text-[#17151c]", compact ? "text-[2.25rem]" : "text-[4rem]")}>
             {temp}
-            <span className="align-top text-2xl font-medium">&deg;</span>
+            <span className={cn("align-top font-medium", compact ? "text-base" : "text-2xl")}>&deg;</span>
           </p>
           <p className="mt-1 text-sm font-medium text-white/75 bento:text-[#55525c]">{words(code)}</p>
         </div>
       </div>
-      <div className="mt-2 grid grid-cols-3 gap-2 border-t border-white/15 pt-3 text-white bento:border-[#cfd5e0] bento:text-[#17151c]">
+      <div className={cn("grid grid-cols-3 gap-2 border-t border-white/15 text-white bento:border-[#cfd5e0] bento:text-[#17151c]", compact ? "mt-1 pt-2" : "mt-2 pt-3")}>
         <Stat icon={<Droplet className="h-3.5 w-3.5" />} label="Humidity" value={c.humidity != null ? `${Math.round(c.humidity * 100)}%` : "—"} />
         <Stat icon={<Wind className="h-3.5 w-3.5" />} label="Wind" value={mph(c.windSpeed) != null ? `${mph(c.windSpeed)} mph ${compass(c.windDirection)}` : "—"} />
         <Stat icon={<Sun className="h-3.5 w-3.5" />} label="Feels" value={feels != null ? `${feels}°` : "—"} />
@@ -177,17 +178,17 @@ function SunEventIcon({ kind }: { kind: "rise" | "set" }) {
   return <I className="h-8 w-8 text-amber-300" aria-label={kind === "rise" ? "Sunrise" : "Sunset"} />;
 }
 
-function HourlyCard({ data }: { data: WxData }) {
+function HourlyCard({ data, compact }: { data: WxData; compact?: boolean }) {
   const pts = useMemo(() => hourlyPoints(data), [data]);
   if (!pts.length) return null;
   const temps = pts.map((p) => toF(p.temp)!);
-  const y = scaleY(Math.min(...temps), Math.max(...temps), 30, 62);
+  const y = scaleY(Math.min(...temps), Math.max(...temps), compact ? 46 : 30, compact ? 70 : 62);
   const n = pts.length;
   const xy = pts.map((p, i) => ({ x: ((i + 0.5) / n) * 100, y: y(toF(p.temp)!) }));
   return (
-    <Card label={<><Clock className="h-3 w-3" /> Hourly forecast</>} className="flex min-w-0 flex-col">
+    <Card label={<><Clock className="h-3 w-3" /> Hourly forecast</>} className={cn("flex min-w-0 flex-col", compact && "p-3 sm:p-3 [&>h3]:mb-1")}>
       <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
-      <div className="relative h-44 min-w-[560px]">
+      <div className={cn("relative min-w-[560px]", compact ? "h-[6.5rem]" : "h-44")}>
         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
           <LinePath pts={xy} className="stroke-white/25 bento:stroke-[#c9c6cf]" dashed />
         </svg>
@@ -202,7 +203,7 @@ function HourlyCard({ data }: { data: WxData }) {
                 </span>
               </div>
               <div className="absolute -translate-y-1/2" style={{ top: `${xy[i].y}%` }}>
-                {p.sun ? <SunEventIcon kind={p.sun} /> : <WeatherGlyph code={p.code} day={p.day} className="h-11 w-11" />}
+                {p.sun ? <SunEventIcon kind={p.sun} /> : <WeatherGlyph code={p.code} day={p.day} className={compact ? "h-7 w-7" : "h-11 w-11"} />}
               </div>
               <span className={cn("absolute bottom-0 whitespace-nowrap text-[0.8rem] font-semibold tabular-nums",
                 i === 0 ? "text-white bento:text-[#17151c]" : "text-white/55 bento:text-[#6b6874]", accent && "text-amber-300")}>
@@ -312,16 +313,33 @@ function DayDetail({ d }: { d: WxDay }) {
   );
 }
 
-export function WeatherBoard({ data, place }: { data: WxData; place: string }) {
+/**
+ * compact (2026-10-06, Jared: "the weather widget is HUGE now, make it ~60% smaller"): the inline board on the
+ * dashboard hero shows a smaller Now card and a shorter hourly strip; the 10-day forecast opens on tap.
+ */
+export function WeatherBoard({ data, place, compact }: { data: WxData; place: string; compact?: boolean }) {
   const [sel, setSel] = useState(0);
+  const [tenDay, setTenDay] = useState(false);
   const days = data.days.slice(0, 10);
+  const showDays = !compact || tenDay;
   return (
-    <div className="grid gap-3">
-      <div className="grid gap-3 md:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
-        <NowCard data={data} place={place} />
-        <HourlyCard data={data} />
+    <div className={cn("grid", compact ? "gap-2" : "gap-3")}>
+      <div className={cn("grid gap-3", compact ? "md:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]")}>
+        <NowCard data={data} place={place} compact={compact} />
+        <HourlyCard data={data} compact={compact} />
       </div>
-      {days.length > 0 && (
+      {compact && days.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setTenDay((v) => !v)}
+          aria-expanded={tenDay}
+          className="flex min-h-9 items-center gap-1.5 justify-self-start rounded-full px-2 text-[0.75rem] font-medium text-white/60 hover:text-white bento:text-[#6b6874]"
+        >
+          <CalendarDays className="h-3.5 w-3.5" aria-hidden />
+          {tenDay ? "Hide 10-day forecast" : "10-day forecast"}
+        </button>
+      )}
+      {showDays && days.length > 0 && (
         <Card className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <div className="min-w-0">
             <h3 className="mb-3 flex items-center justify-between text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-white/45 bento:text-[#8a8792]">
