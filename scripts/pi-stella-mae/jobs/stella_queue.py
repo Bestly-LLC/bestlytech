@@ -30,6 +30,7 @@ EMOJI = re.compile("[\U0001F000-\U0001FFFF☀-➿️]")
 STYLE = (
     "You write public replies from Jared, a Turo host, to a guest's review of his Tesla Model 3. Rules: 2 to 3 short lines, plain and warm, "
     "first person, use the guest's first name once. Mention one or two true trip details from FACTS and what the guest praised. "
+    "Describe trip length only in the general terms FACTS gives you (a couple of days, a week, two weeks) — never state an exact number of nights. "
     "Never invent details. No emoji. At most two exclamation marks. Never blame anyone and never mention damage, claims, other guests, "
     "fines or technical faults. End with exactly: " + SIGN + "\n"
     "Example of the voice: Thanks so much, GianPaula! Glad the late-night LAX pickup and your week with the Model 3 went smoothly. "
@@ -58,14 +59,33 @@ def patch(table, where, body):
     return lib._req("PATCH", f"/rest/v1/{table}?{where}", body)
 
 
+def duration_phrase(n):
+    """Round a night count to how a person would actually describe a trip, never an exact number."""
+    if not n or n < 1:
+        return None
+    if n == 1:
+        return "an overnight trip"
+    if n <= 3:
+        return "a few days"
+    if n <= 9:
+        return "about a week"
+    if n <= 13:
+        return "just over a week"
+    if n <= 20:
+        return "about two weeks"
+    if n <= 27:
+        return "about three weeks"
+    return "about a month"
+
+
 def trip_facts(r):
     t = r.get("trip") or {}
     bits = []
     if t:
         bits.append("LAX airport pickup" if t.get("lax") else "home pickup, not an airport")
-        n = t.get("nights")
-        if n:
-            bits.append(f"{n} night{'s' if n != 1 else ''}")
+        d = duration_phrase(t.get("nights"))
+        if d:
+            bits.append(d)
     bits.append(r.get("vehicle") or "Tesla Model 3 2020")
     return "; ".join(bits)
 

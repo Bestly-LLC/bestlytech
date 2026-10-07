@@ -25,6 +25,7 @@ interface Review {
   id: string; guest_first: string; review_date: string; stars: number | null; text: string | null; status: string; needs_reason: string | null;
   draft: string | null; draft_by: string | null; jared_notes: string | null; respond_available: boolean; has_response: boolean; response_text: string | null;
   post_error: string | null; reservation_id: number | null; trip: { lax?: boolean; nights?: number } | null; vehicle: string | null; posted_at: string | null;
+  is_backlog: boolean;
 }
 interface Rating { reservation_id: number; guest_first: string | null; deadline: string; status: string; draft: string | null; claim_open: boolean }
 interface JobRow { last_run_at: string | null; last_ok: boolean | null; last_summary: string | null }
@@ -168,6 +169,7 @@ function ReviewCard({ r, reload }: { r: Review; reload: () => void }) {
   const trip = r.trip ? [r.trip.lax ? "LAX pickup" : "Home pickup", r.trip.nights ? `${r.trip.nights} ${r.trip.nights === 1 ? "night" : "nights"}` : null].filter(Boolean).join(" · ") : null;
   const waiting = r.status === "new" || r.status === "redraft";
   const approved = r.status === "approved";
+  const backlog = r.is_backlog;
   const run = async (key: string, args: Record<string, unknown>, ok: string) => { const res = await act(setBusy, key, "review_set", { p_id: r.id, ...args }, ok); if (res) reload(); return res; };
 
   return (
@@ -177,6 +179,7 @@ function ReviewCard({ r, reload }: { r: Review; reload: () => void }) {
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold text-white">
             {r.guest_first} <Stars n={r.stars} />
             {under5 && <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-xs font-semibold text-amber-200 bento:bg-amber-100 bento:text-amber-800">Under 5 stars</span>}
+            {backlog && <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold text-white/70 bento:bg-black/5 bento:text-black/60">Backlog · locked</span>}
           </p>
           <p className={cn("mt-0.5 text-sm", muted)}>{dayOnly(r.review_date)}{trip ? ` · ${trip}` : ""}</p>
         </div>
@@ -197,8 +200,12 @@ function ReviewCard({ r, reload }: { r: Review; reload: () => void }) {
           <label htmlFor={`draft-${r.id}`} className="text-xs font-semibold uppercase tracking-widest text-white/60">
             Reply draft{r.draft_by ? <span className="font-normal normal-case tracking-normal"> · {r.draft_by}</span> : null}
           </label>
-          <textarea id={`draft-${r.id}`} value={draft} onChange={(e) => setDraft(e.target.value)} rows={rowsFor(draft)} className={cn(fieldCls, "leading-relaxed")} disabled={approved} />
-          <p className={cn("text-sm", muted)}><span className="whitespace-nowrap">{draft.trim().length} characters</span>. No emoji. Ends with Hope to host you again soon!</p>
+          <textarea id={`draft-${r.id}`} value={draft} onChange={(e) => setDraft(e.target.value)} rows={rowsFor(draft)} className={cn(fieldCls, "leading-relaxed")} disabled={approved || backlog} readOnly={backlog} />
+          <p className={cn("text-sm", muted)}>
+            {backlog
+              ? "Backlog review from before Stella was live. The words are locked — approve as written, or skip it."
+              : <><span className="whitespace-nowrap">{draft.trim().length} characters</span>. No emoji. Ends with Hope to host you again soon!</>}
+          </p>
         </div>
       )}
 
@@ -209,10 +216,12 @@ function ReviewCard({ r, reload }: { r: Review; reload: () => void }) {
 
       {!waiting && (
         <>
-          <div>
-            <label htmlFor={`notes-${r.id}`} className="text-xs font-semibold uppercase tracking-widest text-white/60">Notes for Stella</label>
-            <input id={`notes-${r.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={approved} placeholder="e.g. keep it shorter" className={cn(fieldCls, "mt-1.5 h-11")} />
-          </div>
+          {!backlog && (
+            <div>
+              <label htmlFor={`notes-${r.id}`} className="text-xs font-semibold uppercase tracking-widest text-white/60">Notes for Stella</label>
+              <input id={`notes-${r.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={approved} placeholder="e.g. keep it shorter" className={cn(fieldCls, "mt-1.5 h-11")} />
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             {r.respond_available && !approved && (
               <button className={pillPrimary} disabled={!!busy || draft.trim().length < 20}
@@ -221,10 +230,10 @@ function ReviewCard({ r, reload }: { r: Review; reload: () => void }) {
               </button>
             )}
             {approved && <button className={pillSecondary} disabled={!!busy} onClick={() => run("reopen", { p_action: "reopen" }, "Pulled back")}>Pull back</button>}
-            {!approved && <button className={pillSecondary} disabled={!!busy} onClick={() => run("redraft", { p_action: "redraft", p_notes: notes }, "Stella will redraft it")}>
+            {!backlog && !approved && <button className={pillSecondary} disabled={!!busy} onClick={() => run("redraft", { p_action: "redraft", p_notes: notes }, "Stella will redraft it")}>
               {busy === "redraft" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />} Redraft
             </button>}
-            {dirty && !approved && <button className={pillSecondary} disabled={!!busy} onClick={() => run("draft", { p_action: "draft", p_text: draft }, "Edit saved")}>Save my edit</button>}
+            {!backlog && dirty && !approved && <button className={pillSecondary} disabled={!!busy} onClick={() => run("draft", { p_action: "draft", p_text: draft }, "Edit saved")}>Save my edit</button>}
             <button className={pillSecondary} onClick={() => copyText(draft, "Reply")}><Clipboard className="h-4 w-4" aria-hidden /> Copy</button>
           </div>
         </>
