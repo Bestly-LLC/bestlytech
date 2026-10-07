@@ -314,14 +314,14 @@ export function VoicePicker({ source, openSignal }: { source: Source; defaultOpe
   const refresh = useCallback(async () => {
     if (source !== "ava") return;
     const { data } = await invoke<VoicesRes>("ava-assistant", { action: "voices", scope: "clone" });
-    if (data) setSum({ name: data.current?.name ?? "Lily", mine: data.clone?.voice_id ? (data.clone.paused_at ? "paused" : "ready") : "not recorded" });
+    if (data) setSum({ name: data.current?.name ?? "an unnamed voice", mine: data.clone?.voice_id ? (data.clone.paused_at ? "paused" : "ready") : "not recorded" });
   }, [source]);
   useEffect(() => { void refresh(); }, [refresh]);
   const summary = source === "ava"
-    ? (sum ? <>Ava sounds like {sum.name} · My voice: {sum.mine}</> : "Pick how she sounds, record your voice")
+    ? (sum ? <>Her everyday voice · Your voice: {sum.mine} (Claims Closer calls shops with it)</> : "Pick how she sounds, record your voice")
     : "Pick how RoofGuard Ava sounds on calls";
   return (
-    <CollapsibleSection id={`ava-voice-${source}`} anchorId={`voice-studio-${source}`} title="Voice" icon={<AvaOrb size={28} />} summary={summary} openSignal={openSignal}>
+    <CollapsibleSection id={`ava-voice-${source}`} anchorId={`voice-studio-${source}`} title={source === "ava" && sum ? `Voice: ${sum.name}` : "Voice"} icon={<AvaOrb size={28} />} summary={summary} openSignal={openSignal}>
       <VoiceBody source={source} onChanged={() => void refresh()} />
     </CollapsibleSection>
   );

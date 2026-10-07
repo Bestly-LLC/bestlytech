@@ -493,10 +493,12 @@ async function setup(): Promise<Response> {
 type Placed = { ok: true; call_id: string | null; calling: string } | { ok: false; error: string; status: number; retryable?: boolean };
 
 /** Prompt rules for a call in Jared's cloned voice (docs/ava-voice-clone-opusplan.md). The opener already discloses. */
+/** Jared's voice on a booking he already approved ("Book it" on a claim): she may book that one drop-off and nothing else. */
+const VOICE_RULES_BOOKING = "VOICE MODE: you are speaking in Jared's own voice, so you must be clear you are his AI assistant and not him. Your first line already says so; never skip or contradict it. If anyone asks, say you're an AI. Never say \"this is Jared\" or \"I'm Jared\", and never speak as if you are him. Jared already approved this booking: you may agree to one drop-off time from the times the call reason lists, and nothing else. No money, payment details or other promises. Anything else, say you'll pass it on.";
 const VOICE_RULES = "VOICE MODE: you are speaking in Jared's own voice, so you must be clear you are his AI assistant and not him. Your first line already says so; never skip or contradict it. If anyone asks, say you're an AI. Never say \"this is Jared\" or \"I'm Jared\", and never speak as if you are him. Never commit to anything for him: no money, plans, appointments or promises. Say you'll pass it on.";
 
 /** Places one call as Ava. Everything an outbound call needs lives here so the dialer, "Connect me" and follow-ups share it. */
-async function place(o: { phone: string; name?: string; purpose?: string; connect?: boolean; bridge?: boolean; org?: string; force?: boolean; first_line?: string; voice_id?: string; voice_mode?: "ava" | "jared"; booking?: Record<string, unknown> }): Promise<Placed> {
+async function place(o: { phone: string; name?: string; purpose?: string; connect?: boolean; bridge?: boolean; org?: string; force?: boolean; first_line?: string; voice_id?: string; voice_mode?: "ava" | "jared"; voice_fallback?: boolean; jared_first_line?: string; allow_booking?: boolean; booking?: Record<string, unknown> }): Promise<Placed> {
   const to = toE164(o.phone);
   if (!to) return { ok: false, error: "Enter a 10-digit US or Canada number.", status: 400 };
   const { data: s } = await db.from("ava_settings").select("*").eq("id", true).single();
@@ -519,16 +521,19 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
   // her voice for this call: the agent's own, a one-call override (the voice test), or Jared's clone ("Use my voice")
   let voiceOverride: string | null = o.voice_id ?? null, voiceTag: "ava" | "jared" = "ava", voiceRules = "";
   if (o.voice_mode === "jared") {
-    if (!s.jared_voice_id) return { ok: false, error: "Record your voice first. It's in Ava's voice, further down this page.", status: 412 };
-    if (s.jared_voice_paused_at) return { ok: false, error: "Voice mode is off after a guard alert. Turn it back on in Ava's voice section.", status: 409 };
-    voiceOverride = s.jared_voice_id; voiceTag = "jared"; voiceRules = VOICE_RULES;
+    // voice_fallback (bots, e.g. Claims Closer): no clone or a paused one means the call still goes out in her own voice
+    const why = !s.jared_voice_id ? { error: "Record your voice first. It's in Ava's voice, further down this page.", status: 412 }
+      : s.jared_voice_paused_at ? { error: "Voice mode is off after a guard alert. Turn it back on in Ava's voice section.", status: 409 } : null;
+    if (why && !o.voice_fallback) return { ok: false, ...why };
+    if (!why) { voiceOverride = s.jared_voice_id; voiceTag = "jared"; voiceRules = o.allow_booking ? VOICE_RULES_BOOKING : VOICE_RULES; }
   }
   const first = name ? ` ${name.split(" ")[0]}` : "";
   // A bridge call's first line is usually heard by a robot, so it stays short and gives nothing away.
   const greeting = bridge
     ? "Hi, I'm calling on behalf of a member."
     : voiceTag === "jared"
-    ? `Hey${first}, it's Jared's AI assistant, using his voice.`   // disclosure first, always
+    ? (/\bAI assistant\b/i.test(o.jared_first_line ?? "") ? String(o.jared_first_line).trim().slice(0, 300)   // a caller's own line, still disclosed
+      : `Hey${first}, it's Jared's AI assistant, using his voice.`)   // disclosure first, always
     : String(o.first_line ?? "").trim().slice(0, 300) ||
       `Hi${first}, it's Ava, Jared's AI assistant, on a recorded line. ${connect ? "Jared would love a quick word with you." : "He asked me to give you a call."}`;
   const res = await fetch(`${XI}/convai/sip-trunk/outbound-call`, {
@@ -560,7 +565,8 @@ async function place(o: { phone: string; name?: string; purpose?: string; connec
 
 async function call(body: Record<string, unknown>): Promise<Response> {
   const r = await place({ phone: String(body.phone ?? ""), name: String(body.name ?? ""), purpose: String(body.purpose ?? ""),
-    connect: body.connect === true, force: body.force === true, first_line: String(body.first_line ?? ""), voice_mode: body.voice === "jared" ? "jared" : "ava" });
+    connect: body.connect === true, force: body.force === true, first_line: String(body.first_line ?? ""), voice_mode: body.voice === "jared" ? "jared" : "ava",
+    voice_fallback: body.voice_fallback === true, jared_first_line: String(body.jared_first_line ?? ""), allow_booking: body.allow_booking === true });
   return r.ok ? Response.json({ ok: true, call_id: r.call_id, calling: r.calling }, { headers: CORS })
     : Response.json({ ok: false, error: r.error, retryable: r.retryable === true }, { status: r.status, headers: CORS });
 }
@@ -948,6 +954,8 @@ async function voiceUse(b: Record<string, unknown>): Promise<Response> {
     if (!pr.ok) { await pr.text().catch(() => ""); return jerr("The voice platform wouldn't switch her voice. Try again.", 502); }
   }
   await db.from("ava_settings").update({ voice_id: useId, updated_at: new Date().toISOString() }).eq("id", true);
+  // same history the quick switcher keeps, so the chip at the top of /admin/ava can name her voice
+  if (s?.voice_id !== useId) await db.from("ava_voice_history").insert({ source: "ava", voice_id: useId, name: name.replace(/^Ava\s*[–-]\s*/, ""), via: "voice section" });
   let setupOk = false;
   try { setupOk = (await setup()).ok; } catch { /* the watchdog re-runs setup if something is off */ }
   return Response.json({ ok: true, voice_id: useId, name, setup_ok: setupOk }, { headers: CORS });

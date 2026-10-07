@@ -133,7 +133,8 @@ export function VoiceSwitcher({ source, onMore }: { source: Source; onMore?: () 
 
   const mine = data?.[source];
   const curId = mine?.current.voice_id;
-  const curName = mine?.current.name ?? "Voice";
+  const curName = mine?.current.name ?? "Unnamed voice";
+  const label = source === "ava" ? "Ava's voice" : "RoofGuard voice";
   const recents = (mine?.recent ?? []).map((r) => ({ ...r }) as Voice);
   const favIds = new Set((data?.favorites ?? []).map((f) => f.voice_id));
 
@@ -172,10 +173,10 @@ export function VoiceSwitcher({ source, onMore }: { source: Source; onMore?: () 
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} aria-label={`Voice: ${curName}. Change voice`}
+      <button type="button" onClick={() => setOpen(true)} aria-label={`${label}: ${data ? curName : "loading"}. Change voice`}
         className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white/[0.04] px-3.5 ring-1 ring-white/10 transition hover:bg-white/[0.07]">
         <span className="grid h-7 w-7 place-items-center rounded-full bg-violet-500/15 text-violet-300"><Mic className="h-3.5 w-3.5" aria-hidden /></span>
-        <span className="text-left leading-tight"><span className="block text-[11px] text-white/50">Voice</span>
+        <span className="text-left leading-tight"><span className="block text-[11px] text-white/50">{label}</span>
           <span className="block whitespace-nowrap text-[15px] font-semibold text-white">{data ? curName : "…"}</span></span>
       </button>
 

@@ -62,7 +62,9 @@ export async function sendMail(ctx: Ctx, o: { to: string; subject: string; text:
 async function avaCall(ctx: Ctx, o: { phone: string; name: string; purpose: string; first_line: string }): Promise<{ ok: boolean; call_id?: string; error?: string }> {
   const r = await fetch(`${ctx.supabaseUrl}/functions/v1/ava-assistant`, {
     method: "POST", headers: { Authorization: `Bearer ${ctx.serviceKey}`, apikey: ctx.serviceKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "call", ...o }),
+    // Jared (2026-10-06): shop calls go out in his voice (still disclosed as his AI assistant); no clone = her own voice
+    body: JSON.stringify({ action: "call", ...o, voice: "jared", voice_fallback: true,
+      jared_first_line: o.first_line.replace(/^Hi, it's Ava, Jared Best's AI assistant, on a recorded line\./, "Hi, it's Jared Best's AI assistant, using his voice, on a recorded line.") }),
   }).catch(() => null);
   const j = await r?.json().catch(() => ({}));
   return r?.ok && j?.ok ? { ok: true, call_id: j.call_id } : { ok: false, error: String(j?.error ?? `ava-assistant ${r?.status ?? "no answer"}`).slice(0, 200) };

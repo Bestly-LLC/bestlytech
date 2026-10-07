@@ -110,6 +110,14 @@ async function currentOf(src: Src): Promise<Cur> {
   return { voice_id: data?.voice_id ?? LILY, agent_id: data?.agent_id ?? null };
 }
 
+/** Name of a voice nobody saved (picked in the full Voice section, or set by hand): ask the voice platform once. */
+async function nameFromPlatform(id: string): Promise<string | null> {
+  const key = await vault("elevenlabs_api_key");
+  if (!key) return null;
+  const i = await voiceInfo(key, id);
+  return i.v ? (slim(i.v).name.replace(/^Ava\s*[–-]\s*/, "") || null) : i.missing ? "Missing voice" : null;
+}
+
 async function list(): Promise<Response> {
   const { data: favs } = await db.from("ava_voice_favorites").select("*").order("sort").order("name");
   const out: Record<string, unknown> = {};
@@ -118,7 +126,8 @@ async function list(): Promise<Response> {
     const { data: hist } = await db.from("ava_voice_history").select("voice_id, name, used_at").eq("source", src).order("used_at", { ascending: false }).limit(12);
     const seen = new Set<string>([cur.voice_id]);
     const recent = (hist ?? []).filter((h) => !seen.has(h.voice_id) && seen.add(h.voice_id)).slice(0, 2);
-    const known = (favs ?? []).find((f) => f.voice_id === cur.voice_id)?.name ?? (hist ?? []).find((h) => h.voice_id === cur.voice_id)?.name ?? null;
+    const known = (favs ?? []).find((f) => f.voice_id === cur.voice_id)?.name ?? (hist ?? []).find((h) => h.voice_id === cur.voice_id)?.name
+      ?? (cur.voice_id === LILY ? "Lily" : await nameFromPlatform(cur.voice_id));
     out[src] = { current: { voice_id: cur.voice_id, name: known }, recent, ready: !!cur.agent_id };
   }
   const have = new Set((favs ?? []).map((f) => f.name.toLowerCase()));
@@ -230,7 +239,7 @@ async function apply(key: string, src: Src, voiceId: string, name: string): Prom
   const tbl = src === "ava" ? "ava_settings" : "rg_settings";
   const { error } = await db.from(tbl).update(src === "ava" ? { voice_id: voiceId, updated_at: now } : { voice_id: voiceId, updated_at: now, updated_by: "ava-voices" }).eq("id", true);
   if (error) return `${LABEL[src]}: switched on the platform but couldn't save it (${error.message}).`;
-  if (cur.voice_id !== voiceId) await db.from("ava_voice_history").insert({ source: src, voice_id: voiceId, name });
+  if (cur.voice_id !== voiceId) await db.from("ava_voice_history").insert({ source: src, voice_id: voiceId, name, via: "switcher" });
   return null;
 }
 
