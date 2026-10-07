@@ -181,6 +181,12 @@ async function rateLimited(rung: Rung, f: Fail) {
     modelSkip.set(rung.model, Date.now() + secs * 1000);
     return;
   }
+  // 2026-10-06: Cloudflare's "used up your daily free allocation of 10,000 neurons" 429 has no useful
+  // Retry-After, so it fell to 60 s and the ladder knocked on Cloudflare all day. Pause until its reset.
+  if (rung.provider === "cloudflare" && /daily free allocation|neurons/i.test(f.message)) {
+    await cooldown(rung.provider, (Date.parse(utcDayStart(1)) - Date.now()) / 1000, `Daily free cap (10,000 neurons) used up. Back at its reset, 00:00 UTC.`);
+    return;
+  }
   await cooldown(rung.provider, f.retryAfter, f.message);
 }
 
@@ -239,8 +245,17 @@ function laDayStart(): string {
   return new Date(now.getTime() - (Number(p.hour) * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds()) * 1000).toISOString();
 }
 
+/** 00:00 UTC today (or `plus` days later). Cloudflare's free neurons reset on the UTC day, not the LA one. */
+function utcDayStart(plus = 0): string {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + plus)).toISOString();
+}
+
 async function usedToday(p: Provider): Promise<number> {
-  const since = laDayStart();
+  // 2026-10-06: Cloudflare was counted from LA midnight (07:00 UTC) while its 10,000 neurons reset at 00:00 UTC.
+  // From 5 PM to midnight PT the ladder billed yesterday's use against a fresh quota (skipping free capacity),
+  // then after midnight PT it forgot the evening's use and ran into Cloudflare's own 429 wall.
+  const since = p === "cloudflare" ? utcDayStart() : laDayStart();
   if (p === "cloudflare") {
     const { data } = await db().from("ai_spend").select("free_units").eq("provider", p).gte("at", since).limit(5000);
     return (data ?? []).reduce((a: number, r: any) => a + Number(r.free_units ?? 0), 0);
