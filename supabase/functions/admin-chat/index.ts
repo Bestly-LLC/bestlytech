@@ -79,6 +79,10 @@ import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: 
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v35 (2026-10-06, Jared: "give Scout my Bestly email signature with the gif, he searched and could not find it"):
+//   send_email tool. Sends as Jared through Resend with the shared Bestly signature (_shared/bestly-signature.ts, the GIF
+//   headshot from claims_assets 'jared-signature.gif' inline as cid). Names resolve to addresses from his own mail.
+//   Preview first, send on his yes (or auto-run); never on autopilot. Every send is logged in email_send_log.
 // v34 (2026-10-06, Jared: "queue messages to Scout as well as interrupt and send now, just like Claude"): his window
 //   queues what he types while Scout works and sends it when Scout is done. "Send now" / Stop interrupt: op:"stop"
 //   writes a STOP_MARK message, and every run (free steps, paid turns, auto-continue hops, the final write) checks
@@ -116,6 +120,7 @@ import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: 
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsWith } from "../_shared/cors.ts";
+import { sendAsJared } from "../_shared/bestly-signature.ts";
 
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
 const MAX_TURNS = 10;
@@ -401,6 +406,27 @@ const TOOLS = [
     },
   },
   {
+    name: "send_email",
+    description:
+      "Send an email AS JARED from jared@bestly.tech with his Bestly signature (animated GIF headshot, name, title, phone, " +
+      "site, LinkedIn) added automatically - never type a signature or sign-off block yourself, just end with a short sign-off line " +
+      "like 'Thanks, Jared' if it fits. Jared is bcc'd. to/cc take email addresses OR a person's name (e.g. 'Eli'): a name is looked up " +
+      "in his mail; if it can't be found or matches several people, the result says so - ask him then. body is plain text " +
+      "(blank line between paragraphs, numbered steps fine). Call without confirmed first to get the exact preview, show it to him, " +
+      "and send with confirmed:true only after he said to send it (\"send it\", \"send for me\") or auto-run is on.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to: { type: "array", items: { type: "string" }, description: "addresses or names" },
+        cc: { type: "array", items: { type: "string" } },
+        subject: { type: "string" },
+        body: { type: "string" },
+        confirmed: { type: "boolean" },
+      },
+      required: ["to", "subject", "body"],
+    },
+  },
+  {
     name: "ask_user",
     description:
       "Ask Jared 1-4 multiple-choice questions, shown as tappable answers (he can always type his own instead). Use it when the ask is " +
@@ -493,6 +519,7 @@ Read it with meeting_transcript. Then, in plain text: first the decisions (only 
 - Fix data: db_write (one guarded INSERT/UPDATE/DELETE).
 - Fix the Pi: pi_command (Nextcloud diagnose and heal, Homebridge, Home Assistant, Pi-hole, the agent).
 - Diagnose the home network: pi_command network.* / router.probe / pihole.recent_blocked, and the 5-minute history in home_hub_network_samples (run_sql).
+- Email anyone as Jared: send_email. His Bestly signature (animated GIF headshot, name, title, phone, site, LinkedIn) is added automatically, so it always exists; never say there is no signature and never search files for it. A name like "Eli" is looked up in his mail.
 
 # When something at home "times out" or "won't connect" (a smart device, an app, the Wi-Fi)
 The Pi (bestly-pi, wired to the Verizon router) sits on the same LAN, runs Pi-hole, and can scan and ping everything on it. Work it like this, reading results yourself:
@@ -783,6 +810,7 @@ const FREE_WHY: Record<string, string> = {
 
 // What the free model may state as fact (it knows nothing about Bestly otherwise).
 const FREE_FACTS = `Facts about the admin you may use:
+- Jared's Bestly email signature (animated GIF headshot, name, title, phone, site, LinkedIn) exists and is added automatically by send_email. Never search for it and never say it is missing. send_email also finds a person's address from a name ("Eli").
 - Problems Scout watches are incidents. When one gets fixed on its own (auto-fix, the free AI or Scout), the bell already shows a "Fixed: <what>" alert saying what fixed it, and a push if it had pushed.
 - Failed voice-clip uploads on the Clips page are reported to Scout as an incident and clear with a "Fixed" alert when the next upload works.
 - Auto-run (Scout does things without asking) and Paid AI switches sit at the top of the Scout panel.
@@ -883,6 +911,7 @@ ${convo}`;
 const FREE_TOOLS = new Set([
   "today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "notify", "mark_done",
   "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user", "make_video",
+  "send_email",
 ]);
 const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript"]);
 const FREE_STEPS = 10;
@@ -930,6 +959,7 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["clear_alerts", "resolve_incident"], /\b(alerts?|incidents?|bell|resolve|clear|fixed|warning|notification)\b/i],
   [["learn"], /\b(learn|remember|lesson|next time)\b/i],
   [["make_video"], /\b(video|videos|clip|clips|ltx|render|animate|animation|footage|b-?roll|reel)\b/i],
+  [["send_email"], /\b(e-?mails?|mail|send|signature|message (to|eli|rohit)|write to|reply to)\b/i],
 ];
 const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "ask_user"]);
 
@@ -1407,6 +1437,10 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
         : { ok: true, ...(data as any), hint: args.action === "make" ? "Not made yet: show him this estimate and ask. Call make with confirmed:true after his yes." : undefined };
       break;
     }
+    case "send_email": {
+      out = await sendEmailTool(args, threadId);
+      break;
+    }
     case "ask_user":
       // Reached only when the questions were malformed (a valid call ends the turn before tools run).
       out = { ok: false, error: "bad_questions", hint: "1-4 questions, each with a question and 2-4 options (label, optional description)." };
@@ -1523,7 +1557,80 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
 }
 
 // Tools autopilot never runs even without a confirmed flag: they reach Jared or a machine.
-const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "db_write", "clear_alerts", "ask_user", "make_video"]);
+const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "db_write", "clear_alerts", "ask_user", "make_video", "send_email"]);
+
+// ---------------------------------------------------------------- v35 send_email: mail as Jared with his Bestly signature
+const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]{2,}$/;
+/** "Eli" -> eli.cooper@bdcuniversal.com from his own mail: people who wrote to him first, then people he wrote to. */
+async function lookupAddress(name: string): Promise<{ address?: string; options?: string[] }> {
+  const n = name.trim().replace(/[%_]/g, "");
+  if (n.length < 2) return {};
+  const found = new Map<string, number>();
+  const { data: inbox } = await db.from("bestly_mail").select("from_addr, from_name").or(`from_name.ilike.%${n}%,from_addr.ilike.%${n}%`)
+    .order("sent_at", { ascending: false }).limit(40);
+  // Whole-word match only: "Eli" must not match deliveries, Fidelity or Elizabeth.
+  const want = n.toLowerCase().split(/\s+/);
+  const words = (t: string) => t.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const matches = (name: string, addr: string) => {
+    const w = new Set([...words(name), ...words(addr.split("@")[0])]);
+    return want.every((x) => w.has(x));
+  };
+  for (const r of (inbox ?? []) as { from_addr: string; from_name: string | null }[]) {
+    const a = String(r.from_addr ?? "").toLowerCase();
+    if (EMAIL_RE.test(a) && !/no-?reply|donotreply|notifications?@|mailer|bounce|informeddelivery/.test(a) && matches(String(r.from_name ?? ""), a)) {
+      found.set(a, (found.get(a) ?? 0) + 1);
+    }
+  }
+  if (!found.size) {
+    const { data: sent } = await db.from("bestly_sent_mail").select("to_addrs").ilike("to_addrs", `%${n}%`).order("sent_at", { ascending: false }).limit(20);
+    for (const r of (sent ?? []) as { to_addrs: unknown }[]) {
+      for (const a of String(r.to_addrs ?? "").match(/[^\s"'<>,\[\]]+@[^\s"'<>,\[\]]+/g) ?? []) {
+        if (matches("", a)) found.set(a.toLowerCase(), (found.get(a.toLowerCase()) ?? 0) + 1);
+      }
+    }
+  }
+  const ranked = [...found.entries()].sort((a, b) => b[1] - a[1]).map(([a]) => a);
+  if (ranked.length === 1 || (ranked.length > 1 && found.get(ranked[0])! >= 3 * (found.get(ranked[1]) ?? 0))) return { address: ranked[0] };
+  return ranked.length ? { options: ranked.slice(0, 5) } : {};
+}
+
+async function sendEmailTool(args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
+  const list = (v: unknown) => (Array.isArray(v) ? v : v ? [v] : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 10);
+  const subject = String(args.subject ?? "").trim();
+  const body = String(args.body ?? "").trim();
+  if (!subject || subject.length > 200) return { ok: false, error: "subject required (under 200 characters)" };
+  if (body.length < 10 || body.length > 20_000) return { ok: false, error: "body required (10 to 20,000 characters)" };
+  const resolve = async (items: string[]) => {
+    const out: string[] = [], problems: string[] = [];
+    for (const it of items) {
+      const bare = it.replace(/^.*<([^>]+)>.*$/, "$1").toLowerCase();
+      if (EMAIL_RE.test(bare)) { out.push(bare); continue; }
+      const r = await lookupAddress(it);
+      if (r.address) out.push(r.address);
+      else problems.push(r.options ? `"${it}" matches several addresses: ${r.options.join(", ")}` : `no address found for "${it}" in Jared's mail`);
+    }
+    return { out, problems };
+  };
+  const to = await resolve(list(args.to)), cc = await resolve(list(args.cc));
+  const problems = [...to.problems, ...cc.problems];
+  if (problems.length || !to.out.length) {
+    return { ok: false, error: "recipient_unclear", detail: problems.length ? problems : ["no recipient"], hint: "Ask Jared which address to use (ask_user), then call again with it." };
+  }
+  const preview = { from: "Jared Best <jared@bestly.tech>", to: to.out, cc: cc.out, subject, body, signature: "Bestly signature with the animated headshot is added below the body" };
+  if (args.confirmed !== true) {
+    return { ok: false, error: "not_sent_yet", preview, hint: "Show him this exact email (to, subject, body) and end with OPTIONS: Send it | Change something. Send with confirmed:true after his yes." };
+  }
+  const key = `scout-${threadId}-${Array.from(new TextEncoder().encode(subject + body + to.out.join())).reduce((h, c) => (h * 31 + c) >>> 0, 7)}`;
+  const sent = await sendAsJared(db, { to: to.out, cc: cc.out, subject, text: body, key });
+  await db.from("email_send_log").insert({
+    message_id: sent.id ?? null, template_name: "scout-send-as-jared", recipient_email: to.out.join(", "),
+    status: sent.ok ? "sent" : "failed", error_message: sent.ok ? null : sent.error,
+    metadata: { thread_id: threadId, subject, cc: cc.out, signature: sent.signature },
+  }).then(() => null, () => null);
+  return sent.ok
+    ? { ok: true, sent: true, to: to.out, cc: cc.out, subject, signature: sent.signature === "gif" ? "Bestly signature with animated headshot" : "text signature (the GIF could not be read)", message_id: sent.id }
+    : { ok: false, error: sent.error };
+}
 
 
 /**

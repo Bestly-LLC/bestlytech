@@ -13,10 +13,11 @@
 // Replies go to jared@bestly.tech, which the Mac's puller ingests into bestly_mail within about two minutes,
 // so an AI employee can watch for the answer without anyone forwarding anything.
 //
-// NOT included: Jared's Apple Mail signature (the animated GIF headshot). That lives in Mail on his Mac and is
-// not available here, so anything sent through this function carries a plain sign-off instead. Flagged, not faked.
+// 2026-10-06: now carries Jared's Bestly signature with the animated GIF headshot (_shared/bestly-signature.ts),
+// the same one Scout's send_email and Claims Closer use.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { sendAsJared } from "../_shared/bestly-signature.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -25,7 +26,6 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { pers
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 
-const FROM = "Jared Best <jared@bestly.tech>";
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const err = (error: string, status = 400) => Response.json({ ok: false, error }, { status, headers: CORS });
@@ -56,13 +56,9 @@ Deno.serve(async (req) => {
   if (!subject || subject.length > 200) return err("Give a subject under 200 characters.");
   if (text.length < 20 || text.length > 20000) return err("Give a body between 20 and 20,000 characters.");
 
-  const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: FROM, to: [to], subject, text, reply_to: "jared@bestly.tech" }),
-  }).catch(() => null);
-  const body = await r?.json().catch(() => ({}));
-  if (!r?.ok) return err(`The mail service refused it (${r?.status ?? "no response"}): ${JSON.stringify(body).slice(0, 300)}`, 502);
+  const sent = await sendAsJared(db, { to: [to], subject, text, key: requestId ? `vendor-${requestId}` : undefined });
+  if (!sent.ok) return err(`The mail service refused it: ${sent.error}`, 502);
+  const body = { id: sent.id };
 
   if (requestId) {
     await db.from("vendor_requests").update({
