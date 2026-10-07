@@ -399,8 +399,18 @@ const TOOLS = [
     description:
       "Read a recorded call's transcript, for a debrief or any question about what was said. name is the recording (meeting-YYYYMMDD-HHMM); " +
       "leave it out for the latest call. list:true returns the recent calls instead. JARED lines are his own mic and always right; " +
-      "a name ending in ? was a guess from the voice, so check it against the context.",
-    input_schema: { type: "object", properties: { name: { type: "string" }, list: { type: "boolean" } } },
+      "a name ending in ? was a guess from the voice, so check it against the context. " +
+      "To find where something was said (e.g. where a call to-do came from), pass find (words to look for; several separated by |): " +
+      "you get only the matching lines with 8 lines around each, not the whole call. line_start/line_end read one stretch. " +
+      "A whole transcript is huge: only read it all for a full debrief.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" }, list: { type: "boolean" },
+        find: { type: "string", description: "words to look for, e.g. 'invite|20 minute|Wednesday'" },
+        line_start: { type: "number" }, line_end: { type: "number" },
+      },
+    },
   },
   {
     name: "learn",
@@ -645,6 +655,7 @@ Read it with meeting_transcript. Then, in plain text: first the decisions (only 
 
 # What you can do yourself
 - Read anything: today, incidents, run_sql, meeting_transcript.
+- "Why is this to-do here?" on a call to-do: run_sql scout_daily for its action (meeting, owner, quote), then meeting_transcript {name, find: 2-3 key words of the task or quote}. Answer with who said it, when, and whether it was a real promise or a demo/test line. Never read the whole transcript for this.
 - Fix data: db_write (one guarded INSERT/UPDATE/DELETE).
 - Fix the Pi: pi_command (Nextcloud diagnose and heal, Homebridge, Home Assistant, Pi-hole, the agent).
 - Diagnose the home network: pi_command network.* / router.probe / pihole.recent_blocked, and the 5-minute history in home_hub_network_samples (run_sql).
@@ -888,8 +899,29 @@ async function meetingTranscript(args: Record<string, any>): Promise<Record<stri
   if (error) return { ok: false, error: error.message };
   if (!data?.length) return { ok: false, error: "no recording found" };
   const r = data[0];
-  await db.from("meeting_recordings").update({ debriefed_at: new Date().toISOString() }).eq("id", r.id);
   const text = String(r.transcript ?? "");
+  // v41 (2026-10-07): find / line ranges. Every call used to return the whole transcript (up to 90K chars), which the
+  // free agent cut to its first 1,200 chars, so 26 "find" calls on Oct 7 never saw the line and drained the free AI.
+  const all = text.split("\n");
+  const find = String(args.find ?? "").trim();
+  if (find) {
+    const terms = find.toLowerCase().split("|").map((t) => t.trim()).filter(Boolean).slice(0, 6);
+    const hits: number[] = [];
+    all.forEach((l, i) => { const ll = l.toLowerCase(); if (terms.some((t) => ll.includes(t))) hits.push(i); });
+    const keep = new Set<number>();
+    for (const h of hits.slice(0, 12)) for (let k = Math.max(0, h - 8); k <= Math.min(all.length - 1, h + 8); k++) keep.add(k);
+    const out: string[] = []; let prev = -2;
+    for (const k of [...keep].sort((a, b) => a - b)) { if (k !== prev + 1) out.push("..."); out.push(`${k + 1}| ${all[k]}`); prev = k; }
+    return { ok: true, name: r.name, started_at: r.started_at, roster: r.roster, lines: all.length, matches: hits.length,
+      shown: Math.min(hits.length, 12), excerpt: out.join("\n").slice(0, 12_000) || "(no line mentions that)" };
+  }
+  if (args.line_start != null || args.line_end != null) {
+    const a = Math.max(1, Math.round(Number(args.line_start) || 1));
+    const b = Math.min(all.length, Math.max(a, Math.round(Number(args.line_end) || a + 80)), a + 199);
+    return { ok: true, name: r.name, started_at: r.started_at, roster: r.roster, lines: all.length,
+      excerpt: all.slice(a - 1, b).map((l, i) => `${a + i}| ${l}`).join("\n") };
+  }
+  await db.from("meeting_recordings").update({ debriefed_at: new Date().toISOString() }).eq("id", r.id);
   const MAX = 90_000;
   return {
     ok: true, name: r.name, started_at: r.started_at, stopped_at: r.stopped_at, roster: r.roster, speakers: r.speakers,
