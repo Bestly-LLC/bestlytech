@@ -1094,6 +1094,8 @@ const ASKS_FOR_WORK = /^take this off my plate|^keep going|^do it\b|\b(are|is) (
 /** v23: a free answer that promises, refuses or reports work - the free model is not allowed to say any of it. */
 const CLAIMS_WORK = /\b(scout|i)\s*(will|'ll|would|am going to|can'?t|cannot|can not|won'?t|is unable|am unable|don'?t have|doesn'?t have)\b|\bi'll\b|\bmanually\b|\byou('ll| will)? (need|have) to\b|\b(it'?s|it is|all|now) (done|fixed|resolved|pushed)\b|\bno action (is )?(needed|required)\b|\btakes? (a few )?minutes\b|\bit will pick (it|this) up\b|\bi'?ll keep (going|working|at it)\b|\bstill (working|finding out)\b/i;
 
+const NEEDS_LOOKUP = /\b(invoices?|e-?mails?|mail|inbox|tasks?|to-?dos?|meetings?|calls?|transcripts?|trips?|bookings?|clients?|customers?|elizabeth|eli|rohit|mariah|chase|why is|why did|came from|where did|how much|how many|when did|last time)\b/i;
+const NEEDS_LOOKUP_NAME = /\b(?:for|from|about|with|to|did|is|does)\s+[A-Z][a-z]{2,}/;
 async function freeTry(threadId: string, text: string, page: unknown): Promise<{ answer?: string; why: string }> {
   // v27 (2026-09-23): the free AI now READS the same live snapshot the paid one starts from (admin_today + open
   // incidents), and may draft messages. "What needs me?" and "Help me finish this to-do" were going to paid AI
@@ -1102,6 +1104,9 @@ async function freeTry(threadId: string, text: string, page: unknown): Promise<{
   // v23: work goes to the model with tools. So does every follow-up in a thread that began as a hand-off.
   const todoHelp = /^help me finish this to-do:/i.test(text.trim());
   if (!todoHelp && ASKS_FOR_WORK.test(text.trim())) return { why: FREE_WHY.ACTION };
+  // v41: the quick-answer step has no tools. A question about a person, an email, an invoice, a task or a call needs a lookup, so it goes straight to the tool step
+  // instead of answering from nothing (it named invoice services for Elizabeth without reading a single email).
+  if (!todoHelp && (NEEDS_LOOKUP.test(text) || NEEDS_LOOKUP_NAME.test(text))) return { why: FREE_WHY.DATA };
   const { data: first } = await db.from("admin_chat_messages").select("body").eq("thread_id", threadId).eq("role", "user")
     .order("created_at", { ascending: true }).limit(1);
   if (/^take this off my plate/i.test(String((first as any)?.[0]?.body ?? ""))) return { why: FREE_WHY.ACTION };
