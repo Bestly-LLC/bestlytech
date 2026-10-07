@@ -79,6 +79,24 @@ import { llm, llmChat, llmVision, LlmUnavailable, type ChatResult } from "../_sh
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v38 (2026-10-07, Jared 9:00 PM: "this should not be true, there is free AI coding from LLM. Rework how Scout runs: he should have all
+//   the same abilities as paid AI, and only call on paid AI when it fails after 3 tries"). Plan: docs/scout-free-parity-opusplan.md.
+//   Free Scout has every paid tool: commit_files, db_write and mac_command joined FREE_TOOLS (PAID_ONLY_WHY and its early hand-off are gone),
+//   with the same confirmation rules as paid (confirmed:true after his yes or auto-run; AUTOPILOT_NEVER unchanged). The step that writes code
+//   runs on the coding ladder (llmChat task "code": FreeLLM qwen3-coder-480b, then FreeLLM auto, Groq, Cloudflare; 4,000 tokens, 60 s).
+//   Three tries, then paid. A TRY is one free attempt that ends in a real failure: (1) commit_files reverted by a failed build, (2) the same
+//   tool failing twice in a row (same error or same arguments), (3) STUCK: or ask_paid from the free agent. run_state keeps `tries` and
+//   `try_log` [{at, what, why}] (a new message from him clears them; so does a hand-typed "keep going"). After a failed try the agent starts
+//   the next one itself ("Try 2 of 3: ...") inside the same hop loop. On the 3rd failed try: Paid AI switch ON -> the job is handed to paid
+//   Scout in a fresh request (paid_handoff, so it gets a full time budget) with the try log in its prompt; switch OFF -> one message with the
+//   three tries and OPTIONS: Yes, use paid AI | Leave it. The switch stays the single master control (v30): it is never turned on silently.
+//   With the switch ON, free now answers FIRST (that is the point of "paid only after 3 tries"); with it OFF nothing else changed.
+//   Edge function code: commit_files tells Scout when supabase/functions/ changed and hands it the exact deploy job (fresh temp clone on the
+//   Mac mini, supabase functions deploy, clone deleted). It is a mac_run proposal, Jared taps Run, and a deploy script never auto-runs even
+//   with auto-run on. Schema and cron changes still go to improver_ideas (kind 'schema'); there is no migration tool and no auto-deploy.
+//   Kept from the older lessons: v23 claim checks (CLAIMS_WORK / CLAIMS_DONE, v37), v34 interrupt (supersededSince), v36 run_state and caches.
+//   Where the plan met a lesson: a commit needs ~90 s of the request to be watched and reverted if it fails (rule 4), so a free commit that
+//   would start with less than that left is saved in run_state.pending and runs first thing in the next hop instead of going unwatched.
 // v37 (2026-10-07, Jared: "give Scout vision like Claude: actually look at images, not convert them to text, and let me upload videos"):
 //   Scout sees. A picture, PDF or video he attaches carries a ⟦scout-files: path|path kind=image|pdf|video⟧ line (ScoutAttach.tsx;
 //   a video is frames the browser cut). On paid AI, the files in his two newest file messages reach Claude as real image / document
@@ -189,6 +207,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Per-request cut-off for slow tools, so one tool cannot run the reply past the platform limit.
 let toolDeadline = Infinity;
 const timeUp = () => Date.now() > toolDeadline;
+let reqStartedAt = Date.now();          // v38: set at the top of each request; free commits are gated on how much of the 150 s is left
+const REQ_HARD_MS = 146_000;            // the platform kills the function at 150 s
 
 function cleanKey(raw: string | undefined): string {
   if (!raw) return "";
@@ -595,6 +615,9 @@ When a tool fails, the result comes back with "lessons" (what worked before in t
 # How to change code
 Read the file first, every time. Keep the change small. Use commit_files edits (exact old snippet -> new), not whole files; a large file does not fit in one reply. Never put a key, token or password into a file. When a commit comes back reverted, say so plainly, say what the build complained about, and work out the actual fix - never resend the same thing hoping for a different build.
 
+# Backend code needs his tap to go live
+commit_files ships the site and the admin through the build. It does NOT ship edge functions (supabase/functions/). When a commit_files result carries deploy_needed, propose exactly that job with mac_run (its title, why and script: it deploys only the changed functions from a fresh temp clone on the Mac mini and deletes the clone), say in one line that the Yes button is up, and never say the function is live until that job has run. A deploy always waits for his Run tap, even with auto-run on. Schema and cron changes are never run by you: file them in improver_ideas (kind 'schema', the exact SQL in change) and tell him in one line it is queued.
+
 # How to behave
 - ${ADHD_RULE}
 - Lead with the answer. He has ADHD: no preamble, no recap, no "I'd be happy to". Under 70 words unless he asked for detail (a debrief may run longer, but stays tight).
@@ -813,6 +836,43 @@ async function meetingTranscript(args: Record<string, any>): Promise<Record<stri
   };
 }
 
+/**
+ * v38 (Part C, option B): edge function code ships only with Jared's tap. After a commit touches supabase/functions/, this builds the
+ * exact Mac mini job that deploys just those functions from a fresh temp clone (deleted at the end). Scout proposes it with mac_run;
+ * he taps Run. Nothing here deploys anything, and a deploy script never auto-runs (see macRun).
+ */
+const DEPLOY_RE = /supabase\s+functions\s+deploy/i;
+function deployJobFor(paths: string[]): { functions: string[]; shared: string[]; title: string; why: string; script: string } | null {
+  const fns = new Set<string>(), shared = new Set<string>();
+  for (const p of paths) {
+    const m = String(p).match(/^supabase\/functions\/([A-Za-z0-9_-]+)\/(.+)$/);
+    if (!m) continue;
+    if (m[1] === "_shared") shared.add(m[2].split("/")[0].replace(/\.(ts|tsx|js|json)$/, "").replace(/[^A-Za-z0-9_.-]/g, ""));
+    else fns.add(m[1]);
+  }
+  if (!fns.size && !shared.size) return null;
+  const importers = [...shared].filter(Boolean).map((x) => `$(grep -l "_shared/${x}" supabase/functions/*/index.ts | cut -d/ -f3)`);
+  const script = [
+    "set -e",
+    'D=$(mktemp -d)',
+    'trap \'rm -rf "$D"\' EXIT',
+    'git clone --depth 1 --branch main https://github.com/Bestly-LLC/bestlytech.git "$D/r"',
+    'cd "$D/r"',
+    `FNS="${[...fns, ...importers].join(" ")}"`,
+    'for f in $(printf "%s\\n" $FNS | sort -u); do',
+    '  echo "Deploying $f"',
+    '  supabase functions deploy "$f" --project-ref rcqfqhguwpmaarseifqg --use-api',
+    "done",
+  ].join("\n");
+  const names = [...fns];
+  return {
+    functions: names, shared: [...shared],
+    title: names.length ? `Put ${names.slice(0, 3).join(", ")}${names.length > 3 ? " and more" : ""} live` : "Put the changed backend code live",
+    why: "The new backend code is saved but the old version is still running until this finishes.",
+    script,
+  };
+}
+
 async function macRun(args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
   if (args.action === "get") {
     let q = db.from("mac_jobs").select("id, title, script, status, exit_code, created_at, started_at, finished_at, output");
@@ -843,11 +903,13 @@ async function macRun(args: Record<string, any>, threadId: string): Promise<Reco
     cwd: args.cwd ? String(args.cwd).slice(0, 500) : null, timeout_s: timeout, thread_id: threadId,
   }).select("id").single();
   if (error) return { ok: false, error: error.message };
-  if (autoRunOn && !args.__free) {
+  // v38: a deploy waits for his Run tap even with auto-run on (option B: no auto-deploy).
+  const isDeploy = DEPLOY_RE.test(script);
+  if (autoRunOn && !args.__free && !isDeploy) {
     const { data: ar } = await db.rpc("mac_job_autorun", { p_id: data.id, p_force: true });
     if ((ar as any)?.ok) return { ok: true, id: data.id, status: "approved", note: "Auto-run is on, so it is running on the Mac mini now. Read the result with mac_run get when it finishes." };
   }
-  return { ok: true, id: data.id, status: "proposed", note: "The Run card is on his screen now. It expires in an hour." };
+  return { ok: true, id: data.id, status: "proposed", note: isDeploy ? "The Run card is on his screen now. A deploy always waits for his tap, even with auto-run on. It expires in an hour." : "The Run card is on his screen now. It expires in an hour." };
 }
 
 /**
@@ -857,10 +919,12 @@ async function macRun(args: Record<string, any>, threadId: string): Promise<Reco
 // v17: the free model only CLASSIFIES why it can't answer; Scout says the reason in its own fixed,
 // true words. v15-16 pasted the free model's own one-liner into the ask, and it made things up
 // ("I can't create alerts; use the dashboard's alert settings" - there are no such settings).
+// v38: free Scout has every tool paid Scout has, so none of these is a limit any more. They are only what is said when the free run
+// ended without an answer (an outage, or three failed tries), and they say what the job was, never what the free AI "can't" do.
 const FREE_WHY: Record<string, string> = {
-  DATA: "It needs your live data, which only the paid AI can read.",
-  ACTION: "It means changing something in Bestly, which only the paid AI can do.",
-  CODE: "It means changing how the admin works (a code change), which only the paid AI can do.",
+  DATA: "It needs your live data, and the free AI could not pull it.",
+  ACTION: "It means changing something in Bestly, and the free AI could not finish it.",
+  CODE: "It means a code change, and the free AI could not land it.",
 };
 
 // What the free model may state as fact (it knows nothing about Bestly otherwise).
@@ -909,15 +973,15 @@ async function freeTry(threadId: string, text: string, page: unknown): Promise<{
       severity: t.severity, since: String(t.since ?? "").slice(0, 10), count: t.item_count })),
     open_incidents: ((inc ?? []) as any[]).map((i) => ({ title: i.title, severity: i.severity, stage: i.fix_stage, hint: String(i.needs_jared ?? "").slice(0, 200) })),
   }).slice(0, 14000);
-  const prompt = `You are Scout's free helper inside Jared's Bestly admin dashboard. You can READ the live snapshot below (what needs him today and the open incidents). You cannot change anything, look anything else up, or reach the internet.
+  const prompt = `You are the quick-answer step of Scout, inside Jared's Bestly admin dashboard. You can READ the live snapshot below (what needs him today and the open incidents). This step has no tools of its own: for anything beyond the snapshot, Scout's tool step takes over when you reply NEEDS_TOOLS.
 Answer Jared's last message ONLY if you can answer it fully and correctly from the snapshot, general knowledge, the facts below, or the conversation (for example: what needs him most, explaining something, rewording text, a quick calculation).
 Writing is something you CAN do when Jared asks for it: an email, text, reply, review request or short plan. Write it for him to send himself. Never draft one on your own (see the no-drafts rule below). For a to-do he wants help finishing, give the next step in one line; add a drafted message only if the to-do is a message to a real person. Put a drafted message after a line that says exactly DRAFT:
 Never guess how the admin works or tell him to use settings or pages that are not in the facts.
-If he asks you to DO anything (move, change, add, delete, assign, fix, send, run, set, mark), you can't: reply NEEDS_TOOLS: ACTION. Never say you did something, that it's done, or that "no action is needed".
+If he asks you to DO anything (move, change, add, delete, assign, fix, send, run, set, mark), reply NEEDS_TOOLS: ACTION (Scout's tool step does it). Never say you did something, that it's done, or that "no action is needed".
 If you can't answer, reply with exactly one line and nothing else:
 NEEDS_TOOLS: DATA    (it needs data that is not in the snapshot below)
 NEEDS_TOOLS: ACTION  (it asks to do, fix, run, send, change or look something up)
-NEEDS_TOOLS: CODE    (it asks to build or change a feature, alert, page or behaviour of the admin)
+NEEDS_TOOLS: CODE    (it asks to build or change a feature, alert, page or behaviour of the admin: Scout's tool step reads the code and commits the change itself)
 ${ADHD_RULE}
 Otherwise answer in plain text, under 80 words (a drafted message may add up to 150 more), no markdown. Rank by severity when asked what needs him.
 
@@ -967,6 +1031,7 @@ const FREE_TOOLS = new Set([
   "today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "notify", "mark_done",
   "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user", "make_video",
   "send_email", "look", "report_spam",
+  "commit_files", "db_write", "mac_command",   // v38: the same hands as paid Scout (same confirmation rules, same AUTOPILOT_NEVER)
 ]);
 const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "look"]);
 const FREE_STEPS = 14;           // v36 (was 10); the 85 s budget still bounds each hop
@@ -987,18 +1052,20 @@ const ALREADY = /\b(already|no longer|on its own|since then|has stopped|stopped 
 const PLACEHOLDER = /\[(?:[A-Z][A-Za-z ]{1,20})\]|(?<!Model )\bX\b(?=\s+[a-z])|<[a-z_ ]{2,20}>/;
 /** His latest message is a plain yes: only then may a free-model action carry confirmed:true (auto-run aside). */
 const PLAIN_YES = /^\s*(yes|yep|yeah|ya|ok|okay|sure|do it|go ahead|go for it|approved?|confirm(ed)?|please do|keep going)\b/i;
-const PAID_ONLY_WHY: Record<string, string> = {
-  commit_files: "It means changing how the admin works (a code change), which only the paid AI can do.",
-  db_write: "It means changing data in Bestly, which only the paid AI can do.",
-  mac_command: "It needs an admin command on the Mac mini, which only the paid AI can run.",
-};
+/** v38: three failed tries hand the job to paid Scout (Part B, point 4). */
+const TRY_MAX = 3;
+/** A free commit needs this much of the 150 s request left to be watched through the build (and reverted if it fails). */
+const COMMIT_NEEDS_MS = 90_000;
+const PENDING_CAP = 6_000;      // chars of a deferred commit_files call kept in run_state
+/** Tool errors that are a gate or a bad ask, not a failed attempt: they never count toward a try. */
+const SOFT_ERR = /^(not_confirmed|needs_yes|not_yet|bad_questions|get_does_not_run|not_enough_time|try_counted)\b|is not one of your tools/i;
 
 const ASK_PAID_TOOL = {
   type: "function",
   function: {
     name: "ask_paid",
-    description: "Hand the job to paid Scout (Claude). Use ONLY when it needs a change to the admin's code (a feature, page, alert or behaviour), " +
-      "a change to data rows (INSERT/UPDATE/DELETE), or you used your tools and truly cannot finish. Never for anything you can answer by reading.",
+    description: "Give up on the free AI and hand the job to paid Scout (Claude). You can change code (commit_files), data (db_write) and run jobs yourself, " +
+      "so this is the last resort: it counts as one of your 3 tries and the job goes to paid only on the third. Never for anything you can do or read.",
     parameters: {
       type: "object",
       properties: {
@@ -1026,7 +1093,17 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["send_email"], /\b(e-?mails?|mail|send|signature|message (to|eli|rohit)|write to|reply to)\b/i],
   [["look"], /\b(images?|photos?|screenshots?|pictures?|videos?|frames?|pdf|look|see|seen)\b|scout-files/i],
   [["report_spam"], /\b(spam|phish(ing)?|scam|junk|block (this|that|the) sender|report (this|that|it) (to|as))\b/i],
+  // v38: code, data and schema work. Wide on purpose: Scout used to refuse these, and a missing tool schema is a silent refusal.
+  [["commit_files"], /\b(code|bugs?|fix(es|ed)?|build|built|change[sd]?|edit|implement|feature|page|button|component|site|admin|deploy|commit|repo|refactor|css|layout|typo|wording|copy|broken|errors?|fail(ed|ing|s)?|migration|edge ?functions?|functions?|alert|dashboard|ui|screen)\b/i],
+  [["db_write"], /\b(data|rows?|records?|database|table|schema|insert|update[sd]?|delete[sd]?|backfill|status|assign|owner|cron|migration|improver|queue[sd]?|fix(es|ed)?|change[sd]?|set)\b/i],
+  [["mac_command"], /\b(imap|mail[_ ]?drain|restart[_ ]?mail|macbook|mail agent|mail bridge)\b/i],
 ];
+/** Short descriptions for the tools whose full text is longer than the free window keeps (it would cut off "requires confirmed:true"). */
+const FREE_DESC: Record<string, string> = {
+  commit_files: "Commit changes to main and watch the deploy. Read the file first. Use edits [{path, old, new}] (old = an exact, unique snippet of the current file); files only for new or tiny files. A failed build is reverted automatically. confirmed:true only after his yes (or auto-run). If the result has deploy_needed, propose that job with mac_run.",
+  db_write: "Change data: ONE INSERT, UPDATE or DELETE on the public schema (UPDATE/DELETE need a WHERE). Read the rows with run_sql first. Add RETURNING. Schema or cron changes: INSERT into improver_ideas (kind 'schema', change = exact SQL). confirmed:true only after his yes (or auto-run).",
+  mac_command: "Give the MacBook Air mail agent a job: mail_drain, restart_mail, ping, run_named. confirmed:true only after his yes (or auto-run).",
+};
 const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "ask_user"]);
 
 function freeToolDefs(autopilot: boolean, convo: string) {
@@ -1036,7 +1113,7 @@ function freeToolDefs(autopilot: boolean, convo: string) {
   return [
     ...TOOLS.filter((t) => FREE_TOOLS.has(t.name) && want.has(t.name) && !(autopilot && AUTOPILOT_NEVER.has(t.name))).map((t) => ({
       type: "function",
-      function: { name: t.name, description: t.description.slice(0, 420), parameters: t.input_schema },
+      function: { name: t.name, description: FREE_DESC[t.name] ?? t.description.slice(0, 420), parameters: t.input_schema },
     })),
     ASK_PAID_TOOL,
   ];
@@ -1080,7 +1157,11 @@ interface RunState {
   progress_msg_id?: string | null;
   notes: string[];
   calls: RunCall[];
+  tries?: number;           // v38: failed free attempts so far (3 hands the job to paid)
+  try_log?: TryEntry[];
+  pending?: { name: string; args: Record<string, any> };   // v38: a confirmed commit_files that did not have time to be watched; runs first next hop
 }
+interface TryEntry { at: string; what: string; why: string }
 const RUN_STATE_CAP = 12_000;       // bytes of JSON kept per thread
 const RUN_MAX_MS = 20 * 60_000;     // wall clock for one free run (hops included)
 const RUN_RESUME_MS = 60 * 60_000;  // a hand-typed "keep going" picks the memory back up if it is this fresh
@@ -1130,7 +1211,7 @@ async function saveRunState(threadId: string, st: RunState | null) {
 }
 
 async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean; askFirst?: boolean; since?: string | null; state?: RunState | null; hop?: number } = {}):
-  Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean; stopped?: boolean; stalled?: boolean; state?: RunState }> {
+  Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean; stopped?: boolean; stalled?: boolean; state?: RunState; escalate?: { what: string; log: TryEntry[] } }> {
   const autopilot = !!opts.autopilot;
   const until = Date.now() + FREE_BUDGET_MS;
   const prior = autopilot ? null : (opts.state ?? null);   // v36: what earlier hops of this run already did
@@ -1138,6 +1219,14 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
   const notes: string[] = prior ? prior.notes.slice() : [];
   const runStartedAt = prior?.started_at ?? new Date().toISOString();
   let newCalls = 0, cachedHits = 0;
+  // v38: three tries, then paid. A try is a real failure (a build reverted, the same tool failing twice, STUCK, ask_paid).
+  let tries = prior?.tries ?? 0;
+  const tryLog: TryEntry[] = prior?.try_log ? prior.try_log.map((t) => ({ ...t })) : [];
+  const failTry = (what: string, why: string): boolean => {
+    tries++;
+    tryLog.push({ at: new Date().toISOString(), what: what.replace(/\s+/g, " ").slice(0, 160), why: why.replace(/\s+/g, " ").slice(0, 300) });
+    return tries >= TRY_MAX;
+  };
 
   const [{ data: hist }, { data: today }] = await Promise.all([
     db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(10),
@@ -1164,15 +1253,20 @@ How to work:
 - ${yesRule}
 - mac_run: propose a short, safe, idempotent zsh script with a plain title and why; it waits for his Run tap.
 - Only say something is done if a tool result in this turn shows ok:true for it.
-- Never give Jared SQL to paste into Supabase. Check cron.job / pg_proc with run_sql before calling a job or function missing; a real schema or schedule change goes to ask_paid, never to him.
-- If a tool fails, change approach. Call ask_paid only for a code change, a data change (INSERT/UPDATE/DELETE), or when you truly can't finish.${autopilot ? "" : `
+${autopilot
+    ? "- This is autopilot: Jared is not here, so commit_files, db_write and mac_run are not available. Anything that needs them: say it in your last line (NEEDS_YES)."
+    : `- You can do everything paid Scout can: read (run_sql, today, incidents, read_file, list_files), change data (db_write: ONE INSERT/UPDATE/DELETE with a WHERE), change the admin and site code (commit_files: watched, reverted automatically on a failed build), run jobs on the Mac mini (mac_run, mac_command), the Pi (pi_command), email (send_email), notify. None of it needs paid AI.
+- Code: read the file first, send small commit_files edits (exact old snippet -> new), never a whole large file, never a key or password in a file. If a commit comes back reverted, change the code to fix what broke; never resend the same change. If a result carries deploy_needed, backend code changed: propose that job with mac_run (its title, why and script) and say the Yes button is up. Never say a backend function is live until that job has run.
+- Actions that need confirmed:true follow the yes rule above, exactly like paid Scout.`}
+- Never give Jared SQL to paste into Supabase. Check cron.job / pg_proc with run_sql before calling a job or function missing. A real schema or schedule change: db_write one row into improver_ideas (title, area, kind 'schema', why, change = the exact SQL, effort, impact, status 'new') and tell him in one line it is queued.
+- If a tool fails, change approach.${autopilot ? " Call ask_paid only if you truly can't finish." : ` You have ${TRY_MAX} tries: a build that gets reverted, the same tool failing twice, or you being stuck each use one up, and you will be told "Try 2 of ${TRY_MAX}: ...". Use what failed. Only after the last try does the job go to paid AI. Do not call ask_paid before you have really tried.`}${autopilot ? "" : `
 - If the ask is unclear or you need a detail no tool can find, call ask_user (1-4 tappable questions) instead of guessing.${opts.askFirst ? ` ${ASK_FIRST_NOTE}` : ""}`}
 ${autopilot
     ? `Reply: plain words, under 90 words, then ONE last line that is exactly one of these three (pick one, never list them):
 FIXED: <what fixed it, or "already clear" and the evidence>
 NEEDS_YES: <the one action you'd take with his yes, in everyday words>
 STUCK: <what blocks it>`
-    : `Reply: plain text, under 90 words, lead with the answer, no markdown headers. When he needs to choose or approve, end with one line: OPTIONS: <2-4 short choices separated by |>. A plain answer needs no options.`}
+    : `Reply: plain text, under 90 words, lead with the answer, no markdown headers. When he needs to choose or approve, end with one line: OPTIONS: <2-4 short choices separated by |>. A plain answer needs no options. If, after using your tools, you truly cannot make progress, reply with one line STUCK: <what blocks it> (it counts as one try).`}
 
 ${FREE_FACTS}
 
@@ -1221,15 +1315,49 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   const allowed = new Set(tools.map((t) => t.function.name));
   const used: string[] = [];
   let replied = false, acted = false, fails = 0, nudges = 0;
+  const goal = prior?.goal ?? text.replace(/\s+/g, " ").slice(0, 600);
+  const codeJob = !autopilot && tools.some((t) => t.function.name === "commit_files");   // v38: code steps use the coding ladder
+  let pendingTry: { what: string; why: string } | null = null;
+  let deferred: { name: string; args: Record<string, any> } | null = null;
+  let timeBox = false;
+  let streak: { tool: string; err: string; h: string } | null = null;
+  const snapshot = (): RunState => ({
+    chain_from: prior?.chain_from ?? "", goal, hop: opts.hop ?? 0, started_at: runStartedAt, steps: (prior?.steps ?? 0) + newCalls,
+    stale_hops: prior?.stale_hops ?? 0, progress_msg_id: prior?.progress_msg_id ?? null, notes, calls, tries, try_log: tryLog, pending: deferred ?? undefined,
+  });
+  const escalate = () => ({ why: "", tools: used, escalate: { what: goal, log: tryLog }, state: snapshot() });
+
+  // v38: a commit saved by the last hop (it had no time left to be watched) runs first, with its full time budget.
+  if (!autopilot && prior?.pending) {
+    const pc = prior.pending;
+    toolDeadline = Math.min(reqStartedAt + 118_000, Date.now() + 85_000);
+    let pout: Record<string, unknown>;
+    try { pout = await runTool(pc.name, pc.args, threadId); } catch (e) { pout = { ok: false, error: `tool crashed: ${(e as Error).message}` }; }
+    const pok = (pout as any)?.ok !== false;
+    let pr = ""; try { pr = JSON.stringify(pout); } catch { pr = String(pout); }
+    for (const x of calls) x.stale = true;
+    calls.push({ tool: pc.name, h: argsHash(pc.name, pc.args), args: JSON.stringify({ message: pc.args.message ?? "" }).slice(0, 160), result: pr.slice(0, 600) });
+    used.push(pc.name); newCalls++;
+    if (pok) acted = true;
+    const lastMsg = msgs[msgs.length - 1];
+    lastMsg.content += `\n\n(Your saved ${pc.name} "${String(pc.args.message ?? "").slice(0, 80)}" ran at the start of this round. Result: ${pr.slice(0, 1500)})`;
+    if (!pok && (pout as any).error === "build_failed") {
+      if (failTry(`commit_files "${String(pc.args.message ?? "update").slice(0, 70)}"`, "the build failed and the files were put back")) return escalate();
+      lastMsg.content += `\n\nTry ${tries + 1} of ${TRY_MAX}: that build failed and the files were put back. Re-read your change for a type or syntax mistake and fix it; do not resend it unchanged.`;
+    }
+  }
 
   for (let i = 0; i < FREE_STEPS && Date.now() < until - 8000; i++) {
     // v34: he interrupted (Send now / Stop): drop this run where it stands.
     if (i > 0 && await supersededSince(threadId, opts.since ?? null)) return { why: "", tools: used, stopped: true };
     toolDeadline = Math.min(until - 5000, Date.now() + 60_000);
-    trimForBudget(msgs);
+    // v38: the step that writes code runs on the coding ladder (FreeLLM qwen3-coder-480b first) with room for a real edit; reading steps stay fast.
+    const codeStep = codeJob && (tries > 0 || used.includes("read_file") || calls.some((x) => x.tool === "read_file"));
+    if (codeStep && until - Date.now() < 30_000) break;   // not enough of this round left for a coding call: the next hop does it with a fresh budget
+    trimForBudget(msgs, codeStep ? 24_000 : 3800);
     let r: ChatResult;
     try {
-      r = await llmChat({ messages: msgs, tools, maxTokens: 1200, deadlineMs: Math.min(until - Date.now() - 2000, 45_000), job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
+      r = await llmChat({ messages: msgs, tools, maxTokens: codeStep ? 4000 : 1200, deadlineMs: Math.min(until - Date.now() - 2000, codeStep ? 60_000 : 45_000), task: codeStep ? "code" : "chat", job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
     } catch {
       if (++fails > 1) break;
       continue;
@@ -1240,7 +1368,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       const reply = r.content.trim();
       const nudge = (why: string) => { msgs.push({ role: "assistant", content: reply }); msgs.push({ role: "user", content: why }); nudges++; };
       if (PLACEHOLDER.test(reply) && nudges < 2) { nudge("That reply has placeholders instead of real values. Get the real values with a tool, then reply."); continue; }
-      if (REFUSES.test(reply) && nudges < 1) { nudge("You DO have tools (see the list). Use them to do this. If it truly needs a code or data change, call ask_paid."); continue; }
+      if (REFUSES.test(reply) && nudges < 1) { nudge("You DO have tools (see the list), including commit_files for code and db_write for data. Use them to do this."); continue; }
       const own = reply.split(/^\s*OPTIONS:/m)[0];
       if (CLAIMS_DONE.test(own) && !acted && !ALREADY.test(own) && !/\?\s*$/.test(own.trim())) {
         if (nudges < 2) { nudge("Nothing was changed by a tool in this turn, so don't say it's done. Either do it with a tool, or say what you found and what's left."); continue; }
@@ -1248,6 +1376,14 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
         // so what it read reaches Jared instead of a bare paid-AI ask.
         msgs.push({ role: "assistant", content: reply });
         break;
+      }
+      // v38: STUCK from the free agent is one failed try; the next try starts here, and the third goes to paid.
+      if (!autopilot && /^\s*STUCK:/m.test(reply)) {
+        const stuckWhy = (reply.match(/^\s*STUCK:\s*(.+)$/m)?.[1] ?? "no reason given").trim();
+        if (failTry("said it was stuck", stuckWhy)) return escalate();
+        msgs.push({ role: "assistant", content: reply });
+        msgs.push({ role: "user", content: `Try ${tries + 1} of ${TRY_MAX}: you said you were stuck (${stuckWhy.slice(0, 160)}). Take a different approach with your tools, then answer.` });
+        continue;
       }
       // Normalize the options line; fewer than two choices means no line.
       const m = reply.match(/^\s*OPTIONS:\s*(.+)$/m);
@@ -1262,7 +1398,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     // Tool turn: echo the calls back exactly, then one result per call (max 3 run per step).
     msgs.push({ role: "assistant", content: r.content || null, tool_calls: r.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.raw } })) });
     for (const [n, c] of r.toolCalls.entries()) {
-      const answer = (out: unknown) => { let s = JSON.stringify(out); if (s.length > 2500) s = s.slice(0, 2500) + "...(cut)"; msgs.push({ role: "tool", tool_call_id: c.id, content: s }); };
+      const answer = (out: unknown) => { let s = JSON.stringify(out); const cap = codeJob ? 12_000 : 2500; if (s.length > cap) s = s.slice(0, cap) + "...(cut)"; msgs.push({ role: "tool", tool_call_id: c.id, content: s }); };   // v38: a code job needs the whole snippet it will quote back
       if (n >= 3) { answer({ ok: false, error: "skipped: run at most 3 tools at once" }); continue; }
       if (c.name === "ask_user") {
         const line = questionsLine(c.args);
@@ -1280,10 +1416,15 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
           continue;
         }
         await db.from("admin_chat_actions").insert({ thread_id: threadId, tool: "ask_paid", args: { kind, why: note }, result: { ok: false, free: true }, ok: false });
-        const why = kind === "CODE" ? FREE_WHY.CODE : kind === "DATA" ? PAID_ONLY_WHY.db_write : "The free AI tried but couldn't finish this one.";
-        return { why, tools: used, note };
+        if (autopilot) {
+          const why = kind === "CODE" ? FREE_WHY.CODE : kind === "DATA" ? FREE_WHY.DATA : "The free AI tried but couldn't finish this one.";
+          return { why, tools: used, note };
+        }
+        // v38: asking for paid help is one failed try, not a shortcut. The third one hands the job over (after this step's results are in).
+        if (!pendingTry) pendingTry = { what: `asked for paid help (${kind})`, why: note || "the free AI said it could not finish" };
+        answer({ ok: false, error: "try_counted", hint: "That counts as one of your 3 tries. You can change code (commit_files), change data (db_write) and run jobs yourself: do it now." });
+        continue;
       }
-      if (PAID_ONLY_WHY[c.name]) return { why: PAID_ONLY_WHY[c.name], tools: used };
       if (!allowed.has(c.name)) { answer({ ok: false, error: `"${c.name}" is not one of your tools. Use one from the list.` }); if (++fails > 3) break; continue; }
       const args = { ...c.args } as Record<string, any>;
       if (autopilot && (args.confirmed === true || AUTOPILOT_NEVER.has(c.name))) {
@@ -1305,6 +1446,22 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
         }
       }
       if (c.name === "mac_run" && args.action === "propose") args.__free = true;   // never auto-run a free-model script
+      if (c.name === "commit_files" && !autopilot) {
+        // A commit is watched to the end and reverted if the build fails (rule 4). That needs ~90 s of the 150 s request: with less
+        // left, save the call and run it first thing next hop (a fresh budget) instead of committing something nobody can watch.
+        if (args.confirmed === true && reqStartedAt + REQ_HARD_MS - Date.now() < COMMIT_NEEDS_MS) {
+          if (JSON.stringify(args).length <= PENDING_CAP) {
+            deferred = { name: c.name, args };
+            notes.push(`Saved the commit "${String(args.message ?? "update").slice(0, 80)}" to run first thing next round (not enough time left to watch the build).`);
+            answer({ ok: true, deferred: true, note: "Not enough time left in this round to watch the build, so the commit is saved and runs first thing in the next round. Say so in one line and stop." });
+          } else {
+            answer({ ok: false, error: "not_enough_time", hint: "Not enough time left in this round to watch the build. Next round, send the same change as smaller edits." });
+          }
+          timeBox = true;
+          continue;
+        }
+        toolDeadline = Math.min(reqStartedAt + 118_000, Date.now() + 85_000);
+      }
       let out = await runTool(c.name, args, threadId);
       if ((out as any)?.ok === false && c.name !== "learn") out = await heal(c.name, args, out, {});  // real columns + past lessons
       used.push(c.name);
@@ -1314,6 +1471,18 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
         acted = true;
         for (const x of calls) x.stale = true;   // a change was made: earlier reads may no longer be true, read again
       }
+      if (!autopilot) {
+        const err = String((out as any)?.error ?? "");
+        if (!ok && !SOFT_ERR.test(err)) {
+          if (c.name === "commit_files" && err === "build_failed") {
+            if (!pendingTry) pendingTry = { what: `commit_files "${String(args.message ?? "update").slice(0, 70)}"`, why: `the build failed and the files were put back${(out as any).build_url ? ` (${(out as any).build_url})` : ""}` };
+            streak = null;
+          } else if (streak && streak.tool === c.name && (streak.err === err.slice(0, 80) || streak.h === h)) {
+            if (!pendingTry) pendingTry = { what: `${c.name} failed twice`, why: err.slice(0, 200) || "no error text" };
+            streak = null;
+          } else streak = { tool: c.name, err: err.slice(0, 80), h };
+        } else if (ok) streak = null;
+      }
       if (ok && !autopilot) {
         let r = ""; try { r = JSON.stringify(out); } catch { r = String(out); }
         calls.push({ tool: c.name, h, args: JSON.stringify(Object.fromEntries(Object.entries(args).filter(([k]) => k !== "confirmed" && k !== "__free"))).slice(0, 160), result: r.slice(0, 600) });
@@ -1321,6 +1490,13 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       if (!ok) fails++;
       answer(out);
     }
+    if (pendingTry) {
+      const pt = pendingTry; pendingTry = null;
+      if (failTry(pt.what, pt.why)) return escalate();
+      msgs.push({ role: "user", content: `Try ${tries + 1} of ${TRY_MAX}: ${pt.what} - ${pt.why}. Make a real new attempt with a different approach; do not repeat what failed.` });
+      fails = 0; nudges = 0;
+    }
+    if (timeBox) break;
     if (fails > 4) break;
   }
 
@@ -1332,7 +1508,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     try {
       msgs.push({ role: "user", content: "Stop using tools now. In under 90 words, tell Jared what you found so far and what is left, using only the tool results above. Start with one short sentence (under 20 words) that says where you are. No options line." });
       trimForBudget(msgs);
-      const s = await llmChat({ messages: msgs, tools, toolChoice: "none", maxTokens: 700, deadlineMs: 20_000, job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
+      const s = await llmChat({ messages: msgs, tools, toolChoice: "none", maxTokens: 700, deadlineMs: Math.min(20_000, Math.max(6_000, reqStartedAt + REQ_HARD_MS - Date.now() - 6_000)), job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
       const sum = s.content.replace(/^\s*OPTIONS:.*$/m, "").trim();
       if (sum && !s.toolCalls.length) {
         return autopilot
@@ -1344,12 +1520,8 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
             const isNew = !notes.some((n) => key(n) === key(sum));
             if (isNew) notes.push(sum.slice(0, 500));
             const staleHops = isNew ? 0 : (prior?.stale_hops ?? 0) + 1;
-            const state: RunState = {
-              chain_from: prior?.chain_from ?? "", goal: prior?.goal ?? text.replace(/\s+/g, " ").slice(0, 600), hop: opts.hop ?? 0,
-              started_at: runStartedAt, steps: (prior?.steps ?? 0) + newCalls, stale_hops: staleHops,
-              progress_msg_id: prior?.progress_msg_id ?? null, notes, calls,
-            };
-            return { answer: sum, why: "", tools: used, more: true, stalled: newCalls === 0 || staleHops >= 2, state };
+            const state: RunState = { ...snapshot(), stale_hops: staleHops };
+            return { answer: sum, why: "", tools: used, more: true, stalled: !deferred && (newCalls === 0 || staleHops >= 2), state };
           })();
       }
     } catch { /* fall through to the paid ask */ }
@@ -1536,8 +1708,16 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
           note: "The build failed and the files were put back. Work out what broke before trying again.",
         };
       } else {
+        const deploy = repo === REPOS.site ? deployJobFor(files.map((f) => f.path)) : null;
         out = { ok: true, commit: sha, url: (res as any).url, build: build.state, build_url: (build as any).url ?? null,
-                note: build.state === "timeout" ? "Committed. The build was still running when I stopped watching - check it shortly." : undefined };
+                note: build.state === "timeout" ? "Committed. The build was still running when I stopped watching - check it shortly." : undefined,
+                ...(deploy ? {
+                  deploy_needed: {
+                    functions: deploy.functions, shared_files_changed: deploy.shared,
+                    next: "Backend code changed. The site build does not ship it. Call mac_run with action propose using this title, why and script, so he can tap Run. Say in one line that the Yes button is up. Do not say the function is live until that job has run.",
+                    title: deploy.title, why: deploy.why, script: deploy.script,
+                  },
+                } : {}) };
       }
       break;
     }
@@ -2071,6 +2251,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return J({ ok: false, error: "POST only" }, 405);
   const started = Date.now();
+  reqStartedAt = started;
   toolDeadline = started + BUDGET_MS - 8_000;
 
   let body: Record<string, any> = {};
@@ -2122,6 +2303,14 @@ Deno.serve(async (req) => {
 
   let text = String(body.body ?? "").trim();
   if (!text) return J({ ok: false, error: "body required" }, 400);
+  // v38: a fresh request (fresh time budget) that hands a job to paid Scout after three failed free tries. Only while the switch is on.
+  const paidHandoff = !autopilot && body.paid_handoff === true;
+  if (paidHandoff && !paidOn) return J({ ok: true, thread_id: String(body.thread_id ?? ""), stopped: "paid ai is off" });
+  // v38: with the Paid AI switch ON, free Scout still goes first; paid is for after three failed tries. Switch taps and the cap override
+  // are not jobs and keep their old path.
+  const freeFirst = paidOn && !autopilot && !paidHandoff
+    && !/^(always,? stop asking|yes,? use paid ai|no,? skip it|raise today'?s cap( by \$?5)?|override( (this|it|the cap))?)\.?!?$/i.test(text)
+    && !/^yes, do it:.*paid ai/i.test(text);
   // v28.5: safety net for attachments. If he attached a file in the last few minutes and this message arrived
   // without it (an old page still open, a read that failed in the browser), fetch and read it here.
   if (!autopilot && !/^\[(File|Video): /m.test(text)) text = await withRecentFiles(text).catch(() => text);
@@ -2137,7 +2326,7 @@ Deno.serve(async (req) => {
   }
   // v34: the moment this run's message landed. Anything he sends (or a Stop) after it interrupts this run.
   let runSince: string | null = null;
-  if (autoHop) {
+  if (autoHop || paidHandoff) {
     // He wrote something since the job started (or stopped it): his message wins, this hop ends quietly.
     runSince = String(body.chain_from ?? new Date(0).toISOString());
     if (await supersededSince(threadId, runSince)) return J({ ok: true, thread_id: threadId, stopped: "he wrote since" });
@@ -2150,7 +2339,7 @@ Deno.serve(async (req) => {
   const stoppedReply = () => J({ ok: true, thread_id: threadId, stopped: true });
 
   // v18: moving call to-dos between people needs no AI.
-  if (!autopilot) {
+  if (!autopilot && !paidHandoff) {
     const moved = await tryTodoMove(threadId, text).catch(() => null);
     if (moved) {
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: moved });
@@ -2159,8 +2348,8 @@ Deno.serve(async (req) => {
     }
   }
 
-  // v15/v30: paid AI only while the Paid AI switch is on.
-  if (!paidOn) {
+  // v15/v30: paid AI only while the Paid AI switch is on. v38: and free goes first even then (freeFirst).
+  if (!paidOn || freeFirst) {
     // "keep going" alone is NOT a yes to spending.
     let paidOk = false;
     let sayId: string | null = null;   // v36: the message say() just wrote (the first hop's progress note is edited in place later)
@@ -2203,7 +2392,7 @@ Deno.serve(async (req) => {
         return await say(
           "OK, no paid AI. Nothing was spent. The job is still open: I can keep at it on free AI from where it stopped, or drop it.\n\nOPTIONS: Keep going | Drop it",
         );
-      } else if (/^drop it\.?$/i.test(text)) {
+      } else if (/^(drop it|leave it)\.?$/i.test(text)) {
         await saveRunState(threadId, null).catch(() => {});
         return await say("Dropped. Nothing was spent.");
       } else if (autopilot) {
@@ -2247,6 +2436,39 @@ Deno.serve(async (req) => {
           if (pid && st) await db.from("admin_chat_messages").update({ body: `Worked ${st.steps} steps over ${minutesIn(st)} min.` }).eq("id", pid);
           await saveRunState(threadId, keep ? { ...keep, progress_msg_id: null } : null).catch(() => {});
         };
+        // v38: the third failed try. Paid switch ON: hand the job to paid Scout in a fresh request, try log in its prompt.
+        // Switch OFF: say what happened and ask; the switch stays his (v30), nothing is turned on silently.
+        const fireHandoff = (goalText: string) => {
+          const hop = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/admin-chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: req.headers.get("Authorization") ?? "", apikey: req.headers.get("apikey") ?? "" },
+            body: JSON.stringify({ thread_id: threadId, body: goalText || "keep going", page: body.page, paid_handoff: true, chain_from: String(body.chain_from ?? runSince ?? new Date(0).toISOString()) }),
+          }).then((r) => r.text()).catch(() => null);
+          const er = (globalThis as any).EdgeRuntime;
+          if (er?.waitUntil) er.waitUntil(hop); else return hop;
+        };
+        if (agent.escalate) {
+          const log = agent.escalate.log;
+          const lines = log.map((t, n) => `${n + 1}. ${oneLine(`${t.what}: ${t.why}`)}`).join("\n");
+          await endRun(agent.state);   // keeps the try log and notes (paid reads them), closes the progress note
+          const head = `Free AI tried ${log.length} times and it did not work.\n${lines}`;
+          if (paidOn) {
+            const res = await say(`${head}\nHanding it to paid AI now.`, { free: true, tools: agent.tools ?? [], handoff: true });
+            if (await interrupted()) return res;
+            await fireHandoff(agent.escalate.what);
+            return res;
+          }
+          if (await paidOutOfCredit()) {
+            return await say(
+              `${head}\nPaid AI (Claude) is out of credit right now, so it has to wait. Your message is saved: top up at console.anthropic.com > Settings > Billing, then send it again.\n\nOPTIONS: Leave it | Keep going`,
+              { paid_needed: true, out_of_credit: true },
+            );
+          }
+          return await say(
+            `${head}\nPaid AI can take it from here (about 5 to 50 cents). Yes turns the Paid AI switch on for one hour, then it turns itself off.\n\nOPTIONS: Yes, use paid AI | Leave it`,
+            { paid_needed: true, tools: agent.tools ?? [] },
+          );
+        }
         if (agent.answer && agent.more && agent.state) {
           // v33 (Jared, Oct 5): on free AI Scout keeps working until it is done or needs him. No "Keep going" bursts.
           // v36: up to AUTO_HOPS rounds or 20 minutes, and only while each hop finds something new.
@@ -2291,6 +2513,13 @@ Deno.serve(async (req) => {
         free = { why: agent.why || free.why };
         // v37: say where the free AI got to, not just that it stopped (the autopilot path already did this).
         if (agent.note) free.why = `${free.why} Where it got to: ${agent.note.replace(/[.\s]+$/, "")}.`;
+        // v38: the switch is already on and the free AI could not run at all (an outage, not a failed try): paid takes it now.
+        if (freeFirst) {
+          const res = await say(`${free.why} Handing it to paid AI now.`, { free: true, handoff: true });
+          if (await interrupted()) return res;
+          await fireHandoff(text);
+          return res;
+        }
         // Don't offer a paid run that can't happen: say the real blocker instead.
         if (await paidOutOfCredit()) {
           return await say(
@@ -2366,11 +2595,20 @@ Deno.serve(async (req) => {
   const jobs = (jobRows ?? []).map((j: any) => ({ ...j, output: String(j.output ?? "").slice(-1500) }));
   const unread: Record<string, number> = {};
   for (const n of (bell ?? []) as { severity: string }[]) unread[n.severity] = (unread[n.severity] ?? 0) + 1;
-  const system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder, jobs, page ?? "unknown", lessonsDigest)
+  let system = SYSTEM(today ?? [], mac ?? [], inc ?? [], unread, recorder, jobs, page ?? "unknown", lessonsDigest)
     + (autoRunOn ? AUTO_RUN_ON : ASK_PLAINLY)
     + `\n\n# Paid AI switch\nThe Paid AI switch is ON${paidUntil ? ` until ${new Date(paidUntil).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" })}` : ""}, so you (Claude, paid) are answering. If he asks what AI is running, say exactly that. Never claim paid AI is off while you are answering.`
     + (ASKS_FOR_QUESTIONS.test(text) ? `\n\n# He wants questions first\n${ASK_FIRST_NOTE}` : "")
     + (keepGoing ? "\n\n# He said keep going\nThat is his yes for everything the job needs right now. Carry on from where you stopped and do it; don't ask again." : "");
+
+  // v38: what the free AI already tried on this job (three failed tries hand it here). Read once, then cleared.
+  const handed = await loadRunState(threadId).catch(() => null);
+  if (handed && (handed.try_log?.length || handed.notes?.length)) {
+    const tl = (handed.try_log ?? []).map((t, n) => `${n + 1}. ${t.what}: ${t.why}`).join("\n");
+    const nl = handed.notes.slice(-6).map((n) => `- ${n}`).join("\n");
+    system += `\n\n# The free AI already worked on this\nIt had the same tools as you.${handed.goal ? ` The job: ${handed.goal}` : ""}${tl ? `\nIts failed tries:\n${tl}\nDo not repeat those; work out why they failed, then fix the real cause.` : ""}${nl ? `\nWhat it found:\n${nl}` : ""}`;
+  }
+  if (handed) await saveRunState(threadId, null).catch(() => {});
 
   // Daily chat cap: a runaway guard, even with the Paid AI switch on.
   const { data: budget } = await db.rpc("ai_budget", { p_scope: "chat" });

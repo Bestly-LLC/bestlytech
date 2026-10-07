@@ -530,6 +530,8 @@ export interface ChatRequest {
   ref?: string | null;
   fn?: string;
   scope?: "background" | "chat";
+  /** v3 (2026-10-07): "code" runs the step on the coding ladder (FreeLLM qwen3-coder-480b first) with a longer per-rung wait. */
+  task?: "chat" | "code";
 }
 export interface ChatResult { content: string; toolCalls: ChatToolCall[]; provider: Provider; model: string; tried: LlmResult["tried"] }
 
@@ -544,6 +546,16 @@ const CHAT_LADDER: Rung[] = [
   { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
   { provider: "gemini", model: M.gemini, maxIn: GEMINI_MAX },
   { provider: "openrouter", model: M.openrouter, maxIn: OR_MAX },
+];
+
+// v3 (2026-10-07, scout-free-parity): the step that WRITES code (commit_files, a code job) goes to FreeLLM's coding model first,
+// then FreeLLM's general model, Groq's best and Cloudflare. Gemini and OpenRouter are not on it at all: they train on prompts
+// (llm_providers.private_ok = false), and code and data are private. Reading steps keep CHAT_LADDER above.
+const CODE_CHAT_LADDER: Rung[] = [
+  { provider: "freellm", model: M.freellmCode, maxIn: FREELLM_MAX },
+  { provider: "freellm", model: M.freellm, maxIn: FREELLM_MAX },
+  { provider: "groq", model: M.groqBig, maxIn: GROQ_MAX },
+  { provider: "cloudflare", model: M.cfBig, maxIn: CF_MAX },
 ];
 
 async function postChat(url: string, key: string, body: Record<string, unknown>, timeoutMs: number): Promise<any> {
@@ -585,14 +597,15 @@ export async function llmChat(input: ChatRequest): Promise<ChatResult> {
 
 async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
   const messages = input.messages.map((m) => (typeof m.content === "string" ? { ...m, content: scrub(m.content as string) } : m));
-  const maxTokens = input.maxTokens ?? 1200;
-  const deadline = Date.now() + (input.deadlineMs ?? 45_000);
+  const code = input.task === "code";
+  const maxTokens = input.maxTokens ?? (code ? 4000 : 1200);
+  const deadline = Date.now() + (input.deadlineMs ?? (code ? 60_000 : 45_000));
   const need = estTokens(JSON.stringify(messages) + JSON.stringify(input.tools ?? [])) + maxTokens;
   const logReq: LlmRequest = { task: "judge", system: "", user: "", job: input.job, ref: input.ref ?? null, fn: input.fn, scope: input.scope ?? "chat" };
   const tried: LlmResult["tried"] = [];
   const [prov, k] = await Promise.all([providers(), keys()]);
 
-  for (const rung of CHAT_LADDER) {
+  for (const rung of (code ? CODE_CHAT_LADDER : CHAT_LADDER)) {
     const left = deadline - Date.now();
     const skip = (outcome: Outcome) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0 });
     if (left < 3000) { skip("timeout"); continue; }
@@ -623,7 +636,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
         if (!k.groq_api_key) throw new Fail("skipped_nokey", "no groq_api_key");
         j = await postChat("https://api.groq.com/openai/v1/chat/completions", k.groq_api_key, body, Math.min(left, 25_000));
       } else if (rung.provider === "freellm") {
-        j = await postChat(freellmUrl(k), k.freellm_api_key, body, Math.min(left, 25_000));
+        j = await postChat(freellmUrl(k), k.freellm_api_key, body, Math.min(left, code ? 45_000 : 25_000));
       } else if (rung.provider === "gemini") {
         if (!k.gemini_api_key) throw new Fail("skipped_nokey", "no gemini_api_key");
         j = await postChat("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", k.gemini_api_key, body, Math.min(left, 30_000));
