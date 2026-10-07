@@ -1333,7 +1333,8 @@ const pt12 = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { timeZone
 function scrubReply(s: string): string {
   let t = stripToolSyntax(String(s ?? ""));
   if (thinkingLeak(t)) return "";
-  return t.replace(/^\s*(?:no action (?:is )?(?:needed|required)\.?)\s*$/gim, "").trim();
+  // "No action needed" is a status claim, not an answer; drop the sentence.
+  return t.replace(/[ \t]*[^.!?\n]*\bno (?:further )?action (?:is )?(?:needed|required)\b[^.!?\n]*[.!?]?/gi, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /** v36: what a free run has done so far, carried from hop to hop in admin_chat_threads.run_state. */
@@ -1594,7 +1595,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       if (!reply) { fails++; if (forceAnswer || fails > 2) break; continue; }
       const nudge = (why: string) => { msgs.push({ role: "assistant", content: reply }); msgs.push({ role: "user", content: why }); nudges++; };
       // v41: status filler is not an answer ("No action needed", "it will pick up", "still working").
-      if (/\bno action (is )?(needed|required)\b|\bit will pick (it|this) up\b|\bstill (working|finding out)\b|\bi'?ll keep (going|working)\b/i.test(reply) && nudges < 2) { nudge("That is status filler, not an answer. Give Jared the actual answer from what you found, or say exactly what is missing."); continue; }
+      if (/\bno (further )?action (is )?(needed|required)\b|\bit will pick (it|this) up\b|\bstill (working|finding out)\b|\bi'?ll keep (going|working)\b/i.test(reply) && nudges < 2) { nudge("That is status filler, not an answer. Give Jared the actual answer from what you found, or say exactly what is missing."); continue; }
       // v41: a question about a person, email, invoice, task or call must be answered from something it READ this turn.
       if (!used.length && !cachedHits && (NEEDS_LOOKUP.test(goal) || NEEDS_LOOKUP_NAME.test(goal)) && nudges < 2) {
         nudge("You answered without reading anything. Look it up first: search_mail {who, about} then read_email for mail, run_sql for data, today for his queue, meeting_transcript {find} for a call. Then answer only from what the tools returned.");
