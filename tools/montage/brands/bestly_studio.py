@@ -11,6 +11,9 @@ sys.path.insert(0, "/opt/bestly/cron")
 sys.path.insert(0, "/opt/bestly/montage")
 from brands import _common  # noqa: E402
 from jobs import bestly_social as bs  # noqa: E402
+if not hasattr(bs, "PRODUCT_STUDIO"):   # the worker may have imported an older bestly_social (via bestly_cloud) before it was updated
+    import importlib
+    bs = importlib.reload(bs)
 
 KIT = "/opt/bestly/social-kit"
 NAME = "Bestly Studio"
