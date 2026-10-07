@@ -93,8 +93,8 @@ const ANTHROPIC_PRICE: Record<string, [number, number]> = { haiku: [1, 5], sonne
 /** Models that must never serve agent or chat work: preview/flash models that loop, think out loud, or write tool calls as text. */
 const DENY_MODEL = /^(dots|ling-|fusion$|auto$|claude-)|note-preview|qwen3[.\d]*-flash|-safety|guard|nemoguard|uncensored|heretic|cerebras|pythia|tiny-aya|riva-|llama-3\.2-1b|qwen3\.5-0\.8b|qwen3-0\.6b/i;
 /** Strongest first. Re-ordered from the daily tool-call probe (llm_model_health); a model that failed the probe is dropped. */
-const FREELLM_PREFERRED = ["gpt-oss-120b", "gemini-3.8-flash", "deepseek-v4-flash", "nemotron-3-super-120b", "qwen3.8-27b", "llama-4-maverick", "gemini-2.5-flash"];
-const FREELLM_PREFERRED_CODE = ["qwen3-coder-480b", "kimi-k2-instruct-0905", "qwen3-coder-30b-a3b-instruct", "gpt-oss-120b", "deepseek-v4-flash", "gemini-3.8-flash"];
+const FREELLM_PREFERRED = ["gpt-oss-120b", "deepseek-v4-flash", "nemotron-3-super-120b", "gemini-3.8-flash", "qwen3.8-27b", "gemini-3.6-flash", "command-a-2"];
+const FREELLM_PREFERRED_CODE = ["qwen3-coder-480b", "qwen3-coder-30b-a3b-instruct", "gpt-oss-120b", "deepseek-v4-flash", "nemotron-3-super-120b", "gemini-3.8-flash"];
 const FREELLM_LAST = "auto:smartest";   // never bare "auto" (it picked dots-3-note-preview)
 const FREELLM_RUNGS_MAX = 4;
 

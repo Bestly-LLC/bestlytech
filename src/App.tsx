@@ -115,6 +115,7 @@ const Wall = lazyPage(() => import("./pages/admin/Wall"));
 const Sky = lazyPage(() => import("./pages/admin/Sky"));
 const Security = lazyPage(() => import("./pages/admin/Security"));
 const SpamDesk = lazyPage(() => import("./pages/admin/SpamDesk"));
+const ScoutAI = lazyPage(() => import("./pages/admin/ScoutAI"));
 const Team = lazyPage(() => import("./pages/admin/Team"));
 const ScoutLab = lazyPage(() => import("./pages/admin/ScoutLab"));
 const AdminSkills = lazyPage(() => import("./pages/admin/AdminSkills"));
@@ -260,6 +261,7 @@ const App = () => {
                   <Route path="sky" element={<Sky />} />
                   <Route path="security" element={<Security />} />
                   <Route path="spam" element={<SpamDesk />} />
+                  <Route path="scout-ai" element={<ScoutAI />} />
                   <Route path="team" element={<Team />} />
                   <Route path="scout-lab" element={<ScoutLab />} />
                   <Route path="turo" element={<AdminTuro />} />
